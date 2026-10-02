@@ -1,0 +1,54 @@
+DeepResearchForecast
+Third-party notices
+
+This repository is licensed under the GNU Affero General Public License v3.0
+(see LICENSE). It includes portions of third-party code under the licences
+named below.
+
+------------------------------------------------------------------------------
+TradingAgents (Tauric Research)
+https://github.com/TauricResearch/TradingAgents
+Licensed under the Apache License, Version 2.0; a copy of the licence is in
+LICENSES/Apache-2.0.txt (also at http://www.apache.org/licenses/LICENSE-2.0).
+
+Adapted and modified from TradingAgents 0.5.1:
+
+  deerflow_bridge/data_tools.py
+    Portions adapted from tradingagents/dataflows/vendors/fred.py: the curated
+    FRED alias table with a descriptive phrase rejected before any API call,
+    and both realtime bounds of every FRED request pinned to the earlier of
+    the as-of date and the vendor's own date in America/Chicago. DRF modified
+    the alias set, the id validation, the date handling (dates compared as
+    date objects), the error classification, caching, rendering and
+    secrecy rules.
+    Portions adapted from tradingagents/dataflows/vendors/sec_edgar.py: the
+    as-filed reading of SEC EDGAR XBRL company facts (only facts filed on or
+    before the as-of date; tags tried in priority order, the first to report
+    a period owns it and values are never summed across tags; quarter and
+    fiscal-year span gates; a fiscal-year period must be reported by an
+    annual-report form while the latest filing of any form supplies its
+    value, so amendments and recasts count from their own filing date; no
+    fourth quarter derived) and its statement tag lists. DRF modified the date
+    handling (dates parsed and compared as date objects), the per-period
+    units, the accession tie-break, the fail-closed post-condition, the line
+    set, the identity rules, the error classification, caching, rendering
+    and provenance.
+
+  backend/tests/test_data_tools_edgar.py
+    Fixtures modelled on tests/test_sec_edgar.py: the Apple restatement,
+    filing-date, quarter/year-to-date, tag-fallback, twelve-month-total,
+    quarter-end-balance, recast and capital-expenditure cases.
+
+Files marked "Idea credit: TradingAgents (Apache-2.0)" reimplement an idea in
+DRF's own code; no TradingAgents code is copied into them.
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the Apache License, Version 2.0 is distributed on an "AS IS"
+BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------------
+FinanceHarness and StockAgent
+
+Ideas only: no code from either project is copied into this repository.

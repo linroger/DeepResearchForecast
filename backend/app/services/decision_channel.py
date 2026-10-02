@@ -25,7 +25,9 @@ R2-SIM-2 (power-weighted commitments + influence kept for activation), R2-SIM-3 
 gains_if/loses_if incentives), SIM-5 (power-sort + DECISION_CHANNEL_MAX_ACTIVE cap),
 SIM-6 / R2-EXEC-8 (parallel two-phase elicit→replay), R2-EXEC-10 (collapse the audience
 tail into one weighted public block + per-roster cache), R2-SIM-12 (calendar-scaled
-inertia), SIM-1 (windowed convergence early-stop signal), abstention (R2-CAL-13/SIM-9).
+inertia), SIM-1 (windowed convergence early-stop signal), abstention (R2-CAL-13/SIM-9),
+SIM-8 (the period's scheduled events reach the elicitor as a labelled exogenous block;
+``SIM_DECISION_EVENTS``).
 
 日历改造（temporal spec §4/§5/§6）：单轮核心抽为 ``elicit_round(roster, period_ctx)``，
 供轮内（in-band，run_parallel_simulation 日历回路）与本模块 post-hoc 回放共用；
@@ -36,11 +38,18 @@ decisions/轨迹行带 period_end，输出 schema v3。``round_dates=None`` → 
 
 from __future__ import annotations
 
+import bisect
+import hashlib
+import json
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from .decision_validation import summarize_validation, validate_round_decisions
+from .sim_event_provenance import EVENT_PROVENANCE_SCENARIO, classify_event
+from .world_delta import CARRIED_FROM_ROUND_KEY, fit_whole_lines
 from .worldstate import (
     CONVERGENCE_POLICY_V1,
     ROUND_STATUS_ABSTAINED,
@@ -69,6 +78,18 @@ _UNIT_ZH = {"day": "天", "week": "周", "half_month": "半月", "month": "月",
 # 以及日历模式下 _inertia_for_gap 的 avg_gap（= 单位名义天数）。
 _UNIT_NOMINAL_DAYS = [("day", 1.0), ("week", 7.0), ("half_month", 15.22),
                       ("month", 30.44), ("quarter", 91.31), ("half_year", 182.62)]
+
+# SIM-8 (P23 follow-on): the period's scheduled events as the elicitor sees them. The
+# header labels them exogenous research-timeline items (never an actor's words) whose
+# outcome is still open; the block carries no WorldState number and asks for no direction.
+EVENTS_BLOCK_HEADER = ("本时段日程事件（来自研究时间线的预期外生事件，并非任何角色的发言；"
+                       "结果尚未确定）：")
+EVENTS_BLOCK_MAX_CHARS = 800
+_SCENARIO_EVENT_PREFIX = "【情景假设】"
+# An event carried out of a round no elicitation saw (SIM-6's in-band dead-round carry, an
+# in-band round with an empty roster, or a post-hoc round without replayed actions): it
+# fired in an earlier period, so it is not presented as this period's own event.
+_CARRIED_EVENT_PREFIX = "【更早时段】"
 
 
 def _cfg(name: str, default: Any) -> Any:
@@ -170,6 +191,135 @@ def _render_period_block(round_num: int, n_rounds: Optional[int],
     return block
 
 
+def _event_pair(ev: Any) -> Optional[Tuple[str, str]]:
+    """SIM-8: the ``(date, content)`` identity of a scheduled event; ``None`` when the
+    row is not a dict or has no content (such a row renders nothing). Whitespace runs
+    (line breaks included) in the content collapse to one space, so dedupe, the cache
+    digest and the rendered one-line item share a single identity."""
+    if not isinstance(ev, dict):
+        return None
+    content = " ".join(str(ev.get("content", "") or "").split())
+    if not content:
+        return None
+    return str(ev.get("date", "") or "").strip(), content
+
+
+def _event_rows(events: Any) -> List[Dict[str, Any]]:
+    """SIM-8: the dict rows of an events value; a non-iterable value counts as none."""
+    try:
+        return [ev for ev in (events or []) if isinstance(ev, dict)]
+    except TypeError:
+        return []
+
+
+def _mark_carried(ev: Dict[str, Any], source_round: int) -> Dict[str, Any]:
+    """SIM-8: a copy of ``ev`` labelled as carried out of ``source_round`` (1-based), or
+    ``ev`` itself when it already names the earlier round it was carried from."""
+    if ev.get(CARRIED_FROM_ROUND_KEY) is not None:
+        return ev
+    return {**ev, CARRIED_FROM_ROUND_KEY: source_round}
+
+
+def _carry_unreplayed_events(events_by_round: Dict[int, Any],
+                             replayed_rounds: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+    """SIM-8: post-hoc parity with SIM-6's in-band dead-round carry.
+
+    A round (1-based, ``>= 1``) with scheduled events but no replayed actions is never
+    elicited, so its events join the next replayed round after that round's own events,
+    each copy labelled with its source round (``_mark_carried``; ascending source order,
+    like the in-band merge). Events after the last replayed round reach no elicitation,
+    as in-band, where no later step exists. Returns ``{replayed round: [event, ...]}`` for
+    the replayed rounds that have any; the input is not mutated.
+    """
+    replayed = sorted(set(replayed_rounds))
+    replayed_set = set(replayed)
+    out: Dict[int, List[Dict[str, Any]]] = {}
+    for rnd in replayed:
+        own = _event_rows(events_by_round.get(rnd))
+        if own:
+            out[rnd] = own
+    sources = sorted(k for k in events_by_round
+                     if isinstance(k, int) and k >= 1 and k not in replayed_set)
+    for src in sources:
+        i = bisect.bisect_right(replayed, src)
+        if i == len(replayed):
+            break  # sorted sources: every later one is past the last replayed round too
+        carried = [_mark_carried(ev, src) for ev in _event_rows(events_by_round[src])]
+        if carried:
+            out.setdefault(replayed[i], []).extend(carried)
+    return out
+
+
+def _unique_events(events: Any) -> List[Tuple[Tuple[str, str], Dict[str, Any]]]:
+    """SIM-8: renderable events deduplicated on ``(date, content)`` in input order (the
+    first occurrence wins); a non-iterable value counts as no events."""
+    seen: set = set()
+    out: List[Tuple[Tuple[str, str], Dict[str, Any]]] = []
+    for ev in _event_rows(events):
+        pair = _event_pair(ev)
+        if pair is None or pair in seen:
+            continue
+        seen.add(pair)
+        out.append((pair, ev))
+    return out
+
+
+def _render_event_item(pair: Tuple[str, str], ev: Dict[str, Any]) -> str:
+    """One ``- `` line. Date rule of the WORLD CLOCK header: add ``[date] `` unless the
+    content already starts with ``[``; scenario injections and carried events are
+    labelled. ``pair`` comes from ``_event_pair``, whose content is already one line."""
+    date_s, content = pair
+    if date_s and not content.startswith("["):
+        content = f"[{date_s}] {content}"
+    if classify_event(ev) == EVENT_PROVENANCE_SCENARIO:
+        content = _SCENARIO_EVENT_PREFIX + content
+    if ev.get(CARRIED_FROM_ROUND_KEY) is not None:  # same test as world_delta's section
+        content = _CARRIED_EVENT_PREFIX + content
+    return "- " + content
+
+
+def _events_omitted_marker(n: int) -> str:
+    return f"（另有 {n} 条事件省略）"
+
+
+def _render_events_block(events: Optional[List[Dict[str, Any]]],
+                         max_chars: int = EVENTS_BLOCK_MAX_CHARS) -> str:
+    """SIM-8: the period's scheduled events as a labelled exogenous block ('' for none).
+
+    ``EVENTS_BLOCK_HEADER`` then one ``- `` line per unique ``(date, content)`` event in
+    input order. The block (header included, no trailing newline) keeps whole lines within
+    ``max_chars`` and ends with ``（另有 N 条事件省略）`` when lines are dropped, via
+    SIM-6's ``fit_whole_lines``: when not even the first line fits it is cut with an
+    explicit ``…(truncated)`` ending rather than leaving a header over nothing. A
+    ``max_chars`` below header plus marker still shows both (never a silent omission).
+    """
+    unique = _unique_events(events)
+    if not unique:
+        return ""
+    lines = [_render_event_item(pair, ev) for pair, ev in unique]
+    kept, omitted = fit_whole_lines(lines, int(max_chars) - len(EVENTS_BLOCK_HEADER) - 1,
+                                    _events_omitted_marker)
+    parts = [EVENTS_BLOCK_HEADER, *kept]
+    if omitted:
+        parts.append(_events_omitted_marker(omitted))
+    return "\n".join(parts)
+
+
+def _events_digest(events: Optional[List[Dict[str, Any]]]) -> str:
+    """SIM-8: cache-key component for a round's events — sha1 over the sorted unique
+    ``(date, content)`` pairs, first 16 hex characters.
+
+    Deliberately blind to event order and to the scenario/carried labels (the spec's
+    definition): two keys could then share one elicitation although their blocks differ
+    in those, but only for rounds with the same roster AND the same period label or
+    as_of. Calendar labels are unique per period, and the post-hoc runner passes events
+    only in calendar mode, so runs do not hit that case in practice.
+    """
+    pairs = sorted({pair for pair, _ev in _unique_events(events)})
+    blob = json.dumps(pairs, ensure_ascii=False).encode("utf-8")
+    return hashlib.sha1(blob, usedforsecurity=False).hexdigest()[:16]
+
+
 def _build_round_decision_prompt(scenarios: List[str], active: List[Dict[str, Any]],
                                  round_num: int, as_of: Optional[str],
                                  base_shares: Optional[Dict[str, float]] = None,
@@ -177,7 +327,8 @@ def _build_round_decision_prompt(scenarios: List[str], active: List[Dict[str, An
                                  period: Optional[Dict[str, Any]] = None,
                                  n_rounds: Optional[int] = None,
                                  horizon_date: Optional[str] = None,
-                                 unit: Optional[str] = None) -> str:
+                                 unit: Optional[str] = None,
+                                 events: Optional[List[Dict[str, Any]]] = None) -> str:
     sc_list = "、".join(scenarios)
     roster = "\n".join(_render_roster_line(a) for a in active)
     when = f"（对应时点约 {as_of}）" if as_of else ""
@@ -199,6 +350,14 @@ def _build_round_decision_prompt(scenarios: List[str], active: List[Dict[str, An
     abstain_line = (
         f'若某角色本轮在结果上没有实质利害或无法判断，可让它选择 "{ABSTAIN_TOKEN}"（不计入）。\n'
         if abstain_allowed else "")
+    # SIM-8: the period's scheduled events, right before the roster (advisory context for
+    # the elicitor, not a roster row). None/[] → "" and the prompt is byte-identical.
+    try:
+        events_block = _render_events_block(events) if events else ""
+    except Exception as _ev_err:  # noqa: BLE001 — advisory text never fails the round
+        logger.warning("决策通道事件块渲染失败（已降级为无事件提示词）: %s", _ev_err)
+        events_block = ""
+    events_line = f"{events_block}\n" if events_block else ""
     return (
         f"这是一个预测推演。候选**互斥**情景：{sc_list}。\n"
         f"{base_line}"
@@ -209,6 +368,7 @@ def _build_round_decision_prompt(scenarios: List[str], active: List[Dict[str, An
         "只输出 JSON（不要解释）："
         '{"decisions": [{"agent_id": <id>, "scenario": "<必须取自上面候选>", '
         '"magnitude": 0-1, "confidence": 0-1}]}\n'
+        f"{events_line}"
         f"角色名册：\n{roster}\n"
     )
 
@@ -221,6 +381,8 @@ def _elicit_round_decisions(llm, scenarios: List[str], active: List[Dict[str, An
                             n_rounds: Optional[int] = None,
                             horizon_date: Optional[str] = None,
                             unit: Optional[str] = None,
+                            report: Optional[Dict[str, Any]] = None,
+                            events: Optional[List[Dict[str, Any]]] = None,
                             ) -> Tuple[List[Dict[str, Any]], str]:
     """One batched structured call assigning each active agent a scenario commitment.
 
@@ -240,29 +402,61 @@ def _elicit_round_decisions(llm, scenarios: List[str], active: List[Dict[str, An
     list; the caller decides what the status means for WorldState/convergence.
     ``period``/``n_rounds``/``horizon_date``/``unit`` 仅在日历模式提供，切换提示词
     为 spec §5 的时段框架。
+
+    SIM-2 (C26): with ``DECISION_CHANNEL_VALIDATION`` on (default) the reply is
+    bound to ``active`` by ``validate_round_decisions`` (canonical roster ids,
+    unknown ids and duplicates dropped, magnitude/confidence finite and clamped
+    to [0, 1]) and its reason-coded record is copied into ``report``; a failed
+    call or payload sets ``report["measured"] = False``. ``max_tokens`` scales
+    with rosters above 17 entries. With the flag off the legacy loop runs
+    unchanged and ``report`` is untouched.
+
+    SIM-8: ``events`` (the period's scheduled events) is rendered into the prompt
+    as a labelled exogenous block before the roster; ``None``/``[]`` leaves the
+    prompt byte-identical.
     """
     if not active or not scenarios:
         return [], ROUND_STATUS_MISSING
+    validate = bool(_cfg("DECISION_CHANNEL_VALIDATION", True))
+    # SIM-2: ~96 output tokens per roster row plus headroom; 2048 up to 17 rows.
+    max_tokens = min(8192, max(2048, 96 * (len(active) + 1) + 256)) if validate else 2048
     try:
         raw = llm.chat_json(
             messages=[{"role": "user",
                        "content": _build_round_decision_prompt(
                            scenarios, active, round_num, as_of, base_shares, abstain_allowed,
                            period=period, n_rounds=n_rounds,
-                           horizon_date=horizon_date, unit=unit)}],
+                           horizon_date=horizon_date, unit=unit, events=events)}],
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=max_tokens,
         )
     except Exception as _elicit_err:  # noqa: BLE001 — 一轮 elicit 失败不拖垮整条决策通道
         # Foglamp WP1 (1C/I-16)：失败必须显式入账（round_status=failed），不得再
         # 伪装成「无承诺→先验静态演化→看似收敛」。升级为 warning 级告警。
         logger.warning("决策通道单轮 elicit 失败（round_status=failed，本轮不更新 WorldState）: %s",
                        _elicit_err)
+        if validate and report is not None:
+            report["measured"] = False
         return [], ROUND_STATUS_FAILED
     decs = raw.get("decisions") if isinstance(raw, dict) else None
     if not isinstance(decs, list):
         # 模型返回了不符合契约的载荷：这是失败，不是沉默（I-16）。
+        if validate and report is not None:
+            report["measured"] = False
         return [], ROUND_STATUS_FAILED
+    if validate:
+        try:
+            checked = validate_round_decisions(decs, active, scenarios,
+                                               abstain_token=ABSTAIN_TOKEN)
+        except Exception as _val_err:  # noqa: BLE001 — fail closed: an unvalidated reply never votes
+            logger.warning("决策通道单轮校验异常（round_status=failed，本轮不更新 WorldState）: %s",
+                           _val_err)
+            if report is not None:
+                report["measured"] = False
+            return [], ROUND_STATUS_FAILED
+        if report is not None:
+            report.update(checked["record"])
+        return checked["accepted"], checked["round_status"]
     out: List[Dict[str, Any]] = []
     abstained = 0
     valid = set(scenarios)
@@ -304,6 +498,14 @@ def elicit_round(roster: List[Dict[str, Any]],
     Foglamp WP1 (1C/I-16)：本轮的类型化结果写入 ``period_ctx["round_status"]``
     （committed/abstained/silent/failed/missing）——调用方必须把它传给
     ``WorldState.step(round_status=...)``，使失败/沉默轮不再伪装成稳定。
+
+    SIM-2 (C26): when ``DECISION_CHANNEL_VALIDATION`` produced a record it is
+    written to ``period_ctx["decision_validation"]`` (``{"measured": False}``
+    for a failed call); roster-canonical ids make the outcome-power lookup hit.
+
+    SIM-8: optional ``events`` key (the period's scheduled events) reaches the
+    prompt only while ``SIM_DECISION_EVENTS`` is on; off → ignored, prompt
+    byte-identical.
     """
     ctx = period_ctx or {}
     llm = ctx.get("llm")
@@ -317,13 +519,18 @@ def elicit_round(roster: List[Dict[str, Any]],
     except (TypeError, ValueError):
         rnd = 0
     period = ctx.get("period") if isinstance(ctx.get("period"), dict) else None
+    events = ctx.get("events") if _cfg("SIM_DECISION_EVENTS", True) else None
+    report: Dict[str, Any] = {}
     decisions, round_status = _elicit_round_decisions(
         llm, scenarios, roster, rnd, ctx.get("as_of"),
         ctx.get("base_shares"), bool(ctx.get("abstain_allowed", True)),
         period=period, n_rounds=ctx.get("n_rounds"),
-        horizon_date=ctx.get("horizon_date"), unit=ctx.get("unit"))
+        horizon_date=ctx.get("horizon_date"), unit=ctx.get("unit"), report=report,
+        events=events)
     if isinstance(period_ctx, dict):
         period_ctx["round_status"] = round_status
+        if report:  # SIM-2: per-round validation record (absent with the flag off)
+            period_ctx["decision_validation"] = report
     pmap = {e.get("agent_id"): e.get("outcome_power", 1.0) for e in roster}
     period_end = str(period.get("period_end")) if period and period.get("period_end") else None
     out: List[Dict[str, Any]] = []
@@ -532,6 +739,116 @@ def _fan_out_elicit(tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]
     return results
 
 
+_FALLBACK_MAX_SHARE_DEFAULT = 0.5
+
+
+def _fallback_max_share() -> float:
+    """SIM-2: ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` as a share in ``[0, 1]``.
+
+    A non-numeric, non-finite or out-of-range value (``nan``, ``50`` meant as a
+    percent, a negative) would silently disable or invert the fallback gate, so
+    it falls back to the 0.5 default with a warning instead (fail closed).
+    """
+    raw = _cfg("DECISION_CHANNEL_FALLBACK_MAX_SHARE", _FALLBACK_MAX_SHARE_DEFAULT)
+    try:
+        threshold = float(raw)
+    except (TypeError, ValueError):
+        threshold = math.nan
+    if math.isfinite(threshold) and 0.0 <= threshold <= 1.0:
+        return threshold
+    logger.warning("DECISION_CHANNEL_FALLBACK_MAX_SHARE=%r 不是 [0,1] 内的有限份额，"
+                   "按默认 %.1f 裁定", raw, _FALLBACK_MAX_SHARE_DEFAULT)
+    return _FALLBACK_MAX_SHARE_DEFAULT
+
+
+def decision_channel_verdict(accounting: Dict[str, Any], *,
+                             unaccounted_rounds: int = 0,
+                             fallback_share: Optional[float] = None) -> Dict[str, Any]:
+    """Foglamp WP1 (1C/1D, I-11/I-16) typed run-level validity verdict, shared by both
+    decision-channel producers (SIM-1): post-hoc ``run_decision_channel`` and the
+    in-band calendar evolution in run_parallel_simulation.
+
+    ``accounting`` is ``WorldState.round_accounting()`` and is never mutated.
+    ``unaccounted_rounds`` counts rounds the run executed but the WorldState never
+    stepped (in-band: pre-resume rounds after a lossy resume, rounds dead on every
+    platform). They are booked as ``missing`` and widen the coverage denominator —
+    the frozen policy's rule "missing data yields inconclusive, not convergence".
+    With ``0`` the returned accounting equals the input (no new key).
+
+    The two producers share the verdict rule but not the round set they account:
+    post-hoc ``run_decision_channel`` replays only rounds present in the action log
+    and always passes ``0``, so a round without any action never reaches its
+    denominator, whereas the in-band producer books every round it saw but never
+    stepped. The same run can therefore be ``inconclusive`` in-band and ``valid``
+    post-hoc.
+
+      - valid        — no failed rounds and at least
+                       ``CONVERGENCE_POLICY_V1["min_valid_coverage"]`` of the
+                       accounted rounds (including unaccounted rounds booked as
+                       missing) are committed/abstained
+      - inconclusive — some usable rounds, but provider failures (``failed_rounds``)
+                       or silent/missing rounds (``low_valid_coverage``) keep the run
+                       below the frozen convergence policy's evidence bar
+      - invalid      — zero usable rounds (``no_valid_rounds``; dead channel)
+
+    SIM-2 (C26): ``fallback_share`` is the run-level share of roster slots
+    without an accepted or abstained answer (``summarize_validation``). A run
+    that would be ``valid`` becomes ``inconclusive`` (``fallback_share_exceeded``)
+    when it exceeds ``DECISION_CHANNEL_FALLBACK_MAX_SHARE`` (validated by
+    ``_fallback_max_share``) or is not finite; ``None`` (no validation record)
+    leaves the verdict unchanged.
+
+    A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update. Even a
+    valid run defaults to diagnostic_only until an outcome-blind prospective study
+    promotes a validated update rule (WP6/12/14); validated_update is never emitted
+    (fail closed). ``CONVERGENCE_POLICY_V1`` is read, never modified.
+
+    Returns ``{round_accounting, validity, validity_reasons, forecast_effect}``.
+    """
+    acct = dict(accounting)
+    if isinstance(acct.get("counts"), dict):
+        acct["counts"] = dict(acct["counts"])
+    n = max(0, int(unaccounted_rounds))
+    if n > 0:
+        counts = acct["counts"] = dict(acct.get("counts") or {})
+        counts[ROUND_STATUS_MISSING] = int(counts.get(ROUND_STATUS_MISSING, 0) or 0) + n
+        acct["rounds_accounted"] = int(acct.get("rounds_accounted", 0) or 0) + n
+        acct["missing_rounds"] = int(acct.get("missing_rounds", 0) or 0) + n
+        acct["valid_coverage"] = round(
+            int(acct.get("valid_transitions", 0) or 0) / acct["rounds_accounted"], 6)
+        acct["unaccounted_rounds"] = n
+    reasons: List[str] = []
+    if int(acct.get("valid_transitions", 0) or 0) <= 0:
+        validity = "invalid"
+        reasons.append("no_valid_rounds")
+    else:
+        if int(acct.get("failed_rounds", 0) or 0) > 0:
+            reasons.append("failed_rounds")
+        if float(acct.get("valid_coverage", 0.0) or 0.0) < float(
+                CONVERGENCE_POLICY_V1["min_valid_coverage"]):
+            reasons.append("low_valid_coverage")
+        validity = "inconclusive" if reasons else "valid"
+    if validity == "valid" and fallback_share is not None:
+        share = float(fallback_share)
+        if not math.isfinite(share) or share > _fallback_max_share():
+            validity = "inconclusive"
+            reasons = ["fallback_share_exceeded"]
+    if validity != "valid":
+        forecast_effect = "no_update"
+    else:
+        effect_policy = str(_cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                            or "diagnostic_only").strip().lower()
+        # validated_update is unavailable until WP6/12/14 promotion (fail closed).
+        forecast_effect = ("diagnostic_only" if effect_policy != "no_update"
+                           else "no_update")
+    return {
+        "round_accounting": acct,
+        "validity": validity,
+        "validity_reasons": reasons,
+        "forecast_effect": forecast_effect,
+    }
+
+
 def run_decision_channel(
     actions: List[Dict[str, Any]],
     agent_configs: Optional[List[Dict[str, Any]]],
@@ -542,11 +859,13 @@ def run_decision_channel(
     conv_eps: float = 0.02,
     round_to_date=None,
     round_dates: Optional[List[Dict[str, Any]]] = None,
-    max_active_per_round: int = 60,
+    max_active_per_round: Optional[int] = None,
     concurrency: Optional[int] = None,
     abstain_allowed: bool = True,
     posts_by_round: Optional[Dict[int, Dict[Any, str]]] = None,
     affect_by_agent: Optional[Dict[Any, str]] = None,
+    events_by_round: Optional[Dict[int, List[Dict[str, Any]]]] = None,
+    carry_unreplayed_events: bool = False,
 ) -> Dict[str, Any]:
     """Replay the simulation rounds → evolve a single WorldState → modeled outcome.
 
@@ -559,8 +878,17 @@ def run_decision_channel(
     ``{period_start, period_end, label}``）——提供时提示词切换为时段框架、缓存键改为
     ``(roster 签名, 时段 label)``、decisions/轨迹行带 ``period_end``，并按
     ``WORLDSTATE_ENTROPY_MIX`` 传入每时段天数做熵地板；缺省 ``None`` 走旧路径，逐字节不变。
-    ``posts_by_round[round][agent_id]`` and
-    ``affect_by_agent[agent_id]`` optionally enrich the prompt (R2-SIM-1). Returns
+    ``max_active_per_round`` caps the individually listed actors per round (the
+    tail collapses into one public block); ``None`` reads
+    ``DECISION_CHANNEL_MAX_ACTIVE``. ``posts_by_round[round][agent_id]`` and
+    ``affect_by_agent[agent_id]`` optionally enrich the prompt (R2-SIM-1).
+    ``events_by_round[round]`` (1-based runtime round → that period's scheduled events,
+    SIM-8) adds a labelled exogenous-events block to that round's prompt while
+    ``SIM_DECISION_EVENTS`` is on; only such rounds extend the cache key with an events
+    digest, so rounds without events keep today's key and dedupe (R2-EXEC-10).
+    ``carry_unreplayed_events`` (the runner passes it with SIM-6's SIM_PERIOD_CONTEXT_V2)
+    moves the events of rounds absent from the action log into the next replayed round,
+    labelled as carried (``_carry_unreplayed_events``), matching the in-band evolver. Returns
     ``{outcome, trajectory, decisions, converged_at, n_rounds, ...}``; empty seed → ``{}``.
     """
     scenarios = [str(s) for s in (seed or {}).get("scenarios", []) if str(s).strip()]
@@ -575,7 +903,12 @@ def run_decision_channel(
     posts_by_round = posts_by_round or {}
     affect_by_agent = affect_by_agent or {}
 
-    cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", max_active_per_round) or max_active_per_round)
+    # SIM-2: an explicit max_active_per_round wins; otherwise the DECISION_CHANNEL_MAX_ACTIVE
+    # knob (default 60, the value this keyword used to default to).
+    if max_active_per_round is not None:
+        cap = int(max_active_per_round)
+    else:
+        cap = int(_cfg("DECISION_CHANNEL_MAX_ACTIVE", 60) or 60)
     if concurrency is None:
         concurrency = int(_cfg("OASIS_SEMAPHORE", 8) or 8)
 
@@ -631,6 +964,17 @@ def run_decision_channel(
     # Phase 1 (parallel): one elicitation per unique (roster, date) key (R2-EXEC-10 cache
     # + SIM-6/R2-EXEC-8 fan-out). round_num for the prompt is the first round using the
     # key. 日历模式缓存键 = (roster 签名, 时段 label)——机制同旧的 (签名, as_of)。
+    # SIM-8: a round with scheduled events appends an events digest to its key (hours-mode
+    # rounds sharing an as_of date but not their events must not share one elicitation);
+    # rounds without events, and SIM_DECISION_EVENTS=false, keep the key above. With
+    # carry_unreplayed_events, a round absent from the action log hands its events to the
+    # next replayed round (labelled carried) instead of reaching no elicitation.
+    events_on = (isinstance(events_by_round, dict) and bool(events_by_round)
+                 and bool(_cfg("SIM_DECISION_EVENTS", True)))
+    events_src: Dict[int, Any] = {}
+    if events_on:
+        events_src = (_carry_unreplayed_events(events_by_round, ordered_rounds)
+                      if carry_unreplayed_events else events_by_round)
     tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]] = {}
     round_key: Dict[int, Any] = {}
     for rnd in ordered_rounds:
@@ -638,6 +982,9 @@ def run_decision_channel(
         p = period_by_round.get(rnd)
         key = (_roster_signature(active),
                str(p.get("label")) if p and p.get("label") else as_of_by_round[rnd])
+        round_events = [ev for _pair, ev in _unique_events(events_src.get(rnd))]
+        if round_events:
+            key = key + (_events_digest(round_events),)
         round_key[rnd] = key
         if key not in tasks:
             ctx: Dict[str, Any] = {
@@ -649,6 +996,8 @@ def run_decision_channel(
                 ctx.update({"period": p, "n_rounds": n_rounds_total,
                             "horizon_date": seed.get("horizon_date"),
                             "unit": calendar_unit})
+            if round_events:
+                ctx["events"] = round_events
             tasks[key] = (active, ctx)
     results = _fan_out_elicit(tasks, concurrency)
 
@@ -665,6 +1014,7 @@ def run_decision_channel(
     if period_by_round and seed.get("as_of_date"):
         trajectory[0]["as_of"] = str(seed.get("as_of_date"))  # spec §6: 第 0 行 as_of=as_of_date
     all_decisions: List[Dict[str, Any]] = []
+    validation_records: List[Dict[str, Any]] = []  # SIM-2: one per replayed round
     converged_at: Optional[int] = None
     stable_streak = 0
     prev_date = seed.get("as_of_date")
@@ -692,8 +1042,8 @@ def run_decision_channel(
         entropy_days = _period_days(p) if (entropy_mix_on and p) else None  # 熵地板（spec §4）
         # Foglamp WP1 (1C/I-16): the typed elicitation status was written into the
         # shared task ctx by elicit_round; a cached roster key reuses one status.
-        round_status = str((tasks[round_key[rnd]][1] or {}).get("round_status")
-                           or ROUND_STATUS_MISSING)
+        task_ctx = tasks[round_key[rnd]][1] or {}
+        round_status = str(task_ctx.get("round_status") or ROUND_STATUS_MISSING)
         ws.step(commitments_from_decisions(decisions), inertia=eff_inertia,
                 entropy_mix_days=entropy_days, round_status=round_status)
         snap = {"round": rnd, **ws.outcome()}
@@ -704,6 +1054,12 @@ def run_decision_channel(
             for fk in ("period_start", "period_end", "label"):
                 if p.get(fk):
                     snap[fk] = str(p[fk])
+        # SIM-2: the round's validation record; a cached roster key contributes it
+        # once per replayed round, like its round_status.
+        rec = task_ctx.get("decision_validation")
+        if isinstance(rec, dict):
+            snap["decision_validation"] = rec
+            validation_records.append(rec)
         trajectory.append(snap)
         # SIM-1: windowed convergence — require the EWMA delta to stay below eps for
         # SIM_CONVERGENCE_WINDOW consecutive rounds (after a 2-round warmup) before the
@@ -721,32 +1077,18 @@ def run_decision_channel(
     ws.converged_at = converged_at
     out = ws.outcome()
     out["converged_at"] = converged_at
-    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict.
-    #  - valid        — every accounted round succeeded (committed/abstained) at
-    #                   policy coverage, no provider failures
-    #  - inconclusive — some usable rounds, but failures/silence keep the run
-    #                   below the frozen convergence policy's evidence bar
-    #  - invalid      — zero usable rounds (dead channel)
-    # A non-``valid`` run MUST NOT move a forecast: forecast_effect=no_update.
-    # Even a valid run defaults to diagnostic_only until an outcome-blind
-    # prospective study promotes a validated update rule (WP6/12/14).
-    accounting = ws.round_accounting()
-    if accounting["valid_transitions"] <= 0:
-        validity = "invalid"
-    elif (accounting["failed_rounds"] > 0
-          or accounting["valid_coverage"] < float(
-              CONVERGENCE_POLICY_V1["min_valid_coverage"])):
-        validity = "inconclusive"
-    else:
-        validity = "valid"
-    if validity != "valid":
-        forecast_effect = "no_update"
-    else:
-        effect_policy = str(_cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
-                            or "diagnostic_only").strip().lower()
-        # validated_update is unavailable until WP6/12/14 promotion (fail closed).
-        forecast_effect = ("diagnostic_only" if effect_policy != "no_update"
-                           else "no_update")
+    # Foglamp WP1 (1C/1D, I-11/I-16): typed run-level validity verdict. The rule is
+    # shared with the in-band calendar producer (SIM-1), but this path accounts only
+    # rounds present in the action log (unaccounted_rounds=0) — see
+    # decision_channel_verdict.
+    validation_summary: Optional[Dict[str, Any]] = None
+    if validation_records:  # SIM-2: run-level fallback_share folded into the verdict
+        validation_summary = summarize_validation(
+            validation_records,
+            unmeasured_rounds=len(ordered_rounds) - len(validation_records))
+    verdict = decision_channel_verdict(
+        ws.round_accounting(),
+        fallback_share=(validation_summary or {}).get("fallback_share"))
     result = {
         "outcome": out,
         "trajectory": trajectory,
@@ -757,11 +1099,14 @@ def run_decision_channel(
         "schema_version": 2,
         # Foglamp WP1 (1C/1D): validity + epistemic labeling. WorldState output
         # is an elicited model projection, never authoritative evidence (I-11).
-        "round_accounting": accounting,
-        "validity": validity,
-        "forecast_effect": forecast_effect,
+        "round_accounting": verdict["round_accounting"],
+        "validity": verdict["validity"],
+        "validity_reasons": verdict["validity_reasons"],  # SIM-1 (additive)
+        "forecast_effect": verdict["forecast_effect"],
         "epistemic_status": "elicited_model_projection",
     }
+    if validation_summary is not None:
+        result["decision_validation"] = validation_summary
     if period_by_round:
         # 带日期轨迹 schema v3（spec §6）；v2 hours 路径原样。converged/converged_at
         # 只是稳定性信号——日历模式从不据此早停，回放始终推演到判定日。

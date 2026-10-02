@@ -23,12 +23,16 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import random
 import re
 import time
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
+
+from .point_in_time import parse_stamp_strict
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +147,211 @@ def _fresh_yes_price(raw: Any) -> Optional[float]:
     return prob
 
 
+# ------------------------------------------------------------ endDate hygiene
+# TIME-3: a market whose endDate has passed can stay open (closed=false) at a near-settled
+# price such as 0.03 while it awaits UMA resolution, and so passes every closed / 0-1 gate.
+# Its price still informs evidence, but it must never anchor a binary forecast or seed SIM
+# priors. Every comparison takes an injected ``now`` (market_clock_now() by default) so the
+# checks are replayable and tests never depend on the wall clock.
+_END_DATE_GRACE_MAX_HOURS = 168.0
+_ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_DATE_ONLY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[Zz]?$")
+
+
+def market_clock_now() -> datetime:
+    """Current UTC instant used for every endDate comparison and every requote ``quoted_at``
+    stamp (the single test monkeypatch point)."""
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """Aware UTC view of ``moment``; a naive datetime is read as UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def parse_market_end(value: Any) -> Optional[datetime]:
+    """Parse a Polymarket endDate into an aware UTC datetime; anything unusable → None.
+
+    This is the program's only endDate parser. Strings only (extended ``YYYY-MM-DD`` prefix):
+      * a trailing ``Z`` means UTC; offsets and fractional seconds are accepted;
+      * a date-only ``YYYY-MM-DD`` (a bare ``Z`` designator allowed) means the end of that
+        UTC day (23:59:59.999999);
+      * a naive timestamp is read as UTC; an aware one is converted to UTC.
+    Never raises (bad calendar values, overflow and non-strings all return None).
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not _ISO_DATE_PREFIX_RE.match(text):
+        return None
+    try:
+        date_only = _DATE_ONLY_RE.match(text)
+        if date_only:
+            day = date.fromisoformat(date_only.group(1))
+            return datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
+                            tzinfo=timezone.utc)
+        if text[-1] in "Zz":
+            text = text[:-1] + "+00:00"
+        return _as_utc(datetime.fromisoformat(text))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _clamp_grace_hours(value: Any) -> float:
+    """Grace hours as a finite float in [0, 168]; anything unusable → 0."""
+    hours = _coerce_float(value)
+    if hours is None or not math.isfinite(hours):
+        return 0.0
+    return max(0.0, min(_END_DATE_GRACE_MAX_HOURS, hours))
+
+
+def row_market_end(row: Any) -> Optional[datetime]:
+    """Parsed end of a normalized market row (``end_date``, then raw ``endDate``).
+    Public: the report's Market Cross-Check (FU-5) reads market ends through it too."""
+    if not isinstance(row, dict):
+        return None
+    return parse_market_end(row.get("end_date") or row.get("endDate"))
+
+
+def market_window_ended(row: Any, *, now: datetime, grace_hours: float = 0.0) -> bool:
+    """True iff the row's end date plus the grace period lies before ``now``.
+
+    Missing or unparseable end dates are tolerated (False): the gate only removes markets
+    it can prove are past their resolution window. Never raises."""
+    end = row_market_end(row)
+    if end is None or not isinstance(now, datetime):
+        return False
+    try:
+        return end + timedelta(hours=_clamp_grace_hours(grace_hours)) < _as_utc(now)
+    except OverflowError:
+        return False
+
+
+def end_date_gate_settings() -> Tuple[bool, float]:
+    """(PREDICTION_MARKETS_END_DATE_GATE, grace hours clamped to [0, 168]) from Config."""
+    return (bool(_cfg("PREDICTION_MARKETS_END_DATE_GATE", True)),
+            _clamp_grace_hours(_cfg("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0)))
+
+
+def stamp_window_ended(rows: Any, *, now: datetime,
+                       grace_hours: float = 0.0) -> Tuple[List[Dict[str, Any]], int]:
+    """Shallow-copy the dict rows; rows whose window ended gain ``window_ended=True`` and
+    ``window_ended_at`` (the parsed end, ISO UTC). Rows are never dropped. Returns the
+    copies and how many were stamped."""
+    out: List[Dict[str, Any]] = []
+    stamped = 0
+    for m in rows or []:
+        if not isinstance(m, dict):
+            continue
+        m2 = dict(m)
+        end = row_market_end(m2)
+        if end is not None and market_window_ended(m2, now=now, grace_hours=grace_hours):
+            m2["window_ended"] = True
+            m2["window_ended_at"] = end.isoformat()
+            stamped += 1
+        out.append(m2)
+    return out, stamped
+
+
+def exclude_window_ended(rows: Any, *, now: datetime,
+                         grace_hours: float = 0.0) -> Tuple[List[Any], List[Dict[str, Any]]]:
+    """Split rows into (eligible, excluded) for anchoring or SIM priors: a row is excluded
+    when its window ended at ``now`` or it already carries a ``window_ended`` stamp (e.g.
+    from the research snapshot). Both lists keep the input objects and their order."""
+    kept: List[Any] = []
+    excluded: List[Dict[str, Any]] = []
+    for m in rows or []:
+        if isinstance(m, dict) and (m.get("window_ended") is True
+                                    or market_window_ended(m, now=now,
+                                                           grace_hours=grace_hours)):
+            excluded.append(m)
+            continue
+        kept.append(m)
+    return kept, excluded
+
+
+def drop_window_ended_rows(rows: Any) -> Tuple[List[Any], int]:
+    """SIM-prior view of a market snapshot: under PREDICTION_MARKETS_END_DATE_GATE drop rows
+    whose window ended at market_clock_now() (or already stamped) and return how many were
+    dropped. Gate off → the rows unchanged and 0, so priors stay byte-identical."""
+    gate, grace = end_date_gate_settings()
+    if not gate:
+        return list(rows or []), 0
+    kept, excluded = exclude_window_ended(rows, now=market_clock_now(), grace_hours=grace)
+    return kept, len(excluded)
+
+
+# EVAL-6 (MARKET_ANCHOR_PRICE_TIME): when a row's implied_yes_prob was observed. A requote
+# stamps ``quoted_at``; a research or report-time snapshot row carries ``snapshot_as_of``,
+# which dates the price by the snapshot's as_of: an upper bound on when it was observed.
+# FU-11: research rows also carry the bridge's ``observed_at`` (when that row's price was
+# fetched), which the snapshot's as_of bounds from above.
+PRICE_TIME_BASIS_REQUOTE = "requote"
+PRICE_TIME_BASIS_OBSERVED = "observed"
+PRICE_TIME_BASIS_SNAPSHOT = "snapshot"
+
+
+def price_time_enabled() -> bool:
+    """MARKET_ANCHOR_PRICE_TIME from Config (default on)."""
+    return bool(_cfg("MARKET_ANCHOR_PRICE_TIME", True))
+
+
+def stamp_snapshot_as_of(rows: Any, as_of: Any) -> List[Dict[str, Any]]:
+    """Shallow copies of the dict rows, each dated by the snapshot time ``as_of``.
+
+    ``as_of`` is when the snapshot was written or fetched, an upper bound on when each row's
+    price was observed (a research snapshot also holds agent-tool rows priced earlier in the
+    run). A row that lacks ``snapshot_as_of`` gains ``as_of``; a row that already carries one
+    keeps its own. A blank or non-string ``as_of`` stamps nothing. MARKET_ANCHOR_PRICE_TIME
+    off → the dict rows themselves, untouched, so every artifact stays byte-identical.
+    Never raises."""
+    kept = [m for m in (rows or []) if isinstance(m, dict)]
+    if not price_time_enabled() or not isinstance(as_of, str) or not as_of.strip():
+        return kept
+    out: List[Dict[str, Any]] = []
+    for m in kept:
+        m2 = dict(m)
+        if not m2.get("snapshot_as_of"):
+            m2["snapshot_as_of"] = as_of
+        out.append(m2)
+    return out
+
+
+def market_price_time(row: Any) -> Optional[Tuple[str, str]]:
+    """``(price_time, basis)`` dating a market row's implied_yes_prob, or None when unknown.
+
+    ``quoted_at`` (stamped by requote_markets on a fresh price and kept through a later
+    failed requote, whose retained price is still that quote) → basis 'requote'; otherwise
+    ``observed_at`` (FU-11: the research bridge's per-row fetch time of the price the row
+    carries; written when MARKET_ANCHOR_PRICE_TIME was on in the research child) → basis
+    'observed'; otherwise ``snapshot_as_of`` (the research snapshot's as_of or the
+    report-time fetch time) → basis 'snapshot'. A 'snapshot' time is an upper bound on when
+    the price was observed, not the exact moment: the research bridge takes its as_of when
+    it writes the snapshot, after merging agent-tool rows that may have been priced hours
+    earlier. Only a zone-aware ISO date-time counts (parse_stamp_strict, no bare dates) and
+    it is returned exactly as stored. A row whose quoted_at is present but unusable is
+    unknown, never 'snapshot': its price came from a later requote, so the earlier snapshot
+    time would misdate it. An unusable observed_at is skipped instead: that price was
+    fetched before the snapshot was written, so the snapshot's upper bound still holds.
+    Never raises."""
+    if not isinstance(row, dict):
+        return None
+    quoted_at = row.get("quoted_at")
+    if quoted_at is not None:
+        if parse_stamp_strict(quoted_at, allow_date=False) is None:
+            return None
+        return quoted_at, PRICE_TIME_BASIS_REQUOTE
+    observed_at = row.get("observed_at")
+    if parse_stamp_strict(observed_at, allow_date=False) is not None:
+        return observed_at, PRICE_TIME_BASIS_OBSERVED
+    snapshot_as_of = row.get("snapshot_as_of")
+    if parse_stamp_strict(snapshot_as_of, allow_date=False) is None:
+        return None
+    return snapshot_as_of, PRICE_TIME_BASIS_SNAPSHOT
+
+
 def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
     """MON-1：从一条 Gamma /markets 行防御式解析判定终态；不可判定 → resolved=False（unknown）。
 
@@ -157,6 +366,10 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
     uma_raw = raw.get("umaResolutionStatus")
     if uma_raw is None:
         uma_raw = raw.get("umaResolutionStatuses")
+    if isinstance(uma_raw, (list, tuple)):
+        # EVAL-2: a status history sent as a real JSON array keeps its JSON form (never a
+        # Python repr), so current_uma_status can still read its last stage.
+        uma_raw = json.dumps(list(uma_raw), ensure_ascii=False, default=str)
     uma_status = str(uma_raw).strip() if uma_raw not in (None, "") else None
 
     names = _as_list(raw.get("outcomes"))
@@ -181,7 +394,62 @@ def _parse_resolution(raw: Any) -> Optional[Dict[str, Any]]:
         "resolved_yes_price": (round(resolved_yes_price, 4)
                                if resolved_yes_price is not None else None),
         "uma_status": uma_status,
+        # EVAL-2 (additive): when the market closed, and whether it settled at all.
+        "closed_time": _parse_closed_time(raw.get("closedTime")),
+        "resolution_status": _resolution_status(closed, resolved, uma_status, px),
     }
+
+
+# EVAL-2: a UMA-resolved market whose every outcome price sits at 0.5 ± this tolerance was
+# settled 50/50 (Polymarket's "unknown / ambiguous" resolution): final, but not a YES or NO.
+_AMBIGUOUS_PRICE_TOLERANCE = 0.01
+_UMA_RESOLVED_RE = re.compile(r"\bresolved\b", re.IGNORECASE)
+
+
+def _parse_closed_time(value: Any) -> Optional[str]:
+    """Gamma ``closedTime`` as a UTC ISO string, or None.
+
+    Only a date-time that names its zone is accepted (ISO with ``Z``/offset, or Gamma's
+    ``'YYYY-MM-DD HH:MM:SS+00'``); a bare date or a naive time would be a guess about when
+    the outcome became known. ``endDate`` is the scheduled end, never a known-at time, so it
+    is never used as a fallback."""
+    moment = parse_stamp_strict(value, allow_date=False)
+    return moment.isoformat() if moment is not None else None
+
+
+def current_uma_status(value: Any) -> str:
+    """EVAL-2: the current UMA stage of a Gamma ``uma_status``, lower-cased ('' when absent).
+
+    ``umaResolutionStatuses`` (the fallback key) is a stage history, a JSON-encoded
+    list such as ``'["proposed","resolved"]'`` or a list; its LAST entry is the current
+    stage, so an earlier proposal or dispute never keeps a resolved market pending. Any
+    other value is a single stage and is returned as it is."""
+    if isinstance(value, list):
+        stages: List[Any] = value
+    else:
+        text = str(value if value is not None else "").strip()
+        try:
+            parsed = json.loads(text) if text.startswith("[") else None
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, list):
+            return text.lower()
+        stages = parsed
+    last = stages[-1] if stages else None
+    return str(last).strip().lower() if last is not None else ""
+
+
+def _resolution_status(closed: bool, resolved: bool, uma_status: Optional[str],
+                       prices: List[Any]) -> str:
+    """'settled' (a YES/NO outcome converged), 'ambiguous' (UMA-resolved 50/50) or 'unknown'."""
+    if resolved:
+        return "settled"
+    if closed and _UMA_RESOLVED_RE.search(current_uma_status(uma_status)) and prices:
+        values = [_coerce_float(p) for p in prices]
+        if all(v is not None and abs(v - 0.5) <= _AMBIGUOUS_PRICE_TOLERANCE + 1e-9
+               for v in values):
+            return "ambiguous"
+    return "unknown"
 
 
 def _cap_per_event(ranked: List[Dict[str, Any]], max_per_event: int,
@@ -261,12 +529,18 @@ class PolymarketClient:
         # TRANSPORT-DIAG: 记录具体错误类名 + HTTP 状态（重试耗尽的瞬时状态码沿用 last_status）。
         error_class = ("HTTPStatusError" if isinstance(last_err, str)
                        else type(last_err).__name__ if last_err is not None else "UnknownError")
-        label = f"{error_class}:{last_status}" if last_status is not None else error_class
-        self.last_error = {"error_class": error_class, "http_status": last_status, "url": url}
+        self._record_failure(url, error_class, last_status, last_err)
+        return None
+
+    def _record_failure(self, url: str, error_class: str, http_status: Optional[int],
+                        detail: Any) -> None:
+        """TRANSPORT-DIAG accounting of one failed request: self.last_error + the
+        "类名[:状态]" counter in self.transport_errors, plus a warning."""
+        label = f"{error_class}:{http_status}" if http_status is not None else error_class
+        self.last_error = {"error_class": error_class, "http_status": http_status, "url": url}
         self.transport_errors[label] = self.transport_errors.get(label, 0) + 1
         logger.warning(f"Polymarket GET {url} 失败（降级为空结果；error_class={error_class}, "
-                       f"http_status={last_status}）: {last_err}")
-        return None
+                       f"http_status={http_status}）: {detail}")
 
     def _get(self, path: str, params: Dict[str, Any]) -> Any:
         """相对 Gamma 端点（self.base_url + path）的 GET；复用 _request 的降级纪律。"""
@@ -274,16 +548,27 @@ class PolymarketClient:
 
     # ------------------------------------------------------------- endpoints
     def search_events(self, query: str, limit: int = 15) -> List[Dict[str, Any]]:
-        """全文检索活跃事件（每个事件下挂多个市场）；失败/未启用返回 []。"""
+        """全文检索活跃事件（每个事件下挂多个市场）；失败/未启用返回 []。
+
+        INFRA-4：HTTP 200 但响应体不是 {"events": [...]}（含 JSON null 体）时照旧返回 []，
+        但按 _request 的同一口径记一次失败（InvalidSchema:200），不再静默当作「零命中」。
+        """
         if not self.enabled or not str(query or "").strip():
             return []
+        failures_before = sum(self.transport_errors.values())
         data = self._get("/public-search", {"q": str(query).strip(),
                                             "limit_per_type": limit,
                                             "events_status": "active"})
-        if not isinstance(data, dict):
-            return []
-        events = data.get("events")
-        return [e for e in events if isinstance(e, dict)] if isinstance(events, list) else []
+        events = data.get("events") if isinstance(data, dict) else None
+        if isinstance(events, list):
+            return [e for e in events if isinstance(e, dict)]
+        # None with a new failure recorded = _request already accounted a transport/HTTP error.
+        if data is not None or sum(self.transport_errors.values()) == failures_before:
+            shape = (f"events is {type(events).__name__}" if isinstance(data, dict)
+                     else f"body is {type(data).__name__}")
+            self._record_failure(self.base_url + "/public-search", "InvalidSchema", 200,
+                                 f"response is not {{'events': [...]}} ({shape})")
+        return []
 
     # -------------------------------------------------------------- snapshot
     def snapshot_for_queries(self, queries: List[str], per_query: Optional[int] = None,
@@ -345,7 +630,10 @@ class PolymarketClient:
           * price_at_research ← 原 implied_yes_prob（若已有 price_at_research 则沿用，幂等重入）；
           * implied_yes_prob  ← Gamma /markets 拉到的当前 "Yes" 价（覆盖旧值）；
           * price_delta       ← 现价 − 研究期价（有研究期价时才写）；
-          * 未知 / 已关闭 / 无可解析价 / 未启用 → 保留旧价并置 requote_failed=True。
+          * quoted_at         ← 本批取价时刻（UTC ISO，EVAL-6：仅 MARKET_ANCHOR_PRICE_TIME 开
+            且拿到现价时写）；
+          * 未知 / 已关闭 / 无可解析价 / 未启用 → 保留旧价并置 requote_failed=True（已有的
+            quoted_at 原样保留：留下的旧价仍是那次报价，照旧由它定时）。
         批量走 Gamma `/markets?id=<id>&id=<id>...`（httpx 把 list 值编码为重复 id 参数），
         超过 chunk 大小时分批（PREDICTION_MARKETS_REQUOTE_CHUNK，默认 20）。
         Degrade-safe：任一批失败只丢那一批的新价（对应行标 requote_failed），整体绝不抛。
@@ -362,6 +650,8 @@ class PolymarketClient:
                 seen_ids.add(mid)
                 ids.append(mid)
         fresh = self._fetch_fresh_markets(ids) if (self.enabled and ids) else {}
+        # EVAL-6：整批一个取价时刻（现价到手之后取），只盖在拿到现价的行上。
+        quoted_at = market_clock_now().isoformat() if price_time_enabled() else None
         out: List[Dict[str, Any]] = []
         for m in rows:
             m2 = dict(m)  # 浅拷贝：绝不原地污染调用方传入的行
@@ -375,11 +665,14 @@ class PolymarketClient:
             prob = _fresh_yes_price(fresh.get(mid)) if mid else None
             if prob is None:
                 # 未知/已关闭/无价/未启用 → 保留旧价，标记失败，清掉可能残留的旧 delta。
+                # 已有的 quoted_at 不动：它仍标定留下的旧价（EVAL-6）。
                 m2["requote_failed"] = True
                 m2.pop("price_delta", None)
             else:
                 m2["implied_yes_prob"] = round(prob, 4)
                 m2.pop("requote_failed", None)
+                if quoted_at is not None:
+                    m2["quoted_at"] = quoted_at
                 if research is not None:
                     m2["price_delta"] = round(prob - research, 4)
                 else:
@@ -387,11 +680,14 @@ class PolymarketClient:
             out.append(m2)
         return out
 
-    def _fetch_fresh_markets(self, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _fetch_fresh_markets(self, ids: List[str],
+                             answered: Optional[Set[str]] = None) -> Dict[str, Dict[str, Any]]:
         """按 id 批量拉 Gamma /markets，返回 {market_id: raw_row}；任一批失败只丢那一批。
 
         Gamma `/markets` 支持重复 id 参数（?id=a&id=b）批量取；httpx 会把 {"id": [...]}
         编码为重复 key。响应通常是市场对象数组，也容忍 {"markets": [...]} / {"data": [...]} 包装。
+        EVAL-2：传入 ``answered`` 时请求带显式 ``limit``（=本批 id 数，不吃 Gamma 的缺省页长），
+        并把判定源确实应答过的 id 加进去（见 ``_confirm_answered``）；失败批次的 id 不在其中。
         """
         out: Dict[str, Dict[str, Any]] = {}
         try:
@@ -402,7 +698,10 @@ class PolymarketClient:
             chunk = 20  # 分批大小非法 → 回落默认，避免 range 步长为 0 死循环
         for start in range(0, len(ids), chunk):
             batch = ids[start:start + chunk]
-            data = self._get("/markets", {"id": batch})
+            params: Dict[str, Any] = {"id": batch}
+            if answered is not None:
+                params["limit"] = len(batch)
+            data = self._get("/markets", params)
             if isinstance(data, list):
                 raw_rows = data
             elif isinstance(data, dict):
@@ -414,7 +713,51 @@ class PolymarketClient:
                     mid = str(raw.get("id") or "").strip()
                     if mid:
                         out[mid] = raw
+            if answered is not None:
+                answered.update(self._confirm_answered(batch, data, out))
         return out
+
+    @staticmethod
+    def _market_list(data: Any) -> Optional[List[Any]]:
+        """Gamma /markets 响应里的市场行列表；响应不是市场列表（失败 / 形状异常）→ None。"""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("markets", "data"):
+                if isinstance(data.get(key), list):
+                    return data[key]
+        return None
+
+    def _confirm_answered(self, batch: List[str], data: Any,
+                          out: Dict[str, Dict[str, Any]]) -> Set[str]:
+        """EVAL-2：本批里判定源确实应答过的 id（返回了该行，或确认无此市场）。
+
+        响应须是市场列表，且每行都是本批请求的 id（混进别的 id 说明 id 过滤没生效，
+        缺行什么也证明不了）。多 id 批次里缺的行可能只是被截断：逐个单 id（limit=1）
+        复查，单 id 请求应答且仍无该行才确认「无此市场」，复查拿到的行照常并入 ``out``。
+        一次请求失败绝不确认任何缺行，以免把存在的市场永久 terminal。"""
+        rows = self._market_list(data)
+        if rows is None:
+            return set()
+        returned = {str(raw.get("id") or "").strip() for raw in rows if isinstance(raw, dict)}
+        if not returned <= set(batch):
+            return set()
+        confirmed = set(returned)
+        omitted = [mid for mid in batch if mid not in returned]
+        if len(batch) == 1:
+            return confirmed | set(omitted)
+        for mid in omitted:
+            single = self._market_list(self._get("/markets", {"id": [mid], "limit": 1}))
+            if single is None:
+                continue
+            found = {str(raw.get("id") or "").strip(): raw
+                     for raw in single if isinstance(raw, dict)}
+            if not set(found) <= {mid}:
+                continue
+            if mid in found:
+                out[mid] = found[mid]
+            confirmed.add(mid)
+        return confirmed
 
     # -------------------------------------------------------- price history
     def fetch_price_history(self, clob_token_id: str, interval: str = "1d",
@@ -471,17 +814,30 @@ class PolymarketClient:
         的批量取数与降级纪律，逐条防御式解析终态：
 
             {market_id: {market_id, closed, resolved, resolved_outcome,
-                         resolved_yes_price, uma_status}}
+                         resolved_yes_price, uma_status, closed_time, resolution_status}}
 
         * closed              —— 市场是否已关闭（active 旗标在已判定市场上仍 True，不可靠）；
         * resolved            —— 是否可判定为确定结局（closed 且某结局价 ≥ HI，收敛到 0/1）；
         * resolved_outcome    —— 胜出结局名（"Yes"/"No"/…），无法判定为 None；
         * resolved_yes_price  —— 判定后 "Yes" 结局的价（胜出=~1 / 落败=~0），据此定二元真值；
-        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）。
+        * uma_status          —— 原样透传的 UMA 判定阶段字符串（诊断用；缺失为 None）；
+        * closed_time         —— EVAL-2：Gamma closedTime 的 UTC ISO（须带时区；缺失/不可解析
+                                 为 None，绝不以 endDate 代替）；
+        * resolution_status   —— EVAL-2：'settled' / 'ambiguous'（UMA 判定 50/50）/ 'unknown'。
 
         Degrade-safe：未启用 / 空输入 / 整批网络失败 → {}；单条字段缺失/形状异常 →
         该市场 resolved=False（unknown），绝不抛异常、绝不阻断监测主流程。
         """
+        return self.fetch_resolutions_answered(market_ids)[0]
+
+    def fetch_resolutions_answered(
+            self, market_ids: List[str]) -> Tuple[Dict[str, Dict[str, Any]], Set[str]]:
+        """EVAL-2：``(fetch_resolutions 的结果, 判定源确实应答过的 market id 集合)``。
+
+        应答 = 请求成功、响应是只含所请求 id 的市场列表，且返回了该行或经单 id 复查确认无此
+        市场（见 ``_confirm_answered``）。失败批次（网络 / 5xx / 非列表响应）、未经复查确认的
+        缺行与未启用时的 id 都不在集合里：结算据此只让「确认无数据」的条目走到 grace
+        terminal，绝不因一次瞬时失败或被截断的页永久终结条目。"""
         ids: List[str] = []
         seen: set = set()
         for mid in market_ids or []:
@@ -489,15 +845,16 @@ class PolymarketClient:
             if s and s not in seen:
                 seen.add(s)
                 ids.append(s)
+        answered: Set[str] = set()
         if not self.enabled or not ids:
-            return {}
-        fresh = self._fetch_fresh_markets(ids)
+            return {}, answered
+        fresh = self._fetch_fresh_markets(ids, answered=answered)
         out: Dict[str, Dict[str, Any]] = {}
         for mid, raw in fresh.items():
             parsed = _parse_resolution(raw)
             if parsed is not None:
                 out[mid] = parsed
-        return out
+        return out, answered
 
     @staticmethod
     def _normalize_market(raw: Any, matched_query: str,
@@ -577,15 +934,40 @@ def _requote_move(m: Dict[str, Any]) -> Optional[str]:
     return f"{r * 100:.0f}%→{c * 100:.0f}%"
 
 
-def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str:
+def window_ended_label(m: Dict[str, Any], zh: bool) -> str:
+    """TIME-3: suffix for a row stamped ``window_ended`` (its endDate passed, awaiting
+    settlement); unstamped rows → "" so their cells stay byte-identical. Public: the
+    report's Market Cross-Check (FU-5) labels its rows with the same strings."""
+    if m.get("window_ended") is not True:
+        return ""
+    end = parse_market_end(m.get("window_ended_at")) or row_market_end(m)
+    day = end.date().isoformat() if end is not None else ""
+    if zh:
+        return f" — 已过截止日 {day}，待结算" if day else " — 已过截止日，待结算"
+    return (f" — window ended {day}, awaiting settlement" if day
+            else " — window ended, awaiting settlement")
+
+
+def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en", *,
+                         now: Optional[datetime] = None) -> str:
     """把市场快照渲染为确定性的 markdown 表（无 LLM；空列表 → ""，注入自动跳过）。
 
     若任一行经过重报价（有 price_at_research 且现价与之不同）→ 追加一列 Δ 展示
     '研究期价→现价'（如 34%→41%）；没有任何行发生移动时不加该列，与旧渲染逐字节一致。
+    TIME-3：PREDICTION_MARKETS_END_DATE_GATE 开时先按 market_clock_now() 盖 window_ended 章
+    （浅拷贝，调用方不变）；已盖章的行在问题单元格后追加「window ended YYYY-MM-DD, awaiting
+    settlement」——行仍保留（其价格仍是证据），未盖章的输出逐字节不变。旗标关 → 不盖章也
+    不标注（即便输入行带研究期的 window_ended 章），与旧渲染逐字节一致。
+    ``now`` 把盖章时点钉在给定时刻（EVAL-19 回填按快照时刻渲染，与回填当天无关）；
+    省略 = market_clock_now()，与旧渲染逐字节一致。
     """
     rows = [m for m in (markets or []) if isinstance(m, dict)]
     if not rows:
         return ""
+    gate, grace = end_date_gate_settings()
+    if gate:
+        rows, _ = stamp_window_ended(rows, now=now if now is not None else market_clock_now(),
+                                     grace_hours=grace)
     zh = str(lang or "").lower().startswith("zh")
     show_delta = any(_requote_move(m) for m in rows)  # 有价格移动才加 Δ 列
     title = "### Prediction Market Signals (Polymarket)"
@@ -616,7 +998,8 @@ def render_markets_block(markets: List[Dict[str, Any]], lang: str = "en") -> str
         url = str(m.get("url") or "").strip()
         if url:  # 有事件 URL → 市场问题渲染为可点链接（读者可核对实时价格/规则）
             q_cell = f"[{q_cell}]({_esc_cell(url)})"
-        cells = [str(i), f"{q_cell} ({_esc_cell(m.get('market_id') or '')})",
+        cells = [str(i), f"{q_cell} ({_esc_cell(m.get('market_id') or '')})"
+                 + (window_ended_label(m, zh) if gate else ""),
                  _esc_cell(m.get("exchange") or "—"), pct]
         if show_delta:
             cells.append(_requote_move(m) or "—")  # 未移动/无锚点的行留占位符

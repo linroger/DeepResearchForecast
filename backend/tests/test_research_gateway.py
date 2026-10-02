@@ -470,6 +470,18 @@ def test_result_fields_think_stripping_tool_calls_and_truncation():
     ]
 
 
+@pytest.mark.parametrize("raw, clean", [
+    # U+0130 lower-cases to two characters; an index taken from text.lower() cut into the answer.
+    ("İ reasoning</think>answer", "answer"),
+    ("İstanbul İzmir reasoning</think>answer", "answer"),
+    ("İ<think>x</think>y</THINK>answer", "answer"),
+    ("r1</think>r2</Think>final<think>cut", "final"),
+    ("plain İ text", "plain İ text"),
+])
+def test_strip_think_orphan_closer_after_non_ascii_text(raw, clean):
+    assert rg._strip_think(raw) == clean
+
+
 def test_invoke_rejects_caller_bugs_without_calling_the_model():
     model = FakeModel([ai()])
     gw, _ = gateway(model)
@@ -1114,6 +1126,19 @@ def test_ledger_mark_fetched_returns_copies(tmp_path):
     assert ledger.find("https://A.org/x/")["sid"] == 1 and ledger.find("https://b.org") is None
 
 
+def test_ledger_unmark_fetched_restores_the_unfetched_row_and_persists(tmp_path):
+    ledger = rg.SourceLedger(tmp_path / "s.json")
+    ledger.register("https://a.org/x", "A", "snippet text")
+    ledger.mark_fetched(1, content_sha256="abc", chars=252, page_path="pages/abc.txt", title="Untitled")
+    row = ledger.unmark_fetched(1)
+    assert (row["fetched"], row["content_sha256"], row["chars"], row["page_path"]) == (False, None, 0, None)
+    assert row["url"] == "https://a.org/x" and row["snippet"] == "snippet text"
+    assert ledger.unmark_fetched(99) is None
+    ledger.flush()
+    reloaded = rg.SourceLedger(tmp_path / "s.json").get(1)
+    assert reloaded["fetched"] is False and reloaded["page_path"] is None
+
+
 def test_ledger_flush_is_debounced_atomic_and_reloads(tmp_path):
     clock = FakeClock()
     path = tmp_path / "v3" / "sources.json"
@@ -1411,6 +1436,90 @@ def test_fetch_failure_keeps_search_row_unfetched(tmp_path):
     tools.search("find docs", agent_id="K1")
     assert tools.fetch(url, focus="x", agent_id="K1").startswith("FETCH_FAILED(")
     assert ledger.find(url)["fetched"] is False
+
+
+# RESEARCH-1: live extraction shells (pipe_6c4190b31f0b) the static checks accepted as pages.
+_JINA_PDF_SHELL = ("# Untitled\n\nTitle: NIST IR 8547 initial public draft, Transition to Post-Quantum "
+                   "Cryptography Standards\n"
+                   "URL Source: https://nvlpubs.nist.gov/nistpubs/ir/2024/NIST.IR.8547.ipd.pdf\n"
+                   "Published Time: Fri, 08 Nov 2024 19:04:22 GMT\nMarkdown Content:\nundefined")
+_UNAVAILABLE_PAGE = ("# Page Unavailable\n\n---\n\nPlease be advised that this page is unavailable.\n\n"
+                     "Call our Web Support team or open a support ticket if you need further assistance.\n\n"
+                     "Reference Error ID: `0.d137cb17.1790622686.4bd702ab`\n\nClient IP: 203.0.113.241")
+_PAYWALL_TEASER = ("# Utilities race to connect data centres\n\n"
+                   + "Utilities signed 12 GW of new data centre supply deals in 2025. " * 12
+                   + "\n\nSubscribe to continue reading. Already a subscriber? Sign in.")
+
+
+@pytest.mark.parametrize("page, reason", [
+    (_JINA_PDF_SHELL, "empty_extraction"),
+    (_UNAVAILABLE_PAGE, "unavailable_page"),
+    (_PAYWALL_TEASER, "paywalled"),
+])
+def test_shell_detection_rejects_extraction_shells(tmp_path, page, reason):
+    url = "https://source1.org/doc1"
+    assert rg.ResearchTools._failure_reason(page, None) is None  # the static checks accept it
+    fetcher = FetchRecorder({url: page})
+    tools, ledger = make_tools(tmp_path, search_fn=SearchRecorder(), fetch_fn=fetcher)
+    tools.shell_detection = True
+    tools.search("find docs", agent_id="K1")
+    assert tools.fetch(url, focus="x", agent_id="K1") == f"FETCH_FAILED({reason}): try another source."
+    assert ledger.find(url)["fetched"] is False
+    assert list((tmp_path / "pages").iterdir()) == []
+    second = tools.fetch(url, focus="x", agent_id="K2")
+    assert second == f"FETCH_FAILED({reason}): this URL already failed in this run; try another source."
+    assert fetcher.calls == [url]                                  # answered from run memory
+    assert tools.shell_stats() == {reason: 1}
+    stats = tools.stats()
+    assert stats["failures"] == 1 and stats["per_agent"]["K2"]["cached_fetches"] == 1
+
+
+def test_shell_detection_is_off_unless_the_engine_turns_it_on(tmp_path):
+    url = "https://source1.org/doc1"
+    tools, ledger = make_tools(tmp_path, fetch_fn=FetchRecorder({url: _JINA_PDF_SHELL}))
+    assert tools.shell_detection is False
+    assert tools.fetch(url, focus="x", agent_id="K1").startswith("[S1] Untitled")
+    assert ledger.find(url)["fetched"] is True and tools.shell_stats() == {}
+
+
+def test_shell_detection_keeps_long_articles_with_wall_words(tmp_path):
+    url = "https://www.example.org/analysis"
+    article = ("# Grid outlook\n\n" + "Operators reported 12 GW of new connection requests in 2025. " * 95
+               + "\n\nSubscribe to continue receiving our weekly briefing.")
+    assert len(article) > 5000
+    tools, ledger = make_tools(tmp_path, fetch_fn=FetchRecorder({url: article}))
+    tools.shell_detection = True
+    assert tools.fetch(url, focus="connection requests", agent_id="K1").startswith("[S1] Grid outlook")
+    assert ledger.find(url)["fetched"] is True and tools.shell_stats() == {}
+
+
+def test_shell_detection_names_the_shell_the_failover_chain_reported(tmp_path):
+    """cached_fetch returns "Error: fetch returned <reason>" when every provider
+    produced a shell; with detection on the agent sees the shell reason."""
+    urls = {"https://a.org/x": "Error: fetch returned bot_wall",
+            "https://b.org/y": "Error: fetch returned something_else"}
+    tools, _ = make_tools(tmp_path, fetch_fn=FetchRecorder(urls))
+    tools.shell_detection = True
+    assert tools.fetch("https://a.org/x", agent_id="K1") == "FETCH_FAILED(bot_wall): try another source."
+    assert tools.fetch("https://b.org/y", agent_id="K1") == (
+        "FETCH_FAILED(fetch_returned_something_else): try another source.")
+    assert tools.shell_stats() == {"bot_wall": 1}
+    off, _ = make_tools(tmp_path / "off", fetch_fn=FetchRecorder(urls))
+    assert off.fetch("https://a.org/x", agent_id="K1") == (
+        "FETCH_FAILED(fetch_returned_bot_wall): try another source.")
+    assert off.shell_stats() == {}
+
+
+def test_shell_detection_degrades_open_without_the_classifier(tmp_path, monkeypatch):
+    """The classifier lives in the deployed cached_fetch module; when it cannot
+    be imported the tool layer keeps today's checks instead of failing fetches."""
+    monkeypatch.setattr(rg, "_extraction_classifier", None)
+    monkeypatch.setitem(sys.modules, "cached_fetch", None)  # import raises ImportError
+    url = "https://source1.org/doc1"
+    tools, ledger = make_tools(tmp_path, fetch_fn=FetchRecorder({url: _JINA_PDF_SHELL}))
+    tools.shell_detection = True
+    assert tools.fetch(url, focus="x", agent_id="K1").startswith("[S1]")
+    assert ledger.find(url)["fetched"] is True
 
 
 def test_fetch_rereads_stored_page_for_free_with_new_focus(tmp_path):

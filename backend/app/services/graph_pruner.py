@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from ..config import Config
 from ..utils.actors import normalize_name
-from .zep_entity_resolver import actor_alias_map, canonical_norm_set
+from .zep_entity_resolver import actor_alias_norms, canonical_norm_set
 from .graph_builder import (
     compute_layout_positions,
     compute_node_degrees,
@@ -57,7 +57,7 @@ def _primary_label(node: Dict[str, Any]) -> str:
 def core_norm_names(actors: Any) -> Set[str]:
     """核心集的归一名：canonicals ∪ aliases（口径与 zep_entity_resolver 完全一致）。"""
     actors_dict = _as_actors_dict(actors)
-    return canonical_norm_set(actors_dict) | set(actor_alias_map(actors_dict).keys())
+    return canonical_norm_set(actors_dict) | actor_alias_norms(actors_dict)
 
 
 def core_actor_match_stats(nodes: List[Dict[str, Any]], actors: Any) -> Dict[str, Any]:

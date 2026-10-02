@@ -260,6 +260,248 @@ def test_crosscheck_render_only_unmatched_when_no_anchors():
     assert "Model P" not in block          # 无对照表头
 
 
+def test_crosscheck_labels_window_ended_unmatched_markets(monkeypatch):
+    """FU-5 (TIME-3 open issue): an expired-but-open market in the snapshot is labelled,
+    never listed as a live candidate cross-check; open rows and gate-off output are
+    unchanged, and the caller's snapshot is not mutated."""
+    from datetime import datetime, timezone
+    now = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(pm, "market_clock_now", lambda: now)
+    snapshot = [
+        {"market_id": "m-ended", "question": "Will X happen by August?", "implied_yes_prob": 0.03,
+         "volume": 9000, "end_date": "2026-08-31T00:00:00Z"},
+        {"market_id": "m-open", "question": "Will Y happen by December?", "implied_yes_prob": 0.4,
+         "volume": 100, "end_date": "2026-12-31T00:00:00Z"},
+    ]
+    before = json.dumps(snapshot, sort_keys=True)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    en = render_market_comparison_block({}, markets=snapshot, lang="en")
+    zh = render_market_comparison_block({}, markets=snapshot, lang="zh")
+    assert "- Will X happen by August? — implied P(yes) 3% — window ended 2026-08-31, awaiting settlement" in en
+    assert "- Will Y happen by December? — implied P(yes) 40%\n" in en + "\n"
+    assert "已过截止日 2026-08-31，待结算" in zh and zh.count("待结算") == 1
+    assert json.dumps(snapshot, sort_keys=True) == before
+    # Within the grace period the market is still open.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 48.0, raising=False)
+    assert "awaiting settlement" not in render_market_comparison_block({}, markets=snapshot, lang="en")
+    # The pinned market clock decides expiry, never the wall clock: before the end date the
+    # row is open even though the wall clock (after 2026-08-31) would call it ended.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    monkeypatch.setattr(pm, "market_clock_now", lambda: datetime(2026, 8, 30, tzinfo=timezone.utc))
+    assert "awaiting settlement" not in render_market_comparison_block({}, markets=snapshot, lang="en")
+    assert "待结算" not in render_market_comparison_block({}, markets=snapshot, lang="zh")
+    monkeypatch.setattr(pm, "market_clock_now", lambda: now)
+    # Gate off: the pre-FU-5 bytes, even for a row the research snapshot already stamped.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", False, raising=False)
+    stamped = [dict(snapshot[0], window_ended=True, window_ended_at="2026-08-31T00:00:00+00:00"), snapshot[1]]
+    off = render_market_comparison_block({}, markets=stamped, lang="en")
+    assert off == "\n".join([
+        "### Market Cross-Check", "", _LEGACY_CAPTION_EN, "", "",
+        "**Unmatched markets (in snapshot, not anchored by any forecast — candidate cross-checks):**",
+        "- Will X happen by August? — implied P(yes) 3%",
+        "- Will Y happen by December? — implied P(yes) 40%",
+    ])
+    assert off == render_market_comparison_block({}, markets=snapshot, lang="en")
+    off_zh = render_market_comparison_block({}, markets=stamped, lang="zh")
+    assert off_zh == "\n".join([
+        "### 市场交叉核对", "", _LEGACY_CAPTION_ZH, "", "",
+        "**未匹配市场（快照中未被任何预测锚定，可补充对照）：**",
+        "- Will X happen by August? — 隐含 P(yes) 3%",
+        "- Will Y happen by December? — 隐含 P(yes) 40%",
+    ])
+
+
+def test_crosscheck_labels_window_ended_matched_rows(monkeypatch):
+    """FU-5 review round 1: TIME-3 keeps window-ended markets out of anchoring when the
+    binaries are extracted, but the cross-check is rendered later, so a market open at
+    extraction can have ended by render time. Such a matched row is labelled in its Market
+    cell (from the comparison row's endDate, the fallback market_anchor's endDate, or the
+    snapshot row for the same market when the comparison row has no end date). Open matched
+    rows and gate-off rows keep their bytes; the caller's forecast is not mutated."""
+    from datetime import datetime, timezone
+    extracted_at = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    rendered_at = datetime(2026, 9, 1, 13, tzinfo=timezone.utc)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    monkeypatch.setattr(pm, "market_clock_now", lambda: rendered_at)
+    comps = [
+        {"forecast_id": "F1", "statement": "Z happens", "model_probability": 0.30,
+         "market_id": "m-z", "market_question": "Will Z by Sep 1?", "market_implied_yes_prob": 0.04,
+         "divergence": 0.26, "exceeds_10pp": True, "rationale_cites_market": False,
+         "url": "https://polymarket.com/event/z", "endDate": "2026-09-01T12:30:00Z"},
+        {"forecast_id": "F2", "statement": "W happens", "model_probability": 0.50,
+         "market_id": "m-w", "market_question": "Will W by December?", "market_implied_yes_prob": 0.48,
+         "divergence": 0.02, "exceeds_10pp": False, "rationale_cites_market": False,
+         "url": "https://polymarket.com/event/w", "endDate": "2026-12-31T00:00:00Z"},
+    ]
+    fc = {"market_comparison": {"comparisons": comps}}
+    before = json.dumps(fc, sort_keys=True)
+    row_z = "| F1 | Z happens | 30% | 4% | +26pt | ⚠ explain | [Will Z by Sep 1?](https://polymarket.com/event/z)"
+    row_w = ("| F2 | W happens | 50% | 48% | +2pt | within band | "
+             "[Will W by December?](https://polymarket.com/event/w) |")
+    en = render_market_comparison_block(fc, markets=[], lang="en")
+    zh = render_market_comparison_block(fc, markets=[], lang="zh")
+    assert row_z + " — window ended 2026-09-01, awaiting settlement |" in en.split("\n")
+    assert row_w in en.split("\n")
+    assert ("[Will Z by Sep 1?](https://polymarket.com/event/z) — 已过截止日 2026-09-01，待结算 |"
+            in zh and zh.count("待结算") == 1)
+    assert json.dumps(fc, sort_keys=True) == before
+    # Fallback rows derived from binary_forecasts[].market_anchor carry the anchor's endDate.
+    fallback = {"binary_forecasts": [
+        {"id": "F1", "statement": "Z happens", "probability": 0.30,
+         "market_anchor": {"market_id": "m-z", "question": "Will Z by Sep 1?",
+                           "implied_yes_prob": 0.04, "divergence": 0.26,
+                           "url": "https://polymarket.com/event/z",
+                           "endDate": "2026-09-01T12:30:00Z"}}]}
+    assert ("(https://polymarket.com/event/z) — window ended 2026-09-01, awaiting settlement |"
+            in render_market_comparison_block(fallback, markets=[], lang="en"))
+    # Without an end date on the comparison row the snapshot row for the same market decides,
+    # whether it ended at the market clock or the research snapshot already stamped it.
+    no_end = {"market_comparison": {"comparisons": [dict(comps[0], endDate=None)]}}
+    assert "awaiting settlement" not in render_market_comparison_block(no_end, markets=[], lang="en")
+    snap_open_end = [{"market_id": "m-z", "question": "Will Z by Sep 1?", "implied_yes_prob": 0.04,
+                      "end_date": "2026-09-01T12:30:00Z"}]
+    research_stamped = [{"market_id": "m-z", "question": "Will Z by Sep 1?", "implied_yes_prob": 0.04,
+                         "window_ended": True, "window_ended_at": "2026-09-01T12:30:00+00:00"}]
+    for snap in (snap_open_end, research_stamped):
+        block = render_market_comparison_block(no_end, markets=snap, lang="en")
+        assert row_z + " — window ended 2026-09-01, awaiting settlement |" in block.split("\n")
+        assert "Unmatched markets" not in block
+    # At extraction time the market was still open: the pinned clock decides (the wall clock,
+    # after 2026-09-01, would call it ended), and the row keeps its pre-FU-5 bytes.
+    monkeypatch.setattr(pm, "market_clock_now", lambda: extracted_at)
+    open_en = render_market_comparison_block(fc, markets=[], lang="en")
+    assert row_z + " |" in open_en.split("\n") and "awaiting settlement" not in open_en
+    # Gate off: byte-identical to the open rendering, even with a research-stamped snapshot row.
+    monkeypatch.setattr(pm, "market_clock_now", lambda: rendered_at)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", False, raising=False)
+    off = render_market_comparison_block(fc, markets=research_stamped, lang="en")
+    assert off == open_en
+    assert row_z + " |" in off.split("\n") and row_w in off.split("\n")
+    off_zh = render_market_comparison_block(fc, markets=research_stamped, lang="zh")
+    assert "待结算" not in off_zh
+    assert ("| F1 | Z happens | 30% | 4% | +26pt | ⚠ 需解释 | "
+            "[Will Z by Sep 1?](https://polymarket.com/event/z) |") in off_zh.split("\n")
+
+
+def test_crosscheck_now_pins_the_stamp_instant_and_restamp_off_keeps_only_saved_stamps(monkeypatch):
+    """FU-5 review round 2: an injected ``now`` decides expiry instead of market_clock_now()
+    (omitted, the live path renders exactly as before); ``restamp=False`` consults no clock
+    at all and labels only rows whose window_ended stamp was saved with the artifacts."""
+    from datetime import datetime, timezone
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    snapshot = [
+        {"market_id": "m-ended", "question": "Will X by August?", "implied_yes_prob": 0.03,
+         "volume": 900, "end_date": "2026-08-31T00:00:00Z"},
+        {"market_id": "m-saved", "question": "Will S by July?", "implied_yes_prob": 0.02,
+         "volume": 500, "end_date": "2026-07-15T00:00:00Z",
+         "window_ended": True, "window_ended_at": "2026-07-15T00:00:00+00:00"},
+        {"market_id": "m-open", "question": "Will Y by December?", "implied_yes_prob": 0.4,
+         "volume": 100, "end_date": "2026-12-31T00:00:00Z"},
+    ]
+    comps = [
+        {"forecast_id": "F1", "statement": "Z happens", "model_probability": 0.30,
+         "market_id": "m-z", "market_question": "Will Z by Sep 1?", "market_implied_yes_prob": 0.04,
+         "divergence": 0.26, "exceeds_10pp": True, "rationale_cites_market": False,
+         "url": "https://polymarket.com/event/z", "endDate": "2026-09-01T12:30:00Z"},
+        {"forecast_id": "F2", "statement": "Q happens", "model_probability": 0.20,
+         "market_id": "m-q", "market_question": "Will Q by June?", "market_implied_yes_prob": 0.05,
+         "divergence": 0.15, "exceeds_10pp": True, "rationale_cites_market": True,
+         "url": "https://polymarket.com/event/q", "endDate": "2026-06-30T00:00:00Z"},
+    ]
+    # The research snapshot saved a stamp for the matched market m-q.
+    snap = snapshot + [{"market_id": "m-q", "question": "Will Q by June?", "implied_yes_prob": 0.05,
+                        "end_date": "2026-06-30T00:00:00Z", "window_ended": True,
+                        "window_ended_at": "2026-06-30T00:00:00+00:00"}]
+    fc = {"market_comparison": {"comparisons": comps}}
+    before = json.dumps([fc, snap], sort_keys=True)
+    report_time = datetime(2026, 9, 2, tzinfo=timezone.utc)
+    ended_x = "- Will X by August? — implied P(yes) 3% — window ended 2026-08-31, awaiting settlement"
+    saved_s = "- Will S by July? — implied P(yes) 2% — window ended 2026-07-15, awaiting settlement"
+    open_y = "- Will Y by December? — implied P(yes) 40%"
+    row_z = "| F1 | Z happens | 30% | 4% | +26pt | ⚠ explain | [Will Z by Sep 1?](https://polymarket.com/event/z)"
+    row_q = "| F2 | Q happens | 20% | 5% | +15pt | explained | [Will Q by June?](https://polymarket.com/event/q)"
+
+    # Omitted ``now`` reads market_clock_now(); an explicit ``now`` gives the same bytes and
+    # outranks a market clock that disagrees.
+    monkeypatch.setattr(pm, "market_clock_now", lambda: report_time)
+    live = render_market_comparison_block(fc, markets=snap, lang="en")
+    monkeypatch.setattr(pm, "market_clock_now", lambda: datetime(2100, 1, 1, tzinfo=timezone.utc))
+    assert render_market_comparison_block(fc, markets=snap, lang="en", now=report_time) == live
+    lines = live.split("\n")
+    assert {ended_x, saved_s, open_y} <= set(lines)
+    assert row_z + " — window ended 2026-09-01, awaiting settlement |" in lines
+    assert row_q + " — window ended 2026-06-30, awaiting settlement |" in lines
+    before_end = render_market_comparison_block(
+        fc, markets=snap, lang="en", now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    assert ("- Will X by August? — implied P(yes) 3%" in before_end.split("\n")
+            and row_z + " |" in before_end.split("\n") and saved_s in before_end.split("\n"))
+
+    # restamp=False: no clock is read; only saved stamps label (the unmatched m-saved row and,
+    # through the snapshot, the matched m-q row whose own endDate cannot be judged without a
+    # clock). m-ended and m-z ended at any plausible clock but carry no saved stamp.
+    def _no_clock():
+        raise AssertionError("restamp=False must not read the market clock")
+    monkeypatch.setattr(pm, "market_clock_now", _no_clock)
+    kept = render_market_comparison_block(fc, markets=snap, lang="en", restamp=False)
+    assert kept == render_market_comparison_block(
+        fc, markets=snap, lang="en", restamp=False, now=datetime(2100, 1, 1, tzinfo=timezone.utc))
+    kept_lines = kept.split("\n")
+    assert saved_s in kept_lines and open_y in kept_lines
+    assert "- Will X by August? — implied P(yes) 3%" in kept_lines
+    assert row_z + " |" in kept_lines
+    assert row_q + " — window ended 2026-06-30, awaiting settlement |" in kept_lines
+    kept_zh = render_market_comparison_block(fc, markets=snap, lang="zh", restamp=False)
+    assert kept_zh.count("待结算") == 2 and "已过截止日 2026-07-15，待结算" in kept_zh
+    assert json.dumps([fc, snap], sort_keys=True) == before
+
+    # Gate off: neither keyword changes a byte.
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", False, raising=False)
+    off = render_market_comparison_block(fc, markets=snap, lang="en")
+    assert "awaiting settlement" not in off
+    assert render_market_comparison_block(fc, markets=snap, lang="en", now=report_time) == off
+    assert render_market_comparison_block(fc, markets=snap, lang="en", restamp=False) == off
+
+
+def test_crosscheck_window_ended_label_replaces_the_placeholder_market_cell(monkeypatch):
+    """FU-5 review round 2: a matched row with neither a market question nor a URL shows
+    "—"; once it is labelled the cell carries the market id (or only the label when there is
+    blank id), never "— — window ended …". Unlabelled placeholder cells keep their bytes."""
+    from datetime import datetime, timezone
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GATE", True, raising=False)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_END_DATE_GRACE_HOURS", 0.0, raising=False)
+    monkeypatch.setattr(pm, "market_clock_now", lambda: datetime(2026, 9, 2, tzinfo=timezone.utc))
+    base = {"statement": "Z happens", "model_probability": 0.30, "market_implied_yes_prob": 0.04,
+            "divergence": 0.26, "exceeds_10pp": True, "rationale_cites_market": False}
+    comps = [
+        dict(base, forecast_id="F1", market_id="m-z|1", endDate="2026-09-01T12:30:00Z"),
+        dict(base, forecast_id="F2", market_id="  ", url="https://polymarket.com/event/n",
+             endDate="2026-09-01T12:30:00Z"),
+        dict(base, forecast_id="F3", market_id="m-open", endDate="2026-12-31T00:00:00Z"),
+        dict(base, forecast_id="F4", market_id="m-q", market_question="Will Q?",
+             endDate="2026-09-01T12:30:00Z"),
+    ]
+    fc = {"market_comparison": {"comparisons": comps}}
+    prefix = "| {} | Z happens | 30% | 4% | +26pt | ⚠ explain | "
+    en = render_market_comparison_block(fc, markets=[], lang="en").split("\n")
+    assert prefix.format("F1") + "m-z／1 — window ended 2026-09-01, awaiting settlement |" in en
+    assert prefix.format("F2") + "window ended 2026-09-01, awaiting settlement |" in en
+    assert prefix.format("F3") + "— |" in en
+    assert prefix.format("F4") + "Will Q? — window ended 2026-09-01, awaiting settlement |" in en
+    zh = render_market_comparison_block(fc, markets=[], lang="zh")
+    assert "| m-z／1 — 已过截止日 2026-09-01，待结算 |" in zh
+    assert "| ⚠ 需解释 | 已过截止日 2026-09-01，待结算 |" in zh
+    assert "— —" not in "\n".join(en) and "— —" not in zh
+    # The label strings are TIME-3's, imported under their public names.
+    assert pm.window_ended_label(
+        {"window_ended": True, "window_ended_at": "2026-09-01T12:30:00+00:00"}, False) == (
+        " — window ended 2026-09-01, awaiting settlement")
+    assert pm.row_market_end({"endDate": "2026-09-01T12:30:00Z"}) == datetime(
+        2026, 9, 1, 12, 30, tzinfo=timezone.utc)
+
+
 # ---------------------------------- _prepend_binary_forecasts_section (PM-2)
 
 _H1_MD = "# Grand Forecast\n\n> Executive summary\n\n## Section A\n\nBody.\n"
@@ -290,6 +532,55 @@ def test_prepend_crosscheck_is_idempotent(report_folder):
     a._prepend_binary_forecasts_section("rid-1", rep)   # 重入
     assert rep.markdown_content == once                  # 幂等：不二次插入
     assert once.count("### Market Cross-Check") == 1
+
+
+# ----------------------------------- REPORT-10: anchoring disclosure in the caption
+
+_DISCLOSURE_ZH = "预测在起草时已参考上述市场价格，故 Δ 是锚定之后的差值，并非独立于市场的估计。"
+_DISCLOSURE_EN = ("Forecasts were drafted with these market prices in view, so Δ is measured "
+                  "after anchoring, not against a market-independent estimate.")
+_LEGACY_CAPTION_ZH = ("_预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
+                      "分歧超 10 个百分点且理由未引用市场者标注「需解释」。_")
+_LEGACY_CAPTION_EN = ("_Deterministic cross-check of forecast probabilities against live "
+                      "prediction-market implied probabilities. Markets are calibration anchors, "
+                      "not ground truth; divergences over 10 percentage points whose rationale "
+                      "does not cite the market are flagged for explanation._")
+
+
+@pytest.mark.parametrize("lang, legacy, disclosure", [
+    ("zh", _LEGACY_CAPTION_ZH, _DISCLOSURE_ZH),
+    ("en", _LEGACY_CAPTION_EN, _DISCLOSURE_EN),
+])
+def test_crosscheck_disclose_anchoring_appends_caption_sentence(lang, legacy, disclosure):
+    fc = {"market_comparison": _MC}
+    default = render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang)
+    disclosed = render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang,
+                                               disclose_anchoring=True)
+    # default call byte-identical to the pre-REPORT-10 caption; kwarg False == default
+    assert default.split("\n")[2] == legacy
+    assert render_market_comparison_block(fc, markets=_SNAPSHOT, lang=lang,
+                                          disclose_anchoring=False) == default
+    assert disclosure not in default
+    # the disclosure joins the italic intro caption; nothing else changes
+    sep = "" if lang == "zh" else " "
+    assert disclosed.split("\n")[2] == legacy[:-1] + sep + disclosure + "_"
+    assert disclosed.replace(sep + disclosure, "", 1) == default
+
+
+@pytest.mark.parametrize("knob", [True, False])
+def test_prepend_crosscheck_discloses_per_knob(report_folder, monkeypatch, knob):
+    monkeypatch.setattr(Config, "REPORT_MARKET_XCHECK_DISCLOSURE", knob, raising=False)
+    a = _agent(_forecast_spine={"binary_forecasts": _MC["comparisons"],
+                                "market_comparison": _MC},
+               _prediction_markets=_SNAPSHOT)
+    rep = _ReportStub(_H1_MD)
+    a._prepend_binary_forecasts_section("rid-1", rep)
+    assert (_DISCLOSURE_EN in rep.markdown_content) is knob
+    assert (_LEGACY_CAPTION_EN in rep.markdown_content) is (not knob)
+
+
+def test_market_xcheck_disclosure_defaults_on():
+    assert Config.REPORT_MARKET_XCHECK_DISCLOSURE is True
 
 
 # ------------------------------------------------- PM-3: requote snapshot

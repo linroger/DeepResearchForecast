@@ -11,6 +11,8 @@ import os
 import sys
 import time
 
+import pytest
+
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BRIDGE_DIR = os.path.join(_REPO_ROOT, "deerflow_bridge")
 if _BRIDGE_DIR not in sys.path:
@@ -329,3 +331,612 @@ def test_cache_lru_eviction_end_to_end(monkeypatch, tmp_path):
     # u1 应被淘汰（超上限、最久未用）；u2 在盘
     assert not os.path.exists(p1)
     assert os.path.exists(cf._cache_path(str(d), u2))
+
+
+# ================================================================ TIME-2 —— 来源发布日期旁路（_FETCH_META）
+
+class _FakeResponse:
+    def __init__(self, status_code=200, payload=None, *, text="", headers=None, content=b""):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+        self.text = text
+        self.headers = headers or {}
+        self.content = content or text.encode("utf-8")
+
+    def json(self):
+        return self._payload
+
+
+def _fake_httpx(monkeypatch, response):
+    """假 httpx（sys.modules 注入）：Client/AsyncClient 的 post/get 都回放 ``response``。"""
+    import types
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            return response
+
+    class _AsyncClient(_Client):
+        async def post(self, url, headers=None, json=None):
+            return response
+
+        async def get(self, url):
+            return response
+
+    mod = types.ModuleType("httpx")
+    mod.Client = _Client
+    mod.AsyncClient = _AsyncClient
+    monkeypatch.setitem(sys.modules, "httpx", mod)
+
+
+_FIRECRAWL_BODY = "Grid connection queues exceed 40 months in several regions. " * 10
+
+
+def _scrape(metadata):
+    return _FakeResponse(200, {"success": True, "data": {"markdown": _FIRECRAWL_BODY, "metadata": metadata}})
+
+
+def _firecrawl_env(monkeypatch):
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(cf, "_firecrawl_fetch_calls", 0)
+    monkeypatch.setattr(cf, "_research_budget", None)
+    for name in ("RESEARCH_FIRECRAWL_MAX_FETCH_CALLS_PER_PROCESS", "RESEARCH_FIRECRAWL_FETCH_MAX_CHARS"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def _in_one_task(coroutine_fn, *args):
+    """Run ``coroutine_fn(*args)`` and read _FETCH_META in the same task (as cached_fetch does)."""
+    async def run():
+        result = await coroutine_fn(*args)
+        return result, cf._FETCH_META.get()
+
+    return asyncio.run(run())
+
+
+def test_firecrawl_fetch_records_date_metadata_and_returns_the_unchanged_text(monkeypatch):
+    _firecrawl_env(monkeypatch)
+    metadata = {"title": "Grid report", "publishedTime": "2025-05-10T01:00:00+05:00",
+                "article:modified_time": ["2025-06-01", "2025-06-02"], "sourceURL": "https://x.org/a",
+                "og:updated_time": "x" * 500, "statusCode": 200, "timezone": None, "dateList": [None, True]}
+    _fake_httpx(monkeypatch, _scrape(metadata))
+    out, meta = _in_one_task(cf._firecrawl_fetch, "https://x.org/a")
+    assert out == f"# Grid report\n\n{_FIRECRAWL_BODY.strip()}"
+    assert meta == {"publishedTime": "2025-05-10T01:00:00+05:00",
+                    "article:modified_time": ["2025-06-01", "2025-06-02"], "og:updated_time": "x" * 80}
+    # Without date metadata the text is the same and the side channel stays empty.
+    _fake_httpx(monkeypatch, _scrape({"title": "Grid report"}))
+    plain, meta = _in_one_task(cf._firecrawl_fetch, "https://x.org/a")
+    assert plain == out and meta == {}
+
+
+def test_firecrawl_date_metadata_keeps_every_key_source_dates_reads():
+    # Review round 1: the key filter dropped "dcterms.created" before source_dates saw it.
+    sd = cf._source_dates
+    assert sd is not None
+    for key in sd.PUBLISHED_META_KEYS + sd.MODIFIED_META_KEYS:
+        assert cf._date_metadata({"title": "t", key: "2025-05-09"}) == {key: "2025-05-09"}, key
+    # Firecrawl's camel-cased Dublin Core keys are publication dates.
+    kept = cf._date_metadata({"dcterms.created": "2025-05-09", "dcTermsCreated": "2025-05-08",
+                              "dcDateCreated": "2025-05-07", "dcDate": "2025-05-06", "ogUrl": "https://x"})
+    assert [candidate[2:] for candidate in sd.from_fetch_meta(kept)] == [
+        ("published", "2025-05-09"), ("published", "2025-05-08"), ("published", "2025-05-07"),
+        ("published", "2025-05-06")]
+
+
+def test_firecrawl_date_metadata_keeps_at_most_twelve_keys():
+    many = {f"date_{i:02d}": f"2025-05-{i + 1:02d}" for i in range(20)}
+    kept = cf._date_metadata({"title": "t", **many})
+    assert list(kept) == [f"date_{i:02d}" for i in range(12)]
+
+
+def test_exa_fetch_records_published_date(monkeypatch):
+    import types
+
+    row = types.SimpleNamespace(title="Exa page", text="Body " * 100, published_date="2025-05-09T00:00:00.000Z")
+
+    class Exa:
+        def __init__(self, api_key):
+            pass
+
+        def get_contents(self, urls, text=None):
+            return types.SimpleNamespace(results=[row])
+
+    monkeypatch.setitem(sys.modules, "exa_py", types.SimpleNamespace(Exa=Exa))
+    monkeypatch.setenv("EXA_API_KEY", "exa-test")
+    out, meta = _in_one_task(cf._exa_fetch, "https://x.org/a")
+    assert out.startswith("# Exa page\n\nBody") and meta == {"publishedDate": "2025-05-09T00:00:00.000Z"}
+
+
+def test_direct_fetch_records_html_date_candidates(monkeypatch):
+    page = ("<html><head><meta property=\"article:published_time\" content=\"2025-05-09\"></head><body>"
+            + "<p>Grid connection queues exceed 40 months in several regions of the country.</p>" * 10
+            + "</body></html>")
+    _fake_httpx(monkeypatch, _FakeResponse(200, text=page, headers={"content-type": "text/html"}))
+
+    async def public(host):
+        return True
+
+    monkeypatch.setattr(cf, "_host_is_public", public)
+    out, meta = _in_one_task(cf._direct_http_fetch, "https://x.org/a")
+    assert "Grid connection queues" in out
+    assert meta == {"html_dates": [[5, "meta_tag", "published", "2025-05-09"]]}
+
+
+def test_resilient_fetch_drops_a_failed_providers_metadata(monkeypatch):
+    _firecrawl_env(monkeypatch)
+    _fake_httpx(monkeypatch, _FakeResponse(200, {"success": True, "data": {
+        "markdown": "Just a moment... checking your browser", "metadata": {"publishedTime": "2019-01-01"}}}))
+
+    async def jina(url):
+        return "# Jina page\n\n" + "usable body content " * 30
+
+    monkeypatch.setattr(cf, "_jina_delegate_fetch", jina)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    out, meta = _in_one_task(cf._resilient_fetch, "https://x.org/a")
+    assert out.startswith("# Jina page") and meta == {}
+
+
+def test_cached_fetch_with_meta_sees_the_providers_metadata_in_the_same_task(monkeypatch, tmp_path):
+    """The ContextVar written inside _resilient_fetch -> _firecrawl_fetch is
+    read by cached_fetch_with_meta right after awaiting the fetch."""
+    _fresh_cache_dir(monkeypatch, tmp_path)
+    monkeypatch.setenv("RESEARCH_SOURCE_CACHE_TTL_H", "72")
+    _firecrawl_env(monkeypatch)
+    _fake_httpx(monkeypatch, _scrape({"title": "Grid report", "publishedTime": "2025-05-09T10:00:00Z"}))
+    text, meta = asyncio.run(cf.cached_fetch_with_meta("https://x.org/a", cf._resilient_fetch))
+    assert text.startswith("# Grid report") and meta == {"publishedTime": "2025-05-09T10:00:00Z"}
+
+
+class _MetaFetch:
+    """注入式 fetch：像 provider 一样写 _FETCH_META（为空则不写）。"""
+
+    def __init__(self, content, meta):
+        self.content, self.meta, self.calls = content, meta, 0
+
+    async def __call__(self, url):
+        self.calls += 1
+        if self.meta:
+            cf._FETCH_META.set(dict(self.meta))
+        return self.content
+
+
+def test_cache_entry_holds_meta_only_when_non_empty(monkeypatch, tmp_path):
+    d = _fresh_cache_dir(monkeypatch, tmp_path)
+    monkeypatch.setenv("RESEARCH_SOURCE_CACHE_TTL_H", "72")
+    monkeypatch.setattr(cf, "_research_budget", None)
+    dated, plain = "https://x.org/dated", "https://x.org/plain"
+    asyncio.run(cf.cached_fetch(dated, _MetaFetch("D" * 500, {"publishedTime": "2025-05-09"})))
+    asyncio.run(cf.cached_fetch(plain, _MetaFetch("P" * 500, {})))
+    with open(cf._cache_path(str(d), dated), encoding="utf-8") as f:
+        assert json.load(f)["meta"] == {"publishedTime": "2025-05-09"}
+    with open(cf._cache_path(str(d), plain), encoding="utf-8") as f:
+        assert sorted(json.load(f)) == ["content", "content_len", "fetched_at", "url"]
+
+
+def test_cached_fetch_with_meta_returns_meta_on_miss_and_hit(monkeypatch, tmp_path):
+    _fresh_cache_dir(monkeypatch, tmp_path)
+    monkeypatch.setenv("RESEARCH_SOURCE_CACHE_TTL_H", "72")
+    monkeypatch.setattr(cf, "_research_budget", None)
+    fetch = _MetaFetch("M" * 500, {"publishedTime": "2025-05-09"})
+    url = "https://x.org/m"
+    miss = asyncio.run(cf.cached_fetch_with_meta(url, fetch))
+    hit = asyncio.run(cf.cached_fetch_with_meta(url, fetch))
+    assert miss == hit == ("M" * 500, {"publishedTime": "2025-05-09"})
+    assert fetch.calls == 1
+    # cached_fetch keeps its str contract and returns the identical text.
+    assert asyncio.run(cf.cached_fetch(url, fetch)) == "M" * 500
+    assert cf._read_cache(cf._cache_path(cf._cache_root(), url), 3600.0) == "M" * 500
+
+
+def test_cached_fetch_returns_the_identical_string_on_every_path(monkeypatch, tmp_path):
+    _fresh_cache_dir(monkeypatch, tmp_path)
+    monkeypatch.setenv("RESEARCH_SOURCE_CACHE_TTL_H", "72")
+    monkeypatch.setattr(cf, "_research_budget", None)
+    for url, content in (("https://x.org/ok", "O" * 500), ("https://x.org/err", "Error: 404 not found")):
+        fetch = _MetaFetch(content, {"publishedTime": "2025-05-09"})
+        text = asyncio.run(cf.cached_fetch(url, fetch))
+        assert isinstance(text, str) and text == content
+        assert asyncio.run(cf.cached_fetch_with_meta(url, fetch))[0] == content
+    rejected = asyncio.run(cf.cached_fetch_with_meta("https://economicsummarizer.com/x", _MetaFetch("x", {})))
+    assert json.loads(rejected[0])["error"] == "source_quality_rejected" and rejected[1] == {}
+
+
+def test_a_stale_meta_never_leaks_into_the_next_fetch(monkeypatch, tmp_path):
+    _fresh_cache_dir(monkeypatch, tmp_path)
+    monkeypatch.setenv("RESEARCH_SOURCE_CACHE_TTL_H", "0")
+    monkeypatch.setattr(cf, "_research_budget", None)
+
+    async def run():
+        first = await cf.cached_fetch_with_meta("https://x.org/1", _MetaFetch("A" * 500, {"publishedTime": "2025"}))
+        second = await cf.cached_fetch_with_meta("https://x.org/2", _MetaFetch("B" * 500, {}))
+        return first, second
+
+    first, second = asyncio.run(run())
+    assert first[1] == {"publishedTime": "2025"} and second[1] == {}
+
+
+_DATED_SEARCH = _FakeResponse(200, {"success": True, "data": {"web": [
+    {"url": "https://a.example/x", "title": "A", "description": "alpha", "publishedDate": "2025-05-09"},
+    {"url": "https://b.example/y", "title": "B", "description": "beta"},
+    {"url": "https://c.example/z", "title": "C", "description": "gamma", "date": "May 9, 2025"},
+    {"url": "https://d.example/w", "title": "D", "description": "delta", "published_date": " "},
+]}})
+
+
+def _firecrawl_search_env(monkeypatch):
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_CALLS_PER_MINUTE", "0")
+    _fake_httpx(monkeypatch, _DATED_SEARCH)
+
+
+def test_firecrawl_search_adds_published_only_for_dated_rows(monkeypatch):
+    _firecrawl_search_env(monkeypatch)
+    monkeypatch.setenv("RESEARCH_SOURCE_DATES", "true")
+    rows = json.loads(st._firecrawl_search("grid queues", 5))["results"]
+    assert [row.get("published") for row in rows] == ["2025-05-09", None, "May 9, 2025", None]
+    assert all("published" not in row for row in rows if row["url"] in ("https://b.example/y",
+                                                                           "https://d.example/w"))
+
+
+def test_firecrawl_search_rows_are_unchanged_with_source_dates_off(monkeypatch):
+    _firecrawl_search_env(monkeypatch)
+    monkeypatch.delenv("RESEARCH_SOURCE_DATES", raising=False)
+    out = st._firecrawl_search("grid queues", 5)
+    assert out == json.dumps({"query": "grid queues", "total_results": 4, "results": [
+        {"title": "A", "url": "https://a.example/x", "content": "alpha"},
+        {"title": "B", "url": "https://b.example/y", "content": "beta"},
+        {"title": "C", "url": "https://c.example/z", "content": "gamma"},
+        {"title": "D", "url": "https://d.example/w", "content": "delta"},
+    ]}, ensure_ascii=False)
+
+
+def test_dated_firecrawl_rows_are_cached_apart_from_flag_off_rows(monkeypatch, tmp_path):
+    """A flag-off search never reads a row cached with dates (its cache key is unchanged)."""
+    for name in ("SERPER_API_KEY", "TAVILY_API_KEY", "RESEARCH_ALLOW_LOW_QUALITY_SOURCES",
+                 "RESEARCH_SOURCE_DENY_DOMAINS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RESEARCH_SEARCH_CACHE_TTL_H", "6")
+    monkeypatch.setenv("RESEARCH_SEARCH_CACHE_DIR", str(tmp_path / "search-cache"))
+    monkeypatch.setattr(st, "_research_budget", None)
+    _firecrawl_search_env(monkeypatch)
+    assert st._search_cache_provider("firecrawl") == "firecrawl"
+    monkeypatch.setenv("RESEARCH_SOURCE_DATES", "true")
+    assert (st._search_cache_provider("firecrawl"), st._search_cache_provider("ddg")) == ("firecrawl+dates", "ddg")
+    dated = json.loads(st.web_search_impl("grid queues", 5))["results"]
+    assert dated[0]["published"] == "2025-05-09"
+    monkeypatch.delenv("RESEARCH_SOURCE_DATES")
+    plain = json.loads(st.web_search_impl("grid queues", 5))["results"]
+    assert [row["url"] for row in plain] == [row["url"] for row in dated]
+    assert not any("published" in row for row in plain)
+    assert st._firecrawl_search_calls == 2
+    # Each flag reads its own entry back.
+    assert not any("published" in row for row in json.loads(st.web_search_impl("grid queues", 5))["results"])
+    assert st._firecrawl_search_calls == 2
+
+
+# ================================================================ TIME-8 —— 点时回测搜索（as_of）
+
+def test_pit_cache_key_differs_from_the_live_key_which_keeps_its_formula():
+    import hashlib
+
+    live = st._search_cache_key("firecrawl", "Grid  Queues", 5)
+    assert live == hashlib.sha256("firecrawl\ngrid queues\n5".encode("utf-8")).hexdigest()
+    assert st._search_cache_key("firecrawl", "Grid  Queues", 5, None) == live
+    assert st._search_cache_key("firecrawl", "Grid  Queues", 5, "") == live
+    pit = st._search_cache_key("firecrawl", "Grid  Queues", 5, "2024-06-01")
+    assert pit == hashlib.sha256("firecrawl\ngrid queues\n5\nasof:2024-06-01".encode("utf-8")).hexdigest()
+    assert pit != live != st._search_cache_key("firecrawl", "Grid  Queues", 5, "2024-06-02")
+
+
+def _recording_httpx(monkeypatch, response):
+    """假 httpx：记录每次 post 的 JSON 请求体。"""
+    import types
+
+    posted = []
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            posted.append(json)
+            return response
+
+    mod = types.ModuleType("httpx")
+    mod.Client = _Client
+    monkeypatch.setitem(sys.modules, "httpx", mod)
+    return posted
+
+
+def test_firecrawl_payload_carries_tbs_only_with_as_of(monkeypatch):
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_CALLS_PER_MINUTE", "0")
+    monkeypatch.delenv("RESEARCH_SOURCE_DATES", raising=False)
+    posted = _recording_httpx(monkeypatch, _DATED_SEARCH)
+
+    live = st._firecrawl_search("grid queues", 5)
+    bounded = st._firecrawl_search("grid queues", 5, as_of="2024-06-01")
+    padded = st._firecrawl_search("grid queues", 5, as_of="2024-12-25")
+    unparseable = st._firecrawl_search("grid queues", 5, as_of="June 2024")
+    assert st._firecrawl_date_bound("20240601") == st._firecrawl_date_bound("2024-02-30") == ""
+
+    assert posted[0] == {"query": "grid queues", "limit": 5, "sources": ["web"]}
+    # Google-style custom date range, upper bound only, in M/D/YYYY (not ISO).
+    assert posted[1] == {"query": "grid queues", "limit": 5, "sources": ["web"], "tbs": "cdr:1,cd_max:6/1/2024"}
+    assert posted[2]["tbs"] == "cdr:1,cd_max:12/25/2024"
+    assert "tbs" not in posted[3]
+    assert "date_bound" not in json.loads(live)
+    assert json.loads(bounded)["date_bound"] == "provider"
+    assert json.loads(unparseable)["date_bound"] == "unsupported"
+    # Rows are the same either way.
+    assert json.loads(bounded)["results"] == json.loads(live)["results"]
+
+
+def _pit_search_env(monkeypatch, tmp_path):
+    for name in ("SERPER_API_KEY", "TAVILY_API_KEY", "RESEARCH_ALLOW_LOW_QUALITY_SOURCES",
+                 "RESEARCH_SOURCE_DENY_DOMAINS", "RESEARCH_SOURCE_DATES"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RESEARCH_SEARCH_CACHE_TTL_H", "6")
+    monkeypatch.setenv("RESEARCH_SEARCH_CACHE_DIR", str(tmp_path / "search-cache"))
+    monkeypatch.setattr(st, "_research_budget", None)
+
+
+def test_hindcast_and_live_searches_never_share_a_cache_entry(monkeypatch, tmp_path):
+    _pit_search_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_CALLS_PER_MINUTE", "0")
+    posted = _recording_httpx(monkeypatch, _DATED_SEARCH)
+
+    live = json.loads(st.web_search_impl("grid queues", 5))
+    pit = json.loads(st.web_search_impl("grid queues", 5, as_of="2024-06-01"))
+    assert st._firecrawl_search_calls == 2  # the live entry never answered the hindcast
+    assert "date_bound" not in live and pit["date_bound"] == "provider"
+    assert ["tbs" in body for body in posted] == [False, True]
+    # Each reads its own entry back (no further provider call), never the other's.
+    assert "date_bound" not in json.loads(st.web_search_impl("grid queues", 5))
+    assert json.loads(st.web_search_impl("grid queues", 5, as_of="2024-06-01"))["date_bound"] == "provider"
+    assert st._firecrawl_search_calls == 2
+    # Another as-of is another entry.
+    st.web_search_impl("grid queues", 5, as_of="2023-01-01")
+    assert st._firecrawl_search_calls == 3
+    root = tmp_path / "search-cache"
+    assert (root / (st._search_cache_key("firecrawl", "grid queues", 5) + ".json")).exists()
+    assert (root / (st._search_cache_key("firecrawl", "grid queues", 5, "2024-06-01") + ".json")).exists()
+
+
+def test_unbounded_providers_mark_hindcast_results_unsupported(monkeypatch, tmp_path):
+    _pit_search_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    rows = [{"title": "Primary filing", "url": "https://sec.gov/filing", "content": "c"}]
+    payloads = {"dict": json.dumps({"results": rows}), "list": json.dumps(rows),
+                "error": json.dumps({"error": "No results found", "query": "q"})}
+    kind = {"value": "dict"}
+
+    class _FakeTool:
+        @staticmethod
+        def func(query, max_results=10):
+            return payloads[kind["value"]]
+
+    monkeypatch.setattr(st, "_load_search_module",
+                        lambda provider: type("M", (), {"web_search_tool": _FakeTool})())
+    live = st.web_search_impl("dict query", 5)
+    assert live == payloads["dict"]  # live output byte-identical
+    assert json.loads(st.web_search_impl("dict query", 5, as_of="2024-06-01")) == {
+        "results": rows, "date_bound": "unsupported"}
+    kind["value"] = "list"
+    assert json.loads(st.web_search_impl("list query", 5, as_of="2024-06-01")) == {
+        "results": rows, "date_bound": "unsupported"}
+    kind["value"] = "error"
+    assert st.web_search_impl("error query", 5, as_of="2024-06-01") == payloads["error"]
+
+
+def test_research_budget_exact_key_carries_the_as_of(monkeypatch, tmp_path):
+    _pit_search_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    keys = []
+
+    class _Budget:
+        @staticmethod
+        def admit_attempt(tool):
+            return type("A", (), {"allowed": True, "reason": ""})()
+
+        @staticmethod
+        def negative_suppressed(tool, key):
+            keys.append(key)
+            return False
+
+        claim_request = staticmethod(lambda tool, key: "token")
+        release_request = staticmethod(lambda token: None)
+        admit_network = staticmethod(lambda tool: type("N", (), {"allowed": True, "reason": ""})())
+        clear_negative = record_positive = record_negative = staticmethod(lambda tool, key: None)
+        export_telemetry = staticmethod(lambda force=False: None)
+
+    class _FakeTool:
+        @staticmethod
+        def func(query, max_results=10):
+            return json.dumps({"results": [{"title": "t", "url": "https://sec.gov/f", "content": "c"}]})
+
+    monkeypatch.setattr(st, "_research_budget", _Budget)
+    monkeypatch.setattr(st, "_load_search_module",
+                        lambda provider: type("M", (), {"web_search_tool": _FakeTool})())
+    st.web_search_impl("Grid Queues", 5)
+    st.web_search_impl("Grid Queues", 5, as_of="2024-06-01")
+    assert keys == ["ddg\ngrid queues\n5", "ddg\ngrid queues\n5\nasof:2024-06-01"]
+
+
+def test_an_unbounded_hindcast_search_keeps_its_own_cache_and_budget_keys(monkeypatch, tmp_path):
+    """PIT_PROVIDER_DATE_BOUNDS=false: no tbs is sent, but the entries stay scoped to the as-of."""
+    import hashlib
+
+    unbounded = st._search_cache_key("firecrawl", "Grid  Queues", 5, "2024-06-01", provider_bound=False)
+    assert unbounded == hashlib.sha256(
+        "firecrawl\ngrid queues\n5\nasof:2024-06-01:unbounded".encode("utf-8")).hexdigest()
+    assert unbounded not in (st._search_cache_key("firecrawl", "Grid  Queues", 5),
+                             st._search_cache_key("firecrawl", "Grid  Queues", 5, "2024-06-01"))
+    # A live key ignores the flag.
+    assert st._search_cache_key("firecrawl", "q", 5, None, provider_bound=False) == st._search_cache_key(
+        "firecrawl", "q", 5)
+
+    _pit_search_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setattr(st, "_firecrawl_date_bound_rejected", False)
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_CALLS_PER_MINUTE", "0")
+    posted = _recording_httpx(monkeypatch, _DATED_SEARCH)
+
+    live = json.loads(st.web_search_impl("grid queues", 5))
+    scoped = json.loads(st.web_search_impl("grid queues", 5, as_of="2024-06-01", provider_bound=False))
+    bounded = json.loads(st.web_search_impl("grid queues", 5, as_of="2024-06-01"))
+    assert st._firecrawl_search_calls == 3  # three identities, three provider calls
+    assert ["tbs" in body for body in posted] == [False, False, True]
+    assert "date_bound" not in live
+    assert scoped["date_bound"] == "unsupported" and bounded["date_bound"] == "provider"
+    assert scoped["results"] == live["results"]
+    # Each reads its own entry back.
+    assert json.loads(st.web_search_impl("grid queues", 5, as_of="2024-06-01",
+                                         provider_bound=False))["date_bound"] == "unsupported"
+    assert "date_bound" not in json.loads(st.web_search_impl("grid queues", 5))
+    assert st._firecrawl_search_calls == 3
+    root = tmp_path / "search-cache"
+    assert (root / (st._search_cache_key("firecrawl", "grid queues", 5, "2024-06-01",
+                                         provider_bound=False) + ".json")).exists()
+
+
+def test_research_budget_exact_key_of_an_unbounded_hindcast_search(monkeypatch, tmp_path):
+    _pit_search_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
+    keys = []
+
+    class _Budget:
+        @staticmethod
+        def admit_attempt(tool):
+            return type("A", (), {"allowed": True, "reason": ""})()
+
+        @staticmethod
+        def negative_suppressed(tool, key):
+            keys.append(key)
+            return False
+
+        claim_request = staticmethod(lambda tool, key: "token")
+        release_request = staticmethod(lambda token: None)
+        admit_network = staticmethod(lambda tool: type("N", (), {"allowed": True, "reason": ""})())
+        clear_negative = record_positive = record_negative = staticmethod(lambda tool, key: None)
+        export_telemetry = staticmethod(lambda force=False: None)
+
+    class _FakeTool:
+        @staticmethod
+        def func(query, max_results=10):
+            return json.dumps({"results": [{"title": "t", "url": "https://sec.gov/f", "content": "c"}]})
+
+    monkeypatch.setattr(st, "_research_budget", _Budget)
+    monkeypatch.setattr(st, "_load_search_module",
+                        lambda provider: type("M", (), {"web_search_tool": _FakeTool})())
+    result = json.loads(st.web_search_impl("Grid Queues", 5, as_of="2024-06-01", provider_bound=False))
+    assert result["date_bound"] == "unsupported"
+    assert keys == ["ddg\ngrid queues\n5\nasof:2024-06-01:unbounded"]
+
+
+def _routing_httpx(monkeypatch, respond):
+    """假 httpx：按请求体选响应（``respond(body) -> _FakeResponse``），并记录每次 post 的请求体。"""
+    import types
+
+    posted = []
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            posted.append(dict(json))
+            return respond(json)
+
+    mod = types.ModuleType("httpx")
+    mod.Client = _Client
+    monkeypatch.setitem(sys.modules, "httpx", mod)
+    return posted
+
+
+def _firecrawl_pit_env(monkeypatch):
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setattr(st, "_firecrawl_date_bound_rejected", False)
+    monkeypatch.setattr(st, "_PROVIDER_EVENTS", {})
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_CALLS_PER_MINUTE", "0")
+    monkeypatch.delenv("RESEARCH_FIRECRAWL_MAX_SEARCH_CALLS_PER_PROCESS", raising=False)
+    monkeypatch.delenv("RESEARCH_SOURCE_DATES", raising=False)
+
+
+@pytest.mark.parametrize("status", [400, 422])
+def test_a_rejected_date_bound_falls_back_to_an_unbounded_search_once_and_latches(monkeypatch, status):
+    _firecrawl_pit_env(monkeypatch)
+    posted = _routing_httpx(monkeypatch, lambda body: _FakeResponse(status, {"error": "invalid tbs"})
+                            if "tbs" in body else _DATED_SEARCH)
+
+    first = json.loads(st._firecrawl_search("grid queues", 5, as_of="2024-06-01"))
+    assert first["date_bound"] == "unsupported" and len(first["results"]) == 4
+    assert ["tbs" in body for body in posted] == [True, False]
+    assert st._firecrawl_search_calls == 2  # both requests may be billed
+    assert st.provider_events() == {"date_bound_rejected:firecrawl": 1}
+    # Latched: later hindcast searches go out unbounded straight away.
+    second = json.loads(st._firecrawl_search("grid queues", 5, as_of="2024-06-01"))
+    assert second["date_bound"] == "unsupported"
+    assert ["tbs" in body for body in posted] == [True, False, False]
+    # A live search is unchanged.
+    assert "date_bound" not in json.loads(st._firecrawl_search("grid queues", 5))
+    assert st.provider_events() == {"date_bound_rejected:firecrawl": 1}
+
+
+def test_other_firecrawl_errors_neither_drop_the_bound_nor_latch(monkeypatch):
+    _firecrawl_pit_env(monkeypatch)
+    # A request the provider rejects with or without the bound: not the bound's fault.
+    posted = _routing_httpx(monkeypatch, lambda body: _FakeResponse(400, {"error": "bad query"}))
+    result = json.loads(st._firecrawl_search("grid queues", 5, as_of="2024-06-01"))
+    assert result["error"] == "firecrawl search HTTP 400"
+    assert ["tbs" in body for body in posted] == [True, False]
+    assert st._firecrawl_date_bound_rejected is False and st.provider_events() == {}
+    st._firecrawl_search("grid queues", 5, as_of="2024-06-01")
+    assert "tbs" in posted[2]
+
+    # A server error is not a rejected body: no unbounded retry.
+    posted = _routing_httpx(monkeypatch, lambda body: _FakeResponse(500, {"error": "boom"}))
+    assert json.loads(st._firecrawl_search("grid queues", 5, as_of="2024-06-01"))["error"] == (
+        "firecrawl search HTTP 500")
+    assert ["tbs" in body for body in posted] == [True]
+
+    # The per-process call ceiling is never exceeded by the retry.
+    monkeypatch.setattr(st, "_firecrawl_search_calls", 0)
+    monkeypatch.setenv("RESEARCH_FIRECRAWL_MAX_SEARCH_CALLS_PER_PROCESS", "1")
+    posted = _routing_httpx(monkeypatch, lambda body: _FakeResponse(400, {"error": "invalid tbs"})
+                            if "tbs" in body else _DATED_SEARCH)
+    assert json.loads(st._firecrawl_search("grid queues", 5, as_of="2024-06-01"))["error"] == (
+        "firecrawl search HTTP 400")
+    assert len(posted) == 1 and st._firecrawl_search_calls == 1

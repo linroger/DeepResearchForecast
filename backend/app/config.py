@@ -7,6 +7,20 @@ import os
 import threading
 from dotenv import load_dotenv
 
+try:
+    from .config_audit import ERROR, WARNING, Issue, audit_env, extract_knobs, sanitize_numeric_env
+except ImportError:
+    # Loaded by path outside the app package (tests exec a private copy of this file
+    # with spec_from_file_location): load the stdlib-only audit module beside it.
+    import importlib.util as _importlib_util
+    _audit_spec = _importlib_util.spec_from_file_location(
+        '_drf_config_audit', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config_audit.py'))
+    _config_audit = _importlib_util.module_from_spec(_audit_spec)
+    _audit_spec.loader.exec_module(_config_audit)
+    ERROR, WARNING, Issue = _config_audit.ERROR, _config_audit.WARNING, _config_audit.Issue
+    audit_env, extract_knobs = _config_audit.audit_env, _config_audit.extract_knobs
+    sanitize_numeric_env = _config_audit.sanitize_numeric_env
+
 # 加载项目根目录的 .env 文件
 # 路径: MiroFish/.env (相对于 backend/app/config.py)
 project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
@@ -22,6 +36,20 @@ elif os.path.exists(project_root_env):
 else:
     # 如果根目录没有 .env，尝试加载环境变量（用于生产环境）
     load_dotenv(override=True)
+
+# INFRA-14 config audit (app/config_audit.py).  The knob table is parsed once from this
+# file's source.  Before class Config reads anything, a blank, unparseable or non-finite
+# int/float value is popped from os.environ, so its code default applies and the import
+# never crashes; each one stays an error in CONFIG_IMPORT_ISSUES (see Config.config_issues).
+# An unreadable source (a bytecode-only deployment) only disables the audit.
+try:
+    CONFIG_KNOBS = extract_knobs(__file__)
+except (OSError, SyntaxError, ValueError) as _audit_exc:
+    CONFIG_KNOBS = {}
+    CONFIG_IMPORT_ISSUES = [Issue(WARNING, 'CONFIG_STRICT_VALIDATION',
+                                  f'config audit unavailable: cannot parse config.py ({_audit_exc})')]
+else:
+    CONFIG_IMPORT_ISSUES = sanitize_numeric_env(os.environ, CONFIG_KNOBS)
 
 
 class Config:
@@ -48,6 +76,19 @@ class Config:
     ).strip()
     # 连通性/研究子进程发起的出站请求是否禁止私网/环回地址（暴露到环回之外时建议开启）。
     APP_BLOCK_PRIVATE_URLS = os.environ.get('APP_BLOCK_PRIVATE_URLS', 'False').strip().lower() == 'true'
+    # DNS-rebinding guard (INFRA-10): a request is trusted without a token because it
+    # arrives over loopback only when its Host header also names this machine
+    # (localhost / 127.0.0.1 / ::1, port ignored). A web page whose own domain resolves
+    # to 127.0.0.1 sends that domain as Host and gets 403. Default on is safe: the local
+    # frontend (Vite proxy with changeOrigin -> Host localhost:5001) and direct
+    # localhost / 127.0.0.1 access keep working; token-authenticated requests are
+    # unaffected. Set false to restore the legacy Host-agnostic loopback trust.
+    # Parsed fail-closed, unlike the usual `== 'true'` knobs: only an explicit
+    # false/0/no/off disables this guard, so 1/yes/on or a typo keeps it on.
+    APP_HOST_CHECK = os.environ.get('APP_HOST_CHECK', 'true').strip().lower() not in ('false', '0', 'no', 'off')
+    # Extra Host names (comma-separated, port ignored) accepted on loopback requests,
+    # e.g. a custom /etc/hosts alias for this machine. Empty = only the built-in names.
+    APP_ALLOWED_HOSTS = os.environ.get('APP_ALLOWED_HOSTS', '').strip()
 
     # 串行化 apply_provider 对共享 Config 类属性 + os.environ + .env 的读改写（EXECPLAN2 F-8-4），
     # 避免并发切换提供方时与正在读取配置的管线发生竞态/撕裂。
@@ -60,6 +101,65 @@ class Config:
     # SIM-9 / CACHE-1：默认开——进程内、精确键、有界 LRU；仅确定性 attempt-0 调用命中，
     # 故多样性不受影响。跨 seed/resume/fork 的 prepare/persona/config-gen 复用收益最大。
     LLM_CACHE_ENABLED = os.environ.get('LLM_CACHE_ENABLED', 'True').strip().lower() == 'true'
+    # INFRA-1：LLM 传输层严格归一化（默认开）。开启时 LLMClient 用 llm_text.strip_think 剥离
+    # 推理残留（闭合 <think> 块 + 孤立 </think> 前缀 + 被 max_tokens 截断的悬空 <think>；JSON 模式下
+    # 以 { / [ 开头的回复内的标签属正文、保留），并且
+    # finish_reason 为 length/content_filter/error 或带悬空 <think> 的回复不写入 LLMCache
+    # （否则截断回复会被永久重放）。默认开是安全的：正常回复（stop、无 think 标签）输出逐字节不变，
+    # 只影响残缺回复。false 恢复旧的正则剥离 + 无条件缓存。类型化异常与 usage 竞态修复不受此开关控制。
+    LLM_TRANSPORT_STRICT = os.environ.get('LLM_TRANSPORT_STRICT', 'true').strip().lower() == 'true'
+    # INFRA-2：chat_json 结构化输出修复轮（默认开）。首轮回复不是单个合法 JSON 对象（解析失败，或
+    # 解析出 list/标量/null）时：从 LLMCache 删掉这份坏回复，再以同温度发一次修复轮——原消息 + 坏回复
+    # （assistant）+ 点名失败原因的纠正提示，两轮皆失败仍抛 ValueError；每次结局计入
+    # LLMMeter 的 structured_outputs。旧行为是盲目降温 0.2 重发同一提示：LLMCache 按温度作键，
+    # temperature=0 的调用方（graphiti 图谱抽取）会原样重放缓存里的坏回复，失败不可恢复。默认开
+    # 是安全的：首轮即合法的 JSON 对象回复逐字节不变，只改变原本就会失败或返回非对象值的调用。
+    # false 恢复旧的降温重发（且照旧可能返回非 dict）。
+    LLM_JSON_REPAIR_TURN = os.environ.get('LLM_JSON_REPAIR_TURN', 'true').strip().lower() == 'true'
+    # INFRA-3：推理模型把 max_tokens 全耗在推理上、回复为空且 finish_reason=length 时，chat() 立即
+    # （不退避）以更大的 max_tokens 重发：max(当前×2, 1024)，封顶 PROVIDER_META 的 max_output_tokens
+    # （未配置时 LLM_MAX_TOKENS_CEILING）与「上下文窗口 − prompt − 1024」，至多 LLM_MAX_ESCALATIONS 次。
+    # 被拒的空回复照样计量（token 已花掉）并做预算检查（BudgetExceeded 中止，回退提供方里的超预算
+    # 同样中止、不再被吞掉换成主提供方的错误）；升档耗尽（或升档后的 max_tokens 被提供方以 400 拒绝，
+    # 此时按空回复处理，不让回退提供方进入确定性失败冷却）则直接转回退提供方，不再做同一请求的主
+    # 提供方退避重试。默认开是安全的：只作用于原本必然失败的空截断回复，正常回复逐字节不变，花费
+    # 受次数与上限约束。报告前置探测（max_tokens=64）收到这种空截断回复时视为提供方可达、放行。
+    # false 恢复旧行为（同一 max_tokens 退避重试 3 次；前置探测照旧判失败）。
+    LLM_LENGTH_ESCALATION = os.environ.get('LLM_LENGTH_ESCALATION', 'true').strip().lower() == 'true'
+    try:
+        LLM_MAX_ESCALATIONS = max(0, int(os.environ.get('LLM_MAX_ESCALATIONS', '2') or '2'))
+    except ValueError:
+        LLM_MAX_ESCALATIONS = 2
+    try:
+        LLM_MAX_TOKENS_CEILING = int(os.environ.get('LLM_MAX_TOKENS_CEILING', '32768') or '32768')
+    except ValueError:
+        LLM_MAX_TOKENS_CEILING = 32768
+    if LLM_MAX_TOKENS_CEILING <= 0:
+        LLM_MAX_TOKENS_CEILING = 32768
+    # INFRA-3：预测抽取对截断的 JSON 回复失败即关闭（默认开）。回复 finish_reason=length 或 chat_json
+    # 靠补括号才解析成功（json_truncation_repaired）时：骨架 draw 整个丢弃（全部丢弃 = 骨架失败，照旧
+    # 回退成稿后抽取），二元抽取与市场匹配/分歧重述丢掉被截在半途的列表项（本地补括号时只在补全
+    # 合上了被截断的列表项时丢，无从判断时丢最后一项），红队评审/事前验尸原样返回输入；兜底的成稿后
+    # 抽取保留结果但记 quality.llm_truncation。被判截断的回复同时移出 LLMCache，重试与 resume 不会
+    # 重放它。默认开是安全的：只影响被截断的回复，完整回复逐字节不变。false 恢复旧行为（截断内容
+    # 照常采纳、不标注）。
+    LLM_JSON_TRUNCATION_FAIL_CLOSED = os.environ.get('LLM_JSON_TRUNCATION_FAIL_CLOSED', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM JSON 严格数值（默认开）。_parse_json_response_ex 把 NaN / Infinity / -Infinity 与
+    # 溢出的浮点字面量（1e999）当作非法 JSON（它们不是 RFC 8259 JSON，Python json 却默认接受），
+    # chat_json 于是走修复轮重问一次（原因点名 NaN/Infinity），而不是把 NaN 概率带进骨架与产物。
+    # 默认开是安全的：只含有限数的回复解析结果逐字节不变。false 恢复旧的宽松解析。
+    LLM_JSON_STRICT_NUMBERS = os.environ.get('LLM_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
+    # INFRA-4：LLM 错误分类先看状态（默认开）。_classify_llm_error 先按异常类型 / HTTP 状态判定
+    # （RateLimitError/429 → 配额，AuthenticationError/401/403 → 认证，422 → 内容审查，400 → 非法请求；
+    # Claude CLI 信封的 api_error_status 亦算状态），其次按文本「配额先于认证」（_is_quota 的措辞 +
+    # insufficient balance；429 / 2056 / 1113 只按整数匹配，不再误中 duration_ms:1429 之类），最后才是
+    # 确定性非法请求。chat() 重试环、chat()/chat_with_tools 的 429 熔断计数、_is_deterministic_auth_error
+    # 与编排器 _classify_provider_outage 都读它：带认证样措辞的 MiniMax 2056 用量上限消息不再被判成
+    # 确定性认证失败（跳过重试、回退进 900s 冷却）。开启时 2056 / 1113 也和状态码一样不进失败消息
+    # （max_tokens / 模型名）。默认开是安全的：只改变同时命中配额与认证文本、或带状态码的异常的归类。
+    # false 恢复旧顺序（认证文本 → 配额文本）。
+    LLM_ERROR_CLASSIFY_STATUS_FIRST = os.environ.get(
+        'LLM_ERROR_CLASSIFY_STATUS_FIRST', 'true').strip().lower() == 'true'
     # 每个 run 的 token / 成本上限（0=不限）。超限后下一次 LLM 调用抛 BudgetExceeded，止血式中止。
     LLM_RUN_BUDGET_TOKENS = int(os.environ.get('LLM_RUN_BUDGET_TOKENS', '0') or '0')
     LLM_RUN_BUDGET_USD = float(os.environ.get('LLM_RUN_BUDGET_USD', '0') or '0')
@@ -71,6 +171,13 @@ class Config:
     # （每百万 token 的 [输入, 输出] 美元价）。叠加在 telemetry._COST_PER_1K 的保守内建默认之上（同名覆盖、
     # 新名新增）。留空=纯用内建默认；解析失败=退回无覆盖（degrade-safe，见 telemetry._cost_overrides）。
     LLM_COST_PER_MTOK = os.environ.get('LLM_COST_PER_MTOK', '').strip()
+    # EVAL-17: comma-separated providers billed as a flat-rate plan (e.g. a coding-plan or
+    # token-plan endpoint), matched case-insensitively against the provider part of the meter's
+    # "provider:model" keys. Their volume is labelled cost_basis='subscription' in
+    # run_telemetry.json, like claude-cli/codex-cli, while cost_usd keeps the API-rate
+    # equivalent. Safe default: empty = only the built-in CLI providers count as subscription,
+    # so the classification is unchanged.
+    LLM_SUBSCRIPTION_PROVIDERS = os.environ.get('LLM_SUBSCRIPTION_PROVIDERS', '').strip()
 
     # —— 调优后的 LLM HTTP 客户端（R2-EXEC-6）——
     # 默认 httpx 把 keepalive 连接上限压在 20 且无多路复用，并发抬高后每次调用都要重做 TLS 握手，
@@ -78,6 +185,11 @@ class Config:
     # 协议协商失败时回退 http1（degrade-safe）。LLM_HTTP_KEEPALIVE 抬高最大 keepalive 连接数（原 20）。
     LLM_HTTP2 = os.environ.get('LLM_HTTP2', 'True').strip().lower() == 'true'
     LLM_HTTP_KEEPALIVE = int(os.environ.get('LLM_HTTP_KEEPALIVE', '128') or '128')
+    # INFRA-14: hard per-call HTTP timeout (seconds) of the OpenAI-compatible client
+    # (llm_client._build_openai_client), so a stream that dies mid-read cannot wedge a
+    # pipeline thread.  Declared here so .env reaches it; 600 is the value the client
+    # already used (0 also means 600 there), so the default is unchanged.
+    LLM_HTTP_TIMEOUT_S = float(os.environ.get('LLM_HTTP_TIMEOUT_S', '600') or '600')
 
     # —— 双层模型路由（EXECPLAN2 I-6-2）——
     # 把机械型结构化调用（子查询分解 / 受访者选择 / 访谈问题生成 / JSON 修复重试 /
@@ -165,6 +277,14 @@ class Config:
     # and record a degraded health block (consumed by status API + sim-caveat) for hollow/
     # truncated sims. Stops the "fake completed" runs (8/13 of the audited corpus).
     PIPELINE_HEALTH_GATE = os.environ.get('PIPELINE_HEALTH_GATE', 'True').strip().lower() == 'true'
+    # RESEARCH-2: add pipeline_health.stages.research = {health: degraded, issues, score}
+    # when research_quality is degraded, so the status API and the executive brief's
+    # honesty note name the research degradation.  Degrade-only: it never fails the
+    # pipeline, but the run's status is degraded, so a force resume (ORCH-3, which only
+    # regenerates the report) is accepted and cannot repair the research.
+    # Default false: off = pipeline_health without a research stage, as before.
+    PIPELINE_HEALTH_RESEARCH_STAGE = os.environ.get(
+        'PIPELINE_HEALTH_RESEARCH_STAGE', 'false').strip().lower() == 'true'
     # NEXTSTEPS P0-1：在撰写任何章节叙事**之前**先从信号包+forecast_inputs 推导「预测骨架」
     # （情景+概率+判定标准），强制 MECE 纪律并把骨架注入每章提示词，让叙事对齐可证伪目标。
     # 默认开；关闭则回退为旧的「报告写完后再从成稿抽取」行为（degrade-safe）。
@@ -193,6 +313,15 @@ class Config:
     # Increment whenever a hard publication rule changes. Byte-matched audits
     # from an older policy are drafts until replayed under the current rules.
     REPORT_FINAL_AUDIT_POLICY_VERSION = 3
+    # RESEARCH-9: persist what the publish stabilizer did to citations before the
+    # read-only audit (markers before, dangling / semantic / overuse strips, the
+    # quantitative repair's added citations and removed sentences) as
+    # final_audit.json pre_audit_repairs and forecast.json quality.citation_finalization.
+    # Telemetry only, so default on: the Markdown, full_report.md and every gate
+    # are unchanged; off = neither key is written.
+    REPORT_FINALIZATION_TELEMETRY = os.environ.get(
+        'REPORT_FINALIZATION_TELEMETRY', 'true'
+    ).strip().lower() == 'true'
     # NEXTSTEPS P2-2：在报告末尾追加一个**确定性**的「如何验证本预测」章节——逐情景列可证伪判定
     # 标准 + 来自 forecast_inputs 的带日期/触发观察指标，并把指标-情景映射写进 forecast.json 供
     # 解析调度器使用。默认开；无结构化预测/无情景时自动跳过（degrade-safe）。
@@ -271,11 +400,44 @@ class Config:
     # 双语（随成稿语言，另按 meta.translations[] 生成 exec_brief.<lang>.md）。PDF 复用 pandoc 引擎选择/
     # PyMuPDF 回退但去 --toc 收紧边距做单页。默认开；关闭=三端点 404（degrade-safe）。
     REPORT_EXEC_BRIEF = os.environ.get('REPORT_EXEC_BRIEF', 'True').strip().lower() == 'true'
+    # INFRA-4：预测工件严格 JSON（默认开）。forecast.json（骨架早落版 / 成稿版 / lint 回写 /
+    # scripts/backfill_report_visuals.py 回填）与 market_comparison.json 按 allow_nan=False 序列化：
+    # 含 NaN/±Infinity 的骨架不钉、不早落（回退成稿后抽取）；成稿工件里的非有限叶子记 error 后置 null，
+    # 路径记入 forecast.quality.nonfinite_nulled。浏览器 JSON.parse 拒绝 NaN，默认开是安全的：
+    # 有限数内容逐字节不变。false 恢复旧的照写 NaN。
+    ARTIFACT_STRICT_JSON = os.environ.get('ARTIFACT_STRICT_JSON', 'true').strip().lower() == 'true'
     # NEXTSTEPS P2-4：把每份 forecast.json 追加进校准账本（horizon/resolution date 为键），已解析
     # 预测的历史 Brier/ECE surfacing 进新预测 confidence_rationale——让信心由 track record 赚得而非
     # 自评。默认开（仅 jsonl 追加/读取，无 LLM）；初期无已解析样本时对信心无影响（degrade-safe）。
     REPORT_FORECAST_LEDGER = os.environ.get('REPORT_FORECAST_LEDGER', 'True').strip().lower() == 'true'
     FORECAST_LEDGER_DIR = os.environ.get('FORECAST_LEDGER_DIR', '').strip()  # 空=PIPELINE_DATA_DIR/_forecast_ledger
+    # EVAL-1: when a report enters the calibration ledger. 'published' (default) commits the
+    # audit-sealed forecast.json bytes only after the final publish audit passed and meta.json
+    # says completed (schema_version 2 rows: idempotent, pre-registration keyed, self-contained);
+    # 'legacy' restores the pre-audit schema_version 1 append inside _finalize_structured_forecast
+    # byte-for-byte; 'off' writes nothing. Unknown values act as 'published'. The default is an
+    # intended behaviour change: reports that later fail publication no longer poison calibration.
+    # REPORT_FORECAST_LEDGER=false still disables every ledger write and the calibration read.
+    FORECAST_LEDGER_COMMIT_MODE = os.environ.get('FORECAST_LEDGER_COMMIT_MODE', 'published').strip().lower()
+    # EVAL-1: in 'published' mode, a terminal report that is not publishable (failed, or failed
+    # the final audit) leaves one row_type='unpublished_terminal' row in the same ledger with its
+    # reasons, so the calibration denominator stays auditable (ADR 0002 I-20). Such rows carry no
+    # scenarios and are never scored, so the default cannot change any calibration number.
+    FORECAST_LEDGER_RECORD_UNPUBLISHED = os.environ.get('FORECAST_LEDGER_RECORD_UNPUBLISHED', 'true').strip().lower() == 'true'
+    # EVAL-1: cap on the question text stored in a commit row (question_sha256 always covers the
+    # full normalized text, so the cap only bounds row size, never identity).
+    FORECAST_LEDGER_QUESTION_MAX_CHARS = int(os.environ.get('FORECAST_LEDGER_QUESTION_MAX_CHARS', '4000') or '4000')
+    # EVAL-3: true = the report's historical calibration folds the settlement events of
+    # resolutions.jsonl into the production primary commit rows, admits only items whose outcome
+    # was known before 00:00Z of the report's as-of date (forecast_resolution.admissible) and adds
+    # that as_of plus a binary-scale block to forecast['historical_calibration']. Default off
+    # (ADR 0002 decision 6, shadow first): the report path stays byte-identical, while the
+    # resolution monitor always shows the folded numbers as shadow observability.
+    FORECAST_LEDGER_SETTLEMENT_FOLD = os.environ.get('FORECAST_LEDGER_SETTLEMENT_FOLD', 'false').strip().lower() == 'true'
+    # R2-CAL-5 / EVAL-3: shadow-only. forecast_ledger.recalibration_param reports this as
+    # `enabled` beside the fitted slope, but nothing applies a slope until a WP14
+    # PromotionDecision, so neither value changes any forecast; default off.
+    REPORT_RECALIBRATE_FROM_LEDGER = os.environ.get('REPORT_RECALIBRATE_FROM_LEDGER', 'false').strip().lower() == 'true'
     # MON-1 持续预测/判定监测（scripts/resolution_monitor.py，cron 驱动）：对已发布报告的锚定
     # 市场周期性重报价 + 查询判定终态，落 price_track.jsonl / resolutions.jsonl / monitor_report.md。
     # 纯脚本旁路，不改任何在线管线语义；下列旋钮仅被该脚本读取（degrade-safe，默认保守）。
@@ -288,6 +450,38 @@ class Config:
     # 默认 0=关：行为与今日逐字节一致；开启是 owner 的一行 env 决定（keyless 公共
     # Gamma 重报价，无 LLM/付费调用）。仅 run.py 生产入口启动，测试进程绝不自启。
     RESOLUTION_MONITOR_AUTORUN_HOURS = float(os.environ.get('RESOLUTION_MONITOR_AUTORUN_HOURS', '0') or '0')
+    # EVAL-2 settlement events v2 (read only by scripts/resolution_monitor.py; inert unless the
+    # monitor runs, and autorun above stays off by default). RESOLUTION_SETTLE_LEDGER: `run
+    # --all-recent` also sweeps the production primary commit rows of ledger.jsonl (`settle`
+    # does it on demand); the sweep only appends idempotent, fail-closed settlement events.
+    RESOLUTION_SETTLE_LEDGER = os.environ.get('RESOLUTION_SETTLE_LEDGER', 'true').strip().lower() == 'true'
+    # Weakest market-anchor resolution_equivalence a settlement event may be scoring-eligible at
+    # (exact|near|loose; unknown values act as exact). loose behaves exactly like near: an anchor
+    # with a loose or missing equivalence always fails the completeness check (anchor_incomplete).
+    # Default exact: a near market resolves a different proposition, so its outcome must never
+    # label ours.
+    RESOLUTION_MARKET_MIN_EQUIVALENCE = os.environ.get('RESOLUTION_MARKET_MIN_EQUIVALENCE', 'exact').strip().lower()
+    # Days after a binary's resolution date before an item still lacking a settlement gets one
+    # never-scored terminal event ('unresolvable_after_grace'), so nothing stays pending forever.
+    RESOLUTION_PENDING_GRACE_DAYS = int(os.environ.get('RESOLUTION_PENDING_GRACE_DAYS', '180') or '180')
+    # Cap on the newest production primary commit rows one settle sweep fetches market
+    # resolutions for (rows with an unrecorded market-anchored binary). Unanchored binaries
+    # past their grace period need no network and are always settled; rows with nothing
+    # actionable (every binary recorded, or unanchored and still inside grace) never count.
+    RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
+    # EVAL-5 market-relative skill (read only by scripts/resolution_monitor.py): the
+    # run_monitor result of each `run` and the `summary` payload add market_skill
+    # (backtest.market_skill_report: Brier skill vs the anchor price each settled binary saw,
+    # divergence hit rate vs a market-implied null) and monitor_report.md gains '## Skill vs
+    # the market it saw' (the `run` CLI's per-report rows do not carry it). Safe on by default: it only
+    # reads resolutions.jsonl / ledger.jsonl and sealed forecast.json files (never writes
+    # them), is deterministic with no LLM or network call, changes no report or forecast,
+    # and is inert unless the monitor runs; false = the monitor's output is byte-identical
+    # to before.
+    FORECAST_SKILL_SCORING = os.environ.get('FORECAST_SKILL_SCORING', 'true').strip().lower() == 'true'
+    # Scored rows a market-skill stratum needs before it stops being flagged insufficient_data
+    # ('indicative' in the monitor report); it flags thin strata and never suppresses them.
+    FORECAST_SKILL_MIN_N = int(os.environ.get('FORECAST_SKILL_MIN_N', '10') or '10')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉
     # 分析（contingent 纽带=支点）。**模型先验非证据**，块内显式标注。默认关（保守，避免被当成证据）。
@@ -323,6 +517,11 @@ class Config:
     # R2-CAL-4：发布前给每个保留情景一个概率下限再做最终重归一，绝不发布 0%。消除「已实现但未预测」
     # 结果坐在 ~0 处的灾难性 log-loss/Brier 失败。trivial 且 tail-dominant。
     FORECAST_PROB_FLOOR = float(os.environ.get('FORECAST_PROB_FLOOR', '0.03') or '0.03')
+    # REPORT-1：概率字段的类型化解析（utils/probability_parse.py）。开启后 '30%' 读作 0.30，
+    # 缺失/区间/上下限/混合量纲等不可读概率一律置 null 并标 probability_status=needs_review
+    # （情景合同审计随之失败），绝不再被补成 0.0、均匀分布或 0.98/0.02 钳制。默认开是安全的：
+    # 格式良好的数值输入与旧路径逐字节一致，只有畸形输入会改为显式待复核；设 false 复现旧行为。
+    FORECAST_PROB_STRICT_PARSE = os.environ.get('FORECAST_PROB_STRICT_PARSE', 'true').strip().lower() == 'true'
     # R2-CAL-1 / R2-CAL-17：把预测脊柱推导 K 次（共享情景名、变 temp），汇成均值概率 + spread→confidence。
     # Foglamp WP1 (1D)：默认回到【1】。同模型重抽样的 spread 不是校准过的不确定性——把它
     # 当区间发布会高估独立性；重抽样只有在测得的不稳定性证明其成本合理时才加（WP15）。
@@ -396,6 +595,19 @@ class Config:
     # REPORT-3：默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
     # 钉进每章作可引用的数字底座，提升引用覆盖、减少探索式工具调用。
     REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'True').strip().lower() == 'true'  # I-3-2 每章注入定量信号包
+    # REPORT-5：信号包按 run_summary.json 的 simulation_health 门控（诚实检查，fail-closed，默认开）。
+    # hollow（零有机动作）时去掉动作量/关注聚类派生块（议程设置力分层、派系图、情景差异——它们只是
+    # 种子动作的回声）；errored 再去掉世界态块；图谱派生块（投影纽带、因果骨架）保留；二者都在包头后
+    # 注明「模拟未产出可用行为数据」，无块可留时整包为空。truncated / llm_degraded 保留全部块并附审慎
+    # 提示；未识别的非 ok 值同样附提示并告警（偏向关闭）。结果记入 forecast.json
+    # quality.signal_pack_health（summary 存在却不可读时另记 summary_unreadable 并告警）。
+    # ok / 无 summary / 读取失败 → 信号包逐字节不变；false → 旧行为（不读 summary、不记 quality）。
+    # FU-3：同一规则还管大纲预取（simulation_outcomes / scenario_diff）、ReACT 工具（simulation_outcomes、
+    # coalition_map 含 faction_brief 的降级、opinion_shift、scenario_diff）与情景报告的基线（信号包差异块、
+    # 对比表、scenario_diff 工具、大纲差异预取）：hollow / errored 一侧只给说明行，基线裁定另记
+    # quality.baseline_signal_pack_health；summary 不可读与无 summary 一样按旧行为（只标记、不挡）。
+    REPORT_SIGNAL_PACK_HEALTH_GATE = os.environ.get(
+        'REPORT_SIGNAL_PACK_HEALTH_GATE', 'true').strip().lower() == 'true'
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
     # 模拟 + 命中「对比/反事实」章节时注入，缺基线时自动 no-op（degrade-safe）。
     REPORT_COMPARISON_TABLE = os.environ.get('REPORT_COMPARISON_TABLE', 'True').strip().lower() == 'true'  # I-3-4 基线-情景对比表
@@ -415,6 +627,34 @@ class Config:
     REPORT_KEY_METRICS_MAX = int(os.environ.get('REPORT_KEY_METRICS_MAX', '40') or '40')          # 关键指标表行数上限
     REPORT_CONTESTED_TABLE_MAX = int(os.environ.get('REPORT_CONTESTED_TABLE_MAX', '15') or '15')  # 争议声明表行数上限
     REPORT_CHRONOLOGY_MAX_EVENTS = int(os.environ.get('REPORT_CHRONOLOGY_MAX_EVENTS', '25') or '25')  # 紧凑时间线事件上限
+    # REPORT-8：已核验指标块。研究 quantitative 行带页面核验标签（verification，RESEARCH-4/REPORT-7）时，
+    # 背景块改钉「已核验指标」表替代无核验状态的「关键量化指标」表：只收在所引页面核验到数字的已报告值，
+    # 预期/目标值单列并标注「不是已发生的结果」，[S#] 只取报告引用索引内的记号（绝不自造），其余行只计数；
+    # Part 2 综合注入同一块并附「来源冲突并列呈现、不调和」规则。默认开且安全：无任何行带标签（旧引擎 /
+    # 复用研究）或关闭 → 关键指标表与各提示词逐字节不变；构建失败回退关键指标表（degrade-safe）。
+    REPORT_VERIFIED_FACTS_BLOCK = os.environ.get('REPORT_VERIFIED_FACTS_BLOCK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FACTS_MAX_ROWS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_ROWS', '40') or '40')  # 已核验指标块行数上限（超限先丢预期、再丢陈旧、再丢最旧）
+    REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
+    # REPORT-13：证据引用的反证审查（forecast_counter_case）。骨架钉定后对概率最高的三个非兜底情景做**一次**
+    # 强档 LLM 调用：读字节稳定的 [S#] 证据包（来源索引 + 引用了索引来源的 dossier 段落 + 争议声明表 + 市场
+    # 锚点；绝不含模拟信号包），逐情景给出「概率应更高 / 更低」的引用论据与带日期或阈值的触发器。论据过确定性
+    # 闸门（未知来源 / 无引用 / 含百分比或赔率（含文字形式）或证据包外的数字 / 来源不支撑；被来源否定的 [S#]
+    # 一律剔除）后：触发器（其 [S#] 同样过来源支撑检查，成稿引用收尾不会剥光）并入 forecast.indicators 与
+    # 「如何验证本预测」表，最强论据注入 Part 2 综合提示词，reports/<id>/counter_case.json 落盘并在
+    # forecast.counter_case 记 sha256。绝不改任何已发布概率。默认关且安全：关闭 = 零额外调用、产物逐字节不变；
+    # 开启后每份报告多一次强档调用（约 15-20k 输入 token），失败只记 status=failed、绝不阻断报告。
+    REPORT_COUNTER_CASE = os.environ.get('REPORT_COUNTER_CASE', 'false').strip().lower() == 'true'
+    REPORT_COUNTER_CASE_EVIDENCE_CHARS = int(os.environ.get('REPORT_COUNTER_CASE_EVIDENCE_CHARS', '12000') or '12000')  # 反证证据包中 dossier 引用段落的字符预算（来源索引另取前 6000 字）
+    # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
+    # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
+    # market_conflict / threshold_or_probability / unmatched），计数记入 forecast.quality.verified_figures
+    # 与 final_audit.json 的 verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验
+    # 数字的来源与引用行、比对样例）。默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升
+    # REPORT_FINAL_AUDIT_POLICY_VERSION；已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段
+    # 或文件（并去掉上一轮留下的旧值与旧文件）。REL_TOL：与已核验值的相对差超过它才判为冲突；相差不超过它、
+    # 又未按数字自身精度对上的数字既不算匹配也不算冲突（计入 unmatched，不进 used_in）。
+    REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
+    REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
     # 结构咽喉/介数中心度（研究显著度回退）；关系名册每个 actor 附「结构影响力（KG 中心度）」行
     # （按 actors 别名组折叠去重）。关闭=纯显著度选点、不加中心度行（行为与历史一致）。
@@ -424,6 +664,108 @@ class Config:
     # 坐标。关闭 / scenario_spine 缺省 = 自由起名（行为与历史一致）。
     REPORT_SCENARIO_SPINE_PIN = os.environ.get('REPORT_SCENARIO_SPINE_PIN', 'True').strip().lower() == 'true'
     RECORD_RUN_MANIFEST = os.environ.get('RECORD_RUN_MANIFEST', 'True').strip().lower() == 'true'  # I-8-1 复现清单 run.json
+    # EVAL-15：管线终态（completed/failed/cancelled）时在 _run 的 finally 里写确定性分阶段记分卡
+    # <pipeline_dir>/stage_scorecard.json（stage-scorecard/v1：已有工件的纯投影 + 契约检查），并把
+    # {stage: passed} 摘要折入 state.options.stage_scorecard_summary。默认开（同 RECORD_RUN_MANIFEST
+    # 的观测侧车先例）：只读投影、独立 try/except，绝不改 status/pipeline_health、绝不写报告目录。
+    # 关闭 = 不写文件、不加 options 键。孤儿/旧跑用 scripts/stage_scorecard.py score 回填。
+    STAGE_SCORECARD_ENABLED = os.environ.get('STAGE_SCORECARD_ENABLED', 'true').strip().lower() == 'true'
+    # EVAL-19（P07 第 1 部分）：可发布报告在账本提交之后冻结评估包 reports/<id>/eval_bundle/
+    # （brief / forecast_inputs / dossier / quant / graph / sim / market 七个输入块的逐字节副本 +
+    # manifest：逐块 sha256、研究目标、上游模型与发布指纹），供 EVAL-20 的块移动研究复用同一输入。
+    # 纯旁路：不改报告字节、发布状态与账本；默认关（不写任何文件）。EVAL_DOSSIER_CHARS 为 dossier
+    # 块的头尾切片字符预算（forecast_extractor.slice_head_tail；≤0 视为默认 16000，回填同规则）。
+    EVAL_BUNDLE_CAPTURE = os.environ.get('EVAL_BUNDLE_CAPTURE', 'false').strip().lower() == 'true'
+    EVAL_DOSSIER_CHARS = int(os.environ.get('EVAL_DOSSIER_CHARS', '16000') or '16000')
+    # EVAL-20（P07 第 2 部分）：scripts/value_add_eval.py 在冻结评估包上做无标签的块移动研究
+    # （floor / floor_sc / R / R+Q/G/S/M / FULL / FULL_AA，按服务模型给 moves/inert/inconclusive 判定，
+    # 以 A/A 重复臂为噪声底）。只是证据，绝不自动改任何默认值；输出只落在评估账本 value_add/<study_id>/。
+    # VALUE_ADD_EVAL_ENABLED 关 = run 子命令不发任何调用（plan/score 不调用模型）；EVAL_STUDY_MAX_CALLS
+    # 为计划调用数上限（超出须 --max-calls）。注意：计分判定每块至少需 value_add_stats.MIN_CLUSTERS=16
+    # 个评估包；默认设计每包每模型 66 次调用（2 目标 ×（8 个单次臂 + floor_sc 的 K=3）× 3 重复），
+    # 单模型计分研究至少 1056 次，故默认上限 600 只够特征刻画（单模型 ≤9 包），计分研究须显式
+    # --max-calls；任何块都达不到 16 包（或重复 <3）的研究 run 默认拒绝，须 --allow-characterization
+    # 才花这笔钱。
+    # EVAL_ARM_REPLICATES 每臂重复次数（<3 只算特征刻画）；EVAL_TARGETS_PER_BUNDLE 每个评估包取的目标数；
+    # EVAL_PROBE_FIDELITY_MAX 为探针保真度门槛（R+M 与去市场影响前概率的平均绝对差超出则全部判定只作
+    # 参考）；EVAL_INERT_MARGIN 为 inert 判定的 CI 上界；EVAL_BOOTSTRAP_RESAMPLES 为聚类自助重采样次数。
+    # 这三个评分参数与自助种子在 run 时预注册进 study.json，score 时取值与注册值不同则记为 override，
+    # 且该次判定全部只作参考。
+    VALUE_ADD_EVAL_ENABLED = os.environ.get('VALUE_ADD_EVAL_ENABLED', 'false').strip().lower() == 'true'
+    EVAL_ARM_REPLICATES = int(os.environ.get('EVAL_ARM_REPLICATES', '3') or '3')
+    EVAL_STUDY_MAX_CALLS = int(os.environ.get('EVAL_STUDY_MAX_CALLS', '600') or '600')
+    EVAL_TARGETS_PER_BUNDLE = int(os.environ.get('EVAL_TARGETS_PER_BUNDLE', '2') or '2')
+    EVAL_PROBE_FIDELITY_MAX = float(os.environ.get('EVAL_PROBE_FIDELITY_MAX', '0.10') or '0.10')
+    EVAL_INERT_MARGIN = float(os.environ.get('EVAL_INERT_MARGIN', '0.02') or '0.02')
+    EVAL_BOOTSTRAP_RESAMPLES = int(os.environ.get('EVAL_BOOTSTRAP_RESAMPLES', '2000') or '2000')
+    # EVAL-18: slim per-pipeline cost card. On: the _run finally block writes
+    # <pipeline_dir>/cost_card.json (drf-cost-card/v1: per-stage calls/tokens/wall first, USD
+    # secondary, completeness reasons), and the report stage pins the run's config fingerprint
+    # in options.config_hash_v1 and stamps that config_hash on its ledger commit rows, so cost
+    # and forecast quality can later be joined per configuration. Each attempt start removes
+    # the previous attempt's card and pins its unattributed-spend baseline in
+    # options.cost_card_attempt_v1 (so an orphan rebuild never borrows another attempt's
+    # baseline), and each stage wall window's opening is pinned in
+    # options.cost_card_windows_v1 (its start and the calls earlier attempts had made in the
+    # stage, so the card can name the walls that do not time all of a row's calls).
+    # Default on, like the other observation sidecars (RECORD_RUN_MANIFEST,
+    # STAGE_SCORECARD_ENABLED): it only projects durable artifacts in its own try/except,
+    # never writes the report folder and never changes status or health. Off = no file, no
+    # options keys, no ledger stamp (byte-identical).
+    # Backfill: scripts/cost_card.py build <pipeline_id>.
+    COST_CARD_ENABLED = os.environ.get('COST_CARD_ENABLED', 'true').strip().lower() == 'true'
+    # INFRA-7：run-shape 准入钉（与 safety_policy_v1 并列的第二份准入快照）。开启时 start/fork/批次分叉
+    # 把影响结果的旋钮（ACTOR_CAST_MAX、GRAPH_MAX_ENTITIES、SIM_TEMPORAL_MODE…）与 provider/model
+    # 出处钉进 options.run_shape_v1，每个 attempt 起点对比当前环境并记录漂移；run.json 保留历次
+    # attempt 与复用阶段的原 provider 戳（不再在阶段进入时按当前 provider 重戳），遥测标注每阶段是否复用。
+    # 默认开：只增加记录、不改变任何阶段的执行语义（漂移默认只记录）。关闭 = 与引入前逐字节一致。
+    RUN_SHAPE_PIN = os.environ.get('RUN_SHAPE_PIN', 'true').strip().lower() == 'true'
+    # INFRA-7：resume 时 identity 旋钮漂移的处置。record（默认）= 告警 + 记录后继续；refuse = 以点名
+    # 漂移旋钮的错误使本次 attempt 失败。provider/model 仅漂移永不拒绝。未知值按 record 处理并告警。
+    RUN_SHAPE_DRIFT_POLICY = os.environ.get('RUN_SHAPE_DRIFT_POLICY', 'record').strip().lower()
+    # INFRA-7：resume 血统守卫。上游阶段被重算后，拒绝复用由其旧产物派生的下游产物
+    # （研究重算→本体/图谱重建；图谱重算或模拟绑定的 graph_id 不符→重建 PREPARE；RUN 重算或报告绑定的
+    # simulation_id 不符→重生成报告），在 options.stage_notes 留 'reuse_refused: <原因>' 面包屑。失效记录
+    # 持久化在 options.lineage_invalidated，直到该阶段从当前上游重建才清除——下游重建失败后的下一次 resume
+    # 仍拒绝复用陈旧产物；重建已保存的新本体（落盘即结清）与已完成（COMPLETED）的铸出报告（id 记在
+    # options.lineage_rebuilt）在打断后的下次 resume 被复用而非再生成。默认开：以重算成本换取不复用陈旧产物
+    # （fail closed）；关闭 = 旧的逐阶段存在性复用。
+    RESUME_LINEAGE_GUARDS = os.environ.get('RESUME_LINEAGE_GUARDS', 'true').strip().lower() == 'true'
+    # INFRA-8: model provenance. On, LLMMeter records per stage which model each call requested
+    # (the effective label: a claude-cli call without --model is 'cli-default') and which model
+    # the provider reported serving it (snapshot 'model_resolution'; the simulation child writes
+    # its own into sim_llm_telemetry.json); research v3 ledger rows and usage summaries carry
+    # model/served_model and the v3 work-dir identity gains the resolved model id (a side
+    # without one stays compatible, so existing work dirs still resume); run.json resolved
+    # blocks gain requested_model/requested_source/requested_models/served_models/
+    # model_resolution; forecast.json gains a 'model_provenance' block. The per-call labels and
+    # served ids of LLMClient calls come from LLMMeter, so they need LLM_TELEMETRY_ENABLED=true;
+    # a stage with no recorded call names the configured provider/model pair instead, marked
+    # requested_source='configured' (tier routing or failover may have sent another model).
+    # Both children get this value from Config (research-child registry, simulation env).
+    # Default on: it only adds recorded keys and changes no call, routing or gate; the one
+    # behavioural effect is that a research resume no longer reuses a v3 work dir produced by
+    # a different resolved model id. Off = byte-identical to before.
+    RECORD_MODEL_PROVENANCE = os.environ.get('RECORD_MODEL_PROVENANCE', 'true').strip().lower() == 'true'
+    # INFRA-9：分叉继承安全政策钉。开启时情景分叉（PipelineOrchestrator.fork）与批次问题分叉
+    # （scripts/batch_runs.fork_question）深拷贝 base 的 options.safety_policy_v1（origin=fork_inherited）；
+    # base 无钉（Foglamp WP1 之前准入）时在分叉准入时捕获当前环境政策（默认 Config 下即安全政策，
+    # origin=fork_admission）。默认开：分叉沿用 base 的研究/图谱继续预测，其图谱反馈/种子/extremize/
+    # 模拟影响语义不得随服务重载后的环境默认值漂移；只影响分叉。注意：分叉与 base 共用 graph_id——
+    # base 以 SIM_GRAPH_FEEDBACK=true 准入时分叉继承 sim_graph_feedback=true，其模拟（含情景注入的
+    # 反事实事件）会写入 base 与兄弟分叉共享的观察图；分叉准入时对此记 warning（点名共享图谱）。
+    # 关闭 = 旧行为（分叉不带钉，每个读点回退当前环境值）。
+    FORK_INHERIT_SAFETY_POLICY = os.environ.get('FORK_INHERIT_SAFETY_POLICY', 'true').strip().lower() == 'true'
+    # INFRA-11：严格的 actor 名匹配（名字身份查找歧义即失败，不再猜）。开启时报告工具 opinion_shift 先按
+    # 研究名册解析目标（标准化精确名/别名，规范名优先于他人别名 → 名册与动作日志两边合并的 ≥4 字符包含），
+    # 多个候选时返回点名全部候选的说明而不是把各自轨迹混在一起（旧的无界子串匹配让 'US' 同时命中
+    # Russia/Australia），经别名/包含解析时在输出标题里点名解析结果；trace_cascade 的节点名解析先查名册
+    # 别名（不用被两个 actor 争用的别名），包含匹配下限从 2 字符提到 4 字符并要求唯一命中；实体消解的
+    # actor_alias_map 排除被两个不同 actor 同时认领的别名（记日志），不再后写者胜。默认开：主要把原先的
+    # 错配变成「未解析/歧义」；注意它也不再解析短于 4 字符的唯一包含（如 'Fed' → 'Federal Reserve'），
+    # 除非该短名正是名册里的精确名或别名。关闭 = 旧匹配。
+    # （actor id 的非拉丁名修复不受此旋钮控制：拉丁名 id 本就不变。）
+    ACTOR_NAME_MATCH_STRICT = os.environ.get('ACTOR_NAME_MATCH_STRICT', 'true').strip().lower() == 'true'
 
     # —— EXECPLAN2 第三波改进旋钮（剩余 L-effort 新能力；全部默认关，留空即保持当前行为）——
     # 预测质量回归评测开关（EXECPLAN2 I-7-7）：opt-in，绝不进默认 CI。开启后 eval_forecast_quality.py
@@ -433,6 +775,35 @@ class Config:
     # 仅当本旋钮开启（或 CLI 显式 --to-ledger）时才把已解析黄金题作为二元(YES/NO)预测追加进校准账本，
     # 让 report_visualizer 校准曲线累积黄金题结局。默认关=不污染生产账本（degrade-safe）。
     GOLDEN_EVAL_LEDGER = os.environ.get('GOLDEN_EVAL_LEDGER', 'False').strip().lower() == 'true'  # EVAL-1
+    # EVAL-8: golden_eval headline tiering. On, score-forecast-file classifies every matched row from
+    # the run's provenance (--pipeline-dir / --run-created-at): only a prospective row (the run, from
+    # creation through its last recorded activity, came before the question resolved and within
+    # GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS of its as_of_date, and was no pinned hindcast) counts
+    # toward the headline; every other row is characterization only, a headline without such rows is
+    # withheld, and score-ledger splits golden rows by golden_tier the same way. Default on is safe: the
+    # scorer is offline and characterization-only, the legacy 'metrics' block is unchanged, and a
+    # headline that cannot be backed is withheld, never invented.
+    # false = the pre-EVAL-8 reports (no headline / characterization keys, no golden_tier on rows).
+    GOLDEN_HEADLINE_GATE = os.environ.get('GOLDEN_HEADLINE_GATE', 'true').strip().lower() == 'true'
+    # EVAL-8: how many days after a golden question's as_of_date a run may still be active and count as
+    # prospective (keeps information sets comparable across code versions); must be 0-3650. golden_eval
+    # refuses a value it cannot read (the import audit's default 7) instead of scoring with it.
+    GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS = int(
+        os.environ.get('GOLDEN_PROSPECTIVE_LEAD_TOLERANCE_DAYS', '7') or '7')
+    # EVAL-12：黄金集污染探针（scripts/golden_probe.py）——闭卷无档案预测 + 结局回忆两臂，回忆说对
+    # 结局且细节含策展泄漏标记的题判为 likely_memorized。会产生付费调用，故默认关（CLI 另可 --live
+    # 显式放行）；GOLDEN_PROBE_MAX_CALLS 为单次探针的硬上限（修复回合也计数，超限 → 退出码 4）；
+    # GOLDEN_PROBE_CONFIDENT_P 是弱信号 nd_confident_correct 的置信阈值（实现侧概率 ≥ 此值）。
+    GOLDEN_PROBE_ENABLED = os.environ.get('GOLDEN_PROBE_ENABLED', 'false').strip().lower() == 'true'
+    GOLDEN_PROBE_MAX_CALLS = int(os.environ.get('GOLDEN_PROBE_MAX_CALLS', '120') or '120')
+    GOLDEN_PROBE_CONFIDENT_P = float(os.environ.get('GOLDEN_PROBE_CONFIDENT_P', '0.85') or '0.85')
+    # EVAL-13: under an evaluation run whose pin carries a target proposition, a target the binary
+    # extraction did not produce verbatim gets exactly one bounded repair draw that asks only for
+    # that statement; the row is kept only on a normalized match, never fabricated. Default on is
+    # safe: it is inert unless PipelineOrchestrator.start(evaluation=...) pinned a target, so
+    # production runs never see the addendum or the extra draw. false = no repair draw (the target
+    # is reported under forecast.evaluation.target_binding.missing).
+    EVAL_TARGET_REPAIR_DRAW = os.environ.get('EVAL_TARGET_REPAIR_DRAW', 'true').strip().lower() == 'true'
 
     # —— 运维脚本旋钮（此前各脚本用 getattr(Config, ...) 读但 config.py 从未定义 → "幽灵旋钮"：
     #    在 .env 里设了也无效。这里收口为真实可读项 + .env.example 文档化，消除该反模式）——
@@ -475,6 +846,58 @@ class Config:
     # R2-EXEC-7 研究阶段后台预热嵌入器；R2-RES-7 as_of 双时态锚校验；建图输入源。
     EMBED_WARM_AT_RESEARCH = os.environ.get('EMBED_WARM_AT_RESEARCH', 'false').strip().lower() == 'true'
     VALIDATE_AS_OF_DATE = os.environ.get('VALIDATE_AS_OF_DATE', 'true').strip().lower() == 'true'
+    # TIME-1: v3 actor extraction may not override the research as-of.  On, actors.json
+    # as_of_date is always the plan's as-of (the UTC date fixed when the research plan was
+    # made); a different model value is only recorded in meta.json
+    # (as_of_model_disagreement).  That date becomes the graph valid_at/reference_time and
+    # the simulation calendar anchor, and a model once reported its training cutoff as the
+    # as-of.  Honesty fix, so default on and parsed fail-closed like the bridge's _env_flag:
+    # only 0/false/no/off turn it off.  false = the model-supplied YYYY-MM-DD value is
+    # adopted again (previous bytes).  The parent forwards it to the v3 child.
+    RESEARCH_AS_OF_PIN = os.environ.get(
+        'RESEARCH_AS_OF_PIN', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-7 hindcast admission: accept as_of (a canonical past-or-today YYYY-MM-DD) on run
+    # requests (/api/research/run, /api/v1/run, PipelineOrchestrator.start).  An admitted
+    # as_of pins hindcast_policy_v1 plus an evaluation-run pin, runs v3 research with
+    # RESEARCH_AS_OF and prediction markets withheld, and anchors the graph at the pin.
+    # Default false, which is safe: a request carrying as_of is then rejected (400 /
+    # ValueError) instead of silently running live; requests without as_of are unchanged.
+    HINDCAST_ENABLED = os.environ.get('HINDCAST_ENABLED', 'false').strip().lower() == 'true'
+    # TIME-8 point-in-time evidence gates of a hindcast's v3 research.  Read only at
+    # admission (hindcast_policy.capture_hindcast_policy_v1 pins them as the pin's 'pit'
+    # block; a resume or a later config change never alters an admitted run) and
+    # effective only inside a pinned hindcast, which itself needs HINDCAST_ENABLED, so
+    # live runs are unaffected whatever these say.  On, a source whose latest known
+    # publication/update date is after the as-of never gets an [S<n>] id or a stored
+    # page: late search rows are dropped before registration, URL-dated-late fetches
+    # are refused without budget and late pages are withheld before storage.  TIME-9:
+    # the report then cites only sources admissible as of the as-of, and the research
+    # audit (point_in_time.json) sets forecast.json hindcast.integrity and run.json
+    # as_of_enforcement.  An honesty check, so default on and parsed fail-closed: only
+    # 0/false/no/off disable it.
+    PIT_GATES = os.environ.get('PIT_GATES', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-8: whether a source available on the as-of day itself is admitted.  exclude
+    # (default, strict: evidence must predate the as-of) | include.  Anything else is exclude.
+    PIT_SAME_DAY_POLICY = ('include' if os.environ.get('PIT_SAME_DAY_POLICY', 'exclude').strip().lower()
+                           == 'include' else 'exclude')
+    # TIME-8: a fetched page with no readable date.  drop (default, fail closed: withheld
+    # like a late page) | flag (stored, pit_status 'unverifiable', labelled undated).
+    # drop can starve undated data pages; flag trades that for unverified evidence.
+    # Anything else is drop.
+    PIT_UNDATED_POLICY = ('flag' if os.environ.get('PIT_UNDATED_POLICY', 'drop').strip().lower()
+                          == 'flag' else 'drop')
+    # TIME-8: ask the search provider for a date bound (Firecrawl tbs cd_max at the
+    # as-of; other providers cannot and are counted unbounded; a bounded request the
+    # provider rejects is retried once unbounded).  The primary control; the row gate
+    # still runs on every result, and gated search cache entries are keyed apart from
+    # live ones either way.  Default on; only 0/false/no/off disable it.
+    PIT_PROVIDER_DATE_BOUNDS = os.environ.get(
+        'PIT_PROVIDER_DATE_BOUNDS', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-8: rows requested per gated search = 5 x this, so dropped late rows do not
+    # starve the render slots; clamped to 1..4 where it is pinned at admission
+    # (hindcast_policy.PIT_OVERFETCH_MAX).  Default 1 (no over-fetch: the provider bound
+    # is the primary control and each extra row can be billed).
+    PIT_SEARCH_OVERFETCH = int(os.environ.get('PIT_SEARCH_OVERFETCH', '1') or '1')
     # W9-10：建图输入源默认 both→dossier_only——用户明确要求 KG 收敛到关键 actor：actor 中心的
     # 卷宗切块入图，广覆盖研究报告只喂本体/报告上下文（graph 阶段 8h38m/60% 跳块的主要输入面）。
     # dossier 缺失/为空时代码自动回退 both 语义（全量报告切块），设 'both' 可显式恢复旧行为。
@@ -625,13 +1048,60 @@ class Config:
     #     时把结构化告警写入 run_summary（检测+诚实优先，绝不伪造互动）。
     SIM_ORGANIC_RATIO_DETECTOR = os.environ.get('SIM_ORGANIC_RATIO_DETECTOR', 'true').strip().lower() == 'true'
     SIM_ORGANIC_RATIO_MIN_CONSECUTIVE = int(os.environ.get('SIM_ORGANIC_RATIO_MIN_CONSECUTIVE', '3') or '3')
+    # SIM-3 (C26): 采样赞（action_args.is_engagement_sample，引擎随机代点）不是 agent 的决策，
+    #     不计入 run_summary 的 organic_action_count / rounds_with_organic_actions——否则只有采样赞
+    #     与定时事件帖的零自主运行逃过 'hollow'（summary 与管线健康门两处）。排除数写
+    #     engagement_sample_count（>0 才写）。默认开是诚实修正：只会把此类运行如实标为 hollow；
+    #     false 恢复旧计数（采样赞算有机）。
+    SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES = os.environ.get(
+        'SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES', 'true').strip().lower() == 'true'
+    # SIM-3 (C16): 定时事件可达性审计——round 非法/≥ total_rounds、缺发帖者或内容的
+    #     scheduled_events 永远不会触发（fire_scheduled_events 静默跳过），模拟角色从未看到它们。
+    #     仅当存在不可达事件时 run_summary 写 schedule_audit，管线运行健康记 'degraded' issue
+    #     （绝不判失败）；全部可达 → summary 键逐字节不变，故默认开安全。false 关闭审计。
+    SIM_SCHEDULE_AUDIT = os.environ.get('SIM_SCHEDULE_AUDIT', 'true').strip().lower() == 'true'
 
     # —— 报告组（RPT-*/XRUN-1/XRUN-5/RPT-6/RPT-8；report_agent / forecast_extractor 经 getattr 读取）——
     REPORT_ABORT_ON_LLM_OUTAGE = os.environ.get('REPORT_ABORT_ON_LLM_OUTAGE', 'true').strip().lower() == 'true'
     REPORT_SECTION_RETRY_MAX = int(os.environ.get('REPORT_SECTION_RETRY_MAX', '2') or '2')  # RQ-1 1→2；0=旧的无重试
     REPORT_SECTION_RETRY_BACKOFF_S = float(os.environ.get('REPORT_SECTION_RETRY_BACKOFF_S', '8.0') or '8.0')
     REPORT_CRITIQUE_BEFORE_PROSE = os.environ.get('REPORT_CRITIQUE_BEFORE_PROSE', 'true').strip().lower() == 'true'
+    # INFRA-2：红队自校准每份报告至多执行一次（默认开）。self_critique_forecast 调用评审 LLM 后
+    # 给预测打 critique_attempted 标记；叙事前评审失败/被回退（未 critiqued）时，成稿后的第二次评审
+    # 不再发 LLM 调用，只记 quality.critique_pre_prose='reverted_or_failed'——此前第二次评审会在
+    # 正文写完后再挪概率（正文捍卫的数字与 forecast.json 矛盾），并白付一次评审成本。默认开是安全
+    # 的：评审成功的路径不变（本就跳过二次评审），标记在 LLM 调用之后才写、且不进评审/验尸提示词。
+    # false 恢复旧的「失败后成稿再评一次」且不写标记。
+    REPORT_CRITIQUE_SINGLE_PASS = os.environ.get('REPORT_CRITIQUE_SINGLE_PASS', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
+    # REPORT-11 二元预测对称护栏（默认关）：逆向框架 / 低概率重述规则与基础 RULES 只把模型推离 0.5，
+    # 没有一句约束反方向的失败。开启后每条二元抽取提示词都追加 SYMMETRY GUARD（紧跟当轮逆向 / 低概率
+    # 规则；FORECAST_BINARY_CONTRARIAN 关时紧跟基础 RULES）：证据不支持所给概率就丢掉候选，绝不为凑
+    # 目标区间挪数字，不为显得果断制造极端。这是会移动概率的提示词政策，须经 WP14 前瞻、结果盲的
+    # 晋升门才可默认开启（ADR-0002 I-21：不得凭 golden / 形状指标晋升）。开启时记入
+    # forecast.quality.forecast_policy（与形状遥测旗标无关）与准入钉 safety_policy_v1。默认关是安全的：
+    # 二元抽取提示词逐字节不变。
+    FORECAST_BINARY_SYMMETRIC_GUARD = os.environ.get('FORECAST_BINARY_SYMMETRIC_GUARD', 'false').strip().lower() == 'true'
+    # EVAL-14（P14）：数值阈值型二元的结构化 target——二元抽取提示词追加 STRUCTURED TARGET 规则，
+    # 模型给出的 target 经 binary_targets.validate_binary_target 校验后存 row['target']（不合格存
+    # target_rejected 及原因），报告在定稿概率上做同目标阈值阶梯单调性审计
+    # （binary_quality.threshold_ladder，只告警，不影响发布门与终审政策版本），并记入
+    # quality.forecast_policy.binary_structured_target。默认关：二元抽取提示词、max_tokens 与二元行
+    # 逐字节不变，forecast.json 不多任何键（开启会改变提示词，从而可能改变起草）。不随此旗标的改动
+    # 只有判定标准解析器 _extract_comparable_numeric_range 的两处修复：(1) RESEARCH-15(c) 要求的
+    # 否定修复（否定比较词如 "does not exceed"/"no more than"/不超过 按正确方向读；指标吞入否定词
+    # 或反向判词——"Fails if"、"Resolves negatively/false if"、"Falsified if"——的子句不解析）；
+    # (2) 解析前把水平空白串（制表符、全角空格 U+3000 等）折叠为一个空格以保持线性时间，原先被
+    # 制表符或全角空格截断的子句现在可读。情景分区审计据此读到真实指标，可能新报或不再报
+    # overlapping_numeric_ranges——这是正确行为，不是旗标泄漏。
+    FORECAST_BINARY_STRUCTURED_TARGET = os.environ.get('FORECAST_BINARY_STRUCTURED_TARGET', 'false').strip().lower() == 'true'
+    # REPORT-11 概率形状遥测（默认开）：确定性计算情景形状（峰值 max_probability、归一化熵、距均匀分布的
+    # TV 距离，叙事前 / 成稿后批判成功时另算批判前后差值）与二元预测形状（0.40-0.60 中间带 / 0.45-0.55
+    # 近半 / ≤0.05 或 ≥0.95 极端占比、十分位直方图、市场重述与分区对账向 / 远离 0.5 的移动计数），记入
+    # forecast.quality.probability_shape（批判成功时另记 quality.pre_critique_scenarios），发布提交时
+    # 作为账本行 objective_signals。纯观测：任何门都不读它，零 LLM 调用，不改概率与提示词，故默认开是
+    # 安全的。false 时 forecast.json 与账本提交行逐字节回到旧形态。
+    FORECAST_PROBABILITY_SHAPE = os.environ.get('FORECAST_PROBABILITY_SHAPE', 'true').strip().lower() == 'true'
     FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
     FORECAST_BINARY_THEMES = os.environ.get('FORECAST_BINARY_THEMES', '').strip()  # 空=由 brief/主题自适应
     FORECAST_HORIZON_CHECK = os.environ.get('FORECAST_HORIZON_CHECK', 'true').strip().lower() == 'true'  # RQ-6 需求↔二元预测结算年份一致性标记
@@ -644,6 +1114,37 @@ class Config:
     # 跨模型概率样本 stdev 超此阈值 → 该预测记入 low-agreement（binary_quality.ensemble），
     # 二元预测表渲染以 ±spread 显示分歧。默认 0.15。
     FORECAST_ENSEMBLE_SPREAD_THRESHOLD = float(os.environ.get('FORECAST_ENSEMBLE_SPREAD_THRESHOLD', '0.15') or '0.15')
+    # EVAL-11（P15）骨架跨底座敏感性影子检查：主报告骨架定稿后，以骨架原提示词 + 已定情景名的 follow
+    # 提示各抽一次——同底座对照（复制主客户端，钉住骨架所用模型、绕过缓存）与副底座（下列清单中第一个
+    # 可构造且 (provider, model) 不同于主底座者）——比较跨底座（对照 vs 副）与同底座（批判前骨架 vs 对照）
+    # 的情景分布差异，记入 forecast.quality.backbone_sensitivity。纯影子诊断：不改概率、区间、渲染与
+    # 发布门。准入时钉进 safety_policy_v1.backbone_check（resume 不重新捕获；缺失即关闭）；种子报告 /
+    # model_comparison / API 重生成从不运行。默认关是安全的：不发任何额外 LLM 调用，forecast.json 与
+    # 全部提示词逐字节不变；开启时每次运行多 2 次骨架调用。对照与副底座调用与主报告共用该提供方的
+    # 进程级 422/429 熔断状态（失败计入连败、成功清零、熔断改变后续调用的服务方），故主提供方熔断
+    # 已有连败或处于冷却时不发调用（记 unchecked:primary_throttled），同样状态的副候选被跳过。
+    BACKBONE_CHECK_ENABLED = os.environ.get('BACKBONE_CHECK_ENABLED', 'false').strip().lower() == 'true'
+    # 副底座候选：逗号分隔的提供方名（构造方式同 FORECAST_ENSEMBLE_MODELS）。空 = 无副底座
+    # （开启时记 unchecked:no_distinct_secondary，不发调用）。
+    BACKBONE_CHECK_PROVIDERS = os.environ.get('BACKBONE_CHECK_PROVIDERS', '').strip()
+    # 越界阈值：任一情景 |Δp| ≥ 此值或领先情景不一致即算越界（取值须在 (0, 1]，否则记 unchecked）。
+    BACKBONE_CHECK_MAX_ABS_DELTA = float(os.environ.get('BACKBONE_CHECK_MAX_ABS_DELTA', '0.15') or '0.15')
+    # TIME-5（P13）已发布二元阈值的数值一致性影子检查：off | shadow（默认 shadow）。shadow 时二元抽取提示词
+    # 多索取一个可选 latest_actual 字段（同指标在 dossier 里的最新实际值；每条约 50 个输出 token，不加
+    # LLM 调用，二元抽取的 max_tokens 按条数相应放宽），utils.numeric_guards 做确定性检查（scale_mismatch /
+    # status_quo_contradiction / inverted_interval），只盖 binary['numeric_guard'] 章并汇总进
+    # forecast.quality.numeric_guards。检查本身不改概率、正文、发布门、终审与
+    # REPORT_FINAL_AUDIT_POLICY_VERSION；但追加的提示词规则会改变模型起草，二元与概率可能与 off 不同——
+    # 需要与改动前完全一致的生成时设 off。准入时钉进 safety_policy_v1.numeric_guard_mode（服务重载不改变
+    # 已准入运行，并进入 EVAL-18 配置指纹）；API 重生成读当前值。非法值按 shadow 运行并告警。enforce 刻意
+    # 不实现（须前瞻证据，ADR 0002 I-21）。off → 提示词、forecast.json 与正文逐字节回到旧行为。
+    NUMERIC_GUARD_MODE = os.environ.get('NUMERIC_GUARD_MODE', 'shadow').strip().lower()
+    # 阈值与最新实际值中点之比 ≥ 此值（或 ≤ 其倒数）且单位类 / 币种相同 → scale_mismatch（误解析级）。
+    # 取值须 > 1，否则回落 300。
+    NUMERIC_GUARD_SCALE_RATIO = float(os.environ.get('NUMERIC_GUARD_SCALE_RATIO', '300') or '300')
+    # 现状判定边际 m：最新实际值越过阈值 K 至少 m·|K| 才算「已满足 / 已违背」（概率落在 0.5 另一侧即
+    # status_quo_contradiction）。取值须在 [0, 1)，否则回落 0.25。
+    NUMERIC_GUARD_STATUS_QUO_MARGIN = float(os.environ.get('NUMERIC_GUARD_STATUS_QUO_MARGIN', '0.25') or '0.25')
     REPORT_QUOTE_AUDIT_V2 = os.environ.get('REPORT_QUOTE_AUDIT_V2', 'true').strip().lower() == 'true'
     REPORT_COMPACT_RETRIEVAL_QUERY = os.environ.get('REPORT_COMPACT_RETRIEVAL_QUERY', 'true').strip().lower() == 'true'
     # RQ-2 报告修复门：质量门失败时按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
@@ -656,12 +1157,52 @@ class Config:
     # RQ-5 每章反思：草稿通过基本有效性后做一次廉价批判（骨架概率一致性 / 硬数字接地 / 篇幅下限 /
     # 不复述前序章节），返回 PASS 或单条修订指令；至多一次修订抽取。轮数由 MAX_REFLECTION_ROUNDS 上限。
     REPORT_SECTION_REFLECTION = os.environ.get('REPORT_SECTION_REFLECTION', 'true').strip().lower() == 'true'
+    # REPORT-2（P08 stage 1a）确定性叙事同步：红队批判（含谦逊钳制/兜底情景/舍入闭合）、事前验尸
+    # 转移与 K>1 自洽池化都会移动情景概率，但 headline / confidence_rationale / 情景 summary 仍写着
+    # 移动前的数字（已发布的 report_ffe1ea6bf50d 标题「基准情景（40%）」对应 A=0.35），而该标题被钉进
+    # 每章提示词、大纲摘要、摘要标题与看板。开启后每个移动概率的步骤按「移动前→移动后」唯一值映射
+    # 逐数字改写（歧义值/无法按名配对的值/区间/数量/合计语境一律跳过并计数；无法归属的值记入
+    # quality.narrative_sync_blocked，后续步骤在同一字段不再映射），原文存 *_detail，逐处编辑记入
+    # forecast.quality.narrative_sync。默认开是安全的：零 token、纯确定性、只改叙事文本，从不改概率；
+    # 设 false 逐字节复现旧 forecast.json。
+    REPORT_NARRATIVE_SYNC = os.environ.get('REPORT_NARRATIVE_SYNC', 'true').strip().lower() == 'true'
+    # REPORT-3（P08 stage 1b）别名感知概率槽审计（services/logic_number.py，零 token）：S11 只锚定完整
+    # 情景名的首次出现，report_ffe1ea6bf50d 摘要 blockquote 的「基准情景（40%）」（A=0.35）因此过了终审。
+    # 严格槽位（别名（N%）/ 别名：N% 概率 / N% 的概率 别名 …）+ REPORT-2 的区间/数量/合计守卫找出与骨架
+    # 不符的数字。off = 不审计；observe（默认）= 只记 forecast.quality.logic_number 与 final_audit.json 的
+    # logic_number，不进 hard_issues / 发布门；numeric = 把别名槽不符（可修复与未解决的全部——守卫只决定
+    # 能否改写；检测异常记为不符，失败即关闭）并入 S11（_audit_numeric_consistency 与
+    # report_lint.check_scenario_probabilities），经既有硬路径阻止发布。numeric 改变一条硬发布规则，
+    # 因此必须同时提升 REPORT_FINAL_AUDIT_POLICY_VERSION 并提供重放工具——属 owner 决策，本 WP 不提升。
+    # 未知值按 observe 处理并告警。确定性修复（大纲摘要同步 + 稳定器之前的正文槽位替换）另由
+    # REPORT_LOGIC_NUMBER_REPAIR 控制。默认 observe 是安全的：只读观测，任何硬规则与发布结果不变。
+    REPORT_LOGIC_NUMBER_GATE = os.environ.get('REPORT_LOGIC_NUMBER_GATE', 'observe').strip().lower()
+    # REPORT-3 零 token 槽位修复（大纲摘要同步 + 稳定器之前的正文别名概率槽改成骨架值），还需
+    # REPORT_NARRATIVE_SYNC 开。默认关（编排决策，评审第 4 轮后）：每轮评审都找到新的语境——修复把
+    # 并非该情景概率的百分数（增长率、份额、另一事件的概率，如「有55%的概率实现基准扩张路径下的…」）
+    # 改成情景值，确定性的正文改写绝不能默认编造数字。只读审计（REPORT_LOGIC_NUMBER_GATE=observe）
+    # 照常记录 fixable / unresolved，作为开启前的证据；关 = 成稿、大纲与 forecast.json 不被改写。
+    REPORT_LOGIC_NUMBER_REPAIR = os.environ.get('REPORT_LOGIC_NUMBER_REPAIR', 'false').strip().lower() == 'true'
+    # REPORT-4 报告阶段提示词的类型化缺失标记（utils/absence.py）：章节质检无骨架时去掉概率一致性
+    # 规则、缺失的信号包/市场表写成「本次未启用 / 检索为空 / 不可用」标记而非「（无）」、并行撰写的
+    # 大纲意图不再冒充前序章节摘要；骨架提示词首句只列实际注入的输入并要求无研究基率时写明基率出处；
+    # 二元预测 source 行在模拟信号未注入时不再邀请具名模拟信号；章节前缀追加一行市场缺失说明；
+    # forecast.quality.prompt_slot_states 记录市场槽状态。默认开是安全的：只改提示词措辞（诚实性修复，
+    # 概率锚点仍是数值），标记文本由 report_lint 的泄漏哨兵兜底删除；设 false 逐字节复现旧提示词。
+    REPORT_ABSENCE_MARKERS = os.environ.get('REPORT_ABSENCE_MARKERS', 'true').strip().lower() == 'true'
 
     # —— WAVE9-FOCUS：报告焦点与编辑纪律（模拟=内部方法，报告主语=现实世界）——
     # 确定性编辑 lint（report_lint.lint_report）：修复 passes 之后、双语翻译之前清理引用残留 /
     # 边转储 / 旧模拟标签 / 孤悬归因行 / 引用记号变体 / 重复整句；lint 报告记入 forecast.json
     # quality['lint']。默认开；失败仅告警（degrade-safe）。
     REPORT_EDITORIAL_LINT = os.environ.get('REPORT_EDITORIAL_LINT', 'true').strip().lower() == 'true'
+    # RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution，纯确定性、只记数/
+    # 采样、绝不改写成稿）。研究 quantitative 行按 quant_typing.quant_class 分型（未分型行忽略），正文
+    # 句子同时含该行的关键数字、单位与指标锚词时，按「实现」/「预期」措辞记 projection_as_fact 等计数。
+    # 终审副本（final_audit.json 与 forecast.quality.final_audit 的 projection_attribution）总是写入；
+    # forecast.quality.projection_attribution 由编辑 lint 通道写入，故另需 REPORT_EDITORIAL_LINT 开启。
+    # 默认开是安全的：只读观测，不进 hard_issues、不改发布状态；设 false 各处字段都不写（逐字节复现旧产物）。
+    REPORT_PROJECTION_LINT = os.environ.get('REPORT_PROJECTION_LINT', 'true').strip().lower() == 'true'
     # 模拟机制泄漏修复（_repair_simulation_leakage，注册进 REPORT_REPAIR_PASSES 修复链）：
     # Tier-1 确定性改写（标签/边/工具记号/平台行为引文/泄漏标题）→ Tier-2 每个泄漏段落一次
     # 有界 LLM 重写（数字 token 逐字节校验，失败弃用）→ 重扫后删除仍泄漏句子。默认开。
@@ -704,6 +1245,12 @@ class Config:
     REPORT_BILINGUAL = os.environ.get('REPORT_BILINGUAL', 'true').strip().lower() == 'true'
     # 逐章节翻译的并发度（ThreadPoolExecutor 线程数）；下限 1（串行）。默认 4。
     REPORT_TRANSLATION_CONCURRENCY = max(1, int(os.environ.get('REPORT_TRANSLATION_CONCURRENCY', '4') or '4'))
+    # Rounds of report_agent._repair_variant_contamination (re-translate the source-language
+    # lines a translated variant kept; clamped to 1-5 there).  INFRA-14 declared it: the
+    # report agent read it with a getattr default of 3, so an .env value never reached it.
+    # The default 3 is that getattr default, so an unset knob changes nothing.
+    REPORT_TRANSLATION_CONTAMINATION_RETRIES = int(
+        os.environ.get('REPORT_TRANSLATION_CONTAMINATION_RETRIES', '3') or '3')
     # Lines a published translation may keep in the source language after the full
     # repair ladder (min(this, one per 200 body lines, at least 1)); they publish with a
     # recorded warning instead of withholding the whole translation.  0 = strict.
@@ -722,6 +1269,17 @@ class Config:
     # 锚定采纳的最小 resolution_equivalence 严格度：exact|near|loose（默认 near，即采纳
     # exact/near、丢弃 loose 的宽泛主题匹配，避免把不同结算口径的市场硬贴成锚点）。
     FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE = os.environ.get('FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE', 'near').strip().lower()
+    # EVAL-6（市场价时溯源）：重报价拿到现价的市场行记 quoted_at（取价时刻，UTC ISO；之后
+    # 再次重报价失败时保留，因为留下的价仍是那次报价），研究 handoff 快照行 / 报告期现抓行记
+    # snapshot_as_of（快照 as_of / 现抓时刻，只是取价时刻的上界：研究快照 as_of 在落盘时才取，
+    # 其中智能体工具检索到的行可能更早就已报价）；_build_market_anchor 据此给锚点写 price_time +
+    # price_time_basis（requote|observed|snapshot，时刻未知则两键都不写）。basis=requote 时锚点的
+    # price_at_research 实为报告期重报价（历史字段名）。FU-11：编排器把本旗标下发给研究子进程，
+    # 研究桥给每行记 observed_at（该行价格的抓取时刻：确定性刷新行=刷新时刻，仅工具检索行=
+    # 工具调用的 captured_at），锚点优先用它（basis=observed），快照 as_of 只作兜底上界。
+    # 纯溯源字段，不动任何概率、锚定决策或发布闸门，因此默认开；false → 市场行与
+    # forecast.json 锚点逐字节复现旧形状。
+    MARKET_ANCHOR_PRICE_TIME = os.environ.get('MARKET_ANCHOR_PRICE_TIME', 'true').strip().lower() == 'true'
     # 10pp 规则：锚定后 |model_p − market_p|>0.10 且理由未提及市场的预测，做一次有界重述，
     # 须在理由中引用市场或有依据地保留分歧（绝不静默移动概率）。默认开；关闭=不重述。
     FORECAST_MARKET_DIVERGENCE_REVISION = os.environ.get('FORECAST_MARKET_DIVERGENCE_REVISION', 'true').strip().lower() == 'true'
@@ -731,6 +1289,29 @@ class Config:
     # 对账弹出锚点、修订概率却永久保留）。默认 0.6——高于锚点完整性下限
     # （_market_anchor_complete 的 0.5）：影响概率的门槛必须严于仅作展示的门槛。
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE = float(os.environ.get('FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE', '0.6') or '0.6')
+    # REPORT-12 (deterministic market blend): the 10pp divergence restatement asks the model
+    # only for a bounded market_weight w (plus a market-citing rationale, all or none) and code
+    # computes the revised probability (1-w)*p + w*m from DRF's own snapshot price m, stamps the
+    # formula in market_influence.blend and shows it in the Market Cross-Check.  Default off: it
+    # changes how published probabilities move, so it is promoted only through an outcome-blind
+    # (WP14) decision; off -> the legacy free-probability restatement, byte-identical.
+    FORECAST_MARKET_BLEND_ARITHMETIC = os.environ.get('FORECAST_MARKET_BLEND_ARITHMETIC', 'false').strip().lower() == 'true'
+    # REPORT-12: the largest market_weight accepted (a larger one rejects the whole revision).
+    # Default 0.8: markets are calibration anchors, not truth, so a blend never fully adopts the
+    # market price.  Read only while FORECAST_MARKET_BLEND_ARITHMETIC is on; clamped to [0, 1]
+    # so a blend always stays on the segment between the forecast and the market price, then
+    # floored to two decimals (the 0.01 grid the model's weight is rounded to), so the cap the
+    # prompt states is exactly the cap that is enforced.
+    FORECAST_MARKET_BLEND_WEIGHT_MAX = float(os.environ.get('FORECAST_MARKET_BLEND_WEIGHT_MAX', '0.8') or '0.8')
+    # REPORT-10（信息墙）：注入实时市场包时，二元抽取的 dossier 视图删掉研究桥追加的机器市场表
+    # （"## Prediction Market Signals" H2 节，研究期价格、可能过时），市场价只经实时市场包一个
+    # 入口进入 _draw，且不再占用 head+tail 的尾部预算。默认关：删除会改变二元提示词进而可能
+    # 改变概率，先对比再晋升；关 → 提示词逐字节不变。
+    FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE = os.environ.get('FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE', 'false').strip().lower() == 'true'
+    # REPORT-10（诚实标注）：Market Cross-Check 说明句追加披露——预测起草时已参考市场价格，Δ 是
+    # 锚定之后的差值，而非独立于市场的估计。默认开（纯披露文字、不动任何数字）；false → 说明句
+    # 逐字节恢复旧文案。
+    REPORT_MARKET_XCHECK_DISCLOSURE = os.environ.get('REPORT_MARKET_XCHECK_DISCLOSURE', 'true').strip().lower() == 'true'
 
     # —— RQ-2：成稿后抽取切片（head+tail，结论在文末）+ 抽取 max_tokens（forecast_extractor 经 getattr 读取）——
     # 情景/二元抽取此前只取正文开头 [:budget]，把文末的收敛判断切掉；改为「前 head_ratio +
@@ -740,6 +1321,41 @@ class Config:
     FORECAST_EXTRACT_HEAD_RATIO = float(os.environ.get('FORECAST_EXTRACT_HEAD_RATIO', '0.6') or '0.6')
     # 情景抽取 max_tokens 2048→4096（5 情景 × anchor/rationale/criteria 常被 2048 截断成断裂 JSON）。
     FORECAST_EXTRACT_MAX_TOKENS = int(os.environ.get('FORECAST_EXTRACT_MAX_TOKENS', '4096') or '4096')
+
+    # —— RESEARCH-13（P09）：概率提示词的确定性证据包（forecast_context_packer，零 LLM 调用）——
+    # 二元抽取：以按 H2 节分类的 dossier 摘录（可判定/二元预测节 > 执行摘要 > 情景 > 正文，
+    # References / Visual Annex / How to Read 永不入包，Sources/方法论只吃剩余预算）加一条按 as_of
+    # 过滤、由新到旧的「近期进展」时间线通道，取代 48k head+tail 切片 + situation_brief[:2000]；
+    # 包文与摘要落 reports/<id>/context_pack_binary.json，摘要（无正文）记 forecast.context_pack。
+    # 默认关：改变概率权威看到的证据可能移动概率，按回放指标 + 人工抽查晋升；关 → 提示词逐字节不变。
+    FORECAST_CONTEXT_PACK_BINARY = os.environ.get('FORECAST_CONTEXT_PACK_BINARY', 'false').strip().lower() == 'true'
+    # 骨架：以「研究证据包（按时点标注）」（执行摘要/情景节、局势简报、as_of 切分的时间线、关键指标，
+    # 按份额填充）取代 [态势简报] 的 2000 字切片；EVAL-11 影子检查重建的提示词同样带包。默认关，理由同上。
+    FORECAST_CONTEXT_PACK_SPINE = os.environ.get('FORECAST_CONTEXT_PACK_SPINE', 'false').strip().lower() == 'true'
+    # 二元包 dossier 摘录的字符预算（与旧切片同为 48000）。时间线通道不计入：封顶约 7.6k 字（12 条近期进展
+    # + 5 条已排期 + 两行标题）；包同时去掉 2k 的 [Situation brief]，净增约 5.6k（运行无简报时即 7.6k）。
+    FORECAST_CONTEXT_PACK_BINARY_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_BINARY_BUDGET', '48000') or '48000')
+    # 骨架证据包的总字符预算。
+    FORECAST_CONTEXT_PACK_SPINE_BUDGET = int(os.environ.get('FORECAST_CONTEXT_PACK_SPINE_BUDGET', '14000') or '14000')
+    # 「已排期」（日期晚于 as_of 的时间线条目）只在 as_of 距今不超过此天数的实时运行中展示；回溯运行
+    # 的此类条目可能是事后写成的，一律扣下并计数（post_as_of_rows_withheld）；回测运行（TIME-6 回测钉）不论
+    # 截止日多近一律扣下。只影响上面两个包与下面的章节时间线切分，三者默认都关。
+    FORECAST_SCHEDULED_LIVE_WINDOW_DAYS = int(os.environ.get('FORECAST_SCHEDULED_LIVE_WINDOW_DAYS', '30') or '30')
+    # 章节提示词的「关键事件时间线」块按 as_of 切分：已发生（日期在 as_of 当日或之前，最近 15 条）与
+    # 单列的「已排期」子列表（同一实时运行门）；无日期/跨越 as_of 的条目只计数。默认关：关 → 块逐字节不变。
+    REPORT_CHRONOLOGY_ASOF_SPLIT = os.environ.get('REPORT_CHRONOLOGY_ASOF_SPLIT', 'false').strip().lower() == 'true'
+    # RESEARCH-6: cross-source forecast-dispersion diagnostics (off | shadow).  shadow: the
+    # research quantitative rows typed projected are grouped by metric family (else the
+    # forecaster-free metric), region, target year and unit; a group with >= 2 forecasters
+    # records min/max/median, the max/min spread ratio, vintages, staleness and
+    # same-forecaster revisions, and rows dated after the research as-of (actors.as_of_date,
+    # else the hindcast pin's) are excluded (leakage guard; leakage_guard=false in the
+    # digest when neither is a full day).  The payload goes to
+    # reports/<id>/consensus_evidence.json and its digest to forecast.quality.consensus.
+    # Deterministic, zero model calls, and no prompt, probability or publish-gate input
+    # changes.  Default off (no key, no file: forecast.json byte-identical); blank or any
+    # other value is off.
+    REPORT_CONSENSUS_DIAGNOSTICS = os.environ.get('REPORT_CONSENSUS_DIAGNOSTICS', 'off').strip().lower()
 
     # LLM提供方（默认使用 Claude Code CLI 订阅）
     # claude-cli: 通过本机 `claude` CLI 调用（使用 Claude Code 订阅，无需 API Key）
@@ -972,20 +1588,32 @@ class Config:
 
             for k, v in env_updates.items():
                 os.environ[k] = v
-            cls._persist_env(env_updates)
-            return cls.provider_info()
+            # The runtime switch above already took effect; persistence is reported, not
+            # raised. A stub that predates the (ok, error) contract (returns None) reads
+            # as persisted, matching the old fire-and-forget semantics.
+            persisted = cls._persist_env(env_updates)
+            env_ok, env_error = (
+                persisted if isinstance(persisted, tuple) and len(persisted) == 2 else (True, None)
+            )
+            info = cls.provider_info()
+            info['env_persisted'] = bool(env_ok)
+            info['env_persist_error'] = env_error
+            return info
 
     @classmethod
-    def _persist_env(cls, updates):
-        """把 key=value 安全 upsert 进项目根 .env（best-effort，失败不抛）。
+    def _persist_env(cls, updates, *, env_path=None):
+        """把 key=value 安全 upsert 进 .env，返回 ``(ok, error_class)``。
 
         每个值都经 sanitize（拒绝换行/控制字符，防止注入额外 KEY=VALUE 行）+ dotenv
-        安全引号，再原子落盘（EXECPLAN2 F-8-1）。
+        安全引号，再以 0600 原子落盘（EXECPLAN2 F-8-1；INFRA-10）。失败不再静默吞掉：
+        返回 ``(False, 异常类名)``，由 apply_provider / 设置 API 如实上报，已有 .env 不被破坏。
+        ``env_path`` 缺省为项目根 .env（测试传临时路径，绝不触碰真实 .env）。
         """
         try:
             from .utils.security import sanitize_env_value, quote_env_value
-            from .utils.atomic import write_text_atomic
-            env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env'))
+            from .utils.atomic import write_secret_text_atomic
+            if env_path is None:
+                env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env'))
             lines = []
             if os.path.exists(env_path):
                 with open(env_path, 'r', encoding='utf-8') as f:
@@ -1004,9 +1632,10 @@ class Config:
                 out.append(line)
             for key, val in remaining.items():
                 out.append(f"{key}={val}")
-            write_text_atomic(env_path, '\n'.join(out) + '\n')
-        except Exception:
-            pass
+            write_secret_text_atomic(env_path, '\n'.join(out) + '\n')
+        except Exception as exc:  # noqa: BLE001 — 上报失败类别，由调用方决定如何呈现
+            return False, type(exc).__name__
+        return True, None
 
     # ============================================================
     # 知识图谱后端：本地 Graphiti（替代 Zep Cloud）
@@ -1073,6 +1702,22 @@ class Config:
     SIM_HORIZON_DEFAULT_MONTHS = int(os.environ.get('SIM_HORIZON_DEFAULT_MONTHS', '12') or '12')
     # 世界时钟头部附带上一时段变化摘要（world_delta 纯确定性拼装，仅日历模式生效）。
     SIM_WORLD_DELTA = os.environ.get('SIM_WORLD_DELTA', 'true').strip().lower() == 'true'
+    # REPORT-6：世界时钟头部区分「首轮 / 平静期 / 摘要不可用 / 本次运行不产出摘要」与
+    # 「本时段无日程事件」，取代一律回落的 "(first period)" / "(none)"（演化失败或 in-band
+    # 关闭时每轮都自称首轮，与 "round N/M" 矛盾；"(none)" 被读成"世界无事发生"）。
+    # 默认开是安全的：只改 agent 可见的占位措辞（不含数字/百分号，herding guard 不变）+
+    # 轨迹附加键 delta_state_counts；关闭 → 头部与轨迹逐字节回到旧行为。
+    SIM_ABSENCE_MARKERS = os.environ.get('SIM_ABSENCE_MARKERS', 'true').strip().lower() == 'true'
+    # SIM-6：逐时段上下文如实送达。世界时钟事件段改标「研究时间线上的预期事件，结果事先未知」
+    # （不再称 CONFIRMED）、情景注入标 SCENARIO ASSUMPTION；摘要落后于时钟时注明其覆盖时段；
+    # sampled agent 缺席事件轮后首次激活时补报漏掉的日程事件；全平台死轮的到期事件并入下一次
+    # 摘要；摘要事件/帖文分段整行封顶带省略标记（不再静默截断 900 字符）；无状态的回应阶段
+    # 辅助 agent 也拿到本期事件与变化。默认开是安全的：只改 agent 可见措辞（诊断性质的模拟），
+    # 不新增 LLM 调用，占位措辞仍由 SIM_ABSENCE_MARKERS 决定；关闭 → agent 可见文本逐字节回到旧行为。
+    SIM_PERIOD_CONTEXT_V2 = os.environ.get('SIM_PERIOD_CONTEXT_V2', 'true').strip().lower() == 'true'
+    # SIM-6：漏报事件补报块的字符上限（整行保留、最新优先，超出部分以 "(+N earlier scheduled
+    # events omitted)" 标注）；只影响缺席过事件轮的 agent，控制记忆增长与 token 成本。
+    SIM_EVENT_CATCHUP_MAX_CHARS = int(os.environ.get('SIM_EVENT_CATCHUP_MAX_CHARS', '1200') or '1200')
     # 决策通道改为逐轮在环内引出承诺并推进 WorldState（仅日历模式；关闭则回退事后一次性通道）。
     SIM_DECISION_CHANNEL_INBAND = os.environ.get('SIM_DECISION_CHANNEL_INBAND', 'true').strip().lower() == 'true'
     # WorldState.step 熵地板：按时段天数向种子基率先验混合，防止长时域份额锁死（仅日历模式生效）。
@@ -1185,6 +1830,311 @@ class Config:
     #             deerflow / agentic 为其别名（与 bridge 侧解析器的别名集合一致）。
     # 未知值按 v3 处理并告警一次；空值 = 默认 v3。引擎自身旋钮见 .env.example 的 RESEARCH_LINEAR_*。
     RESEARCH_ENGINE = os.environ.get('RESEARCH_ENGINE', 'v3').strip().lower()
+    # v3 quantitative-row page verification (RESEARCH-4): each quantitative.json row is
+    # checked against the fetched page of the source it cites and labelled verification =
+    # verified | unverified | snippet_only | none (absent = unchecked: no checkable number on
+    # a fetched page), plus a `verified` bool; values are never changed.  snippet_only means
+    # the source was never fetched or its stored page is unavailable; its search snippet is
+    # not checked, so the label says nothing about whether the number appears anywhere.
+    # The same knob gates the evidence windows (REPORT-7): the page sentence that states a
+    # verified figure next to >= 2 of its metric words becomes a sources.json `supports`
+    # span (<= 360 chars, cleaned like web text; <= 2 per figure, <= 8 per source, every
+    # figure's best window first; windows over the cap are counted, never silent), so the
+    # report's number-aware citation check sees figures deeper than the 1,200-char page
+    # excerpt; quant rows keep source_ref and get evidence_window / future_dated, and the
+    # findings and figures are projected to handoff verified_facts.json (SHA-manifested).
+    # Default true: deterministic, zero model calls, labels and spans are additive keys;
+    # false leaves every research artifact byte-identical.  The parent forwards it to the
+    # v3 child.
+    RESEARCH_VERIFIED_FACTS = os.environ.get('RESEARCH_VERIFIED_FACTS', 'true').strip().lower() == 'true'
+    # v3 reported/projected typing of quantitative rows (RESEARCH-4): epistemic_class,
+    # date_precision, target-date repair (a forecast's target date put in as_of_date),
+    # future-dated rows bucketed apart from fresh ones in meta.quant_freshness, and a
+    # date-semantics rule in the facts extraction prompt.  Default false: the facts prompt
+    # changes extraction behaviour and needs a live A/B first; off = byte-identical rows,
+    # prompt and meta.  The parent forwards it to the v3 child.
+    RESEARCH_QUANT_TYPING = os.environ.get('RESEARCH_QUANT_TYPING', 'false').strip().lower() == 'true'
+    # RESEARCH-5: report-side rendering of that typing.  On, a persona's quantitative fact the
+    # research stamped projected/unknown carries "(expectation by {source}, target {period})",
+    # or ", as of {date}" when the row states only the source's date
+    # (actor_role_prompt._pack_report_rows), and the chart labels read epistemic_class before
+    # value_kind/value_type (report_visualizer: projected -> forecast marker, reported -> actual).
+    # Default false: it changes role-prompt bytes (PREPARE recomputes their SHAs) and chart
+    # markers, and only acts on rows RESEARCH_QUANT_TYPING stamped; off = byte-identical.
+    QUANT_TYPED_RENDERING = os.environ.get('QUANT_TYPED_RENDERING', 'false').strip().lower() == 'true'
+    # RESEARCH-6: forecaster attribution in v3 fact extraction.  On, the facts task asks each
+    # estimate/forecast/target row for its forecaster (also written to `analyst`, so charts
+    # split by forecaster rather than by publisher) with a forecaster-free metric, plus the
+    # range (low/high) and forecaster count (n_forecasters) the report states.  Every kept
+    # bound must be made of the report's own numbers and a count must stand next to a count
+    # noun ("40 economists"); a value written as a range becomes low/high (range_kind
+    # stated_range); meta.forecaster_attribution counts kept and dropped fields.  Default
+    # false: the fields add ~5-10% extraction output and the forecaster names change which
+    # quant rows match an actor in PREPARE context packs (a row that matched still matches
+    # and, at the 32-row pack cap, keeps its place: forecaster-only matches fill spare
+    # slots only, FU-10); off =
+    # byte-identical facts prompt, quantitative.json and meta.  The parent forwards it to
+    # the v3 child.
+    RESEARCH_FORECASTER_ATTRIBUTION = os.environ.get(
+        'RESEARCH_FORECASTER_ATTRIBUTION', 'false').strip().lower() == 'true'
+    # RESEARCH-10 v3 evidence headers: each KIQ block of the writers' evidence digest opens
+    # with the engine's count of its evidence (sourced findings by tag, cited sources
+    # fetched vs snippet-only, distinct domains; counted before lines are dropped for
+    # length) and a sufficiency label (insufficient: deterministic fallback notes, < 3
+    # sourced findings or no fetched source; thin: < 2 VERIFIED, < 2 fetched or < 2
+    # domains; else adequate); a legend opens the digest, the gap review's coverage matrix
+    # gains fetched/domains/sufficiency, the section rules gain one thin-evidence line,
+    # meta.kiqs gains evidence/sufficiency and a degradation event fires when at least
+    # half of the researched KIQs are insufficient.  Zero model calls.  Default false: it
+    # changes the writers' cached prefix and section task, and the DRF-original thresholds
+    # must first be validated on stored kiq/*.json; off = digest, coverage matrix, section
+    # task and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_EVIDENCE_HEADERS = os.environ.get('RESEARCH_EVIDENCE_HEADERS', 'false').strip().lower() == 'true'
+    # RESEARCH-10 fair deterministic truncation (v3): the plan's scout digest shares its
+    # 6,000 chars max-min fairly between the scout queries (each keeps at least an equal
+    # share), cut only between search results and noting "(k results omitted for
+    # length)", where the head-cut of the joined digest silently lost the last queries;
+    # an over-cap digest block drops, among lines of equal priority, the one sharing the
+    # fewest terms with the KIQ question first (not simply the last).  Zero model calls.
+    # Default false: it changes the plan prompt and the writers' digest; off =
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_TRUNCATION_FAIRNESS = os.environ.get(
+        'RESEARCH_TRUNCATION_FAIRNESS', 'false').strip().lower() == 'true'
+    # RESEARCH-1：抓取层抽取空壳检测（诚实性检查，故默认开 = fail closed）。开启时 reader 空壳
+    # （"Markdown Content: undefined"）、"page unavailable" 页、bot wall 与短付费墙预告不再算成功
+    # 读取：不进 72h 源缓存、触发 provider 回退、v3 工具层返回 FETCH_FAILED(<reason>) 且绝不标记
+    # fetched；续跑的工作目录里检查之前存下的空壳页取消 fetched 标记，定稿时以 cited 发布
+    # （fetch_status=shell:<reason>）。false = 空壳处理与之前逐字节一致（直连回退的 PDF 解析
+    # 修复无条件生效）。fail closed：只有显式假值 0/false/no/off 关闭，空值、1/yes/on 与拼写
+    # 错误都保持开启（与 bridge 侧解析一致）。编排器经 env 显式下发给研究子进程
+    # （cached_fetch / linear_research 读取）。
+    RESEARCH_FETCH_SHELL_DETECTION = os.environ.get(
+        'RESEARCH_FETCH_SHELL_DETECTION', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # RESEARCH-1：v3 单次 web_fetch 的硬墙钟上限（秒）。旧路径 asyncio.run 在收尾时等待事件循环
+    # 默认线程池，挂住的 to_thread 解析/SDK/DNS 可让一次抓取远超各 provider 超时；有界运行器
+    # 到时即返回 FETCH_FAILED(fetch_call_deadline_exceeded)（非瞬态，不重试）且不等残留线程。
+    # 默认 150：最坏 provider 链约 90s 加余量，仍低于工具层 singleflight 等待（180s）。成功的
+    # 抓取结果不变；0 = 旧的 asyncio.run 路径（逐字节一致）。
+    RESEARCH_FETCH_CALL_TIMEOUT_S = max(
+        0, int(os.environ.get('RESEARCH_FETCH_CALL_TIMEOUT_S', '150') or '150'))
+    # RESEARCH-2: typed source outcomes for the research tools.  On: search budget
+    # denials stop counting as fetch failures; a Firecrawl 401/402 on search latches
+    # the v3 run (SEARCH_NOT_CONFIGURED, no further backend calls) and on fetch
+    # disables Firecrawl for the process and opens the shared provider circuit;
+    # outages never enter the gateway run cache or the fetch negative cache; a DDG
+    # "No results found" is SEARCH_EMPTY_UNCONFIRMED; fetch failures say whether the
+    # service (FETCH_UNAVAILABLE) or the page (FETCH_FAILED) failed; meta.source_health
+    # and source-health degradation events are written.  Default false: the new
+    # sentinels may end some KIQs earlier during outages and need a live comparison
+    # run first; off = byte-identical tool text, caches and meta.  The parent forwards
+    # it to every research child (search_tools / cached_fetch / linear_research).
+    RESEARCH_SOURCE_TAXONOMY = os.environ.get('RESEARCH_SOURCE_TAXONOMY', 'false').strip().lower() == 'true'
+    # RESEARCH-3 absence discipline (v3): web search is relevance-ranked and undated, so
+    # an empty search is not evidence that something did not happen.  On: an empty
+    # search answers NO_RESULTS plus that sentence, the KIQ task and the section rules
+    # each gain one line (state an absence only when a cited source says so), and
+    # findings that state an absence are counted per KIQ (record absence_cues) and per
+    # run (meta.absence_findings) without changing any tag.  Default false: it changes
+    # agent and writer prompts, which needs a live comparison run first; off = tool
+    # text, prompts, KIQ records and meta byte-identical.  Forwarded to the v3 child.
+    RESEARCH_ABSENCE_DISCIPLINE = os.environ.get(
+        'RESEARCH_ABSENCE_DISCIPLINE', 'false').strip().lower() == 'true'
+    # RESEARCH-11 v3 question spec: one post-scout JSON call (reusing the plan call's
+    # cached prefix) pins the operational question, outcome definition, resolution
+    # source, horizon and reference class, and discloses at most 3 defaults it chose
+    # instead of asking.  Written to handoff question_spec.json (drf.question_spec/v1,
+    # SHA-manifested), appended to the run brief, fed to the plan call and mirrored
+    # into actors.json (question_spec, horizon_date, forecast_inputs.base_rates).  A
+    # failed call never fails the run (status unavailable + a degradation event).
+    # Default false: it adds a model call and changes the plan prompt; off = brief,
+    # plan, actors.json and every prompt byte-identical.  Forwarded to the v3 child.
+    RESEARCH_QUESTION_SPEC = os.environ.get('RESEARCH_QUESTION_SPEC', 'false').strip().lower() == 'true'
+    # RESEARCH-12 question spec consumers (backend only): a valid actors.json
+    # question_spec (schema, status ok/partial, spec_sha256 recomputed; anything else is
+    # ignored) supplies the simulation calendar's horizon below every deterministic
+    # prompt date (skipping the LLM fallback; horizon_source 'question_spec') and
+    # _infer_horizon_date's fallback, is prepended to the spine prompt's research
+    # inputs (only when its deadline is the run's horizon), is disclosed in the
+    # report's resolution section and is summarized in forecast.json question_spec
+    # (horizon_applied records that check).  Default true is safe: without a spec (needs
+    # RESEARCH_QUESTION_SPEC) every consumer is byte-identical.  False = shadow mode
+    # (the spec stays persisted but unused).
+    QUESTION_SPEC_DOWNSTREAM = os.environ.get('QUESTION_SPEC_DOWNSTREAM', 'true').strip().lower() == 'true'
+    # Forecast-input extraction master switch (EXECPLAN2 I-0-5), read by the legacy
+    # bridge's extraction prompt and the report agent's forecast-inputs block (both
+    # already read this name); parsed exactly like the bridge (unset or empty = true,
+    # else 1/true/yes/on), so the default keeps today's behaviour.  Forwarded to every
+    # research child.
+    RESEARCH_FORECAST_INPUTS = (os.environ.get('RESEARCH_FORECAST_INPUTS', '').strip().lower() or 'true') in (
+        '1', 'true', 'yes', 'on')
+    # Evidence-grading switch (EXECPLAN2 I-0-0/I-0-1): source tiers, dates and Admiralty
+    # grades plus contested claims in the legacy bridge's extraction, and the report
+    # agent's contested-claims block and tiered source index.  INFRA-14 declared it
+    # (the report agent read it with a getattr default, so .env never reached the
+    # backend) and forwards it to every research child.  Parsed like its sibling above
+    # and the bridge (blank = true, else 1/true/yes/on), so the default and every
+    # child's reading stay as they were.
+    RESEARCH_EVIDENCE_GRADING = (os.environ.get('RESEARCH_EVIDENCE_GRADING', 'true').strip().lower()
+                                 or 'true') in ('1', 'true', 'yes', 'on')
+    # Quantitative sanity checks of the research child (TIME-4): quantitative rows on the
+    # same metric and unit (v3: also the same period end and length, geography and
+    # reported/projected class, but not the series name, so two entities' readings of one
+    # generic metric can still reconcile) that disagree by > 10% become contested.json
+    # claims (origin quant_reconcile; v3 adds at most 10, probable unit-scale errors first),
+    # a ~1000x gap is also a probable unit-scale error in meta.quant_unit_warnings, and
+    # claimed actuals dated after the research as-of (v3: also those whose as_of_date the
+    # bridge cannot read, or for a period ending after it) or with > 150% growth are listed
+    # in meta.quant_implausible.  Read-only:
+    # quantitative.json never changes.  The legacy engine has always run them under this
+    # bridge-read name (its full run lists quant_implausible regardless of the knob);
+    # TIME-4 restores them in v3 and the extract-only salvage.  Parsed like the bridge
+    # (blank = true, else 1/true/yes/on), so the default keeps the legacy engine as it
+    # was; false = v3 and extract-only artifacts and meta byte-identical to before.
+    # Forwarded to every research child.  The report agent reads it too (FU-9): when its
+    # contested-claims block (at most 15 claims) would cut quant_reconcile rows, up to 3
+    # slots (more when the plain cut already shows more) go to them, probable unit-scale
+    # errors first, and a note counts those still cut; nothing changes when nothing is
+    # cut, and false = the plain first-15 cut.
+    RESEARCH_QUANT_RECONCILE = (os.environ.get('RESEARCH_QUANT_RECONCILE', 'true').strip().lower()
+                                or 'true') in ('1', 'true', 'yes', 'on')
+    # RESEARCH-11 v3 forecast inputs: the facts extraction also asks for the drivers
+    # and dated leading indicators (precision-preserving dates, never padded) that
+    # fill actors.json forecast_inputs.drivers / .indicators, which v3 wrote empty.
+    # Needs RESEARCH_FORECAST_INPUTS too.  Default false until one live A/B: it
+    # extends the facts prompt; off = prompt and actors.json byte-identical.
+    # Forwarded to the v3 child.
+    RESEARCH_V3_FORECAST_INPUTS = os.environ.get(
+        'RESEARCH_V3_FORECAST_INPUTS', 'false').strip().lower() == 'true'
+    # RESEARCH-9 v3 citation stats: the QA phase records qa.json citation_stats
+    # (markers before QA and published, orphan markers renumbering dropped, stale
+    # groups, cited fetched vs snippet sources and their marker share, unused fetched
+    # pages, writer bibliographies, scaffold echo lines, prose numbers no evidence
+    # traces), mirrored into meta.research_qa and meta.research_quality.  Detection
+    # only, so default on: research_report.md and sources.json are byte-identical
+    # either way; off = no key.  Forwarded to the v3 child.
+    RESEARCH_V3_CITATION_STATS = os.environ.get(
+        'RESEARCH_V3_CITATION_STATS', 'true').strip().lower() == 'true'
+    # INFRA-4: v3 research-gateway JSON parsing (parse_json_object) rejects NaN, Infinity,
+    # -Infinity and overflowing float literals (1e999): a model reply carrying one is unparseable
+    # (a dict nested inside it is not taken for the reply either), so the gateway's JSON retry
+    # asks again (naming the non-finite number) instead of handing a NaN to the plan, facts and
+    # handoff artifacts.  Control characters stay tolerated.  Default true is safe: replies with
+    # finite numbers parse byte-identically; false = the previous permissive decoder.  The bridge
+    # reads it from its env; the parent forwards it to the v3 child.
+    RESEARCH_JSON_STRICT_NUMBERS = os.environ.get(
+        'RESEARCH_JSON_STRICT_NUMBERS', 'true').strip().lower() == 'true'
+    # RESEARCH-7: verbatim evidence-span contract for v3 findings (off | audit | enforce).
+    # Not off: the KIQ task asks each finding for an EVIDENCE: "<verbatim passage>" clause,
+    # the source ledger keeps every distinct search snippet of a row, and each quote is
+    # located deterministically (zero model calls) in the stored page / search text of the
+    # cited sources; KIQ facts get evidence, evidence_status, evidence_near_miss,
+    # claimed_tag and a REPORTED-number audit, and meta.evidence is written.  audit changes
+    # no tag; enforce demotes a fact whose quotes are not on what the agent was shown
+    # (UNVERIFIED) or a VERIFIED fact whose numbers lie outside its quoted passages
+    # (REPORTED).  Default off (byte-identical prompts, facts, ledger and sources.json):
+    # longer notes cost ~2-3% more units and GLM may paraphrase; enforce needs an
+    # owner-approved audit run (located share >= 0.8, QA passing) first.  Blank or an
+    # unknown value is off.  The parent forwards it to the v3 child.
+    RESEARCH_EVIDENCE_QUOTES = os.environ.get('RESEARCH_EVIDENCE_QUOTES', 'off').strip().lower()
+    # RESEARCH-7: with RESEARCH_EVIDENCE_QUOTES not off, up to 3 located verbatim quotes of
+    # a source (<= 280 chars, page quotes first) become its sources.json `supports`, ahead
+    # of the REPORT-7 evidence windows.  Default false: supports feed the report's
+    # semantic-citation and quote-grounding checks (publish-gate inputs), so the gate delta
+    # is measured in an audit run first; off = supports exactly as before.  Forwarded to
+    # the v3 child.
+    RESEARCH_EVIDENCE_SUPPORTS = os.environ.get('RESEARCH_EVIDENCE_SUPPORTS', 'false').strip().lower() == 'true'
+    # RESEARCH-8: declarative derived findings in v3.  On, the KIQ task asks a finding
+    # that states a figure the agent calculated (growth rate, ratio, share) to end with
+    # "(DERIVED: <formula>; a=<value> [S<n>], ...)", and the notes postprocessor
+    # recomputes it with zero model calls (hardened Decimal evaluator, operands and the
+    # years of a years(Y1,Y2) period checked at their full value on the one fetched page
+    # they cite, a stated result read as written - sign, scale word, a percentage result
+    # as a percentage only, a unit class only that of every operand through a formula
+    # that keeps it (sums, differences, literal scaling) - within display precision,
+    # every other figure of the finding on that page too): a passing finding is tagged
+    # DERIVED (never VERIFIED), a failing one UNVERIFIED with a derivation_error.  The
+    # digest shows the calculation, the section rules say how to state it, sources.json
+    # gains a separate derived_supports field (the report's citation evidence spans read
+    # it without its calculation, whose formula literals are no evidence), unverified
+    # quant rows matching a DERIVED result gain derived_from, and meta gains
+    # kiqs.derived and derived.  Default false: model compliance with the clause format
+    # is unmeasured; off = KIQ task, section rules, facts, digest, sources.json and meta
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_DERIVED_FINDINGS = os.environ.get('RESEARCH_DERIVED_FINDINGS', 'false').strip().lower() == 'true'
+    # TIME-2 source publication dates (v3): each searched/fetched source is dated from
+    # its provider metadata (Firecrawl scrape metadata and search row dates, Exa
+    # published_date, the opt-in direct fetch's JSON-LD/<meta>/<time>), converted to the
+    # UTC calendar (offsets applied, offset-less values and epochs read as UTC) with its
+    # precision and provenance; a date after the run's UTC date or before 1900 is
+    # rejected, never clamped.  Shown in tool row headers (outside the untrusted
+    # block), the SOURCE INDEX and References; written to sources.json (date,
+    # date_precision, date_source, modified_at, modified_source, date_rejected),
+    # quantitative rows (source_date, as_of_after_source: an actual value dated after
+    # its source, where only a metadata modified date widens the source's window and a
+    # page-head "Updated:" line never does; never dropped) and meta.source_dates (dated /
+    # undated / rejected counts by source and precision).  Zero model calls.  Default
+    # false: the extractors are unproven on real pages and need a precision check
+    # first; off = tool text, source ledger, sources.json and report byte-identical.
+    # The fetch layer records date metadata whatever this flag says (source-cache
+    # entries gain a "meta" key when a provider reported dates; the opt-in direct
+    # fetch scans the page head for them), so a later flag-on run dates cache hits
+    # too; nothing reads that metadata while the flag is off.  Forwarded to the v3
+    # child.
+    RESEARCH_SOURCE_DATES = os.environ.get('RESEARCH_SOURCE_DATES', 'false').strip().lower() == 'true'
+    # TIME-2: with RESEARCH_SOURCE_DATES on, sources are also dated from two heuristics
+    # ranked below metadata: a fetched page's head datelines (Published/Updated/发布时间
+    # lines) and the URL path (/YYYY/MM/DD/) of a fetched page or a search row.  Off,
+    # only provider/HTML metadata and search-provider row dates date a source.  Only
+    # read when RESEARCH_SOURCE_DATES is on, so the default true changes nothing by
+    # itself; only 0/false/no/off disable it (the child reads unknown values as on).
+    # Forwarded to the v3 child.
+    RESEARCH_SOURCE_DATE_TEXT_FALLBACK = os.environ.get(
+        'RESEARCH_SOURCE_DATE_TEXT_FALLBACK', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-13 official-data tools of the v3 research agents (deerflow_bridge/data_tools.py):
+    # a comma list of fred (macro_series: FRED/ALFRED series as published on the run's
+    # vintage date), sec_edgar (company_filings: a US SEC filer's statements as filed on
+    # or before the as-of date) or all.  A tool is bound only with its credential:
+    # FRED_API_KEY for fred, an SEC_EDGAR_USER_AGENT naming a contact address for
+    # sec_edgar.  Default empty: no tool is bound and the agents' tools object, prompts,
+    # sources.json, quantitative.json and meta are byte-identical to before.  Forwarded to
+    # the v3 child.
+    RESEARCH_DATA_TOOLS = os.environ.get('RESEARCH_DATA_TOOLS', '').strip().lower()
+    # TIME-13: the FRED API key (a secret: never forwarded explicitly, the research child
+    # inherits it from the environment; data_tools keeps it out of every result, cache file
+    # and log line).  Empty: macro_series is never bound.
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
+    # TIME-13: the User-Agent SEC requires ('Name contact@domain'; inherited by the research
+    # child like the key).  Without an '@' company_filings is never bound.
+    SEC_EDGAR_USER_AGENT = os.environ.get('SEC_EDGAR_USER_AGENT', '').strip()
+    # TIME-13: at most this many deterministic rows (the structured values of the cited
+    # official-data sources, copied exactly) head quantitative.json, within its 60-row cap.
+    # Only read when data tools are bound, so the default changes nothing by itself; 0 adds
+    # none.  Forwarded to the v3 child.
+    try:
+        DATA_QUANT_ROWS_MAX = max(0, int(os.environ.get('DATA_QUANT_ROWS_MAX', '12') or '12'))
+    except ValueError:
+        DATA_QUANT_ROWS_MAX = 12
+    # TIME-10/11 vendor knobs (read by data_tools on every call, clamped there; empty =
+    # the module default), declared here so the parent forwards its own values to the v3
+    # child instead of whatever the child's environment holds.  They only matter once
+    # RESEARCH_DATA_TOOLS binds a tool.
+    try:
+        DATA_FRED_WINDOW_YEARS = int(os.environ.get('DATA_FRED_WINDOW_YEARS', '10') or '10')
+    except ValueError:
+        DATA_FRED_WINDOW_YEARS = 10
+    DATA_TOOLS_CACHE_DIR = os.environ.get('DATA_TOOLS_CACHE_DIR', '').strip()
+    try:
+        DATA_FRED_CACHE_TTL_H = float(os.environ.get('DATA_FRED_CACHE_TTL_H', '6') or '6')
+    except ValueError:
+        DATA_FRED_CACHE_TTL_H = 6.0
+    try:
+        DATA_EDGAR_CACHE_TTL_H = float(os.environ.get('DATA_EDGAR_CACHE_TTL_H', '24') or '24')
+    except ValueError:
+        DATA_EDGAR_CACHE_TTL_H = 24.0
+    try:
+        DATA_TOOL_TIMEOUT_S = float(os.environ.get('DATA_TOOL_TIMEOUT_S', '20') or '20')
+    except ValueError:
+        DATA_TOOL_TIMEOUT_S = 20.0
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回
@@ -1407,6 +2357,19 @@ class Config:
     # 世界简报注入：把「预测问题 + 局势简报 + 热点话题」拼成 ≤1400 字的共同世界背景，写入模拟配置
     # world_brief 字段，运行时追加到每个 agent 的 system prompt——agent 知道这个世界在争论什么。
     SIM_WORLD_BRIEF = os.environ.get('SIM_WORLD_BRIEF', 'true').strip().lower() == 'true'
+    # SIM-5 世界简报诚实标题：v3 situation_brief 是未逐条标注来源（无 [S#]）的研究综述，旧标题
+    # 却称其为「深度研究实证/权威背景」。开启 → 标题改为「研究综述，未逐条标注来源；背景参考，
+    # 并非已核实事实」（仅 SimulationConfigGenerator._build_world_brief 这一处 agent 可见的
+    # 调用点）。默认开是诚实修正；关闭 → 旧标题逐字节恢复。
+    SIM_WORLD_BRIEF_HONEST_LABEL = os.environ.get(
+        'SIM_WORLD_BRIEF_HONEST_LABEL', 'true').strip().lower() == 'true'
+    # SIM-5 定时事件来源标注（ADR-0002 I-11）：研究时间线事件/情景注入由名字匹配或最高影响力
+    # 回退选中的真实行为者发帖，此前被当作该行为者的自发行为（动作统计、议程分层、派系图、立场
+    # 轨迹、决策名册、回应阶段的「X wrote:」与 ResponseLog）。开启 → feed 帖带
+    # [WORLD EVENT …]/[SCENARIO ASSUMPTION …] 前缀、日志行带 event_provenance，上述消费端全部
+    # 剔除或改标注入内容。默认开是诚实修正（注入内容从不冒充行为者）；关闭 → 旧行为逐字节恢复
+    # （同帖者同轮事件合并、缺发帖者静默丢弃这两处 bug 修复不受开关影响）。
+    SIM_EVENT_PROVENANCE = os.environ.get('SIM_EVENT_PROVENANCE', 'true').strip().lower() == 'true'
     # 人格设计（实证语境工程）：对有档案的真实主体（政府/企业/机构），在画像 LLM 调用中要求产出
     # 结构化 persona_design（identity/views_beliefs/incentives/objectives/relations/red_lines/
     # decision_style/rhetoric），严格接地于研究档案、禁止发明立场；多样性来自真实主体的真实差异。
@@ -1441,6 +2404,19 @@ class Config:
     # 使 market_anchor 用现价。关闭 → 只用研究期快照（在包头标注时效性）。重报价失败一律 degrade-safe：
     # 保留研究期价 + 时效性说明，绝不阻断报告（PolymarketClient.requote_markets 每行自带失败标记）。
     PREDICTION_MARKETS_REQUOTE = os.environ.get('PREDICTION_MARKETS_REQUOTE', 'true').strip().lower() == 'true'
+    # TIME-3 endDate hygiene: a market past its endDate can stay open at a near-settled price
+    # while it awaits UMA resolution. With the gate on, such a market never anchors a binary
+    # forecast and never seeds SIM priors (world brief / persona hints); it still appears in
+    # the market pack and research section, labelled "window ended ... awaiting settlement",
+    # because its price remains evidence. FU-5: the report's Market Cross-Check block applies
+    # the same label to such markets, both in the unmatched-markets list and on matched
+    # comparison rows whose window ended by the time the report is rendered. Default on
+    # (honesty fix); false restores the exact pre-gate prompts, anchors, snapshot, market-pack
+    # and Market Cross-Check bytes. The research child receives both knobs from Config.
+    PREDICTION_MARKETS_END_DATE_GATE = os.environ.get('PREDICTION_MARKETS_END_DATE_GATE', 'true').strip().lower() == 'true'
+    # Hours after endDate before a market counts as ended (absorbs Gamma endDate quirks on
+    # extended events); clamped to [0, 168] where it is used. 0 = strictly after endDate.
+    PREDICTION_MARKETS_END_DATE_GRACE_HOURS = float(os.environ.get('PREDICTION_MARKETS_END_DATE_GRACE_HOURS', '0') or '0')
     # PM-HZ（WAVE9）：预测市场远期降级阶梯——主检索词零命中/全被相关性门挡时，按「剥 4 位年份 →
     # 事件级宽词（前 3 词）」两级放宽重试。降级候选必须过 LLM 相关性门（fail-closed：打分不可用
     # 即整阶段丢弃），命中行打 horizon_degraded 标签留痕。同时研究阶段**始终**落盘
@@ -1481,6 +2457,38 @@ class Config:
     # R2-SIM-1 / R2-CAL-3：默认开——硬前提：没有它脊柱只看到活动量、零建模结果。成本由
     # OASIS_DEFAULT_MAX_ROUNDS 封顶 + SIM_CONVERGENCE_STOP 早停 + 并行 elicitation 约束。
     SIM_DECISION_CHANNEL = os.environ.get('SIM_DECISION_CHANNEL', 'true').strip().lower() == 'true'
+    # SIM-8 (P23 follow-on): the decision-channel elicitor, the call that steps WorldState,
+    # sees the period's scheduled research-timeline events (with SIM_PERIOD_CONTEXT_V2 also
+    # events carried out of rounds no elicitation saw: SIM-6 dead rounds, in-band rounds
+    # with an empty roster, post-hoc rounds without actions, labelled as earlier periods)
+    # as a labelled exogenous block before the roster, capped at 800 characters on whole
+    # lines: in-band every calendar round with events, and in the post-hoc calendar
+    # fallback. Default on: zero extra LLM calls, the block carries no WorldState number
+    # and asks for no direction, and the channel stays diagnostic_only; the post-hoc cache
+    # key gains an events digest only for rounds that have events. false = prompts and
+    # cache keys byte-identical to before.
+    SIM_DECISION_EVENTS = os.environ.get('SIM_DECISION_EVENTS', 'true').strip().lower() == 'true'
+    # SIM-2 (C26): bind every decision-channel reply to the round roster before it can move
+    # WorldState — canonical roster ids, unknown ids and duplicate rows dropped, magnitude and
+    # confidence finite and clamped to [0,1], a missing magnitude rejected instead of becoming
+    # 1.0 — and record reason-coded counts per round plus a run-level fallback_share. Default
+    # on: an honesty check that fails closed with zero extra LLM calls and unchanged prompt
+    # text (only rosters above 17 rows get a larger max_tokens). false restores the legacy
+    # parse loop and trajectories byte for byte.
+    DECISION_CHANNEL_VALIDATION = os.environ.get(
+        'DECISION_CHANNEL_VALIDATION', 'true').strip().lower() == 'true'
+    # SIM-2: a run whose share of roster slots without an accepted or abstained answer exceeds
+    # this is at best 'inconclusive' (fallback_share_exceeded, forecast_effect=no_update).
+    # Uncalibrated: 0.5 is a conservative majority-of-slots floor; log live rates before tightening.
+    # Must be a share in [0,1]: the verdict replaces NaN/out-of-range values (e.g. 50 meant as a
+    # percent) with 0.5 and logs a warning, so a typo cannot silently disable the gate.
+    DECISION_CHANNEL_FALLBACK_MAX_SHARE = float(
+        os.environ.get('DECISION_CHANNEL_FALLBACK_MAX_SHARE', '0.5') or '0.5')
+    # SIM-2 (defines the SIM-5 cap knob): per-round individual-actor cap before the tail
+    # collapses into one public block. Previously a ghost knob read via getattr by both
+    # decision-channel producers; 60 is the default they already used, so defining it here
+    # changes nothing. An explicit run_decision_channel(max_active_per_round=...) still wins.
+    DECISION_CHANNEL_MAX_ACTIVE = int(os.environ.get('DECISION_CHANNEL_MAX_ACTIVE', '60') or '60')
     # Foglamp WP1 (1D, I-16/I-18)：模拟对已发布概率的影响政策（run-pinned）。
     #   diagnostic_only —— 默认。模拟/WorldState 产出只进「显式标注模拟来源」的分析散文，
     #                      不进 derive_forecast_spine() 的概率生成输入，不调整任何概率。
@@ -1495,6 +2503,19 @@ class Config:
         in ('diagnostic_only', 'no_update', 'validated_update', 'legacy_prompt')
         else 'diagnostic_only'
     )
+    # SIM-4（C30）：零 LLM 的决策通道先验回声诊断（services/sim_prior_echo.py，策略
+    # drf-sim-control/v1）：终局份额与种子先验几乎一致（prior_echo）或承诺扎堆先验领先情景
+    # （prior_leader_herd）时，编排器在 decision_channel_summary.prior_echo 记录并告警，报告
+    # 世界态块追加一行不含数字的定性提示。纯诊断：不动任何概率、不影响运行健康门，其余裁定
+    # 下报告逐字节不变，故默认开；false = 不计算、不记录、不加提示。
+    SIM_PRIOR_ECHO_DIAGNOSTIC = os.environ.get('SIM_PRIOR_ECHO_DIAGNOSTIC', 'true').strip().lower() == 'true'
+    # SIM-1：报告世界态块/世界态图表/fork 情景对比表遵从决策通道的显式非 valid 裁定
+    # （world_state_trajectory.json 顶层 validity 存在且 != valid）——隐藏结果份额与演化
+    # 航点、跳过图表（trajectory_not_valid）、对比表返回 None。默认开：诚实检查 fail-closed，
+    # 非 valid 分布本就 forecast_effect=no_update；valid 轨迹与无 validity 的旧轨迹逐字节不变。
+    # false → 回到旧行为（仍渲染份额，仅附 ⚠️ 警示行）。
+    REPORT_WORLDSTATE_HIDE_INVALID = os.environ.get(
+        'REPORT_WORLDSTATE_HIDE_INVALID', 'true').strip().lower() == 'true'
     SIM_DECISION_INERTIA = float(os.environ.get('SIM_DECISION_INERTIA', '0.7') or '0.7')  # 先验每轮持久度
     # NEXTSTEPS P1-4：收敛/均衡检测——按 WorldState 的逐轮变化 EWMA 早停（区别于按声量），
     # 把"收敛于 R 轮（稳定）" vs "未收敛（低信心）"本身作为校准信号。需 P1-1 的世界态（现已默认开）。
@@ -1526,6 +2547,24 @@ class Config:
     # REPORT-4：默认开——消除 conflict/contamination 的纠正往返与 contamination-adoption 失败模式；
     # 每章遇异常自动 per-section 回退到 ReAct（degrade-safe）。
     REPORT_NATIVE_TOOLS = os.environ.get('REPORT_NATIVE_TOOLS', 'true').strip().lower() == 'true'
+    # INFRA-5：报告工具调用边界（默认开）。ReAct / chat 的 <tool_call> 改为宽容解析：块内多个对象取首个、
+    # 缺右括号补齐、tool/params/arguments/args/input 键名归一、与 name 并列的扁平参数上提进 parameters、
+    # 字符串化的 parameters 解码；仍无法解析的块不再静默丢弃，而是回给模型一条纠正性 Observation。
+    # 派发前校验必填参数 / as_of / limit，被拒调用不计入工具预算（超出 REPORT_TOOL_MAX_REJECTED_PER_SECTION
+    # 后才计）。原生路径 arguments 解析失败或参数无效时以 role=tool 'ERROR: …' 回包、不执行不计费，并按模型
+    # 原文回填 assistant.tool_calls。默认开是安全的：格式良好、参数齐全的调用解析与派发不变，只影响此前被丢弃
+    # 或以空参数白跑的调用；false 恢复旧的严格正则解析与不校验直接派发（原生路径对未知工具名的 fail-closed
+    # 拒绝与 agent_log 的 tool_unknown 行不受此开关控制）。
+    REPORT_TOOL_ARG_REPAIR = os.environ.get('REPORT_TOOL_ARG_REPAIR', 'true').strip().lower() == 'true'
+    # INFRA-5：每章可免费（不计工具预算）被拒的工具调用次数；超出后被拒调用照常计入预算，防止模型在无效
+    # 调用上无限空转。仅在 REPORT_TOOL_ARG_REPAIR 开启时生效（关闭时没有参数类拒绝）；未知工具名的拒绝
+    # （ReAct 与原生路径）从不计费，也不占此额度。计费的被拒调用只占上限预算，不算入每章工具调用下限。
+    REPORT_TOOL_MAX_REJECTED_PER_SECTION = int(os.environ.get('REPORT_TOOL_MAX_REJECTED_PER_SECTION', '6') or '6')
+    # INFRA-5：原生工具循环迭代用尽、被迫无工具收尾时，把已检索到的工具结果（首尾截取到
+    # REPORT_NATIVE_FINAL_EVIDENCE_CHARS 字符）附进收尾提示，而非丢弃全部证据凭空成文。默认开是安全的：
+    # 只改变迭代用尽后的兜底回合；false 恢复旧的「仅原始提示」收尾。
+    REPORT_NATIVE_FINAL_WITH_EVIDENCE = os.environ.get('REPORT_NATIVE_FINAL_WITH_EVIDENCE', 'true').strip().lower() == 'true'
+    REPORT_NATIVE_FINAL_EVIDENCE_CHARS = int(os.environ.get('REPORT_NATIVE_FINAL_EVIDENCE_CHARS', '12000') or '12000')
     # 并发生成报告章节（EXECPLAN2 I-6-3）：>1 时正文章节走线程池并行，摘要/结论章节最后串行
     # （依赖正文全文）。章节级 LLM 并发受 OASIS 信号量同源约束。
     # REPORT-1：1→3。正文章节相互独立，并行 ~2.5-3.5x 加速；正文段自动走 brief 上下文避免 O(N²) token。
@@ -1591,9 +2630,42 @@ class Config:
     def _is_placeholder(cls, value) -> bool:
         return bool(value) and str(value).strip().lower() in cls._PLACEHOLDER_VALUES
 
+    # INFRA-14: strict config validation.  On (default), the errors of config_issues()
+    # (a non-canonical boolean such as X=1, a blank or malformed number, an enum / range /
+    # coupled-pair violation, a malformed LLM_COST_PER_MTOK) refuse pipeline admission:
+    # preflight_pipeline lists them and PipelineOrchestrator.start raises
+    # ConfigurationError.  The server still starts (run.py prints every issue as a WARN
+    # line).  false downgrades them to warnings.  A clean environment has no issue, so
+    # the default changes nothing.  Parsed fail-closed like APP_HOST_CHECK: only an
+    # explicit false/0/no/off turns it off, so an ambiguous value cannot disable the audit.
+    CONFIG_STRICT_VALIDATION = os.environ.get('CONFIG_STRICT_VALIDATION', 'true').strip().lower() not in (
+        'false', '0', 'no', 'off')
+
     @classmethod
-    def validate(cls):
-        """验证必要配置"""
+    def config_issues(cls) -> list:
+        """INFRA-14: the config audit's issues (config_audit.Issue: level, knob, message).
+
+        The import-time numeric sanitisation issues plus audit_env over the current
+        os.environ (apply_provider writes land there too).  With
+        CONFIG_STRICT_VALIDATION off every error is returned as a warning.
+        """
+        issues = list(CONFIG_IMPORT_ISSUES) + audit_env(os.environ, CONFIG_KNOBS)
+        if not cls.CONFIG_STRICT_VALIDATION:
+            issues = [issue._replace(level=WARNING) for issue in issues]
+        return issues
+
+    @classmethod
+    def config_errors(cls) -> list:
+        """INFRA-14: the messages of the config_issues() that refuse a run (none when not strict)."""
+        return [issue.message for issue in cls.config_issues() if issue.level == ERROR]
+
+    @classmethod
+    def validate(cls, *, include_audit: bool = True):
+        """验证必要配置
+
+        INFRA-14: include_audit (default) appends config_errors(); run.py passes False,
+        so its startup exit gate is unchanged and the audit only refuses pipeline runs.
+        """
         errors = []
 
         if cls.LLM_PROVIDER not in cls.SUPPORTED_LLM_PROVIDERS:
@@ -1605,6 +2677,17 @@ class Config:
         # 需要 Key 的提供方（needs_key=True）必须配置 LLM_API_KEY；CLI/订阅提供方使用本机订阅
         if cls.PROVIDER_META.get(cls.LLM_PROVIDER, {}).get('needs_key') and not cls.LLM_API_KEY:
             errors.append(f"LLM_PROVIDER={cls.LLM_PROVIDER} 时必须配置 LLM_API_KEY")
+
+        # INFRA-6: 非法的 LLM_FALLBACK_REASONING_EFFORT 以前只在每次回退调用时抛 ValueError
+        # （每次都记错误日志，且不进确定性冷却），回退形同虚设。改为启动期报错（run.py 退出 1）：
+        # 即便当前未配置 LLM_FALLBACK_PROVIDER，拼错的值也会阻止启动——这是有意的。
+        from .utils.provider_overrides import FALLBACK_REASONING_EFFORTS
+        _fb_effort = (os.environ.get('LLM_FALLBACK_REASONING_EFFORT', '') or '').strip()
+        if _fb_effort and _fb_effort.lower() not in FALLBACK_REASONING_EFFORTS:
+            errors.append(
+                f"LLM_FALLBACK_REASONING_EFFORT 必须是 {'/'.join(FALLBACK_REASONING_EFFORTS)} 之一"
+                f"（或留空），当前为 '{_fb_effort}'"
+            )
 
         # 知识图谱已迁移到本地 Graphiti——不再需要 ZEP_API_KEY。
         # 仅校验 GRAPH_BACKEND 取值合法；嵌入式后端无需任何外部服务或 Key。
@@ -1635,7 +2718,46 @@ class Config:
             _sem_val = getattr(cls, _sem_name, None)
             if not isinstance(_sem_val, int) or _sem_val < 1:
                 errors.append(f"{_sem_name} 必须是 >=1 的整数，当前为 '{_sem_val}'")
+        if include_audit:
+            errors.extend(cls.config_errors())
         return errors
+
+    @classmethod
+    def validation_warnings(cls) -> list:
+        """INFRA-8: model settings that silently do nothing (warnings only, never refuse a run).
+
+        - LLM_FALLBACK_MODEL set while LLM_FALLBACK_PROVIDER is empty: failover is off, so the
+          fallback model is never used.
+        - LLM_FAST_MODEL / LLM_STRONG_MODEL set for a CLI primary (claude-cli / codex-cli) to a
+          model other than LLM_MODEL_NAME: the CLI transport never receives a tier model
+          (claude-cli is given --model from LLM_MODEL_NAME, and only for a claude id/alias;
+          codex-cli never), so every call runs LLM_MODEL_NAME's effective model or the CLI
+          account's default ('cli-default'), whatever the tier model names.
+
+        run.py prints them at startup; scripts/preflight.py lists them as WARN rows.
+        """
+        from .utils.model_provenance import CLI_DEFAULT_LABEL, effective_model_label
+        warnings = []
+        fb_model = (os.environ.get('LLM_FALLBACK_MODEL', '') or '').strip()
+        fb_provider = (os.environ.get('LLM_FALLBACK_PROVIDER', '') or '').strip()
+        if fb_model and not fb_provider:
+            warnings.append(
+                f"LLM_FALLBACK_MODEL={fb_model} is set but LLM_FALLBACK_PROVIDER is empty: "
+                "failover is off and the fallback model is never used"
+            )
+        provider = (cls.LLM_PROVIDER or '').strip().lower()
+        if provider in ('claude-cli', 'codex-cli'):
+            runs = effective_model_label(provider, cls.LLM_MODEL_NAME)
+            runs_text = ("the CLI account's default model" if runs == CLI_DEFAULT_LABEL
+                         else f"{runs} (from LLM_MODEL_NAME)")
+            for name in ('LLM_FAST_MODEL', 'LLM_STRONG_MODEL'):
+                value = getattr(cls, name, None)
+                if value and value.strip() != (cls.LLM_MODEL_NAME or '').strip():
+                    warnings.append(
+                        f"{name}={value} is set for LLM_PROVIDER={provider} but is ignored: the "
+                        f"CLI is never given a tier model, so every call runs {runs_text}"
+                    )
+        return warnings
 
 
 # ------------------------------------------------------------------

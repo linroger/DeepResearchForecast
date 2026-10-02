@@ -31,6 +31,7 @@
 17. [Ops scripts & developer workflow](#17-ops-scripts--developer-workflow)
 18. [Design philosophy & resilience patterns](#18-design-philosophy--resilience-patterns)
 19. [Key file map](#19-key-file-map)
+20. [finharness transplants (branch `feat/finharness-transplants`)](#20-finharness-transplants-branch-featfinharness-transplants)
 
 ---
 
@@ -1789,3 +1790,215 @@ remains unauthorized.
 | Platform | `backend/run.py`, `app/__init__.py`, `app/config.py`, `utils/{llm_client,security,logger,file_parser,dates}.py`, `services/text_processor.py`, `api/{research,settings,sdk}.py` |
 | Frontend | `frontend/src/{views,components,components/research,api,router,store,i18n.js}` |
 | Ops | `setup.sh`, `scripts/{start,doctor,smoke}.sh`, `scripts/salvage_orphaned_pipelines.py`, `package.json` |
+| finharness transplants (§20) | Time/PIT: `services/hindcast_policy.py`, `utils/{point_in_time,deadline_dates,numeric_guards}.py`, `deerflow_bridge/{source_dates,data_tools}.py`. Research: `deerflow_bridge/{evidence_spans,derived_numbers}.py`, `utils/{quant_typing,absence}.py`, `services/{question_spec,consensus_evidence,forecast_context_packer,citation_finalization_telemetry}.py`. Simulation: `services/{decision_validation,sim_schedule_audit,sim_event_provenance,sim_period_context,sim_prior_echo}.py`. Report: `utils/probability_parse.py`, `services/{narrative_sync,logic_number,verified_facts,probability_shape,report_tool_args,forecast_counter_case,binary_targets,quantity_scoring}.py`. Evaluation: `services/{ledger_commit,forecast_resolution,eval_stats,golden_set,backbone_sensitivity,stage_scorecard,eval_bundle,value_add_stats}.py`, `utils/cost_accounting.py`, `backend/scripts/{golden_curate,golden_probe,stage_scorecard,cost_card,eval_bundle,value_add_eval,context_pack_replay}.py`. Platform: `app/config_audit.py`, `services/run_shape.py`, `utils/{llm_text,llm_recovery,provider_overrides,model_provenance,ctxpool,env_loading,numeric,canonical_json}.py`. Frontend: `frontend/src/utils/marketStatus.js` |
+
+## 20. finharness transplants (branch `feat/finharness-transplants`)
+
+This branch implements the roadmap in
+`docs/research/2026-09-29-finharness-essence.md`. That roadmap was distilled from three repos (FinanceHarness,
+StockAgent, TradingAgents) and five papers (F²Agent, the FinanceHarness paper, Nexus, TIEM and the
+StockAgent paper). The research document holds the evidence, the per-package specs, the
+implementation record and the open follow-ups. This section shows where each mechanism lives in
+the pipeline.
+
+**Invariants every package follows.**
+
+- New behaviour sits behind a `Config` knob, and every knob is documented in `.env.example`.
+- At its default a knob keeps output byte-identical to before, unless the package's spec explicitly turns it on by default. Most of those default-on knobs are fail-closed honesty fixes, but some are enhancements, provenance or shadow diagnostics (for example `NUMERIC_GUARD_MODE=shadow`, `MARKET_ANCHOR_PRICE_TIME=true`, `SIM_PERIOD_CONTEXT_V2=true`, `SIM_DECISION_EVENTS=true`). Each one's `.env.example` entry gives its default and what turning it off restores.
+- Honesty checks fail closed (block, demote or flag). Enhancements degrade safely (log and continue).
+- Artifacts are written atomically (`utils/atomic.py`).
+- New bridge modules are registered in both `setup.sh` and `_DEPLOYED_BRIDGE_MODULES`, and a parity test pins the two lists.
+- LLM and HTTP egress imports are restricted to approved modules by an AST import fence (`backend/tests/test_import_fences.py`, INFRA-13).
+- Tests are offline and hermetic (INFRA-12):
+  - the ambient environment is scrubbed;
+  - a no-egress guard is active;
+  - global state is reset between tests;
+  - `FakeLLMClient` stands in for every model call.
+
+### 20.1 Time and evidence integrity (hindcasts, point-in-time)
+
+**Hindcast admission and the pin.**
+
+- `PipelineOrchestrator.start` (and the run API routes, through `admit_hindcast_as_of`) validates a requested `as_of` and fails closed for any research engine other than v3 (TIME-7, `HINDCAST_ENABLED=false`).
+- On admission it pins `options['hindcast_policy_v1']` (`services/hindcast_policy.py`, TIME-6).
+- Under the pin the research child runs with `PREDICTION_MARKETS_ENABLED=false`, so no live odds reach the research, the simulation priors or the report. Reports are routed to the evaluation ledger.
+- Forks carry the pin and never re-capture it.
+
+**Point-in-time evidence gates** (`deerflow_bridge/source_dates.py` availability/gate rule, applied to search and fetch in `deerflow_bridge/research_gateway.py` (`PitPolicy`); pinned at admission by `services/hindcast_policy.py`; TIME-8, `PIT_*` knobs).
+
+- One availability rule decides whether a source is admissible. It applies to search and fetch results, to provider date bounds and to undated sources.
+- TIME-9 adds a citation wall: only admissible `[S#]` markers stay citable.
+- The audit artifact `point_in_time.json` drives the hindcast integrity verdict that `forecast.json['hindcast']` reports.
+
+**Source dates and as-of pins.**
+
+- v3 records source publication dates in `sources.json` and in the SOURCE INDEX (`deerflow_bridge/source_dates.py`, TIME-2, `RESEARCH_SOURCE_DATES`).
+- `actors.json` `as_of_date` is pinned to the plan's as-of (TIME-1, `RESEARCH_AS_OF_PIN=true`). A different model value is only recorded, under `meta.as_of_model_disagreement`.
+
+**Markets.**
+
+- Expired Polymarket markets never anchor a binary or seed a simulation prior (TIME-3, `PREDICTION_MARKETS_END_DATE_GATE=true`).
+- Market rows record when their price was taken (`quoted_at` on a requote, `observed_at` from the research bridge, `snapshot_as_of` as an upper bound), and each anchor records `price_time` plus `price_time_basis` (requote|observed|snapshot), so a scorer knows which price the forecast saw (EVAL-6, `MARKET_ANCHOR_PRICE_TIME=true`; per-row `observed_at` from FU-11).
+
+**Official data, vintage-pinned** (`deerflow_bridge/data_tools.py`).
+
+- FRED/ALFRED macro series are read as of a date (TIME-10).
+- SEC EDGAR company facts are restricted to filings made on or before `as_of` (TIME-11).
+- Research gateway plumbing provides schemas, budgets, ledger rows and counters (TIME-12).
+- TIME-13 wires both tools into the v3 engine as `macro_series` and `company_filings` (`RESEARCH_DATA_TOOLS`, default off).
+  - A tool is bound only with its credential (`FRED_API_KEY`; an `SEC_EDGAR_USER_AGENT` containing an e-mail address). The reason a tool stays unbound is recorded in `meta.data_tools.disabled`.
+  - The run's vintage and as-of cutoff are fixed once in `v3/data_pins.json` and reused on resume. In a hindcast that excludes same-day sources, the cutoff is the day before `as_of`.
+  - Results are cited like fetched pages. Their structured values open `quantitative.json` as verified rows, and a model row that contradicts a cited data source is dropped.
+- Adapted TradingAgents code is attributed in `NOTICE`.
+
+**Quantitative sanity.**
+
+- v3 reconciles unit-scale disagreements and flags future-dated actuals (TIME-4, `RESEARCH_QUANT_RECONCILE=true`).
+- A shadow numeric guard checks published binary thresholds against the latest actuals (`utils/numeric_guards.py`, TIME-5, `NUMERIC_GUARD_MODE=shadow`).
+
+### 20.2 Research (stage 1)
+
+**Fetch layer.**
+
+- A fetch-layer classifier detects extraction shells, and a provenance wall stops a shell page from verifying a fact. Each fetch call has a hard time bound (RESEARCH-1).
+- Source outcomes are typed. Failures are counted honestly, credential and quota refusals are latched, and infrastructure failures are kept apart from content failures (RESEARCH-2, `RESEARCH_SOURCE_TAXONOMY`).
+
+**Evidence handling.**
+
+- Absence of evidence is reported with discipline: no-result text is coverage-aware, absence rules apply, and market-coverage states are explicit (RESEARCH-3, `RESEARCH_ABSENCE_DISCIPLINE`; frontend `utils/marketStatus.js`).
+- Quantitative rows are typed as reported or projected, with target-date repair (RESEARCH-4, `RESEARCH_QUANT_TYPING=false`), and are checked against the fetched page of their cited source (RESEARCH-4, `RESEARCH_VERIFIED_FACTS=true`). The report side reads the typing in `utils/quant_typing.py` (RESEARCH-5).
+- Findings carry verbatim evidence spans (`deerflow_bridge/evidence_spans.py`, RESEARCH-7, audit-first).
+
+**Forecaster attribution** (RESEARCH-6, shadow only).
+
+- Extracted facts are attributed to the forecaster who made them.
+- Cross-source dispersion diagnostics show how far those forecasters disagree (`services/consensus_evidence.py`).
+
+**Citation telemetry.** Citation-surgery telemetry is recorded for the report finalizer and for v3 QA (`services/citation_finalization_telemetry.py`, RESEARCH-9).
+
+**Question spec** (`drf.question_spec/v1`).
+
+- RESEARCH-11 produces it: the operational definition, the resolution source, the horizon and the deadline (`RESEARCH_QUESTION_SPEC`).
+- RESEARCH-12 consumes it: the simulation horizon rung, the spine block and the resolution-section disclosure (`services/question_spec.py`, `QUESTION_SPEC_DOWNSTREAM=true`).
+
+**Packing for the forecast prompts.**
+
+- Deterministic context packs feed the two probability prompts (`services/forecast_context_packer.py`, RESEARCH-13, `FORECAST_CONTEXT_PACK_*`). An offline replay runs over stored handoffs (`scripts/context_pack_replay.py`).
+- Each key intelligence question gets an evidence-count header and a sufficiency label, and the digest is truncated fairly (RESEARCH-10).
+- Derived findings are declarative and evaluated in Decimal (`deerflow_bridge/derived_numbers.py`, RESEARCH-8, `RESEARCH_DERIVED_FINDINGS`).
+
+### 20.3 Simulation (stages 4–5)
+
+**Decision channel.**
+
+- A shared validity verdict holds in-band, with coverage-aware accounting (SIM-1, `REPORT_WORLDSTATE_HIDE_INVALID=true`).
+- Each elicitation reply is validated against the roster and every outcome is reason-coded (`services/decision_validation.py`, SIM-2).
+
+**Run artifacts and context.**
+
+- Run artifacts are kept clean: a reachability audit of scheduled events, `world_digest` rotation, and engagement samples kept out of the organic counts (`services/sim_schedule_audit.py`, SIM-3).
+- Injected events never pose as actor behaviour (`services/sim_event_provenance.py`, SIM-5).
+- Each period gets truthful context (`services/sim_period_context.py`, SIM-6, `SIM_PERIOD_CONTEXT_V2=true`).
+- The world clock tells apart first, quiet, unavailable and not-produced periods (REPORT-6).
+- The decision elicitor sees the period's scheduled events as labelled exogenous items (SIM-8).
+
+**Diagnostics and overrides.**
+
+- A zero-LLM prior-echo diagnostic and a pinned derivation of the ensemble seed (`services/sim_prior_echo.py`, SIM-4, `SIM_PRIOR_ECHO_DIAGNOSTIC=true`).
+- Scenario overlays may carry human-authored `outcome_power` overrides (SIM-7).
+
+### 20.4 Report and forecast (stage 6)
+
+**Probability parsing.** Probabilities are parsed honestly (`utils/probability_parse.py`, REPORT-1, `FORECAST_PROB_STRICT_PARSE=true`). An unreadable value becomes `needs_review`; it is never coerced to 0.0 or a uniform split.
+
+**Prompt slots and narrative.**
+
+- Prompt slots get typed absence markers (`utils/absence.py`, REPORT-4).
+- When a probability moves, a deterministic sync refreshes the stale numbers in the narrative (`services/narrative_sync.py`, REPORT-2, `REPORT_NARRATIVE_SYNC=true`).
+- An alias-aware probability-slot audit runs over the outline summary and the final prose (`services/logic_number.py`, REPORT-3, `REPORT_LOGIC_NUMBER_GATE=observe`). Its zero-token slot repair stays off because known cases remain where it would rewrite a percentage that is not the scenario's probability; the guards must be extended before it is turned on (`REPORT_LOGIC_NUMBER_REPAIR=false`; it also needs `REPORT_NARRATIVE_SYNC`).
+
+**Gates and walls.**
+
+- The signal pack fails closed on a hollow or errored simulation (REPORT-5, `REPORT_SIGNAL_PACK_HEALTH_GATE=true`).
+- Information walls are pinned (REPORT-10).
+
+**Verified figures.**
+
+- Research-side verification labels are written to `verified_facts.json` (REPORT-7).
+- A labelled verified-figures block replaces the key-metrics table (`services/verified_facts.py`, REPORT-8).
+- A shadow check compares the published figures with the verified rows and writes the `figure_provenance.json` sidecar; it never changes the report (REPORT-9, `REPORT_VERIFIED_FIGURES_CHECK=true`).
+
+**Probability shape and markets.**
+
+- Probability-shape telemetry is recorded (`services/probability_shape.py`, REPORT-11). An optional symmetric binary guard is behind `FORECAST_BINARY_SYMMETRIC_GUARD=false`.
+- When switched on, the market-blend arithmetic for the divergence restatement is computed deterministically (REPORT-12, `FORECAST_MARKET_BLEND_ARITHMETIC=false`).
+- When switched on, an evidence-cited counter-case pass runs before the final draft (`services/forecast_counter_case.py`, REPORT-13, `REPORT_COUNTER_CASE=false`).
+
+**Agent tool calls.** The report agent's tool-call boundary tolerates malformed arguments: they are parsed leniently and validated, and up to six rejected calls per section are not charged against the tool budget (`REPORT_TOOL_MAX_REJECTED_PER_SECTION=6`; unknown-tool rejections are never charged) (`services/report_tool_args.py`, INFRA-5).
+
+### 20.5 Evaluation, ledger and settlement
+
+**Ledger commits and settlement.**
+
+- A ledger commit happens after publication. It is sealed, idempotent and self-contained (`services/ledger_commit.py`, EVAL-1, `FORECAST_LEDGER_COMMIT_MODE=published`).
+- Market settlement events are deterministic (`services/forecast_resolution.py`, `utils/deadline_dates.py`, EVAL-2).
+- A settlement fold and a single point-in-time `admissible()` gate apply to the resolution monitor's calibration, and to the report's historical calibration only when switched on (EVAL-3, `FORECAST_LEDGER_SETTLEMENT_FOLD=false`).
+- There is a manual settlement path with supersede and retract (EVAL-4).
+
+**Golden set and scoring.**
+
+- Small-sample statistics for golden evaluation (`services/eval_stats.py`, EVAL-7).
+- Golden headline tiering separates prospective rows from hindcast rows (EVAL-8).
+- The golden-set v2 contract (`services/golden_set.py`, `scripts/golden_curate.py`, EVAL-9).
+- Contamination probes test the golden set (`scripts/golden_probe.py`, EVAL-12, `GOLDEN_PROBE_ENABLED=false`).
+- Binaries get structured numeric targets, and a threshold-ladder audit checks them (`services/binary_targets.py`, EVAL-14, `FORECAST_BINARY_STRUCTURED_TARGET=false`).
+
+**Run honesty and backbones.**
+
+- `LLMClient` instances are isolated from each other (EVAL-10).
+- An opt-in shadow cross-backbone sensitivity check can run on the spine (`services/backbone_sensitivity.py`, EVAL-11, `BACKBONE_CHECK_ENABLED=false`).
+- Evaluation runs are kept honest: an admission pin, ledger routing and exclusion from the resolution monitor (EVAL-13).
+
+**Scorecards and metering.**
+
+- A per-stage scorecard sidecar (`services/stage_scorecard.py`, `scripts/stage_scorecard.py`, EVAL-15).
+- Counters for unknown and invalid tool calls, plus a cross-run aggregate (EVAL-16).
+- Metering is faithful (EVAL-17).
+- A slim cost card, a config fingerprint and a compute-matched norm (`utils/cost_accounting.py`, `scripts/cost_card.py`, EVAL-18).
+
+**Evaluation studies.**
+
+- A frozen evaluation bundle (`services/eval_bundle.py`, `scripts/eval_bundle.py`, EVAL-19).
+- A label-free block-movement study with an A/A noise floor (`services/value_add_stats.py`, `scripts/value_add_eval.py`, EVAL-20, `VALUE_ADD_EVAL_ENABLED=false`).
+- A market-relative skill scorer in the resolution monitor (`services/backtest.py`, `scripts/resolution_monitor.py`, EVAL-5, `FORECAST_SKILL_SCORING`).
+
+### 20.6 Platform
+
+**LLM transport** (`utils/llm_text.py`, `utils/llm_recovery.py`, INFRA-1–4).
+
+- Finish reasons and empty replies are normalized, and think tags are stripped.
+- A structured-output repair turn retries a failed JSON reply.
+- `max_tokens` escalates on an empty reply that was cut by the length limit, and a truncated JSON reply fails closed.
+- Non-finite numbers are guarded, and errors are classified by HTTP status first.
+- A model reply's JSON never crashes a parser: an oversized integer or deep nesting is "does not parse" and takes the repair or retry path (FU-12).
+
+**Providers and provenance.**
+
+- Per-provider request overrides come from one helper (`utils/provider_overrides.py`, INFRA-6).
+- Model provenance records the requested and the served model for each stage (`utils/model_provenance.py`, INFRA-8).
+
+**Runs and actors.**
+
+- A run-shape pin, drift detection and resume-lineage guards (`services/run_shape.py`, INFRA-7).
+- ContextVars propagate into worker pools, and forks inherit the safety policy (`utils/ctxpool.py`, INFRA-9).
+- Actor identity is stable for non-Latin names (INFRA-11).
+
+**Security and configuration.**
+
+- Identifiers are contained and the local API is hardened (INFRA-10).
+- The configuration is audited strictly (`app/config_audit.py`, INFRA-14, `CONFIG_STRICT_VALIDATION=true`).
+- `.env` loading is shared by the standalone scripts (`utils/env_loading.py`).
+
+### 20.7 Follow-ups
+
+Some fixes came from triaging the merged packages' open issues. They landed as integration commits and as the follow-up packages FU-1 to FU-12. Owner decisions, the live checks still owed, and defects that predate this program are listed in the research document under "Open issues after implementation".

@@ -1094,7 +1094,7 @@ flowchart LR
 
 ## Trust and quality guarantees
 
-The pipeline is built so that a finished run means something. Most of the weight rests on four mechanisms.
+The pipeline is built so that a finished run means something. Most of the weight rests on the mechanisms below.
 
 ### 1. The actor-realism chain
 
@@ -1186,6 +1186,32 @@ With `REPORT_PUBLISH_GATE=true` (the default), *epistemic* problems also block p
 - **Numbers.** A research finding is tagged VERIFIED only when each of its numbers appears on the fetched page it cites. Percentages must match percentages, and power, energy and currency figures must match the same unit class, so "15%" is not confirmed by a date's 15 and "176 GW" is not confirmed by "176 pages". Findings with a missing number are tagged UNVERIFIED and are never stated as fact.
 - **Citations.** `[S#]` markers are positional into `sources.json`; an agent can cite only sources it was shown, and research lint never deletes, invents or truncates a marker.
 - **Honest degradation.** Template plans, deterministic fallback sections, cut replies and failed extractions are listed in `research_quality.degradation`, and a run with no model output or no sourced evidence exits with a resumable failure instead of publishing.
+
+### 6. Time, settlement and evaluation integrity
+
+These guarantees come from the finharness transplant program. Its research record is in [docs/research/2026-09-29-finharness-essence.md](docs/research/2026-09-29-finharness-essence.md), and [DRF_ARCHITECTURE.md §20](DRF_ARCHITECTURE.md#20-finharness-transplants-branch-featfinharness-transplants) shows where each mechanism lives.
+
+- **Hindcasts see only the past.** A run with an `as_of` date is admitted only when `HINDCAST_ENABLED=true` and the v3 research engine is used.
+  - The run pins its hindcast policy, so forks inherit it and never re-capture it.
+  - Live prediction-market odds are switched off for the research child.
+  - A point-in-time gate decides which sources are admissible. Inadmissible sources stay uncitable, and the verdict is reported in `forecast.json['hindcast']`.
+  - FRED/ALFRED series and SEC EDGAR facts are read as of the pinned date.
+- **Probabilities are parsed, never guessed.** An unreadable probability becomes `needs_review`; it is never coerced to 0 or to a uniform split. When a probability changes, the stale numbers in the narrative are refreshed deterministically.
+- **Markets are dated.** A market past its end date never anchors a forecast or seeds a simulation prior. Every anchor records the time of the price it used.
+- **Published figures are checked.** Research verification labels reach the report as a labelled verified-figures block. A shadow check compares the published figures with the verified rows and writes `figure_provenance.json`.
+- **The ledger records what was published.** A forecast is committed to the ledger only after publication, sealed and idempotently. Settlement is deterministic, and a manual settlement can be superseded or retracted, never edited in place.
+- **Evaluation is measured, not assumed.** Every run writes a per-stage scorecard and a cost card with a config fingerprint (on by default; `scripts/stage_scorecard.py` and `scripts/cost_card.py` backfill older runs). The other evaluation tools run offline:
+  - a golden set with small-sample statistics;
+  - contamination probes (off until `GOLDEN_PROBE_ENABLED=true` or `--live`);
+  - a market-relative skill scorer in the resolution monitor;
+  - a label-free value-add study that compares each block against an A/A noise floor (off until `VALUE_ADD_EVAL_ENABLED=true` or `--live`).
+- **The configuration is audited.** With `CONFIG_STRICT_VALIDATION=true`, a pipeline run is refused while the environment holds a value `Config` would misread or reject:
+  - a non-canonical boolean (most knobs still read `X=1` as false);
+  - an unparseable or out-of-range number;
+  - an unknown enum value;
+  - a contradictory pair of knobs.
+
+  The server still starts and prints these issues as warnings.
 
 ---
 

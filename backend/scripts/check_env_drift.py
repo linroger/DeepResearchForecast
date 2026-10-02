@@ -18,10 +18,15 @@ Two independent modes:
              prints the DIVERGENT pins with a severity hint (performance-critical
              knobs — REPORT_SECTION_CONCURRENCY / DEERFLOW_RESEARCH_DEPTH /
              RESEARCH_PARALLEL_TRACKS / N_FORECAST_SEEDS / ENSEMBLE_SEED_CONCURRENCY
-             / OASIS_SEMAPHORE / GRAPH_BUILD_CONCURRENCY … — are flagged loudly).
+             / OASIS_SEMAPHORE / GRAPH_BUILD_CONCURRENCY … — are flagged loudly),
+             and honesty-critical knobs (EVAL-15: REPORT_PUBLISH_GATE /
+             REPORT_PUBLISH_GATE_MIN_COVERAGE / REPORT_FINAL_READ_ONLY_AUDIT /
+             PIPELINE_HEALTH_GATE — a pin here relaxes a publish/audit/health
+             gate, e.g. MIN_COVERAGE=0.05 lets a 0.07-coverage report publish)
+             are flagged just as loudly.
              ADVISORY: `--pins` always exits 0; `--pins --strict` exits 1 only
-             when a performance-critical pin diverges. Secret-looking values
-             (KEY/TOKEN/SECRET) are never printed — they are masked.
+             when a performance- or honesty-critical pin diverges. Secret-looking
+             values (KEY/TOKEN/SECRET) are never printed — they are masked.
 
 Usage:
     python backend/scripts/check_env_drift.py [--strict] [--json]
@@ -31,6 +36,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import os
 import re
@@ -38,6 +45,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG = os.path.join(ROOT, "backend", "app", "config.py")
+CONFIG_AUDIT = os.path.join(ROOT, "backend", "app", "config_audit.py")
 ENV_EXAMPLE = os.path.join(ROOT, ".env.example")
 ENV_FILE = os.path.join(ROOT, ".env")  # ENV-1：运行时 .env（可能不存在——纯 advisory）
 
@@ -51,7 +59,6 @@ _IGNORE = {
     "ZEP_API_KEY",
 }
 
-_ENV_READ_RE = re.compile(r"os\.environ(?:\.get\(\s*['\"]([A-Z0-9_]+)['\"]|\[\s*['\"]([A-Z0-9_]+)['\"]\s*\])")
 _ENV_DOC_RE = re.compile(r"^\s*#?\s*([A-Z][A-Z0-9_]+)=", re.M)
 
 
@@ -83,6 +90,18 @@ PERF_CRITICAL_VARS = {
     "LLM_HTTP_KEEPALIVE",             # LLM HTTP keepalive 连接上限
 }
 
+# EVAL-15: honesty-critical knobs: a divergent pin here relaxes a gate that keeps
+# an unaudited, under-cited or broken deliverable from being published as
+# completed (live example: REPORT_PUBLISH_GATE_MIN_COVERAGE=0.05 vs the default
+# 0.75 let a report with 0.07 citation coverage pass). Flagged as loudly as
+# PERF_CRITICAL_VARS and likewise make `--pins --strict` exit 1.
+HONESTY_CRITICAL_VARS = {
+    "REPORT_PUBLISH_GATE",            # 发布门（覆盖率/概率闭合/兜底情景）
+    "REPORT_PUBLISH_GATE_MIN_COVERAGE",  # 发布门定量引用覆盖率阈值
+    "REPORT_FINAL_READ_ONLY_AUDIT",   # 成稿只读审计（final_audit.json）
+    "PIPELINE_HEALTH_GATE",           # 交付物健康门（空报告/缺 forecast 硬失败）
+}
+
 # Mask anything whose NAME looks like a credential — never print its value.
 # Match on underscore-delimited SEGMENTS (not raw substring) so real secrets
 # (*_KEY / *_TOKEN / SECRET_* / *_PASSWORD) are masked while token-COUNT knobs
@@ -90,21 +109,28 @@ PERF_CRITICAL_VARS = {
 # names that merely contain 'KEY' (e.g. MONKEY) are not falsely masked.
 _SECRET_SEGMENTS = {"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CREDENTIALS"}
 
-# Extract `os.environ.get('VAR', 'default')` literals from config.py source text.
-# re.S so the whitespace gap tolerates the multi-line `.get(\n 'VAR',\n 'default')`
-# form (e.g. APP_CORS_ORIGINS). The default literal itself is single-line and
-# quote-free internally ([^'\"]*), which covers every default in config.py.
-_CONFIG_DEFAULT_RE = re.compile(
-    r"os\.environ\.get\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*,\s*(['\"])([^'\"]*)\2",
-    re.S,
-)
+
+@functools.lru_cache(maxsize=1)
+def _config_audit():
+    """backend/app/config_audit.py, loaded by path: it is stdlib only, and importing
+    the app package would pull in Flask and the whole backend."""
+    spec = importlib.util.spec_from_file_location("_drf_env_drift_config_audit", CONFIG_AUDIT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def config_knobs(text: str | None = None) -> dict:
+    """Env name -> knob for every literal env read in config.py (``text`` overrides
+    the file), from config_audit.extract_knobs: the single parser of Config's knobs
+    (INFRA-14), an AST walk, so comments and docstrings never count."""
+    if text is None:
+        return _config_audit().extract_knobs(CONFIG)
+    return _config_audit().extract_knobs(source=text)
 
 
 def config_env_vars() -> set:
-    text = open(CONFIG, encoding="utf-8").read()
-    out = set()
-    for m in _ENV_READ_RE.finditer(text):
-        out.add(m.group(1) or m.group(2))
+    out = set(config_knobs())
     out -= _IGNORE
     return {v for v in out if not any(p.match(v) for p in _IGNORE_PATTERNS)}
 
@@ -118,18 +144,12 @@ def documented_env_vars() -> set:
 
 def config_defaults(text: str | None = None) -> dict:
     """var -> default literal string, introspected from config.py source text
-    the same way config_env_vars() does (regex over source — no import, so this
-    stays offline and needs no backend deps). First occurrence wins (the real
-    assignment precedes any doc-comment mention). Vars whose `os.environ.get`
-    has no default literal (or use os.environ[...]) are simply absent here."""
-    if text is None:
-        text = open(CONFIG, encoding="utf-8").read()
-    out: dict = {}
-    for m in _CONFIG_DEFAULT_RE.finditer(text):
-        var = m.group(1)
-        if var not in out:                # first (real) definition wins
-            out[var] = m.group(3)
-    return out
+    the same way config_env_vars() does (config_knobs: no import, so this stays
+    offline and needs no backend deps). The first literal default among a var's
+    reads wins. Vars whose reads have no literal default (`os.environ.get('X')`,
+    `os.environ[...]`, a computed default) are simply absent here."""
+    return {var: knob["default"] for var, knob in config_knobs(text).items()
+            if knob["default"] is not None}
 
 
 def parse_env_text(text: str) -> dict:
@@ -250,37 +270,50 @@ def find_divergent_pins(env_path: str | None = None,
             "current_default": mask_value(var, default),
             "default_source": source,
             "critical": var in PERF_CRITICAL_VARS,
+            "honesty_critical": var in HONESTY_CRITICAL_VARS,
             "secret": is_secret(var),
         })
-    # Loud items first (performance-critical), then alphabetical for stability.
-    out.sort(key=lambda r: (not r["critical"], r["var"]))
+    # Loud items first (performance- or honesty-critical), then alphabetical for stability.
+    out.sort(key=lambda r: (not _is_loud(r), r["var"]))
     return out
+
+
+def _is_loud(record: dict) -> bool:
+    """A pin that is flagged loudly and fails `--pins --strict`."""
+    return bool(record.get("critical") or record.get("honesty_critical"))
 
 
 def _render_pins(divergent: list, as_json: bool) -> None:
     if as_json:
         print(json.dumps({"divergent_pins": divergent,
-                          "critical_count": sum(1 for r in divergent if r["critical"])},
+                          "critical_count": sum(1 for r in divergent if r["critical"]),
+                          "honesty_critical_count": sum(
+                              1 for r in divergent if r.get("honesty_critical"))},
                          indent=2, ensure_ascii=False))
         return
     if not divergent:
         print("✓ no .env pins diverge from current Config defaults")
         return
     crit = [r for r in divergent if r["critical"]]
+    honesty = [r for r in divergent if r.get("honesty_critical")]
     print(f"⚠️  {len(divergent)} .env pin(s) diverge from current Config defaults"
-          f" ({len(crit)} performance-critical):")
+          f" ({len(crit)} performance-critical, {len(honesty)} honesty-critical):")
     # column widths (over masked values, so no secret influences layout)
     wv = max(3, max(len(r["var"]) for r in divergent))
     wp = max(6, max(len(r["pinned"]) for r in divergent))
     wd = max(7, max(len(r["current_default"]) for r in divergent))
-    print(f"    {'':2}{'VAR'.ljust(wv)}  {'PINNED'.ljust(wp)}  {'DEFAULT'.ljust(wd)}  SOURCE")
+    print(f"    {'':3}{'VAR'.ljust(wv)}  {'PINNED'.ljust(wp)}  {'DEFAULT'.ljust(wd)}  SOURCE")
     for r in divergent:
-        marker = "‼ " if r["critical"] else "  "
+        marker = "‼  " if r["critical"] else ("‼H " if r.get("honesty_critical") else "   ")
         print(f"    {marker}{r['var'].ljust(wv)}  {r['pinned'].ljust(wp)}  "
               f"{r['current_default'].ljust(wd)}  {r['default_source']}")
     if crit:
         print("    ‼ = performance-critical: this pin overrides an improved default and "
               "may throttle throughput/quality.")
+    if honesty:
+        print("    ‼H = honesty-critical: this pin relaxes a publish/audit/health gate, so "
+              "under-cited or unaudited reports can publish as completed.")
+    if crit or honesty:
         print("      Remove the pin (or align it) unless the override is deliberate.")
 
 
@@ -289,17 +322,17 @@ def main() -> int:
     ap.add_argument("--pins", action="store_true",
                    help="ENV-1: audit repo-root .env for pins that diverge from current Config defaults (advisory)")
     ap.add_argument("--strict", action="store_true",
-                   help="doc-drift: exit 1 if any Config var is undocumented; with --pins: exit 1 only if a performance-critical pin diverges")
+                   help="doc-drift: exit 1 if any Config var is undocumented; with --pins: exit 1 only if a performance- or honesty-critical pin diverges")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
     if args.pins:
         # ENV-1 advisory pin audit. Always exit 0 unless --strict AND a
-        # performance-critical pin diverges (never blocks the default run).
+        # performance- or honesty-critical pin diverges (never blocks the default run).
         divergent = find_divergent_pins()
         _render_pins(divergent, args.json)
-        critical = any(r["critical"] for r in divergent)
-        return 1 if (args.strict and critical) else 0
+        loud = any(_is_loud(r) for r in divergent)
+        return 1 if (args.strict and loud) else 0
 
     read = config_env_vars()
     documented = documented_env_vars()

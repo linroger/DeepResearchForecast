@@ -815,7 +815,10 @@ def prep_quant(rows, max_bars: int = 10, max_panels: int = 3):
             continue
         projection = _is_projection(r)
         staleness = _num(r.get("staleness_days"))
-        if staleness is not None and staleness < 0 and not projection:
+        # A future-dated actual is no observation: negative age, or the typed
+        # recency pass's is_future_dated (which withholds the age).
+        future_dated = (staleness is not None and staleness < 0) or r.get("is_future_dated") is True
+        if future_dated and not projection:
             continue
         denominator = _quant_denominator_key(unit, definition)
         if not denominator:

@@ -8,6 +8,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 
 BRIDGE_FILE = Path(__file__).resolve().parents[2] / "deerflow_bridge" / "market_tools.py"
 
@@ -333,3 +335,155 @@ def test_captured_tool_candidates_keep_clob_fields(tmp_path, monkeypatch):
     assert row["clob_yes_token_id"] == "0xYES"
     assert row["outcomes"] == ["No", "Yes"]
     assert row["outcome_prices"] == [0.875, 0.125]
+
+
+class _Resp:
+    def __init__(self, status_code: int, headers: dict | None = None, payload=None) -> None:
+        self.status_code = status_code
+        self.headers = headers or {}
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def _scripted_http(monkeypatch, module, responses):
+    """Scripted requests.get plus a recorder of this thread's time.sleep calls."""
+    import requests
+
+    gets: list[str] = []
+    sleeps: list[float] = []
+    main = threading.current_thread()
+    real_sleep = time.sleep
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        gets.append(url)
+        return responses.pop(0)
+
+    def fake_sleep(seconds):
+        if threading.current_thread() is main:
+            sleeps.append(seconds)
+        else:
+            real_sleep(seconds)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(module.time, "sleep", fake_sleep)
+    return gets, sleeps
+
+
+@pytest.mark.parametrize("headers, expected", [
+    ({"Retry-After": "3"}, 3.0),
+    ({"Retry-After": "999"}, 10.0),
+    ({"Retry-After": "0"}, 0.0),
+    ({"Retry-After": "-4"}, 0.0),
+])
+def test_transient_status_waits_retry_after_clamped_then_retries_once(monkeypatch, headers, expected):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(429, headers), _Resp(200, payload={"ok": 1})])
+    assert module._http_get("/public-search", {"q": "x"}) == {"ok": 1}
+    assert sleeps == [expected] and len(gets) == 2
+
+
+@pytest.mark.parametrize("headers", [{}, {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+                                     {"Retry-After": "nan"}, {"Retry-After": "inf"}])
+def test_transient_status_without_a_numeric_retry_after_waits_jitter(monkeypatch, headers):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(503, headers), _Resp(503, headers)])
+    assert module._http_get("/public-search", {"q": "x"}) is None   # exactly one retry, then degrade
+    assert len(gets) == 2 and len(sleeps) == 1
+    assert 0.5 <= sleeps[0] <= 1.5
+
+
+def test_non_transient_status_is_not_retried_or_delayed(monkeypatch):
+    module = _load_module()
+    gets, sleeps = _scripted_http(monkeypatch, module, [_Resp(404, {"Retry-After": "3"})])
+    assert module._http_get("/public-search", {"q": "x"}) is None
+    assert len(gets) == 1 and sleeps == []
+
+
+def test_timed_out_request_is_never_a_verified_empty_search(monkeypatch):
+    """FU-6: a query whose request timed out never finished, so the agent is never
+    told 'no equivalent market'.  requests.Timeout is retried once and then counts
+    as a transport failure; a completed empty search stays verified_empty."""
+    import requests
+
+    module = _load_module()
+    sent: list[str] = []
+    main = threading.current_thread()
+    real_sleep = time.sleep
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        query = str((params or {}).get("q") or "")
+        sent.append(query)
+        if query.startswith("slow"):
+            raise requests.Timeout(f"read timed out: {query}")
+        return _Resp(200, payload={"events": []})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(module.time, "sleep",
+                        lambda s: None if threading.current_thread() is main else real_sleep(s))
+    module._reset_market_query_cache()
+
+    timed_out = json.loads(module.prediction_market_search_impl("slow a"))
+    assert sent == ["slow a", "slow a"]                  # one retry, then degrade
+    assert timed_out["status"]["state"] == "transport_failure"
+    assert timed_out["status"]["empty_reason"] == "transport_failure"
+    assert timed_out["status"]["successful_query_count"] == 0
+    assert timed_out["status"]["transport_failure_count"] == 1
+    assert "no absence conclusion" in timed_out["note"]
+    assert "No active, liquid markets matched" not in timed_out["note"]
+
+    partial = json.loads(module.prediction_market_search_impl("slow a, empty b"))
+    assert partial["status"]["state"] == "partial_transport_failure"
+    assert partial["status"]["empty_reason"] == "partial_transport_failure"
+    assert "incomplete" in partial["note"]
+    assert "No active, liquid markets matched" not in partial["note"]
+
+    completed = json.loads(module.prediction_market_search_impl("empty c"))
+    assert completed["status"]["state"] == "verified_empty"
+    assert completed["status"]["empty_reason"] == "no_equivalent_market"
+    assert "No active, liquid markets matched" in completed["note"]
+
+
+def test_completed_search_with_a_liquid_market_stays_success(monkeypatch):
+    """FU-6 leaves the tool's success status unchanged: a finished search that found a
+    liquid market reports state 'success', no empty_reason and no absence or
+    incomplete-search note."""
+    import requests
+
+    module = _load_module()
+    event = {
+        "title": "Optimus deliveries",
+        "slug": "optimus-deliveries",
+        "markets": [{
+            "id": "m-1",
+            "question": "Will Optimus ship to customers in 2027?",
+            "closed": False,
+            "outcomes": ["Yes", "No"],
+            "outcomePrices": ["0.4", "0.6"],
+            "volume": "5000",
+            "slug": "optimus-ship-2027",
+        }],
+    }
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        return _Resp(200, payload={"events": [event]})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.delenv("DEERFLOW_RUN_ARTIFACT_DIR", raising=False)
+    monkeypatch.delenv("PREDICTION_MARKETS_MIN_VOLUME", raising=False)
+    module._reset_market_query_cache()
+
+    found = json.loads(module.prediction_market_search_impl("optimus 2027"))
+    assert [m["market_id"] for m in found["markets"]] == ["m-1"]
+    assert found["status"]["state"] == "success"
+    assert found["status"]["empty_reason"] is None
+    assert found["status"]["successful_query_count"] == 1
+    assert found["status"]["transport_failure_count"] == 0
+    assert "No active, liquid markets matched" not in found["note"]
+    assert "incomplete" not in found["note"]
+    assert "no absence conclusion" not in found["note"]

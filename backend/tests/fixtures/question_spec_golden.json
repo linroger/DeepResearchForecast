@@ -1,0 +1,68 @@
+{
+  "question": "Will global data-centre capacity exceed 250 GW by the end of 2027?",
+  "as_of": "2026-10-01",
+  "raw_reply": {
+    "operational_question": "Will installed global data-centre capacity exceed 250 GW on 31 December 2027?",
+    "outcome_definition": "Global installed data-centre IT capacity is at least 250 GW (≥ 250 GW) on 31 December 2027.",
+    "resolution_source": {
+      "name": "IEA Energy and AI report",
+      "url": "https://www.iea.org/reports/energy-and-ai",
+      "kind": "official_statistic"
+    },
+    "horizon": {
+      "label": "by 31 December 2027",
+      "date": "2027-12-31",
+      "basis": "explicit"
+    },
+    "reference_class": "Past multi-year data-centre build-out targets",
+    "assumptions": [
+      {
+        "text": "Capacity means IT load in GW, not grid connection requests (单位：吉瓦).",
+        "slot": "units"
+      },
+      {
+        "text": "The IEA year-end estimate resolves the question when published.",
+        "slot": "resolution_source"
+      },
+      {
+        "text": "End of 2027 means 31 December 2027.",
+        "slot": "horizon"
+      }
+    ]
+  },
+  "spec": {
+    "schema": "drf.question_spec/v1",
+    "status": "ok",
+    "as_of": "2026-10-01",
+    "question_sha256": "f57184f69914f6066c9762f727919be83872ff1623c04753038f4eb9c2bfc2fa",
+    "operational_question": "Will installed global data-centre capacity exceed 250 GW on 31 December 2027?",
+    "outcome_definition": "Global installed data-centre IT capacity is at least 250 GW (≥ 250 GW) on 31 December 2027.",
+    "resolution_source": {
+      "name": "IEA Energy and AI report",
+      "url": "https://www.iea.org/reports/energy-and-ai",
+      "kind": "official_statistic"
+    },
+    "horizon": {
+      "label": "by 31 December 2027",
+      "date": "2027-12-31",
+      "basis": "explicit"
+    },
+    "reference_class": "Past multi-year data-centre build-out targets",
+    "assumptions": [
+      {
+        "text": "End of 2027 means 31 December 2027.",
+        "slot": "horizon"
+      },
+      {
+        "text": "The IEA year-end estimate resolves the question when published.",
+        "slot": "resolution_source"
+      },
+      {
+        "text": "Capacity means IT load in GW, not grid connection requests (单位：吉瓦).",
+        "slot": "units"
+      }
+    ],
+    "degradation": [],
+    "spec_sha256": "c70438fd44c254ce0c9400f051ade21629470bd6324f750fdc21749aa4642abe"
+  }
+}

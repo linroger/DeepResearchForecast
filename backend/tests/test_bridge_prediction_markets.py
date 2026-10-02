@@ -9,6 +9,9 @@ import hashlib
 import json
 import os
 import sys
+from datetime import datetime, timezone
+
+import pytest
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BRIDGE_DIR = os.path.join(_REPO_ROOT, "deerflow_bridge")
@@ -360,6 +363,115 @@ def test_collector_circuit_open_persists_prepass_error_classes(tmp_path, monkeyp
     assert payload["status"]["empty_reason"] == "transport_failure"
     assert payload["status"]["transport_error_classes"] == {"HTTPError:403": 16}
     assert meta["prediction_markets_count"] == 0
+
+
+# ---------------------------------------------------------------- RESEARCH-3 partial transport label
+
+def _collect_empty_refresh(tmp_path, monkeypatch, *, attempted, successful, failures,
+                           deadline_on_calls=()):
+    """Run the collector on a refresh that returns no market with the given
+    query outcomes (every snapshot call, horizon retries included); the
+    snapshot calls numbered in ``deadline_on_calls`` (0 = the refresh) also
+    report ``deadline_exhausted``.  Return the written status."""
+    calls = []
+
+    def snapshot(queries, *, diagnostics=None, **_kwargs):
+        if diagnostics is not None:
+            diagnostics.update({"attempted_query_count": attempted, "successful_query_count": successful,
+                                "transport_failure_count": failures})
+            if len(calls) in deadline_on_calls:
+                diagnostics["deadline_exhausted"] = 1
+        calls.append(list(queries))
+        return []
+
+    monkeypatch.setattr(d, "_pm_snapshot", snapshot)
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_args, **_kwargs: ["AI bubble 2026", "Nvidia 2026"])
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    d._set_pm_transport_unavailable(False)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    class Log:
+        def write(self, level, message):
+            pass
+
+    meta = {}
+    d._collect_prediction_markets(tmp_path, "Will the AI investment boom unwind in 2026?", "report body",
+                                  meta, Log(), model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    assert payload["markets"] == [] and payload["no_relevant_markets"] is True
+    assert meta["prediction_markets_count"] == 0
+    assert all(index < len(calls) for index in deadline_on_calls), calls
+    return payload["status"]
+
+
+def test_collector_partial_transport_failure_without_candidates_is_labelled(tmp_path, monkeypatch):
+    """Some queries failed and none found a candidate: market coverage is unknown,
+    so the status must not read as 'no equivalent market exists'."""
+    status = _collect_empty_refresh(tmp_path, monkeypatch, attempted=3, successful=2, failures=1)
+    assert status["empty_reason"] == "partial_transport_failure"
+    assert status["transport_failure_count"] >= 1 and status["candidate_count"] == 0
+
+
+def test_collector_all_failed_and_clean_empty_keep_their_labels(tmp_path, monkeypatch):
+    failed = _collect_empty_refresh(tmp_path / "failed", monkeypatch, attempted=2, successful=0, failures=2)
+    assert failed["empty_reason"] == "transport_failure"
+    clean = _collect_empty_refresh(tmp_path / "clean", monkeypatch, attempted=2, successful=2, failures=0)
+    assert clean["empty_reason"] == "no_equivalent_market" and clean["transport_failure_count"] == 0
+    assert "deadline_exhausted" not in clean
+
+
+def test_collector_unanswered_queries_without_candidates_are_partial(tmp_path, monkeypatch):
+    """The snapshot deadline ran out (in the refresh, call 0, or in a horizon-retry
+    stage, call 1) with no failure and no candidate: the unanswered queries were
+    never searched, so coverage is unknown and the status must not read as 'no
+    market exists'."""
+    for call in (0, 1):
+        status = _collect_empty_refresh(tmp_path / f"call{call}", monkeypatch, attempted=5, successful=2,
+                                        failures=0, deadline_on_calls=(call,))
+        assert status["transport_failure_count"] == 0 and status["candidate_count"] == 0
+        assert status["empty_reason"] == "partial_transport_failure"
+        assert status["deadline_exhausted"] == 1
+
+
+def test_orchestrator_market_merge_applies_the_partial_transport_rule():
+    from app.services.pipeline_orchestrator import merge_market_snapshots
+
+    def track(queries, successful, failures, **extra):
+        return {"markets": [], "status": {"query_count": queries, "successful_query_count": successful,
+                                          "transport_failure_count": failures, "candidate_count": 0, **extra}}
+
+    partial = merge_market_snapshots([track(3, 2, 1), track(2, 2, 0)])["status"]
+    assert partial["empty_reason"] == "partial_transport_failure"
+    assert partial["state"] == "partial_transport_failure"
+    assert merge_market_snapshots([track(2, 0, 2), track(1, 0, 1)])["status"]["empty_reason"] == "transport_failure"
+    assert merge_market_snapshots([track(2, 2, 0)])["status"]["empty_reason"] == "no_equivalent_market"
+    timeout_only = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2)])["status"]
+    # FU-6: an all-timed-out merge no longer pairs its state with 'no_equivalent_market'.
+    assert timeout_only["empty_reason"] == "inflight_timeout" and timeout_only["state"] == "inflight_timeout"
+    # Timeouts beside a transport failure or an exhausted deadline keep the partial
+    # label they had before FU-6 (the empty_reason still records the failure).
+    for mixed_infra in (track(2, 0, 1, inflight_timeout_count=1),
+                        track(2, 0, 0, inflight_timeout_count=1, deadline_exhausted=1)):
+        status = merge_market_snapshots([mixed_infra])["status"]
+        assert status["state"] == "inflight_timeout"
+        assert status["empty_reason"] == "partial_transport_failure"
+    # FU-6: a track whose queries timed out next to an empty answered one leaves coverage
+    # unknown (it read as verified_empty / 'no equivalent market').
+    mixed = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2), track(2, 2, 0)])["status"]
+    assert mixed["empty_reason"] == "partial_transport_failure"
+    assert mixed["state"] == "partial_transport_failure"
+    # With a candidate found the timeout changes nothing (relevance decides).
+    found = merge_market_snapshots([track(2, 0, 0, inflight_timeout_count=2),
+                                    track(2, 2, 0, candidate_count=3)])["status"]
+    assert found["empty_reason"] == "all_candidates_irrelevant"
+    irrelevant = merge_market_snapshots([{"markets": [], "status": {
+        "query_count": 3, "successful_query_count": 2, "transport_failure_count": 1, "candidate_count": 4}}])
+    assert irrelevant["status"]["empty_reason"] == "all_candidates_irrelevant"
+    # A track whose snapshot deadline ran out left queries unanswered: coverage is unknown.
+    unanswered = merge_market_snapshots([track(5, 2, 0, deadline_exhausted=1), track(2, 2, 0)])["status"]
+    assert unanswered["empty_reason"] == "partial_transport_failure"
+    assert unanswered["state"] == "partial_transport_failure" and unanswered["deadline_exhausted"] == 1
+    assert "deadline_exhausted" not in partial
 
 
 # ---------------------------------------------------------------- PM-1 market normalization enrich
@@ -1194,6 +1306,8 @@ def test_collector_preserves_report_vetted_tool_market_when_refresh_has_no_queri
     )
     monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(d, "score_market_relevance", lambda *_args, **_kwargs: {})
+    # TIME-3: pin the endDate clock to the capture day so the 2026-12-31 end never ages out.
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
     monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
     monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
 
@@ -1219,6 +1333,140 @@ def test_collector_preserves_report_vetted_tool_market_when_refresh_has_no_queri
     assert payload["status"]["empty_reason"] is None
     assert meta["prediction_markets_count"] == 1
     assert "Prediction Market Signals" in (tmp_path / d.REPORT_FILENAME).read_text(encoding="utf-8")
+
+
+def _collect_with_tool_and_refresh(tmp_path, monkeypatch, *, price_time, refresh=True):
+    """A tool call priced two markets at 00:00; the deterministic refresh at 06:00 re-priced
+    one of them. Returns prediction_markets.json's rows by market id."""
+    tool_only = {"market_id": "691340", "question": "AI bubble burst in 2026?",
+                 "implied_yes_prob": 0.1545, "volume": 2_310_000.0,
+                 "url": "https://polymarket.com/event/ai-bubble-burst-in-2026",
+                 "end_date": "2026-12-31T00:00:00Z"}
+    both = {"market_id": "777", "question": "AI capex cut in 2026?", "implied_yes_prob": 0.30,
+            "volume": 900_000.0, "url": "https://polymarket.com/event/ai-capex-cut",
+            "end_date": "2026-12-31T00:00:00Z"}
+    (tmp_path / d.PREDICTION_MARKET_CANDIDATES_FILENAME).write_text(json.dumps({
+        "captured_at": "2026-07-11T00:00:00Z", "queries": ["AI bubble 2026"],
+        "markets": [tool_only, both]}) + "\n", encoding="utf-8")
+
+    def _refresh_snapshot(queries, **kwargs):
+        kwargs["diagnostics"].update({"attempted_query_count": 1, "successful_query_count": 1,
+                                      "transport_failure_count": 0})
+        return [dict(both, implied_yes_prob=0.42)]
+
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["AI capex 2026"])
+    monkeypatch.setattr(d, "_pm_snapshot", _refresh_snapshot)
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {})
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
+    monkeypatch.setattr(d, "_utcnow", lambda: "2026-07-11T06:00:00+00:00")
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("MARKET_ANCHOR_PRICE_TIME", "true" if price_time else "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_REFRESH_WITH_TOOL_CANDIDATES", "true" if refresh else "false")
+
+    class Log:
+        def write(self, level, message):
+            pass
+
+    report = ("Polymarket market 691340 trades at 15.45%; see also "
+              "https://polymarket.com/event/ai-capex-cut.")
+    d._collect_prediction_markets(tmp_path, "Will the AI boom unwind in 2026?", report, {}, Log(),
+                                  model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    return {row["market_id"]: row for row in payload["markets"]}, payload
+
+
+def test_collector_records_each_rows_own_price_observation_time(tmp_path, monkeypatch):
+    """FU-11 (EVAL-6 open issue): a row the refresh re-priced is dated by the refresh, a
+    tool-only row by its tool call; both kept captured_at before, so they could not be told
+    apart and an anchor was dated only by the snapshot's later as_of."""
+    rows, payload = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=True)
+    assert rows["777"]["implied_yes_prob"] == 0.42
+    assert rows["777"]["observed_at"] == "2026-07-11T06:00:00+00:00"
+    assert rows["691340"]["observed_at"] == "2026-07-11T00:00:00Z"
+    assert rows["691340"]["captured_at"] == "2026-07-11T00:00:00Z"   # provenance unchanged
+    assert payload["as_of"] == "2026-07-11T06:00:00+00:00"
+
+
+def test_collector_without_refresh_dates_tool_rows_by_their_capture(tmp_path, monkeypatch):
+    """The default (no refresh beside tool candidates): every row is a tool row."""
+    rows, _ = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=True, refresh=False)
+    assert rows["777"]["implied_yes_prob"] == 0.30
+    assert {row["observed_at"] for row in rows.values()} == {"2026-07-11T00:00:00Z"}
+
+
+def test_collector_price_time_off_writes_no_observation_time(tmp_path, monkeypatch):
+    rows, _ = _collect_with_tool_and_refresh(tmp_path, monkeypatch, price_time=False)
+    assert set(rows) == {"777", "691340"}
+    assert not any("observed_at" in row for row in rows.values())
+
+
+def test_collector_price_time_off_differs_only_by_the_observation_time(tmp_path, monkeypatch):
+    """Knob off: prediction_markets.json is the knob-on payload without observed_at."""
+    (tmp_path / "off").mkdir()
+    (tmp_path / "on").mkdir()
+    _, off = _collect_with_tool_and_refresh(tmp_path / "off", monkeypatch, price_time=False)
+    _, on = _collect_with_tool_and_refresh(tmp_path / "on", monkeypatch, price_time=True)
+    for row in on["markets"]:
+        row.pop("observed_at")
+    assert off == on
+
+
+def test_merged_snapshot_never_pairs_a_fresher_price_with_an_older_fetch_time():
+    """FU-11: the freshest track wins the price; a fetch time from an older track that the
+    fresher row does not carry is dropped, never kept beside the newer price."""
+    from app.services.pipeline_orchestrator import merge_market_snapshots
+    older = {"as_of": "2026-07-11T00:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.30, "observed_at": "2026-07-11T00:00:00Z"}]}
+    fresher = {"as_of": "2026-07-11T06:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.42}]}
+    (row,) = merge_market_snapshots([older, fresher])["markets"]
+    assert row["implied_yes_prob"] == 0.42 and "observed_at" not in row
+    stamped = {"as_of": "2026-07-11T06:00:00Z", "markets": [
+        {"market_id": "777", "implied_yes_prob": 0.42, "observed_at": "2026-07-11T05:59:00Z"}]}
+    (row,) = merge_market_snapshots([older, stamped])["markets"]
+    assert (row["implied_yes_prob"], row["observed_at"]) == (0.42, "2026-07-11T05:59:00Z")
+
+
+@pytest.mark.parametrize("price_time", [True, False])
+def test_collector_dates_horizon_degraded_rows_by_their_fetch(tmp_path, monkeypatch, price_time):
+    """FU-11: a row found by the horizon-degradation retry is dated by that retry's fetch."""
+    row = {"market_id": "888", "question": "TSMC market share above 60%?", "implied_yes_prob": 0.2,
+           "volume": 500_000.0, "url": "https://polymarket.com/event/tsmc-share",
+           "end_date": "2026-12-31T00:00:00Z"}
+    calls = []
+
+    def _snapshot(queries, **kwargs):
+        calls.append(list(queries))
+        kwargs["diagnostics"].update({"attempted_query_count": 1, "successful_query_count": 1,
+                                      "transport_failure_count": 0})
+        return [] if len(calls) == 1 else [dict(row)]
+
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["TSMC market share 2030"])
+    monkeypatch.setattr(d, "_pm_snapshot", _snapshot)
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {"888": 9.0})  # 0-10 scale
+    monkeypatch.setattr(d, "_pm_now", lambda: datetime(2026, 7, 11, tzinfo=timezone.utc))
+    monkeypatch.setattr(d, "_utcnow", lambda: "2026-07-11T06:00:00+00:00")
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_HORIZON_RETRY", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_MIN_RELEVANCE", "5")
+    monkeypatch.setenv("MARKET_ANCHOR_PRICE_TIME", "true" if price_time else "false")
+
+    class Log:
+        def write(self, level, message):
+            pass
+
+    d._collect_prediction_markets(tmp_path, "Will TSMC hold over 60% share in 2030?", "", {}, Log(),
+                                  model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    assert payload.get("horizon_degraded") and len(calls) >= 2
+    (kept,) = payload["markets"]
+    assert kept["market_id"] == "888" and kept["horizon_degraded"] == payload["horizon_degraded"]
+    if price_time:
+        assert kept["observed_at"] == "2026-07-11T06:00:00+00:00"
+    else:
+        assert "observed_at" not in kept
 
 
 def test_bridge_fanout_suppressed_when_harness_delegation_is_active(monkeypatch):
@@ -1292,3 +1540,146 @@ def test_collect_price_history_fetches_yes_leg_not_index_zero(monkeypatch, tmp_p
     n = d._collect_market_price_history(Path(str(tmp_path)), markets, _Plog())
     assert calls == ["tok-yes"]
     assert n == 1
+
+
+# ---------------------------------------------------------------- TIME-3 endDate gate
+_TIME3_NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+_TIME3_AS_OF = "2026-10-01T12:00:00Z"
+
+
+def _time3_raw(mid, question, yes, end_date):
+    return {"id": mid, "question": question, "closed": False,
+            "outcomes": '["Yes","No"]',
+            "outcomePrices": json.dumps([str(yes), str(round(1 - yes, 4))]),
+            "volume": "50000", "liquidity": "1000", "endDate": end_date}
+
+
+class _Time3Log:
+    def __init__(self):
+        self.rows = []
+
+    def write(self, level, message):
+        self.rows.append((level, message))
+
+
+def _patch_time3_markets(monkeypatch, gate, grace_hours=None):
+    """Patch the network and pin the clocks over one active ladder event: child A's endDate
+    passed a day ago (still priced 3%), child B ends in 2027."""
+    event = {"title": "Fed rate cuts", "slug": "fed-rate-cuts", "markets": [
+        _time3_raw("A", "Will the Fed cut rates 3 times in 2026?", 0.03, "2026-09-30T12:00:00Z"),
+        _time3_raw("B", "Will the Fed cut rates 4 times by April 2027?", 0.62,
+                   "2027-04-19T12:00:00Z"),
+    ]}
+    monkeypatch.setattr(d, "_polymarket_get", lambda *_a, **_k: {"events": [event]})
+    monkeypatch.setattr(d, "_pm_resolve_queries", lambda *_a, **_k: ["Fed rate cuts"])
+    monkeypatch.setattr(d, "score_market_relevance", lambda *_a, **_k: {})
+    monkeypatch.setattr(d, "_PM_TRANSPORT_UNAVAILABLE", False)
+    monkeypatch.setattr(d, "_pm_now", lambda: _TIME3_NOW)
+    monkeypatch.setattr(d, "_utcnow", lambda: _TIME3_AS_OF)
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setenv("PREDICTION_MARKETS_PRICE_HISTORY", "false")
+    monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GATE", "true" if gate else "false")
+    if grace_hours is None:
+        monkeypatch.delenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", raising=False)
+    else:
+        monkeypatch.setenv("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", grace_hours)
+
+
+def _collect_time3(tmp_path, monkeypatch, gate, grace_hours=None):
+    """Run the collector over the patched ladder event (see _patch_time3_markets)."""
+    _patch_time3_markets(monkeypatch, gate, grace_hours)
+    log = _Time3Log()
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    d._collect_prediction_markets(
+        tmp_path, "How many times will the Fed cut rates by 2027?", "# Report\n\nBody.\n",
+        {}, log, model_name="test")
+    payload = json.loads((tmp_path / d.PREDICTION_MARKETS_FILENAME).read_text(encoding="utf-8"))
+    report = (tmp_path / d.REPORT_FILENAME).read_text(encoding="utf-8")
+    return payload, report, log
+
+
+def test_collector_stamps_expired_ladder_child_and_labels_section(tmp_path, monkeypatch):
+    payload, report, log = _collect_time3(tmp_path, monkeypatch, gate=True)
+    rows = {row["market_id"]: row for row in payload["markets"]}
+    assert set(rows) == {"A", "B"}  # stamped, never dropped: its price is still evidence
+    assert rows["A"]["window_ended"] is True
+    assert rows["A"]["window_ended_at"] == "2026-09-30T12:00:00+00:00"
+    assert "window_ended" not in rows["B"] and "window_ended_at" not in rows["B"]
+    assert payload["status"]["end_date_passed_count"] == 1
+    assert payload["status"]["selected_count"] == 2
+    assert ("Will the Fed cut rates 3 times in 2026? (A) — window ended 2026-09-30, "
+            "awaiting settlement |") in report
+    assert report.count("window ended") == 1
+    assert any(level == "warn" and "past their endDate" in msg for level, msg in log.rows)
+
+
+def test_collector_grace_hours_keep_a_just_ended_market_unstamped(tmp_path, monkeypatch):
+    # The forwarded grace (48h) covers child A's 24h-old endDate → nothing is stamped.
+    payload, report, _log = _collect_time3(tmp_path, monkeypatch, gate=True, grace_hours="48")
+    assert payload["status"]["end_date_passed_count"] == 0
+    assert all("window_ended" not in row for row in payload["markets"])
+    assert "window ended" not in report
+
+
+def test_collector_gate_off_writes_no_stamp_key_or_label(tmp_path, monkeypatch):
+    off_payload, off_report, _ = _collect_time3(tmp_path / "off", monkeypatch, gate=False)
+    assert "end_date_passed_count" not in off_payload["status"]
+    assert all("window_ended" not in row and "window_ended_at" not in row
+               for row in off_payload["markets"])
+    assert "window ended" not in off_report
+    # The gate is purely additive: removing its stamps, status key and labels from the
+    # gate-on artifacts yields exactly the gate-off (pre-gate) bytes.
+    on_payload, on_report, _ = _collect_time3(tmp_path / "on", monkeypatch, gate=True)
+    for row in on_payload["markets"]:
+        row.pop("window_ended", None)
+        row.pop("window_ended_at", None)
+    del on_payload["status"]["end_date_passed_count"]
+    assert on_payload == off_payload
+    assert on_report.replace(" — window ended 2026-09-30, awaiting settlement", "") == off_report
+
+
+_TIME3_QUESTION = "How many times will the Fed cut rates by 2027?"
+_TIME3_PRICING_LINE_A = ("- Will the Fed cut rates 3 times in 2026?: market prices YES at 3%, "
+                         "volume $50,000")
+_TIME3_LABEL = " — window ended 2026-09-30, awaiting settlement"
+
+
+def test_prepass_snapshot_stamps_expired_child_and_labels_pass0_and_extraction_input(
+        monkeypatch):
+    # Legacy-engine PM-4/INT-1 pre-pass: the same rows feed the pass-0 pricing block and the
+    # actor-extraction input, so an expired child must reach both labelled, never as live.
+    _patch_time3_markets(monkeypatch, gate=True)
+    monkeypatch.setattr(d, "_MARKET_PRICING_BLOCK", "")
+    log = _Time3Log()
+    rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", log)
+    by_id = {row["market_id"]: row for row in rows}
+    assert set(by_id) == {"A", "B"}  # stamped, never dropped
+    assert by_id["A"]["window_ended"] is True
+    assert by_id["A"]["window_ended_at"] == "2026-09-30T12:00:00+00:00"
+    assert "window_ended" not in by_id["B"]
+    assert any(level == "warn" and "pre-pass" in msg and "past their endDate" in msg
+               for level, msg in log.rows)
+    block = d._pm_render_pricing_block(rows, _TIME3_AS_OF)
+    assert _TIME3_PRICING_LINE_A + _TIME3_LABEL + "\n" in block + "\n"
+    assert block.count("window ended") == 1
+    d._set_market_pricing_block(block)
+    assert _TIME3_PRICING_LINE_A + _TIME3_LABEL in d.build_research_prompt(
+        _TIME3_QUESTION, "standard", None)
+    section = d._pm_render_section(rows, _TIME3_AS_OF)  # INT-1 extraction-input table
+    assert "Will the Fed cut rates 3 times in 2026? (A)" + _TIME3_LABEL + " |" in section
+
+
+def test_prepass_snapshot_gate_off_leaves_rows_and_pricing_block_unchanged(monkeypatch):
+    _patch_time3_markets(monkeypatch, gate=False)
+    off_log = _Time3Log()
+    off_rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", off_log)
+    assert {row["market_id"] for row in off_rows} == {"A", "B"}
+    assert all("window_ended" not in row and "window_ended_at" not in row for row in off_rows)
+    assert not any("past their endDate" in msg for _level, msg in off_log.rows)
+    off_block = d._pm_render_pricing_block(off_rows, _TIME3_AS_OF)
+    assert _TIME3_PRICING_LINE_A + "\n" in off_block + "\n"
+    assert "window ended" not in off_block
+    _patch_time3_markets(monkeypatch, gate=True)
+    on_rows = d._pm_initial_snapshot(_TIME3_QUESTION, "test", _Time3Log())
+    on_block = d._pm_render_pricing_block(on_rows, _TIME3_AS_OF)
+    assert on_block.replace(_TIME3_LABEL, "") == off_block  # the gate only adds the label

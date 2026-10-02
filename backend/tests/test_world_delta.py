@@ -112,3 +112,150 @@ def test_event_date_prefix_not_duplicated():
     ev = [{"date": "2027-03-15", "content": "[2027-03-15] Already prefixed event"}]
     out = build_world_delta([], ev)
     assert out == "[2027-03-15] Already prefixed event"
+
+
+# ================================================== SIM-6: sectioned caps (V2)
+_EVENTS_H = "### Scheduled events last period"
+_POSTS_H = "### Most-influential actor posts last period (peer claims, unverified)"
+
+
+def test_sectioned_emits_both_sections_then_momentum():
+    out = build_world_delta(_actions(), _events(),
+                            leader_move={"leader": "ScenarioA", "direction": "up"},
+                            sectioned=True)
+    assert out.split("\n") == [
+        _EVENTS_H,
+        "[2027-03-15] Regulator opens formal inquiry",
+        "[2027-03-20] Flagship model ships",
+        _POSTS_H,
+        "Alice: We commit to the merger.",
+        "Carol: Alliance announced with Dana.",
+        "Bob: We will wait and see.",
+        "Momentum: ScenarioA strengthened this period.",
+    ]
+    # the default arguments keep the legacy flat digest
+    assert build_world_delta(_actions(), _events()) == build_world_delta(
+        _actions(), _events(), sectioned=False)
+    assert "###" not in build_world_delta(_actions(), _events())
+
+
+def test_sectioned_skips_empty_sections_and_stays_empty_when_quiet():
+    only_posts = build_world_delta(_actions(), [], sectioned=True)
+    assert only_posts.startswith(_POSTS_H) and _EVENTS_H not in only_posts
+    only_events = build_world_delta([], _events(), sectioned=True)
+    assert only_events.startswith(_EVENTS_H) and _POSTS_H not in only_events
+    assert build_world_delta([], [], sectioned=True) == ""
+    assert build_world_delta(object(), 42, sectioned=True) == ""
+
+
+def test_sectioned_labels_scenario_injections():
+    events = [{"date": "2027-04-01", "content": "Export ban extended",
+               "is_scenario_injection": True},
+              {"date": "2027-04-02", "content": "[2027-04-02] Research event"}]
+    out = build_world_delta([], events, sectioned=True).split("\n")
+    assert out[1] == "SCENARIO ASSUMPTION (what-if, not observed): [2027-04-01] Export ban extended"
+    assert out[2] == "[2027-04-02] Research event"
+    legacy = build_world_delta([], events)
+    assert "SCENARIO ASSUMPTION" not in legacy       # legacy digest unchanged
+
+
+def test_sectioned_oversized_events_cannot_starve_posts_and_vice_versa():
+    big_events = [{"date": f"2027-03-{10 + i}", "content": "E" * 300} for i in range(6)]
+    big_posts = [{"actor_name": f"agent{i}", "influence_weight": 1.0 - i / 10,
+                  "content": "P" * 140} for i in range(5)]
+    lead = {"leader": "ScenarioA", "direction": "down"}
+    out = build_world_delta(big_posts, big_events, leader_move=lead, sectioned=True,
+                            event_char_cap=600, post_char_cap=400)
+    lines = out.split("\n")
+    ev = lines[lines.index(_EVENTS_H) + 1:lines.index(_POSTS_H)]
+    posts = lines[lines.index(_POSTS_H) + 1:-1]
+    # each section keeps whole lines within its own cap and names what it dropped
+    assert all(line.endswith("E" * 300) for line in ev[:-1]) and len(ev) - 1 == 1
+    assert ev[-1] == "(+5 more omitted)"
+    assert len("\n".join(ev)) <= 600
+    assert all(line.startswith("agent") and line.endswith("P" * 140) for line in posts[:-1])
+    assert posts[-1] == f"(+{5 - (len(posts) - 1)} more omitted)"
+    assert len("\n".join(posts)) <= 400 and len(posts) - 1 >= 1
+    # the momentum line survives both overflows and stays last
+    assert lines[-1] == "Momentum: ScenarioA weakened this period."
+    # a single event longer than its cap is cut with an explicit ending, posts intact
+    one = build_world_delta(big_posts[:1], [{"date": "2027-03-10", "content": "E" * 900}],
+                            sectioned=True, event_char_cap=600).split("\n")
+    assert one[0] == _EVENTS_H and one[2] == _POSTS_H
+    assert one[1].startswith("[2027-03-10] EEE") and one[1].endswith("E…(truncated)")
+    assert len(one[1]) <= 600
+
+
+def test_sectioned_marks_clipped_posts():
+    out = build_world_delta([{"actor_name": "A", "influence_weight": 1.0, "content": "x" * 500}],
+                            [], sectioned=True)
+    assert out == _POSTS_H + "\nA: " + "x" * 140 + "…"
+    short = build_world_delta([{"actor_name": "A", "content": "y" * 140}], [], sectioned=True)
+    assert short.endswith("A: " + "y" * 140)
+
+
+def test_sectioned_herding_guard_no_share_tokens():
+    leader_move = {"leader": "ScenarioA", "direction": "up",
+                   "share": 0.62, "leader_share": 0.62, "delta": 0.07, "pct": "62%"}
+    events = [{"date": "2027-03-15", "content": "E" * 700}]
+    posts = [{"actor_name": f"agent{i}", "influence_weight": 1.0, "content": "P" * 140}
+             for i in range(8)]
+    out = build_world_delta(posts, events, leader_move=leader_move, sectioned=True,
+                            event_char_cap=100, post_char_cap=300)
+    assert "%" not in out
+    assert not re.search(r"(?<!\d)0\.\d+", out)
+    assert "62" not in out and "0.07" not in out
+    momentum = [ln for ln in out.split("\n") if ln.startswith("Momentum")]
+    assert momentum == ["Momentum: ScenarioA strengthened this period."]
+    assert out.split("\n")[-1] == momentum[0]
+
+
+def test_sectioned_carried_events_get_their_own_section():
+    """Events carried out of a round that produced no digest are never presented as
+    last period's: own heading first, own cap; the flat layout ignores the tag."""
+    carried = {"date": "2027-01-10", "content": "Earlier event", "carried_from_round": 2}
+    events = [carried] + _events()
+    out = build_world_delta(_actions(), events, sectioned=True).split("\n")
+    assert out[:5] == [
+        "### Scheduled events from earlier periods (no digest was produced)",
+        "[2027-01-10] Earlier event",
+        _EVENTS_H,
+        "[2027-03-15] Regulator opens formal inquiry",
+        "[2027-03-20] Flagship model ships",
+    ]
+    assert out[5] == _POSTS_H
+    only_carried = build_world_delta([], [carried], sectioned=True)
+    assert only_carried == ("### Scheduled events from earlier periods (no digest was "
+                            "produced)\n[2027-01-10] Earlier event")
+    assert build_world_delta([], [carried]) == "[2027-01-10] Earlier event"
+    many = [dict(carried, content=f"Earlier event {i} " + "x" * 80) for i in range(10)]
+    capped = build_world_delta([], many + _events(), sectioned=True,
+                               event_char_cap=300).split("\n")
+    last = capped.index(_EVENTS_H)
+    assert capped[last - 1].startswith("(+") and capped[last - 1].endswith(" more omitted)")
+    assert capped[last + 1:] == ["[2027-03-15] Regulator opens formal inquiry",
+                                 "[2027-03-20] Flagship model ships"]
+
+
+def test_fit_whole_lines():
+    from app.services.world_delta import fit_whole_lines
+
+    def marker(n):
+        return f"(+{n} more omitted)"
+
+    lines = ["a" * 10, "b" * 10, "c" * 10]
+    assert fit_whole_lines(lines, 32, marker) == (lines, 0)           # fits exactly
+    kept, omitted = fit_whole_lines(lines, 31, marker)
+    assert (kept, omitted) == (lines[:1], 2)                          # a + "\n" + marker
+    assert len("\n".join(kept + [marker(omitted)])) <= 31
+    assert fit_whole_lines(lines, 5, marker) == ([], 3)
+    assert fit_whole_lines([], 0, marker) == ([], 0)
+    # a first line too long on its own is cut on a word boundary, never silently
+    long_lines = ["alpha beta gamma delta " * 10, "short"]
+    kept, omitted = fit_whole_lines(long_lines, 80, marker)
+    assert omitted == 1 and kept == ["alpha beta gamma delta alpha beta gamma delta…(truncated)"]
+    assert len("\n".join(kept + [marker(omitted)])) <= 80
+    kept, omitted = fit_whole_lines(["z" * 200], 60, marker)
+    assert (kept, omitted) == (["z" * 48 + "…(truncated)"], 0)
+    # too little room for a meaningful cut → dropped whole, the marker names it
+    assert fit_whole_lines(["z" * 200, "y"], 60, marker) == ([], 2)

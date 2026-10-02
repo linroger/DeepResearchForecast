@@ -20,11 +20,13 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.config import Config
+from app.services.binary_targets import threshold_ladder_audit
 from app.services.report_agent import (
-    ReportAgent, ReportManager, render_market_comparison_block,
+    ReportAgent, ReportManager, _nonfinite_nulled_artifact, render_market_comparison_block,
 )
 from app.services.forecast_extractor import (
     _binary_quality,
+    _binary_withheld_issue,
     _is_circular_market_forecast,
     build_market_comparison,
     reconcile_forecast_contract,
@@ -34,7 +36,10 @@ from app.services.forecast_extractor import (
 from app.services.report_lint import lint_report
 from app.services.report_visualizer import ReportVisualizer
 from app.utils.atomic import write_json_atomic, write_text_atomic
+from app.utils.logger import get_logger
+from app.utils.numeric import NonFiniteJSONError
 
+logger = get_logger("mirofish.backfill_report_visuals")
 
 DEFAULT_TARGETS = (
     ("pipe_f23527f7d903", "report_a03be154febc"),
@@ -75,6 +80,28 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return None
+
+
+def _write_forecast_artifact(path: Path, obj: Any, *, record_quality: bool = False) -> Any:
+    """Write forecast.json or market_comparison.json; returns the object written.
+
+    INFRA-4 (ARTIFACT_STRICT_JSON, default on): like the live report writer, never write NaN or
+    Infinity. A non-finite leaf is logged and set to null in a copy (``obj`` is not mutated);
+    with ``record_quality`` (forecast.json) its JSON path joins quality.nonfinite_nulled.
+    Finite content is written byte for byte as before; off, the legacy write.
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        write_json_atomic(str(path), obj)
+        return obj
+    try:
+        write_json_atomic(str(path), obj, allow_nan=False)
+        return obj
+    except NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        write_json_atomic(str(path), cleaned, allow_nan=False)
+        logger.error(f"{path.name}: {exc}; written as standard JSON "
+                     f"({len(paths)} non-finite value(s) set to null)")
+        return cleaned
 
 
 def _read_text(path: Path) -> str:
@@ -301,7 +328,9 @@ def synchronize_market_comparison(
     standalone = report_dir / "market_comparison.json"
     if comparison.get("comparisons"):
         forecast["market_comparison"] = comparison
-        write_json_atomic(str(standalone), comparison)
+        # INFRA-4: the embedded copy keeps a non-finite value until forecast.json is written,
+        # which nulls it and records its path.
+        _write_forecast_artifact(standalone, comparison)
         return comparison
     forecast.pop("market_comparison", None)
     try:
@@ -309,6 +338,40 @@ def synchronize_market_comparison(
     except FileNotFoundError:
         pass
     return None
+
+
+def rebuild_binary_quality(
+        binaries: List[Dict[str, Any]], contract: Any, old_quality: Any) -> Dict[str, Any]:
+    """The binary_quality of a replayed forecast, rebuilt over the retained rows.
+
+    The scorecard is recomputed and carries the reconcile result; the extractor's
+    ensemble block is kept. A report written with FORECAST_BINARY_STRUCTURED_TARGET
+    (EVAL-14: its old block has ``threshold_ladder``, or a retained row still has a
+    validated ``target``) gets the threshold-ladder audit recomputed over the retained
+    rows, so a replay neither drops the audit nor keeps a removed rung in it.
+    """
+    old = old_quality if isinstance(old_quality, dict) else {}
+    quality = _binary_quality(binaries, min_count=10)
+    quality["proposition_consistency"] = contract
+    if isinstance(old.get("ensemble"), dict):
+        quality["ensemble"] = old["ensemble"]
+    if "threshold_ladder" in old or any(isinstance(row.get("target"), dict) for row in binaries):
+        quality["threshold_ladder"] = threshold_ladder_audit(binaries)
+    return quality
+
+
+def _report_completed_at(meta: Any) -> Optional[datetime]:
+    """When the report completed (meta.json ``completed_at``), in UTC; None when unknown.
+
+    A naive stamp is local time, as generate_report writes it (scripts/eval_bundle.py reads
+    it the same way)."""
+    stamp = meta.get("completed_at") if isinstance(meta, dict) else None
+    if not isinstance(stamp, str) or not stamp.strip():
+        return None
+    try:
+        return datetime.fromisoformat(stamp.strip()).astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 def _language(markdown: str, filename: str) -> str:
@@ -388,6 +451,56 @@ def _offline_report_agent(
     return agent
 
 
+def _recorded_market_rows(snapshot: Any, previous: Any) -> List[Dict[str, Any]]:
+    """The markets the run's previous figure_provenance.json recorded, as handoff snapshot
+    rows (their question anchors the check) carrying the recorded prices and stamps."""
+    recorded: Dict[str, Dict[str, Any]] = {}
+    for row in (previous.get("market_rows") or []) if isinstance(previous, dict) else []:
+        if isinstance(row, dict) and str(row.get("market_id") or "").strip():
+            recorded.setdefault(str(row["market_id"]).strip(), row)
+    markets = snapshot.get("markets") if isinstance(snapshot, dict) else snapshot
+    rows: List[Dict[str, Any]] = []
+    for market in markets if isinstance(markets, list) else []:
+        prior = recorded.get(str(market.get("market_id") or "").strip()) if isinstance(market, dict) else None
+        if prior is not None:
+            rows.append(dict(market, **{key: prior.get(key) for key in
+                                        ("implied_yes_prob", "price_at_research", "quoted_at", "snapshot_as_of")}))
+    return rows
+
+
+def _attach_verified_figure_inputs(agent: ReportAgent, artifacts: Dict[str, Any], report_dir: Path) -> None:
+    """REPORT-9: the live run's inputs of the shadow verified-figure check, so the re-audit
+    measures the replayed bytes instead of dropping the run's quality.verified_figures and
+    figure_provenance.json (the shadow data an enforcement decision needs).
+
+    The verified-figures block and its excluded rows are rebuilt from the handoff as the
+    report built them (research quantitative rows, sources, research report, the actors'
+    as-of date; RESEARCH-5's observe-only projection-attribution audit reads the same
+    rows).  The report re-quoted its markets live, which an offline replay cannot redo:
+    the market rows are the handoff snapshot's markets that the previous
+    figure_provenance.json recorded, with the prices it recorded, and none without such a
+    record (a research-time price would read a re-quoted one as a market conflict).  Call
+    it only after every Markdown repair: market rows change what the stabilizer's
+    quantitative grounding keeps.  Never raises; with no block the re-audit records
+    nothing and the sidecar is removed, as before.  With REPORT_VERIFIED_FIGURES_CHECK
+    off it rebuilds nothing: the agent keeps the state the replay gave it, so the
+    re-audit (RESEARCH-5's projection attribution included) is the one it was before
+    REPORT-9."""
+    if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+        return
+    try:
+        quantitative = artifacts.get("quantitative")
+        actors = artifacts.get("actors")
+        agent.quantitative = quantitative if isinstance(quantitative, list) and quantitative else None
+        agent.actors = actors if isinstance(actors, dict) else None
+        agent._prediction_markets = _recorded_market_rows(
+            artifacts.get("prediction_markets"), _read_json(report_dir / "figure_provenance.json"))
+        if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            agent._build_verified_figures_block()
+    except Exception as exc:  # noqa: BLE001 — shadow inputs only; the audit runs regardless
+        logger.warning(f"verified-figure check inputs not rebuilt (shadow record dropped): {exc}")
+
+
 def _backup(report_dir: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = report_dir / f".codex-backup-{stamp}"
@@ -398,7 +511,7 @@ def _backup(report_dir: Path) -> Path:
         shutil.copy2(path, backup / path.name)
     for name in (
             "meta.json", "forecast.json", "market_comparison.json",
-            "viz_manifest.json", "pdf_export.json"):
+            "viz_manifest.json", "pdf_export.json", "figure_provenance.json"):
         path = report_dir / name
         if path.exists():
             shutil.copy2(path, backup / name)
@@ -422,7 +535,7 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
                 path.unlink()
     for name in (
         "meta.json", "forecast.json", "market_comparison.json",
-        "viz_manifest.json", "pdf_export.json",
+        "viz_manifest.json", "pdf_export.json", "figure_provenance.json",
     ):
         path = report_dir / name
         if path.exists() or path.is_symlink():
@@ -440,6 +553,92 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
             shutil.copy2(path, report_dir / path.name)
     if (backup / "charts").is_dir():
         shutil.copytree(backup / "charts", charts, symlinks=True)
+
+
+# FU-1 (EVAL-10 open issue): the scorecard lines _binary_quality writes, which the
+# backfill rebuilds from the retained rows. The withheld line is rebuilt from
+# needs_review_count, the provenance line from the recounted downgrades and the ensemble
+# line from the binary ids it names that are still retained; every other stored issue
+# line is carried in its stored order.
+_SCORE_ISSUE_RES = tuple(re.compile(pattern) for pattern in (
+    r"only \d+ binaries \(< \d+\)",
+    r"probability spread too low \(stdev -?[0-9.]+\) — hedging",
+    r"\d+/\d+ forecasts in 0\.40-0\.60 — under-committed",
+    r"fewer than 3 high-conviction calls \(p>=0\.70 or <=0\.30\)",
+    r"only \d+/\d+ have objective metric\+number\+date criteria",
+    r"all forecasts share a single theme — no thematic spread",
+))
+_WITHHELD_ISSUE_RE = re.compile(r"\d+ binary probabilities unreadable — withheld, not clamped")
+_PROVENANCE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) claimed a simulation signal that was never injected into the prompt "
+    r"— source downgraded to research-prior \(see source_claimed\)")
+# Groups: the spread threshold as written, then the comma-separated binary ids.
+_ENSEMBLE_ISSUE_RE = re.compile(
+    r"\d+ forecast\(s\) show cross-model disagreement \(spread > ([^\s)]+)\): (.+)")
+
+
+def _provenance_issue(count: int) -> str:
+    """The extractor's provenance-downgrade issue line (forecast_extractor wording)."""
+    return (f"{count} forecast(s) claimed a simulation signal that was never "
+            "injected into the prompt — source downgraded to research-prior (see source_claimed)")
+
+
+def _ensemble_issue(ids: List[str], spread_threshold: str) -> str:
+    """The extractor's cross-model disagreement issue line (forecast_extractor wording)."""
+    return (f"{len(ids)} forecast(s) show cross-model disagreement "
+            f"(spread > {spread_threshold}): {', '.join(ids)}")
+
+
+def carry_binary_quality(old_quality: Dict[str, Any], quality: Dict[str, Any],
+                         retained: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """``quality`` (the scorecard rebuilt from ``retained``) completed from the stored
+    ``old_quality`` (FU-1): every key the rebuild does not produce is kept as stored
+    (world_state_outcome, needs_review_*, market_window_ended_excluded and the other
+    extractor-only keys do not depend on which published rows remain), except
+    ``ensemble``, which the caller keeps only when it is a dict (as before FU-1), and
+    ``provenance_downgrades``, which is recounted from the retained rows (rows the
+    extractor downgraded carry ``source_claimed``).  Issue lines: the withheld line
+    first (as the extractor and ReportAgent order it), the rebuilt scorecard lines,
+    then the stored lines that are not scorecard lines in their stored order, the
+    provenance line restated with the recounted number (dropped at zero; written after
+    the scorecard lines, where the extractor puts it, when a non-zero count has no
+    stored line), the ensemble line restated without the ids of rows that are no
+    longer retained (dropped when none remains; the ``ensemble`` block itself, which
+    the Part-1 footnote reads, stays as stored).  Only a list of stored issue lines is
+    read.  Mutates and returns ``quality``."""
+    for key, value in old_quality.items():
+        if key not in ("issues", "ensemble") and key not in quality:
+            quality[key] = value
+    downgrades: Optional[int] = None
+    if "provenance_downgrades" in old_quality:
+        downgrades = sum(1 for row in retained if "source_claimed" in row)
+        quality["provenance_downgrades"] = downgrades
+    retained_ids = {str(row.get("id") or "").strip() for row in retained}
+    issues = quality.setdefault("issues", [])
+    if quality.get("needs_review_count"):
+        issues.insert(0, _binary_withheld_issue(quality["needs_review_count"]))
+    scorecard_end = len(issues)
+    provenance_stored = False
+    stored_issues = old_quality.get("issues")
+    for line in stored_issues if isinstance(stored_issues, list) else []:
+        if not isinstance(line, str):
+            continue
+        disagreement = _ENSEMBLE_ISSUE_RE.fullmatch(line)
+        if _PROVENANCE_ISSUE_RE.fullmatch(line) and downgrades is not None:
+            provenance_stored = True
+            line = _provenance_issue(downgrades) if downgrades else ""
+        elif _WITHHELD_ISSUE_RE.fullmatch(line) or any(r.fullmatch(line) for r in _SCORE_ISSUE_RES):
+            continue
+        elif disagreement:
+            named = disagreement.group(2).split(", ")
+            kept = [bid for bid in named if bid in retained_ids]
+            if kept != named:
+                line = _ensemble_issue(kept, disagreement.group(1)) if kept else ""
+        if line and line not in issues:
+            issues.append(line)
+    if downgrades and not provenance_stored:
+        issues.insert(scorecard_end, _provenance_issue(downgrades))
+    return quality
 
 
 def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict[str, Any]:
@@ -489,17 +688,19 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         ]
         old_quality = forecast_obj.get("binary_quality") if isinstance(
             forecast_obj.get("binary_quality"), dict) else {}
-        quality = _binary_quality(retained, min_count=10)
-        quality["proposition_consistency"] = contract
-        if isinstance(old_quality.get("ensemble"), dict):
-            quality["ensemble"] = old_quality["ensemble"]
-        forecast_obj["binary_quality"] = quality
+        # The rebuild recomputes the scorecard and (EVAL-14) the threshold-ladder audit;
+        # carry only fills the keys the rebuild did not produce (FU-1), so a stale
+        # stored ladder never overrides the recomputed one.
+        quality = rebuild_binary_quality(retained, contract, old_quality)
+        forecast_obj["binary_quality"] = carry_binary_quality(old_quality, quality, retained)
         # Always rebuild/remove both comparison copies. This repairs a stale
         # partial backfill even after the offending circular binary was already
         # removed by an earlier attempt.
         synchronize_market_comparison(report_dir, forecast_obj)
         scenario_label_change = ensure_baseline_scenario_label(forecast_obj)
-        write_json_atomic(str(report_dir / "forecast.json"), forecast_obj)
+        # INFRA-4: keep rendering what was written (non-finite leaves nulled).
+        forecast_obj = artifacts["forecast"] = _write_forecast_artifact(
+            report_dir / "forecast.json", forecast_obj, record_quality=True)
     manifest = ReportVisualizer().build_all(report_id, str(report_dir), artifacts)
     sources = artifacts.get("sources") or []
     main_lint: Optional[Dict[str, Any]] = None
@@ -524,10 +725,16 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if isinstance(forecast_obj, dict):
         binary_block = render_binary_forecasts_block(
             forecast_obj, language=primary_language)
+        # FU-5: window-ended labels are judged at the report's own completion time, never
+        # the replay day; when that time is unknown only the stamps saved with the report
+        # count, so replaying the same artifacts always writes the same bytes.
+        completed_at = _report_completed_at(_read_json(report_dir / "meta.json"))
         market_block = render_market_comparison_block(
             forecast_obj,
             markets=artifacts.get("prediction_markets") or [],
             lang=primary_language,
+            now=completed_at,
+            restamp=completed_at is not None,
         )
         if market_block:
             binary_block = binary_block + "\n\n" + market_block
@@ -558,7 +765,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     forecast = _read_json(forecast_path)
     if isinstance(forecast, dict) and main_lint:
         forecast.setdefault("quality", {})["lint"] = main_lint
-        write_json_atomic(str(forecast_path), forecast)
+        forecast = _write_forecast_artifact(forecast_path, forecast, record_quality=True)
     meta_path = report_dir / "meta.json"
     meta = _read_json(meta_path)
     if not isinstance(meta, dict):
@@ -574,8 +781,12 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if main_markdown and main_agent is not None:
         main_agent._forecast_spine = (
             forecast if isinstance(forecast, dict) else forecast_obj)
+        _attach_verified_figure_inputs(main_agent, artifacts, report_dir)
         final_audit = main_agent._enforce_final_publish_audit(
             report_id, _Report(main_markdown))
+        # REPORT-9: the shadow figure_provenance.json describes the re-audited bytes,
+        # or is removed when this agent measured nothing (no verified-figures block).
+        main_agent._write_figure_provenance(report_id, _Report(main_markdown))
 
     primary_citations = _read_json(report_dir / "citations.json")
     primary_citations = primary_citations if isinstance(primary_citations, dict) else {}

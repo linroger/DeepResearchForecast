@@ -34,16 +34,24 @@ community 工具函数——因此行为与直接在 config 里选那个 provide
 * **LOOP-007 —— 跨进程预算**：编排器提供 RESEARCH_BUDGET_DB 后，每次工具调用先计 attempt；
   正缓存 miss 后才原子占用 global/lane 网络额度。exact 空结果只放行一次重试，随后在 10 分钟
   TTL 内稳定抑制。账本故障 fail-open，并写 research_budget.json degraded 遥测。
+* **RESEARCH-2 —— 类型化来源结果**（RESEARCH_SOURCE_TAXONOMY，缺省关）：开启时 Firecrawl
+  错误 JSON 在原 "error" 之外追加 failure_class（not_configured / unavailable / budget）、
+  provider、reason；DDG 的 "No results found" 标注 empty_unconfirmed（可能是故障而非真空）。
+  后端替换（configured→ddg）与 Firecrawl 每进程调用上限的拒绝总是记入进程内 provider_events()。
+  关 = 输出逐字节不变。
 """
 
 from __future__ import annotations
 
+import copy
+import datetime
 import hashlib
 import json
 import logging
 import os
 import random
 import re
+import threading
 import time
 from typing import Any, Optional
 
@@ -88,7 +96,86 @@ _firecrawl_ceiling_warned = False  # 越线只 warn 一次，不逐调用刷屏
 DEFAULT_FIRECRAWL_CALLS_PER_MINUTE = 8
 DEFAULT_FIRECRAWL_SEARCH_MAX_RETRIES = 4
 _FIRECRAWL_RETRY_AFTER_RE = re.compile(r"retry after (\d+)\s*s", re.IGNORECASE)
+# TIME-8: the only as-of spelling a provider date bound is built from.
+_CANONICAL_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# TIME-8: HTTP statuses of a request body Firecrawl rejects; a date-bounded search
+# answered with one is retried once without its tbs bound.
+_FIRECRAWL_DATE_BOUND_REJECTED_STATUSES = frozenset({400, 422})
+_firecrawl_date_bound_rejected = False  # 本进程 Firecrawl 已拒绝过 tbs：后续回测搜索不再设界
 _firecrawl_window: list[float] = []  # 本进程最近 60s 内发出请求的 monotonic 时间戳
+
+# —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
+# Firecrawl 401/402 = credential/quota refusal: no later search in this run can
+# succeed, so the v3 tool layer latches it instead of retrying every query.
+_FIRECRAWL_NOT_CONFIGURED_STATUSES = frozenset({401, 402})
+_TAXONOMY_TRUTHY = frozenset({"1", "true", "yes", "on"})
+# Process-local provider events ("substitution:<configured>->ddg" and
+# "ceiling:firecrawl", one per search the per-run call ceiling refused -> count).
+# Always recorded; linear_research reads them only with the taxonomy on.
+_PROVIDER_EVENTS: dict[str, int] = {}
+_PROVIDER_EVENTS_LOCK = threading.Lock()
+
+
+def _source_taxonomy_on() -> bool:
+    """RESEARCH_SOURCE_TAXONOMY (default off; the orchestrator forwards Config's value)."""
+    return os.environ.get("RESEARCH_SOURCE_TAXONOMY", "").strip().lower() in _TAXONOMY_TRUTHY
+
+
+def _source_dates_on() -> bool:
+    """RESEARCH_SOURCE_DATES (TIME-2, default off; the orchestrator forwards
+    Config's value to the v3 child): Firecrawl search rows keep their date."""
+    return os.environ.get("RESEARCH_SOURCE_DATES", "").strip().lower() in _TAXONOMY_TRUTHY
+
+
+# Firecrawl search row fields that may carry the result's date (TIME-2), in order.
+_FIRECRAWL_ROW_DATE_KEYS = ("publishedDate", "published_date", "date")
+
+
+def _search_cache_provider(provider: str) -> str:
+    """The provider part of the search disk-cache key: Firecrawl rows cached
+    with RESEARCH_SOURCE_DATES on carry ``published`` (TIME-2), so they get their
+    own entries and a flag-off run never reads them (flag-off keys unchanged)."""
+    return f"{provider}+dates" if provider == "firecrawl" and _source_dates_on() else provider
+
+
+def _firecrawl_row_date(row: dict) -> str:
+    """The first non-empty date field of a Firecrawl search row, as text ("" when none)."""
+    for key in _FIRECRAWL_ROW_DATE_KEYS:
+        value = row.get(key)
+        if value is None or isinstance(value, (bool, dict, list)):
+            continue
+        text = str(value).strip()
+        if text:
+            return text[:80]
+    return ""
+
+
+def _record_provider_event(name: str) -> None:
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS[name] = _PROVIDER_EVENTS.get(name, 0) + 1
+
+
+def provider_events() -> dict[str, int]:
+    """Snapshot (deep copy) of this process's search provider events."""
+    with _PROVIDER_EVENTS_LOCK:
+        return copy.deepcopy(_PROVIDER_EVENTS)
+
+
+def reset_provider_events() -> None:
+    """Forget this process's search provider events (a new process starts empty)."""
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS.clear()
+
+
+def _firecrawl_error(error: str, query: str, failure_class: str, reason: str) -> str:
+    """Firecrawl's legacy ``{"error", "query"}`` envelope; with the taxonomy on,
+    also its failure_class, provider and reason (legacy keys first, unchanged)."""
+    payload: dict[str, Any] = {"error": error, "query": query}
+    if _source_taxonomy_on():
+        payload.update({"failure_class": failure_class, "provider": "firecrawl",
+                        "reason": reason})
+    return json.dumps(payload, ensure_ascii=False)
+
 
 # ---------------------------------------------------------------------------
 # WAVE9 —— web_search 结果磁盘缓存（镜像 cached_fetch.py 的模式，自包含不 import 桥）。
@@ -152,9 +239,23 @@ def _normalize_query(query: Any) -> str:
     return _WS_RE.sub(" ", str(query or "").strip()).lower()
 
 
-def _search_cache_key(provider: str, query: str, max_results: int) -> str:
-    """(provider, 归一化 query, max_results) → sha256 hexdigest（稳定、文件名安全）。"""
-    raw = f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
+def _as_of_key_suffix(as_of: Optional[str], provider_bound: bool = True) -> str:
+    """TIME-8: the key suffix of a search run for a hindcast as-of date
+    ("" for a live search, so every live key keeps its old formula); a search
+    that asked for no provider date bound is keyed apart from a bounded one."""
+    if not as_of:
+        return ""
+    return f"\nasof:{as_of}" if provider_bound else f"\nasof:{as_of}:unbounded"
+
+
+def _search_cache_key(provider: str, query: str, max_results: int, as_of: Optional[str] = None,
+                      provider_bound: bool = True) -> str:
+    """(provider, 归一化 query, max_results[, as_of]) → sha256 hexdigest（稳定、文件名安全）。
+
+    TIME-8: a search for a hindcast as-of date gets its own entries (its rows may
+    be provider-bounded), so a hindcast never reads a live entry and vice versa."""
+    raw = (f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
+           f"{_as_of_key_suffix(as_of, provider_bound)}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -245,6 +346,43 @@ def _filter_denied_search_results(result: Any) -> str:
             obj = filtered
     return (json.dumps(obj, ensure_ascii=False, sort_keys=True)
             if changed else text)
+
+
+def _mark_unconfirmed_empty(result: str) -> str:
+    """Annotate the community DDG tool's ``{"error": "No results found", ...}``.
+
+    The DDG tool swallows every engine error (throttling included) into the
+    same payload as a genuine empty result, so the payload proves nothing
+    about absence: add ``empty_unconfirmed`` and ``provider`` (other keys kept).
+    Such payloads carry "error", so they are neither negative- nor disk-cached.
+    """
+    try:
+        obj = json.loads(result)
+    except (TypeError, ValueError):
+        return result
+    if not isinstance(obj, dict):
+        return result
+    if not str(obj.get("error") or "").casefold().startswith("no results"):
+        return result
+    return json.dumps({**obj, "empty_unconfirmed": True, "provider": "ddg"},
+                      ensure_ascii=False)
+
+
+def _mark_date_unbounded(result: str) -> str:
+    """TIME-8: stamp ``"date_bound": "unsupported"`` on a successful result of a
+    backend that cannot bound a search by date (Serper / Tavily / DDG), so the
+    v3 tool layer counts it as unbounded.  A top-level result list becomes
+    ``{"results": [...]}`` (the shape the tool layer reads either way); error
+    envelopes and non-JSON text are returned unchanged."""
+    try:
+        obj = json.loads(result)
+    except (TypeError, ValueError):
+        return result
+    if isinstance(obj, list):
+        obj = {"results": obj}
+    if not isinstance(obj, dict) or obj.get("error"):
+        return result
+    return json.dumps({**obj, "date_bound": "unsupported"}, ensure_ascii=False)
 
 
 def _budget_denial(tool: str, reason: str, request: str) -> str:
@@ -432,16 +570,68 @@ def _firecrawl_throttle() -> None:
     _firecrawl_window.append(now)
 
 
-def _firecrawl_search(query: str, max_results: int) -> str:
+def _firecrawl_date_bound(as_of: Optional[str]) -> str:
+    """TIME-8: the Firecrawl v2 /search ``tbs`` value bounding results to on or
+    before ``as_of`` (canonical YYYY-MM-DD): Google's custom date range with
+    only an upper bound, ``cdr:1,cd_max:M/D/YYYY`` (US order, not ISO; the
+    v2 ``tbs`` field and this syntax are those firecrawl-py 4.23's v2 search
+    tests accept, e.g. ``cdr:1,cd_min:1/1/2024,cd_max:12/31/2024``).  ""
+    when ``as_of`` is not a canonical date (the search then runs unbounded)."""
+    text = str(as_of or "").strip()
+    if not _CANONICAL_DAY_RE.fullmatch(text):
+        return ""
+    try:
+        day = datetime.date.fromisoformat(text)
+    except ValueError:
+        return ""
+    return f"cdr:1,cd_max:{day.month}/{day.day}/{day.year}"
+
+
+def _firecrawl_post(httpx: Any, endpoint: str, api_key: str, request: dict[str, Any], timeout: float) -> Any:
+    """One Firecrawl /search POST (throttled), retried on HTTP 429 with backoff; returns the response."""
+    max_retries = _firecrawl_search_max_retries()
+    attempt = 0
+    while True:
+        _firecrawl_throttle()
+        with httpx.Client(timeout=timeout, trust_env=True) as client:
+            response = client.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=request,
+            )
+        if response.status_code != 429 or attempt >= max_retries:
+            return response
+        # 429：优先信 body 里的 "please retry after Ns" 提示，缺省退避 5s×2^n + 抖动。
+        hint = 5.0 * (2 ** attempt)
+        m = _FIRECRAWL_RETRY_AFTER_RE.search(response.text or "")
+        if m:
+            hint = float(m.group(1)) + 1.0
+        backoff = min(hint + random.uniform(0.0, 2.0), 70.0)
+        logger.warning(
+            "search_tools: Firecrawl /search 429（第 %d/%d 次重试，退避 %.1fs）",
+            attempt + 1, max_retries, backoff)
+        attempt += 1
+        time.sleep(backoff)
+
+
+def _firecrawl_search(query: str, max_results: int, as_of: Optional[str] = None) -> str:
     """Firecrawl v2 /search 直连实现，输出与 community 工具同形的 JSON 字符串。
 
-    成功 → {"query", "total_results", "results":[{title,url,content}]}；真实空结果 →
+    成功 → {"query", "total_results", "results":[{title,url,content}]}（RESEARCH_SOURCE_DATES 开时，
+    带日期字段的行另有 published）；TIME-8 ``as_of``（回测日期）→ 请求体加 ``tbs``
+    （:func:`_firecrawl_date_bound`），成功结果另有 ``"date_bound": "provider"``，
+    as_of 不可解析时为 ``"unsupported"``（不加 tbs）；带 tbs 的请求被拒（HTTP 400/422）时去掉 tbs
+    重试一次、结果标 ``"unsupported"``，重试成功则本进程后续不再设界（provider 事件
+    ``date_bound_rejected:firecrawl``）；无 as_of 时请求与输出逐字节不变。真实空结果 →
     total_results=0 + results=[]（可被负缓存抑制重复空查询）；传输/HTTP 错误 →
     {"error", "query"}（不负缓存，交由上层按瞬态处理）。绝不抛异常、绝不回显凭据。
     花费护栏：limit 被 RESEARCH_FIRECRAWL_SEARCH_LIMIT 钳制（按条计费）；进程内计费调用
     数达上限后直接返回瞬态 {"error"} 形状（不触网、不负缓存），越线只 warn 一次。
     """
-    global _firecrawl_search_calls, _firecrawl_ceiling_warned
+    global _firecrawl_search_calls, _firecrawl_ceiling_warned, _firecrawl_date_bound_rejected
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
     q = str(query or "").strip()
     ceiling = _firecrawl_search_call_ceiling()
@@ -451,10 +641,10 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             logger.warning(
                 "search_tools: Firecrawl 本进程 search 计费调用已达上限 %d，"
                 "后续搜索直接返回瞬态错误（不再产生 Firecrawl 费用）", ceiling)
-        return json.dumps(
-            {"error": f"firecrawl search per-run call ceiling reached ({ceiling})",
-             "query": q},
-            ensure_ascii=False)
+        _record_provider_event("ceiling:firecrawl")
+        return _firecrawl_error(
+            f"firecrawl search per-run call ceiling reached ({ceiling})", q,
+            "budget", "per_run_call_ceiling")
     try:
         import httpx
 
@@ -464,67 +654,65 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             "FIRECRAWL_SEARCH_API_URL", "https://api.firecrawl.dev/v2/search"
         ).strip() or "https://api.firecrawl.dev/v2/search"
         limit = max(1, min(int(max_results), _firecrawl_search_limit_cap()))
+        request: dict[str, Any] = {"query": q, "limit": limit, "sources": ["web"]}
+        date_bound = (_firecrawl_date_bound(as_of)
+                      if as_of and not _firecrawl_date_bound_rejected else "")
+        if date_bound:
+            request["tbs"] = date_bound
         _firecrawl_search_calls += 1  # 计在发出请求前：HTTP 4xx/5xx 同样可能计费
-        max_retries = _firecrawl_search_max_retries()
-        attempt = 0
-        while True:
-            _firecrawl_throttle()
-            with httpx.Client(timeout=timeout, trust_env=True) as client:
-                response = client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "query": q,
-                        "limit": limit,
-                        "sources": ["web"],
-                    },
-                )
-            if response.status_code != 429 or attempt >= max_retries:
-                break
-            # 429：优先信 body 里的 "please retry after Ns" 提示，缺省退避 5s×2^n + 抖动。
-            hint = 5.0 * (2 ** attempt)
-            m = _FIRECRAWL_RETRY_AFTER_RE.search(response.text or "")
-            if m:
-                hint = float(m.group(1)) + 1.0
-            backoff = min(hint + random.uniform(0.0, 2.0), 70.0)
-            logger.warning(
-                "search_tools: Firecrawl /search 429（第 %d/%d 次重试，退避 %.1fs）",
-                attempt + 1, max_retries, backoff)
-            attempt += 1
-            time.sleep(backoff)
+        response = _firecrawl_post(httpx, endpoint, api_key, request, timeout)
+        if (date_bound and response.status_code in _FIRECRAWL_DATE_BOUND_REJECTED_STATUSES
+                and not (ceiling > 0 and _firecrawl_search_calls >= ceiling)):
+            # TIME-8: the provider date bound is an enhancement (the v3 row gate is the
+            # honesty check), so a request the provider rejects is retried once without
+            # it; when that succeeds the bound is off for the rest of the process.
+            request = {key: value for key, value in request.items() if key != "tbs"}
+            date_bound = ""
+            _firecrawl_search_calls += 1
+            response = _firecrawl_post(httpx, endpoint, api_key, request, timeout)
+            if response.status_code < 400:
+                _firecrawl_date_bound_rejected = True
+                logger.warning("search_tools: Firecrawl /search 拒绝日期上界 tbs；本进程后续回测搜索不再设界"
+                               "（逐行日期闸门照常执行）")
+                _record_provider_event("date_bound_rejected:firecrawl")
         if response.status_code >= 400:
-            return json.dumps(
-                {"error": f"firecrawl search HTTP {response.status_code}",
-                 "query": q},
-                ensure_ascii=False)
+            status = response.status_code
+            return _firecrawl_error(
+                f"firecrawl search HTTP {status}", q,
+                "not_configured" if status in _FIRECRAWL_NOT_CONFIGURED_STATUSES
+                else "unavailable",
+                f"http_{status}")
         payload = response.json()
         data = payload.get("data") if isinstance(payload, dict) else None
         # v2 按 source 分组（{"web":[...]}）；容忍 v1 风格的裸列表。
         rows = data.get("web") if isinstance(data, dict) else data
         results = []
+        keep_dates = _source_dates_on()
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
                 continue
             url = str(row.get("url") or "").strip()
             if not url:
                 continue
-            results.append({
+            result = {
                 "title": str(row.get("title") or "").strip() or url,
                 "url": url,
                 "content": str(row.get("description") or row.get("snippet")
                                or "").strip(),
-            })
-        return json.dumps(
-            {"query": q, "total_results": len(results), "results": results},
-            ensure_ascii=False)
+            }
+            published = _firecrawl_row_date(row) if keep_dates else ""
+            if published:
+                # TIME-2: the provider's date becomes the ledger row's rank-1 date.
+                result["published"] = published
+            results.append(result)
+        body: dict[str, Any] = {"query": q, "total_results": len(results), "results": results}
+        if as_of:
+            body["date_bound"] = "provider" if date_bound else "unsupported"
+        return json.dumps(body, ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001 — 不回显异常正文（可能含 bearer 头）
-        return json.dumps(
-            {"error": f"firecrawl search failed: {type(exc).__name__}",
-             "query": q},
-            ensure_ascii=False)
+        return _firecrawl_error(
+            f"firecrawl search failed: {type(exc).__name__}", q,
+            "unavailable", type(exc).__name__)
 
 
 def _load_search_module(provider: str) -> Optional[Any]:
@@ -565,6 +753,8 @@ def web_search_impl(
     query: str,
     max_results: int = DEFAULT_MAX_RESULTS,
     revisit_reason: str = "",
+    as_of: Optional[str] = None,
+    provider_bound: bool = True,
 ) -> str:
     """纯逻辑入口：选后端 → 查缓存 → 委派 → 落缓存 → 返回结果字符串。任何内部错误 → 带说明的空结果，绝不抛。
 
@@ -572,8 +762,16 @@ def web_search_impl(
     连 DDG 也不可用则返回空结果 JSON（与 community 工具的「无结果」形状一致）。
     WAVE9：委派前后各加一层短 TTL 磁盘缓存（键含**实际使用**的 provider，回退 DDG 时按 ddg 记）；
     缓存关闭（TTL<=0）或 query 归一化后为空时绕过正缓存；LOOP-007 预算仍独立生效。
+    TIME-8 ``as_of``（点时回测的 YYYY-MM-DD，缺省 None = 实时搜索，逐字节不变）：磁盘缓存键与
+    research_budget exact_key 追加 ``asof:<as_of>``（回测条目与实时条目互不命中）；Firecrawl 以
+    ``tbs`` 做提供方日期上界并标 ``"date_bound": "provider"``，其它后端无法设界，成功结果标
+    ``"date_bound": "unsupported"``（日期闸门仍在 v3 工具层逐行执行）。``provider_bound=False``
+    （PIT_PROVIDER_DATE_BOUNDS 关）：仍按 as_of 隔离缓存键（``asof:<as_of>:unbounded``），但不发 tbs，
+    成功结果标 ``"unsupported"``。
     """
+    as_of = str(as_of).strip() if as_of is not None else ""
     provider = _select_search_provider()
+    configured = provider
     if _research_budget is not None:
         attempt = _research_budget.admit_attempt("search")
         if not attempt.allowed:
@@ -594,16 +792,22 @@ def web_search_impl(
         if tool_obj is None:
             return json.dumps({"error": "no web_search backend available", "query": query},
                               ensure_ascii=False)
+    if provider != configured:
+        # RESEARCH-2: a silent substitution is visible to the engine's health events.
+        _record_provider_event(f"substitution:{configured}->{provider}")
     # Provider fallback changes the actual request identity; negative-cache the
     # delegate that was really used, just like the positive disk-cache key.
-    exact_key = f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
+    exact_key = (f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
+                 f"{_as_of_key_suffix(as_of, provider_bound)}")
     # WAVE9：缓存读——TTL<=0（关闭）或空 query 时完全绕过；缓存层异常绝不阻断搜索。
     _ttl = _search_ttl_seconds()
     _cache_path_str = ""
     if _ttl > 0 and _normalize_query(query):
         try:
             _root = _search_cache_root()
-            _cache_path_str = _search_cache_path(_root, _search_cache_key(provider, query, max_results))
+            _cache_path_str = _search_cache_path(
+                _root, _search_cache_key(_search_cache_provider(provider), query, max_results, as_of,
+                                         provider_bound))
             hit = _read_search_cache(_cache_path_str, _ttl)
             if hit is not None:
                 hit = _filter_denied_search_results(hit)
@@ -683,11 +887,19 @@ def web_search_impl(
             return _budget_denial("web_search", network.reason, query)
 
     try:
-        result = (_firecrawl_search(query, max_results)
-                  if provider == "firecrawl"
-                  else _call_delegate(tool_obj, query, max_results))
+        bounded = bool(as_of) and provider_bound and provider == "firecrawl"
+        if bounded:
+            result = _firecrawl_search(query, max_results, as_of=as_of)
+        elif provider == "firecrawl":
+            result = _firecrawl_search(query, max_results)
+        else:
+            result = _call_delegate(tool_obj, query, max_results)
         result = result if isinstance(result, str) else str(result)
         result = _filter_denied_search_results(result)
+        if provider == "ddg" and _source_taxonomy_on():
+            result = _mark_unconfirmed_empty(result)
+        if as_of and not bounded:
+            result = _mark_date_unbounded(result)
     except Exception as e:  # noqa: BLE001 — 工具层最后兜底：绝不向 agent 循环抛异常
         logger.warning("search_tools: 委派 %s 失败（降级为空结果）: %s", provider, e)
         if _research_budget is not None:

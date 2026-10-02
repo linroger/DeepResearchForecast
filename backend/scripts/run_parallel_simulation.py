@@ -121,17 +121,18 @@ _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
-from dotenv import load_dotenv
+# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）。INFRA-12：经 load_project_dotenv
+# 加载——行为同 load_dotenv(override=False)，但测试进程（DRF_TEST_PROCESS=1）在收集阶段
+# 导入本脚本时不再把开发者 .env 注入 pytest 进程。
+from app.utils.env_loading import load_project_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
-    load_dotenv(_env_file)
-    print(f"已加载环境配置: {_env_file}")
+    if load_project_dotenv(_env_file):
+        print(f"已加载环境配置: {_env_file}")
 else:
     # 尝试加载 backend/.env
     _backend_env = os.path.join(_backend_dir, '.env')
-    if os.path.exists(_backend_env):
-        load_dotenv(_backend_env)
+    if load_project_dotenv(_backend_env):
         print(f"已加载环境配置: {_backend_env}")
 
 
@@ -191,8 +192,6 @@ from action_logger import SimulationLogManager, PlatformActionLogger
 from app.utils.oasis_llm import create_oasis_model, get_oasis_semaphore
 
 try:
-    from camel.models import ModelFactory
-    from camel.types import ModelPlatformType
     import oasis
     from oasis import (
         ActionType,
@@ -203,7 +202,7 @@ try:
     )
 except ImportError as e:
     print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print("请先安装 camel-oasis（提供 oasis 模块）: cd backend && uv sync --python 3.12")
     sys.exit(1)
 
 
@@ -809,6 +808,24 @@ def _cfg_flag(name: str, default: str) -> str:
 
 def _flag_true(name: str, default: str) -> bool:
     return _cfg_flag(name, default).strip().lower() in ("true", "1", "yes", "on")
+
+
+def _event_provenance_enabled() -> bool:
+    """SIM-5 SIM_EVENT_PROVENANCE（默认开）：定时事件帖带来源前缀，回应阶段/立场轨迹/
+    决策名册不再把注入内容记作发帖行为者的行为。false → 旧行为逐字节一致。"""
+    return _flag_true("SIM_EVENT_PROVENANCE", "true")
+
+
+def _event_post_contents_for_run(event_config: Any) -> set:
+    """SIM-5：回应阶段识别事件帖用的帖文集合（与 fire_scheduled_events 同一标注助手生成）。
+    开关关 / 无定时事件 → 空集（回应阶段逐字节走旧路径）。"""
+    if not _event_provenance_enabled() or not isinstance(event_config, dict):
+        return set()
+    try:
+        from app.services.sim_event_provenance import event_post_contents
+        return event_post_contents(event_config.get("scheduled_events") or [], labelled=True)
+    except Exception:  # noqa: BLE001 — 附加层，失败只退回旧渲染，绝不中断模拟
+        return set()
 
 
 # IPC相关常量
@@ -1898,6 +1915,12 @@ def _build_dynamics_tracker(config, log_info):
         return None
 
 
+# SIM-5: {plat}_dynamics_summary.json 的 prompt_delivery——_inject_agent_dynamics 写的是
+# SYSTEM 记录，camel ScoreBasedContextCreator 只保留首条系统消息，状态行因此从未送达模型。
+# 改为 USER 投递（及把硬编码中文状态行本地化）是另一项所有者决策，这里只如实记录。
+_DYNAMICS_PROMPT_DELIVERY = "system_record_dropped_by_context_creator"
+
+
 def _inject_agent_dynamics(active_agents, tracker, log_info):
     """Append each active agent's current-state line as a fresh SYSTEM memory record
     for this round. astep() reads memory.get_context(), so the note becomes the
@@ -1937,9 +1960,35 @@ def _observe_agent_dynamics(tracker, actual_actions, name_to_id):
         pass
 
 
+# REPORT-6（SIM_ABSENCE_MARKERS，默认开）：世界时钟空段的具名占位。旧头部把"首轮"、
+# "上一时段平静"、"演化失败/未步进"、"本次运行不产出摘要"一律写成 "(first period)"——
+# 演化失败或 in-band 关闭时每轮都自称首轮，与 "round N/M" 矛盾；CONFIRMED EVENTS 空段
+# 的 "(none)" 又被读成"世界无事发生"。SIM-6：标记字符串与选择逻辑迁入
+# app.services.sim_period_context（唯一一份；render_delta_lines / render_event_lines），
+# herding guard 不变：这些标记不含任何数字与 "%"。
+
+
+def _stepped_delta_state(delta_text: str, digest_actions, fired_events, leader_move) -> str:
+    """REPORT-6: 步进成功的一轮，其摘要的来源状态（失败关闭）。有摘要 → stepped；摘要为空
+    且本轮确实无可报内容（无非空帖文、无非空到期事件、无领先者动量）→ quiet；摘要为空但
+    本轮有可报内容 → failed——build_world_delta 只在吞掉自身异常时才会如此，此时下一轮
+    绝不能向 agent 声称"上一时段无事发生"。判定口径与 build_world_delta 的取舍一致。"""
+    if str(delta_text or "").strip():
+        return "stepped"
+    has_posts = any(isinstance(a, dict) and str(a.get("content", "") or "").strip()
+                    for a in digest_actions or [])
+    has_events = any(isinstance(e, dict) and str(e.get("content", "") or "").strip()
+                     for e in fired_events or [])
+    if has_posts or has_events or leader_move is not None:
+        return "failed"
+    return "quiet"
+
+
 def _inject_period_context(env, active_ids, round_num, period, timeline,
                            fired_events, world_delta, response_step: bool = False,
-                           language: str = "") -> None:
+                           language: str = "", *, delta_state: Optional[str] = None,
+                           v2: bool = False, delta_stale_label: str = "",
+                           per_agent_suffix: Optional[Dict[Any, str]] = None) -> List[Any]:
     """CAL-TEMPORAL: env.step 前给每个活跃 agent 追加一条本轮「世界时钟」记忆。
 
     以 USER 角色写入（关键）：camel-ai 0.2.78 的 ScoreBasedContextCreator 只保留
@@ -1947,18 +1996,29 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
     写入的动态世界时钟根本到不了模型（实测 get_context() 丢弃）；改用 USER 角色则随
     环境消息一同送达（与 OASIS 把「你的环境：[帖子…]」作 USER 消息投喂同源），且
     update_memory 不清空跨轮记忆。头部含日历时段/轮次进度/预测判定日（spec §5 verbatim）；
-    CONFIRMED EVENTS 列出本轮已到期的日程事件；WHAT CHANGED LAST PERIOD 段由
-    SIM_WORLD_DELTA 开关控制（默认开），摘要为空（首轮 / in-band 演化未产出）时显示
-    "(first period)"。仅日历模式调用；全程 best-effort——无法构造/单个 agent 失败均静默
-    跳过，绝不中断轮循环。
+    事件段列出本轮已到期的日程事件；WHAT CHANGED LAST PERIOD 段由 SIM_WORLD_DELTA 开关
+    控制（默认开）。空段占位：delta_state 为 None 或 SIM_ABSENCE_MARKERS 关 → 旧文本逐字节
+    不变（事件空 "(none)"、摘要空 "(first period)"）；否则按 delta_state（in-band 演化器的
+    not_stepped/stepped/quiet/failed，或调用方的 no_inband）给出具名标记（REPORT-6，见
+    sim_period_context.render_delta_lines）。
+
+    SIM-6（v2=True，调用方按 SIM_PERIOD_CONTEXT_V2 传入）：框架行、回应阶段行与语言行不变；
+    事件段标题改为 SCHEDULED EVENTS THIS PERIOD（研究时间线上的预期事件，结果事先未知——
+    绝非"已确认"），情景注入事件前缀 SCENARIO ASSUMPTION；摘要来自更早时段时首行注明其覆盖
+    的时段（delta_stale_label）；per_agent_suffix[aid] 非空时空一行追加到该 agent 的记忆条
+    （漏报事件补报）。渲染出错 → 回落旧文本。v2=False → 旧文本逐字节不变。
+
+    返回成功注入的 agent id 列表（补报据此记"已告知"）。仅日历模式调用；全程
+    best-effort——无法构造/单个 agent 失败均静默跳过，绝不中断轮循环。
     """
     if not isinstance(period, dict) or not period:
-        return
+        return []
     try:
         from camel.messages import BaseMessage
         from camel.types import OpenAIBackendRole
+        from app.services import sim_period_context as _spc
     except Exception:
-        return
+        return []
     timeline = timeline if isinstance(timeline, dict) else {}
     label = str(period.get("label", "") or "")
     period_start = str(period.get("period_start", "") or "")
@@ -1971,19 +2031,24 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
         n_rounds = 0
     periods_remaining = max(0, n_rounds - (round_num + 1))
 
-    event_lines = []
-    for ev in fired_events or []:
-        if not isinstance(ev, dict):
-            continue
-        content = str(ev.get("content", "") or "").strip()
-        if not content:
-            continue
-        date = str(ev.get("date", "") or "").strip()
-        # 配置生成器在日历模式已给 content 加 "[{date}] " 前缀；未加前缀时这里补上
-        if date and not content.startswith("["):
-            content = f"[{date}] {content}"
-        event_lines.append(content)
-    events_block = "\n".join(event_lines) if event_lines else "(none)"
+    absence_markers = delta_state is not None and _flag_true("SIM_ABSENCE_MARKERS", "true")
+    delta = str(world_delta or "").strip()
+    # 旧文本（事件行：配置生成器在日历模式已给 content 加 "[{date}] " 前缀，未加时补上）
+    legacy = (_spc.LEGACY_EVENTS_HEADING,
+              _spc.render_event_lines(fired_events, markers=absence_markers,
+                                      scenario_labels=False),
+              _spc.render_delta_lines(delta, delta_state, round_num=round_num,
+                                      markers=absence_markers))
+    events_heading, event_lines, delta_lines = legacy
+    if v2:
+        try:
+            events_heading, event_lines, delta_lines = (
+                _spc.SCHEDULED_EVENTS_HEADING_V2,
+                _spc.render_event_lines(fired_events, markers=absence_markers),
+                _spc.render_delta_lines(delta, delta_state, round_num=round_num,
+                                        stale_label=delta_stale_label, markers=absence_markers))
+        except Exception:  # noqa: BLE001 — SIM-6 渲染出错 → 整段回落旧文本（degrade-safe）
+            events_heading, event_lines, delta_lines = legacy
 
     lines = [
         f"# WORLD CLOCK — {label} ({period_start} → {period_end}) | "
@@ -2000,24 +2065,131 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
                      "actors' posts, so use this action for your own move.")
     if language:
         lines.append(f"Write all of your posts and replies in {language}.")
-    lines += [
-        "## CONFIRMED EVENTS THIS PERIOD",
-        events_block,
-    ]
+    lines.append(events_heading)
+    lines += event_lines
     if _flag_true("SIM_WORLD_DELTA", "true"):
-        lines.append("## WHAT CHANGED LAST PERIOD")
-        lines.append(str(world_delta or "").strip() or "(first period)")
+        lines.append(_spc.WHAT_CHANGED_HEADING)
+        lines += delta_lines
     text = "\n".join(lines)
 
+    injected: List[Any] = []
     for aid in active_ids or []:
         try:
             agent = env.agent_graph.get_agent(aid)
-            note = BaseMessage.make_user_message(role_name="WorldClock", content=text)
+            suffix = (per_agent_suffix or {}).get(aid) or ""
+            note = BaseMessage.make_user_message(
+                role_name="WorldClock", content=f"{text}\n\n{suffix}" if suffix else text)
             # USER 角色（非 SYSTEM）：见 docstring——SYSTEM 记录会被 camel 的上下文构造器
             # 丢弃，只有 USER 记录能随环境送达模型。这是本特性真正落地的关键行。
             agent.update_memory(note, OpenAIBackendRole.USER)
+            injected.append(aid)
         except Exception:
             continue
+    return injected
+
+
+def _build_event_catchup(event_config, log_info):
+    """SIM-6: 漏报事件补报器（调用方仅在日历模式且 SIM_PERIOD_CONTEXT_V2 开时构建）。
+    SIM_EVENT_CATCHUP_MAX_CHARS 非法 → 默认 1200；构建失败 → None（不补报，模拟照跑）。"""
+    try:
+        from app.services.sim_period_context import EventCatchUp
+        try:
+            max_chars = int(_cfg_flag("SIM_EVENT_CATCHUP_MAX_CHARS", "1200"))
+        except ValueError:
+            max_chars = 1200
+        return EventCatchUp(event_config, max_chars)
+    except Exception as _cu_err:  # noqa: BLE001 — 附加层，失败只关补报
+        log_info(f"漏报事件补报初始化失败（不补报，不中断模拟）: {_cu_err}")
+        return None
+
+
+def _period_stale_label(world_delta: str, delta_round: int, round_num: int,
+                        round_periods: Dict[int, Dict[str, Any]]) -> str:
+    """SIM-6: 摘要落后于时钟时，它所覆盖时段的标签（"" = 无摘要或摘要正是上一时段的）。
+
+    摘要出自第 delta_round 轮（1 基）步进，覆盖 0 基轮次 delta_round-1 的时段；本轮（0 基
+    round_num）能拿到的最新摘要出自第 round_num 轮步进。0 < delta_round < round_num →
+    落后：上一时段是全平台死轮，或双平台水位错峰让较快的平台先拿到旧摘要。"""
+    try:
+        delta_round = int(delta_round or 0)
+    except (TypeError, ValueError):
+        return ""
+    if not str(world_delta or "").strip() or not 0 < delta_round < round_num:
+        return ""
+    period = round_periods.get(delta_round - 1)
+    label = str(period.get("label") or "").strip() if isinstance(period, dict) else ""
+    return label or f"round {delta_round}"
+
+
+def _reaction_period_context(due_events, world_delta: str, delta_state: str, round_num: int,
+                             stale_label: str) -> str:
+    """SIM-6: 回应阶段的辅助 agent 无状态（只带 system prompt），看不到世界时钟——给它本期
+    到期事件与上一时段变化的压缩版（整行封顶 ≤1200 字符）。与世界时钟同一渲染器与开关
+    （SIM_ABSENCE_MARKERS 占位措辞；SIM_WORLD_DELTA 关 → 无变化段）。"""
+    from app.services import sim_period_context as _spc
+    markers = _flag_true("SIM_ABSENCE_MARKERS", "true")
+    delta_lines: List[str] = []
+    if _flag_true("SIM_WORLD_DELTA", "true"):
+        delta_lines = _spc.render_delta_lines(world_delta, delta_state, round_num=round_num,
+                                              stale_label=stale_label, markers=markers)
+    return _spc.compact_period_context(_spc.render_event_lines(due_events, markers=markers),
+                                       delta_lines)
+
+
+def _world_clock_round(env, active_agents, round_num: int, period, timeline, event_config,
+                       world_delta: str, round_periods: Dict[int, Dict[str, Any]], inband_evo,
+                       catchup, reaction_state: Dict[str, Any], *, v2: bool,
+                       response_step: bool, language: str, log_info) -> None:
+    """一轮的世界时钟投递（Twitter/Reddit 两个孪生回路共用，保证两者同步）。
+
+    注入 WORLD CLOCK 记忆（_inject_period_context）；SIM-6（v2）另加：摘要落后标注、
+    漏报事件补报（catchup：本轮活跃者缺席过的事件轮，注入成功后记为已告知）、回应阶段的
+    本期上下文（reaction_state["period_context"]，每轮重算）。
+
+    v2 下摘要正文、所出轮号与来源状态在注入时一并重读：回路在上一轮末读到的摘要之后还
+    await 过 fire_scheduled_events（有到期事件时 env.step），双平台运行中另一平台可能已在
+    此间步进了缺失的一轮——重读拿到更新的摘要，落后标注与占位状态也彼此一致（最多到上一
+    时段：本平台本轮尚未交付，演化器不会步进本轮）。v2=False → world_delta 用回路上一轮末
+    的读数，与旧回路逐字节相同的注入调用、无回应阶段上下文。
+
+    失败隔离：落后标注、补报块、回应阶段上下文各自出错只丢掉该附加部分（记日志），世界
+    时钟照常注入；补报块出错时本轮不记"已告知"（下次激活重补）。注入本身的异常上抛，由
+    回路既有的 try/except 记录并跳过。"""
+    reaction_state.pop("period_context", None)
+    due = _scheduled_events_due(event_config, round_num)
+    delta_round = 0
+    if v2 and inband_evo is not None:
+        world_delta = inband_evo.latest_delta()
+        delta_round = inband_evo.latest_delta_round()
+    delta_state = inband_evo.latest_delta_state() if inband_evo is not None else "no_inband"
+    stale = ""
+    if v2:
+        try:
+            stale = _period_stale_label(world_delta, delta_round, round_num, round_periods)
+        except Exception as _st_err:  # noqa: BLE001 — 附加标注，失败只省略落后说明
+            log_info(f"世界时钟摘要落后标注失败（省略该行，不中断模拟）: {_st_err}")
+    suffix = None
+    if catchup is not None:
+        try:
+            suffix = {aid: catchup.render(catchup.missed(aid, round_num))
+                      for aid, _ in active_agents}
+        except Exception as _cu_err:  # noqa: BLE001 — 附加块，失败只省略本轮补报
+            log_info(f"漏报事件补报渲染失败（本轮不补报，不中断模拟）: {_cu_err}")
+    briefed = _inject_period_context(
+        env, [aid for aid, _ in active_agents], round_num, period, timeline, due, world_delta,
+        response_step=response_step, language=language, delta_state=delta_state,
+        v2=v2, delta_stale_label=stale, per_agent_suffix=suffix,
+    )
+    if suffix is not None:
+        for aid in briefed:
+            catchup.mark_briefed(aid, round_num)
+    if v2 and response_step:
+        try:
+            reaction_state["period_context"] = _reaction_period_context(
+                due, world_delta, delta_state, round_num, stale)
+        except Exception as _rc_err:  # noqa: BLE001 — 辅助 agent 退回无本期上下文的旧提示
+            log_info(f"回应阶段本期上下文生成失败（辅助 agent 不带本期上下文，不中断模拟）: "
+                     f"{_rc_err}")
 
 
 # ============================================================================
@@ -2059,6 +2231,12 @@ _SIM_LLM_USAGE: Dict[str, Any] = {
 }
 # main() 钉定、__main__ 的 finally 消费：任何退出路径都能写终版快照。
 _SIM_LLM_TELEMETRY_SINK: Dict[str, Any] = {"dir": None, "config": None}
+# INFRA-8 (RECORD_MODEL_PROVENANCE): requested model -> {calls, served: {id: calls}} of the
+# direct camel calls (OpenAI-compatible OASIS agents), whose response.model is the id the
+# provider reported serving. Synthetic completions ('chatcmpl-cli-': the CLI bridge and the
+# LLMClient failover) are not counted here: those calls went through LLMClient, which counts
+# them with their own requested label and served id in this process's LLMMeter.
+_SIM_DIRECT_MODEL_RESOLUTION: Dict[str, Dict[str, Any]] = {}
 
 
 def _record_sim_llm_usage(source: str, model: str,
@@ -2094,23 +2272,38 @@ def _record_sim_llm_error() -> None:
         pass
 
 
-def _accumulate_sim_llm_response(response: Any) -> None:
+def _record_sim_direct_model(requested_model: Any, served_model: Any) -> None:
+    """INFRA-8: count one direct camel call under the model it requested, with the id the
+    provider reported serving it (thread-safe, never raises)."""
+    try:
+        from app.utils.model_provenance import count_served
+        label = str(getattr(requested_model, "value", requested_model) or "").strip() or "unknown"
+        with _SIM_LLM_USAGE_LOCK:
+            entry = _SIM_DIRECT_MODEL_RESOLUTION.setdefault(label, {"calls": 0, "served": {}})
+            entry["calls"] += 1
+            count_served(entry["served"], served_model)
+    except Exception:  # noqa: BLE001 — 出处记录绝不影响调用路径
+        pass
+
+
+def _accumulate_sim_llm_response(response: Any, requested_model: Any = None) -> None:
     """从一次 chat-completion 响应提取 usage 并入账（degrade-safe）。
 
     oasis_llm._build_chat_completion 伪造的估算响应 id 恒以 'chatcmpl-cli-' 开头
     （CLI 桥接与 LLMClient 回退路径）→ source='estimate'；其余带 usage 的响应视为
-    提供方真实值 → source='provider'；无 usage → source='missing'（token 记 0）。"""
+    提供方真实值 → source='provider'；无 usage → source='missing'（token 记 0）。
+    INFRA-8: ``requested_model`` (the camel backend's model_type) given, a real provider
+    response is also counted under it with its served id (_record_sim_direct_model)."""
     try:
         model = str(getattr(response, "model", "") or "unknown")
+        synthetic = str(getattr(response, "id", "") or "").startswith("chatcmpl-cli-")
+        if requested_model is not None and not synthetic:
+            _record_sim_direct_model(requested_model, getattr(response, "model", None))
         usage = getattr(response, "usage", None)
         if usage is None:
             _record_sim_llm_usage("missing", model, 0, 0)
             return
-        source = (
-            "estimate"
-            if str(getattr(response, "id", "") or "").startswith("chatcmpl-cli-")
-            else "provider"
-        )
+        source = "estimate" if synthetic else "provider"
         _record_sim_llm_usage(
             source, model,
             getattr(usage, "prompt_tokens", 0),
@@ -2120,15 +2313,34 @@ def _accumulate_sim_llm_response(response: Any) -> None:
         pass
 
 
+def _last_provider_usage(client: Any) -> Any:
+    """本线程上 client 最近一次调用的提供方真实 usage；无则 None。
+
+    INFRA-2：优先读 INFRA-1 的逐调用元数据 last_call_meta()（线程本地，按客户端归属；仅
+    usage_source='provider' 算精确值）；不提供该接口或返回 None 的客户端回退旧的 _last_usage。"""
+    meta_of = getattr(client, "last_call_meta", None)
+    try:
+        meta = meta_of() if callable(meta_of) else None
+    except Exception:  # noqa: BLE001 — 元数据读取失败 → 回退 _last_usage
+        meta = None
+    if isinstance(meta, dict):
+        return meta.get("usage") if meta.get("usage_source") == "provider" else None
+    return getattr(client, "_last_usage", None)
+
+
 def _wrap_llm_client_usage(client: Any) -> Any:
     """DEFECT-3: 包装决策通道 / in-band 演化所用 LLMClient 的 chat/chat_json。
 
     这两条路径不经 camel 模型边界，其 LLMMeter 记录只活在子进程内存里。精确 usage
-    （client._last_usage，OpenAI 兼容直连路径填充）→ source='provider'；CLI 提供方
-    无精确 usage → 按文本长度估算 → source='estimate'。包装失败原样返回 client。"""
+    （_last_provider_usage：逐调用元数据，OpenAI 兼容直连路径填充）→ source='provider'；
+    CLI 提供方无精确 usage → 按文本长度估算 → source='estimate'。包装失败原样返回 client。
+
+    INFRA-2：真实 LLMClient 的 chat_json 经 self.chat 发出每次请求（含修复轮），而实例上的
+    chat 已被包装、逐次入账——再包 chat_json 会把同一调用记两遍，故对 LLMClient 实例只包 chat。"""
     if client is None:
         return client
     try:
+        from app.utils.llm_client import LLMClient
         from app.utils.oasis_llm import _estimate_tokens_of
 
         def _wrap_method(name: str) -> None:
@@ -2148,7 +2360,7 @@ def _wrap_llm_client_usage(client: Any) -> Any:
                         or getattr(client, "provider", "")
                         or "unknown"
                     )
-                    usage = getattr(client, "_last_usage", None)
+                    usage = _last_provider_usage(client)
                     if isinstance(usage, dict) and (
                         usage.get("prompt_tokens") or usage.get("completion_tokens")
                     ):
@@ -2170,10 +2382,34 @@ def _wrap_llm_client_usage(client: Any) -> Any:
             setattr(client, name, _wrapped)
 
         _wrap_method("chat")
-        _wrap_method("chat_json")
+        if not isinstance(client, LLMClient):
+            _wrap_method("chat_json")
     except Exception:  # noqa: BLE001 — 包装失败 → 该路径放弃计量，不阻断
         pass
     return client
+
+
+def _sim_model_resolution(provider: str) -> Dict[str, Dict[str, Any]]:
+    """INFRA-8: ``{'provider:requested label': {calls, served}}`` of this simulation.
+
+    The direct camel calls, labelled for the simulation ``provider``
+    (model_provenance.effective_model_label), plus every LLMClient call this process metered
+    (LLMMeter ``model_resolution``, all stages merged): the CLI bridge, the failover path, the
+    decision channel and in-band evolution, each under the label its transport requested.
+    """
+    from app.utils.model_provenance import effective_model_label, merge_resolution_entries
+    from app.utils.telemetry import LLMMeter
+
+    with _SIM_LLM_USAGE_LOCK:
+        direct = {label: {"calls": entry["calls"], "served": dict(entry["served"])}
+                  for label, entry in _SIM_DIRECT_MODEL_RESOLUTION.items()}
+    out: Dict[str, Dict[str, Any]] = {}
+    for label, entry in direct.items():
+        merge_resolution_entries(out, {f"{provider}:{effective_model_label(provider, label)}": entry})
+    metered = LLMMeter.snapshot().get("model_resolution")
+    for stage_entries in (metered.values() if isinstance(metered, dict) else ()):
+        merge_resolution_entries(out, stage_entries)
+    return out
 
 
 def _write_sim_llm_telemetry(simulation_dir: str,
@@ -2217,6 +2453,11 @@ def _write_sim_llm_telemetry(simulation_dir: str,
             "wall_s": round(max(0.0, time.time() - _SIM_LLM_METER_STARTED), 3),
             "written_at": datetime.now().isoformat(),
         }
+        if _flag_true("RECORD_MODEL_PROVENANCE", "true"):
+            try:
+                payload["model_resolution"] = _sim_model_resolution(str(provider or "unknown"))
+            except Exception:  # noqa: BLE001 — 出处缺失不影响 token 快照落盘
+                pass
         write_json_atomic(
             os.path.join(simulation_dir, SIM_LLM_TELEMETRY_FILE), payload)
         if log_info:
@@ -2245,7 +2486,8 @@ def _wrap_model_llm_counter(model) -> Dict[str, int]:
                     _record_sim_llm_error()
                     raise
                 # DEFECT-3: 逐调用累计 usage（真实/估算按来源分桶）；纯附加，绝不抛出。
-                _accumulate_sim_llm_response(result)
+                # INFRA-8: 同时按请求模型记下提供方自报的服务模型。
+                _accumulate_sim_llm_response(result, getattr(model, "model_type", None))
                 return result
             model._arequest_chat_completion = _acounted
         else:
@@ -2259,7 +2501,7 @@ def _wrap_model_llm_counter(model) -> Dict[str, int]:
                     counter["errors"] += 1
                     _record_sim_llm_error()
                     raise
-                _accumulate_sim_llm_response(result)  # DEFECT-3（同上）
+                _accumulate_sim_llm_response(result, getattr(model, "model_type", None))  # DEFECT-3/INFRA-8（同上）
                 return result
             model._request_chat_completion = _counted
     except Exception:  # noqa: BLE001 — 遥测是附加物，绝不阻断模型创建
@@ -2533,34 +2775,53 @@ async def fire_scheduled_events(env, event_config, loop_round, agent_names, acti
 
     复用 initial_posts 的注入路径（matched poster → ManualAction(CREATE_POST)）。无匹配事件 → 0。
     返回成功触发的事件数。
+
+    SIM-5：同一发帖者同轮多个事件按列表累积（此前按 agent 覆盖，只发出最后一条却全部计数）；
+    缺发帖者/内容或发帖者不可用的事件逐条记日志（此前静默丢弃）——两者不受开关影响。
+    SIM_EVENT_PROVENANCE 开（默认）→ 发帖与落账内容带来源前缀，落账 action_args 附 event_provenance。
     """
     events = event_config.get("scheduled_events", []) or []
     due = [e for e in events if int(e.get("round", -1)) == loop_round]
     if not due:
         return 0
-    actions = {}
+    provenance_on = _event_provenance_enabled()
+    if provenance_on:
+        from app.services.sim_event_provenance import classify_event, label_event_post
+    actions: Dict[Any, List[Any]] = {}
     fired = 0
     for ev in due:
         agent_id = ev.get("poster_agent_id")
         content = str(ev.get("content", "") or "")
         if agent_id is None or not content:
+            log_info(
+                f"第 {loop_round + 1} 轮定时事件缺{'发帖者' if agent_id is None else '内容'}，"
+                f"跳过: {_truncate_text(content or ev.get('date') or '', 80)!r}"
+            )
             continue
+        logged_args: Dict[str, Any] = {"content": content, "is_scheduled_event": True}
+        if provenance_on:
+            provenance = classify_event(ev)
+            content = label_event_post(content, provenance)
+            logged_args = {"content": content, "is_scheduled_event": True,
+                           "event_provenance": provenance}
         try:
             agent = env.agent_graph.get_agent(agent_id)
-            actions[agent] = ManualAction(
+            actions.setdefault(agent, []).append(ManualAction(
                 action_type=ActionType.CREATE_POST,
                 action_args={"content": content},
-            )
+            ))
             if action_logger:
                 action_logger.log_action(
                     round_num=loop_round + 1,
                     agent_id=agent_id,
                     agent_name=(agent_names or {}).get(agent_id, f"Agent_{agent_id}"),
                     action_type="CREATE_POST",
-                    action_args={"content": content, "is_scheduled_event": True},
+                    action_args=logged_args,
                 )
             fired += 1
-        except Exception:
+        except Exception as e:  # noqa: BLE001 — 如发帖者不在 agent 图中（裁剪/重编号）
+            log_info(f"第 {loop_round + 1} 轮定时事件（发帖者 {agent_id}）注入失败，跳过: "
+                     f"{type(e).__name__}: {e}")
             continue
     if actions:
         try:
@@ -2586,6 +2847,39 @@ def _scheduled_events_due(event_config, loop_round) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _posthoc_decision_events(config: Any, round_dates: Any) -> Dict[str, Any]:
+    """SIM-8：post-hoc 决策通道日历回退的附加关键字——各时段日程事件
+    ``{"events_by_round": {1 基 runtime 轮号: [事件…]}}``，elicitor 与 in-band 看到同一事件块。
+    仅当 SIM_DECISION_EVENTS 开且确有日历 round_dates 映射时构建；hours 模式 / 开关关 /
+    无可用事件 → {}（什么都不传，逐字节不变）。round 字段非法或为负的条目跳过（与
+    _scheduled_events_due 同一 round 匹配语义）。SIM_PERIOD_CONTEXT_V2 开（与 in-band 死轮
+    暂存同一开关）→ 另传 carry_unreplayed_events=True：动作日志里没有的轮次（全员缺席）的
+    事件并入下一回放轮并标"更早时段"，与 in-band 同口径。"""
+    if not round_dates or not _flag_true("SIM_DECISION_EVENTS", "true"):
+        return {}
+    event_config = config.get("event_config") if isinstance(config, dict) else None
+    scheduled = event_config.get("scheduled_events") if isinstance(event_config, dict) else None
+    if not isinstance(scheduled, list):
+        return {}
+    by_round: Dict[int, List[Dict[str, Any]]] = {}
+    for ev in scheduled:
+        if not isinstance(ev, dict):
+            continue
+        try:
+            loop_round = int(ev.get("round"))
+        except (TypeError, ValueError):
+            continue
+        if loop_round < 0:
+            continue
+        by_round.setdefault(loop_round + 1, []).append(ev)
+    if not by_round:
+        return {}
+    kwargs: Dict[str, Any] = {"events_by_round": by_round}
+    if _flag_true("SIM_PERIOD_CONTEXT_V2", "true"):
+        kwargs["carry_unreplayed_events"] = True
+    return kwargs
 
 
 def _resolve_total_rounds(config: Dict[str, Any], temporal_config: Dict[str, Any],
@@ -2846,8 +3140,15 @@ def _score_stance_trajectory(
         - trajectory: [{round, by_stance:{...发声量...}, net_sentiment}]
         - polarization_index: agent 级净情感分布的方差（[0,1] 量级，越大越极化）
         - net_sentiment_by_agent: agent_id -> 平均净情感（供互动比/社区主导立场使用）
+
+    SIM-5：SIM_EVENT_PROVENANCE 开（默认）→ 跳过注入行（round≤0 种子、定时事件回放、种子
+    动作、采样点赞），立场轨迹只反映行为者自发的发声。
     """
     from collections import defaultdict
+
+    skip_injected = _event_provenance_enabled()
+    if skip_injected:
+        from app.services.sim_event_provenance import is_injected_row
 
     per_round: Dict[int, Dict[str, Any]] = {}
     sent_sum_by_agent: Dict[int, float] = defaultdict(float)
@@ -2860,6 +3161,8 @@ def _score_stance_trajectory(
         agent_id = rec.get("agent_id")
         round_num = rec.get("round")
         if agent_id is None or round_num is None:
+            continue
+        if skip_injected and is_injected_row(rec.get("action_args"), round_num):
             continue
         agent_id = int(agent_id)
         round_num = int(round_num)
@@ -2912,12 +3215,22 @@ def _score_stance_trajectory(
 def _compute_interaction_ratio(
     conn: "sqlite3.Connection",
     stance_by_agent: Dict[int, str],
+    event_contents: Any = frozenset(),
 ) -> Dict[str, Any]:
     """跨立场 vs 同立场互动比。
 
     通过 follow（关注边）、post.original_post_id（转发/引用）、comment（回复）三类
     “agent→agent”边，按双方 stance 是否相同计数。比值 = 跨立场 / (同立场 + 跨立场)。
+
+    SIM-5：event_contents（_event_post_contents_for_run，开关关/无事件 → 空集）非空时，
+    目标帖是定时事件帖本身（原帖且正文 ∈ event_contents，与回应阶段同一判定）的转发/引用/
+    评论边不计——对新闻的反应不是与发帖账号的互动。对他人引用事件的帖子的评论照计（目标是
+    引用者）。空集 → 计数逐字节不变。
     """
+    def _is_event_post(original_post_id, content) -> bool:
+        return (bool(event_contents) and original_post_id is None
+                and str(content or "").strip() in event_contents)
+
     cursor = conn.cursor()
 
     # user_id -> agent_id -> stance
@@ -2958,11 +3271,13 @@ def _compute_interaction_ratio(
     # 转发/引用边：reposter -> 原帖作者
     try:
         cursor.execute(
-            "SELECT p.user_id, orig.user_id "
+            "SELECT p.user_id, orig.user_id, orig.original_post_id, orig.content "
             "FROM post p JOIN post orig ON p.original_post_id = orig.post_id "
             "WHERE p.original_post_id IS NOT NULL"
         )
-        for reposter, author in cursor.fetchall():
+        for reposter, author, orig_parent, orig_content in cursor.fetchall():
+            if _is_event_post(orig_parent, orig_content):
+                continue
             _tally(reposter, author)
     except sqlite3.Error:
         pass
@@ -2970,10 +3285,12 @@ def _compute_interaction_ratio(
     # 评论边：评论者 -> 被评论帖作者
     try:
         cursor.execute(
-            "SELECT c.user_id, p.user_id "
+            "SELECT c.user_id, p.user_id, p.original_post_id, p.content "
             "FROM comment c JOIN post p ON c.post_id = p.post_id"
         )
-        for commenter, author in cursor.fetchall():
+        for commenter, author, post_parent, post_content in cursor.fetchall():
+            if _is_event_post(post_parent, post_content):
+                continue
             _tally(commenter, author)
     except sqlite3.Error:
         pass
@@ -3160,7 +3477,9 @@ def compute_emergent_metrics(
     conn = None
     try:
         conn = sqlite3.connect(db_path)
-        interaction = _compute_interaction_ratio(conn, stance_by_agent)
+        interaction = _compute_interaction_ratio(
+            conn, stance_by_agent, _event_post_contents_for_run(config.get("event_config"))
+        )
         communities = _detect_follow_communities(conn, stance_by_agent, log_info)
         cascades = _compute_cascades(conn)
     except Exception as e:  # noqa: BLE001
@@ -3263,7 +3582,11 @@ class PlatformSimulation:
 # ============== NEXTSTEPS P1-1/P1-2/P1-4: post-sim decision channel helpers ==============
 def _read_actions_for_decision_channel(simulation_dir: str) -> List[Dict[str, Any]]:
     """读取两平台 actions.jsonl 的动作记录（跳过 round_start/end/sim_end 事件），
-    汇成 [{round, agent_id, agent_name}] 供决策通道按轮回放。失败/缺失 → []。"""
+    汇成 [{round, agent_id, agent_name}] 供决策通道按轮回放。失败/缺失 → []。
+
+    SIM-5：SIM_EVENT_PROVENANCE 开（默认）→ 跳过定时事件回放与采样点赞行（发帖账号/采样者
+    并未作出该动作），与 in-band 名册只见有机+回应动作一致。"""
+    skip_injected = _event_provenance_enabled()
     out: List[Dict[str, Any]] = []
     for plat in ("twitter", "reddit"):
         path = os.path.join(simulation_dir, plat, "actions.jsonl")
@@ -3281,6 +3604,11 @@ def _read_actions_for_decision_channel(simulation_dir: str) -> List[Dict[str, An
                         continue
                     if rec.get("event_type") or rec.get("agent_id") is None:
                         continue
+                    if skip_injected:
+                        _args = rec.get("action_args")
+                        if isinstance(_args, dict) and (_args.get("is_scheduled_event")
+                                                        or _args.get("is_engagement_sample")):
+                            continue
                     out.append({"round": rec.get("round", 0),
                                 "agent_id": rec.get("agent_id"),
                                 "agent_name": rec.get("agent_name", "")})
@@ -3380,8 +3708,10 @@ class _InbandWorldEvolution:
     def __init__(self, config: Dict[str, Any], simulation_dir: str,
                  expected_platforms: int, log_info) -> None:
         from app.services import decision_channel as _dc_mod
+        from app.services import decision_validation as _dv_mod
         from app.services.worldstate import WorldState
         self._dc = _dc_mod
+        self._dv = _dv_mod
         self._log = log_info
         self._dir = simulation_dir
         self._expected = max(1, int(expected_platforms or 1))
@@ -3430,13 +3760,33 @@ class _InbandWorldEvolution:
             row0["as_of"] = self._as_of_date  # spec §6: 第 0 行 as_of=as_of_date
         self._trajectory: List[Dict[str, Any]] = [row0]
         self._decisions: List[Dict[str, Any]] = []
+        # SIM-2：逐轮名册校验记录（elicit_round 写入 ctx["decision_validation"]；旧签名的
+        # elicit 替身不写 → 无记录、无新键、裁定不变）。只收已步进轮，收尾汇总成 fallback_share。
+        self._validation_records: List[Dict[str, Any]] = []
         self._watermark: Dict[str, int] = {}   # 平台 → 已交付/心跳的最高轮次（0 基）
         self._done: set = set()                # 已结束回路的平台
         self._pending: Dict[int, Dict[str, Any]] = {}  # 轮次 → 合并缓冲（等齐平台水位）
         self._delta_text = ""                  # 最近一次步进产出的定性摘要（喂下一轮头部）
+        # REPORT-6：最近一次摘要的来源状态（not_stepped / stepped / quiet / failed），与
+        # _delta_text 同步更新，让世界时钟区分"平静期"与"摘要不可用"；逐次计数收尾写入轨迹
+        # 附加键 delta_state_counts（SIM_ABSENCE_MARKERS 开时）。
+        self._delta_state = "not_stepped"
+        self._delta_state_counts: Dict[str, int] = {"stepped": 0, "quiet": 0, "failed": 0}
+        # SIM-6（SIM_PERIOD_CONTEXT_V2，默认开）：摘要分段封顶（不再静默截断）；最近一次成功
+        # 步进的轮号（1 基，0 = 尚未步进），世界时钟据此标注落后于时钟的摘要（死轮 / 双平台
+        # 水位错峰）；全平台死轮的到期事件暂存（轮次 → 事件），并入其后第一次成功步进的缓冲。
+        self._v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
+        self._delta_round = 0
+        self._carry_events: Dict[int, List[Dict[str, Any]]] = {}
+        # SIM-8（V2 开）：已步进但名册为空（交付了轮次却无可归属动作）的轮没有 elicit——其决策
+        # 上下文事件（带 carried_from_round）留给下一次 elicit；只进决策上下文，摘要不重复。
+        self._decision_carry: List[Dict[str, Any]] = []
         self._prev_date = self._as_of_date
         self._stepped = 0
         self._max_round = 0
+        # SIM-1：本进程见过的最高轮次（1 基，deliver/heartbeat 均计）。与 WorldState 实际
+        # 入账轮数之差 = 未入账轮（有损续跑前的轮次、全平台死轮），裁定时按 missing 计入分母。
+        self._max_seen_round = 0
         self._converged_at: Optional[int] = None
         self._stable_streak = 0
         self._finalized = False
@@ -3455,6 +3805,7 @@ class _InbandWorldEvolution:
         """交付某平台本轮（0 基）的有机动作与到期事件；凑齐全部平台水位后按轮序步进。
         内部全隔离：任何异常 → 告警 + 下一轮空摘要，绝不中断轮循环（spec §4）。"""
         try:
+            self._max_seen_round = max(self._max_seen_round, int(round_num) + 1)
             p = str(platform)
             buf = self._pending.get(round_num)
             if buf is None:
@@ -3465,34 +3816,69 @@ class _InbandWorldEvolution:
             for a in round_actions or []:
                 if isinstance(a, dict):
                     buf["actions"].append(a)
-            # 同一份日程事件配置在两平台各触发一次 → 按 (date, content) 去重
-            for ev in fired_events or []:
-                if not isinstance(ev, dict):
-                    continue
-                key = (str(ev.get("date", "") or ""), str(ev.get("content", "") or ""))
-                if key in buf["event_keys"]:
-                    continue
-                buf["event_keys"].add(key)
-                buf["events"].append(ev)
+            self._add_events(buf, fired_events)
             self._watermark[p] = max(self._watermark.get(p, -1), round_num)
             self._advance()
         except Exception as _e:  # noqa: BLE001
-            self._delta_text = ""
+            self._record_delta("", "failed")
             self._log(f"第 {round_num + 1} 轮 in-band 世界演化交付失败（已隔离，下一轮空摘要）: {_e}")
 
-    def heartbeat(self, platform: str, round_num: int) -> None:
+    def heartbeat(self, platform: str, round_num: int,
+                  fired_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """死轮/env.step 失败轮的水位推进（本平台本轮无动作可交付），
-        防止双平台按轮配对停摆。绝不抛异常。"""
+        防止双平台按轮配对停摆。绝不抛异常。
+
+        SIM-6（V2 开）：本轮到期事件照常上了 feed，不能随死轮消失——已有本轮缓冲（另一平台
+        已交付）→ 去重并入；否则暂存，由其后第一次成功步进并入摘要（单列"更早时段"段）与
+        决策上下文（不新增轨迹行）。"""
         try:
+            self._max_seen_round = max(self._max_seen_round, int(round_num) + 1)
+            if self._v2 and fired_events:
+                buf = self._pending.get(round_num)
+                if buf is not None:
+                    self._add_events(buf, fired_events)
+                else:
+                    self._carry_events.setdefault(round_num, []).extend(
+                        ev for ev in fired_events if isinstance(ev, dict))
             p = str(platform)
             self._watermark[p] = max(self._watermark.get(p, -1), round_num)
             self._advance()
         except Exception:  # noqa: BLE001
             pass
 
+    @staticmethod
+    def _add_events(buf: Dict[str, Any], events) -> None:
+        """同一份日程事件配置在两平台各触发一次（死轮暂存亦同）→ 按 (date, content) 去重并入。"""
+        keys = buf.setdefault("event_keys", set())
+        for ev in events or []:
+            if not isinstance(ev, dict):
+                continue
+            key = (str(ev.get("date", "") or ""), str(ev.get("content", "") or ""))
+            if key in keys:
+                continue
+            keys.add(key)
+            buf.setdefault("events", []).append(ev)
+
     def latest_delta(self) -> str:
         """最近一次步进产出的定性摘要（喂下一轮 WORLD CLOCK 头；未步进/失败 → ""）。"""
         return self._delta_text
+
+    def latest_delta_state(self) -> str:
+        """REPORT-6: latest_delta() 的来源状态——not_stepped（尚无步进）/ stepped（有摘要）/
+        quiet（步进成功且本轮确无可报内容）/ failed（交付或步进失败，或步进成功但摘要生成
+        失败，见 _stepped_delta_state）；喂世界时钟的空段标记。"""
+        return self._delta_state
+
+    def latest_delta_round(self) -> int:
+        """SIM-6: latest_delta() 所出自的步进轮号（1 基，= 其覆盖时段的 0 基轮次 + 1）；
+        0 = 尚未成功步进。与 latest_delta() 同时读取，世界时钟据此判断摘要是否落后。"""
+        return self._delta_round
+
+    def _record_delta(self, text: str, state: str) -> None:
+        """REPORT-6: 同步更新摘要、来源状态与状态计数（每次设置都计一次）。"""
+        self._delta_text = text
+        self._delta_state = state
+        self._delta_state_counts[state] = self._delta_state_counts.get(state, 0) + 1
 
     def platform_done(self, platform: str) -> None:
         """本平台回路结束；全部平台完成时冲刷剩余轮并落轨迹（幂等）。"""
@@ -3539,6 +3925,41 @@ class _InbandWorldEvolution:
                            ("horizon_defaulted", self._horizon_defaulted)):
                 if fv is not None:
                     result[fk] = fv
+            # REPORT-6：摘要来源状态计数（附加键，与世界时钟空段标记同一开关；关 → 轨迹逐字节
+            # 不变）。stepped/quiet = 步进成功且摘要可信的轮数；failed = 摘要不可用的次数（交付/
+            # 步进失败，或步进成功但摘要生成失败——后者也计入实际步进轮）。
+            if _flag_true("SIM_ABSENCE_MARKERS", "true"):
+                result["delta_state_counts"] = dict(self._delta_state_counts)
+            # SIM-1：与 post-hoc 决策通道同一套有效性裁定规则（诚实对齐，无开关）。未入账轮
+            # （本进程见过但 WorldState 未步进）按 missing 计入分母——有损续跑只覆盖部分
+            # 轮次时不再被判 valid（post-hoc 只入账动作日志中出现的轮次，见
+            # decision_channel_verdict）。嵌套 outcome.round_accounting 保留 WorldState 原始口径。
+            # 同理 converged_at / outcome.converged / outcome.convergence_state 只反映本进程实际
+            # 步进的轮次，未入账轮不改它们：有损续跑时 validity=inconclusive 可与"已趋稳"并存，
+            # 下游须以 validity 为准（报告侧 REPORT_WORLDSTATE_HIDE_INVALID 默认连趋稳行一并隐藏）。
+            # 裁定失败只丢裁定键，绝不丢轨迹。
+            # SIM-2：有校验记录时汇总 run 级 fallback_share 并折入裁定（超阈 → inconclusive）；
+            # 无记录的已步进轮计作 unmeasured。汇总与裁定同进退：失败只丢裁定键。
+            try:
+                accounted = len(self._ws.round_statuses)
+                validation_summary = None
+                if self._validation_records:
+                    validation_summary = self._dv.summarize_validation(
+                        self._validation_records,
+                        unmeasured_rounds=max(0, accounted - len(self._validation_records)))
+                verdict = self._dc.decision_channel_verdict(
+                    self._ws.round_accounting(),
+                    unaccounted_rounds=max(0, self._max_seen_round - accounted),
+                    fallback_share=(validation_summary or {}).get("fallback_share"))
+                result["round_accounting"] = verdict["round_accounting"]
+                result["validity"] = verdict["validity"]
+                result["validity_reasons"] = verdict["validity_reasons"]
+                result["forecast_effect"] = verdict["forecast_effect"]
+                result["epistemic_status"] = "elicited_model_projection"
+                if validation_summary is not None:
+                    result["decision_validation"] = validation_summary
+            except Exception as _v_err:  # noqa: BLE001
+                self._log(f"in-band 有效性裁定失败（已隔离，轨迹照写、无裁定键）: {_v_err}")
             write_json_atomic(os.path.join(self._dir, "world_state_trajectory.json"), result)
             with open(os.path.join(self._dir, "decisions.jsonl"), "w", encoding="utf-8") as _df:
                 for _d in self._decisions:
@@ -3546,7 +3967,7 @@ class _InbandWorldEvolution:
             _INBAND_TRAJ_WRITTEN[os.path.abspath(self._dir)] = True
             self._log(f"in-band 世界演化完成: leader={out.get('leader')} "
                       f"share={out.get('leader_share')} converged_at={self._converged_at}"
-                      f"（稳定性信号，从不早停）")
+                      f"（稳定性信号，从不早停） validity={result.get('validity')}")
         except Exception as _e:  # noqa: BLE001
             self._log(f"in-band 轨迹写出失败（已隔离）: {_e}")
 
@@ -3573,8 +3994,18 @@ class _InbandWorldEvolution:
 
     def _step_round(self, round_num: int, buf: Dict[str, Any]) -> None:
         """步进一轮：名册 → elicit → WorldState.step → 摘要 + world_digest.jsonl 行。
-        任何异常 → 告警 + 空摘要（下一轮头部回落 "(first period)" 语义），模拟继续。"""
+        任何异常 → 告警 + 空摘要（状态 failed：下一轮头部标"摘要不可用"；SIM_ABSENCE_MARKERS
+        关时回落旧 "(first period)"），模拟继续。"""
         try:
+            from app.services.world_delta import CARRIED_FROM_ROUND_KEY, build_world_delta
+            # SIM-6：暂存的到期事件并入本轮（只并入不晚于本轮的暂存；去重）。更早轮次的事件
+            # 带 carried_from_round（1 基）→ 摘要单列"更早时段"段，不冒充上一时段的事件；
+            # 暂存到步进成功才删除——本轮步进失败则原样留给下一次步进。
+            carried_rounds = sorted(k for k in self._carry_events if k <= round_num)
+            for k in carried_rounds:
+                self._add_events(buf, [
+                    ev if k == round_num else {**ev, CARRIED_FROM_ROUND_KEY: k + 1}
+                    for ev in self._carry_events[k]])
             period = buf.get("period") if isinstance(buf.get("period"), dict) else None
             rnd = round_num + 1  # 轨迹/digest/decisions 与 actions.jsonl 同为 1 基轮号
             period_end = (str(period.get("period_end")) if period and period.get("period_end")
@@ -3606,7 +4037,16 @@ class _InbandWorldEvolution:
             if period:
                 ctx.update({"period": period, "n_rounds": self._n_rounds,
                             "horizon_date": self._horizon_date, "unit": self._unit})
+            # SIM-8（SIM_DECISION_EVENTS，默认开）：本时段日程事件（含上面并入的死轮暂存事件，
+            # 及此前空名册轮留下的决策暂存）作为带标注的外生事件块喂 elicitor；无事件 / 开关关
+            # → ctx 无 events 键，提示词逐字节不变。
+            decision_events = list(buf.get("events") or []) + self._decision_carry
+            if decision_events and _flag_true("SIM_DECISION_EVENTS", "true"):
+                ctx["events"] = decision_events
             commitments = self._dc.elicit_round(roster, ctx) if roster else []
+            # SIM-2：本轮名册校验记录（DECISION_CHANNEL_VALIDATION 开时由 elicit_round 写入）
+            validation = ctx.get("decision_validation")
+            validation = validation if isinstance(validation, dict) else None
             # Foglamp WP1 (1C/I-16): elicit_round 把类型化轮结果写入 ctx["round_status"]
             # （committed/abstained/silent/failed/missing）；roster 为空即 missing。
             # 旧签名的 elicit 替身（测试/降级路径）不写状态 → 传 None，由
@@ -3621,6 +4061,8 @@ class _InbandWorldEvolution:
             prev_shares = dict(self._ws.shares)
             self._ws.step(commitments, inertia=eff_inertia, entropy_mix_days=entropy_days,
                           round_status=round_status)
+            if validation is not None:  # 与 WorldState 入账轮一一对应（步进成功后才收）
+                self._validation_records.append(validation)
             out = self._ws.outcome()
             leader = out.get("leader")
             # leader_move：只取方向（up/down/flat），份额数值绝不进 agent 可见文本
@@ -3631,7 +4073,6 @@ class _InbandWorldEvolution:
                 direction = "up" if diff > 1e-9 else ("down" if diff < -1e-9 else "flat")
                 leader_move = {"leader": leader, "direction": direction}
             # 定性摘要（喂下一轮 WORLD CLOCK 头）——纯函数，出错自身返回 ""
-            from app.services.world_delta import build_world_delta
             digest_actions = []
             for a in buf.get("actions") or []:
                 content = (a.get("action_args") or {}).get("content")
@@ -3642,7 +4083,9 @@ class _InbandWorldEvolution:
                     "agent_name": a.get("agent_name", ""),
                     "influence_weight": self._activation.get(a.get("agent_id"), 0.0),
                 })
-            delta_text = build_world_delta(digest_actions, buf.get("events") or [], leader_move)
+            # SIM-6（V2）：事件与帖文各自整行封顶并带省略标记，动量线永不截断
+            delta_text = build_world_delta(digest_actions, buf.get("events") or [], leader_move,
+                                           sectioned=self._v2)
             # decisions 审计行：与 post-hoc 同口径（剥离 step 用的 weight）
             for c in commitments:
                 self._decisions.append({k: v for k, v in c.items() if k != "weight"})
@@ -3655,6 +4098,8 @@ class _InbandWorldEvolution:
                 for fk in ("period_start", "period_end", "label"):
                     if period.get(fk):
                         snap[fk] = str(period[fk])
+            if validation is not None:
+                snap["decision_validation"] = validation
             self._trajectory.append(snap)
             # world_digest.jsonl（审计产物）：定量份额只活在这里和轨迹里（spec §4）
             digest_row = {
@@ -3669,6 +4114,11 @@ class _InbandWorldEvolution:
                                    - float(prev_shares.get(k, 0.0)), 6)
                           for k in self._ws.shares},
             }
+            if validation is not None and validation.get("measured") is True:
+                # SIM-2：名册覆盖（失败轮的 {"measured": False} 没有计数可报）
+                digest_row["actor_coverage"] = {
+                    k: validation.get(k) for k in ("roster_size", "accepted", "abstained",
+                                                   "rejected", "missing_from_reply")}
             with open(os.path.join(self._dir, "world_digest.jsonl"), "a", encoding="utf-8") as _f:
                 _f.write(json.dumps(digest_row, ensure_ascii=False) + "\n")
             # 收敛只记信号（SIM-1 同窗口口径），绝不早停
@@ -3683,9 +4133,24 @@ class _InbandWorldEvolution:
             self._max_round = max(self._max_round, rnd)
             if period_end:
                 self._prev_date = period_end
-            self._delta_text = delta_text
+            # REPORT-6：空摘要只在本轮确实无可报内容时记 quiet；否则是摘要生成失败 → failed
+            delta_state = _stepped_delta_state(delta_text, digest_actions,
+                                               buf.get("events") or [], leader_move)
+            if delta_state == "failed":
+                self._log(f"第 {rnd} 轮世界摘要为空但本轮有可报内容（摘要生成失败，"
+                          "下一轮标为摘要不可用）")
+            for k in carried_rounds:
+                self._carry_events.pop(k, None)
+            # SIM-8：有名册 → 本轮 elicit 已看到这些事件；空名册 + V2 → 事件留给下一次 elicit
+            # （与 post-hoc 回放把无动作轮的事件并入下一回放轮同口径）
+            if roster:
+                self._decision_carry = []
+            elif self._v2 and ctx.get("events"):
+                self._decision_carry = [self._dc._mark_carried(ev, rnd) for ev in ctx["events"]]
+            self._record_delta(delta_text, delta_state)
+            self._delta_round = rnd
         except Exception as _e:  # noqa: BLE001 — spec §4: 失败 → 告警 + 下一轮空摘要
-            self._delta_text = ""
+            self._record_delta("", "failed")
             self._log(f"第 {round_num + 1} 轮 in-band 世界演化失败（已隔离，下一轮空摘要）: {_e}")
 
 
@@ -4379,6 +4844,9 @@ def select_reaction_candidates(
         话题与自己利益重合（每个重合词 +0.5，上限 +2）、关注作者 +1 / 被作者关注 +0.5、
         立场不同 +0.5 / 相同 +0.25、本轮新帖 +1（上轮 +0.3）；
       * 分散：本轮已分配给其他回应者的次数 −0.75/次，已有评论 −0.2/条（封顶 10 条）。
+      * SIM-5：定时事件帖（thread["is_scheduled_event"]）的发帖账号不是说话者——对任何回应者
+        都不算「自己的帖子」，不给关注/立场加分；点名加分改用原因「a scheduled world event
+        that concerns you」，话题与新帖加分不变。
     返回候选 dict（帖子字段 + score + reasons），按分数降序；同分新帖优先。
     """
     me = profiles.get(int(reactor_id)) or {}
@@ -4400,7 +4868,8 @@ def select_reaction_candidates(
         ]
         reasons: List[str] = []
         score = 0.0
-        if author == reactor_id:
+        is_event = bool(thread.get("is_scheduled_event"))
+        if author == reactor_id and not is_event:
             if not newer_from_others:
                 continue
             score += 3.0
@@ -4419,21 +4888,23 @@ def select_reaction_candidates(
             )
             if _text_mentions(discussion, aliases):
                 score += 3.0
-                reasons.append("it mentions you")
+                reasons.append("a scheduled world event that concerns you" if is_event
+                               else "it mentions you")
             overlap = my_tokens & _reaction_topic_tokens(
                 str(thread.get("content") or "") + " " + str(thread.get("quoted") or "")
             )
             if overlap:
                 score += min(2.0, 0.5 * len(overlap))
                 reasons.append("it touches your priorities (" + ", ".join(sorted(overlap)[:4]) + ")")
-            if (reactor_id, author) in follows:
-                score += 1.0
-                reasons.append("you follow the author")
-            if (author, reactor_id) in follows:
-                score += 0.5
-            author_stance = (profiles.get(author) or {}).get("stance") or ""
-            if my_stance and author_stance:
-                score += 0.5 if author_stance != my_stance else 0.25
+            if not is_event:
+                if (reactor_id, author) in follows:
+                    score += 1.0
+                    reasons.append("you follow the author")
+                if (author, reactor_id) in follows:
+                    score += 0.5
+                author_stance = (profiles.get(author) or {}).get("stance") or ""
+                if my_stance and author_stance:
+                    score += 0.5 if author_stance != my_stance else 0.25
         score += 1.0 if thread.get("recent") else 0.3
         score -= 0.75 * float(assigned.get(pid, 0))
         score -= 0.2 * min(len(comments), 10)
@@ -4455,13 +4926,29 @@ def build_reaction_prompt(
     platform: str,
     period_label: str = "",
     language: str = "",
+    period_context: str = "",
 ) -> str:
-    """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。"""
+    """回应阶段的用户提示：候选帖（含已有回复与相关原因）+ 作答要求。
+
+    SIM-5：定时事件帖（is_scheduled_event / quoted_is_event）的作者位渲染为来源标注
+    （SCHEDULED WORLD EVENT …），绝不渲染成发帖行为者「X wrote:」；作者位已说明来源，正文去掉
+    feed 前缀再截断（不挤占事件正文）；无事件候选 → 逐字节不变。
+
+    SIM-6：period_context 非空（SIM_PERIOD_CONTEXT_V2，_reaction_period_context）→ 紧接
+    '# RESPONSE ROUND' 两行头部插入本期到期事件与上一时段变化，辅助 agent 不再对本期一无所知；
+    空 → 逐字节不变。"""
     def who(aid: Any) -> str:
         try:
             return agent_names.get(int(aid), f"Agent_{int(aid)}")
         except (TypeError, ValueError):
             return "Unknown"
+
+    has_event = any(c.get("is_scheduled_event") or c.get("quoted_is_event") for c in candidates)
+    if has_event:
+        from app.services.sim_event_provenance import event_author_label, strip_event_label
+    # 发帖账号本身：事件帖在库里记在它名下，自我背书守卫会拒绝 like_post——提前说明
+    own_event = any(c.get("is_scheduled_event") and c.get("author_id") == reactor_id
+                    for c in candidates)
 
     reddit = platform == "reddit"
     lines = [
@@ -4471,16 +4958,28 @@ def build_reaction_prompt(
         "or the most to add, and answer it directly.",
         "",
     ]
+    if period_context:
+        lines += [period_context, ""]
     for idx, cand in enumerate(candidates, start=1):
-        own = cand.get("author_id") == reactor_id
-        author = "you" if own else who(cand.get("author_id"))
-        lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
-        lines.append('"' + _truncate_text(cand.get("content"), _REACTION_POST_CHARS) + '"')
+        content = cand.get("content")
+        if cand.get("is_scheduled_event"):
+            lines.append(f"[{idx}] post_id={cand['post_id']} — {event_author_label(content)}:")
+            content = strip_event_label(content)
+        else:
+            own = cand.get("author_id") == reactor_id
+            author = "you" if own else who(cand.get("author_id"))
+            lines.append(f"[{idx}] post_id={cand['post_id']} — {author} wrote:")
+        lines.append('"' + _truncate_text(content, _REACTION_POST_CHARS) + '"')
         if cand.get("quoted"):
             quoted_by = cand.get("quoted_author_id")
-            source = who(quoted_by) if quoted_by is not None else "another post"
+            quoted = cand["quoted"]
+            if cand.get("quoted_is_event"):
+                source = event_author_label(quoted)
+                quoted = strip_event_label(quoted)
+            else:
+                source = who(quoted_by) if quoted_by is not None else "another post"
             lines.append(
-                f'  (quoting {source}: "' + _truncate_text(cand["quoted"], _REACTION_QUOTED_CHARS) + '")'
+                f'  (quoting {source}: "' + _truncate_text(quoted, _REACTION_QUOTED_CHARS) + '")'
             )
         comments = cand.get("comments") or []
         if comments:
@@ -4513,8 +5012,15 @@ def build_reaction_prompt(
         f"5. Keep it to 1-3 sentences (at most {_REACTION_MAX_WORDS} words){language_clause}.",
         f"6. In the same turn, also call {endorse} only if {reactor_name} would publicly endorse "
         "it; never like your own post.",
-        "You cannot publish a new standalone post in this step.",
     ]
+    if has_event:
+        lines.append(
+            "7. A post marked SCHEDULED was placed on the feed by the simulation's event timeline; "
+            "no actor said it. Respond to the event itself, not to the account it appears under."
+            + (" Event posts filed under your own account cannot be liked; reply to them instead."
+               if own_event else "")
+        )
+    lines.append("You cannot publish a new standalone post in this step.")
     return "\n".join(lines).strip()
 
 
@@ -4533,10 +5039,95 @@ def _make_reaction_agent(agent, tools: List[Any]):
     )
 
 
+def _scheduled_event_post_ids(db_path: str, post_ids: Any, event_contents: Any) -> set:
+    """SIM-5：post_ids 中哪些是定时事件帖本身——原帖（original_post_id 为空）且正文属于
+    event_contents。
+
+    按帖子身份判断，不能只比 post_content：OASIS quote_post 把被引根帖正文复制进引用帖的
+    post.content，对「某行为者引用事件」的评论/点赞也带着事件正文，回应的却是引用者的评论。
+    无事件/无目标/缺表/任何 sqlite 异常 → 空集（ResponseLog 退回旧措辞，degrade-safe）。"""
+    ids = set()
+    for pid in post_ids or ():
+        try:
+            ids.add(int(pid))
+        except (TypeError, ValueError):
+            continue
+    if not ids or not event_contents or not os.path.exists(db_path):
+        return set()
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            ordered = sorted(ids)
+            placeholders = ",".join("?" for _ in ordered)
+            rows = conn.execute(
+                "SELECT post_id, content FROM post WHERE original_post_id IS NULL "
+                f"AND post_id IN ({placeholders})",
+                ordered,
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return set()
+    return {int(pid) for pid, content in rows if str(content or "").strip() in event_contents}
+
+
+def _comment_post_ids(db_path: str, comment_ids: Any) -> Dict[int, int]:
+    """SIM-5：comment_id → 该评论所回应帖子的 post_id。
+
+    OASIS create_comment 的 trace 只记 {content, comment_id}，不含 post_id（platform.py
+    create_comment），fetch_new_actions_from_db 读出的评论行因此没有目标帖——须经 comment
+    表回查。OASIS 已把对纯转发的评论改挂到根帖，comment.post_id 即回应对象。
+    无目标/缺表/任何 sqlite 异常 → 空映射（ResponseLog 退回旧措辞，degrade-safe）。"""
+    ids = set()
+    for cid in comment_ids or ():
+        try:
+            ids.add(int(cid))
+        except (TypeError, ValueError):
+            continue
+    if not ids or not os.path.exists(db_path):
+        return {}
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            ordered = sorted(ids)
+            placeholders = ",".join("?" for _ in ordered)
+            rows = conn.execute(
+                f"SELECT comment_id, post_id FROM comment WHERE comment_id IN ({placeholders})",
+                ordered,
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return {}
+    return {int(cid): int(pid) for cid, pid in rows if pid is not None}
+
+
+def _reaction_target_post_id(action: Dict[str, Any], comment_post_ids: Dict[int, int]) -> Optional[int]:
+    """SIM-5：回应动作所针对的帖子 id——优先取动作参数里的 post_id（点赞帖子的 trace 带它），
+    评论行没有时按 comment_post_ids（_comment_post_ids 回查结果）补齐；都没有 → None。"""
+    args = action.get("action_args") or {}
+    pid = args.get("post_id")
+    if pid is None and action.get("action_type") == "CREATE_COMMENT":
+        try:
+            pid = comment_post_ids.get(int(args.get("comment_id")))
+        except (TypeError, ValueError):
+            pid = None
+    try:
+        return int(pid)
+    except (TypeError, ValueError):
+        return None
+
+
 def _reaction_memory_note(
-    agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str]
+    agent_id: int, actions: List[Dict[str, Any]], agent_names: Dict[int, str],
+    event_post_ids: Any = frozenset(), comment_post_ids: Optional[Dict[int, int]] = None,
 ) -> str:
-    """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。"""
+    """把某 agent 本阶段的回应动作压成一条简短记忆（供后续轮次保持连续性）。
+
+    SIM-5：回应对象是定时事件帖本身（目标帖 ∈ event_post_ids，见 _scheduled_event_post_ids）
+    时不写「You replied to X's post」——事件不是发帖行为者说的话；对他人引用事件的帖子的回应
+    照旧记为回应引用者。评论的目标帖经 comment_post_ids 回查（OASIS 评论 trace 不带 post_id）。
+    event_post_ids 为空 → 逐字节不变。"""
     parts: List[str] = []
     for action in actions:
         if action.get("agent_id") != agent_id:
@@ -4544,11 +5135,20 @@ def _reaction_memory_note(
         kind = action.get("action_type")
         args = action.get("action_args") or {}
         target = args.get("post_author_name") or args.get("comment_author_name") or "another actor"
+        on_event = False
+        if event_post_ids and kind in ("CREATE_COMMENT", "LIKE_POST"):
+            on_event = _reaction_target_post_id(action, comment_post_ids or {}) in event_post_ids
         if kind == "CREATE_COMMENT":
             text = _truncate_text(args.get("content"), _REACTION_NOTE_CHARS)
-            parts.append(f"You replied to {target}'s post: \"{text}\"")
+            if on_event:
+                parts.append(f"You responded to the scheduled world event: \"{text}\"")
+            else:
+                parts.append(f"You replied to {target}'s post: \"{text}\"")
         elif kind == "LIKE_POST":
-            parts.append(f"You endorsed (liked) {target}'s post.")
+            if on_event:
+                parts.append("You endorsed the scheduled world event.")
+            else:
+                parts.append(f"You endorsed (liked) {target}'s post.")
         elif kind == "LIKE_COMMENT":
             parts.append(f"You endorsed (liked) {target}'s reply.")
     if not parts:
@@ -4587,6 +5187,13 @@ async def run_reaction_phase(
         )
         if not threads:
             return [], last_rowid
+        # SIM-5：event_contents 由调用方按 SIM_EVENT_PROVENANCE 预置（关/无事件 → 空集 → 线程
+        # 不带任何新键，候选与提示逐字节不变）；帖文与日志用同一 label_event_post，精确匹配。
+        event_contents = reaction_state.get("event_contents") or frozenset()
+        if event_contents:
+            for thread in threads.values():
+                thread["is_scheduled_event"] = thread["content"].strip() in event_contents
+                thread["quoted_is_event"] = thread["quoted"].strip() in event_contents
         profiles = reaction_state.get("profiles")
         if profiles is None:
             profiles = _build_reaction_profiles(config)
@@ -4615,7 +5222,8 @@ async def run_reaction_phase(
             assigned[candidates[0]["post_id"]] = assigned.get(candidates[0]["post_id"], 0) + 1
             name = agent_names.get(int(aid)) or (profiles.get(int(aid)) or {}).get("name") or f"Agent_{aid}"
             prompt = build_reaction_prompt(
-                int(aid), name, candidates, agent_names, platform, period_label, language
+                int(aid), name, candidates, agent_names, platform, period_label, language,
+                reaction_state.get("period_context", ""),
             )
             plans.append((int(aid), agent, prompt))
         if not plans:
@@ -4660,8 +5268,23 @@ async def run_reaction_phase(
         # 连续性：把各自的回应压成一条 USER 记忆（SYSTEM 记录会被 camel 上下文构造器丢弃）。
         try:
             from camel.types import OpenAIBackendRole
+            # SIM-5：评论行没有 post_id（OASIS trace 只记 comment_id）——仅在有事件帖时回查目标帖，
+            # 无事件 → 不读库、event_post_ids 为空，记忆逐字节不变。
+            comment_post_ids: Dict[int, int] = {}
+            if event_contents:
+                comment_post_ids = _comment_post_ids(
+                    db_path,
+                    [(a.get("action_args") or {}).get("comment_id") for a in actions
+                     if a.get("action_type") == "CREATE_COMMENT"],
+                )
+            event_post_ids = _scheduled_event_post_ids(
+                db_path, [_reaction_target_post_id(a, comment_post_ids) for a in actions],
+                event_contents,
+            )
             for aid, agent, _prompt in plans:
-                note = _reaction_memory_note(aid, actions, agent_names)
+                note = _reaction_memory_note(
+                    aid, actions, agent_names, event_post_ids, comment_post_ids
+                )
                 if note and hasattr(agent, "update_memory"):
                     agent.update_memory(
                         BaseMessage.make_user_message(role_name="ResponseLog", content=note),
@@ -4962,7 +5585,7 @@ async def run_twitter_simulation(
     last_active_ids: set = set()  # T3.5: 近因加成——上一轮活跃的 agent 下一轮更易被激活
     # RUN-4: 默认 false = 死轮清空近因集（旧行为）；true 时跨死轮保留，级联不被时段空档打断
     _recency_carry = _flag_true("SIM_RECENCY_CARRY", "false")
-    # I-2-1: 逐智能体动态情感状态（默认关；SIM_AGENT_DYNAMICS=true 时生效）
+    # I-2-1: 逐智能体动态情感状态（默认开；SIM_AGENT_DYNAMICS=false 关闭）
     dynamics_tracker = _build_dynamics_tracker(config, log_info)
     dyn_name_to_id = {name: aid for aid, name in agent_names.items()}
 
@@ -4975,6 +5598,9 @@ async def run_twitter_simulation(
     # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
     _reaction_on = _reaction_phase_enabled()
     _reaction_state: Dict[str, Any] = {}
+    # SIM-5: 全部定时事件的帖文（带来源前缀）一次性预置——回应阶段据此把事件帖渲染为世界事件
+    # 而非发帖行为者的发言；按全量事件而非已触发事件计算，断点续跑安全。开关关 → 空集。
+    _reaction_state["event_contents"] = _event_post_contents_for_run(event_config)
     _sim_language = _sim_output_language(config)
     if _reaction_on:
         log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
@@ -4988,6 +5614,10 @@ async def run_twitter_simulation(
     # 注册，expected=semaphore_platforms），凑齐两平台本轮水位后才按轮序步进一次。
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if calendar else None)
+    # SIM-6（SIM_PERIOD_CONTEXT_V2，默认开，仅日历模式）：世界时钟的预期事件标题/情景标注/
+    # 摘要落后标注、sampled agent 缺席事件轮后首次激活时的漏报补报、回应阶段的本期上下文。
+    _pc_v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
+    _catchup = _build_event_catchup(event_config, log_info) if (calendar and _pc_v2) else None
 
     def _write_ckpt(completed_round: int) -> None:
         # 闭包按调用时读取 last_rowid / total_actions 的当前值；ITEM 3: 附带 config_hash 与实时 RNG 状态
@@ -5069,26 +5699,30 @@ async def run_twitter_simulation(
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _inband_evo is not None:
-                # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
-                _inband_evo.heartbeat(_ckpt_platform, round_num)
+                # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆；
+                # SIM-6（V2）：本轮到期事件已上 feed，随心跳暂存并进入下一次步进的摘要
+                _inband_evo.heartbeat(_ckpt_platform, round_num,
+                                      _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
-        # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
+        # I-2-1: 注入本轮动态情感状态（默认开）。以 SYSTEM 记录写入，camel 上下文构造器只保留
+        # 首条系统消息、丢弃其后 SYSTEM 记录 → 该行实际送不到模型（dynamics_summary 如实记录）。
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
 
-        # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮已确认事件/上一时段演化摘要）。
-        # world_delta_text 由 in-band 演化在上一轮末填充；首轮/演化失败 → "" → "(first period)"。
+        # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮到期事件/上一时段演化摘要）。
+        # world_delta_text 由 in-band 演化在上一轮末填充；空摘要按来源状态给具名占位（REPORT-6）。
+        # SIM-6（_pc_v2）：注入时重读摘要（见 _world_clock_round）、预期事件标题、摘要落后
+        # 标注、漏报补报、回应阶段本期上下文。
         if calendar:
             try:
-                _inject_period_context(
-                    result.env, [aid for aid, _ in active_agents], round_num,
-                    _period, temporal_config,
-                    _scheduled_events_due(event_config, round_num),
-                    world_delta_text,
-                    response_step=_reaction_on,
-                    language=_sim_language,
+                _world_clock_round(
+                    result.env, active_agents, round_num, _period, temporal_config,
+                    event_config, world_delta_text, _round_periods,
+                    _inband_evo, _catchup, _reaction_state,
+                    v2=_pc_v2, response_step=_reaction_on, language=_sim_language,
+                    log_info=log_info,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
@@ -5116,8 +5750,9 @@ async def run_twitter_simulation(
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _inband_evo is not None:
-                # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
-                _inband_evo.heartbeat(_ckpt_platform, round_num)
+                # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）；SIM-6 同死轮暂存事件
+                _inband_evo.heartbeat(_ckpt_platform, round_num,
+                                      _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 失败轮同样推进检查点（该轮已按 0 动作记账）
             if step_failure_limit > 0 and consec_step_failures >= step_failure_limit:
@@ -5159,7 +5794,7 @@ async def run_twitter_simulation(
                     total_actions += len(_reaction_actions)
                     round_action_count += len(_reaction_actions)
 
-        # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
+        # I-2-1: 用本轮实际动作更新动态情感状态（默认开；状态行注入见上，被 camel 丢弃）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
 
         # ITEM 20 (SIM_ENGAGEMENT_SAMPLER): 有机动作落账后补一层被动点赞（本轮活跃者→本轮新帖）。
@@ -5208,9 +5843,12 @@ async def run_twitter_simulation(
         # 死在模拟进程内，报告阶段无法对 hollow sim 施加"不得叙述情绪演化"的 caveat。
         try:
             from app.utils.atomic import write_json_atomic
+            # SIM-5: prompt_delivery 如实记录状态行的投递结果——SYSTEM 记录被 camel 丢弃，
+            # 情感状态从未进入模型提示（见 tests/test_camel_context_delivery.py）。
             write_json_atomic(
                 os.path.join(simulation_dir, f"{_plat}_dynamics_summary.json"),
-                dynamics_tracker.dynamics_summary(),
+                {**dynamics_tracker.dynamics_summary(),
+                 "prompt_delivery": _DYNAMICS_PROMPT_DELIVERY},
             )
         except Exception as _dyn_err:  # noqa: BLE001
             log_info(f"dynamics_summary 写出失败（不影响模拟）: {_dyn_err}")
@@ -5513,7 +6151,7 @@ async def run_reddit_simulation(
     last_active_ids: set = set()  # T3.5: 近因加成——上一轮活跃的 agent 下一轮更易被激活
     # RUN-4: 默认 false = 死轮清空近因集（旧行为）；true 时跨死轮保留，级联不被时段空档打断
     _recency_carry = _flag_true("SIM_RECENCY_CARRY", "false")
-    # I-2-1: 逐智能体动态情感状态（默认关；SIM_AGENT_DYNAMICS=true 时生效）
+    # I-2-1: 逐智能体动态情感状态（默认开；SIM_AGENT_DYNAMICS=false 关闭）
     dynamics_tracker = _build_dynamics_tracker(config, log_info)
     dyn_name_to_id = {name: aid for aid, name in agent_names.items()}
 
@@ -5526,6 +6164,9 @@ async def run_reddit_simulation(
     # SIM-REACT: 每轮发帖后的回应阶段（默认开）；候选窗口水位在每轮有机 step 前推进。
     _reaction_on = _reaction_phase_enabled()
     _reaction_state: Dict[str, Any] = {}
+    # SIM-5: 全部定时事件的帖文（带来源前缀）一次性预置——回应阶段据此把事件帖渲染为世界事件
+    # 而非发帖行为者的发言；按全量事件而非已触发事件计算，断点续跑安全。开关关 → 空集。
+    _reaction_state["event_contents"] = _event_post_contents_for_run(event_config)
     _sim_language = _sim_output_language(config)
     if _reaction_on:
         log_info(f"回应阶段已启用（每轮发帖后回应他人帖子；输出语言={_sim_language or '未指定'}）")
@@ -5539,6 +6180,10 @@ async def run_reddit_simulation(
     # 注册，expected=semaphore_platforms），凑齐两平台本轮水位后才按轮序步进一次。
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if calendar else None)
+    # SIM-6（SIM_PERIOD_CONTEXT_V2，默认开，仅日历模式）：世界时钟的预期事件标题/情景标注/
+    # 摘要落后标注、sampled agent 缺席事件轮后首次激活时的漏报补报、回应阶段的本期上下文。
+    _pc_v2 = _flag_true("SIM_PERIOD_CONTEXT_V2", "true")
+    _catchup = _build_event_catchup(event_config, log_info) if (calendar and _pc_v2) else None
 
     def _write_ckpt(completed_round: int) -> None:
         # 闭包按调用时读取 last_rowid / total_actions 的当前值；ITEM 3: 附带 config_hash 与实时 RNG 状态
@@ -5620,26 +6265,30 @@ async def run_reddit_simulation(
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _inband_evo is not None:
-                # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
-                _inband_evo.heartbeat(_ckpt_platform, round_num)
+                # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆；
+                # SIM-6（V2）：本轮到期事件已上 feed，随心跳暂存并进入下一次步进的摘要
+                _inband_evo.heartbeat(_ckpt_platform, round_num,
+                                      _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
 
-        # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
+        # I-2-1: 注入本轮动态情感状态（默认开）。以 SYSTEM 记录写入，camel 上下文构造器只保留
+        # 首条系统消息、丢弃其后 SYSTEM 记录 → 该行实际送不到模型（dynamics_summary 如实记录）。
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
 
-        # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮已确认事件/上一时段演化摘要）。
-        # world_delta_text 由 in-band 演化在上一轮末填充；首轮/演化失败 → "" → "(first period)"。
+        # CAL-TEMPORAL: 日历模式注入本轮世界时钟头（时段/进度/本轮到期事件/上一时段演化摘要）。
+        # world_delta_text 由 in-band 演化在上一轮末填充；空摘要按来源状态给具名占位（REPORT-6）。
+        # SIM-6（_pc_v2）：注入时重读摘要（见 _world_clock_round）、预期事件标题、摘要落后
+        # 标注、漏报补报、回应阶段本期上下文。
         if calendar:
             try:
-                _inject_period_context(
-                    result.env, [aid for aid, _ in active_agents], round_num,
-                    _period, temporal_config,
-                    _scheduled_events_due(event_config, round_num),
-                    world_delta_text,
-                    response_step=_reaction_on,
-                    language=_sim_language,
+                _world_clock_round(
+                    result.env, active_agents, round_num, _period, temporal_config,
+                    event_config, world_delta_text, _round_periods,
+                    _inband_evo, _catchup, _reaction_state,
+                    v2=_pc_v2, response_step=_reaction_on, language=_sim_language,
+                    log_info=log_info,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
@@ -5667,8 +6316,9 @@ async def run_reddit_simulation(
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _inband_evo is not None:
-                # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
-                _inband_evo.heartbeat(_ckpt_platform, round_num)
+                # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）；SIM-6 同死轮暂存事件
+                _inband_evo.heartbeat(_ckpt_platform, round_num,
+                                      _scheduled_events_due(event_config, round_num))
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 失败轮同样推进检查点（该轮已按 0 动作记账）
             if step_failure_limit > 0 and consec_step_failures >= step_failure_limit:
@@ -5710,7 +6360,7 @@ async def run_reddit_simulation(
                     total_actions += len(_reaction_actions)
                     round_action_count += len(_reaction_actions)
 
-        # I-2-1: 用本轮实际动作更新动态情感状态（默认关 → no-op）
+        # I-2-1: 用本轮实际动作更新动态情感状态（默认开；状态行注入见上，被 camel 丢弃）
         _observe_agent_dynamics(dynamics_tracker, actual_actions, dyn_name_to_id)
 
         # ITEM 20 (SIM_ENGAGEMENT_SAMPLER): 有机动作落账后补一层被动点赞（本轮活跃者→本轮新帖）。
@@ -5759,9 +6409,12 @@ async def run_reddit_simulation(
         # 死在模拟进程内，报告阶段无法对 hollow sim 施加"不得叙述情绪演化"的 caveat。
         try:
             from app.utils.atomic import write_json_atomic
+            # SIM-5: prompt_delivery 如实记录状态行的投递结果——SYSTEM 记录被 camel 丢弃，
+            # 情感状态从未进入模型提示（见 tests/test_camel_context_delivery.py）。
             write_json_atomic(
                 os.path.join(simulation_dir, f"{_plat}_dynamics_summary.json"),
-                dynamics_tracker.dynamics_summary(),
+                {**dynamics_tracker.dynamics_summary(),
+                 "prompt_delivery": _DYNAMICS_PROMPT_DELIVERY},
             )
         except Exception as _dyn_err:  # noqa: BLE001
             log_info(f"dynamics_summary 写出失败（不影响模拟）: {_dyn_err}")
@@ -5999,17 +6652,20 @@ async def main():
                 _eps = 0.02
             _tc_posthoc = config.get("temporal_config") if isinstance(config, dict) else None
             _tc_posthoc = _tc_posthoc if isinstance(_tc_posthoc, dict) else {}
+            # 日历模式回退：精确 round→时段映射（hours 模式无 temporal_config → None，
+            # 旧路径逐字节不变）
+            _round_dates_posthoc = (_tc_posthoc.get("round_dates")
+                                    if str(_tc_posthoc.get("mode") or "").lower() == "calendar"
+                                    else None)
             _res = run_decision_channel(
                 # DEFECT-3: 决策通道批调用同样进 sim token 计量（不经 camel 边界）。
                 _acts, config.get("agent_configs"), _ws_seed,
                 _wrap_llm_client_usage(LLMClient()),
                 inertia=_inertia, conv_eps=_eps,
                 round_to_date=_build_round_to_date(_ws_seed, config),
-                # 日历模式回退：精确 round→时段映射（hours 模式无 temporal_config → None，
-                # 旧路径逐字节不变）
-                round_dates=(_tc_posthoc.get("round_dates")
-                             if str(_tc_posthoc.get("mode") or "").lower() == "calendar"
-                             else None),
+                round_dates=_round_dates_posthoc,
+                # SIM-8：日历回退时各时段日程事件喂 elicitor（hours 模式 / 开关关 → 不传）
+                **_posthoc_decision_events(config, _round_dates_posthoc),
             )
             if _res:
                 write_json_atomic(

@@ -589,19 +589,29 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     (resolve_variable -> import_module) imports these by bare name — they MUST
   #     sit next to config.yaml in deer-flow/ or web_search/web_fetch/prediction_market
   #     tools fail to load. Deploy all four so the wiring is reproducible.
-  #   - linear_research.py + research_gateway.py are the deep-research engine v3
+  #   - linear_research.py + research_gateway.py (+ evidence_spans.py and
+  #     derived_numbers.py, which linear_research imports) are the deep-research engine v3
   #     (RESEARCH_ENGINE=v3, the default). deerflow_research.py imports them by
   #     bare name, so they must be colocated too or the v3 dispatch hits ImportError.
+  #   - source_dates.py is the source publication-date parser cached_fetch and
+  #     research_gateway import by bare name (RESEARCH_SOURCE_DATES).
+  #   - data_tools.py is the official-data vendor module (FRED/ALFRED
+  #     vintage-pinned macro series; SEC EDGAR as-filed company statements,
+  #     TIME-11), imported by bare name once the research engine binds it.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py evidence_spans.py source_dates.py data_tools.py derived_numbers.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
         runtime_skill_sync.py)
           ok "Installed runtime_skill_sync.py (runtime bundle verifier)" ;;
-        linear_research.py|research_gateway.py)
+        linear_research.py|research_gateway.py|evidence_spans.py|derived_numbers.py)
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
+        source_dates.py)
+          ok "Installed source_dates.py (source publication-date parser)" ;;
+        data_tools.py)
+          ok "Installed data_tools.py (official-data vendor tools)" ;;
         *)
           ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
       esac

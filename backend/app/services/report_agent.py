@@ -24,13 +24,28 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from ..config import Config
+from ..utils import absence as _absence
+from ..utils import numeric as _numeric
+from ..utils import numeric_guards as _numeric_guards
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from ..utils.logger import get_logger
+from ..utils.model_provenance import (
+    REPORT_STAGE,
+    forecast_model_provenance,
+    resolution_entries,
+    stage_record,
+)
+from ..utils.security import UnsafeIdError, contained_child, is_safe_id, safe_id
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
+from .hindcast_policy import as_hindcast_pin, hindcast_forecast_block
+from . import citation_finalization_telemetry as _cftel
+from . import probability_shape as _pshape
+from . import question_spec as _qspec
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
+from . import report_tool_args as _rta
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -40,6 +55,14 @@ from .zep_tools import (
 )
 
 logger = get_logger('mirofish.report_agent')
+
+# TIME-6: ReportAgent._hindcast_pin 的「尚未查找」哨兵（区分未查找与查到 None = 非回测运行）。
+_HINDCAST_PIN_UNRESOLVED = object()
+
+# INFRA-5: 工具调用计数（_section_tool_calls / _report_tool_calls_total / _tool_outcomes）的锁。
+# 并发章节（REPORT_SECTION_CONCURRENCY>1）在线程池里共享同一 agent 实例递增这些计数；取模块级锁
+# 而非实例锁，使测试经 __new__ 构造、未跑 __init__ 的 agent 同样安全。
+_TOOL_COUNTER_LOCK = threading.Lock()
 
 # EXECPLAN2 F-7-1: 并发报告生成时，每份报告的 console_log.txt 此前都挂在进程级共享 logger
 # （'mirofish.report_agent' / 'mirofish.zep_tools'）上，导致两份报告的日志互相串扰，且 handler
@@ -268,7 +291,37 @@ class ReportLogger:
                 "message": f"工具 {tool_name} 返回结果"
             }
         )
-    
+
+    def log_tool_rejection(
+        self,
+        section_title: str,
+        tool_name: Optional[str],
+        reason: str,
+        raw_excerpt: Optional[str],
+        section_index: int = None
+    ):
+        """INFRA-5: 记录一次派发前被拒绝的工具调用（参数非 JSON / 缺工具名 / 参数无效）。
+
+        只记事件骨架（工具名、拒绝原因、调用原文摘录），不含任何章节草稿正文，故不在
+        api/report.py 的 _AGENT_LOG_DRAFT_FIELDS 草稿闸门之列。未闭合的 <tool_call> 块会一直延伸到
+        回复末尾、可能带上章节正文，故摘录经 report_tool_args.rejection_excerpt fail-closed 收窄：先在首个
+        'Final Answer' 或空行处截断，再从首个调用开头（{"name": / {"tool":，否则首个 {）起只保留调用语法
+        记号（括号、键、字符串、数字等），遇到中文正文、Markdown 标题等其他字符即止，至多 300 字符，
+        止于首个完整 JSON 对象；没有 { 时为空串。
+        """
+        self.log(
+            action="tool_rejected",
+            stage="generating",
+            section_title=section_title,
+            section_index=section_index,
+            details={
+                "tool_name": tool_name or "",
+                "reason": reason,
+                "raw_excerpt": _rta.rejection_excerpt(raw_excerpt),
+                "message": f"拒绝工具调用: {tool_name or '(无工具名)'}"
+            }
+        )
+
     def log_llm_response(
         self,
         section_title: str,
@@ -915,6 +968,10 @@ CONTAMINATION_MARKERS = (
     "等待命令响应超时",
 )
 
+# INFRA-5：推理残留标记。LLMClient 在 LLM_TRANSPORT_STRICT 下已剥离 <think> 块，仍出现在正文里即
+# 说明剥离失败（悬空/嵌套标签）；仅在该开关开启时计入 _looks_contaminated。
+_REASONING_LEAK_MARKERS = ("<think>", "</think>")
+
 # 合格章节正文的最小长度（远低于此通常意味着模型并未真正撰写正文）
 # RQ-1：200→800——展开后的章节目标 3000-6000 字，几百字的残段应判为未真正撰写。
 # 但含图表标记（一张 Mermaid/内嵌图 + 简短图注）的短章节是合法产出，见 _looks_contaminated
@@ -1043,6 +1100,67 @@ def salience_tiers_from_outcomes(outcomes_text: str) -> str:
     return "\n".join(lines)
 
 
+# REPORT-5（REPORT_SIGNAL_PACK_HEALTH_GATE）：run_summary.json 的 simulation_health → 信号包须跳过
+# 的块（按渲染顺序）。hollow（零有机动作）时议程设置力分层数的是种子动作、派系图聚类的是种子关注、
+# 情景差异比较的是两份种子回声；errored 连世界态也不可信。图谱派生块（投影纽带、因果骨架）不依赖
+# 模拟行为，始终保留。
+_SIGNAL_PACK_HEALTH_SKIPS: Dict[str, Tuple[str, ...]] = {
+    "hollow": ("simulation_outcomes", "coalition_map", "scenario_diff"),
+    "errored": ("world_state", "simulation_outcomes", "coalition_map", "scenario_diff"),
+}
+_SIGNAL_PACK_NO_BEHAVIOUR_NOTE = (
+    "⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」的发现；"
+    "正文不得引用任何基于模拟行为量或派系聚类的推演结论。"
+)
+# FU-3：情景报告的基线模拟非健康（_SIGNAL_PACK_HEALTH_SKIPS 里的状态）时，基线的提示词侧消费方
+# （信号包的情景差异块、scenario_diff 工具、大纲的差异预取）改给这一行，不给基线数据；对比表
+# 的表位（成稿正文）改给下面的读者可见说明行。
+_BASELINE_NO_BEHAVIOUR_NOTE = (
+    "⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的行为对比；"
+    "正文不得引用任何基线 vs 情景的行为差值。"
+)
+# FU-3：对比章节正文里替代对比表的读者可见说明行（按成稿语言取一行）。上面两行写给撰写模型
+# （带健康字段、方法学词汇与对正文的指令），进成稿会被泄漏 lint 改写或删除、或把内部字段带给
+# 读者；这里只陈述「没有可用的对比数据，本章依据研究材料」。健康裁定只记在
+# quality.signal_pack_health / quality.baseline_signal_pack_health，不进正文。
+_COMPARISON_NO_SCENARIO_DATA_LINE = {
+    "zh": "> 本情景没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for this scenario, so this chapter compares it "
+           "with the baseline using the research sources only."),
+}
+_COMPARISON_NO_BASELINE_DATA_LINE = {
+    "zh": "> 基线没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "en": ("> No usable comparison data is available for the baseline, so this chapter compares this "
+           "scenario with it using the research sources only."),
+}
+# 部分 / 降级完成的运行：块全部保留，包头后附审慎提示。
+_SIGNAL_PACK_PARTIAL_HEALTHS = ("truncated", "llm_degraded")
+_SIGNAL_PACK_PARTIAL_NOTE = (
+    "⚠️ 模拟运行状态：{health}（未完整或降级完成）——以下诊断材料只覆盖部分运行，引用须更加审慎。"
+)
+# 运行器当前只产出 ok/hollow/errored/truncated/llm_degraded；未识别的非 ok 值（未来新增状态）
+# 不当作 ok 静默放行（fail-closed 偏向）：块全部保留，包头后附此提示并告警。
+_SIGNAL_PACK_UNKNOWN_HEALTH_NOTE = (
+    "⚠️ 模拟运行状态：{health}（未识别的健康状态，运行是否完整未经确认）——以下诊断材料的可靠性"
+    "未经核验，引用须更加审慎。"
+)
+
+
+def _prior_echo_caveat(trajectory: Any) -> str:
+    """SIM-4: the world-state block's qualitative caveat for a prior-echo or
+    prior-leader-herd trajectory (sim_prior_echo.prior_echo_diagnostics), else ""."""
+    from .sim_prior_echo import (
+        VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+    )
+    diag = prior_echo_diagnostics(trajectory if isinstance(trajectory, dict) else {})
+    if diag["verdict"] == VERDICT_PRIOR_ECHO:
+        return "对照诊断：终局分布与种子先验几乎一致——决策通道没有在研究先验之外提供信息，不得作为独立佐证。"
+    if diag["verdict"] == VERDICT_PRIOR_LEADER_HERD:
+        return (f"对照诊断：承诺绝大多数集中于先验领先情景「{diag['prior_leader']}」——推演可能只是在复述先验，"
+                "不构成独立佐证。")
+    return ""
+
+
 REACT_CONTAMINATED_RETRY_MSG = (
     "【格式错误】你上一条输出不是合格的章节正文（疑似系统提示泄漏、工具调用残留或采访超时提示）。"
     '请立即以 "Final Answer:" 开头，只输出本章节的中文正文：用研究材料中的可验证事实与 [S#]，'
@@ -1092,13 +1210,21 @@ def _looks_truncated(text: Optional[str]) -> bool:
     return False
 
 
+def _has_contamination_marker(text: str) -> bool:
+    """正文含污染标记：系统提示泄漏 / 工具框架残留（CONTAMINATION_MARKERS），以及
+    INFRA-5（LLM_TRANSPORT_STRICT，默认开）下的 <think> 推理残留（_REASONING_LEAK_MARKERS）。"""
+    for marker in CONTAMINATION_MARKERS:
+        if marker in text:
+            return True
+    return bool(getattr(Config, "LLM_TRANSPORT_STRICT", True)) and any(m in text for m in _REASONING_LEAK_MARKERS)
+
+
 def _looks_contaminated(text: Optional[str]) -> bool:
     """判断一段拟用作章节正文的文本是否被污染 / 无效。"""
     if not text or not text.strip():
         return True
-    for marker in CONTAMINATION_MARKERS:
-        if marker in text:
-            return True
+    if _has_contamination_marker(text):
+        return True
     # RQ-1：短于下限判无效，但含图表标记（Mermaid/内嵌图 + 简短图注）的短章节是合法产出，
     # 豁免长度门（与 pipeline_orchestrator 健康门的图表豁免同源，避免两侧判定漂移）。
     if len(text.strip()) < MIN_VALID_SECTION_CHARS:
@@ -1251,6 +1377,42 @@ def _citation_display_title(source: Dict[str, Any], tag: str = "") -> str:
     return title or domain or tag
 
 
+def _nonfinite_nulled_artifact(obj: Any, *, record_quality: bool) -> Tuple[Any, List[str]]:
+    """INFRA-4：(副本, 路径)——NaN/±Infinity 叶子置 None（非有限的浮点键名改为 json 默认写出的
+    字符串），不改入参；record_quality=True 且确有叶子被置 null 时把路径并入副本的
+    quality.nonfinite_nulled。副本按 allow_nan=False 必能序列化（非有限数层面）。"""
+    cleaned, paths = _numeric.null_nonfinite(obj)
+    if record_quality and paths and isinstance(cleaned, dict):
+        quality = cleaned.get("quality")
+        if quality is None:
+            quality = cleaned["quality"] = {}
+        if isinstance(quality, dict):
+            prior = quality.get("nonfinite_nulled")
+            merged = [p for p in prior if isinstance(p, str)] if isinstance(prior, list) else []
+            merged.extend(p for p in paths if p not in merged)
+            quality["nonfinite_nulled"] = merged
+    return cleaned, paths
+
+
+def _forecast_artifact_json(obj: Any, artifact: str, *,
+                            record_quality: bool = False) -> Tuple[str, Any]:
+    """INFRA-4（ARTIFACT_STRICT_JSON，默认开）：把预测工件序列化为标准 JSON，返回 (text, written)。
+
+    关闭：json.dumps 原样（NaN/Infinity 照写）。开启：有限数内容逐字节同旧输出；含 NaN/±Infinity
+    时改写副本（_nonfinite_nulled_artifact，不改入参），按严格 JSON 序列化成功后记一条 error（列出
+    JSON 路径）——绝不写出 NaN。written 即 text 所序列化的对象，调用方留用它，使内存副本与落盘一致。
+    """
+    if not getattr(Config, "ARTIFACT_STRICT_JSON", True):
+        return json.dumps(obj, ensure_ascii=False, indent=2), obj
+    try:
+        return _numeric.dumps_strict(obj, ensure_ascii=False, indent=2), obj
+    except _numeric.NonFiniteJSONError as exc:
+        cleaned, paths = _nonfinite_nulled_artifact(obj, record_quality=record_quality)
+        text = _numeric.dumps_strict(cleaned, ensure_ascii=False, indent=2)
+        logger.error(f"{artifact}: {exc}；已改写为标准 JSON 后落盘（{len(paths)} 处非有限数置 null）")
+        return text, cleaned
+
+
 # ═══════════════════════════════════════════════════════════════
 # PM-2: 「Market Cross-Check」渲染块（预测 vs 市场隐含概率对照 + >10pp 判定 + 未匹配市场）
 # ═══════════════════════════════════════════════════════════════
@@ -1272,12 +1434,27 @@ def _mc_cell(x: Any) -> str:
     return str(x).replace("|", "／").replace("\n", " ").strip()
 
 
+def _mc_blend_work(blend: Any, zh: bool) -> str:
+    """REPORT-12：确定性市场混合（market_influence.blend）的代入数值算式（show-your-work），
+    追加在 Market Cross-Check 影响条目之后。四个值缺失或不在 [0, 1] → ""（degrade-safe，
+    不渲染半截算式）。"""
+    if not isinstance(blend, dict):
+        return ""
+    w, p, m, c = (_mc_float(blend.get(k)) for k in ("weight", "prior", "market", "computed"))
+    if not all(v is not None and 0.0 <= v <= 1.0 for v in (w, p, m, c)):
+        return ""
+    if zh:
+        return f"（混合 w={w:.2f}：{1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%}）"
+    return f" (blend w={w:.2f}: {1 - w:.2f}·{p:.0%} + {w:.2f}·{m:.0%} = {c:.0%})"
+
+
 def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any]]:
     """从 forecast 汇出对照行：优先 forecast['market_comparison']['comparisons']（PM-2 抽取器
     已算好的确定性负载），缺失时从 binary_forecasts[].market_anchor 现场推导（同字段口径）。
 
     统一为渲染用 schema：{forecast_id, statement, model_probability, market_id, market_question,
-    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url}。
+    market_implied_yes_prob, divergence, exceeds_10pp, rationale_cites_market, url, endDate}
+    （endDate 与抽取器负载同口径，供 FU-5 的截止日标注）。
     纯函数、无副作用；无可对照数据 → []。"""
     mc = forecast.get("market_comparison")
     if isinstance(mc, dict) and isinstance(mc.get("comparisons"), list):
@@ -1308,6 +1485,7 @@ def _mc_comparisons_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, An
             "exceeds_10pp": (abs(dv) > 0.10) if dv is not None else False,
             "rationale_cites_market": None,  # 无对照负载时无法判定，留空（渲染按未知处理）
             "url": anchor.get("url"),
+            "endDate": anchor.get("endDate"),
         })
     return out
 
@@ -1329,7 +1507,7 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
         inf = b.get("market_influence")
         if not isinstance(inf, dict) or not str(inf.get("market_id") or "").strip():
             continue
-        out.append({
+        row: Dict[str, Any] = {
             "forecast_id": b.get("id"),
             "market_id": inf.get("market_id"),
             "market_question": inf.get("market_question"),
@@ -1340,13 +1518,20 @@ def _mc_influences_from_forecast(forecast: Dict[str, Any]) -> List[Dict[str, Any
             "match_confidence": _mc_float(inf.get("match_confidence")),
             "anchor_removed": bool(inf.get("anchor_removed", False)),
             "probability_restored": bool(inf.get("probability_restored", False)),
-        })
+        }
+        # REPORT-12：确定性市场混合的算式记录（无 blend 时行形状不变）。
+        if isinstance(inf.get("blend"), dict):
+            row["blend"] = dict(inf["blend"])
+        out.append(row)
     return out
 
 
 def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                    markets: Optional[List[Dict[str, Any]]] = None,
-                                   lang: str = "en") -> str:
+                                   lang: str = "en", *,
+                                   disclose_anchoring: bool = False,
+                                   now: Optional[datetime] = None,
+                                   restamp: bool = True) -> str:
     """PM-2：渲染确定性「Market Cross-Check」块——预测 vs 市场隐含概率对照 + 未匹配市场清单。
 
     纯函数（无 LLM/无网络）：
@@ -1359,7 +1544,19 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
 
     LOOP-017 P0（影响溯源不丢失）：追加「市场影响的概率修订」小节——每条市场实际移动过
     发布概率的预测（market_influence 印章 / market_comparison.influences），**含锚点其后
-    被对账移除的情形**（标注是否已恢复 prior）。仅有影响记录时也必须出块。"""
+    被对账移除的情形**（标注是否已恢复 prior）。仅有影响记录时也必须出块。
+
+    REPORT-10 ``disclose_anchoring``（生产调用方传 REPORT_MARKET_XCHECK_DISCLOSURE，默认开）：
+    说明句末尾追加一句披露——预测起草时已参考这些市场价格，Δ 是锚定之后的差值，而非对一个
+    独立于市场的估计的度量。缺省 False → 输出逐字节不变。
+
+    REPORT-12：影响条目带确定性市场混合记录（blend）时，条目后追加代入数值的算式
+    （见 _mc_blend_work）；无 blend 的条目逐字节不变。
+
+    FU-5（PREDICTION_MARKETS_END_DATE_GATE 开时）：已过截止日、待结算的市场在对照行与未匹配
+    条目末尾标注。``now`` 钉住盖章时点（离线回放传报告自身的完成时刻，输出与回放当天无关）；
+    省略 = market_clock_now()，即实时最终化路径。``restamp=False`` → 不按任何时钟盖新章，只认
+    行上已保存的 window_ended 章（回放不知报告完成时刻时用，绝不退回墙钟）。"""
     if not isinstance(forecast, dict):
         return ""
     comps = _mc_comparisons_from_forecast(forecast)
@@ -1377,18 +1574,50 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
     # 其余（"zh"/"Chinese"/"中文" 等）走中文，兼容短码与语言全名两种传入。
     zh = not str(lang or "").lower().startswith("en")
     if zh:
-        lines = ["### 市场交叉核对", "",
-                 "_预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
-                 "分歧超 10 个百分点且理由未引用市场者标注「需解释」。_", ""]
+        caption = ("预测概率与真实预测市场隐含概率的确定性对照。市场是校准锚点，非真值；"
+                   "分歧超 10 个百分点且理由未引用市场者标注「需解释」。")
+        if disclose_anchoring:
+            caption += "预测在起草时已参考上述市场价格，故 Δ 是锚定之后的差值，并非独立于市场的估计。"
+        lines = ["### 市场交叉核对", "", f"_{caption}_", ""]
     else:
-        lines = ["### Market Cross-Check", "",
-                 "_Deterministic cross-check of forecast probabilities against live "
-                 "prediction-market implied probabilities. Markets are calibration anchors, "
-                 "not ground truth; divergences over 10 percentage points whose rationale does "
-                 "not cite the market are flagged for explanation._", ""]
+        caption = ("Deterministic cross-check of forecast probabilities against live "
+                   "prediction-market implied probabilities. Markets are calibration anchors, "
+                   "not ground truth; divergences over 10 percentage points whose rationale does "
+                   "not cite the market are flagged for explanation.")
+        if disclose_anchoring:
+            caption += (" Forecasts were drafted with these market prices in view, so Δ is "
+                        "measured after anchoring, not against a market-independent estimate.")
+        lines = ["### Market Cross-Check", "", f"_{caption}_", ""]
+    # FU-5（TIME-3 遗留）：PREDICTION_MARKETS_END_DATE_GATE 开时按 now（缺省
+    # market_clock_now()）盖 window_ended 章（浅拷贝，调用方的负载与快照不变）。已过截止日、
+    # 待结算的市场在对照行的「市场」单元格末尾、未匹配条目末尾标注，不再被当作实时对照。对照行
+    # 也要判定：抽取期（exclude_window_ended）只保证锚点在抽取那一刻未过期，本块在其后才渲染，
+    # 其间市场可能已过截止日。restamp=False 时不盖新章，只认已保存的章。未过期的行与旗标关时
+    # 的输出逐字节不变。
+    from ..utils.prediction_markets import (
+        end_date_gate_settings, market_clock_now, row_market_end, stamp_window_ended,
+        window_ended_label,
+    )
+    gate, grace = end_date_gate_settings()
+    stamping = gate and restamp
+    clock_now = (now if now is not None else market_clock_now()) if stamping else None
     if comps:
         comps_sorted = sorted(
             comps, key=lambda c: -(abs(_mc_float(c.get("divergence")) or 0.0)))
+        # 对照行无 endDate 时回退到快照中同 market_id 的行（含研究期已盖的 window_ended 章）；
+        # 不盖新章时对照行自身的 endDate 无从判定，快照行已保存的章即是最好的证据。
+        ended_snapshot: Dict[str, Dict[str, Any]] = {}
+        if gate:
+            matched_snapshot = [
+                m for m in snapshot if str(m.get("market_id") or "").strip() in anchored_ids]
+            if stamping:
+                comps_sorted, _ = stamp_window_ended(
+                    comps_sorted, now=clock_now, grace_hours=grace)
+                matched_snapshot, _ = stamp_window_ended(
+                    matched_snapshot, now=clock_now, grace_hours=grace)
+            for m in matched_snapshot:
+                if m.get("window_ended") is True:
+                    ended_snapshot.setdefault(str(m.get("market_id")).strip(), m)
         if zh:
             headers = ["#", "预测", "预测 P", "市场 P(yes)", "Δ（pp）", ">10pp 判定", "市场"]
         else:
@@ -1418,6 +1647,18 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(c.get("market_question") or "")[:80])
             url = str(c.get("url") or "").strip()
             market_cell = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or "—")
+            if gate:
+                ended = window_ended_label(c, zh)
+                if not ended and (not stamping or row_market_end(c) is None):
+                    ended = window_ended_label(
+                        ended_snapshot.get(str(c.get("market_id") or "").strip(), {}), zh)
+                if ended and not q:
+                    # 无问题文本时以 market_id 代替「—」占位符（不渲染成「— — window ended …」）；
+                    # 连 market_id 也没有 → 单元格只留标注本身。
+                    market_cell = _mc_cell(c.get("market_id") or "")
+                    if not market_cell:
+                        ended = ended.removeprefix(" — ")
+                market_cell += ended
             lines.append("| " + " | ".join(
                 [fid, stmt, mp_s, ip_s, dv_s, verdict, market_cell]) + " |")
     # LOOP-017 P0：市场实际移动过概率的记录——即使锚点其后被对账移除，影响溯源也必须
@@ -1446,7 +1687,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             if zh:
                 item = (f"- {fid} — {q or '—'}（{mid}）：{move}"
                         f"（修订时市场 P(yes) {_pct(inf.get('price_at_revision'))}，"
-                        f"匹配置信度 {conf_s}）")
+                        f"匹配置信度 {conf_s}）"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (f"—— 锚点在对账中被移除；概率已恢复为 "
@@ -1455,7 +1697,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                         item += "—— 锚点在对账中被移除（修订其后已被取代，未回滚）"
             else:
                 item = (f"- {fid} — {q or '—'} ({mid}): {move} at market P(yes) "
-                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}")
+                        f"{_pct(inf.get('price_at_revision'))}, match confidence {conf_s}"
+                        + _mc_blend_work(inf.get("blend"), zh))
                 if inf.get("anchor_removed"):
                     if inf.get("probability_restored"):
                         item += (" — anchor removed in reconciliation; probability restored "
@@ -1465,6 +1708,8 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
                                  "superseded; not rolled back)")
             lines.append(item)
     if unmatched:
+        if stamping:
+            unmatched, _ = stamp_window_ended(unmatched, now=clock_now, grace_hours=grace)
         lines.append("")
         if zh:
             lines.append("**未匹配市场（快照中未被任何预测锚定，可补充对照）：**")
@@ -1477,10 +1722,11 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             q = _mc_cell(str(m.get("question") or "")[:120])
             url = str(m.get("url") or "").strip()
             label = f"[{q}]({_mc_cell(url)})" if (q and url) else (q or _mc_cell(m.get("market_id") or ""))
+            ended = window_ended_label(m, zh) if gate else ""
             if zh:
-                lines.append(f"- {label} — 隐含 P(yes) {ip_s}")
+                lines.append(f"- {label} — 隐含 P(yes) {ip_s}{ended}")
             else:
-                lines.append(f"- {label} — implied P(yes) {ip_s}")
+                lines.append(f"- {label} — implied P(yes) {ip_s}{ended}")
     return "\n".join(lines)
 
 
@@ -1530,6 +1776,23 @@ class ReportAgent:
         "校准与信心评估",
     ]
 
+    @staticmethod
+    def resolve_output_language(simulation_requirement: str, research_report: str = "",
+                                situation_brief: str = "") -> str:
+        """The report's output language (REPORT_OUTPUT_LANGUAGE override, else sniffed).
+
+        Shared by ``__init__`` and callers that need a finished report's language
+        without constructing an agent (EVAL-1's reused-report ledger repair).
+        """
+        forced = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
+        if forced:
+            return forced
+        try:
+            from .requirement_spec import detect_output_language
+            return detect_output_language(simulation_requirement, research_report, situation_brief)
+        except Exception:  # noqa: BLE001 — never block construction on language sniff
+            return "English"
+
     def __init__(
         self,
         graph_id: str,
@@ -1550,6 +1813,9 @@ class ReportAgent:
         graph_priors: Optional[Dict[str, Any]] = None,
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
+        hindcast: Optional[Dict[str, Any]] = None,
+        numeric_guard_mode: Optional[str] = None,
+        interview_graph_feedback: Optional[bool] = None,
     ):
         """
         初始化Report Agent
@@ -1577,6 +1843,22 @@ class ReportAgent:
                 因果骨架的 chokepoint 支点优先取自此处（研究显著度回退）。
             scenario_spine: 主跑情景脊柱 [{name, resolution_criteria}]（W9-5 多种子集成对齐）——
                 钉进骨架推导，让种子对同一组命名情景打分（概率自由，新情景可追加）。
+
+        TIME-6 hindcast: 回测运行的 hindcast_policy_v1 钉（编排器主报告/种子报告传入）。缺省 None 时
+            由 _hindcast_pin 按模拟 id 查回所属管线的钉（覆盖 API 重生成/对话）；两者皆无 = 实时运行，
+            行为逐字节不变。有钉时报告阶段不读/不重报价/不现抓预测市场，forecast.json 盖 hindcast 章。
+            只有真正的回测钉（本版本且 hindcast 为真）才算数：as_of 等于今天的实时钉、{} 或其他值一律视为未传入。
+
+        TIME-5 numeric_guard_mode: 已发布二元阈值数值一致性影子检查的模式（off | shadow）。编排器主报告 /
+            种子报告传入准入时钉住的 safety_policy_v1.numeric_guard_mode；缺省 None（API 重生成 / 对话路径）
+            读当前 Config.NUMERIC_GUARD_MODE。非法值按 shadow 运行并告警。检查本身不改任何产物内容；
+            shadow 在二元提示词里多索取 latest_actual，模型起草的二元与概率可能因此与 off 不同。
+
+        FU-8 interview_graph_feedback: 采访回答能否写入观察图——有钉值的运行，编排器主报告 / 种子报告
+            传入该运行钉住的值（PipelineOrchestrator._interview_feedback_agent_kwargs），原样转交
+            zep_tools.interview_agents；只有 True 放行，其他非 None 值按 False（失败关闭）。缺省 None
+            （无钉值的运行、API 重生成 / 对话路径）时由 interview_agents 按模拟 id 查所属管线的钉
+            （共享模拟子管线跟随 base；无钉 → 环境值 Config.SIM_INTERVIEW_GRAPH_FEEDBACK）。
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
@@ -1591,16 +1873,8 @@ class ReportAgent:
         # report (an English brief → English submission; a wrong-language report is an automatic
         # round-one fail). Overridable via REPORT_OUTPUT_LANGUAGE. Consumed by _lang_override()
         # (section/plan prompts) and the binary/Part-1 renderers.
-        _forced_lang = (os.environ.get("REPORT_OUTPUT_LANGUAGE", "") or "").strip()
-        if _forced_lang:
-            self.output_language = _forced_lang
-        else:
-            try:
-                from .requirement_spec import detect_output_language
-                self.output_language = detect_output_language(
-                    self.simulation_requirement, self.research_report, self.situation_brief)
-            except Exception:  # noqa: BLE001 — never block construction on language sniff
-                self.output_language = "English"
+        self.output_language = self.resolve_output_language(
+            self.simulation_requirement, self.research_report, self.situation_brief)
         # T4.6/T4.7: 情景标签（what-if 框架）+ base 模拟 id（反事实对比）
         self.scenario_label = (scenario_label or "").strip()
         self.base_simulation_id = base_simulation_id or None
@@ -1620,6 +1894,19 @@ class ReportAgent:
             if isinstance(graph_priors_structural, dict) and graph_priors_structural else None)
         self.scenario_spine = (scenario_spine
                                if isinstance(scenario_spine, list) and scenario_spine else None)
+        # TIME-6: 回测钉（见 docstring）；只存真正的回测钉，其余一律视为未传入。按模拟 id 的查找结果
+        # 懒缓存一次；查找抛错时记下，市场据此失败即扣下。测试经 __new__ 构造时三者缺失，读取一律走 getattr。
+        # 须在下方各块构建之前赋值：REPORT_CHRONOLOGY_ASOF_SPLIT 的时间线块按回测钉的 as_of 切分（RESEARCH-13）。
+        self.hindcast: Optional[Dict[str, Any]] = as_hindcast_pin(hindcast)
+        # TIME-5：数值一致性影子检查模式（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self._numeric_guard_mode = self._normalize_numeric_guard_mode(numeric_guard_mode)
+        # FU-8：采访事实写图的门（见 docstring）。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self.interview_graph_feedback: Optional[bool] = (
+            None if interview_graph_feedback is None else interview_graph_feedback is True)
+        self._hindcast_pin_cache: Any = _HINDCAST_PIN_UNRESOLVED
+        self._hindcast_lookup_failed = False
+        # RESEARCH-12：(问题规范, 判定日是否采用) 懒缓存（_question_spec_for_run；None = 尚未核对）。
+        self._question_spec_run: Optional[Tuple[Optional[Dict[str, Any]], bool]] = None
         # VIZ-2: 研究期图表清单渲染成「可引用图表」块，钉进各章节提示词（章节据此用标准 markdown
         # 图片语法引用图形）；charts_manifest 缺省/空/解析失败时为空串 → 注入自动跳过（degrade-safe）。
         try:
@@ -1644,12 +1931,19 @@ class ReportAgent:
         # EXECPLAN2 I-3-2: 模拟量化信号包（确定性接地下限），懒构建一次后缓存；
         # 关闭 REPORT_SIGNAL_PACK 时始终为空串，_prepend_research_background 自动跳过（行为不变）。
         self._signal_pack = ""
+        # REPORT-5：最近一次构建信号包时的健康门裁定 {'health', 'suppressed'}；门关闭或尚未构建时为 None。
+        self._signal_pack_health: Optional[Dict[str, Any]] = None
+        # FU-3：run_summary.json 健康度读取结果按模拟 id 缓存（_run_summary_health）——一份报告内
+        # 本模拟与基线各只读一次，信号包、大纲、ReACT 工具与对比表共用同一裁定。
+        self._run_summary_health_cache: Dict[str, Tuple[Optional[str], bool]] = {}
         # 预测市场信号包（Polymarket 公开 Gamma API，keyless）：市场隐含概率作为**校准锚点**
         # 注入章节/骨架/二元预测提示词。优先读研究 handoff 的 prediction_markets.json，
         # 缺失时经 PolymarketClient 现抓。懒构建一次后缓存；无数据/关闭
         # PREDICTION_MARKETS_ENABLED 时为空串，注入自动跳过（degrade-safe，行为不变）。
         self._market_pack = ""
         self._prediction_markets: List[Dict[str, Any]] = []
+        # REPORT-4：章节提示词所见的市场槽状态（generate_report 构建市场包后冻结；None ⇒ 现算）。
+        self._prompt_market_status: Optional[_absence.SlotStatus] = None
         # PM-3：市场快照是否「陈旧」（实时重报价未生效——关闭旗标/client 不可用/整体失败）。
         # True 时 _build_market_pack 在包头附一句时效性说明，读者知道价是研究期而非当下（degrade-safe）。
         self._markets_stale = False
@@ -1657,6 +1951,14 @@ class ReportAgent:
         # 推导一次，注入每章提示词让叙事对齐可证伪目标；缺省/未开时为空，_prepend 自动跳过。
         self._forecast_spine: Optional[Dict[str, Any]] = None
         self._forecast_spine_block = ""
+        # REPORT-1：骨架因概率不可读被弃用时的复核摘要（并入 forecast.quality.probability_parse）。
+        self._spine_probability_review: Optional[Dict[str, Any]] = None
+        # INFRA-3：骨架因截断 draw 全部被丢弃而弃用时的计数（并入 forecast.quality.llm_truncation）。
+        self._spine_llm_truncation: Optional[Dict[str, Any]] = None
+        # REPORT-13：反证审查结果（forecast_counter_case）与 counter_case.json 的 sha256。旗标关 / 未运行 /
+        # 工件写入失败时为 None，指标、判定章节与 Part 2 提示词逐字节不变（__new__ 构造时读取一律走 getattr）。
+        self._counter_case: Optional[Dict[str, Any]] = None
+        self._counter_case_sha256: Optional[str] = None
         # XRUN-5/RPT-8: 报告级紧凑检索查询（懒派生一次后缓存）；None=未派生。
         self._retrieval_query: Optional[str] = None
         # RQ-1(4): 报告形状（章节数区间 / 每章字数 / 每章工具预算），从需求书 page_budget 懒派生
@@ -1667,10 +1969,37 @@ class ReportAgent:
         # RPT-5: 大纲摘要（generate_report 规划完成后回填），供引用溯源审计豁免系统注入的
         # 摘要 blockquote（assemble_full_report 固定输出 "> {outline.summary}"）。
         self._outline_summary = ""
+        # EVAL-1: 账本提交的溯源上下文（编排器/脚本在构造后赋值：pipeline_id、seed、run_kind、
+        # record_class、as_of_date；API 路径不设 → 默认 production）与本次提交回执。
+        # 测试经 __new__ 构造 agent 时二者缺失，读取一律走 getattr。
+        self.ledger_context: Optional[Dict[str, Any]] = None
+        self.ledger_receipt: Optional[Dict[str, Any]] = None
+        # EVAL-13: 评估运行准入钉（编排器主报告/种子报告在构造后赋值）。缺省 None 时由
+        # _resolve_evaluation_context 按模拟 id 查回所属管线的持久化标记（覆盖 API 重生成）；
+        # 两者皆无 = 生产运行，行为不变。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self.evaluation_context: Optional[Dict[str, Any]] = None
+        # EVAL-11: 骨架跨底座影子检查的政策（仅编排器主报告按准入钉赋值；种子报告 / model_comparison /
+        # API 路径从不设置 → None = 不运行）与检查结果（_finalize 写入 forecast.quality）。
+        # 测试经 __new__ 构造时二者缺失，读取一律走 getattr。
+        self.backbone_check_policy: Optional[Dict[str, Any]] = None
+        self._backbone_sensitivity: Optional[Dict[str, Any]] = None
+        # RESEARCH-13: 概率提示词证据包的摘要（无正文，kind → digest），_finalize 在最终落盘前写入
+        # forecast.context_pack。旗标全关时始终为空。测试经 __new__ 构造时缺失，读取一律走 getattr。
+        self._context_pack_digests: Dict[str, Dict[str, Any]] = {}
+        # INFRA-8: upstream model provenance (model-provenance/v1: research..run stages + pin
+        # drift), assigned by the orchestrator's report stage after construction. None (API
+        # paths, seed reports) = forecast.json carries no model_provenance. Tests building the
+        # agent via __new__ lack it; read with getattr.
+        self.run_provenance: Optional[Dict[str, Any]] = None
 
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
-        
+        # INFRA-11: opinion_shift / trace_cascade resolve actor names against the research roster
+        # (aliases included) under ACTOR_NAME_MATCH_STRICT. Only a tools object that declares the
+        # slot (ZepToolsService.__init__) receives it; without actors it matches graph/log names.
+        if actors and hasattr(self.zep_tools, "actor_roster"):
+            self.zep_tools.actor_roster = actors
+
         # 工具定义
         self.tools = self._define_tools()
         # interview_agents 需要 OASIS 模拟环境在线（IPC）。报告阶段几乎总在模拟结束、环境关闭之后运行，
@@ -1692,6 +2021,8 @@ class ReportAgent:
         # EXECPLAN2 I-5-4: 当前章节的工具调用计数器（_execute_tool 单一汇聚点累加），
         # 用于 per-section 遥测；未开遥测时该计数依旧无害地维护，开销可忽略。
         self._section_tool_calls = 0
+        # INFRA-5: 报告级工具调用计数与派发结局（并发章节下 per-section 汇总为空时的 tool_calls 来源）。
+        self._reset_tool_counters()
 
         # RQ-1(4): 依据需求书 page_budget 收敛/展开本次报告的每章工具预算——小 page_budget 报告回到
         # 紧凑 8 次，无/大预算用展开默认（Config.REPORT_AGENT_MAX_TOOL_CALLS=12）。以实例属性覆盖类
@@ -1876,8 +2207,12 @@ class ReportAgent:
                 # W9-8: 优先用研究 handoff 的全量 quantitative.json 渲染「关键指标」表
                 # （tier+时效排序过滤，上限 REPORT_KEY_METRICS_MAX），替代 actors 内嵌的
                 # 20 行副本；全量列表缺省/渲染为空/旗标关闭 → 回退内嵌副本（行为不变）。
+                # REPORT-8：研究行带页面核验标签时先用「已核验指标」块替代关键指标表；
+                # 无标签/旗标关闭/构建失败 → 空串，照旧走关键指标表 / 内嵌副本（逐字节不变）。
                 qb = ""
-                if getattr(Config, "REPORT_EVIDENCE_BLOCKS", True):
+                if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+                    qb = self._build_verified_figures_block()
+                if not qb and getattr(Config, "REPORT_EVIDENCE_BLOCKS", True):
                     try:
                         qb = self._build_key_metrics_block()
                     except Exception:  # noqa: BLE001 — 关键指标表为可选增强
@@ -2074,40 +2409,291 @@ class ReportAgent:
             ]) + " |")
         return "\n".join(lines)
 
+    def _build_verified_figures_block(self) -> str:
+        """REPORT-8：研究 quantitative.json 带页面核验标签（verification）时渲染「已核验指标」块。
+
+        在所引页面核验到数字的已报告值一张表、预期/目标值单列并标注「不是已发生的结果」，其余行只
+        计数（verified_facts.build_verified_figures_block，确定性、行数/字符数受
+        REPORT_VERIFIED_FACTS_MAX_ROWS / _MAX_CHARS 约束）。[S#] 只取报告引用索引
+        （_build_sources_index 的记号映射，纯函数、不改 __init__ 顺序）里存在的记号，绝不自造；
+        行按 actors.as_of_date 分型。结果字典缓存在 self._verified_figures（Part 2 综合注入同一块），
+        返回渲染文本。无任何行带标签（旧引擎/复用研究）→ ""（调用方回退关键指标表）；任何异常
+        → ""（绝不从 __init__ 抛出：构造抛错会触发编排器丢弃全部研究产物的 TypeError 回退）。"""
+        self._verified_figures = None
+        try:
+            rows = getattr(self, "quantitative", None)
+            if not isinstance(rows, list) or not any(
+                    isinstance(r, dict) and "verification" in r for r in rows):
+                return ""
+            from . import verified_facts as _vf
+            from ..utils.dates import parse_as_of
+
+            def _knob(name: str, default: int) -> int:
+                try:
+                    return int(getattr(Config, name, default))
+                except (TypeError, ValueError):
+                    return default
+
+            actors = getattr(self, "actors", None)
+            as_of = parse_as_of(actors.get("as_of_date")) if isinstance(actors, dict) else None
+            result = _vf.build_verified_figures_block(
+                rows,
+                tag_for=_vf.citation_tag_resolver(self._build_sources_index()[1]),
+                lang=getattr(self, "output_language", None) or "English",
+                max_rows=_knob("REPORT_VERIFIED_FACTS_MAX_ROWS", 40),
+                max_chars=_knob("REPORT_VERIFIED_FACTS_MAX_CHARS", 6000),
+                as_of=as_of.date() if as_of is not None else None,
+            )
+        except Exception as exc:  # noqa: BLE001 — 已核验指标块为增强，失败回退关键指标表
+            logger.warning(f"已核验指标块构建失败（回退关键指标表）: {exc}")
+            return ""
+        self._verified_figures = result
+        logger.info(
+            f"已核验指标块：已核验 {len(result['rows'])} 条、预期 {len(result['projections'])} 条、"
+            f"超限未列 {result['omitted']} 条、未收录 {result['excluded']}（sha256 {result['sha256'][:12]}）")
+        return result["rendered"]
+
+    def _verified_figures_check(self, md: str) -> Optional[Dict[str, Any]]:
+        """REPORT-9（REPORT_VERIFIED_FIGURES_CHECK，默认开，只检测）：正文数字对照 REPORT-8 的已核验指标块
+        （verified_facts.check_verified_figures），结果另附 block_sha256。块行 = rows + projections；
+        states_unverified 的对照行取研究 quantitative 中 quant_typing.is_unverified 的行（verification 为
+        unverified / snippet_only / none）；市场行取 self._prediction_markets；来源支撑检查用 _semantic_citation_support。旗标关、块为空
+        （旧引擎 / 复用研究 / 未核验）或任何异常 → None：不记录计数（终审据此去掉草稿期的
+        quality.verified_figures，_write_figure_provenance 据此删除旧 sidecar）。本方法从不改任何状态。"""
+        if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+            return None
+        block = getattr(self, "_verified_figures", None)
+        if not isinstance(block, dict) or not block.get("rendered"):
+            return None
+        try:
+            from . import verified_facts as _vf
+            from ..utils.quant_typing import is_unverified
+            try:
+                rel_tol = float(getattr(Config, "REPORT_VERIFIED_FIGURE_REL_TOL", _vf.DEFAULT_REL_TOL))
+            except (TypeError, ValueError):
+                rel_tol = _vf.DEFAULT_REL_TOL
+            if not 0.0 <= rel_tol <= 1.0:  # also NaN
+                rel_tol = _vf.DEFAULT_REL_TOL
+            index = self._citation_index_or_fallback()
+
+            def support(unit: str, tag: str) -> Optional[bool]:
+                source = index.get(tag)
+                return self._semantic_citation_support(unit, source) if isinstance(source, dict) else None
+
+            quantitative = getattr(self, "quantitative", None)
+            excluded = [row for row in (quantitative if isinstance(quantitative, list) else [])
+                        if isinstance(row, dict) and is_unverified(row)]
+            result = _vf.check_verified_figures(
+                md, list(block.get("rows") or []) + list(block.get("projections") or []),
+                excluded_rows=excluded, market_rows=getattr(self, "_prediction_markets", None) or [],
+                rel_tol=rel_tol, support_fn=support)
+        except Exception as exc:  # noqa: BLE001 — 只检测的旁路，失败不留任何字段
+            logger.warning(f"已核验数字比对失败（忽略）: {exc}")
+            return None
+        result["block_sha256"] = block.get("sha256") or ""
+        return result
+
+    @staticmethod
+    def _verified_figures_summary(check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：forecast.quality / final_audit.json 里记录的比对摘要（计数 + 块指纹）。"""
+        return {"counts": dict(check["counts"]), "block_sha256": check["block_sha256"],
+                "source_discrepancies": len(check["source_discrepancies"])}
+
+    def _write_figure_provenance(self, report_id: str, report: "Report") -> None:
+        """REPORT-9：终审之后（主报告已定型）写 reports/<id>/figure_provenance.json——已核验指标块
+        每一行的来源（[S#] 记号 / 来源标题 / URL）与正文里引用它的行、比对计数与样例（供人工复核
+        冲突精度）、比对出的来源分歧，以及市场行的报价时间戳（EVAL-6 的 quoted_at / snapshot_as_of
+        与 market_price_time 推出的 price_time / price_time_basis）；markdown_sha256 标明所描述的
+        成稿字节。本次未比对（旗标关 / 块为空 / 比对失败）→ 删除上一轮留下的旧文件，绝不让它描述
+        别的字节。影子工件：不登记阶段清单，从不改成稿，失败只告警（并删除旧文件）。"""
+        try:
+            path = os.path.join(ReportManager._get_report_folder(report_id), "figure_provenance.json")
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"figure_provenance.json 路径不可用（忽略）: {exc}")
+            return
+        try:
+            md = getattr(report, "markdown_content", None) or ""
+            check = self._verified_figures_check(md)
+            if check is not None:
+                write_json_atomic(path, self._figure_provenance_payload(md, check), allow_nan=False)
+                return
+        except Exception as exc:  # noqa: BLE001 — 影子工件，失败不影响报告
+            logger.warning(f"写 figure_provenance.json 失败（忽略）: {exc}")
+        # 本次未比对或写入失败：上一轮的旧文件描述的是别的字节，删除。
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError as exc:
+            logger.warning(f"删除旧 figure_provenance.json 失败（忽略）: {exc}")
+
+    def _figure_provenance_payload(self, md: str, check: Dict[str, Any]) -> Dict[str, Any]:
+        """REPORT-9：figure_provenance.json 的内容（drf.figure_provenance/v1，见 _write_figure_provenance）。"""
+        from ..utils.prediction_markets import market_price_time, price_time_enabled
+        block = self._verified_figures
+        block_rows = list(block.get("rows") or []) + list(block.get("projections") or [])
+        index = self._citation_index_or_fallback()
+        rows = []
+        for row_index, row in enumerate(block_rows):
+            tag = row.get("tag") or None
+            source = index.get(tag) if tag else None
+            indexed_url = source.get("url") if isinstance(source, dict) else None
+            rows.append({
+                "row_index": row_index, "metric": row.get("metric"), "value": row.get("value"),
+                "unit": row.get("unit"), "as_of": row.get("when"),
+                # The date or period the value is about (the year the check compares).
+                "period": row.get("period"),
+                "source_ref": tag,
+                "source_title": row.get("source_title"),
+                # The research row's own page, else the page its [S#] resolves to.
+                "source_url": row.get("source_url")
+                or (indexed_url.strip() if isinstance(indexed_url, str) else "") or None,
+                "verification": "verified",
+                # used_in lists at most MATCHED_LINES_PER_ROW lines; used_in_count is every use.
+                "used_in": check["matched_rows"].get(row_index, []),
+                "used_in_count": check["matched_counts"].get(row_index, 0),
+            })
+        markets = []
+        for market in getattr(self, "_prediction_markets", None) or []:
+            if not isinstance(market, dict):
+                continue
+            entry = {key: market.get(key) for key in
+                     ("market_id", "implied_yes_prob", "quoted_at", "price_at_research", "snapshot_as_of")}
+            # The anchor's own price time (EVAL-6): none when MARKET_ANCHOR_PRICE_TIME is off.
+            price_time = market_price_time(market) if price_time_enabled() else None
+            entry["price_time"], entry["price_time_basis"] = price_time or (None, None)
+            markets.append(entry)
+        return {
+            "schema": "drf.figure_provenance/v1",
+            "block_sha256": check["block_sha256"],
+            "markdown_sha256": hashlib.sha256(md.encode("utf-8")).hexdigest(),
+            "rows": rows,
+            "source_discrepancies": check["source_discrepancies"],
+            "market_rows": markets,
+            "unmatched_numeric_claims": check["counts"]["unmatched"],
+            "counts": dict(check["counts"]),
+            "examples": check["examples"],
+        }
+
+    # FU-9: contested-table slots reserved for TIME-4 quantitative reconcile rows, and the
+    # why_they_differ marker reconcile_quantitative writes on a probable unit-scale error.
+    _CONTESTED_QUANT_SLOTS = 3
+    _UNIT_SCALE_MARK = "probable unit-scale error"
+
+    def _contested_row_line(self, r: Any) -> Optional[str]:
+        """W9-8: contested.json 单条论断 → 块内一行；无论断或无可用立场返回 None（跳过）。"""
+        if not isinstance(r, dict) or not r.get("claim"):
+            return None
+        segs = []
+        for p in (r.get("positions") or [])[:3]:
+            if not isinstance(p, dict) or not p.get("stance"):
+                continue
+            src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
+            tier = str(p.get("tier") or "").strip()
+            tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
+            segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
+        if not segs:
+            return None
+        return f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs)
+
     def _build_contested_table_block(self, max_claims: int = 15) -> str:
         """W9-8: 争议性关键论断块（contested.json 全量，上限 15 条）。
 
         注入命中风险/不确定性关键词的章节提示词——报告必须正面处理证据分歧而非
-        单边引用。无数据返回空串（注入自动跳过）。"""
+        单边引用。无数据返回空串（注入自动跳过）。FU-9：上限截掉 TIME-4 数值对账行时
+        （RESEARCH_QUANT_RECONCILE 开启）见 _contested_quant_slots；未截断时逐字节不变。"""
         rows = self.contested if isinstance(getattr(self, "contested", None), list) else None
         if not rows:
             return ""
-        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
-        rendered = 0
-        for r in rows:
-            if not isinstance(r, dict) or not r.get("claim"):
+        # The plain cut: the first max_claims renderable rows (at least one), in order; the
+        # rows after it are never rendered here.
+        head: List[Tuple[Dict[str, Any], str]] = []
+        rest: List[Any] = []
+        for i, r in enumerate(rows):
+            line = self._contested_row_line(r)
+            if line is None:
                 continue
-            segs = []
-            for p in (r.get("positions") or [])[:3]:
-                if not isinstance(p, dict) or not p.get("stance"):
-                    continue
-                src = "；".join(str(s) for s in (p.get("sources") or [])[:2])
-                tier = str(p.get("tier") or "").strip()
-                tag = f"（{tier}{'，' if tier and src else ''}{src}）" if (tier or src) else ""
-                segs.append(f"{self._md_cell(p['stance'], 160)}{tag}")
-            if not segs:
-                continue
-            lines.append(f"- **{self._md_cell(r['claim'], 120)}** — " + " ⇄ ".join(segs))
-            rendered += 1
-            if rendered >= max_claims:
+            head.append((r, line))
+            if len(head) >= max_claims:
+                rest = rows[i + 1:]
                 break
-        return "\n".join(lines) if rendered else ""
+        if not head:
+            return ""
+        lines = ["## 争议性关键论断（证据分歧——本章须正面呈现两侧立场与依据，不得单边引用）"]
+        if rest and getattr(Config, "RESEARCH_QUANT_RECONCILE", True):
+            lines += self._contested_quant_slots(head, rest)
+        else:
+            lines += [line for _, line in head]
+        return "\n".join(lines)
+
+    def _contested_quant_slots(self, head: List[Tuple[Dict[str, Any], str]],
+                               rest: List[Any]) -> List[str]:
+        """FU-9 (TIME-4 open issue): the plain cut's rows with slots kept for quant rows.
+
+        Every engine appends its quantitative disagreements (origin quant_reconcile) after
+        the model's claims, and only v3 caps them and puts probable unit-scale errors first,
+        so the plain first-N cut drops them all.  A multi-track run's merged handoff joins the
+        tracks' contested.json files (pipeline_orchestrator.merge_list_dedup), so there the
+        quant rows sit after each track's claims, interleaved with the next track's.  When the
+        plain cut drops at least one renderable quant_reconcile row, the quant rows get
+        max(min(_CONTESTED_QUANT_SLOTS, N), quant rows inside the plain cut) of the N slots
+        (at most all of them), chosen by priority wherever they sit: probable unit-scale
+        errors first, stable, so each kind keeps contested.json order.  A plain quant row
+        inside the cut therefore never keeps its slot while a unit-scale error past it is
+        dropped.  The plain cut's other rows (the model's claims) fill the remaining slots in
+        order.  The kept rows keep contested.json order, except that the positions held by
+        kept quant rows take those rows in priority order (unit-scale errors first; v3's
+        order already is), and a closing note counts the quant rows still cut.  Otherwise the
+        plain cut is returned unchanged.  Only quant_reconcile rows of ``rest`` are rendered,
+        and a malformed one is skipped (the plain cut never rendered it)."""
+        def unit_scale(r: Dict[str, Any]) -> bool:
+            return self._UNIT_SCALE_MARK in str(r.get("why_they_differ") or "")
+
+        tail: List[Tuple[Dict[str, Any], str]] = []
+        for r in rest:
+            if not isinstance(r, dict) or r.get("origin") != "quant_reconcile":
+                continue
+            try:
+                line = self._contested_row_line(r)
+            except Exception:  # noqa: BLE001 — a malformed row past the cap is skipped, as before
+                continue
+            if line is not None:
+                tail.append((r, line))
+        if not tail:
+            return [line for _, line in head]
+        cap = len(head)
+        rendered = head + tail  # contested.json order
+        quant = [i for i, (r, _) in enumerate(rendered) if r.get("origin") == "quant_reconcile"]
+        quant.sort(key=lambda i: not unit_scale(rendered[i][0]))
+        quant_positions = set(quant)
+        # The quant rows' share never falls below what the plain cut already shows; tail is
+        # not empty, so there are more quant rows than that and the slice fills the share.
+        in_cut = sum(1 for i in quant if i < cap)
+        keep = set(quant[:max(min(self._CONTESTED_QUANT_SLOTS, cap), in_cut)])
+        # The plain cut's other rows, in order, fill the remaining slots (there are enough:
+        # cap - in_cut of them).
+        keep.update([i for i in range(cap) if i not in quant_positions][:cap - len(keep)])
+        # Kept rows in contested.json order; the positions held by quant rows take the kept
+        # quant rows in priority order (unit-scale errors first).
+        kept_quant_by_priority = iter([i for i in quant if i in keep])
+        lines = []
+        for i in sorted(keep):
+            row = next(kept_quant_by_priority) if i in quant_positions else i
+            lines.append(rendered[row][1])
+        cut = [rendered[i][0] for i in quant if i not in keep]
+        if cut:
+            n_unit = sum(1 for r in cut if unit_scale(r))
+            lines.append(f"（另有 {len(cut)} 条数值对账分歧超出上限未列出"
+                         + (f"，其中 {n_unit} 条疑似量纲错误" if n_unit else "") + "）")
+            logger.info(f"争议性论断块：数值对账分歧保留 {len(quant) - len(cut)} 条、"
+                        f"超出上限未列 {len(cut)} 条（疑似量纲错误 {n_unit} 条）")
+        return lines
 
     def _build_chronology_block(self, max_events: int = 25) -> str:
         """W9-8: 紧凑时间线块（timeline.json 取最近 max_events 条、按时间升序渲染）。
 
         注入命中背景/时间线关键词的章节提示词；图表侧另有全量 plotly 时间线。
-        无数据返回空串（注入自动跳过）。"""
+        无数据返回空串（注入自动跳过）。RESEARCH-13：REPORT_CHRONOLOGY_ASOF_SPLIT 开启时改按
+        as_of 切分渲染（_build_chronology_split_block）；关闭时逐字节不变。"""
         rows = (self.timeline_events
                 if isinstance(getattr(self, "timeline_events", None), list) else None)
         if not rows:
@@ -2115,6 +2701,10 @@ class ReportAgent:
         evts = [r for r in rows if isinstance(r, dict) and r.get("date") and r.get("event")]
         if not evts:
             return ""
+        if getattr(Config, "REPORT_CHRONOLOGY_ASOF_SPLIT", False):
+            split_block = self._build_chronology_split_block(rows)
+            if split_block is not None:
+                return split_block
         evts.sort(key=lambda r: str(r.get("date") or ""))
         recent = evts[-max_events:]
         lines = ["## 关键事件时间线（研究实证，按时序——叙事因果链须与之一致）"]
@@ -2125,6 +2715,45 @@ class ReportAgent:
                 continue
             seen.add(key)
             lines.append(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}")
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    def _build_chronology_split_block(self, rows: List[Any]) -> Optional[str]:
+        """RESEARCH-13（REPORT_CHRONOLOGY_ASOF_SPLIT）：时间线块按 as_of 切分。
+
+        已发生（整个日期区间在 as_of 当日或之前，最近 15 条，按时序）与单列的「已排期」子列表
+        （日期晚于 as_of；与证据包同一实时运行门，回溯/回测运行扣下并注明条数）；无日期/跨越 as_of 的
+        条目只计数。as_of 取回测钉优先（_context_pack_as_of）；as_of 无效、回测钉查找失败或切分失败
+        → None，调用方渲染旧块（degrade-safe）。"""
+        try:
+            from . import forecast_context_packer as _cp
+            as_of_raw, as_of_source = self._context_pack_as_of()
+            now = datetime.now(timezone.utc)
+            as_of = _cp.validate_pack_as_of(as_of_raw, now)
+            if as_of is None:
+                return None
+            split = _cp.split_chronology(
+                rows, as_of, now,
+                window_days=int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30)),
+                retrospective=as_of_source == "hindcast_pin")
+        except Exception as exc:  # noqa: BLE001 — 切分为增强，失败回退旧时间线块
+            logger.warning(f"时间线 as_of 切分失败（回退旧时间线块）: {exc}")
+            return None
+        day = as_of.isoformat()
+        lines = [f"## 关键事件时间线（研究实证，按时序；日期在 {day} 当日或之前——叙事因果链须与之一致）"]
+        lines.extend(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}"
+                     for r in split["past"])
+        if split["scheduled"]:
+            lines.append(f"### 已排期（日期在 {day} 之后：尚未发生，是催化剂而非已发生的事实）")
+            lines.extend(f"- {self._md_cell(r['date'], 16)}：{self._md_cell(r['event'], 160)}"
+                         for r in split["scheduled"])
+        notes = []
+        if split["post_as_of_rows_withheld"]:
+            notes.append(f"{split['post_as_of_rows_withheld']} 条日期在 {day} 之后的条目"
+                         "（回溯运行，可能含事后信息）未列出")
+        if split["undated"] or split["straddle"]:
+            notes.append(f"{split['undated']} 条无日期、{split['straddle']} 条跨越 {day} 的条目未列出")
+        if notes:
+            lines.append("（" + "；".join(notes) + "）")
         return "\n".join(lines) if len(lines) > 1 else ""
 
     def _kg_structural_note(self, name: str, row: Dict[str, Any]) -> str:
@@ -2293,10 +2922,20 @@ class ReportAgent:
         """
         # 市场包/图表块经 getattr 读取：部分离线测试用 __new__ 绕过 __init__ 构造 agent，
         # 缺属性时按空串处理（与注入跳过语义一致）。
+        # REPORT-4（REPORT_ABSENCE_MARKERS）：市场槽为空且状态非 present 时，在市场包位置写一行
+        # 类型化缺失标记 + 禁止引用/编造市场价的说明。状态在一次运行内稳定 ⇒ 各章前缀仍逐字节一致。
+        market_pack = getattr(self, "_market_pack", "")
+        market_absence = ""
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True) and not market_pack:
+            _mstatus = self._market_slot_status()
+            if _mstatus.state != _absence.SLOT_PRESENT:
+                market_absence = (
+                    _absence.absence_marker("预测市场信号", _mstatus, "zh")
+                    + "\n正文不得引用或编造预测市场价格/隐含概率（研究材料中带 [S#] 的数字除外）。")
         prefix_parts = [p for p in (
             self._background_block, self._sources_index,
             self._forecast_spine_block, self._signal_pack,
-            getattr(self, "_market_pack", ""),
+            market_pack, market_absence,
             getattr(self, "_charts_block", ""),
         ) if p]
         # W9-8: 章节定向证据块——标题命中关键词时追加争议表 / 时间线（块为空时自动跳过）。
@@ -2387,15 +3026,44 @@ class ReportAgent:
                       or "diagnostic_only").strip().lower()
         if _effect == "no_update":
             return ""
+        # REPORT-5（REPORT_SIGNAL_PACK_HEALTH_GATE，默认开，fail-closed）：按 run_summary.json 的
+        # simulation_health 跳过种子回声块（_SIGNAL_PACK_HEALTH_SKIPS），裁定记入
+        # self._signal_pack_health（_finalize_structured_forecast 落 quality.signal_pack_health）。
+        # 无 summary / 读取失败 → health=None，与 ok 一样按旧行为组包（逐字节不变）；summary 存在
+        # 却读不出健康度时另记 summary_unreadable=True（门对本次运行未生效，须与「无 summary」可区分）。
+        # 未识别的非 ok 值 → 保留全部块并附审慎提示（偏向关闭，不当作 ok）。
+        _health: Optional[str] = None
+        _unrecognised = False
+        _skip: Tuple[str, ...] = ()
+        if getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            _health, _summary_unreadable = self._run_summary_health()
+            _skip = _SIGNAL_PACK_HEALTH_SKIPS.get(_health or "", ())
+            _unrecognised = (_health is not None and _health != "ok" and not _skip
+                             and _health not in _SIGNAL_PACK_PARTIAL_HEALTHS)
+            if _unrecognised:
+                logger.warning(f"信号包健康门：未识别的 simulation_health={_health[:80]!r}，"
+                               f"保留全部块并附审慎提示（按非健康运行处理）")
+            # suppressed = 门跳过的块。被跳过块的构建工具根本不调用，所以列入不代表该块本会非空
+            # （如 SIM_DECISION_CHANNEL 关闭时世界态块本就为空）。唯一按适用性筛掉的是情景差异块：
+            # 它只对有基线模拟的报告适用，无基线时从不构建，谈不上被跳过。
+            self._signal_pack_health = {
+                "health": _health,
+                "suppressed": [b for b in _skip
+                               if b != "scenario_diff" or self.base_simulation_id],
+            }
+            if _summary_unreadable:
+                self._signal_pack_health["summary_unreadable"] = True
         parts: List[str] = []
         # 0) NEXTSTEPS P1-1: 决策通道演化出的「结果世界态」——建模出的 P(outcome)（按情景份额），
         # 比声量份额更接近真实结果。仅开启 SIM_DECISION_CHANNEL 时存在；置于最前（最权威）。
-        try:
-            ws_blk = self._world_state_block()
-            if ws_blk:
-                parts.append(ws_blk)
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"信号包 world_state 读取失败（忽略）: {e}")
+        # hollow 时保留（块内自带有效性裁定行）；errored 时跳过。
+        if "world_state" not in _skip:
+            try:
+                ws_blk = self._world_state_block()
+                if ws_blk:
+                    parts.append(ws_blk)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"信号包 world_state 读取失败（忽略）: {e}")
         # 0b) NEXTSTEPS P3-8: 关系演化投影到预测时点（保守模型先验，显式标注=非证据）。
         # 默认关（REPORT_PROJECTED_EDGES）；标注 contingent 的纽带是情景分叉支点。
         if getattr(Config, "REPORT_PROJECTED_EDGES", False):
@@ -2408,29 +3076,31 @@ class ReportAgent:
                 logger.warning(f"信号包 projected_edges 失败（忽略）: {e}")
         # 1) 量化结果——WAVE9：默认把原始动作计数确定性转写为定性「议程设置力分层」再注入
         # （REPORT_SIGNAL_PACK_QUALITATIVE，默认开）；转写失败或旗标关闭回退原始文本（截断 ~3600 字）。
-        try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=8)
-            if outcomes and not outcomes.strip().startswith("（"):
-                if getattr(Config, "REPORT_SIGNAL_PACK_QUALITATIVE", True):
-                    tiers = salience_tiers_from_outcomes(outcomes)
-                    if tiers:
-                        parts.append(tiers)
-                    elif not _actor_counts_flat(_parse_outcome_actors(outcomes)):
-                        # 转写失败（解析不出行为者）才回退原始文本（历史行为）；LOOP-015：
-                        # 计数持平判空 = 无信号，整块自抑制——绝不回退原始动作计数，
-                        # 那正是 WAVE9 定性转写要挡住的机制数字泄漏。
+        if "simulation_outcomes" not in _skip:
+            try:
+                outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=8)
+                if outcomes and not outcomes.strip().startswith("（"):
+                    if getattr(Config, "REPORT_SIGNAL_PACK_QUALITATIVE", True):
+                        tiers = salience_tiers_from_outcomes(outcomes)
+                        if tiers:
+                            parts.append(tiers)
+                        elif not _actor_counts_flat(_parse_outcome_actors(outcomes)):
+                            # 转写失败（解析不出行为者）才回退原始文本（历史行为）；LOOP-015：
+                            # 计数持平判空 = 无信号，整块自抑制——绝不回退原始动作计数，
+                            # 那正是 WAVE9 定性转写要挡住的机制数字泄漏。
+                            parts.append(outcomes[:3600])
+                    else:
                         parts.append(outcomes[:3600])
-                else:
-                    parts.append(outcomes[:3600])
-        except Exception as e:  # noqa: BLE001 — 信号包为可选增强，失败仅告警不影响主流程
-            logger.warning(f"信号包 simulation_outcomes 计算失败（忽略）: {e}")
+            except Exception as e:  # noqa: BLE001 — 信号包为可选增强，失败仅告警不影响主流程
+                logger.warning(f"信号包 simulation_outcomes 计算失败（忽略）: {e}")
         # 2) 派系/联盟结构——RQ-4：截断到 ~1600 字
-        try:
-            coalitions = self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
-            if coalitions and not coalitions.strip().startswith("（"):
-                parts.append(coalitions[:1600])
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"信号包 coalition_map 计算失败（忽略）: {e}")
+        if "coalition_map" not in _skip:
+            try:
+                coalitions = self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
+                if coalitions and not coalitions.strip().startswith("（"):
+                    parts.append(coalitions[:1600])
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"信号包 coalition_map 计算失败（忽略）: {e}")
         # 2b) R2-KG-7: 因果骨架——chokepoint 多跳因果邻域 + 最强 source→outcome 路径（含
         # 方向/符号/强度/时滞）。RQ-4：默认开（Config.REPORT_CAUSAL_SPINE=True），且 graph 层
         # 多跳遍历有界、任意失败降级为空串，不影响信号包其余部分。
@@ -2442,13 +3112,19 @@ class ReportAgent:
             except Exception as e:  # noqa: BLE001
                 logger.warning(f"信号包 causal_spine 计算失败（忽略）: {e}")
         # 3) 反事实差异（仅情景报告有基线时）——RQ-4：截断到 ~2400 字
-        if self.base_simulation_id:
-            try:
-                diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
-                if diff and not diff.strip().startswith("（"):
-                    parts.append(diff[:2400])
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"信号包 scenario_diff 计算失败（忽略）: {e}")
+        # FU-3：基线模拟不可用（REPORT-5 规则）时不给差异，给基线说明行（基线裁定由
+        # _finalize_structured_forecast 落 quality.baseline_signal_pack_health）。
+        if self.base_simulation_id and "scenario_diff" not in _skip:
+            _base_note = self._baseline_behaviour_note()
+            if _base_note:
+                parts.append(_base_note)
+            else:
+                try:
+                    diff = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
+                    if diff and not diff.strip().startswith("（"):
+                        parts.append(diff[:2400])
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"信号包 scenario_diff 计算失败（忽略）: {e}")
 
         if not parts:
             return ""
@@ -2467,7 +3143,152 @@ class ReportAgent:
             "本材料不进入概率生成路径（forecast_effect=diagnostic_only）；\n"
             "❌ 严禁在正文引用动作次数、轮次、动作类型、发帖/点赞/评论等机制细节。"
         )
+        # REPORT-5：非健康运行在包头后紧跟一行状态说明（ok / 无 health → 不加，逐字节不变）。
+        if _health in _SIGNAL_PACK_HEALTH_SKIPS:
+            header += "\n\n" + _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+        elif _health in _SIGNAL_PACK_PARTIAL_HEALTHS:
+            header += "\n\n" + _SIGNAL_PACK_PARTIAL_NOTE.format(health=_health)
+        elif _unrecognised:
+            # 未识别值原样进每章提示词：截短，防异常长串挤占上下文。
+            header += "\n\n" + _SIGNAL_PACK_UNKNOWN_HEALTH_NOTE.format(health=_health[:40])
         return header + "\n\n" + "\n\n".join(parts)
+
+    def _behaviour_skips(self, simulation_id: Optional[str] = None
+                         ) -> Tuple[Optional[str], Tuple[str, ...]]:
+        """FU-3：``simulation_id``（缺省本报告的模拟）的 (health, 须跳过的行为块)，规则同 REPORT-5
+        信号包（_SIGNAL_PACK_HEALTH_SKIPS）。门关 / 无 summary / ok / 部分完成 / 未识别 → 无跳过。
+        供大纲预取、ReACT 工具与基线消费方复用同一裁定。"""
+        if not getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            return None, ()
+        health, _unreadable = self._run_summary_health(simulation_id)
+        return health, _SIGNAL_PACK_HEALTH_SKIPS.get(health or "", ())
+
+    def _baseline_behaviour_note(self) -> str:
+        """FU-3：情景报告的基线模拟按 REPORT-5 规则不可用（hollow / errored）时的基线说明行；
+        门关 / 非情景报告 / 基线可用（含无 summary、部分完成、未识别、summary 不可读）→ ""。"""
+        if not self.base_simulation_id:
+            return ""
+        health, skip = self._behaviour_skips(self.base_simulation_id)
+        return _BASELINE_NO_BEHAVIOUR_NOTE.format(health=health) if "scenario_diff" in skip else ""
+
+    def _scenario_diff_note(self) -> str:
+        """FU-3：基线 vs 情景行为对比（scenario_diff 工具 / 大纲差异预取）在任一侧模拟不可用时给的
+        说明行：本报告模拟不可用 → REPORT-5 的同一说明行；否则基线不可用 → 基线说明行；否则 ""。"""
+        if not self.base_simulation_id:
+            return ""
+        health, skip = self._behaviour_skips()
+        if "scenario_diff" in skip:
+            return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=health)
+        return self._baseline_behaviour_note()
+
+    def _comparison_body_note(self) -> str:
+        """FU-3：对比章节正文里替代对比表的读者可见说明行。裁定同 _scenario_diff_note（本报告模拟
+        不可用优先，其次基线不可用），措辞按成稿语言取 _COMPARISON_NO_*_DATA_LINE——不带健康字段、
+        方法学词汇或写作指令。非情景报告 / 门关 / 两侧都可用 → ""。"""
+        if not self.base_simulation_id:
+            return ""
+        zh = not str(getattr(self, "output_language", "") or "English").lower().startswith("en")
+        lang = "zh" if zh else "en"
+        _health, skip = self._behaviour_skips()
+        if "scenario_diff" in skip:
+            return _COMPARISON_NO_SCENARIO_DATA_LINE[lang]
+        if self._baseline_behaviour_note():
+            return _COMPARISON_NO_BASELINE_DATA_LINE[lang]
+        return ""
+
+    def _gated_behaviour_tools(self) -> frozenset[str]:
+        """FU-3：本报告里只会返回说明行的行为类工具（与 _execute_tool 的门同一裁定）。它们不进
+        ReACT 的「未使用工具」推荐集，也不进工具描述、使用建议与原生 tool schema——否则模型被推去
+        调用只给说明行的工具，白占工具调用预算。工具仍留在 self.tools：模型照旧调用时派发给说明行。
+        门关 / 健康运行且基线可用 → 空集（工具集与提示词逐字节不变）。读不到裁定 → 空集（只是增强）。"""
+        try:
+            _health, skip = self._behaviour_skips()
+            gated = set()
+            if "simulation_outcomes" in skip:
+                gated.update(("simulation_outcomes", "opinion_shift"))
+            if "coalition_map" in skip:
+                gated.add("coalition_map")
+            if getattr(self, "base_simulation_id", None) and self._scenario_diff_note():
+                gated.add("scenario_diff")
+            return frozenset(gated)
+        except Exception as e:  # noqa: BLE001 — 工具宣传过滤为增强，失败按旧工具集
+            logger.warning(f"行为类工具门裁定失败（按完整工具集宣传）: {e}")
+            return frozenset()
+
+    def _baseline_health_record(self) -> Optional[Dict[str, Any]]:
+        """FU-3：情景报告基线模拟的健康裁定，与 quality.signal_pack_health 同形。
+        - 基线不可用（hollow / errored）→ {'health', 'suppressed'}；suppressed = 基线门挡下的基线
+          消费方（scenario_diff 指信号包差异块、scenario_diff 工具与大纲差异预取；comparison_table
+          仅在 REPORT_COMPARISON_TABLE 开时列入）。与 REPORT-5 同义：列入表示门挡下了它，不代表它
+          本会非空；与本报告模拟自身的裁定无关（两侧都不可用时照样记）。
+        - 基线 summary 存在却不可读 → {'health': None, 'suppressed': [], 'summary_unreadable': True}
+          （同 REPORT-5：门对基线未生效，须与「无 summary」可区分）。
+        - 门关 / 非情景报告 / 基线可用（ok / 部分完成 / 未识别 / 无 summary）→ None（不写）。"""
+        if not self.base_simulation_id or not getattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", True):
+            return None
+        health, unreadable = self._run_summary_health(self.base_simulation_id)
+        if "scenario_diff" in _SIGNAL_PACK_HEALTH_SKIPS.get(health or "", ()):
+            suppressed = ["scenario_diff"]
+            if getattr(Config, "REPORT_COMPARISON_TABLE", False):
+                suppressed.append("comparison_table")
+            return {"health": health, "suppressed": suppressed}
+        if unreadable:
+            return {"health": None, "suppressed": [], "summary_unreadable": True}
+        return None
+
+    def _run_summary_health(self, simulation_id: Optional[str] = None) -> Tuple[Optional[str], bool]:
+        """REPORT-5：读本模拟 run_summary.json 的 simulation_health（小写），返回 (health, unreadable)。
+        FU-3：``simulation_id`` 给出时读该模拟（情景报告的基线），缺省读本报告的模拟。结果按模拟 id
+        缓存在 agent 上：一份报告内每个模拟只读一次 summary（不可读告警也只打一次），所有消费方
+        共用同一裁定。读取规则见 _read_run_summary_health。"""
+        sid = getattr(self, "simulation_id", None) if simulation_id is None else simulation_id
+        if not isinstance(sid, str):
+            return self._read_run_summary_health(sid)
+        cache = getattr(self, "_run_summary_health_cache", None)
+        if cache is None:  # __new__ 构造（未走 __init__）的离线 agent
+            cache = self._run_summary_health_cache = {}
+        if sid not in cache:
+            cache[sid] = self._read_run_summary_health(sid)
+        return cache[sid]
+
+    def _read_run_summary_health(self, simulation_id: Any) -> Tuple[Optional[str], bool]:
+        """REPORT-5：读 ``simulation_id`` 的 run_summary.json 的 simulation_health（小写），
+        返回 (health, unreadable)。
+
+        路径与编排器模拟健康门相同（SimulationRunner.RUN_STATE_DIR/<simulation_id>/run_summary.json，
+        经 contained_child 校验 id）。
+        - 缺文件 / 非法 id / 早于健康度记账的老 summary（无该字段）→ (None, False)，静默。
+        - 文件存在但解析失败、顶层不是对象、或 simulation_health 不是非空字符串 → (None, True)，
+          WARNING 告警：fail-closed 的健康门对本次运行未生效，生产上必须可见。
+        两种 None 调用方都按旧行为组包（离线 / API 路径不因 summary 缺失或损坏而改变）。"""
+        try:
+            from .simulation_runner import SimulationRunner
+            path = os.path.join(
+                contained_child(SimulationRunner.RUN_STATE_DIR, simulation_id, "simulation"),
+                "run_summary.json")
+        except Exception as e:  # noqa: BLE001 — 非法 / 缺失 id：没有可读的 summary
+            logger.debug(f"信号包健康门无法定位 run_summary.json（按无 summary 处理）: {e}")
+            return None, False
+        if not os.path.exists(path):
+            return None, False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                summary = json.load(f)
+        except Exception as e:  # noqa: BLE001 — 读不到健康度即按旧行为（绝不阻断信号包）
+            problem = f"读取或解析失败: {e}"
+        else:
+            if not isinstance(summary, dict):
+                problem = f"顶层不是对象（{type(summary).__name__}）"
+            elif "simulation_health" not in summary:
+                return None, False
+            else:
+                health = summary.get("simulation_health")
+                if isinstance(health, str) and health.strip():
+                    return health.strip().lower(), False
+                problem = f"simulation_health 非法: {health!r:.80}"
+        logger.warning(f"信号包健康门：run_summary.json 存在但不可读（{problem}），"
+                       f"按无 summary 处理（门未生效）: {path}")
+        return None, True
 
     def _world_state_block(self) -> str:
         """NEXTSTEPS P1-1: 读取模拟的 world_state_trajectory.json（决策通道产物），渲染**建模出的
@@ -2493,10 +3314,30 @@ class ReportAgent:
         # 投影），不是权威/硬模拟证据；标签随块携带，且带上 1C 的有效性裁定（若有）。
         lines = ["【推演结果分布 P(outcome)（elicited model projection——模型引出的推演投影，"
                  "非观察证据；仅供机制分析，不得据此调整概率）】"]
+        note_line = "注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。"
         _validity = str((data or {}).get("validity") or "").strip().lower()
         if _validity and _validity != "valid":
-            lines.append(f"⚠️ 有效性裁定：{_validity}（决策通道存在失败/沉默轮，"
+            _reasons = (data or {}).get("validity_reasons")
+            _reasons = [str(r) for r in (_reasons if isinstance(_reasons, list) else [])
+                        if str(r).strip()]
+            # SIM-2：fallback_share_exceeded 只在其余检查全过时出现（每轮都可能已提交），
+            # 病因是名册覆盖不足而非失败/沉默轮；其余裁定沿用原措辞（逐字节不变）。
+            _cause = ("决策通道名册覆盖不足：过多名册席位无有效承诺或弃权"
+                      if "fallback_share_exceeded" in _reasons else "决策通道存在失败/沉默轮")
+            lines.append(f"⚠️ 有效性裁定：{_validity}（{_cause}，"
                          "本分布不可用作任何依据；forecast_effect=no_update）")
+            if getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True):
+                # SIM-1（fail-closed）：显式非 valid 裁定 → 只留警示与裁定原因，隐藏结果份额与
+                # 演化航点，正文无数字可引。注意：信号包解析器
+                # （forecast_extractor._WS_OUTCOME_HEADER_RE / _SIM_SIGNAL_TAXONOMY）自 SIM-3 起识别
+                # 本块的「【推演结果分布」头（以本渲染器标题为准），并对上面的「⚠️ 有效性裁定」行
+                # fail-closed（不计入可引用信号、不解析份额，本开关关闭时同样如此）；隐藏份额行
+                # 再保证正文无数字可引。
+                if _reasons:
+                    lines.append("裁定原因：" + "、".join(_reasons))
+                lines.append("（有效性未达标：已隐藏结果份额与演化航点——正文不得引用本块任何数字或趋势）")
+                lines.append(note_line)
+                return "\n".join(lines)
         for name, sh in sorted(shares.items(), key=lambda kv: -float(kv[1] or 0)):
             try:
                 lines.append(f"· {name}: {float(sh) * 100:.0f}%")
@@ -2538,7 +3379,14 @@ class ReportAgent:
                              f"（截至 {(data or {}).get('horizon_date') or ''}）")
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
-        lines.append("注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。")
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：先验回声 / 领先扎堆时，在份额行之后、注释行
+        # 之前加一行不含机制数字的定性提示（forecast_extractor 的份额解析只读份额行，不受影响）；
+        # 其余裁定不加任何行，输出逐字节不变。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True):
+            echo_line = _prior_echo_caveat(data)
+            if echo_line:
+                lines.append(echo_line)
+        lines.append(note_line)
         return "\n".join(lines)
 
     def _temporal_horizon_date(self) -> str:
@@ -2564,9 +3412,88 @@ class ReportAgent:
             return ""
         return ""
 
+    def _question_spec_for_run(self) -> Tuple[Optional[Dict[str, Any]], bool]:
+        """RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：本报告采用的研究问题规范（哈希复核；无规范 /
+        被拒 / 旗标关 → None），及其判定日是否即本次运行的判定日（question_spec.horizon_applies：
+        日历模式以模拟实际采用的判定日为准——提示词显式日期优先于规范；否则须落在 as_of 窗口内）。
+        不一致时骨架提示词不采用规范块（避免两个相互矛盾的判定日）、判定章节标注「未采用」、
+        forecast.json question_spec.horizon_applied=false。每份报告只算一次（不一致只告警一次）；
+        任何异常 → 视为无规范（degrade-safe，与旧行为一致）。"""
+        cached = getattr(self, "_question_spec_run", None)
+        if cached is not None:
+            return cached
+        spec: Optional[Dict[str, Any]] = None
+        applied = True
+        try:
+            spec = _qspec.downstream_spec(self.actors)
+            if spec is not None:
+                from datetime import date as _date
+                from ..utils.dates import parse_as_of
+                parsed = parse_as_of(self.actors.get("as_of_date"))
+                as_of = parsed.date() if parsed else _date.today()
+                run_horizon = self._temporal_horizon_date()
+                applied = _qspec.horizon_applies(spec, as_of, run_horizon)
+                if not applied:
+                    why = (f"不是本次运行的判定日 {run_horizon}" if run_horizon
+                           else f"不在 as_of {as_of.isoformat()} 之后 {_qspec.MAX_HORIZON_YEARS} 年窗口内")
+                    logger.warning(
+                        f"研究问题规范判定日 {spec['horizon'].get('date')} {why}：骨架不采用问题规范块，"
+                        "判定章节标注未采用，forecast.json question_spec.horizon_applied=false")
+        except Exception as exc:  # noqa: BLE001 — 规范为可选增强，核对失败按无规范处理
+            logger.warning(f"研究问题规范判定日核对失败（按无规范处理）: {exc}")
+            spec, applied = None, True
+        self._question_spec_run = (spec, applied)
+        return self._question_spec_run
+
     # ──────────────────────────────────────────────────────────────
     # 预测市场信号包（Polymarket 公开 Gamma API；市场隐含概率 = 校准锚点）
     # ──────────────────────────────────────────────────────────────
+    def _hindcast_pin(self) -> Optional[Dict[str, Any]]:
+        """TIME-6: this report's hindcast policy pin, or None for a live report.
+
+        The ``hindcast`` constructor kwarg (orchestrator main and seed reports) wins
+        when it is a real hindcast pin (``hindcast_policy.as_hindcast_pin``; a live
+        pin or ``{}`` counts as not given). Otherwise the pipeline that ran
+        ``simulation_id`` is looked up once and cached
+        (``pipeline_orchestrator.hindcast_pin_for_simulation``), so entry points that
+        build a ReportAgent without orchestrator context (``/api/report`` regenerate
+        and chat) still withhold live market data from a hindcast. A lookup that
+        raises is logged and counts as no pin (no hindcast block, no as-of year), but
+        it is remembered so that markets stay withheld (``_markets_withheld_status``).
+        """
+        given = as_hindcast_pin(getattr(self, "hindcast", None))
+        if given is not None:
+            return given
+        cached = getattr(self, "_hindcast_pin_cache", _HINDCAST_PIN_UNRESOLVED)
+        if cached is not _HINDCAST_PIN_UNRESOLVED:
+            return cached
+        found: Optional[Dict[str, Any]] = None
+        simulation_id = getattr(self, "simulation_id", None)
+        if simulation_id:
+            try:
+                from .pipeline_orchestrator import hindcast_pin_for_simulation
+                found = hindcast_pin_for_simulation(simulation_id)
+            except Exception as exc:  # noqa: BLE001 — 查找失败不阻断报告：不盖章，但市场失败即扣下
+                logger.warning(f"回测钉查找失败（不盖 hindcast 章，预测市场扣下）: {exc}")
+                self._hindcast_lookup_failed = True
+        self._hindcast_pin_cache = found if isinstance(found, dict) else None
+        return self._hindcast_pin_cache
+
+    def _markets_withheld_status(self) -> Optional["_absence.SlotStatus"]:
+        """TIME-6: why this report keeps market data out, or None when markets load as usual.
+
+        A hindcast pin withholds them: ``not_run('hindcast_markets_withheld')``. A pin
+        lookup that raised withholds them too, ``unavailable('hindcast_lookup_failed')``
+        (fail closed, like EVAL-13's evaluation lookup): markets are an optional
+        enhancement, so a live report only loses its market table, whereas live odds
+        in an unrecognised hindcast would not be honest.
+        """
+        if self._hindcast_pin() is not None:
+            return _absence.not_run("hindcast_markets_withheld")
+        if getattr(self, "_hindcast_lookup_failed", False):
+            return _absence.unavailable("hindcast_lookup_failed")
+        return None
+
     def _load_prediction_markets(self) -> List[Dict[str, Any]]:
         """加载本次运行的预测市场快照（规整化 schema，见 utils.prediction_markets）。
 
@@ -2574,7 +3501,22 @@ class ReportAgent:
         simulation_id 定位，与 load_research_dossier_for_simulation 同模式）；② 文件缺失
         且 PolymarketClient 可用时现抓一次（检索词由需求书 + hot_topics + 头部 actor 名确定性
         派生）。任何失败返回 []（degrade-safe，绝不阻断报告生成）。
+
+        REPORT-4：同时把市场槽状态写进 self._market_status（absence.SlotStatus：研究快照有行 /
+        现抓成功 ⇒ present；handoff 无行 ⇒ 按研究 payload 分类；现抓异常 ⇒ unavailable；
+        无 handoff 且现抓未成功 ⇒ unavailable('no_market_snapshot')），供缺失标记与
+        forecast.quality.prompt_slot_states 使用。现抓兜底行为本身不变。
+
+        TIME-6：回测运行（_hindcast_pin）一律扣下市场——不读 handoff 快照、不重报价、不现抓，
+        槽状态记为 not_run('hindcast_markets_withheld')（提示词据此写明「本次运行未启用」而非「无市场」）；
+        回测钉查找抛错时同样扣下，记为 unavailable('hindcast_lookup_failed')（见 _markets_withheld_status）。
         """
+        _withheld = self._markets_withheld_status()
+        if _withheld is not None:
+            self._market_status = _withheld
+            self._markets_stale = False
+            return []
+        self._market_status = _absence.unavailable("no_market_snapshot")
         try:
             max_n = int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20)
         except (TypeError, ValueError):
@@ -2597,9 +3539,18 @@ class ReportAgent:
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
                     rows = [m for m in (markets or []) if isinstance(m, dict)]
                     if rows:
+                        self._market_status = _absence.present("research_snapshot")
+                        # EVAL-6：快照 payload 的顶层 as_of 记进每行 snapshot_as_of（行已带则保留），
+                        # 锚点据此标定研究期价（as_of 是快照落盘时刻，只是取价时刻的上界）；
+                        # MARKET_ANCHOR_PRICE_TIME 关 → 行不变。
+                        from ..utils.prediction_markets import stamp_snapshot_as_of
+                        rows = stamp_snapshot_as_of(
+                            rows[:max_n],
+                            payload.get("as_of") if isinstance(payload, dict) else None)
                         # PM-3：handoff-PLUS-refresh——研究期快照拉进来后对其做一次实时重报价，
                         # 保留 price_at_research 并算 Δ；重报价未生效时用研究期价并置 _markets_stale。
-                        return self._requote_snapshot(rows[:max_n])
+                        return self._requote_snapshot(rows)
+                    self._market_status = _absence.market_status(payload, enabled=True)
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
@@ -2612,6 +3563,7 @@ class ReportAgent:
                 PolymarketClient,
                 derive_market_queries_llm,
                 score_market_relevance,
+                stamp_snapshot_as_of,
             )
             client = PolymarketClient()
             if not client.enabled or not getattr(self, "llm", None):
@@ -2659,6 +3611,9 @@ class ReportAgent:
             candidates = client.snapshot_for_queries(
                 queries, max_total=max_n, min_volume=min_vol,
                 max_per_event=max_per_event)
+            # 现抓时刻只取一次、紧跟抓价（早于相关性打分的 LLM 调用）：既写恢复工件的 as_of，
+            # 也作每行 snapshot_as_of（EVAL-6，无 report_id 时行照样带上）。
+            fetched_at = datetime.now(timezone.utc).isoformat()
             scored = score_market_relevance(_market_llm, question, candidates)
             markets = [row for row in scored if row.get("relevance_score") is not None]
             if markets:
@@ -2670,7 +3625,7 @@ class ReportAgent:
                         write_json_atomic(
                             os.path.join(ReportManager._get_report_folder(report_id),
                                          "prediction_markets_recovered.json"),
-                            {"as_of": datetime.now(timezone.utc).isoformat(),
+                            {"as_of": fetched_at,
                              "source": "report_fallback", "queries": queries,
                              "markets": markets,
                              "status": {"attempted": True,
@@ -2680,10 +3635,13 @@ class ReportAgent:
                         )
                     except Exception as persist_error:  # noqa: BLE001 — observability only
                         logger.debug(f"写入报告期预测市场恢复工件失败（忽略）: {persist_error}")
+                self._market_status = _absence.present("report_fallback")
+                markets = stamp_snapshot_as_of(markets, fetched_at)
             self._markets_stale = False  # PM-3：现抓即实时价，不陈旧
             return markets
         except Exception as e:  # noqa: BLE001 — 市场信号为可选增强
             logger.warning(f"预测市场信号抓取失败（忽略）: {e}")
+            self._market_status = _absence.unavailable("report_fallback_error")
             return []
 
     def _requote_snapshot(self, markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2725,7 +3683,10 @@ class ReportAgent:
 
         就地更新 self._prediction_markets（供 extract_binary_forecasts 的 markets 回填/校验）
         与 self._market_pack（渲染的市场表，Δ 列随之刷新）。无缓存快照/未开旗标/失败 → 原样
-        （degrade-safe，_requote_snapshot 内部已把整体成败写进 _markets_stale）。"""
+        （degrade-safe，_requote_snapshot 内部已把整体成败写进 _markets_stale）。
+        TIME-6：市场被扣下（回测钉或钉查找失败，见 _markets_withheld_status）时直接返回，不发任何市场请求。"""
+        if self._markets_withheld_status() is not None:
+            return
         rows = getattr(self, "_prediction_markets", None)
         if not rows or not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
             return
@@ -2776,6 +3737,35 @@ class ReportAgent:
             return ""
         self._prediction_markets = markets
         return self._render_market_pack(markets)
+
+    def _market_slot_status(self) -> "_absence.SlotStatus":
+        """REPORT-4：提示词里市场槽的状态（absence.SlotStatus）。
+
+        generate_report 构建市场包后即冻结该状态（_freeze_market_slot_status）：之后骨架 / 二元
+        抽取在市场包为空时会重跑 _load_prediction_markets 并改写 self._market_status，但章节前缀、
+        章节质检与 forecast.quality.prompt_slot_states 必须一致地反映章节提示词实际看到的那个状态。
+        未冻结（单独调用 / 离线测试）时现算，见 _live_market_slot_status。"""
+        frozen = getattr(self, "_prompt_market_status", None)
+        if frozen is not None:
+            return frozen
+        return self._live_market_slot_status()
+
+    def _freeze_market_slot_status(self) -> None:
+        """REPORT-4：把此刻的市场槽状态冻结为本次运行章节提示词所用的状态（见 _market_slot_status）。"""
+        self._prompt_market_status = self._live_market_slot_status()
+
+    def _live_market_slot_status(self) -> "_absence.SlotStatus":
+        """REPORT-4：按当前记录现算市场槽状态。
+
+        PREDICTION_MARKETS_ENABLED 关 ⇒ not_run；否则取 _load_prediction_markets 记下的状态，
+        未加载过 ⇒ unavailable('no_market_snapshot')。状态为 present 但提示词实际没有市场表
+        （渲染为空 / 构建失败）⇒ unavailable('market_pack_empty')——缺失槽绝不被当作已注入。"""
+        if not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
+            return _absence.not_run("prediction_markets_disabled")
+        status = getattr(self, "_market_status", None) or _absence.unavailable("no_market_snapshot")
+        if status.state == _absence.SLOT_PRESENT and not getattr(self, "_market_pack", ""):
+            return _absence.unavailable("market_pack_empty")
+        return status
 
     def _build_causal_spine_block(self, max_chokepoints: int = 4, max_chars: int = 3200) -> str:
         """R2-KG-7: 确定性「因果骨架」块——以图谱中显著度最高的若干 chokepoint 为中心，渲染其
@@ -2844,6 +3834,167 @@ class ReportAgent:
     # ──────────────────────────────────────────────────────────────
     # NEXTSTEPS P0-1 / P2-1 / P2-3: forecast spine + finalization + publish gate
     # ──────────────────────────────────────────────────────────────
+    def _context_pack_as_of(self) -> Tuple[Any, str]:
+        """RESEARCH-13: the cutoff of the dated lanes and where it came from.
+
+        A hindcast's pinned as-of (TIME-6) wins over the research actors' ``as_of_date`` (the
+        research run date): a row dated after the cutoff must never be shown as a past
+        development. Fail closed: a pin without a usable as-of, or a pin lookup that raised
+        (hindcast unknown, as when TIME-6 withholds markets), yields no cutoff, so the packs
+        and the chronology split fall back to their legacy views instead of cutting at the
+        research date. The packer validates the value (a day, not after today)."""
+        pin = self._hindcast_pin()
+        if pin is not None:
+            return pin.get("as_of"), "hindcast_pin"
+        if getattr(self, "_hindcast_lookup_failed", False):
+            return None, "hindcast_lookup_failed"
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+        return actors.get("as_of_date"), "actors"
+
+    def _context_pack_situation(self) -> Tuple[str, str]:
+        """RESEARCH-13: the spine pack's situation stream and where it came from.
+
+        The actors' situation-brief block; when actors.json has none, the legacy background
+        brief (actors.situation_brief: roster, relationships, hot topics) that the [态势简报]
+        slice carried, rendered without its key-events timeline and research as-of line (the
+        dated rows reach the pack only through the as_of-labelled lanes)."""
+        from ..utils import actors as _actors
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else None
+        block = _actors.situation_brief_block(actors)
+        if block:
+            return block, "situation_brief_block"
+        if actors is None:
+            return "", "none"
+        brief = _actors.situation_brief(
+            {k: v for k, v in actors.items() if k not in ("key_events", "as_of_date")})
+        return (brief, "legacy_brief") if brief else ("", "none")
+
+    def _context_pack_timeline(self) -> List[Dict[str, Any]]:
+        """RESEARCH-13: the research timeline (timeline.json), else the actors' key_events."""
+        rows = getattr(self, "timeline_events", None)
+        if isinstance(rows, list) and rows:
+            return rows
+        actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+        events = actors.get("key_events")
+        return events if isinstance(events, list) else []
+
+    def _spine_key_metrics(self) -> Tuple[str, bool]:
+        """FU-4 (REPORT-8 open issue): the spine pack's key-metrics stream, and whether it is
+        REPORT-8's labelled verified-figures block.
+
+        With REPORT_VERIFIED_FACTS_BLOCK on, that block replaces the unlabelled key-metrics
+        table, as it does in the report context: the block ``__init__`` built (the text Part 2
+        injects). When ``__init__`` never reached the builder (RESEARCH_FORECAST_INPUTS off, or
+        no situation brief), the same builder runs here, and ``self._verified_figures`` is left
+        unset again so Part 2 and the section context stay as they were. No rendered block (no
+        labelled row, a failed build) or the knob off: the key-metrics table, as before."""
+        if not getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            return self._build_key_metrics_block(), False
+        if hasattr(self, "_verified_figures"):
+            verified = self._verified_figures
+        else:
+            try:
+                self._build_verified_figures_block()
+                verified = getattr(self, "_verified_figures", None)
+            finally:
+                vars(self).pop("_verified_figures", None)
+        rendered = str(verified.get("rendered") or "").strip() if isinstance(verified, dict) else ""
+        if rendered:
+            return rendered, True
+        return self._build_key_metrics_block(), False
+
+    def _context_pack_result(self, kind: str, *, now: Optional[datetime] = None,
+                             strip_market_table: bool = False) -> Tuple[Any, Dict[str, Any]]:
+        """RESEARCH-13: build the ``kind`` ('binary' | 'spine') evidence pack, no IO.
+
+        Returns ``(PackResult, provenance)``. ``strip_market_table`` removes the research
+        bridge's machine market table first (REPORT-10, the same view the legacy draw gets).
+        Shared with backend/scripts/context_pack_replay.py so the replay packs exactly what
+        a report would."""
+        from . import forecast_context_packer as _cp
+        now = now or datetime.now(timezone.utc)
+        as_of_raw, as_of_source = self._context_pack_as_of()
+        # A hindcast's timeline was researched after its cutoff: rows dated after it are
+        # withheld however recent the cutoff (scheduled_guard_open).
+        retrospective = as_of_source == "hindcast_pin"
+        timeline = self._context_pack_timeline()
+        window = int(getattr(Config, "FORECAST_SCHEDULED_LIVE_WINDOW_DAYS", 30))
+        report = str(getattr(self, "research_report", "") or "")
+        provenance: Dict[str, Any] = {"as_of_source": as_of_source}
+        if kind == "binary":
+            if strip_market_table:
+                from .forecast_extractor import strip_machine_market_table
+                report, provenance["market_table_stripped"] = strip_machine_market_table(report)
+            result = _cp.build_binary_pack(
+                report, timeline, as_of_raw, now,
+                budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_BINARY_BUDGET", 48000)),
+                lang="en", window_days=window, retrospective=retrospective)
+        elif kind == "spine":
+            situation, provenance["situation_source"] = self._context_pack_situation()
+            metrics, verified = self._spine_key_metrics()
+            if verified:
+                provenance["key_metrics_source"] = "verified_figures"
+            result = _cp.build_spine_pack(
+                report, situation, metrics, timeline, as_of_raw, now,
+                budget=int(getattr(Config, "FORECAST_CONTEXT_PACK_SPINE_BUDGET", 14000)),
+                lang="zh", window_days=window, retrospective=retrospective)
+        else:
+            raise ValueError(f"unknown context pack kind: {kind!r}")
+        return result, provenance
+
+    def _forecast_context_pack(self, report_id: str, kind: str, *,
+                               strip_market_table: bool = False) -> Optional[str]:
+        """RESEARCH-13 (P09): the ``kind`` evidence pack text for its probability prompt.
+
+        Writes ``<report_folder>/context_pack_<kind>.json`` atomically (schema
+        drf.context_pack/1, with the text) and keeps the digest without the text in
+        ``self._context_pack_digests[kind]``; ``applied`` says whether the prompt got the
+        pack (for the spine, ``published`` is added after the draw: see
+        ``_mark_spine_pack_published``). Degrade-safe: a fallback status or any error is
+        logged and returns None, so the caller runs its legacy prompt (the digest records why)."""
+        digests = getattr(self, "_context_pack_digests", None)
+        if not isinstance(digests, dict):
+            digests = {}
+            self._context_pack_digests = digests
+        try:
+            result, provenance = self._context_pack_result(
+                kind, strip_market_table=strip_market_table)
+            record = dict(result.digest(kind), applied=result.ok, **provenance)
+            write_json_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id),
+                             f"context_pack_{kind}.json"),
+                dict(record, text=result.text))
+        except Exception as exc:  # noqa: BLE001 — 证据包为增强：失败回退旧提示词
+            logger.warning(f"证据包 {kind} 构建失败（回退旧提示词）: {exc}")
+            digests[kind] = {"kind": kind, "status": f"error:{type(exc).__name__}",
+                             "applied": False}
+            return None
+        digests[kind] = record
+        if not result.ok:
+            logger.warning(f"证据包 {kind} 未启用（{result.status}），回退旧提示词")
+            return None
+        # FU-4：已核验指标块（REPORT_VERIFIED_FACTS_MAX_CHARS，默认 6000 字）可能超出骨架证据包的
+        # key_metrics 配额（预算 20% 加余量）。截断已记入遥测并以 …[truncated] 标出，此处再告警，不静默。
+        if provenance.get("key_metrics_source") == "verified_figures":
+            stream = (result.telemetry.get("streams") or {}).get("key_metrics") or {}
+            if stream.get("truncated") or stream.get("sections_dropped"):
+                logger.warning(
+                    f"证据包 {kind}：已核验指标块 {stream.get('raw_chars')} 字超出 key_metrics 配额 "
+                    f"{stream.get('allocated_chars')} 字，保留 {stream.get('kept_chars')} 字"
+                    f"（{'末尾截断' if stream.get('truncated') else '整块未收录'}）")
+        logger.info(f"证据包 {kind}: {len(result.text)} 字（as_of 来源 {provenance['as_of_source']}）")
+        return result.text
+
+    def _mark_spine_pack_published(self, published: bool) -> None:
+        """RESEARCH-13: record on the spine pack's digest whether the spine drawn with it was
+        pinned. A spine without scenarios (or a failed draw) falls back to post-hoc
+        extract_structured_forecast, which never sees the pack, so its scenarios are not the
+        pack's. No-op unless the pack reached the spine prompt (flag off: no digest)."""
+        digests = getattr(self, "_context_pack_digests", None)
+        digest = digests.get("spine") if isinstance(digests, dict) else None
+        if isinstance(digest, dict) and digest.get("applied"):
+            digest["published"] = bool(published)
+
     def _derive_and_pin_forecast_spine(self, report_id: str) -> None:
         """NEXTSTEPS P0-1: derive the structured forecast spine BEFORE section prose,
         persist forecast.json early, and pin a compact spine block into every section
@@ -2852,13 +4003,40 @@ class ReportAgent:
         Degrade-safe: any failure leaves ``self._forecast_spine=None`` and the block
         empty, so sections behave exactly as the pre-spine path.
         """
+        from . import backbone_sensitivity as _bs
         from . import forecast_extractor as _fe
+        self._spine_probability_review = None
+        self._spine_llm_truncation = None
+        # EVAL-11：影子跨底座检查的输入——骨架实际所用的参数与批判前骨架（检查在下方 try 之外运行）。
+        # 开启时骨架推导经观察器调用主客户端，逐次记下每次骨架调用的服务方（主 / 回退 / 缓存）；
+        # 未开启时照旧直接传 self.llm（调用与提示词逐字节不变）。
+        self._backbone_sensitivity = None
+        pre_critique_spine: Optional[Dict[str, Any]] = None
+        spine_kwargs: Dict[str, Any] = {}
+        spine_calls: Optional[_bs.SpineCallObserver] = None
+        if _bs.enabled_policy(getattr(self, "backbone_check_policy", None)) is not None:
+            spine_calls = _bs.SpineCallObserver(self.llm)
         try:
             from ..utils import actors as _actors
             try:
                 forecast_inputs = _actors.forecast_inputs_block(self.actors) or ""
             except Exception:  # noqa: BLE001 — forecast_inputs 为可选增强
                 forecast_inputs = ""
+            # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范块置于研究输入最前（6000 字上限
+            # 保住它），各情景 resolution_criteria 采用同一结果定义、判定来源与判定日。经 spine_kwargs
+            # 的 forecast_inputs 槽进入 build_spine_user_prompt，EVAL-11 影子检查见到同一文本；
+            # 无规范 / 旗标关 / 规范判定日不是本次运行的判定日 → 块为空，提示词逐字节不变。
+            # build_spine_user_prompt 截的是研究输入的尾部：块把研究输入推过上限时告警（不再静默）。
+            _qspec_spec, _qspec_applied = self._question_spec_for_run()
+            _qspec_block = _qspec.render_spine_block(_qspec_spec) if _qspec_applied else ""
+            if _qspec_block:
+                forecast_inputs = _qspec_block + ("\n\n" + forecast_inputs if forecast_inputs else "")
+                _inputs_cap = int(getattr(Config, "REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
+                if len(forecast_inputs) > _inputs_cap:
+                    logger.warning(
+                        f"问题规范块（{len(_qspec_block)} 字）置于研究输入最前：研究输入共 {len(forecast_inputs)} 字，"
+                        f"超出 REPORT_SPINE_INPUT_CAP_INPUTS={_inputs_cap}，末尾 "
+                        f"{len(forecast_inputs) - _inputs_cap} 字被截断")
             # Foglamp WP1 (1D, I-16/I-18)：预测骨架是概率权威。默认政策 diagnostic_only 下，
             # 模拟信号包（WorldState 份额、联盟结构、反事实差异等 elicited model projection）
             # **不得进入概率生成输入**——研究先验已经播种了 WorldState，再喂回骨架就是同一
@@ -2894,19 +4072,37 @@ class ReportAgent:
             _hz = self._temporal_horizon_date()
             if _hz:
                 horizon = _hz
+            spine_kwargs = {
+                "central_question": self.simulation_requirement or "",
+                "horizon": horizon,
+                "situation_brief": self.situation_brief or None,
+                "forecast_inputs": forecast_inputs,
+                "signal_pack": signal_pack,
+                "market_block": market_pack,
+                "language": getattr(self, "output_language", None) or "",
+            }
+            # RESEARCH-13（FORECAST_CONTEXT_PACK_SPINE，默认关）：研究证据包取代 [态势简报] 切片。
+            # 放进 spine_kwargs，EVAL-11 影子检查重建的提示词与发布骨架所用的逐字节一致；包构建
+            # 失败/回退时不加此键，提示词与旧路径逐字节相同。
+            if getattr(Config, "FORECAST_CONTEXT_PACK_SPINE", False):
+                _spine_pack = self._forecast_context_pack(report_id, "spine")
+                if _spine_pack:
+                    spine_kwargs["context_pack"] = _spine_pack
             spine = _fe.derive_forecast_spine(
-                self.llm,
-                central_question=self.simulation_requirement or "",
-                horizon=horizon,
-                situation_brief=self.situation_brief or None,
-                forecast_inputs=forecast_inputs,
-                signal_pack=signal_pack,
-                market_block=market_pack,
-                language=getattr(self, "output_language", None) or "",
-            )
+                self.llm if spine_calls is None else spine_calls, **spine_kwargs)
             if not spine or not spine.get("scenarios"):
+                # REPORT-1：骨架因概率不可读被置空时保留复核摘要，_finalize 并入
+                # forecast.quality.probability_parse（回退成稿后抽取的原因可审计）。
+                if isinstance(spine, dict) and spine.get("probability_review"):
+                    self._spine_probability_review = spine["probability_review"]
+                # INFRA-3：截断 draw 全被丢弃导致骨架为空时同样留下计数（仅截断失败即关闭时存在）。
+                _spine_quality = spine.get("quality") if isinstance(spine, dict) else None
+                if isinstance(_spine_quality, dict) and _spine_quality.get("llm_truncation"):
+                    self._spine_llm_truncation = dict(_spine_quality["llm_truncation"])
+                self._mark_spine_pack_published(False)
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
+            pre_critique_spine = spine
             # RPT-3（REPORT_CRITIQUE_BEFORE_PROSE，默认开）：红队自校准 + 事前验尸挪到
             # 叙事之前——此前批判发生在全部正文写完之后，正文（连章节标题里的百分比）
             # 捍卫的是 4 情景 39/23/19/19，而 forecast.json 交付的是批判后的 5 情景
@@ -2917,6 +4113,11 @@ class ReportAgent:
                     and getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)):
                 try:
                     _forecast_language = getattr(self, "output_language", None) or ""
+                    # REPORT-11（FORECAST_PROBABILITY_SHAPE）：批判前快照情景概率——未批判骨架此前从不
+                    # 落盘，批判对概率形状的影响无从度量。评审成功（critiqued）时在评审 / 验尸调用之后
+                    # 记入 quality.pre_critique_scenarios（两者提示词不变）；旗标关不快照、不加键。
+                    _pre_critique = (_pshape.scenario_snapshot(spine.get("scenarios"))
+                                     if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
                     _critiqued = _fe.self_critique_forecast(
                         spine, self.llm, language=_forecast_language
                     )
@@ -2925,18 +4126,50 @@ class ReportAgent:
                     )
                     if _critiqued.get("scenarios"):
                         spine = _critiqued
+                        if _pre_critique is not None:
+                            _pshape.stamp_pre_critique(spine, _pre_critique)
                         logger.info(
                             f"预测骨架已先于叙事完成红队自校准（{len(spine['scenarios'])} 情景）"
                         )
                 except Exception as _ce:  # noqa: BLE001 — 批判失败沿用未批判骨架
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
+            # INFRA-4（ARTIFACT_STRICT_JSON，默认开）：含 NaN/Infinity 的骨架不钉进章节提示词、
+            # 不早落 forecast.json，回退成稿后抽取（与骨架未产出情景的回退同路径）。
+            _spine_nonfinite = (_numeric.find_nonfinite(spine)
+                                if getattr(Config, "ARTIFACT_STRICT_JSON", True) else [])
+            if _spine_nonfinite:
+                self._forecast_spine = None
+                self._forecast_spine_block = ""
+                self._mark_spine_pack_published(False)
+                logger.warning(f"预测骨架含非有限数 {_spine_nonfinite[:10]}，不钉骨架、不早落 "
+                               f"forecast.json（回退为成稿后抽取）")
+                return
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
+            self._mark_spine_pack_published(True)
             # 早落 forecast.json（骨架版）；成稿后由 _finalize_structured_forecast 补
-            # citation_audit / 自校准 / 发布门后覆盖。
+            # citation_audit / 自校准 / 发布门后覆盖。EVAL-13：评估运行的骨架版同样盖
+            # forecast['evaluation'] 章（目标尚未抽取 → missing），成稿失败时留下的这份文件
+            # 也绝不被当成生产预测监测；生产运行写入内容逐字节不变。
             try:
                 fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-                write_text_atomic(fpath, json.dumps(spine, ensure_ascii=False, indent=2))
+                _early = spine
+                _early_evaluation = self._resolve_evaluation_context()
+                if _early_evaluation is not None:
+                    _early = dict(spine, evaluation=self._evaluation_stamp(
+                        _early_evaluation,
+                        self._evaluation_target_propositions(_early_evaluation), None))
+                # TIME-6：回测运行的骨架版同样盖 hindcast 章（成稿失败时留下的这份也如实标注）。
+                _early_hindcast = self._hindcast_pin()
+                if _early_hindcast is not None:
+                    _early = dict(_early, hindcast=hindcast_forecast_block(
+                        _early_hindcast, research_audit=_early_hindcast.get("research_audit")))
+                # INFRA-8：骨架版同样自述产出模型（成稿失败时留下的这份也如实标注）；未设 run_provenance 时不加键。
+                _early_provenance = self._model_provenance_block()
+                if _early_provenance is not None:
+                    _early = dict(_early, model_provenance=_early_provenance)
+                write_text_atomic(fpath, _forecast_artifact_json(
+                    _early, "forecast.json（骨架版）", record_quality=True)[0])
             except Exception as _pe:  # noqa: BLE001 — 早落失败不影响主流程
                 logger.warning(f"预测骨架早落 forecast.json 失败（忽略）: {_pe}")
             logger.info(
@@ -2947,6 +4180,344 @@ class ReportAgent:
             logger.warning(f"预测骨架推导失败（忽略，回退成稿后抽取）: {_se}")
             self._forecast_spine = None
             self._forecast_spine_block = ""
+            self._mark_spine_pack_published(False)
+        # EVAL-11：影子跨底座检查置于上方 try/except 之外——其失败（含向上抛出的 BudgetExceeded）
+        # 绝不能经由那个 except 丢弃已发布的骨架。仅在骨架已钉住时运行；未开启时不发任何调用。
+        if pre_critique_spine is not None and self._forecast_spine is not None:
+            self._run_backbone_check(
+                pre_critique_spine, spine_kwargs,
+                spine_served_by=None if spine_calls is None else spine_calls.served_by)
+
+    def _run_backbone_check(self, pre_critique_spine: Dict[str, Any],
+                            spine_kwargs: Dict[str, Any], *,
+                            spine_served_by: Optional[List[Optional[str]]] = None) -> None:
+        """EVAL-11 (P15): shadow cross-backbone sensitivity check of the published spine.
+
+        Runs only when the orchestrator handed this agent an enabled ``backbone_check_policy``
+        (the main report of a run whose admission pin opted in); seed reports,
+        model_comparison and the API path never set it. The spine prompt is rebuilt from the
+        exact kwargs the spine was drawn with, ``pre_critique_spine``'s scenario names are
+        pinned in the follow prompt, and the artifact lands in ``self._backbone_sensitivity``
+        for _finalize_structured_forecast (forecast.quality.backbone_sensitivity). ``within``
+        compares ``pre_critique_spine`` (the free spine prompt, pooled when
+        REPORT_SPINE_SELFCONSISTENCY_K > 1) with one control draw on the fixed-name follow
+        prompt, so it bundles sampling noise with the free-vs-follow prompt difference.
+        ``spine_served_by`` is who served each call of the spine derivation
+        (SpineCallObserver): a spine the fallback provider drew any part of is not a
+        within-backbone baseline and is recorded unchecked without a call. Never touches
+        ``self._forecast_spine`` / ``self._forecast_spine_block``: probabilities are
+        unchanged. BudgetExceeded propagates; any other error records
+        ``unchecked:error:<Type>``. The calls are metered under the telemetry stage
+        'backbone_check'; the previous stage is restored afterwards.
+        """
+        from . import backbone_sensitivity as _bs
+        policy = _bs.enabled_policy(getattr(self, "backbone_check_policy", None))
+        if policy is None:
+            return
+        from . import forecast_extractor as _fe
+        from ..utils.telemetry import BudgetExceeded, set_stage
+        prev_stage = get_run_context()[1]
+        set_stage("backbone_check")
+        try:
+            user, _anchor_ws = _fe.build_spine_user_prompt(**spine_kwargs)
+            names = [str(s.get("name")) for s in (pre_critique_spine.get("scenarios") or [])
+                     if isinstance(s, dict)]
+            self._backbone_sensitivity = _bs.run_spine_backbone_check(
+                follow_prompt=_fe.spine_follow_prompt(user, names),
+                primary_spine=pre_critique_spine,
+                primary_llm=self.llm,
+                providers=policy["providers"],
+                client_factory=_fe._build_ensemble_client,
+                max_tokens=int(getattr(Config, "REPORT_SPINE_MAX_TOKENS", 6144)),
+                max_abs_delta=policy["max_abs_delta"],
+                spine_served_by=spine_served_by,
+            )
+            logger.info(f"骨架跨底座影子检查: {self._backbone_sensitivity.get('status')}")
+        except BudgetExceeded:
+            raise
+        except Exception as _bce:  # noqa: BLE001 — 影子诊断，失败只记 unchecked，绝不影响报告
+            logger.warning(f"骨架跨底座影子检查失败（记 unchecked，不影响骨架）: {_bce}")
+            self._backbone_sensitivity = _bs.unchecked_artifact(f"error:{type(_bce).__name__}")
+        finally:
+            set_stage(prev_stage)
+
+    def _run_counter_case(self, report_id: str) -> None:
+        """REPORT-13 (REPORT_COUNTER_CASE, default off): one evidence-cited counter-case call
+        over the pinned spine (forecast_counter_case), right after the spine is pinned.
+
+        The packet is the report's [S#] source index, the dossier paragraphs citing an
+        admissible indexed source, the contested-claims table and the market pack (never the
+        simulation signal pack). Validated output lands in reports/<id>/counter_case.json
+        (canonical JSON) and in ``self._counter_case`` / ``self._counter_case_sha256``, which
+        feed forecast.indicators, forecast.counter_case, the How-to-Verify table and the Part-2
+        prompt. A trigger keeps only the markers the support check does not reject, both for
+        its signal and for the claim the publish-time citation finalizer reads in its
+        How-to-Verify row (_counter_case_published_claim), so the finalizer never strips its
+        last marker; a ``by`` date before the run's as-of counts as no date. Probabilities
+        are never touched. Off, or no spine: no call, nothing set. Any
+        failure (including the artifact write) leaves both attributes None and the report
+        unchanged; PipelineCancelled / ProviderOutageHalt (BaseException) propagate.
+        """
+        self._counter_case = None
+        self._counter_case_sha256 = None
+        if not getattr(Config, "REPORT_COUNTER_CASE", False):
+            return
+        spine = getattr(self, "_forecast_spine", None)
+        if not (isinstance(spine, dict) and spine.get("scenarios")):
+            return
+        try:
+            from . import forecast_counter_case as _cc
+            tag_map = {str(tag): source
+                       for tag, source in (getattr(self, "_citation_index", None) or {}).items()
+                       if _citation_source_admissible(source)}
+            question = getattr(self, "simulation_requirement", "") or ""
+            try:
+                cap = int(getattr(Config, "REPORT_COUNTER_CASE_EVIDENCE_CHARS", 12000))
+            except (TypeError, ValueError):
+                cap = 12000
+            packet = _cc.build_evidence_packet(
+                sources_index=getattr(self, "_sources_index", "") or "",
+                tag_map=tag_map,
+                research_report=getattr(self, "research_report", "") or "",
+                contested_block=getattr(self, "_contested_table_block", "") or "",
+                market_pack=getattr(self, "_market_pack", "") or "",
+                spine=spine, question=question, cap=cap,
+                numbers_fn=self._semantic_numbers,
+            )
+            # 触发器的 by 早于本次运行的 as-of（回测钉 > actors.as_of_date > 今天）视为无日期。
+            from ..utils.dates import parse_as_of
+            _as_of = parse_as_of(self._context_pack_as_of()[0])
+            result = _cc.run_counter_case(
+                spine, llm=self.llm, packet=packet, tag_map=tag_map,
+                support_fn=self._semantic_citation_support, numbers_fn=self._semantic_numbers,
+                question=question, lang=getattr(self, "output_language", None) or "English",
+                published_claim_fn=self._counter_case_published_claim,
+                as_of=(_as_of or datetime.now(timezone.utc)).date(),
+            )
+            text = _cc.artifact_text(result)
+            write_text_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id), _cc.ARTIFACT_NAME), text)
+        except Exception as _cce:  # noqa: BLE001 — 反证审查为可选增强，失败绝不阻断报告
+            logger.warning(f"反证审查失败（忽略，不影响骨架与报告）: {_cce}")
+            return
+        self._counter_case = result
+        self._counter_case_sha256 = _cc.artifact_sha256(text)
+        logger.info(
+            f"反证审查 {result.get('status')}: {report_id}（证据包 {packet['sha256'][:12]}，"
+            f"丢弃论据 {sum((result.get('dropped') or {}).values())} 条）")
+
+    def _counter_case_published_claim(self, indicator: Dict[str, Any]) -> str:
+        """REPORT-13: the claim the publish-time citation check reads for the [S#] markers of
+        this counter-case indicator's How-to-Verify row.
+
+        The row is rendered by the same helper as the section (forecast_extractor.
+        resolution_indicator_table, in the section's language) and the claim is built exactly
+        as _repair_semantic_citations / _audit_semantic_citations build it (marker clause plus
+        the row label and header numbers). Every marker of the row sits in the same clause, so
+        one claim serves them all. Without a marker in the row: the indicator text.
+        """
+        from .forecast_extractor import markdown_table_cells, resolution_indicator_table
+        header, _delimiter, row = resolution_indicator_table(
+            [dict(indicator)], getattr(self, "output_language", None) or "Chinese")[:3]
+        match = self._S_CITATION_RE.search(row)
+        if match is None:
+            return str(indicator.get("indicator") or "")
+        clause = self._citation_claim_clause(row, match.start(), match.end())
+        return self._citation_semantic_claim(
+            row, match.start(), clause, markdown_table_cells(header))
+
+    def _with_counter_case_indicators(self, indicators: List[Any]) -> List[Any]:
+        """REPORT-13: research indicators followed by the counter-case triggers (source
+        'counter_case'; forecast_counter_case.merge_indicators: a trigger repeating a research
+        indicator's text or an earlier trigger row is left out and logged). Without a
+        counter-case result (flag off, not run, failed) the given list is returned unchanged."""
+        result = getattr(self, "_counter_case", None)
+        if not result:
+            return indicators
+        try:
+            from . import forecast_counter_case as _cc
+            return _cc.merge_indicators(indicators, _cc.triggers_to_indicators(result))
+        except Exception as _cie:  # noqa: BLE001 — 增强失败退回研究指标
+            logger.warning(f"并入反证审查触发器失败（忽略，仅保留研究指标）: {_cie}")
+            return indicators
+
+    def _resolve_evaluation_context(self) -> Optional[Dict[str, Any]]:
+        """EVAL-13: this report's evaluation-run context, or None for a production report.
+
+        The assigned ``evaluation_context`` (orchestrator main and seed reports) wins;
+        otherwise the pipeline that ran ``simulation_id`` is looked up once
+        (``pipeline_orchestrator.evaluation_context_for_simulation``: its pin or its
+        persisted handoff marker), so entry points that build a ReportAgent without
+        orchestrator context (``/api/report/generate``) still honour the run. The
+        orchestrator marks a production run's agents as already resolved (no scan).
+        A lookup that cannot run fails closed: an evaluation context without run
+        provenance (``lookup_failed``), never a production answer.
+        """
+        assigned = getattr(self, "evaluation_context", None)
+        if isinstance(assigned, dict):
+            return assigned
+        if getattr(self, "_evaluation_context_looked_up", False):
+            return getattr(self, "_evaluation_context_lookup", None)
+        found: Optional[Dict[str, Any]] = None
+        simulation_id = getattr(self, "simulation_id", None)
+        if simulation_id:
+            try:
+                from .pipeline_orchestrator import evaluation_context_for_simulation
+                found = evaluation_context_for_simulation(simulation_id)
+            except Exception as exc:  # noqa: BLE001 — 查找失败按评估运行处理（fail closed）
+                logger.warning(f"评估运行上下文查找失败（按评估运行处理，不进生产账本）: {exc}")
+                found = {"record_class": "evaluation", "characterization_only": True,
+                         "eval_run_id": None, "cell_id": None, "question_id": None,
+                         "target": None, "lookup_failed": True}
+        self._evaluation_context_lookup = found if isinstance(found, dict) else None
+        self._evaluation_context_looked_up = True
+        return self._evaluation_context_lookup
+
+    @staticmethod
+    def _evaluation_target_propositions(evaluation: Optional[Dict[str, Any]]
+                                        ) -> Optional[List[Dict[str, Any]]]:
+        """EVAL-13: the pinned target as ``extract_binary_forecasts`` target propositions."""
+        target = (evaluation or {}).get("target")
+        if not isinstance(target, dict) or not target.get("question_id") or not target.get("statement"):
+            return None
+        return [{"question_id": str(target["question_id"]),
+                 "statement": str(target["statement"]),
+                 "resolution_criteria": target.get("resolution_criteria")}]
+
+    @staticmethod
+    def _evaluation_stamp(evaluation: Dict[str, Any],
+                          targets: Optional[List[Dict[str, Any]]],
+                          target_binding: Optional[Dict[str, Any]], *,
+                          extraction_failed: bool = False) -> Dict[str, Any]:
+        """EVAL-13: forecast['evaluation'] for a report of an evaluation run.
+
+        A pinned target the binary extraction never bound is still reported under
+        ``target_binding.missing``, never silently dropped: ``repair_draw`` is
+        ``extraction_failed`` when the extraction raised, else ``not_attempted``
+        (binary extraction off, or the early spine copy written before it ran).
+        A fail-closed context (no run identity) also records why the report was
+        routed here (``fail_closed``, plus ``marker_pipeline_id`` for a fork of an
+        evaluation run), so a demoted production report can be found and recommitted.
+        """
+        from .ledger_commit import evaluation_fail_closed
+        binding = target_binding
+        if targets and not isinstance(binding, dict):
+            binding = {"bound": {}, "missing": [t["question_id"] for t in targets],
+                       "method": "normalized_equality",
+                       "repair_draw": "extraction_failed" if extraction_failed else "not_attempted"}
+        stamp: Dict[str, Any] = {
+            "record_class": "evaluation",
+            "eval_run_id": evaluation.get("eval_run_id"),
+            "cell_id": evaluation.get("cell_id"),
+            "question_id": evaluation.get("question_id"),
+            "historical_calibration_suppressed": True,
+            "target_binding": binding,
+        }
+        reason, marker_pipeline_id = evaluation_fail_closed(evaluation)
+        if reason:
+            stamp["fail_closed"] = reason
+            if marker_pipeline_id:
+                stamp["marker_pipeline_id"] = marker_pipeline_id
+        return stamp
+
+    # EVAL-3: the three numbers forecast['historical_calibration'] has always carried. With
+    # FORECAST_LEDGER_SETTLEMENT_FOLD off the report keeps exactly this shape, so the additive
+    # exclusion counts of calibration_summary never reach forecast.json.
+    _HISTORICAL_CALIBRATION_KEYS = ("n_resolved", "mean_brier", "calibration_error")
+
+    def _historical_calibration_as_of(self) -> Optional[str]:
+        """EVAL-3: the point-in-time cut of the folded historical calibration.
+
+        The ledger context's ``as_of_date``, else the research actors' ``as_of_date``,
+        each only when it is a canonical, non-future YYYY-MM-DD date (``validate_as_of``,
+        the rule the ledger commit applies); else None, and ``admissible`` then cuts at
+        now. Tests build agents via ``__new__``, so both attributes are read with getattr.
+        """
+        from ..utils.point_in_time import validate_as_of
+        for source in (getattr(self, "ledger_context", None), getattr(self, "actors", None)):
+            if isinstance(source, dict):
+                try:
+                    return validate_as_of(source.get("as_of_date"))
+                except ValueError:
+                    continue
+        return None
+
+    def _attach_historical_calibration(self, forecast: Dict[str, Any]) -> None:
+        """NEXTSTEPS P2-4 + EVAL-3: surface the ledger's historical calibration in ``forecast``.
+
+        FORECAST_LEDGER_SETTLEMENT_FOLD off (default): the historical read, a bare
+        ``calibration_summary()``; when anything resolved, its three numbers become
+        ``forecast['historical_calibration']`` (byte-identical to before) and one note joins
+        ``confidence_rationale``. On: the scenario summary folds the settlement events and is
+        cut at ``_historical_calibration_as_of``; ``historical_calibration`` is written when
+        the scenario or the binary summary scored anything and keeps every summary field plus
+        ``as_of``, the Brier ``scale`` and a binary-scale ``binary`` block. The rationale note
+        stays the scenario one. Nothing is recalibrated. Degrade-safe: any failure leaves
+        ``forecast`` without the block.
+        """
+        try:
+            from .forecast_ledger import calibration_summary as _cal
+            if getattr(Config, "FORECAST_LEDGER_SETTLEMENT_FOLD", False):
+                from .forecast_ledger import binary_calibration_summary
+                as_of = self._historical_calibration_as_of()
+                _cs = _cal(as_of=as_of)
+                binary = binary_calibration_summary(as_of=as_of)
+                if _cs.get("n_resolved") or binary.get("n_resolved"):
+                    block = dict(_cs)
+                    block.update({"as_of": as_of, "scale": "multiclass_sum", "binary": binary})
+                    forecast["historical_calibration"] = block
+            else:
+                _cs = _cal()
+                if _cs.get("n_resolved"):
+                    forecast["historical_calibration"] = {
+                        key: _cs[key] for key in self._HISTORICAL_CALIBRATION_KEYS if key in _cs}
+            if _cs.get("n_resolved"):
+                _note = (f"历史校准：已解析 {_cs['n_resolved']} 个预测，平均 Brier "
+                         f"{_cs.get('mean_brier')}，校准误差 {_cs.get('calibration_error')}")
+                forecast["confidence_rationale"] = (
+                    (str(forecast.get("confidence_rationale") or "").strip()
+                     + " ｜" + _note).strip(" ｜"))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _model_provenance_block(self) -> Optional[Dict[str, Any]]:
+        """INFRA-8: forecast.json ``model_provenance``, or None to omit the key.
+
+        The orchestrator's ``run_provenance`` (research..run stages, pin drift) plus the
+        report stage, filled here: at construction the run.json report stamp still describes
+        a previous attempt's report. The report stage records this agent's LLM provider /
+        model and, from LLMMeter's stage 'report' in the current run context, the labels its
+        calls requested (tier routing and failover included) and the ids served, overall and
+        per request (model_provenance.stage_record; without a recorded call, the effective
+        label of the agent's provider / model, marked requested_source 'configured', and no
+        served ids). None when ``run_provenance`` is unset (API paths, seed reports) or
+        RECORD_MODEL_PROVENANCE is off; any failure also degrades to None (logged).
+        """
+        run_prov = getattr(self, "run_provenance", None)
+        if not isinstance(run_prov, dict) or not getattr(Config, "RECORD_MODEL_PROVENANCE", True):
+            return None
+        try:
+            run_id = get_run_context()[0]
+            resolution = LLMMeter.snapshot(run_id).get("model_resolution") if run_id else None
+            llm = getattr(self, "llm", None)
+            provider, model = getattr(llm, "provider", None), getattr(llm, "model", None)
+            report_stage = {"provider": provider, "model_name": model,
+                            **stage_record(resolution_entries(resolution, REPORT_STAGE),
+                                           provider, model)}
+            return forecast_model_provenance(run_prov, report_stage)
+        except Exception as exc:  # noqa: BLE001 — provenance is observability; never block the forecast
+            logger.debug(f"model_provenance 构建失败（忽略）: {exc}")
+            return None
+
+    @staticmethod
+    def _normalize_numeric_guard_mode(value: Optional[str] = None) -> str:
+        """TIME-5：off | shadow。None → 当前 Config.NUMERIC_GUARD_MODE；非法值 → shadow 并告警。"""
+        raw = value if value is not None else getattr(
+            Config, "NUMERIC_GUARD_MODE", _numeric_guards.MODE_SHADOW)
+        mode, valid = _numeric_guards.normalize_mode(raw)
+        if not valid:
+            logger.warning(f"NUMERIC_GUARD_MODE={raw!r} 不是 off|shadow，按 shadow 运行")
+        return mode
 
     def _finalize_structured_forecast(self, report_id: str, report_markdown: str,
                                       report: Optional["Report"] = None) -> None:
@@ -2966,6 +4537,18 @@ class ReportAgent:
         from .forecast_extractor import (
             extract_structured_forecast, audit_citation_grounding, self_critique_forecast,
         )
+        # EVAL-13：评估运行（准入钉或所属管线标记）——跳过生产校准读、绑定钉住的目标命题、
+        # 盖 forecast['evaluation'] 章；生产运行时三者皆为 None，行为逐字节不变。
+        _evaluation = self._resolve_evaluation_context()
+        _eval_targets = self._evaluation_target_propositions(_evaluation)
+        _target_binding: Optional[Dict[str, Any]] = None
+        _binary_extraction_failed = False
+        # TIME-6：回测钉——时间范围一致性校验以 as_of 年为「今年」，落盘前盖 forecast['hindcast'] 章；
+        # 实时运行为 None，行为逐字节不变。
+        _hindcast = self._hindcast_pin()
+        # TIME-5：本次运行的数值一致性检查模式（编排器钉住值；__new__ 构造的 agent 读当前 Config）。
+        _ng_mode = (getattr(self, "_numeric_guard_mode", None)
+                    or self._normalize_numeric_guard_mode())
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
@@ -2979,10 +4562,15 @@ class ReportAgent:
         # 如骨架推导失败的 91f5 型运行）保留原有的成稿后批判。
         if (getattr(Config, "REPORT_FORECAST_SELF_CRITIQUE", False)
                 and not forecast.get("critiqued")):
+            # REPORT-11：成稿后批判同样快照批判前情景概率，评审成功时记入 quality.pre_critique_scenarios。
+            _pre_critique = (_pshape.scenario_snapshot(forecast.get("scenarios"))
+                             if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True) else None)
             forecast = self_critique_forecast(
                 forecast, self.llm,
                 language=getattr(self, "output_language", None) or "",
             )
+            if _pre_critique is not None:
+                _pshape.stamp_pre_critique(forecast, _pre_critique)
         # XRUN-16(1): 骨架情景数与最终情景数漂移检测（正文按骨架 N 情景撰写、交付却是
         # M 情景 ⇒ 必然矛盾）；随 forecast.json quality 落盘供健康门消费。
         try:
@@ -3025,6 +4613,18 @@ class ReportAgent:
                                f"{_nc.get('scenario_prob_mismatches', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-3：别名感知概率槽观测（REPORT_LOGIC_NUMBER_GATE != off；off 时不加键）。此处是成稿
+        # 草稿（正文修复在其后）：修复改写成稿时以修复后字节上的观测（含修复记录）替换本值，终审再以
+        # 最终字节上的 logic_number 覆盖；只记录，不进发布门。
+        try:
+            _ln_observation = self._logic_number_observation(report_markdown, forecast)
+            if _ln_observation is not None:
+                forecast.setdefault("quality", {})["logic_number"] = _ln_observation
+                if _ln_observation.get("fixable"):
+                    logger.warning(f"概率槽观测：{_ln_observation['fixable']} 处别名概率槽与骨架不符"
+                                   f"（未解决 {_ln_observation['unresolved']} 处）")
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响 forecast.json
+            logger.warning(f"记录概率槽观测失败（忽略）: {_ln_err}")
         # QUALITY-OPT S12: flag implausible headline growth stats (>100% YoY) that anchor reports.
         try:
             _sp = self._audit_stat_plausibility(report_markdown)
@@ -3034,6 +4634,18 @@ class ReportAgent:
                                f"{_sp.get('implausible_stats', [])[:3]}")
         except Exception:  # noqa: BLE001
             pass
+        # REPORT-9：正文数字对照已核验指标块（只检测；块为空 / 旗标关时不加键，绝不进发布门）。
+        try:
+            _vf_check = self._verified_figures_check(report_markdown)
+            if _vf_check is not None:
+                _vf_summary = self._verified_figures_summary(_vf_check)
+                _vf_quality = forecast.setdefault("quality", {})
+                if isinstance(_vf_quality, dict):
+                    _vf_quality["verified_figures"] = _vf_summary
+                if _vf_summary["counts"]["conflict"]:
+                    logger.warning(f"已核验数字比对：{_vf_summary['counts']['conflict']} 处正文数字与已核验指标不符")
+        except Exception as _vf_err:  # noqa: BLE001 — 只检测的旁路，失败不影响 forecast.json
+            logger.warning(f"已核验数字比对记录失败（忽略）: {_vf_err}")
         # QUALITY-OPT A1: emit >=N INDEPENDENT binary (yes/no) forecasts — the brief's headline
         # deliverable — ALONGSIDE the scenario spine. The research dossier usually already holds a
         # compliant F1..Fn table; we extract it (preserving its probabilities) and top up to the
@@ -3043,6 +4655,7 @@ class ReportAgent:
             try:
                 from .forecast_extractor import (
                     _binary_quality as _binary_quality_score,
+                    _binary_withheld_issue,
                     apply_horizon_consistency as _apply_horizon_consistency,
                     extract_binary_forecasts as _ebf,
                     reconcile_forecast_contract as _reconcile_forecast_contract,
@@ -3090,6 +4703,30 @@ class ReportAgent:
                 # 二元预测会静默结算到 2027，与情景骨架/图表的日历判定日不一致）。hours 模式
                 # _temporal_horizon_date() 返回 ""，传 None ⇒ 旧行为逐字节不变（degrade-safe）。
                 _hz_date = self._temporal_horizon_date() or None
+                # EVAL-13：仅评估运行的钉住目标作为目标命题传入（生产调用形状逐字节不变）。
+                _ebf_eval_kwargs: Dict[str, Any] = (
+                    {"target_propositions": _eval_targets} if _eval_targets else {})
+                # RESEARCH-13（FORECAST_CONTEXT_PACK_BINARY，默认关）：按节取舍的 dossier 摘录 + as_of
+                # 时间线通道取代 head+tail 切片与 [Situation brief]。REPORT-10 删表条件与抽取器同口径
+                # （旗标开 + 注入了市场包），打包前先删机器市场表。回退/失败 → 不传此参数（调用形状不变）。
+                _ebf_pack_kwargs: Dict[str, Any] = {}
+                if getattr(Config, "FORECAST_CONTEXT_PACK_BINARY", False):
+                    _strip_market = (
+                        bool(getattr(Config, "FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE", False))
+                        and bool(getattr(Config, "PREDICTION_MARKETS_ENABLED", True))
+                        and bool(str(_mkt or "").strip()))
+                    _binary_pack = self._forecast_context_pack(
+                        report_id, "binary", strip_market_table=_strip_market)
+                    if _binary_pack:
+                        _ebf_pack_kwargs["context_pack"] = _binary_pack
+                # TIME-5：shadow 时二元抽取顺带索取 latest_actual；off 时不传此参数（调用形状逐字节不变）。
+                _ebf_guard_kwargs: Dict[str, Any] = (
+                    {"numeric_guard_mode": _ng_mode}
+                    if _ng_mode == _numeric_guards.MODE_SHADOW else {})
+                # FU-7：市场被扣下（回测钉，或钉查找失败时失败关闭，见 _markets_withheld_status）
+                # 时弹出模型自报的市场锚点（实时运行不传，调用逐字节不变）。
+                if self._markets_withheld_status() is not None:
+                    _ebf_guard_kwargs["withhold_market_anchors"] = True
                 # B2: 需求书解析出的 binary_min_count 参与生效——取 spec 与 Config 的较大者
                 # （需求书写明「15+ binary forecasts」时不被 Config 默认静默压低）。
                 _bres = _ebf(
@@ -3103,10 +4740,25 @@ class ReportAgent:
                     markets=getattr(self, "_prediction_markets", None) or None,
                     scenarios=forecast.get("scenarios") or None,
                     horizon_date=_hz_date,
+                    **_ebf_eval_kwargs,
+                    **_ebf_pack_kwargs,
+                    **_ebf_guard_kwargs,
                 )
+                if isinstance(_bres.get("target_binding"), dict):
+                    _target_binding = _bres["target_binding"]
                 if _bres.get("binary_forecasts"):
                     forecast["binary_forecasts"] = _bres["binary_forecasts"]
                     forecast["binary_quality"] = _bres.get("binary_quality") or {}
+                    # EVAL-10：reconcile 改概率之前，快照抽取器的 binary_quality，并对它刚打过分的
+                    # 同一份二元列表再算一次基础记分卡，得到抽取器 issues 里的基础打分行
+                    # （spread/midband/count 等）——这些行由下方重算给出，reconcile 恢复概率后
+                    # 可能已过时；其余行（溯源降级、集成分歧、扣下说明等）为抽取器独有。
+                    _ext_bq = dict(_bres.get("binary_quality") or {})
+                    _ext_base = set(_binary_quality_score(
+                        forecast["binary_forecasts"],
+                        min_count=self._binary_min_count(),
+                        themes_expected=_themes,
+                    ).get("issues") or [])
                     _contract = _reconcile_forecast_contract(forecast)
                     _quality = _binary_quality_score(
                         forecast["binary_forecasts"],
@@ -3114,16 +4766,54 @@ class ReportAgent:
                         themes_expected=_themes,
                     )
                     _quality["proposition_consistency"] = _contract
+                    # REPORT-1：重算的记分卡会丢掉抽取时统计的「概率不可读被扣下」计数与说明行，
+                    # 照搬回来（说明行置首，发布门只展示前两条 issues）。
+                    _bq_extracted = _bres.get("binary_quality") or {}
+                    for _review_key in ("needs_review_count", "needs_review_reasons",
+                                        "needs_review_secondary_count"):
+                        if _review_key in _bq_extracted:
+                            _quality[_review_key] = _bq_extracted[_review_key]
+                    if _bq_extracted.get("needs_review_count"):
+                        _quality.setdefault("issues", []).insert(0, _binary_withheld_issue(
+                            _bq_extracted["needs_review_count"]))
+                    # EVAL-10：重算记分卡此前整体覆盖抽取器的 binary_quality，丢掉了 ITEM-12 的
+                    # ensemble 诊断、provenance_downgrades、world_state_outcome 等仅抽取器才写的键
+                    # 与说明行（报表脚注与发布门因此读不到）。通用合并：抽取器键只补缺、绝不覆盖
+                    # 重算的打分键；issues 只追加抽取器独有的行（去重、保序），跳过基础打分行。
+                    for _ext_key, _ext_val in _ext_bq.items():
+                        if _ext_key != "issues":
+                            _quality.setdefault(_ext_key, _ext_val)
+                    _q_issues = _quality.setdefault("issues", [])
+                    for _ext_issue in _ext_bq.get("issues") or []:
+                        if _ext_issue not in _ext_base and _ext_issue not in _q_issues:
+                            _q_issues.append(_ext_issue)
+                    # EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：同目标阈值阶梯单调性审计，
+                    # 在 reconcile 定稿后的概率上做；只告警（不进 issues、不碰发布门与终审政策版本）。
+                    # 增强项：审计异常只记日志，不写键、不影响定稿（degrade-safe）。
+                    if getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False):
+                        try:
+                            from .binary_targets import threshold_ladder_audit as _ladder_audit
+                            _ladder = _ladder_audit(forecast["binary_forecasts"])
+                            _quality["threshold_ladder"] = _ladder
+                            if _ladder["violation_count"]:
+                                logger.warning(f"二元预测阈值阶梯不单调："
+                                               f"{_ladder['violation_count']} 处（仅告警）")
+                        except Exception as _lae:  # noqa: BLE001 — 只告警的增强审计
+                            logger.warning(f"二元预测阈值阶梯审计失败（忽略，不影响产物）: {_lae!r}")
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
                     # quality["horizon_mismatch"] 合并进 forecast（供发布门降信心）。日历
                     # horizon 缺失（hours 模式）时 horizon_date=None，退回仅按需求书校验，
                     # 行为不变（degrade-safe，绝不覆盖既有 quality 键）。
+                    # TIME-6：回测运行以 as_of 年为 now_year（目标年份窗口随之回到 as_of 当年）。
                     try:
+                        _hz_kwargs: Dict[str, Any] = {"horizon_date": _hz_date}
+                        if _hindcast is not None:
+                            _hz_kwargs["now_year"] = int(str(_hindcast["as_of"])[:4])
                         _apply_horizon_consistency(
                             forecast, getattr(self, "simulation_requirement", None),
-                            horizon_date=_hz_date)
+                            **_hz_kwargs)
                     except Exception:  # noqa: BLE001 — 观测性校验，绝不影响产物
                         pass
                     # PM-2：确定性市场对照负载（预测 vs 市场隐含概率、|Δ|、>10pp 判定）——嵌入
@@ -3136,8 +4826,10 @@ class ReportAgent:
                             _mcpath = os.path.join(
                                 ReportManager._get_report_folder(report_id),
                                 "market_comparison.json")
+                            # INFRA-4：非有限叶子置 null 后写出；内嵌副本由下方 forecast.json
+                            # 落盘记入 quality.nonfinite_nulled（$.market_comparison…）。
                             write_text_atomic(
-                                _mcpath, json.dumps(_mc, ensure_ascii=False, indent=2))
+                                _mcpath, _forecast_artifact_json(_mc, "market_comparison.json")[0])
                         except Exception as _mce:  # noqa: BLE001 — 落盘失败不影响主流程
                             logger.warning(f"落 market_comparison.json 失败（忽略）: {_mce}")
                     # XRUN-1(c): 与同图谱、不同模拟的上一份报告比对概率向量——
@@ -3151,8 +4843,74 @@ class ReportAgent:
                                 f"完全一致（不同 simulation_id）")
                     except Exception:  # noqa: BLE001 — 观测性检查，绝不影响产物
                         pass
+                elif (_bres.get("binary_quality") or {}).get("needs_review_count"):
+                    # REPORT-1：二元概率全部不可读被扣下 → 无可发布的二元，但抽取记分卡（扣下
+                    # 计数、原因与说明行）照样随 forecast.json 落盘，运维可见缺二元的原因。
+                    forecast["binary_quality"] = _bres["binary_quality"]
             except Exception as _be:  # noqa: BLE001 — additive; never break finalization
                 logger.warning(f"二元预测抽取失败（忽略，不影响情景预测）: {_be}")
+                _binary_extraction_failed = True
+        # TIME-5（NUMERIC_GUARD_MODE，默认 shadow）：已发布二元阈值的数值一致性影子检查——每条二元盖
+        # binary['numeric_guard'] 章（阈值 vs 同指标最新实际值：status_quo_contradiction / scale_mismatch /
+        # inverted_interval），汇总并入 forecast.quality.numeric_guards（无二元 → not_run，情景区间照查）。
+        # 只合并进既有 dict，绝不重赋 forecast['binary_quality']；检查本身不改概率、正文、发布门、终审与
+        # 政策版本，不发 LLM 调用（shadow 追加在二元提示词里的 latest_actual 规则属于抽取，可能改变起草）。
+        # 回测运行以钉住的 as_of 为「今天」且要求日期可读（所述期间结束晚于 as_of、或无可读日期的实际值
+        # 都不绑定）；as_of 读不出时不回落系统日期（那会把 as_of 之后的信息当作已知）→ status 'error'。
+        # 失败 → status 'error'。
+        if _ng_mode == _numeric_guards.MODE_SHADOW:
+            _ng_today = None
+            _ng_error = None
+            if _hindcast is not None:
+                try:
+                    _ng_today = datetime.strptime(str(_hindcast.get("as_of"))[:10], "%Y-%m-%d").date()
+                except (TypeError, ValueError):
+                    _ng_error = "hindcast_as_of_unreadable"
+            try:
+                if _ng_error is not None:
+                    logger.warning(f"数值一致性影子检查跳过：回测钉 as_of 不可读（{_hindcast.get('as_of')!r}）")
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": _ng_error}
+                else:
+                    forecast.setdefault("quality", {})["numeric_guards"] = _numeric_guards.stamp_forecast(
+                        forecast, quant_rows=getattr(self, "quantitative", None) or [], mode=_ng_mode,
+                        scale_ratio=getattr(Config, "NUMERIC_GUARD_SCALE_RATIO",
+                                            _numeric_guards.DEFAULT_SCALE_RATIO),
+                        margin=getattr(Config, "NUMERIC_GUARD_STATUS_QUO_MARGIN",
+                                       _numeric_guards.DEFAULT_STATUS_QUO_MARGIN),
+                        today=_ng_today, require_as_of=_hindcast is not None)
+            except Exception as _nge:  # noqa: BLE001 — 影子诊断，绝不阻断定稿
+                logger.warning(f"数值一致性影子检查失败（忽略，不影响产物）: {_nge}")
+                try:
+                    forecast.setdefault("quality", {})["numeric_guards"] = {
+                        "mode": _ng_mode, "status": "error", "error": type(_nge).__name__}
+                except Exception:  # noqa: BLE001 — quality 形状异常时放弃记录
+                    pass
+        # REPORT-11：概率政策标记与概率形状遥测——置于二元块（含对账重算记分卡）之后，此后不再有步骤
+        # 移动情景 / 二元概率。政策标记与形状旗标无关（形状关时开了护栏的运行仍可识别）；形状纯观测，
+        # 任何门都不读，随下方 forecast.json 落盘（终审指纹覆盖它），发布提交时抄入账本行
+        # objective_signals。护栏（与 EVAL-14 结构化 target）都关时不写 forecast_policy；形状关时不写
+        # probability_shape（forecast.json 回到旧形态）。probability_shape 从不抛出（纯函数，失败返回空块）。
+        # EVAL-14：结构化 target 开启时二元抽取提示词多一段 STRUCTURED TARGET 规则（可能改变起草），
+        # 同样记入 forecast_policy（护栏键照实写出，账本 shape_summary 按它分组不受影响）；两旗标都关
+        # → 不写（forecast.json 不变）。
+        _guard_on = bool(getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False))
+        _target_on = bool(getattr(Config, "FORECAST_BINARY_STRUCTURED_TARGET", False))
+        if _guard_on or _target_on:
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["forecast_policy"] = {"binary_symmetric_guard": _guard_on}
+            if _target_on:
+                _fq["forecast_policy"]["binary_structured_target"] = True
+            forecast["quality"] = _fq
+        if getattr(Config, "FORECAST_PROBABILITY_SHAPE", True):
+            _fq0 = forecast.get("quality")
+            _fq = dict(_fq0) if isinstance(_fq0, dict) else {}
+            _fq["probability_shape"] = _pshape.probability_shape(
+                forecast.get("scenarios"), forecast.get("binary_forecasts"),
+                pre_critique_scenarios=_fq.get("pre_critique_scenarios"),
+                policy=_fq.get("forecast_policy") or {"binary_symmetric_guard": False})
+            forecast["quality"] = _fq
         # RQ-2：质量门失败 → 按维度单次定向修复（引用回填 / 引文接地 / 占位符解析），
         # 重跑受影响审计一次并把 before/after 记进 forecast['quality']['repair']（合并，不覆盖）。
         # 置于发布门之前 ⇒ 发布门只对修复后的审计结果打分一次，避免二次降级。任何失败仅告警。
@@ -3168,39 +4926,177 @@ class ReportAgent:
         # resolution criteria, language repair, editorial lint, and References can
         # all change it below.  Applying the gate here made its citation/quality
         # fields stale by construction and could demote confidence twice.
+        # REPORT-4（REPORT_ABSENCE_MARKERS）：记录本次提示词槽状态——市场槽（与章节前缀的缺失
+        # 标记同源）与研究基率是否存在（骨架提示词据此要求写明基率出处）。纯观测，失败不影响产物。
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+            try:
+                from ..utils import actors as _actors
+                _has_base_rates = bool(
+                    _actors.extract_forecast_inputs(self.actors).get("base_rates"))
+                forecast.setdefault("quality", {})["prompt_slot_states"] = {
+                    "market": self._market_slot_status().to_dict(),
+                    "base_rates": {"state": (_absence.SLOT_PRESENT if _has_base_rates
+                                             else _absence.SLOT_NOT_RUN)},
+                }
+            except Exception as _pse:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.debug(f"记录 prompt_slot_states 失败（忽略）: {_pse}")
+        # REPORT-5：信号包健康门裁定（health + 被跳过的块 + summary 损坏标记）随 forecast.json
+        # 落盘（additive）。门关闭或本次从未构建信号包时属性为 None → 不写，forecast.json 逐字节不变。
+        _sp_health = getattr(self, "_signal_pack_health", None)
+        if _sp_health:
+            try:
+                _sp_record = {
+                    "health": _sp_health.get("health"),
+                    "suppressed": list(_sp_health.get("suppressed") or []),
+                }
+                if _sp_health.get("summary_unreadable"):
+                    _sp_record["summary_unreadable"] = True
+                forecast.setdefault("quality", {})["signal_pack_health"] = _sp_record
+            except Exception as _sphe:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.debug(f"记录 signal_pack_health 失败（忽略）: {_sphe}")
+        # FU-3：情景报告的基线模拟不可用（或其 summary 不可读）时，基线裁定（同形，见
+        # _baseline_health_record）落在 signal_pack_health 旁边，与本报告模拟自身的裁定无关。
+        # 门关 / 非情景报告 / 基线可用 → 不写（forecast.json 逐字节不变）。
+        try:
+            _base_record = self._baseline_health_record()
+            if _base_record:
+                forecast.setdefault("quality", {})["baseline_signal_pack_health"] = _base_record
+        except Exception as _bhe:  # noqa: BLE001 — 观测性记录，绝不影响产物
+            logger.debug(f"记录 baseline_signal_pack_health 失败（忽略）: {_bhe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
+        # REPORT-13：反证审查的已校验触发器（source='counter_case'）排在研究指标之后并入（与研究指标按指标
+        # 文本去重，触发器之间仅去完全重复），forecast.counter_case 记工件 sha256 与计数（含实际发布数
+        # triggers_published）；无反证结果时两者皆不变（逐字节一致）。
         try:
             from ..utils import actors as _actors
             _inds = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
-            if _inds:
-                forecast["indicators"] = _inds
         except Exception:  # noqa: BLE001
-            pass
+            _inds = []
+        _research_inds = _inds
+        _inds = self._with_counter_case_indicators(_inds)
+        if _inds:
+            forecast["indicators"] = _inds
+        _cc_result = getattr(self, "_counter_case", None)
+        _cc_sha = getattr(self, "_counter_case_sha256", None)
+        if _cc_result and _cc_sha:
+            try:
+                from . import forecast_counter_case as _cc
+                forecast["counter_case"] = _cc.forecast_summary(
+                    _cc_result, _cc_sha, research_indicators=_research_inds)
+            except Exception as _ccs:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.warning(f"记录 forecast.counter_case 失败（忽略）: {_ccs}")
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True):
+        # EVAL-13：评估运行绝不读生产校准（生产 track record 不得影响评估样本的信心）。
+        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and _evaluation is None:
+            self._attach_historical_calibration(forecast)
+        # REPORT-1：骨架因概率不可读被弃用时，把其复核摘要并入 quality.probability_parse。
+        _spine_review = getattr(self, "_spine_probability_review", None)
+        if _spine_review:
+            _pq0 = forecast.get("quality")
+            _pq = dict(_pq0) if isinstance(_pq0, dict) else {}
+            _pparse = dict(_pq.get("probability_parse") or {})
+            _pparse["spine"] = _spine_review
+            _pq["probability_parse"] = _pparse
+            forecast["quality"] = _pq
+        # INFRA-3：骨架因截断 draw 全被丢弃而回退成稿后抽取时，把丢弃计数并入 quality.llm_truncation
+        # （与成稿后抽取自己的截断标注并存）；骨架可用时计数已随骨架带入，此处为 None。
+        _spine_truncation = getattr(self, "_spine_llm_truncation", None)
+        if _spine_truncation:
+            _tq0 = forecast.get("quality")
+            _tq = dict(_tq0) if isinstance(_tq0, dict) else {}
+            _truncation = dict(_tq.get("llm_truncation") or {})
+            _truncation.update(_spine_truncation)
+            _tq["llm_truncation"] = _truncation
+            forecast["quality"] = _tq
+        if _evaluation is not None:
+            forecast["evaluation"] = self._evaluation_stamp(
+                _evaluation, _eval_targets, _target_binding,
+                extraction_failed=_binary_extraction_failed)
+        if _hindcast is not None:
+            forecast["hindcast"] = hindcast_forecast_block(
+                _hindcast, research_audit=_hindcast.get("research_audit"))
+        # EVAL-11：骨架跨底座影子检查的记录（仅准入钉开启的主报告才有）。只记录：不改概率 / 区间 /
+        # 渲染，不进发布门；未开启时不加键（forecast.json 逐字节不变）。已开启但没有叙事前骨架可查
+        # （骨架推导失败 / 无情景 / 关闭 REPORT_FORECAST_SPINE_FIRST）时记 unchecked:no_spine，
+        # 使「已开启但无可查」与「未开启」可区分。
+        _backbone = getattr(self, "_backbone_sensitivity", None)
+        if _backbone is None and getattr(self, "backbone_check_policy", None) is not None:
+            from . import backbone_sensitivity as _bs
+            if _bs.enabled_policy(self.backbone_check_policy) is not None:
+                _backbone = _bs.unchecked_artifact("no_spine")
+        if isinstance(_backbone, dict):
+            _bq0 = forecast.get("quality")
+            _bq = dict(_bq0) if isinstance(_bq0, dict) else {}
+            _bq["backbone_sensitivity"] = _backbone
+            forecast["quality"] = _bq
+        # RESEARCH-13：证据包摘要（无正文；包文在 context_pack_<kind>.json）只在最终落盘前写入——
+        # 绝不进入骨架早落版与批判 / 验尸输入。旗标全关时无摘要、不加键（forecast.json 逐字节不变）。
+        _pack_digests = getattr(self, "_context_pack_digests", None)
+        if isinstance(_pack_digests, dict) and _pack_digests:
+            forecast["context_pack"] = {kind: dict(d) for kind, d in _pack_digests.items()}
+        # INFRA-8：模型出处在稳定器 / 终审之前落盘，之后每条读-改-写路径都保留它（终审封印前再刷新
+        # 报告阶段）。未设 run_provenance（API 路径 / 种子报告）或旗标关闭时不加键。
+        _model_provenance = self._model_provenance_block()
+        if _model_provenance is not None:
+            forecast["model_provenance"] = _model_provenance
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：研究问题规范摘要（哈希、判定日、结果定义、判定来源、
+        # 默认假设）随最终 forecast.json 落盘，终审的 forecast 哈希随之覆盖它；不进发布门、不改账本。
+        # horizon_applied 记规范判定日是否即本次运行的判定日。无规范 / 旗标关时不加键（逐字节不变）。
+        _question_spec, _qspec_applied = self._question_spec_for_run()
+        if _question_spec is not None:
+            forecast["question_spec"] = _qspec.summary(_question_spec, horizon_applied=_qspec_applied)
+        # RESEARCH-6（REPORT_CONSENSUS_DIAGNOSTICS=shadow）：研究定量行的跨来源预测离散度诊断（确定性、
+        # 零模型调用），全文落 consensus_evidence.json（先落盘），摘要记 forecast.quality.consensus。只记录：
+        # 不改概率 / 提示词 / 发布门；off（默认）或无效值时不加键、不写文件（forecast.json 逐字节不变）。
+        # as-of 取 actors.as_of_date；它缺失或不是整日（旧版/抢救研究）时退回回测钉的 as_of；两者皆无则
+        # 泄漏守卫与陈旧度不运行，摘要记 leakage_guard=false。
+        if getattr(Config, "REPORT_CONSENSUS_DIAGNOSTICS", "off") == "shadow" and getattr(self, "quantitative", None):
             try:
-                from .forecast_ledger import calibration_summary as _cal
-                _cs = _cal()
-                if _cs.get("n_resolved"):
-                    forecast["historical_calibration"] = _cs
-                    _note = (f"历史校准：已解析 {_cs['n_resolved']} 个预测，平均 Brier "
-                             f"{_cs.get('mean_brier')}，校准误差 {_cs.get('calibration_error')}")
-                    forecast["confidence_rationale"] = (
-                        (str(forecast.get("confidence_rationale") or "").strip()
-                         + " ｜" + _note).strip(" ｜"))
-            except Exception:  # noqa: BLE001
-                pass
+                from . import consensus_evidence as _consensus
+                _consensus_actors = self.actors if isinstance(getattr(self, "actors", None), dict) else {}
+                _consensus_as_of = _consensus_actors.get("as_of_date")
+                if _consensus.as_of_full_day(_consensus_as_of) is None:
+                    _consensus_as_of = (self._hindcast_pin() or {}).get("as_of")
+                _consensus_diag = _consensus.build_dispersion_diagnostics(
+                    self.quantitative, getattr(self, "timeline_events", None), _consensus_as_of)
+                write_json_atomic(
+                    os.path.join(ReportManager._get_report_folder(report_id), _consensus.FILENAME),
+                    _consensus_diag)
+                forecast.setdefault("quality", {})["consensus"] = _consensus.quality_summary(_consensus_diag)
+            except Exception as _cde:  # noqa: BLE001 — 影子诊断，绝不影响产物
+                logger.warning(f"跨来源预测离散度诊断失败（忽略）: {_cde}")
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
-        write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
+        # INFRA-4（ARTIFACT_STRICT_JSON）：绝不写出 NaN/Infinity——置 null 并记 quality.nonfinite_nulled，
+        # 其后的内存副本与账本追加都用落盘的这一份。
+        _forecast_text, forecast = _forecast_artifact_json(forecast, "forecast.json",
+                                                           record_quality=True)
+        write_text_atomic(fpath, _forecast_text)
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
+        # EVAL-1: 仅 FORECAST_LEDGER_COMMIT_MODE=legacy 在此（终审之前）追加；默认 published 模式
+        # 由 generate_report 在终审封印 + 落盘之后经 _commit_forecast_ledger 提交封印字节。
         if getattr(Config, "REPORT_FORECAST_LEDGER", True):
             try:
                 from .forecast_ledger import append_forecast as _append
-                _append(forecast, report_id=report_id,
-                        horizon=str(forecast.get("horizon") or "") or None,
-                        created_at=datetime.now().isoformat())
+                from .ledger_commit import commit_mode as _ledger_commit_mode
+                if _ledger_commit_mode() != "legacy":
+                    pass
+                elif (getattr(Config, "FORECAST_PROB_STRICT_PARSE", True)
+                        and forecast.get("probability_status") == "needs_review"):
+                    # REPORT-1：概率待复核（含 null 概率）的预测不可打分，绝不写入校准账本。
+                    logger.warning(f"预测概率待复核（needs_review），跳过校准账本追加: {report_id}")
+                elif _evaluation is not None:
+                    # EVAL-13：评估运行的 legacy 追加改写进隔离的评估账本，绝不进生产 ledger.jsonl。
+                    from .forecast_ledger import evaluation_ledger_dir as _eval_ledger_dir
+                    _append(forecast, report_id=report_id,
+                            horizon=str(forecast.get("horizon") or "") or None,
+                            created_at=datetime.now().isoformat(),
+                            d=_eval_ledger_dir())
+                else:
+                    _append(forecast, report_id=report_id,
+                            horizon=str(forecast.get("horizon") or "") or None,
+                            created_at=datetime.now().isoformat())
             except Exception:  # noqa: BLE001
                 pass
         logger.info(
@@ -3908,9 +5804,37 @@ class ReportAgent:
             for match in cls._SEMANTIC_NUMBER_RE.finditer(str(text or ""))
         }
 
+    # RESEARCH-8: the calculation a derived_supports statement ends with
+    # (" [calculated: <expr>; a=…, b=…]", possibly cut short with no closing
+    # bracket), from its first opener on.
+    _DERIVED_CALCULATION_RE = re.compile(r"\s*\[calculated:.*\Z", re.S)
+
+    @classmethod
+    def _derived_support_spans(cls, source: Dict[str, Any]) -> List[str]:
+        """RESEARCH-8: the calculated statements of v3 DERIVED findings a
+        source carries (``derived_supports``, written only by flag-on
+        research), each without its trailing calculation: the formula's
+        literals (100, 1) and the operands are no evidence of their own (the
+        operands are page figures the other spans carry), so only the finding
+        text, which states the result, can support a claim."""
+        derived = source.get("derived_supports")
+        if not isinstance(derived, list):
+            return []
+        spans = (cls._DERIVED_CALCULATION_RE.sub("", str(value)).strip() for value in derived)
+        return [span for span in spans if span]
+
     @staticmethod
-    def _citation_evidence_spans(source: Dict[str, Any]) -> List[str]:
-        """Return only persisted evidence-bearing source fields."""
+    def _citation_evidence_spans(
+        source: Dict[str, Any], include_derived: bool = True
+    ) -> List[str]:
+        """Return only persisted evidence-bearing source fields.
+
+        RESEARCH-8: ``derived_supports`` (:meth:`_derived_support_spans`,
+        without their calculation) join after ``supports`` unless
+        ``include_derived`` is false;
+        :meth:`_semantic_citation_support` weighs them apart, so they can only
+        add support to a claim, never remove it.
+        """
         spans: List[str] = []
         title = str(source.get("title") or "").strip()
         if title:
@@ -3922,6 +5846,8 @@ class ReportAgent:
             )
         elif isinstance(supports, str) and supports.strip():
             spans.append(supports.strip())
+        if include_derived:
+            spans.extend(ReportAgent._derived_support_spans(source))
         for key in (
             "excerpt", "snippet", "quote", "summary", "description", "content", "text"
         ):
@@ -3956,7 +5882,31 @@ class ReportAgent:
         create lexical coincidences but cannot support a claim.  ``None`` means
         the pair is not deterministically auditable (for example cross-language
         prose); callers preserve but report it rather than guessing.
+
+        RESEARCH-8: ``derived_supports`` are purely additive (market_supported-
+        style keep-never-remove).  The verdict on the other spans stands unless
+        the derived statements, weighed alone, support the claim (then True);
+        they never turn a verdict into False or None.
         """
+        verdict = cls._semantic_span_support(
+            line,
+            cls._citation_evidence_spans(source, include_derived=False),
+            str(source.get("title") or "").strip(),
+        )
+        if verdict is True:
+            return True
+        derived = cls._derived_support_spans(source)
+        if derived and cls._semantic_span_support(line, derived, "") is True:
+            return True
+        return verdict
+
+    @classmethod
+    def _semantic_span_support(
+        cls, line: str, spans: List[str], title: str
+    ) -> Optional[bool]:
+        """The lexical verdict of :meth:`_semantic_citation_support` on one
+        list of evidence ``spans``; ``title`` is non-empty when ``spans[0]`` is
+        the source title, which needs fewer anchors."""
         bare = cls._FULL_S_TAG_RE.sub(" ", str(line or ""))
 
         def _tokens(text: str) -> set[str]:
@@ -3969,11 +5919,9 @@ class ReportAgent:
                 out.add(token)
             return out
 
-        spans = cls._citation_evidence_spans(source)
         if not spans:
             return None
 
-        title = str(source.get("title") or "").strip()
         line_tokens = _tokens(bare)
         line_numbers = cls._semantic_numbers(bare)
         discriminative_numbers = {
@@ -4814,10 +6762,18 @@ class ReportAgent:
             indicators = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
         except Exception:  # noqa: BLE001
             indicators = []
+        # REPORT-13：与 forecast.indicators 同一份合并（研究指标 + 反证审查触发器）；反证行在表中为
+        # 「信号 [S#]（反证审查）」+「日期: 阈值（上调/下调）」。无反证结果时原样返回，章节逐字节不变。
+        indicators = self._with_counter_case_indicators(indicators)
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
+        # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：有已复核的研究问题规范时披露操作化定义与每条
+        # 默认假设（判定日不是本次运行的判定日时标注未采用）；无规范 / 旗标关 → question_spec=None，
+        # 章节逐字节不变。
+        _question_spec, _qspec_applied = self._question_spec_for_run()
         block = render_resolution_block(
             self._forecast_spine, indicators,
-            language=getattr(self, "output_language", None) or "Chinese")
+            language=getattr(self, "output_language", None) or "Chinese",
+            question_spec=_question_spec, question_spec_horizon_applied=_qspec_applied)
         if not block:
             return
         new_md = (report.markdown_content or "").rstrip() + "\n\n" + block + "\n"
@@ -4994,6 +6950,8 @@ class ReportAgent:
         for s in (forecast.get("scenarios") or []):
             if not isinstance(s, dict):
                 continue
+            if s.get("probability") is None:
+                continue  # REPORT-1：待复核（null）概率无可比对的值，不当作 0% 比对
             name = str(s.get("name") or "").strip()
             try:
                 p = round(float(s.get("probability") or 0.0) * 100)
@@ -5021,6 +6979,18 @@ class ReportAgent:
             if near:
                 pv = min(near, key=lambda x: abs(x - p))
                 issues.append(f"scenario '{name[:28]}': prose {pv}% vs forecast.json {p}%")
+        # REPORT-3：仅 REPORT_LOGIC_NUMBER_GATE=numeric 时并入别名槽不符（同一格式、去重），经既有
+        # S11 硬路径阻止发布；observe/off 输出不变。检测异常时失败即关闭（记一条不符）。
+        if self._logic_number_gate() == "numeric":
+            try:
+                from .logic_number import s11_mismatches
+                for message in s11_mismatches(md, forecast.get("scenarios") or [],
+                                              reference="forecast.json"):
+                    if message not in issues:
+                        issues.append(message)
+            except Exception as _ln_err:  # noqa: BLE001 — 硬规则检测失败 → fail closed
+                logger.warning(f"别名概率槽 S11 检测失败（按不符处理）: {_ln_err}")
+                issues.append(f"logic-number alias audit failed: {type(_ln_err).__name__}")
         return {"scenario_prob_mismatches": issues[:8], "mismatch_count": len(issues)}
 
     def _lang_override(self) -> str:
@@ -5484,7 +7454,9 @@ class ReportAgent:
         lang = getattr(self, "output_language", None) or "English"
         spine = self._forecast_spine if isinstance(getattr(self, "_forecast_spine", None),
                                                    dict) else None
-        cleaned, lint_rep = _rl.lint_report(md, lang, mode="final", spine=spine)
+        cleaned, lint_rep = _rl.lint_report(
+            md, lang, mode="final", spine=spine,
+            alias_aware_s11=self._logic_number_gate() == "numeric")
         if lint_rep.get("changed") and cleaned.strip():
             report.markdown_content = cleaned
             try:
@@ -5492,6 +7464,7 @@ class ReportAgent:
                 write_text_atomic(os.path.join(folder, "full_report.md"), cleaned)
             except Exception as _we:  # noqa: BLE001
                 logger.warning(f"回写编辑 lint 成稿 full_report.md 失败（忽略）: {_we}")
+        projection = self._projection_attribution_audit(report.markdown_content or "")
         # lint 报告并入 forecast.json 的 quality（读-改-写；文件缺失/损坏时仅记内存副本）。
         try:
             fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
@@ -5500,9 +7473,14 @@ class ReportAgent:
                     fc = json.load(f)
                 if isinstance(fc, dict):
                     fc.setdefault("quality", {})["lint"] = lint_rep
-                    write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+                    if projection is not None:
+                        fc["quality"]["projection_attribution"] = projection
+                    write_text_atomic(fpath, _forecast_artifact_json(
+                        fc, "forecast.json", record_quality=True)[0])
                     if isinstance(getattr(self, "_forecast_spine", None), dict):
                         self._forecast_spine.setdefault("quality", {})["lint"] = lint_rep
+                        if projection is not None:
+                            self._forecast_spine["quality"]["projection_attribution"] = projection
         except Exception as _fe:  # noqa: BLE001 — quality 记录失败不影响成稿
             logger.warning(f"编辑 lint 报告写入 forecast.json 失败（忽略）: {_fe}")
         logger.info(
@@ -5512,6 +7490,203 @@ class ReportAgent:
             f"{lint_rep.get('dangling_attributions')}｜重复句 "
             f"{lint_rep.get('duplicate_sentences_removed')}｜泄漏残留 {lint_rep.get('leakage_flags')}"
         )
+
+    @staticmethod
+    def _logic_number_repair_enabled() -> bool:
+        """REPORT-3：零 token 槽位修复是否运行（REPORT_LOGIC_NUMBER_REPAIR 与 REPORT_NARRATIVE_SYNC 皆开）。"""
+        return bool(getattr(Config, "REPORT_LOGIC_NUMBER_REPAIR", False)
+                    and getattr(Config, "REPORT_NARRATIVE_SYNC", True))
+
+    @staticmethod
+    def _logic_number_gate() -> str:
+        """REPORT-3：生效的 REPORT_LOGIC_NUMBER_GATE（off / observe / numeric；未知值按 observe 并告警）。
+
+        每份报告（默认 observe）都会走到这里：审计模块导入失败绝不能让稳定器或终审抛出，故退回
+        原始取值（off / numeric 照用，其余按 observe）并告警；numeric 分支自身仍失败即关闭。"""
+        raw = getattr(Config, "REPORT_LOGIC_NUMBER_GATE", "observe")
+        try:
+            from .logic_number import resolve_gate
+        except Exception as exc:  # noqa: BLE001 — 只读观测的门值解析不得阻断发布
+            logger.warning(f"logic_number 模块导入失败，按原始取值解析 REPORT_LOGIC_NUMBER_GATE: {exc}")
+            value = str(raw or "").strip().lower()
+            return value if value in ("off", "numeric") else "observe"
+        return resolve_gate(raw)
+
+    def _spine_scenario_rows(self) -> List[Dict[str, Any]]:
+        """REPORT-3：当前预测骨架（成稿后即最终 forecast）的情景行；无骨架/无情景时为空列表。"""
+        spine = getattr(self, "_forecast_spine", None)
+        rows = spine.get("scenarios") if isinstance(spine, dict) else None
+        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+    def _repair_outline_summary_numbers(self, outline: "ReportOutline") -> None:
+        """REPORT-3：把大纲摘要里与骨架不符的别名概率槽（「基准情景（40%）」对 A=0.35）确定性改成
+        骨架值（零 token）。调用方在 report.outline / self._outline_summary 赋值与 save_outline 之前
+        调用，故大纲、meta、引用溯源豁免文本与成稿摘要 blockquote 始终逐字节一致。改写记入
+        self._logic_number_summary_repair，由 _repair_logic_number 并入修复记录；失败仅告警。"""
+        try:
+            from . import logic_number as _ln
+            summary = getattr(outline, "summary", None)
+            findings = _ln.find_probability_slots(summary, self._spine_scenario_rows())
+            new_summary, applied = _ln.substitute_probability_slots(summary, findings)
+            if applied:
+                outline.summary = new_summary
+                self._logic_number_summary_repair = [
+                    {"where": "outline_summary", **row} for row in applied]
+                logger.info(f"大纲摘要概率槽已同步骨架: {applied}")
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原摘要
+            logger.warning(f"大纲摘要概率槽同步失败（忽略，保留原文）: {_ln_err}")
+
+    @staticmethod
+    def _resync_summary_blockquote(report: "Report", md: str, scenarios: List[Dict[str, Any]]
+                                   ) -> Tuple[str, Optional[str], List[Dict[str, str]]]:
+        """REPORT-3：成稿阶段的摘要补同步（只计算，不改任何状态）。规划时骨架尚无情景（成稿后
+        抽取的旧路径）或其后概率又被移动时，摘要仍可能与最终情景不符；仅当成稿里恰有一处整行块
+        等于 "> {outline.summary}"（摘要含换行时为多行：首行带 "> "，其后是 blockquote 的惰性续行）
+        时才改写该块，并返回改写后的摘要供调用方与 report.outline.summary / self._outline_summary
+        一并提交（四者保持逐字节一致）。找不到唯一的那一块则不改。
+        返回 (成稿, 新摘要或 None, 改写记录)。"""
+        from . import logic_number as _ln
+        summary = getattr(getattr(report, "outline", None), "summary", None)
+        new_summary, applied = _ln.substitute_probability_slots(
+            summary, _ln.find_probability_slots(summary, scenarios))
+        if not applied:
+            return md, None, []
+        block = f"> {summary}"
+        hits: List[int] = []
+        position = md.find(block)
+        while position >= 0 and len(hits) < 2:
+            end = position + len(block)
+            if (position == 0 or md[position - 1] == "\n") and (end == len(md) or md[end] == "\n"):
+                hits.append(position)
+            position = md.find(block, position + 1)
+        if len(hits) != 1:
+            return md, None, []
+        synced = md[:hits[0]] + f"> {new_summary}" + md[hits[0] + len(block):]
+        return synced, new_summary, [{"where": "outline_summary", **row} for row in applied]
+
+    def _repair_logic_number(self, report_id: str, report: "Report") -> None:
+        """REPORT-3：稳定器之前的确定性别名概率槽修复（零 token）。
+
+        对成稿（跳过摘要 blockquote——它只与大纲摘要一并改写，见 _repair_outline_summary_numbers /
+        _resync_summary_blockquote，单独改写会破坏与 self._outline_summary 的一致）做
+        logic_number.audit_markdown，把 fixable 槽位的数字换成骨架值；区间/数量/合计/市场/引语/
+        条件/历史守卫命中的 unresolved 槽位只计数、绝不改写。全部算完后一次提交：
+        report.markdown_content 与 full_report.md（放在语言纯度之后、编辑 lint 与
+        _stabilize_publish_markdown 之前，稳定器与终审的 SHA 指纹因此覆盖修复后的字节），摘要补同步时
+        连同 outline.summary / self._outline_summary / outline.json；成稿有改写时再刷新 forecast.json
+        的 quality.logic_number（_refresh_logic_number_quality）。结果记
+        self._logic_number_repair = {applied（截断明细）, applied_count / summary_count / body_count
+        （未截断总数）, unresolved}。REPORT_LOGIC_NUMBER_REPAIR（默认关）或 REPORT_NARRATIVE_SYNC 关、
+        或骨架无情景时不做任何事（成稿逐字节不变）；任何失败仅告警。"""
+        if not self._logic_number_repair_enabled():
+            return
+        scenarios = self._spine_scenario_rows()
+        if not scenarios:
+            return
+        try:
+            from . import logic_number as _ln
+            md = report.markdown_content or ""
+            synced_md, new_summary, summary_rows = self._resync_summary_blockquote(
+                report, md, scenarios)
+            audit = _ln.audit_markdown(synced_md, scenarios, skip_summary_blockquote=True,
+                                       max_findings=None)
+            new_md, applied = _ln.substitute_probability_slots(synced_md, audit["findings"])
+            applied_rows = list(getattr(self, "_logic_number_summary_repair", None) or [])
+            applied_rows += summary_rows + [{"where": "body", **row} for row in applied]
+        except Exception as _ln_err:  # noqa: BLE001 — 确定性修复为增强，失败保留原文
+            logger.warning(f"概率槽修复失败（忽略，保留原文）: {_ln_err}")
+            return
+        # applied 只留前 LOGIC_NUMBER_FINDINGS_CAP 条明细；*_count 为未截断的总数（摘要 + 正文）。
+        self._logic_number_repair = {
+            "applied": applied_rows[:_ln.LOGIC_NUMBER_FINDINGS_CAP],
+            "applied_count": len(applied_rows),
+            "summary_count": len(applied_rows) - len(applied),
+            "body_count": len(applied),
+            "unresolved": audit["unresolved"],
+        }
+        if new_summary is not None:
+            report.outline.summary = new_summary
+            self._outline_summary = new_summary
+        if new_md != md:
+            report.markdown_content = new_md
+            try:
+                folder = ReportManager._get_report_folder(report_id)
+                write_text_atomic(os.path.join(folder, "full_report.md"), new_md)
+                if new_summary is not None:
+                    ReportManager.save_outline(report_id, report.outline)
+            except Exception as _we:  # noqa: BLE001
+                logger.warning(f"重写 full_report.md / outline.json（概率槽修复）失败（忽略）: {_we}")
+        if new_md != md or applied_rows:
+            # 仅规划时摘要被修复、正文无需改写时，草稿观测里也还没有修复记录，同样刷新。
+            self._refresh_logic_number_quality(report_id, new_md)
+        logger.info(f"概率槽修复: {report_id} 正文改写 {len(applied)} 处｜摘要改写 "
+                    f"{len(summary_rows)} 处｜未解决 {audit['unresolved']} 处")
+
+    def _refresh_logic_number_quality(self, report_id: str, md: str) -> None:
+        """REPORT-3：修复改写了成稿后，把 forecast.json（及内存骨架）的 quality.logic_number 换成
+        修复后字节上的观测（含修复记录）。_finalize_structured_forecast 记下的是修复前草稿上的观测，
+        REPORT_FINAL_READ_ONLY_AUDIT 关闭时没有终审再覆盖它，留着就会描述一份从未发布的文本。
+        gate=off、无 forecast.json 或无情景时不动；读-改-写，失败仅告警（只关乎可观测性）。"""
+        try:
+            fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+            if not os.path.exists(fpath):
+                return
+            with open(fpath, "r", encoding="utf-8") as f:
+                fc = json.load(f)
+            if not isinstance(fc, dict):
+                return
+            observation = self._logic_number_observation(md, fc)
+            if observation is None:
+                return
+            fc.setdefault("quality", {})["logic_number"] = observation
+            write_text_atomic(fpath, json.dumps(fc, ensure_ascii=False, indent=2))
+            if isinstance(getattr(self, "_forecast_spine", None), dict):
+                self._forecast_spine.setdefault("quality", {})["logic_number"] = observation
+        except Exception as _fe:  # noqa: BLE001 — 观测性记录，绝不影响成稿
+            logger.warning(f"概率槽修复后刷新 forecast.json quality.logic_number 失败（忽略）: {_fe}")
+
+    def _logic_number_observation(self, md: str,
+                                  forecast: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """REPORT-3：只读别名概率槽观测（REPORT_LOGIC_NUMBER_GATE != off）——含摘要 blockquote 的
+        logic_number.audit_markdown，再附上本次运行的修复记录（有则附）。从不进 hard_issues / 发布门。
+        gate=off 或无情景时返回 None（调用方不写字段）；失败仅告警并返回 None。"""
+        if self._logic_number_gate() == "off":
+            return None
+        scenarios = forecast.get("scenarios") if isinstance(forecast, dict) else None
+        if not isinstance(scenarios, list) or not scenarios:
+            return None
+        try:
+            from . import logic_number as _ln
+            observation = _ln.audit_markdown(md or "", scenarios)
+            repair = getattr(self, "_logic_number_repair", None)
+            if repair is not None:
+                observation["repair"] = repair
+            return observation
+        except Exception as _ln_err:  # noqa: BLE001 — 观测性记录，绝不影响产物
+            logger.warning(f"概率槽观测失败（忽略）: {_ln_err}")
+            return None
+
+    def _projection_attribution_audit(self, md: str) -> Optional[Dict[str, Any]]:
+        """RESEARCH-5：已报告 vs 预期的归因观测（report_lint.check_projection_attribution）——
+        研究 quantitative 行里的预期值被正文写成已发生事实等计数。只读、只记数，绝不改成稿、
+        不进 hard_issues。REPORT_PROJECTION_LINT 关闭或无研究量化行时返回 None（调用方不写
+        字段）；失败仅告警并返回 None（degrade-safe）。as-of 取 self.actors['as_of_date']。"""
+        rows = getattr(self, "quantitative", None)
+        if not getattr(Config, "REPORT_PROJECTION_LINT", True) or not isinstance(rows, list) or not rows:
+            return None
+        try:
+            from . import report_lint as _rl
+            from ..utils.dates import parse_as_of
+            actors = getattr(self, "actors", None)
+            as_of = parse_as_of(actors.get("as_of_date")) if isinstance(actors, dict) else None
+            return _rl.check_projection_attribution(
+                md, rows,
+                as_of=as_of.date() if as_of is not None else None,
+                lang=getattr(self, "output_language", None) or "English",
+            )
+        except Exception as exc:  # noqa: BLE001 — 观测失败不影响成稿与审计
+            logger.warning(f"已报告/预期归因观测失败（忽略）: {exc}")
+            return None
 
     # ──────────────────────────────────────────────────────────────
     # BILINGUAL：自动生成成稿的另一语种版本（英⇄中），逐 H2 章节并发翻译
@@ -7879,6 +10054,7 @@ class ReportAgent:
             body, repair_info = self._repair_dangling_citations(
                 body, list(v["dangling"])
             )
+            self._log_citation_finalization("dangling", repair_info)
             imap = self._citation_index_or_fallback()
             v = validate_citation_markers(body, imap)
             logger.info(
@@ -7896,6 +10072,11 @@ class ReportAgent:
             imap = self._citation_index_or_fallback()
             if self._audit_semantic_citations(body, imap)["unsupported"] == 0:
                 break
+        # RESEARCH-9: every pass re-checks the surviving markers, so the log sums
+        # only remaps / strips and keeps kept / unverifiable of the last pass.
+        self._log_citation_finalization(
+            "semantic", semantic_totals, state=semantic_info
+        )
         v = validate_citation_markers(body, imap)
         if semantic_totals["remapped"] or semantic_totals["stripped"]:
             logger.info(
@@ -7988,6 +10169,79 @@ class ReportAgent:
                 ) from exc
             logger.warning(f"引用最终化失败（正文无引用记号，降级继续）: {exc}")
 
+    def _new_citation_finalization_log(
+        self, report_id: str, report: "Report"
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: a fresh citation-finalization log for one stabilizer run.
+
+        ``markers_before`` is the body-marker total (References excluded) before
+        the first citation finalization.  None when REPORT_FINALIZATION_TELEMETRY
+        is off or the measurement fails (telemetry never blocks publication).
+        """
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        try:
+            from .forecast_extractor import validate_citation_markers
+
+            body = "\n".join(
+                chunk for chunk in self._split_markdown_h2_sections(
+                    report.markdown_content or ""
+                )
+                if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
+            )
+            markers = validate_citation_markers(
+                body, self._citation_index_or_fallback()
+            )["total_markers"]
+            return _cftel.new_log(report_id, markers)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测初始化失败（忽略）: {exc}")
+            return None
+
+    def _log_citation_finalization(
+        self, event: str, info: Any, *, first_pass: bool = False, state: Any = None
+    ) -> None:
+        """RESEARCH-9: add one repair event to the current citation-finalization
+        log (no-op without one: flag off, or a caller outside the stabilizer)."""
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict):
+            return
+        try:
+            _cftel.record(log, event, info, first_pass=first_pass, state=state)
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测记录失败（忽略）: {event}: {exc}")
+
+    def _pre_audit_repairs(
+        self, report_id: str, body_marker_audit: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """RESEARCH-9: the report-citation-finalization/1 record of this report's
+        stabilizer run for the final audit; None when the flag is off or no log
+        of this report exists.  Warns when most markers were stripped."""
+        if not getattr(Config, "REPORT_FINALIZATION_TELEMETRY", True):
+            return None
+        log = getattr(self, "_finalization_log", None)
+        if not isinstance(log, dict) or log.get("report_id") != str(report_id):
+            return None
+        try:
+            record = _cftel.pre_audit_repairs(
+                log, (body_marker_audit or {}).get("total_markers", 0)
+            )
+        except Exception as exc:  # noqa: BLE001 — telemetry never blocks publication
+            logger.warning(f"引用最终化遥测汇总失败（忽略）: {exc}")
+            return None
+        if record["marker_strip_ratio"] >= _cftel.STRIP_RATIO_WARNING:
+            logger.warning(
+                "citation finalization stripped most markers before the audit: "
+                "%s ratio=%.3f before=%s final=%s machine_added=%s "
+                "lost_with_removed_text=%s",
+                report_id,
+                record["marker_strip_ratio"],
+                record["markers_before"],
+                record["markers_final"],
+                record["machine_added_citations"],
+                record["markers_lost_with_removed_text"],
+            )
+        return record
+
     def _stabilize_publish_markdown(
         self,
         report_id: str,
@@ -8021,6 +10275,8 @@ class ReportAgent:
             if isinstance(getattr(self, "_forecast_spine", None), dict)
             else None
         )
+        # REPORT-3: numeric gate only adds alias mismatches to the detection report.
+        alias_aware = self._logic_number_gate() == "numeric"
         folder = ReportManager._get_report_folder(report_id)
         totals: Dict[str, Any] = {
             "passes": 0,
@@ -8033,6 +10289,12 @@ class ReportAgent:
             "stable": False,
             "lint": {},
         }
+        # RESEARCH-9: this run's citation-finalization log (None with
+        # REPORT_FINALIZATION_TELEMETRY off); _finalize_citations and the loop
+        # below add to it and the read-only audit persists it.
+        self._finalization_log = self._new_citation_finalization_log(
+            report_id, report
+        )
 
         for pass_no in range(1, limit + 1):
             totals["passes"] = pass_no
@@ -8054,6 +10316,11 @@ class ReportAgent:
                 )
             )
             totals["quantitative_grounding"] = quantitative_info
+            # The repairing call's diagnostics: the probe below re-runs on the
+            # repaired text and overwrites totals with zeros.
+            self._log_citation_finalization(
+                "quantitative", quantitative_info, first_pass=pass_no == 1
+            )
             if quantitatively_grounded != (report.markdown_content or ""):
                 totals["quantitative_rewrites"] += 1
                 report.markdown_content = quantitatively_grounded
@@ -8067,6 +10334,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             if not cleaned.strip():
                 raise RuntimeError(
@@ -8099,6 +10367,7 @@ class ReportAgent:
                 lang,
                 mode="final",
                 spine=spine,
+                alias_aware_s11=alias_aware,
             )
             unsupported = int(semantic.get("unsupported", 0) or 0)
             totals["semantic_unsupported"] = unsupported
@@ -8106,6 +10375,7 @@ class ReportAgent:
             totals["_quote_stable"] = (quote_probe == current)
             totals["_quant_stable"] = (quantitative_probe == current)
             totals["_semantic"] = semantic
+            self._log_citation_finalization("totals", totals)
             if (
                 quote_probe == current
                 and quantitative_probe == current
@@ -8145,8 +10415,10 @@ class ReportAgent:
         ):
             try:
                 _current = report.markdown_content or ""
-                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine)
-                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine)
+                _once, _ = _rl.lint_report(_current, lang, mode="final", spine=spine,
+                                           alias_aware_s11=alias_aware)
+                _twice, _info2 = _rl.lint_report(_once, lang, mode="final", spine=spine,
+                                                 alias_aware_s11=alias_aware)
                 if _once == _twice and _once.strip() and not _info2.get("changed"):
                     report.markdown_content = _once
                     write_text_atomic(
@@ -8544,6 +10816,7 @@ class ReportAgent:
             lang,
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
+            alias_aware_s11=self._logic_number_gate() == "numeric",
         )
 
         audit: Dict[str, Any] = {
@@ -8580,6 +10853,29 @@ class ReportAgent:
             # published bytes; the candidate rewrite is intentionally discarded.
             "lint": lint_audit,
         }
+        # RESEARCH-5: observe-only; _final_audit_integrity_issues never reads it.
+        projection_audit = self._projection_attribution_audit(md)
+        if projection_audit is not None:
+            audit["projection_attribution"] = projection_audit
+        # REPORT-3: observe-only alias probability-slot audit of the final body (plus the
+        # run's repair record); _final_audit_integrity_issues never reads it.
+        logic_number_audit = self._logic_number_observation(body, forecast)
+        if logic_number_audit is not None:
+            audit["logic_number"] = logic_number_audit
+        # REPORT-9: read-only figure check on the final bytes; never read by
+        # _final_audit_integrity_issues or the publish gate, and a failure records
+        # nothing rather than failing the audit.
+        try:
+            verified_figures_check = self._verified_figures_check(md)
+            if verified_figures_check is not None:
+                audit["verified_figures"] = self._verified_figures_summary(verified_figures_check)
+        except Exception as exc:  # noqa: BLE001 — detection-only telemetry
+            logger.warning(f"Verified-figure check of the final report failed (ignored): {exc}")
+        # RESEARCH-9: what the publish stabilizer stripped / added before this
+        # audit (telemetry: neither the integrity issues nor the gate read it).
+        pre_audit_repairs = self._pre_audit_repairs(report_id, body_marker_audit)
+        if pre_audit_repairs is not None:
+            audit["pre_audit_repairs"] = pre_audit_repairs
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
 
@@ -8593,6 +10889,26 @@ class ReportAgent:
             quality["quote_provenance"] = quote_audit
             quality["numeric_consistency"] = numeric_audit
             quality["implausible_stats"] = stat_audit
+            # REPORT-3: the final-bytes alias-slot observation (with this run's repair record)
+            # replaces the draft one _finalize_structured_forecast took before the repair.
+            if logic_number_audit is not None:
+                quality["logic_number"] = logic_number_audit
+            else:
+                quality.pop("logic_number", None)
+            if "verified_figures" in audit:
+                # REPORT-9: the final bytes' figure check replaces the draft's.
+                quality["verified_figures"] = dict(audit["verified_figures"])
+            else:
+                # Not measured on these bytes (knob off, no block, a failed check):
+                # the draft's or an earlier audit's counts must not survive re-sealed.
+                quality.pop("verified_figures", None)
+            if pre_audit_repairs is not None:
+                # Before serialization, so forecast_sha256 seals it.
+                quality["citation_finalization"] = pre_audit_repairs
+            else:
+                # No record of this run (flag off, no log, or the log of another
+                # report): an earlier audit's record must not survive re-sealed.
+                quality.pop("citation_finalization", None)
             quality["final_audit"] = audit
             forecast["quality"] = quality
             if getattr(Config, "REPORT_PUBLISH_GATE", False):
@@ -8615,6 +10931,11 @@ class ReportAgent:
             }
             # ``audit`` is already referenced by quality.final_audit; adding the
             # compact gate result above therefore persists in both artifacts.
+            # INFRA-8: refresh the model provenance (the report stage's served models now
+            # include every report-stage call) inside the sealed bytes; unset -> key untouched.
+            _model_provenance = self._model_provenance_block()
+            if _model_provenance is not None:
+                forecast["model_provenance"] = _model_provenance
             forecast_serialized = json.dumps(
                 forecast, ensure_ascii=False, indent=2, allow_nan=False
             )
@@ -8663,9 +10984,11 @@ class ReportAgent:
         if not block:
             return
         # PM-2：确定性市场交叉核对块，紧随二元表。degrade-safe：渲染失败/空 → 不追加。
+        # REPORT-10：说明句按 REPORT_MARKET_XCHECK_DISCLOSURE 披露预测起草时已见市场价（Δ 为锚定后差值）。
         try:
             xcheck = render_market_comparison_block(
-                fc, markets=getattr(self, "_prediction_markets", None), lang=_lang)
+                fc, markets=getattr(self, "_prediction_markets", None), lang=_lang,
+                disclose_anchoring=bool(getattr(Config, "REPORT_MARKET_XCHECK_DISCLOSURE", True)))
         except Exception as _xe:  # noqa: BLE001 — 对照块为增强，失败不影响二元表前置
             logger.warning(f"渲染 Market Cross-Check 块失败（忽略）: {_xe}")
             xcheck = ""
@@ -8805,6 +11128,32 @@ class ReportAgent:
             parts.append("[Section key points]\n" + key_points)
         if not parts:
             return ""  # 没有任何可综合的输入 → 跳过（绝不让模型凭空写）
+        # REPORT-8：与各章节提示词同一份「已核验指标」块（_build_verified_figures_block 的缓存，
+        # 字符数已受 REPORT_VERIFIED_FACTS_MAX_CHARS 约束），附引用与来源冲突规则；块为空/旗标
+        # 关闭 → 提示词逐字节不变。块本身不构成综合输入（上方判空在前）。
+        figures_rule = ""
+        verified = getattr(self, "_verified_figures", None)
+        verified_block = (verified.get("rendered") or "") if isinstance(verified, dict) else ""
+        if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True) and verified_block:
+            parts.append("[Verified-on-page figures — exact numbers and their sources]\n" + verified_block)
+            figures_rule = (
+                " When stating an exact figure, use the verified-figures table and keep its [S#]; "
+                "if sources conflict, present both with their sources and never a reconciled number.")
+        # REPORT-13：反证审查完成时注入每个主要情景两侧最强的已校验引用论据（只含 valid / unverifiable），
+        # 并要求正面回应；无反证结果 / 旗标关 → 块为空，提示词逐字节不变。块不构成综合输入（判空在前）。
+        counter_rule = ""
+        counter_case = getattr(self, "_counter_case", None)
+        if counter_case:
+            try:
+                from .forecast_counter_case import render_counter_case_block
+                counter_block = render_counter_case_block(counter_case, lang)
+            except Exception as _cbe:  # noqa: BLE001 — 增强失败不影响 Part 2
+                logger.warning(f"渲染反证审查块失败（忽略）: {_cbe}")
+                counter_block = ""
+            if counter_block:
+                parts.append("[Counter-case: strongest cited arguments against the leading scenarios]\n"
+                             + counter_block)
+                counter_rule = " Address the strongest counter-case explicitly and keep its [S#] markers."
         prompt = (
             "You are the lead forecaster assembling 'Part 2 — Framework & Synthesis' of a "
             "three-part forecast submission (Part 1 = the binary-forecast table, Part 3 = the "
@@ -8817,7 +11166,8 @@ class ReportAgent:
             "top-level heading (the system adds it); no placeholders or meta commentary. "
             "NEVER mention the simulation, agents, rounds, action counts, factions, causal graphs, "
             "or this report's own drafting process; attribute analytical viewpoints to our "
-            "scenario analysis instead — the subject is always the real world.\n\n"
+            "scenario analysis instead — the subject is always the real world."
+            + figures_rule + counter_rule + "\n\n"
             + "\n\n".join(parts)
         )
         text = self.llm.chat(
@@ -9171,7 +11521,12 @@ class ReportAgent:
             coverage = float(audit.get(_coverage_basis, 1.0) or 0.0)
             min_cov = float(getattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.5) or 0.0)
             probs: List[float] = []
+            unreadable_probabilities = 0
             for s in scenarios:
+                if s.get("probability") is None:
+                    # REPORT-1：待复核（null）概率不计入和，也绝不当作 0。
+                    unreadable_probabilities += 1
+                    continue
                 try:
                     probs.append(float(s.get("probability") or 0.0))
                 except (TypeError, ValueError):
@@ -9189,17 +11544,25 @@ class ReportAgent:
                 for s in scenarios
             )
             top = max(probs) if probs else 0.0
+            # REPORT-1：概率待复核时只有部分行可读，其和/最大值不是分区的量——不据此下结论。
+            probabilities_unreadable = forecast.get("probability_status") == "needs_review"
             epistemic_issues: List[str] = []
             hard_issues: List[str] = []
             if scenarios and coverage < min_cov:
                 epistemic_issues.append(
                     f"定量声明引用覆盖率 {coverage:.2f} < 阈值 {min_cov:.2f}"
                 )
-            if scenarios and abs(prob_sum - 1.0) > 0.05:
+            if probabilities_unreadable:
+                # REPORT-1：概率不可读 → 显式 NEEDS_REVIEW 硬失败（替代误导性的「和偏离 1」）。
+                hard_issues.append(
+                    f"{unreadable_probabilities} 个情景概率无法解析"
+                    "（NEEDS_REVIEW，未以 0/均匀分布代替）"
+                )
+            elif scenarios and abs(prob_sum - 1.0) > 0.05:
                 hard_issues.append(f"情景概率之和 {prob_sum} 偏离 1")
             if scenarios and not has_residual:
                 hard_issues.append("缺少『维持现状/兜底』情景")
-            if top >= 0.9 and len(probs) <= 1:
+            if top >= 0.9 and len(probs) <= 1 and not probabilities_unreadable:
                 epistemic_issues.append("概率分布退化（单情景≥0.9 且无对照情景）")
             # QUALITY-OPT: fold the binary-forecast conviction/objectivity gate (A3/A4) +
             # the S2/S11/S12 audits into the publish gate so they actually demote confidence.
@@ -9269,9 +11632,10 @@ class ReportAgent:
                 "pre_publish_confidence_rationale": _baseline_rationale,
                 "citation_coverage": round(coverage, 3),
                 "citation_coverage_basis": _coverage_basis,
-                "probability_sum": prob_sum,
+                # REPORT-1：待复核时记 None（部分行之和会被误读成分区之和）。
+                "probability_sum": None if probabilities_unreadable else prob_sum,
                 "has_residual_scenario": has_residual,
-                "max_probability": round(top, 3),
+                "max_probability": None if probabilities_unreadable else round(top, 3),
                 "hard_issues": hard_issues,
                 "epistemic_issues": epistemic_issues,
                 "hard_passed": not hard_issues,
@@ -9319,10 +11683,22 @@ class ReportAgent:
         """把基线/情景两份最终 P(outcome) 归一化为可比维度的字典。
 
         返回 {dimensions:[{name, baseline, scenario, delta, verdict}]}；任一侧缺少
-        world_state_trajectory.json / outcome.shares 时返回 None。
+        world_state_trajectory.json / outcome.shares，或（REPORT_WORLDSTATE_HIDE_INVALID 开时）
+        任一侧带显式非 valid 有效性裁定时返回 None（后者记一条 info 日志，便于与缺轨迹区分）。
+        FU-3：任一侧模拟按 REPORT-5 规则不可用（hollow / errored，REPORT_SIGNAL_PACK_HEALTH_GATE）
+        时同样返回 None 并记 info 日志——调用方（_prepend_comparison_table）在表位给说明行。
         """
         if not self.base_simulation_id:
             return None
+        # FU-3：任一侧模拟不可用 → 不出「权威」对比表（与信号包 / 工具 / 大纲的差异门一致）。
+        for _sid in (self.base_simulation_id, self.simulation_id):
+            _health, _skip = self._behaviour_skips(_sid)
+            if "scenario_diff" in _skip:
+                logger.info("情景对比表跳过：%s 的 simulation_health=%s（REPORT_SIGNAL_PACK_HEALTH_GATE）",
+                            _sid, _health)
+                return None
+        hide_invalid = bool(getattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True))
+
         def _shares(simulation_id: str) -> Dict[str, float]:
             path = os.path.join(
                 getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
@@ -9330,9 +11706,17 @@ class ReportAgent:
             )
             try:
                 with open(path, "r", encoding="utf-8") as handle:
-                    raw = ((json.load(handle) or {}).get("outcome") or {}).get("shares") or {}
+                    doc = json.load(handle) or {}
+                raw = (doc.get("outcome") or {}).get("shares") or {}
             except (OSError, ValueError, TypeError):
                 return {}
+            # SIM-1（fail-closed）：任一侧轨迹带显式非 valid 裁定 → 无可比份额 → 对比表 None。
+            if hide_invalid:
+                validity = str(doc.get("validity") or "").strip().lower()
+                if validity and validity != "valid":
+                    logger.info("情景对比表跳过：%s 轨迹有效性裁定=%s（REPORT_WORLDSTATE_HIDE_INVALID）",
+                                simulation_id, validity)
+                    return {}
             out: Dict[str, float] = {}
             for name, value in raw.items() if isinstance(raw, dict) else []:
                 try:
@@ -9408,6 +11792,35 @@ class ReportAgent:
         lines.append("")
         lines.append("> 上表为确定性聚合结果，正文请围绕这些权威差值展开解读，勿自行复算或反转方向。")
         return "\n".join(lines)
+
+    def _prepend_comparison_table(self, report_id: str, section_content: str) -> str:
+        """EXECPLAN2 I-3-4: 把确定性结构化对比表前置到情景对比章节正文，并落盘 comparison.json
+        （供 UI / diff 工具消费）。对比表为可选增强：任何失败只告警，返回已拼好的正文。
+
+        FU-3：任一侧模拟按 REPORT-5 规则不可用时 _scenario_diff_structured 返回 None——表位改给
+        读者可见的说明行（_comparison_body_note：本报告模拟不可用优先，其次基线不可用；不用写给
+        撰写模型的提示词说明行），不落 comparison.json。其余无表情形（缺轨迹 / 有效性裁定非 valid
+        / 门关）正文逐字节不变。"""
+        try:
+            diff_dict = self._scenario_diff_structured()
+            if diff_dict:
+                table_md = self._render_comparison_table(diff_dict)
+                if table_md:
+                    section_content = table_md + "\n\n" + section_content
+                    cpath = os.path.join(
+                        ReportManager._get_report_folder(report_id), "comparison.json"
+                    )
+                    write_text_atomic(
+                        cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
+                    )
+                    logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
+            else:
+                _body_note = self._comparison_body_note()
+                if _body_note:
+                    section_content = _body_note + "\n\n" + section_content
+        except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
+            logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
+        return section_content
 
     # ──────────────────────────────────────────────────────────────
     # EXECPLAN2 I-5-4: 报告级 LLM 成本/时延遥测（per-section + totals）
@@ -9625,23 +12038,43 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     max_agents=max_agents,
                     graph_id=self.graph_id,  # T3.14: 把采访回答持久化为 typed 图谱事实
+                    # FU-8：编排器交来的该运行钉值；None → interview_agents 按模拟 id 查钉。
+                    feedback_allowed=getattr(self, "interview_graph_feedback", None),
                 )
                 return result.to_text()
             
             elif tool_name == "simulation_outcomes":
+                # FU-3：非健康运行（REPORT-5 规则）不给种子回声数据，给同一说明行。
+                _health, _skip = self._behaviour_skips()
+                if "simulation_outcomes" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 top_n = parameters.get("top_n", 15)
                 if isinstance(top_n, str):
                     top_n = int(top_n) if top_n.isdigit() else 15
                 return self.zep_tools.simulation_outcomes(self.simulation_id, top_n=top_n)
 
             elif tool_name == "coalition_map":
+                _health, _skip = self._behaviour_skips()
+                if "coalition_map" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 return self.zep_tools.coalition_map(self.graph_id, self.simulation_id)
 
             elif tool_name == "faction_brief":  # EXECPLAN2 I-1-2
+                # FU-3：非健康运行不许经 faction_brief 的降级路径回退到 coalition_map（种子回声）：
+                # 不给 simulation_id；图谱原生社区简报不依赖模拟行为，照常给，降级串换成同一说明行。
+                _health, _skip = self._behaviour_skips()
+                if "coalition_map" in _skip:
+                    brief = self.zep_tools.faction_brief(self.graph_id, parameters.get("query", ""), "")
+                    return (_SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+                            if not brief or brief.strip().startswith("（") else brief)
                 return self.zep_tools.faction_brief(
                     self.graph_id, parameters.get("query", ""), self.simulation_id)
 
             elif tool_name == "opinion_shift":
+                # FU-3：逐轮动作轨迹与 simulation_outcomes 同源（动作日志），非健康运行同样只给说明行。
+                _health, _skip = self._behaviour_skips()
+                if "simulation_outcomes" in _skip:
+                    return _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
                 actor_name = parameters.get("actor_name", parameters.get("query", ""))
                 return self.zep_tools.opinion_shift(self.simulation_id, actor_name)
 
@@ -9657,6 +12090,10 @@ class ReportAgent:
                 # T4.7: 反事实对比 base vs 当前情景模拟
                 if not self.base_simulation_id:
                     return "（本报告非情景对比报告，无基线模拟可对比）"
+                # FU-3：任一侧模拟不可用 → 说明行（本报告模拟优先），不调用工具。
+                _diff_note = self._scenario_diff_note()
+                if _diff_note:
+                    return _diff_note
                 return self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
 
             # ========== 向后兼容的旧工具（内部重定向到新工具） ==========
@@ -9697,6 +12134,8 @@ class ReportAgent:
             else:
                 # RPT-7: 提示可用工具时列出 live 工具集（此前硬编码 3 个，遗漏了
                 # simulation_outcomes/coalition_map/opinion_shift/trace_cascade 等）。
+                # INFRA-5 / EVAL-16: 未经名单校验直达此处的未知工具名（chat() 等）记一行 tool_unknown。
+                self._log_tool_unknown(tool_name, "dispatch")
                 return f"未知工具: {tool_name}。请使用以下工具之一: {', '.join(sorted(self.tools.keys()))}"
                 
         except Exception as e:
@@ -9722,6 +12161,192 @@ class ReportAgent:
         """
         return set(self.tools.keys()) | self._LEGACY_TOOL_ALIASES
 
+    # ── INFRA-5: 工具调用边界的计数 / 日志 / 拒绝 ──
+
+    def _reset_tool_counters(self) -> None:
+        """INFRA-5: 归零报告级工具调用计数与派发结局（__init__ 与每次 generate_report 开始时）。"""
+        with _TOOL_COUNTER_LOCK:
+            self._report_tool_calls_total = 0
+            self._tool_outcomes = _rta.new_tool_outcomes()
+
+    def _count_tool_event(self, outcome: Optional[str] = None, *, charged: bool = False,
+                          repaired: bool = False) -> None:
+        """INFRA-5: 持锁记一次工具调用事件（并发章节线程共享本实例，裸 += 会丢计数）。
+
+        outcome 为 report_tool_args.TOOL_OUTCOME_KEYS 之一；charged=True 表示本次计入工具预算
+        （成功派发，或超出免费额度的被拒调用），同时递增 per-section 的 _section_tool_calls 与
+        报告级的 _report_tool_calls_total。两者同口径，故串行汇总与并发兜底的 tool_calls 一致。
+        """
+        with _TOOL_COUNTER_LOCK:
+            outcomes = getattr(self, "_tool_outcomes", None)
+            if not isinstance(outcomes, dict):
+                outcomes = self._tool_outcomes = _rta.new_tool_outcomes()
+            if outcome:
+                outcomes[outcome] = outcomes.get(outcome, 0) + 1
+            if repaired:
+                outcomes["repaired"] = outcomes.get("repaired", 0) + 1
+            if charged:
+                self._section_tool_calls = int(getattr(self, "_section_tool_calls", 0) or 0) + 1
+                self._report_tool_calls_total = int(getattr(self, "_report_tool_calls_total", 0) or 0) + 1
+
+    def _tool_counters_snapshot(self) -> Tuple[int, Dict[str, int]]:
+        """INFRA-5: (报告级计费工具调用数, 派发结局计数副本)，持锁读取。"""
+        with _TOOL_COUNTER_LOCK:
+            outcomes = getattr(self, "_tool_outcomes", None)
+            merged = _rta.new_tool_outcomes()
+            if isinstance(outcomes, dict):
+                merged.update(outcomes)
+            return int(getattr(self, "_report_tool_calls_total", 0) or 0), merged
+
+    @staticmethod
+    def _free_tool_rejections() -> int:
+        """INFRA-5: 每章免费（不计预算）被拒调用数 REPORT_TOOL_MAX_REJECTED_PER_SECTION（非法值回退 6）。"""
+        try:
+            return max(0, int(getattr(Config, "REPORT_TOOL_MAX_REJECTED_PER_SECTION", 6)))
+        except (TypeError, ValueError):
+            return 6
+
+    def _safe_report_log(self, method: str, *args, **kwargs) -> None:
+        """INFRA-5: 调用 report_logger 的某个记录方法；无记录器 / 替身缺方法 / 写入失败均静默跳过。"""
+        report_logger = getattr(self, "report_logger", None)
+        fn = getattr(report_logger, method, None) if report_logger is not None else None
+        if fn is None:
+            return
+        try:
+            fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 — 日志为旁路，绝不影响章节生成
+            logger.debug(f"report_logger.{method} 失败（忽略）: {exc}")
+
+    def _log_tool_unknown(self, tool_name: Any, path: str, section_title: Optional[str] = None,
+                          section_index: Optional[int] = None) -> None:
+        """INFRA-5 / EVAL-16 契约：模型点名不存在的工具时写一行 action='tool_unknown'。
+
+        path: 'react'（ReAct 循环拒绝）| 'native'（原生循环拒绝）| 'dispatch'（_execute_tool 兜底分支）。
+        每次未知调用只经过其中一处，故一次调用恰好一行。
+        """
+        self._safe_report_log(
+            "log", action="tool_unknown", stage="generating",
+            details={"tool_name": tool_name, "path": path},
+            section_title=section_title, section_index=section_index,
+        )
+
+    def _reject_tool_call(self, kind: str, budget: "_rta.RejectionBudget", tool_name: Optional[str],
+                          reason: str, raw: Optional[str], *, section_title: Optional[str] = None,
+                          section_index: Optional[int] = None, track: bool = True) -> bool:
+        """INFRA-5: 记一次派发前拒绝（计数 + agent_log 骨架行）；返回本次是否计入工具预算。
+
+        budget 为本章（或本次对话）的 RejectionBudget：前 REPORT_TOOL_MAX_REJECTED_PER_SECTION 次
+        免费，之后每次计费。track=False（chat 对话）时不动报告级计数。
+        """
+        charged = budget.register()
+        if track:
+            self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_params"), charged=charged)
+        self._safe_report_log("log_tool_rejection", section_title, tool_name, f"{kind}: {reason}", raw,
+                              section_index=section_index)
+        logger.warning(
+            f"工具调用被拒绝（{'计入' if charged else '不计入'}工具预算）: "
+            f"{tool_name or '(无工具名)'} — {kind}: {reason}"
+        )
+        return charged
+
+    def _note_skipped_parse_errors(self, tool_calls: List[Dict[str, Any]], selected: Dict[str, Any], *,
+                                   section_title: Optional[str] = None, section_index: Optional[int] = None,
+                                   track: bool = True) -> str:
+        """INFRA-5: 同一回复里未被处理的无法解析块（_select_tool_call 选了别的调用）留痕并告知模型。
+
+        前 SKIPPED_BLOCKS_ITEMIZED 个这样的块各记一次不计费的被拒调用（track=False 的 chat 对话不动
+        报告级计数）与一行 tool_rejected，其余块只合记一行汇总（退化回复里成百上千个块不会变成成百上千次
+        加锁追加写与虚高的 rejected_parse）；都不占本章免费额度（本轮已处理选中的调用）。返回拼在本轮
+        Observation 前的说明。没有这样的块时（含宽容解析关闭：列表里没有错误条目）返回空串，
+        Observation 逐字节不变。
+        """
+        skipped = [c for c in tool_calls if c is not selected and "_parse_error" in c]
+        itemized = skipped[:_rta.SKIPPED_BLOCKS_ITEMIZED]
+        for entry in itemized:
+            kind = entry.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+            if track:
+                self._count_tool_event(_rta.OUTCOME_FOR_KIND.get(kind, "rejected_parse"))
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"{kind}: {entry['_parse_error']}（同一回复另有被处理的调用，本块未执行）",
+                                  entry.get("raw"), section_index=section_index)
+        if len(skipped) > len(itemized):
+            self._safe_report_log("log_tool_rejection", section_title, None,
+                                  f"skipped_blocks: 同一回复另有 {len(skipped) - len(itemized)} 个无法解析的"
+                                  f"工具调用块未逐条记录（共 {len(skipped)} 个，均未执行）",
+                                  None, section_index=section_index)
+        if skipped:
+            logger.warning(f"同一回复中 {len(skipped)} 个无法解析的工具调用块未执行（不计工具预算）")
+        return _rta.skipped_blocks_note([str(c["_parse_error"]) for c in skipped])
+
+    @staticmethod
+    def _select_tool_call(tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """INFRA-5: 取首个格式良好的调用；全部解析失败时取第一个错误条目（非空列表）。
+
+        宽容解析关闭时列表里没有错误条目，恒等于 tool_calls[0]（历史「只执行第一个」）。
+        """
+        for call in tool_calls:
+            if "_parse_error" not in call:
+                return call
+        return tool_calls[0]
+
+    @staticmethod
+    def _public_tool_call(call: Dict[str, Any]) -> Dict[str, Any]:
+        """INFRA-5: 去掉解析层的私有键（'_repairs' 等），供 chat() 对外返回。"""
+        return {k: v for k, v in call.items() if not str(k).startswith("_")}
+
+    def _screen_native_unknown_tool(self, call: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5 / RESEARCH-15(b): 原生工具调用的工具名名单校验；合法时返回 None，否则 (结局, 类型, 原因)。
+
+        fail-closed、不受 REPORT_TOOL_ARG_REPAIR 控制：调用方在降级安全的参数校验之外调用它，
+        自身异常照常抛出（_generate_section 回退 ReAct），绝不按可派发处理。
+        self.tools 为空（仅测试替身）时与 ReAct 路径一致跳过名单校验。
+        """
+        name = call.get("name")
+        if self.tools and name not in self._valid_tool_names():
+            return ("rejected_unknown", "unknown_tool",
+                    f"'{name}' 不是可用工具。请从以下工具中选择：{', '.join(sorted(self.tools.keys()))}")
+        return None
+
+    @staticmethod
+    def _screen_native_tool_args(call: Dict[str, Any], repair_on: bool) -> Optional[Tuple[str, str, str]]:
+        """INFRA-5（REPORT_TOOL_ARG_REPAIR）: 原生工具调用的参数检查；可派发时返回 None，否则 (结局, 类型, 原因)。
+
+        INFRA-1 的 arguments_error（参数不是 JSON 对象）与 validate_call（必填/as_of/limit）。
+        """
+        if not repair_on:
+            return None
+        name = call.get("name")
+        if call.get("arguments_error"):
+            return ("rejected_parse", _rta.KIND_ARGS_NOT_JSON,
+                    f"工具参数不是有效的 JSON 对象（{call['arguments_error']}）。"
+                    "请重新发起该工具调用，arguments 必须是一个 JSON 对象")
+        error = _rta.validate_call(name, call.get("arguments"))
+        if error:
+            return ("rejected_params", _rta.KIND_INVALID_PARAMS,
+                    f"工具 {name} 的参数无效：{error}。请修正参数后重新调用")
+        return None
+
+    @staticmethod
+    def _native_arguments_text(call: Dict[str, Any], prefer_raw: bool) -> str:
+        """回填 assistant.tool_calls 的 arguments 文本。
+
+        INFRA-5（prefer_raw）：有模型原文 raw_arguments 时原样回填——arguments 解析失败时为 {}，
+        json.dumps({}) 会向模型谎报它发出的内容；否则（及开关关闭时）沿用历史 json.dumps。
+        """
+        raw = call.get("raw_arguments")
+        if prefer_raw and isinstance(raw, str) and raw.strip():
+            return raw
+        return json.dumps(call.get("arguments", {}), ensure_ascii=False)
+
+    @staticmethod
+    def _native_final_evidence_chars() -> int:
+        """INFRA-5: 原生兜底收尾的证据摘要字符预算 REPORT_NATIVE_FINAL_EVIDENCE_CHARS（非正/非法回退 12000）。"""
+        try:
+            chars = int(getattr(Config, "REPORT_NATIVE_FINAL_EVIDENCE_CHARS", 12000))
+        except (TypeError, ValueError):
+            return 12000
+        return chars if chars > 0 else 12000
+
     def _parse_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """
         从LLM响应中解析工具调用
@@ -9729,7 +12354,77 @@ class ReportAgent:
         支持的格式（按优先级）：
         1. <tool_call>{"name": "tool_name", "parameters": {...}}</tool_call>
         2. 裸 JSON（响应整体或单行就是一个工具调用 JSON）
+
+        INFRA-5（REPORT_TOOL_ARG_REPAIR，默认开）走宽容解析 _parse_tool_calls_tolerant；
+        关闭时为下方的历史严格解析（逐字节不变）。
         """
+        if getattr(Config, "REPORT_TOOL_ARG_REPAIR", True):
+            return self._parse_tool_calls_tolerant(response)
+        return self._parse_tool_calls_legacy(response)
+
+    def _parse_tool_calls_tolerant(self, response: str) -> List[Dict[str, Any]]:
+        """INFRA-5: 宽容解析工具调用。
+
+        <tool_call> 块由 report_tool_args.split_tool_call_blocks 线性切分（块内任意内容都交给解析，
+        不再要求是一个完整的 {...}；旧正则匹配不上的块会被静默丢弃）。每个块经
+        parse_tool_call_block_repairs（整体 JSON → 首个对象 → 补齐括号）与 normalize_envelope
+        （键名归一、扁平参数上提、字符串化 parameters 解码）。
+        无法恢复的块不再丢弃，而是产出 {'_parse_error': 原因, 'raw': 原文[:500], '_kind': 类型}
+        条目，由调用方回给模型一条纠正性 Observation。成功条目的 '_repairs' 列出所做修复。
+        最后一个闭合块之后仍有未闭合的 <tool_call>（回复被 max_tokens 截断，或误用 </invoke> 等
+        闭合标签）时，其后全文按同一流程作为一个块处理（修复标记 unterminated_block）。
+        裸 JSON 兜底（无 <tool_call> 块）沿用历史的两种候选与「工具名须合法」约束，只把
+        json.loads 换成同一套修复；裸 JSON 解析失败一般不产出错误条目（可能只是正文里的花括号），
+        唯一例外是整个回复以 {"name": "<可用工具>" 开头却解码不了（report_tool_args.broken_bare_call）。
+        切分与候选定位都不用回溯正则：模型文本上的 <tool_call>\\s*(.*?)\\s*</tool_call> 在未闭合开标签
+        + 长空白串时是三次方回溯，且 _sre 匹配期间不释放 GIL（并发章节线程全被卡住）。
+        """
+        tool_calls: List[Dict[str, Any]] = []
+        for block, block_repair in _rta.split_tool_call_blocks(response):
+            obj, repairs, error = _rta.parse_tool_call_block_repairs(block)
+            if obj is None:
+                tool_calls.append({"_parse_error": error, "raw": block[:500],
+                                   "_kind": _rta.KIND_ARGS_NOT_JSON})
+                continue
+            call, envelope_repairs = _rta.normalize_envelope(obj)
+            name = call.get("name")
+            if not isinstance(name, str) or not name:
+                tool_calls.append({"_parse_error": "missing tool name", "raw": block[:500],
+                                   "_kind": _rta.KIND_MISSING_NAME})
+                continue
+            call["_repairs"] = ([block_repair] if block_repair else []) + repairs + envelope_repairs
+            tool_calls.append(call)
+        if tool_calls:
+            return tool_calls
+
+        for candidate in _rta.bare_tool_call_candidates(response):
+            obj, repairs, _error = _rta.parse_tool_call_block_repairs(candidate)
+            if obj is None:
+                continue
+            call, envelope_repairs = _rta.normalize_envelope(obj)
+            name = call.get("name")
+            if isinstance(name, str) and name in self._valid_tool_names():
+                call["_repairs"] = repairs + envelope_repairs
+                return [call]
+
+        # 整个回复以 {"name": "<可用工具>" 开头、但那个对象解码不了（多为缺外层右括号，
+        # 上面的候选只看以 } 结尾的回复）：能补齐就派发，补不齐就产出错误条目回给模型，不再静默丢弃。
+        broken = _rta.broken_bare_call(response)
+        if broken is None or broken[1] not in self._valid_tool_names():
+            return []
+        candidate, _declared = broken
+        obj, repairs, error = _rta.parse_tool_call_block_repairs(candidate)
+        if obj is None:
+            return [{"_parse_error": error, "raw": candidate[:500], "_kind": _rta.KIND_ARGS_NOT_JSON}]
+        call, envelope_repairs = _rta.normalize_envelope(obj)
+        name = call.get("name")
+        if not isinstance(name, str) or name not in self._valid_tool_names():
+            return []
+        call["_repairs"] = repairs + envelope_repairs
+        return [call]
+
+    def _parse_tool_calls_legacy(self, response: str) -> List[Dict[str, Any]]:
+        """历史严格解析（REPORT_TOOL_ARG_REPAIR=false）：JSON 解析失败的块被静默丢弃。"""
         tool_calls = []
 
         # 格式1: XML风格（标准格式）
@@ -9793,9 +12488,12 @@ class ReportAgent:
         return False
     
     def _get_tools_description(self) -> str:
-        """生成工具描述文本"""
+        """生成工具描述文本（FU-3：本报告只给说明行的行为类工具不列出）"""
         desc_parts = ["可用工具："]
+        gated = self._gated_behaviour_tools()
         for name, tool in self.tools.items():
+            if name in gated:
+                continue
             params_desc = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
             desc_parts.append(f"- {name}: {tool['description']}")
             if params_desc:
@@ -9819,9 +12517,11 @@ class ReportAgent:
     }
 
     def _tool_usage_hints(self) -> str:
-        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。"""
+        """RPT-7: 从 live self.tools 渲染工具使用建议 bullets（工具被移除即不再出现）。
+        FU-3：本报告只给说明行的行为类工具同样不列出。"""
+        gated = self._gated_behaviour_tools()
         lines = [f"- {name}: {self._TOOL_HINT_SUMMARIES[name]}"
-                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES]
+                 for name in self.tools if name in self._TOOL_HINT_SUMMARIES and name not in gated]
         return "\n".join(lines) if lines else "（按上方工具描述使用）"
 
     def _lint_outline_titles(self, sections: List["ReportSection"]) -> int:
@@ -9918,34 +12618,54 @@ class ReportAgent:
                 sweeps.append("【图谱深挖摘要】\n" + forge_text[:6000])  # RQ-4: 3000→6000
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
-        try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
-            if outcomes:
-                # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
-                # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
-                sweeps.append(
-                    "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
-                    "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
-                    "不得为推演本身单设章节，任何章节标题不得含"
-                    "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n"
-                    + outcomes[:5000])  # RQ-4: 2500→5000
-        except Exception as e:
-            logger.warning(f"plan_outline simulation_outcomes 扫描失败（忽略）: {e}")
+        # FU-3：非健康运行（REPORT-5 规则）不把种子回声数据给大纲（工具不调用），只给同一说明行；
+        # 信号包（上面已钉入）包头已带这一行时不再重复。
+        _health, _skip = self._behaviour_skips()
+        if "simulation_outcomes" in _skip:
+            _no_behaviour = _SIGNAL_PACK_NO_BEHAVIOUR_NOTE.format(health=_health)
+            if _no_behaviour not in user_prompt:
+                sweeps.append(_no_behaviour)
+        else:
+            try:
+                outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+                if outcomes:
+                    # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
+                    # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
+                    sweeps.append(
+                        "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
+                        "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
+                        "不得为推演本身单设章节，任何章节标题不得含"
+                        "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n"
+                        + outcomes[:5000])  # RQ-4: 2500→5000
+            except Exception as e:
+                logger.warning(f"plan_outline simulation_outcomes 扫描失败（忽略）: {e}")
         if sweeps:
             user_prompt = user_prompt + "\n\n" + "\n\n".join(sweeps)
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
         if self.base_simulation_id:
-            try:
-                diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
-                if diff_text:
-                    user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
-            except Exception as e:
-                logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
-            user_prompt += (
-                "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
-                "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
-            )
+            _diff_note = self._scenario_diff_note()
+            if _diff_note:
+                # FU-3：任一侧模拟不可用 → 不预取差异（说明行已在提示词里时不重复）；
+                # 对比章节只说明为何不做行为对比。
+                if _diff_note not in user_prompt:
+                    user_prompt += "\n\n" + _diff_note
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，说明基线与本情景之间没有可用的行为对比数据，"
+                    "只依据研究材料讨论两者的差异。"
+                )
+            else:
+                try:
+                    diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
+                    if diff_text:
+                        user_prompt += "\n\n【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n" + diff_text[:2500]
+                except Exception as e:
+                    logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
+                user_prompt += (
+                    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+                    "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。"
+                )
 
         # R2-DETAIL-2: 把先于大纲推导出的预测骨架钉入提示词，并（在有骨架时）强制大纲围绕预测组织。
         # forecast_spine_block 为空 / require_forecast_structure 为 False 时本段为 no-op（提示词与历史一致）。
@@ -10280,27 +13000,33 @@ class ReportAgent:
         prior = "\n\n".join((s or "")[:600] for s in (previous_sections or [])[:6])[:2400]
         floor = self._section_char_floor()  # WAVE9：800 → 章节目标的 40%（随形状伸缩）
         lang = getattr(self, "output_language", None) or "English"
-        sys_prompt = (
-            "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足四条标准：\n"
-            "1) 概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾；\n"
-            "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【信号包】中的数字"
-            "是内部模拟推演产物（elicited model projection），只有在正文显式标注其模拟来源时"
-            "才可引用，绝不能替代 [S#] 作为现实世界声明的接地；【预测市场表】中的隐含概率/"
-            "价格是机器抓取的真实市场数据（Polymarket 公开 API），正文引用且与表内数值一致时"
-            "视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写；\n"
-            f"3) 篇幅下限：正文须有不少于 {floor} 字符的实质内容；\n"
-            "4) 不复述前序章节：不得大段重复【前序章节摘要】中的内容。\n"
-            f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
-            f"具体的修订指令（用{lang}书写，单句，不要解释）。"
-        )
-        usr_prompt = (
-            f"【预测骨架概率】\n{spine_txt or '（无）'}\n\n"
-            f"【信号包（硬数字）】\n{signal_txt or '（无）'}\n\n"
-            f"【预测市场表】\n{market_txt or '（无）'}\n\n"
-            f"【前序章节摘要】\n{prior or '（无）'}\n\n"
-            f"【本章标题】{section.title}\n\n"
-            f"【本章草稿】\n{content[:6000]}"
-        )
+        if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+            sys_prompt, usr_prompt = self._typed_critique_prompts(
+                section, content, previous_sections, spine_txt=spine_txt,
+                signal_txt=signal_txt, market_txt=market_txt, prior=prior,
+                floor=floor, lang=lang)
+        else:
+            sys_prompt = (
+                "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足四条标准：\n"
+                "1) 概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾；\n"
+                "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【信号包】中的数字"
+                "是内部模拟推演产物（elicited model projection），只有在正文显式标注其模拟来源时"
+                "才可引用，绝不能替代 [S#] 作为现实世界声明的接地；【预测市场表】中的隐含概率/"
+                "价格是机器抓取的真实市场数据（Polymarket 公开 API），正文引用且与表内数值一致时"
+                "视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写；\n"
+                f"3) 篇幅下限：正文须有不少于 {floor} 字符的实质内容；\n"
+                "4) 不复述前序章节：不得大段重复【前序章节摘要】中的内容。\n"
+                f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
+                f"具体的修订指令（用{lang}书写，单句，不要解释）。"
+            )
+            usr_prompt = (
+                f"【预测骨架概率】\n{spine_txt or '（无）'}\n\n"
+                f"【信号包（硬数字）】\n{signal_txt or '（无）'}\n\n"
+                f"【预测市场表】\n{market_txt or '（无）'}\n\n"
+                f"【前序章节摘要】\n{prior or '（无）'}\n\n"
+                f"【本章标题】{section.title}\n\n"
+                f"【本章草稿】\n{content[:6000]}"
+            )
         resp = self.llm.chat(
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": usr_prompt}],
@@ -10321,6 +13047,91 @@ class ReportAgent:
             logger.warning(f"章节 {section.title}: 质检只回了「{text[:20]}」（无具体指令），跳过修订")
             return None
         return text[:600]
+
+    @staticmethod
+    def _signal_slot_status() -> "_absence.SlotStatus":
+        """REPORT-4：章节质检里空信号包槽的状态。
+
+        信号包步骤不在本次运行里（SIMULATION_FORECAST_EFFECT=no_update 整包自抑制，或
+        REPORT_SIGNAL_PACK 关）⇒ not_run；步骤开着却没有信号包（_build_signal_pack 产出空串或
+        构建失败——空心 / 出错的模拟）⇒ unavailable('signal_pack_empty')，不能谎称「未启用」。"""
+        _effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                      or "diagnostic_only").strip().lower()
+        if _effect == "no_update":
+            return _absence.not_run("simulation_forecast_effect_no_update")
+        if not getattr(Config, "REPORT_SIGNAL_PACK", False):
+            return _absence.not_run("signal_pack_not_injected")
+        return _absence.unavailable("signal_pack_empty")
+
+    # REPORT-4：并发/brief 上下文模式下 previous_sections[0] 是 _build_synthesis_brief 的大纲意图，
+    # 不是前序章节正文。
+    _SYNTHESIS_BRIEF_PREFIX = "【报告大纲与各章节意图"
+    _CRITIQUE_RULE_COUNT_ZH = {2: "两", 3: "三", 4: "四"}
+
+    def _typed_critique_prompts(
+        self, section: "ReportSection", content: str, previous_sections: List[str], *,
+        spine_txt: str, signal_txt: str, market_txt: str, prior: str, floor: int, lang: str,
+    ) -> Tuple[str, str]:
+        """REPORT-4（REPORT_ABSENCE_MARKERS）：章节质检提示词，缺失的材料不再写成「（无）」。
+
+        规则按实际材料动态编号：无骨架 ⇒ 去掉概率一致性规则与【预测骨架概率】槽；缺信号包 /
+        市场表 ⇒ 槽内写类型化缺失标记，规则 2 的对应子句改为「未注入 ⇒ 相关论断无依据 / 无 [S#]
+        的市场价按未接地处理」（带 [S#] 的研究数字不受影响，保留 LOOP-017 修复）；首章 ⇒ 说明尚无
+        前序章节并去掉不复述规则；并发大纲意图 ⇒ 如实标注，规则改为不与其他章节的既定意图重复。"""
+        rules: List[str] = []
+        if spine_txt:
+            rules.append("概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾")
+        if signal_txt:
+            signal_clause = (
+                "【信号包】中的数字是内部模拟推演产物（elicited model projection），只有在正文"
+                "显式标注其模拟来源时才可引用，绝不能替代 [S#] 作为现实世界声明的接地")
+            signal_slot = signal_txt
+        else:
+            signal_clause = ("本次质检未注入内部情景推演诊断材料：任何「内部情景推演显示…」"
+                             "类论断视为无依据")
+            signal_slot = _absence.absence_marker("信号包", self._signal_slot_status())
+        if market_txt:
+            market_clause = (
+                "【预测市场表】中的隐含概率/价格是机器抓取的真实市场数据（Polymarket 公开 API），"
+                "正文引用且与表内数值一致时视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写")
+            market_slot = market_txt
+        else:
+            market_clause = (
+                "本次运行无可用的预测市场表：正文中未带 [S#] 的预测市场价格/隐含概率没有机器证据，"
+                "按未接地处理（带 [S#] 的研究材料数字不受影响）")
+            market_slot = _absence.absence_marker("预测市场表", self._market_slot_status())
+        rules.append("硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；"
+                     + signal_clause + "；" + market_clause)
+        rules.append(f"篇幅下限：正文须有不少于 {floor} 字符的实质内容")
+        first_prior = str((previous_sections or [""])[0] or "")
+        if not prior:
+            prior_label, prior_body = "【前序章节摘要】", "（尚无前序章节：这是第一个章节）"
+        elif first_prior.startswith(self._SYNTHESIS_BRIEF_PREFIX):
+            prior_label = "【报告大纲意图（并行撰写，前序正文不可用）】"
+            prior_body = prior
+            rules.append("不重复其他章节：不与其他章节的既定意图大段重复")
+        else:
+            prior_label, prior_body = "【前序章节摘要】", prior
+            rules.append("不复述前序章节：不得大段重复【前序章节摘要】中的内容")
+        n = len(rules)
+        numbered = "".join(f"{i}) {rule}{'；' if i < n else '。'}\n"
+                           for i, rule in enumerate(rules, 1))
+        sys_prompt = (
+            "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足"
+            f"{self._CRITIQUE_RULE_COUNT_ZH.get(n, str(n))}条标准：\n"
+            + numbered
+            + f"全部满足 ⇒ 只输出 PASS（不要任何多余文字）；否则 ⇒ 只输出一条最关键、可执行、"
+            f"具体的修订指令（用{lang}书写，单句，不要解释）。"
+        )
+        slots = [f"【预测骨架概率】\n{spine_txt}"] if spine_txt else []
+        slots += [
+            f"【信号包（硬数字）】\n{signal_slot}",
+            f"【预测市场表】\n{market_slot}",
+            f"{prior_label}\n{prior_body}",
+            f"【本章标题】{section.title}",
+            f"【本章草稿】\n{content[:6000]}",
+        ]
+        return sys_prompt, "\n\n".join(slots)
 
     def _revise_section_draft(
         self, section: "ReportSection", outline: "ReportOutline",
@@ -10483,11 +13294,13 @@ class ReportAgent:
         faction_brief / scenario_diff 等条件工具在被定义时即原生暴露，杜绝「prompt 中
         宣告但 tools= schema 缺失」的漂移。旧工具别名是 _execute_tool 的内部重定向，
         本就不应原生暴露，故不纳入。默认（条件工具关）时输出与历史静态名单逐字节一致。
+        FU-3：本报告只给说明行的行为类工具（_gated_behaviour_tools）不暴露。
         """
         schemas = []
+        gated = self._gated_behaviour_tools()
         for tname in sorted(self.tools.keys()):
             spec = self.tools.get(tname)
-            if not spec:
+            if not spec or tname in gated:
                 continue
             props = {}
             for pname, pdesc in (spec.get("parameters") or {}).items():
@@ -10510,7 +13323,11 @@ class ReportAgent:
         progress_callback: Optional[Callable] = None,
         section_index: int = 0,
     ) -> str:
-        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries/无污染检测）。"""
+        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries）。
+
+        INFRA-5: 被拒的工具调用（未知工具名 / 参数非 JSON / 参数无效）以 role=tool 'ERROR: …'
+        回包、不派发；LLM_TRANSPORT_STRICT 下含污染标记的正文抛出，由 _generate_section 回退 ReAct。
+        """
         logger.info(f"原生 tool calling 生成章节: {section.title}")
         if self.report_logger:
             self.report_logger.log_section_start(section.title, section_index)
@@ -10563,15 +13380,21 @@ class ReportAgent:
         max_iterations = 14  # RQ-1: 10→14，支撑更多工具轮次 + 更长章节的收尾
         max_tool_calls = self.MAX_TOOL_CALLS_PER_SECTION
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数，工具下限 _eff_min 只认它（计费的被拒调用只占上限预算）。
+        dispatched_count = 0
+        # INFRA-5: 派发前校验开关、本章被拒调用的免费额度、已派发工具结果（兜底收尾的证据摘要）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
+        _evidence: List[str] = []
 
         for _ in range(max_iterations):
             # REPORT-9: 工具调用未达下限时，本回合的正文会被拒绝（强制继续检索）→ 必为「工具决策回合」，
             # 用较小的 REPORT_AGENT_TOOL_TURN_MAX_TOKENS 抑制长链推理；达到下限后本回合可能直接产出正文，
             # 回到完整 SECTION_MAX_TOKENS 预算以免截断。（原生路径此前用 chat_with_tools 的 4096 默认值。）
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= _eff_min
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, _eff_min, max_tool_calls)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             resp = self.llm.chat_with_tools(
                 messages, schemas, temperature=Config.REPORT_AGENT_TEMPERATURE,
@@ -10590,23 +13413,54 @@ class ReportAgent:
                     logger.info(
                         f"章节 {section.title}: 工具批次超出剩余预算，裁掉 {len(_dropped)} 个调用"
                     )
-                # 回填 assistant 工具调用消息
+                # 回填 assistant 工具调用消息（INFRA-5: 开关开时 arguments 用模型原文 raw_arguments）
                 messages.append({
                     "role": "assistant",
                     "content": content or None,
                     "tool_calls": [
                         {"id": c["id"], "type": "function",
-                         "function": {"name": c["name"], "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+                         "function": {"name": c["name"], "arguments": self._native_arguments_text(c, _repair_on)}}
                         for c in calls
                     ],
                 })
                 for c in calls:
-                    tool_calls_count += 1
-                    self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                    # INFRA-5: 派发前检查。被拒调用不执行，以 role=tool 'ERROR: …' 回包（assistant 消息里
+                    # 的每个 tool_call_id 都必须有回包）；未知工具与免费额度内的被拒调用不计预算。
+                    screened = self._screen_native_unknown_tool(c)
+                    if screened is None:
+                        try:
+                            screened = self._screen_native_tool_args(c, _repair_on)
+                        except Exception as se:  # noqa: BLE001 — 参数校验为增强，自身失败按可派发处理
+                            logger.debug(f"原生工具调用参数校验失败（按可派发处理）: {se}")
+                            screened = None
+                    if screened is not None:
+                        _outcome, _kind, _reason = screened
+                        _charged = False
+                        if _outcome == "rejected_unknown":
+                            self._count_tool_event(_outcome)
+                            self._log_tool_unknown(c.get("name"), "native", section.title, section_index)
+                            logger.warning(f"章节 {section.title}: 原生调用了未知工具 '{c.get('name')}'，已拒绝（不计预算）")
+                        else:
+                            _charged = self._reject_tool_call(
+                                _kind, _rejections, c.get("name"), _reason, c.get("raw_arguments"),
+                                section_title=section.title, section_index=section_index,
+                            )
+                            if _charged:
+                                tool_calls_count += 1
+                        messages.append({
+                            "role": "tool", "tool_call_id": c["id"],
+                            "content": f"ERROR: {_reason}" + (_rta.CHARGED_NOTE if _charged else ""),
+                        })
+                        continue
                     try:
                         result = self._execute_tool(c["name"], c["arguments"], report_context=section.title)
                     except Exception as te:  # noqa: BLE001
                         result = f"（工具 {c['name']} 执行失败：{te}）"
+                    # INFRA-5: 派发之后才计费（此前先计费后派发）；EXECPLAN2 I-5-4 per-section 计数同步递增。
+                    tool_calls_count += 1
+                    dispatched_count += 1
+                    self._count_tool_event("dispatched", charged=True)
+                    _evidence.append(f"【{c['name']}】\n{str(result)[:8000]}")
                     if self.report_logger:
                         try:
                             self.report_logger.log_tool_call(
@@ -10630,18 +13484,20 @@ class ReportAgent:
 
             # 无更多工具调用（或已达上限）→ 收尾出正文
             if content.strip():
-                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径）
-                if tool_calls_count < _eff_min and tool_calls_count < max_tool_calls:
+                # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径；
+                # INFRA-5: 下限只数成功派发的调用）
+                if dispatched_count < _eff_min and tool_calls_count < max_tool_calls:
                     messages.append({"role": "assistant", "content": content})
                     messages.append({
                         "role": "user",
                         "content": (
-                            f"你只调用了 {tool_calls_count} 次工具，少于本章要求的至少 "
+                            f"你只调用了 {dispatched_count} 次工具，少于本章要求的至少 "
                             f"{_eff_min} 次。请勿现在输出正文，"
                             "继续发起工具调用以补足实证后再撰写本章。"
                         ),
                     })
                     continue
+                self._raise_if_native_contaminated(content, section.title)
                 return content
             # 达到工具上限但模型还没出正文：显式要求收尾
             messages.append({"role": "user", "content": "请基于以上工具结果直接输出本章完整 Markdown 正文。"})
@@ -10649,9 +13505,40 @@ class ReportAgent:
         # 兜底：迭代用尽仍无正文 → 末次无工具强制出文
         final = self.llm.chat(messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt + "\n\n请直接输出本章 Markdown 正文。"},
+            {"role": "user", "content": self._native_final_user_prompt(user_prompt, _evidence)},
         ], temperature=Config.REPORT_AGENT_TEMPERATURE, max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS)
+        self._raise_if_native_contaminated(final, section.title)
         return final
+
+    def _native_final_user_prompt(self, user_prompt: str, evidence: List[str]) -> str:
+        """原生循环迭代用尽时兜底收尾的用户提示。
+
+        INFRA-5（REPORT_NATIVE_FINAL_WITH_EVIDENCE，默认开）：兜底回合只带 system + 原始用户提示，
+        此前已检索的工具结果全部丢弃、模型凭空成文。开关开且有已派发结果时，附上结果拼接后按
+        forecast_extractor.slice_head_tail 首尾截取到 REPORT_NATIVE_FINAL_EVIDENCE_CHARS 的证据摘要。
+        无结果、开关关闭或构建失败时为历史提示（逐字节不变）。
+        """
+        legacy = user_prompt + "\n\n请直接输出本章 Markdown 正文。"
+        if not evidence or not getattr(Config, "REPORT_NATIVE_FINAL_WITH_EVIDENCE", True):
+            return legacy
+        try:
+            from .forecast_extractor import slice_head_tail
+            digest = slice_head_tail("\n\n".join(evidence), self._native_final_evidence_chars())
+        except Exception as exc:  # noqa: BLE001 — 证据摘要为增强，失败回退历史提示
+            logger.warning(f"原生兜底收尾证据摘要构建失败（回退原始提示）: {exc}")
+            return legacy
+        return (user_prompt + "\n\n【已检索到的工具结果（证据摘要）】\n" + digest
+                + "\n\n请基于以上工具结果直接输出本章 Markdown 正文。")
+
+    @staticmethod
+    def _raise_if_native_contaminated(text: Optional[str], section_title: str) -> None:
+        """INFRA-5（LLM_TRANSPORT_STRICT，默认开）：原生路径的章节正文含污染标记（系统提示泄漏 /
+        工具框架残留 / <think> 推理残留，_has_contamination_marker）即抛出，由 _generate_section 按其它
+        原生失败一样回退 ReAct（ReAct 自带纠正重试与占位符兜底）。只看标记、不套 _looks_contaminated 的
+        MIN_VALID_SECTION_CHARS 长度门：短而干净的原生正文照旧采纳，不因篇幅整章重跑 ReAct。
+        开关关闭时不检测（历史行为）。"""
+        if getattr(Config, "LLM_TRANSPORT_STRICT", True) and text and _has_contamination_marker(text):
+            raise RuntimeError(f"原生 tool calling 章节正文含污染标记（{section_title}），回退 ReAct")
 
     def _generate_section_react(
         self,
@@ -10738,17 +13625,25 @@ class ReportAgent:
         # ReACT循环（min_tool_calls 在提示词构建前经 _effective_min_tool_calls 计算，
         # T4.4 配置下限 + LOOP-015 padding/证据预注入下调）
         tool_calls_count = 0
+        # INFRA-5: 成功派发的调用数。工具下限只认它——超出免费额度后计费的被拒调用只占上限预算，
+        # 没有取回任何证据（宽容解析关闭时没有被拒调用，两者恒等）。
+        dispatched_count = 0
         max_iterations = 14  # RQ-1: 10→14，最大迭代轮数（更高以支撑更深入的检索与更长的章节）
         conflict_retries = 0  # 工具调用与Final Answer同时出现的连续冲突次数
         contamination_retries = 0  # 输出被污染（系统提示泄漏/工具调用残留）的连续重试次数
         MAX_CONTAMINATION_RETRIES = 2  # 污染输出最多纠正重试次数
         used_tools = set()  # 记录已调用过的工具名
+        # INFRA-5: 派发前校验开关与本章被拒调用的免费额度（超出后被拒调用照常计费）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
         # REPORT-8: interview_agents 仍可用（保留在 self.tools / 提示词中），但不再进入
         # 「未使用工具」推荐集——采访依赖 OASIS 在线、延迟高且易超时，不应被反复 nudge 去尝试。
         all_tools = {"insight_forge", "panorama_search", "quick_search",
                      "simulation_outcomes", "coalition_map", "opinion_shift"}
         if self.base_simulation_id:
             all_tools.add("scenario_diff")  # T4.7
+        # FU-3：本报告只给说明行的行为类工具不推荐（健康运行 / 门关时为空集，推荐集不变）。
+        all_tools -= self._gated_behaviour_tools()
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
@@ -10768,9 +13663,10 @@ class ReportAgent:
             # 到下限，本回合可能直接产出最终正文，回到完整 SECTION_MAX_TOKENS 预算以免截断正文。
             # REPORT-10: 温度统一读 Config.REPORT_AGENT_TEMPERATURE（默认 0.5，行为不变、可运维调）。
             _turn_max_tokens = (
-                Config.REPORT_AGENT_SECTION_MAX_TOKENS
-                if tool_calls_count >= min_tool_calls
-                else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION)
+                else Config.REPORT_AGENT_SECTION_MAX_TOKENS
             )
             response = self.llm.chat(
                 messages=messages,
@@ -10845,15 +13741,16 @@ class ReportAgent:
 
             # ── 情况1：LLM 输出了 Final Answer ──
             if has_final_answer:
-                # 工具调用次数不足，拒绝并要求继续调工具
-                if tool_calls_count < min_tool_calls:
+                # 工具调用次数不足，拒绝并要求继续调工具（INFRA-5: 只数成功派发的调用）
+                if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                             self.MAX_TOOL_CALLS_PER_SECTION):
                     messages.append({"role": "assistant", "content": response})
                     unused_tools = all_tools - used_tools
                     unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
                     messages.append({
                         "role": "user",
                         "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
-                            tool_calls_count=tool_calls_count,
+                            tool_calls_count=dispatched_count,
                             min_tool_calls=min_tool_calls,
                             unused_hint=unused_hint,
                         ),
@@ -10905,8 +13802,30 @@ class ReportAgent:
                     })
                     continue
 
-                # 只执行第一个工具调用
-                call = tool_calls[0]
+                # 只执行第一个工具调用（INFRA-5: 首个格式良好的调用优先；宽容解析关闭时即 tool_calls[0]）
+                call = self._select_tool_call(tool_calls)
+                # INFRA-5: 同一回复里其余无法解析的块不计预算、留痕，并在本轮 Observation 前告知模型。
+                _skipped_note = self._note_skipped_parse_errors(
+                    tool_calls, call, section_title=section.title, section_index=section_index)
+
+                # INFRA-5: 无法恢复的 <tool_call> 块（参数非 JSON / 缺工具名）不再被静默丢弃——
+                # 回给模型纠正性 Observation；免费额度内不计入工具调用预算。
+                if "_parse_error" in call:
+                    _kind = call.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+                    _charged = self._reject_tool_call(
+                        _kind, _rejections, None, str(call["_parse_error"]), call.get("raw"),
+                        section_title=section.title, section_index=section_index,
+                    )
+                    if _charged:
+                        tool_calls_count += 1
+                    messages.append({"role": "assistant", "content": response})
+                    messages.append({
+                        "role": "user",
+                        "content": _skipped_note + _rta.rejection_observation(
+                            _kind, str(call["_parse_error"]), charged=_charged),
+                    })
+                    continue
+
                 if len(tool_calls) > 1:
                     logger.info(f"LLM 尝试调用 {len(tool_calls)} 个工具，只执行第一个: {call['name']}")
 
@@ -10915,15 +13834,38 @@ class ReportAgent:
                 # self.tools 为空（仅测试替身场景）时跳过校验，保持旧直通行为。
                 if self.tools and call["name"] not in self._valid_tool_names():
                     logger.warning(f"章节 {section.title}: 模型调用了未知工具 '{call['name']}'，已纠正（不计预算）")
+                    # INFRA-5 / EVAL-16: 未知工具计数 + agent_log 的 tool_unknown 行。
+                    self._count_tool_event("rejected_unknown")
+                    self._log_tool_unknown(call["name"], "react", section.title, section_index)
                     messages.append({"role": "assistant", "content": response})
                     messages.append({
                         "role": "user",
-                        "content": (
+                        "content": _skipped_note + (
                             f"【工具错误】'{call['name']}' 不是可用工具。请从以下工具中选择重新调用："
                             f"{', '.join(sorted(self.tools.keys()))}"
                         ),
                     })
                     continue
+
+                # INFRA-5: 派发前参数校验（必填参数 / as_of / limit），无效调用给出纠正性 Observation、
+                # 免费额度内不计预算（例如空 query 的 insight_forge 仍会白烧一次子问题分解 + 多次检索）。
+                if _repair_on:
+                    _param_error = _rta.validate_call(call["name"], call.get("parameters"))
+                    if _param_error:
+                        _charged = self._reject_tool_call(
+                            _rta.KIND_INVALID_PARAMS, _rejections, call["name"], _param_error,
+                            json.dumps(call.get("parameters"), ensure_ascii=False, default=str),
+                            section_title=section.title, section_index=section_index,
+                        )
+                        if _charged:
+                            tool_calls_count += 1
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({
+                            "role": "user",
+                            "content": _skipped_note + _rta.rejection_observation(
+                                _rta.KIND_INVALID_PARAMS, _param_error, tool_name=call["name"], charged=_charged),
+                        })
+                        continue
 
                 if self.report_logger:
                     self.report_logger.log_tool_call(
@@ -10950,8 +13892,10 @@ class ReportAgent:
                     )
 
                 tool_calls_count += 1
+                dispatched_count += 1
                 used_tools.add(call['name'])
-                self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                # EXECPLAN2 I-5-4: per-section 工具调用计数（INFRA-5: 持锁递增，附报告级计数与派发结局）
+                self._count_tool_event("dispatched", charged=True, repaired=bool(call.get("_repairs")))
 
                 # 构建未使用工具提示
                 unused_tools = all_tools - used_tools
@@ -10962,7 +13906,7 @@ class ReportAgent:
                 messages.append({"role": "assistant", "content": response})
                 messages.append({
                     "role": "user",
-                    "content": REACT_OBSERVATION_TEMPLATE.format(
+                    "content": _skipped_note + REACT_OBSERVATION_TEMPLATE.format(
                         tool_name=call["name"],
                         result=result,
                         tool_calls_count=tool_calls_count,
@@ -10976,15 +13920,16 @@ class ReportAgent:
             # ── 情况3：既没有工具调用，也没有 Final Answer ──
             messages.append({"role": "assistant", "content": response})
 
-            if tool_calls_count < min_tool_calls:
-                # 工具调用次数不足，推荐未用过的工具
+            if _rta.evidence_floor_unmet(dispatched_count, tool_calls_count, min_tool_calls,
+                                         self.MAX_TOOL_CALLS_PER_SECTION):
+                # 工具调用次数不足，推荐未用过的工具（INFRA-5: 只数成功派发的调用）
                 unused_tools = all_tools - used_tools
                 unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
 
                 messages.append({
                     "role": "user",
                     "content": REACT_INSUFFICIENT_TOOLS_MSG_ALT.format(
-                        tool_calls_count=tool_calls_count,
+                        tool_calls_count=dispatched_count,
                         min_tool_calls=min_tool_calls,
                         unused_hint=unused_hint,
                     ),
@@ -11110,6 +14055,41 @@ class ReportAgent:
             still_failed.extend([title] * max(0, count))
         return still_failed
 
+    def _commit_forecast_ledger(self, report_id: str, report: "Report",
+                                error: Optional[str] = None) -> Dict[str, Any]:
+        """EVAL-1: run the post-publication steps (first: the forecast-ledger commit).
+
+        Called once the report is terminal and saved (meta.json + full_report.md on
+        disk), so ``publication_status`` judges the exact published bytes. Only reads
+        the sealed artifacts: never mutates forecast.json / full_report.md and never
+        changes the report status. Any failure yields ``{'status': 'error'}``, logged
+        at WARNING because such a report is missing from the auditable ledger.
+        """
+        try:
+            from . import ledger_commit as _ledger_commit
+            _status = getattr(report, "status", None)
+            receipt = _ledger_commit.run_post_publication(
+                self, report_id,
+                report_status=str(getattr(_status, "value", _status) or ""),
+                error=error,
+                publication_status_fn=ReportManager.publication_status,
+                load_forecast_fn=ReportManager.load_structured_forecast,
+                final_audit_path_fn=ReportManager._get_report_final_audit_path,
+            )
+        except Exception as _le:  # noqa: BLE001 — 账本为旁路记账，绝不影响报告终态
+            receipt = {"status": "error", "reasons": [f"{type(_le).__name__}: {_le}"[:300]]}
+        if not isinstance(receipt, dict):
+            receipt = {"status": "error", "reasons": ["post-publication returned no receipt"]}
+        receipt.setdefault("report_id", report_id)
+        self.ledger_receipt = receipt
+        _line = (f"[ledger] status={receipt.get('status')} "
+                 f"commit_id={receipt.get('commit_id')} report={report_id}")
+        if receipt.get("status") == "error":
+            logger.warning(f"{_line} reasons={receipt.get('reasons')}")
+        else:
+            logger.info(_line)
+        return receipt
+
     def generate_report(
         self,
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
@@ -11142,6 +14122,7 @@ class ReportAgent:
         if not report_id:
             report_id = f"report_{uuid.uuid4().hex[:12]}"
         self._active_report_id = report_id
+        self._reset_tool_counters()  # INFRA-5: 报告级工具调用计数按本次生成归零
         start_time = datetime.now()
         
         report = Report(
@@ -11239,10 +14220,17 @@ class ReportAgent:
                 except Exception as _mp_err:  # noqa: BLE001 — 市场信号为可选增强
                     logger.warning(f"构建预测市场信号包失败（忽略）: {_mp_err}")
                     self._market_pack = ""
+            # REPORT-4：冻结章节提示词所见的市场槽状态——骨架 / 二元抽取稍后可能重跑市场加载并
+            # 改写 self._market_status，缺失标记与 prompt_slot_states 仍须与章节提示词一致。
+            if getattr(Config, "REPORT_ABSENCE_MARKERS", True):
+                self._freeze_market_slot_status()
 
             if (getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                     and getattr(Config, "REPORT_FORECAST_SPINE_FIRST", True)):
                 self._derive_and_pin_forecast_spine(report_id)
+                # REPORT-13（REPORT_COUNTER_CASE，默认关）：骨架钉定后一次证据引用的反证审查（绝不改概率）；
+                # 旗标关 / 无骨架时立即返回、不发调用，内部失败只记日志。
+                self._run_counter_case(report_id)
 
             _spine_ready = bool(self._forecast_spine and self._forecast_spine.get("scenarios"))
             outline = self.plan_outline(
@@ -11251,6 +14239,13 @@ class ReportAgent:
                 forecast_spine_block=self._forecast_spine_block,
                 require_forecast_structure=_spine_ready,
             )
+            # REPORT-3：摘要 blockquote 由 outline.summary 组装，引用溯源审计只豁免
+            # self._outline_summary——在二者赋值与 save_outline 之前把摘要里的过期别名概率槽改成
+            # 骨架值，大纲 / meta / 豁免文本 / 成稿 blockquote 因此逐字节一致（零 token）。
+            self._logic_number_summary_repair = []
+            self._logic_number_repair = None
+            if _spine_ready and self._logic_number_repair_enabled():
+                self._repair_outline_summary_numbers(outline)
             report.outline = outline
             # RPT-5: 供引用溯源审计豁免系统注入的摘要 blockquote（"> {outline.summary}"）。
             self._outline_summary = outline.summary or ""
@@ -11374,22 +14369,7 @@ class ReportAgent:
                     and section_content != SECTION_FAILURE_PLACEHOLDER
                     and self._is_comparison_section(section.title)
                 ):
-                    try:
-                        diff_dict = self._scenario_diff_structured()
-                        if diff_dict:
-                            table_md = self._render_comparison_table(diff_dict)
-                            if table_md:
-                                section_content = table_md + "\n\n" + section_content
-                                # 落盘结构化对比工件，供 UI / diff 工具消费
-                                cpath = os.path.join(
-                                    ReportManager._get_report_folder(report_id), "comparison.json"
-                                )
-                                write_text_atomic(
-                                    cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
-                                )
-                                logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
-                    except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
-                        logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
+                    section_content = self._prepend_comparison_table(report_id, section_content)
 
                 section.content = section_content
                 if section_content == SECTION_FAILURE_PLACEHOLDER:
@@ -11542,6 +14522,11 @@ class ReportAgent:
                     except Exception as _lp_err:  # noqa: BLE001
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
 
+            # REPORT-3：确定性别名概率槽修复——所有注入与语言纯度之后、编辑 lint 与发布稳定器之前
+            # （SHA 指纹覆盖修复后的字节）。REPORT_LOGIC_NUMBER_REPAIR / REPORT_NARRATIVE_SYNC 关或
+            # 骨架无情景时不动成稿；失败仅告警。
+            self._repair_logic_number(report_id, report)
+
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
             # lint 报告记入 forecast.json quality['lint']。放在 REPORT_STRUCTURED_FORECAST
@@ -11576,6 +14561,8 @@ class ReportAgent:
             # rewrites Markdown; it only persists final_audit.json + forecast fields.
             if getattr(Config, "REPORT_FINAL_READ_ONLY_AUDIT", True):
                 self._enforce_final_publish_audit(report_id, report)
+            # REPORT-9：主报告已定型，写影子工件 figure_provenance.json（块为空 / 旗标关时不写，并删除旧文件）。
+            self._write_figure_provenance(report_id, report)
 
             # BILINGUAL：在所有最终化/可视化/纯度处理之后（成稿已定型），自动生成另一语种版本
             # （英⇄中）。逐 H2 章节并发翻译，落 full_report.{en|zh}.md 并把 translations 条目写入
@@ -11612,6 +14599,9 @@ class ReportAgent:
                         except (TypeError, ValueError):
                             return 0.0
                     snap_after = self._meter_stage_total(_telemetry_run_id, "report")
+                    # INFRA-5: 并发章节模式跳过逐章汇总（section_rollup 为空），此前 tool_calls 恒为 0；
+                    # 此时改读持锁维护的报告级计数（与逐章计数同口径：计入工具预算的调用）。
+                    _report_tool_calls, _tool_dispatch = self._tool_counters_snapshot()
                     telemetry_totals = {
                         "report_id": report_id,
                         "run_id": _telemetry_run_id,
@@ -11624,7 +14614,9 @@ class ReportAgent:
                         "completion_tokens": max(0, int(_diff(snap_after, _report_stage_before, "completion_tokens"))),
                         "est_cost_usd": round(max(0.0, _diff(snap_after, _report_stage_before, "cost_usd")), 6),
                         "latency_ms": round(max(0.0, _diff(snap_after, _report_stage_before, "latency_ms")), 1),
-                        "tool_calls": sum(int(s.get("tool_calls", 0) or 0) for s in section_rollup),
+                        "tool_calls": (sum(int(s.get("tool_calls", 0) or 0) for s in section_rollup)
+                                       if section_rollup else _report_tool_calls),
+                        "tool_dispatch": _tool_dispatch,
                     }
                     report.telemetry = {"totals": telemetry_totals, "sections": section_rollup}
                     try:
@@ -11668,17 +14660,28 @@ class ReportAgent:
                 failed_sections=failed_section_titles,
                 forecast_ok=_forecast_ok
             )
-            
-            if progress_callback:
-                progress_callback("completed", 100, "报告生成完成")
-            
-            logger.info(f"报告生成完成: {report_id}")
-            
-            # 关闭控制台日志记录器
-            if self.console_logger:
-                self.console_logger.close()
-                self.console_logger = None
-            
+            # EVAL-1: 账本提交放在收尾步骤（进度回调/日志/关闭控制台）之后、return 之前：
+            # 须在 save_report/update_progress 之后（publication_status 读 meta.json）；收尾步骤
+            # 抛普通异常会让失败分支把报告改记 FAILED（不可发布）→ 只留 unpublished_terminal 行，
+            # 绝不让计分主行归属一份未发布报告。取消/熔断（BaseException）不经失败分支，
+            # 报告仍以 completed 落盘可发布 → 照常入账后再上抛。
+            try:
+                if progress_callback:
+                    progress_callback("completed", 100, "报告生成完成")
+
+                logger.info(f"报告生成完成: {report_id}")
+
+                # 关闭控制台日志记录器
+                if self.console_logger:
+                    self.console_logger.close()
+                    self.console_logger = None
+            except Exception:  # 普通异常 → 下方失败分支（报告改记 FAILED，只记 unpublished 行）
+                raise
+            except BaseException:  # 取消/熔断：报告已按 completed 发布 → 入账后上抛
+                self._commit_forecast_ledger(report_id, report)
+                raise
+
+            self._commit_forecast_ledger(report_id, report)
             return report
             
         except Exception as e:
@@ -11700,6 +14703,8 @@ class ReportAgent:
                 )
             except Exception:
                 pass  # 忽略保存失败的错误
+            # EVAL-1: 失败终态同样留痕——unpublished_terminal 行（不计分）让校准分母可审计。
+            self._commit_forecast_ledger(report_id, report, error=str(e))
             
             # 关闭控制台日志记录器
             if self.console_logger:
@@ -11784,6 +14789,10 @@ class ReportAgent:
         # ReACT循环（简化版）
         tool_calls_made = []
         max_iterations = 2  # 减少迭代轮数
+        # INFRA-5: 与 ReAct 同一套派发前校验；被拒调用不计入对话工具额度（超出免费额度后才计）。
+        _repair_on = bool(getattr(Config, "REPORT_TOOL_ARG_REPAIR", True))
+        _rejections = _rta.RejectionBudget(self._free_tool_rejections())
+        _charged_rejections = 0
         
         for _iteration in range(max_iterations):
             response = self.llm.chat(
@@ -11807,19 +14816,43 @@ class ReportAgent:
             
             # 执行工具调用（限制数量）
             tool_results = []
-            for call in tool_calls[:1]:  # 每轮最多执行1次工具调用
-                if len(tool_calls_made) >= self.MAX_TOOL_CALLS_PER_CHAT:
-                    break
-                result = self._execute_tool(call["name"], call.get("parameters", {}))
-                tool_results.append({
-                    "tool": call["name"],
-                    "result": result[:1500]  # 限制结果长度
-                })
-                tool_calls_made.append(call)
+            rejection_note = ""  # INFRA-5: 本轮被拒调用的纠正性说明（取代工具结果）
+            skipped_note = ""  # INFRA-5: 同一回复里未执行的无法解析块的说明（拼在 Observation 前）
+            # 每轮最多执行1次工具调用（INFRA-5: 首个格式良好的调用优先；关闭宽容解析时即 tool_calls[0]）
+            call = self._select_tool_call(tool_calls)
+            if len(tool_calls_made) + _charged_rejections < self.MAX_TOOL_CALLS_PER_CHAT:
+                # INFRA-5: 同一回复里其余无法解析的块留痕并告知模型（对话不动报告级计数）。
+                skipped_note = self._note_skipped_parse_errors(tool_calls, call, track=False)
+                _param_error = None
+                if _repair_on and "_parse_error" not in call:
+                    _param_error = _rta.validate_call(call["name"], call.get("parameters"))
+                if "_parse_error" in call:
+                    _kind = call.get("_kind") or _rta.KIND_ARGS_NOT_JSON
+                    _charged = self._reject_tool_call(
+                        _kind, _rejections, None, str(call["_parse_error"]), call.get("raw"), track=False)
+                    rejection_note = _rta.rejection_observation(
+                        _kind, str(call["_parse_error"]), charged=_charged)
+                elif _param_error:
+                    _charged = self._reject_tool_call(
+                        _rta.KIND_INVALID_PARAMS, _rejections, call["name"], _param_error,
+                        json.dumps(call.get("parameters"), ensure_ascii=False, default=str), track=False)
+                    rejection_note = _rta.rejection_observation(
+                        _rta.KIND_INVALID_PARAMS, _param_error, tool_name=call["name"], charged=_charged)
+                else:
+                    _charged = False
+                    result = self._execute_tool(call["name"], call.get("parameters", {}))
+                    tool_results.append({
+                        "tool": call["name"],
+                        "result": result[:1500]  # 限制结果长度
+                    })
+                    tool_calls_made.append(self._public_tool_call(call))
+                if _charged:
+                    _charged_rejections += 1
             
             # 将结果添加到消息
             messages.append({"role": "assistant", "content": response})
-            observation = "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results])
+            observation = skipped_note + (
+                rejection_note or "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results]))
             messages.append({
                 "role": "user",
                 "content": observation + CHAT_OBSERVATION_SUFFIX
@@ -11840,6 +14873,12 @@ class ReportAgent:
             "tool_calls": tool_calls_made,
             "sources": [tc.get("parameters", {}).get("query", "") for tc in tool_calls_made]
         }
+
+
+# The one publication_status reason that a later REPORT_FINAL_AUDIT_POLICY_VERSION bump adds to
+# an already-sealed report. EVAL-2: publishable_at_issue ignores exactly this reason, so a policy
+# bump never retroactively unpublishes settled history.
+FINAL_AUDIT_STALE_POLICY_REASON = "final audit policy is stale; deterministic replay required"
 
 
 class ReportManager:
@@ -11888,8 +14927,16 @@ class ReportManager:
     
     @classmethod
     def _get_report_folder(cls, report_id: str) -> str:
-        """获取报告文件夹路径"""
-        return os.path.join(cls.REPORTS_DIR, report_id)
+        """获取报告文件夹路径（INFRA-10：id 经 contained_child 校验，非法/逃逸 id 抛 UnsafeIdError）。
+
+        返回值与 os.path.join(REPORTS_DIR, report_id) 逐字节相同；收容性只按 realpath 判定。
+        """
+        return contained_child(cls.REPORTS_DIR, report_id, "report")
+
+    @classmethod
+    def _get_legacy_report_file(cls, report_id: str, ext: str) -> str:
+        """旧版扁平布局 reports/{report_id}.{ext}：先 safe_id 校验 id，再拼带后缀的文件名。"""
+        return os.path.join(cls.REPORTS_DIR, f"{safe_id(report_id, 'report')}.{ext}")
     
     @classmethod
     def _ensure_report_folder(cls, report_id: str) -> str:
@@ -11909,7 +14956,9 @@ class ReportManager:
         return os.path.join(cls._get_report_folder(report_id), "full_report.md")
 
     @classmethod
-    def load_structured_forecast(cls, report_id: str) -> Optional[Dict[str, Any]]:
+    def load_structured_forecast(
+        cls, report_id: str, *, allow_stale_policy: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """Load an optional forecast only when the final audit seals its bytes.
 
         Legacy reports may be publishable without ``forecast.json``.  Merely
@@ -11919,16 +14968,21 @@ class ReportManager:
         artifact as present and valid and its SHA-256 matches the exact bytes.
         Customer-facing callers must additionally apply ``publication_status``
         to the report itself before exposing the returned object.
+
+        ``allow_stale_policy=True`` (EVAL-2 settlement, paired with
+        ``publishable_at_issue``) skips only the audit policy-version check;
+        every other seal check still applies.
         """
-        return cls._load_sealed_forecast(report_id)[0]
+        return cls._load_sealed_forecast(report_id, allow_stale_policy=allow_stale_policy)[0]
 
     @classmethod
     def _load_sealed_forecast(
-        cls, report_id: str
+        cls, report_id: str, *, allow_stale_policy: bool = False
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """``load_structured_forecast`` plus the sealed SHA-256 of forecast.json."""
-        audit_path = cls._get_report_final_audit_path(report_id)
         try:
+            # INFRA-10: an unsafe id raises UnsafeIdError (a ValueError) -> "not found".
+            audit_path = cls._get_report_final_audit_path(report_id)
             with open(audit_path, encoding="utf-8") as handle:
                 audit = json.load(handle)
         except (OSError, ValueError, TypeError):
@@ -11940,7 +14994,7 @@ class ReportManager:
         required_policy = int(getattr(
             Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3
         ))
-        if audit.get("policy_version") != required_policy:
+        if not allow_stale_policy and audit.get("policy_version") != required_policy:
             return None, None
         structured = audit.get("structured_forecast")
         if not isinstance(structured, dict):
@@ -12496,9 +15550,7 @@ class ReportManager:
             Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3
         ))
         if audit.get("policy_version") != required_policy:
-            result["reasons"].append(
-                "final audit policy is stale; deterministic replay required"
-            )
+            result["reasons"].append(FINAL_AUDIT_STALE_POLICY_REASON)
         if list(audit.get("hard_issues") or []):
             result["reasons"].append("final audit contains hard issues")
         if audit.get("markdown_sha256") != markdown_sha:
@@ -12596,6 +15648,25 @@ class ReportManager:
     @classmethod
     def is_publishable(cls, report_id: str, lang: Optional[str] = None) -> bool:
         return bool(cls.publication_status(report_id, lang).get("publishable"))
+
+    @classmethod
+    def publishable_at_issue(cls, report_id: str) -> Dict[str, Any]:
+        """Whether the primary report was publishable when it was issued.
+
+        ``publication_status`` with exactly one reason ignored: a stale final
+        audit policy. A later REPORT_FINAL_AUDIT_POLICY_VERSION bump asks for a
+        replay before new customer exposure, but it must not retroactively
+        unpublish history that settlement already scored (EVAL-2). Every other
+        reason still blocks. ``stale_policy_ignored`` says whether it applied.
+        """
+        status = cls.publication_status(report_id)
+        reasons = list(status.get("reasons") or [])
+        kept = [reason for reason in reasons if reason != FINAL_AUDIT_STALE_POLICY_REASON]
+        result = dict(status)
+        result["reasons"] = kept
+        result["stale_policy_ignored"] = len(kept) != len(reasons)
+        result["publishable"] = not kept
+        return result
 
     # ── PDF-1: full_report.md → full_report.pdf（pandoc+xelatex，回退 PyMuPDF；按 mtime 缓存）──
 
@@ -13665,9 +16736,12 @@ class ReportManager:
         meta.json 内嵌了完整 markdown，json.load 仍会读全文；该方法主要用于在已知
         候选 report_id 时只解析一次，避免遍历全部文件夹。读取失败返回 None。
         """
-        path = cls._get_report_path(report_id)
+        try:
+            path = cls._get_report_path(report_id)
+        except UnsafeIdError:
+            return None
         if not os.path.exists(path):
-            old_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
+            old_path = cls._get_legacy_report_file(report_id, "json")
             if not os.path.exists(old_path):
                 return None
             path = old_path
@@ -14288,11 +17362,14 @@ class ReportManager:
         if f"{report_id}.json" == cls._SIM_INDEX_FILENAME or report_id == cls._SIM_INDEX_FILENAME[:-5]:
             return None
 
-        path = cls._get_report_path(report_id)
+        try:
+            path = cls._get_report_path(report_id)
+        except UnsafeIdError:
+            return None  # INFRA-10: 非法 id 与「不存在」同义
 
         if not os.path.exists(path):
             # 兼容旧格式：检查直接存储在reports目录下的文件
-            old_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
+            old_path = cls._get_legacy_report_file(report_id, "json")
             if os.path.exists(old_path):
                 path = old_path
             else:
@@ -14382,14 +17459,18 @@ class ReportManager:
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
                 continue
             item_path = os.path.join(cls.REPORTS_DIR, item)
-            # 新格式：文件夹
+            # 新格式：文件夹（INFRA-10: 名字不是合法 id 的条目——.DS_Store、_tmp 等——直接跳过）
             if os.path.isdir(item_path):
+                if not is_safe_id(item):
+                    continue
                 report = cls.get_report(item)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
+                if not is_safe_id(report_id):
+                    continue
                 report = cls.get_report(report_id)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
@@ -14427,8 +17508,10 @@ class ReportManager:
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
                 continue
             item_path = os.path.join(cls.REPORTS_DIR, item)
-            # 新格式：文件夹
+            # 新格式：文件夹（INFRA-10: 名字不是合法 id 的条目——.DS_Store、_tmp 等——直接跳过）
             if os.path.isdir(item_path):
+                if not is_safe_id(item):
+                    continue
                 report = cls.get_report(item)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
@@ -14436,6 +17519,8 @@ class ReportManager:
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
+                if not is_safe_id(report_id):
+                    continue
                 report = cls.get_report(report_id)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
@@ -14448,7 +17533,11 @@ class ReportManager:
     
     @classmethod
     def delete_report(cls, report_id: str) -> bool:
-        """删除报告（整个文件夹）"""
+        """删除报告（整个文件夹）。
+
+        INFRA-10: rmtree 的目标只可能来自 contained_child（REPORTS_DIR 的严格后代）；
+        非法/逃逸 id 抛 UnsafeIdError，绝不删除数据根之外的任何东西。
+        """
         import shutil
 
         folder_path = cls._get_report_folder(report_id)
@@ -14462,8 +17551,8 @@ class ReportManager:
 
         # 兼容旧格式：删除单独的文件
         deleted = False
-        old_json_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
-        old_md_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.md")
+        old_json_path = cls._get_legacy_report_file(report_id, "json")
+        old_md_path = cls._get_legacy_report_file(report_id, "md")
 
         if os.path.exists(old_json_path):
             os.remove(old_json_path)

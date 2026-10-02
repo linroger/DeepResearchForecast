@@ -16,6 +16,7 @@ a per-agent ``{scenario, magnitude, confidence}`` decision and persisting
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,10 @@ def commitments_from_decisions(
     Resolution order per decision: explicit ``outcome_power`` on the decision →
     ``weight_by_agent[agent_id]`` (a power map the caller may still pass) → 1.0. An empty
     / abstaining ``scenario`` contributes nothing (R2-CAL-13/SIM-9 abstention).
+
+    SIM-2: a decision whose magnitude, confidence or power is not finite (NaN/±inf)
+    is skipped — clamping would turn NaN into a full-weight vote and inf into a NaN
+    target that zeroes its scenario.
     """
     out: List[Dict[str, Any]] = []
     wmap = weight_by_agent or {}
@@ -102,19 +107,24 @@ def commitments_from_decisions(
         if not sc:
             continue
         try:
-            mag = max(0.0, float(d.get("magnitude", 1.0) or 0.0))
-            conf = float(d.get("confidence", 1.0) or 0.0)
+            mag_raw = float(d.get("magnitude", 1.0) or 0.0)
+            conf_raw = float(d.get("confidence", 1.0) or 0.0)
         except (TypeError, ValueError):
             continue
-        conf = max(0.0, min(1.0, conf))
         # R2-SIM-2: prefer per-decision outcome_power; fall back to the supplied map.
         power = d.get("outcome_power")
         if power is None:
             power = wmap.get(d.get("agent_id"), 1.0)
         try:
-            base_w = max(0.0, float(power))
+            power_raw = float(power)
         except (TypeError, ValueError):
-            base_w = 1.0
+            power_raw = 1.0
+        if not (math.isfinite(mag_raw) and math.isfinite(conf_raw)
+                and math.isfinite(power_raw)):
+            continue  # SIM-2: non-finite values never reach WorldState
+        mag = max(0.0, mag_raw)
+        conf = max(0.0, min(1.0, conf_raw))
+        base_w = max(0.0, power_raw)
         out.append({"scenario": sc, "magnitude": mag, "weight": base_w * conf})
     return out
 
@@ -208,10 +218,13 @@ class WorldState:
             if sc not in votes:
                 continue
             try:
-                votes[sc] += max(0.0, float(c.get("magnitude", 1.0) or 0.0)) * \
+                vote = max(0.0, float(c.get("magnitude", 1.0) or 0.0)) * \
                     max(0.0, float(c.get("weight", 1.0) or 0.0))
             except (TypeError, ValueError):
                 continue
+            if not math.isfinite(vote):
+                continue  # SIM-2: an inf/NaN vote would poison the target distribution
+            votes[sc] += vote
         if sum(votes.values()) > 0:
             target = _norm_shares(votes)
             blended = {s: eff_inertia * self.shares[s] + (1.0 - eff_inertia) * target[s]

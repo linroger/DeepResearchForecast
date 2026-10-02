@@ -18,6 +18,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from .model_provenance import count_served, effective_model_label
+
 # ---------------------------------------------------------------- run context
 # Tag every LLM call with the run (pipeline/report id) and stage that issued it,
 # so telemetry can be attributed without threading ids through every call.
@@ -173,6 +175,33 @@ def cost_is_estimated(provider: str) -> bool:
     return provider in _ESTIMATED_COST_PROVIDERS or provider not in _COST_PER_1K
 
 
+# XRUN-8: CLI subscription providers — their $0 is "zero marginal cost inside a plan",
+# not "free"; snapshot() labels such volume with cost_basis='subscription'.
+_SUBSCRIPTION_PROVIDERS = frozenset({"claude-cli", "codex-cli"})
+
+
+def _declared_subscription_providers() -> frozenset:
+    """EVAL-17: providers the operator declared flat-rate (Config.LLM_SUBSCRIPTION_PROVIDERS,
+    a comma list such as a coding-plan or token-plan endpoint), lower-cased. Unset, empty or
+    an unreadable config → empty set, so cost_basis keeps its built-in classification."""
+    try:
+        from ..config import Config
+        raw = str(getattr(Config, "LLM_SUBSCRIPTION_PROVIDERS", "") or "")
+    except Exception:  # noqa: BLE001 — config unavailable: no declared plans
+        return frozenset()
+    return frozenset(p.strip().lower() for p in raw.split(",") if p.strip())
+
+
+def _model_provenance_enabled() -> bool:
+    """INFRA-8: Config.RECORD_MODEL_PROVENANCE (default on). An unreadable config records
+    nothing, so the snapshot stays as it was before the knob existed."""
+    try:
+        from ..config import Config
+        return bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True))
+    except Exception:  # noqa: BLE001 — config unavailable: record no provenance
+        return False
+
+
 # ---------------------------------------------------------------- meter
 @dataclass
 class _Counter:
@@ -182,9 +211,13 @@ class _Counter:
     completion_tokens: int = 0
     latency_ms: float = 0.0
     cost_usd: float = 0.0
+    # EVAL-17: prompt tokens the provider served from its prompt cache (research engine v3
+    # reports them as ``cached=`` on its [usage] lines). Informational split only: they are
+    # not added to prompt_tokens/total_tokens and do not change cost_usd.
+    prompt_cache_read_tokens: int = 0
 
     def add(self, prompt_tokens: int, completion_tokens: int, latency_ms: float,
-            cost_usd: float, cached: bool) -> None:
+            cost_usd: float, cached: bool, prompt_cache_read_tokens: int = 0) -> None:
         self.calls += 1
         if cached:
             self.cached += 1
@@ -192,6 +225,7 @@ class _Counter:
         self.completion_tokens += completion_tokens
         self.latency_ms += latency_ms
         self.cost_usd += cost_usd
+        self.prompt_cache_read_tokens += prompt_cache_read_tokens
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -202,7 +236,87 @@ class _Counter:
             "total_tokens": self.prompt_tokens + self.completion_tokens,
             "latency_ms": round(self.latency_ms, 1),
             "cost_usd": round(self.cost_usd, 6),
+            "prompt_cache_read_tokens": self.prompt_cache_read_tokens,
         }
+
+
+# EVAL-17: the counter keys summed across attempts into run_telemetry.json's
+# cumulative_total and cumulative_by_stage.
+CUMULATIVE_COUNTER_KEYS = ("calls", "cached", "prompt_tokens", "completion_tokens",
+                           "total_tokens", "latency_ms", "cost_usd", "prompt_cache_read_tokens")
+
+
+def add_counter_dicts(base: Any, current: Any) -> Dict[str, Any]:
+    """EVAL-17: key-wise sum of two counter dicts (``_Counter.as_dict`` shape) over
+    CUMULATIVE_COUNTER_KEYS. A missing key or a non-dict side counts as 0; a key whose
+    values cannot be added (e.g. a string) is left out rather than raising."""
+    b = base if isinstance(base, dict) else {}
+    c = current if isinstance(current, dict) else {}
+    out: Dict[str, Any] = {}
+    for k in CUMULATIVE_COUNTER_KEYS:
+        try:
+            out[k] = round((b.get(k) or 0) + (c.get(k) or 0), 6)
+        except TypeError:
+            continue
+    return out
+
+
+def add_stage_counter_dicts(base_by_stage: Any, current_by_stage: Any) -> Dict[str, Dict[str, Any]]:
+    """EVAL-17: per-stage :func:`add_counter_dicts` over the union of both stage maps
+    (base stages first, then stages new in ``current``). Non-dict inputs count as empty."""
+    b = base_by_stage if isinstance(base_by_stage, dict) else {}
+    c = current_by_stage if isinstance(current_by_stage, dict) else {}
+    stages = list(b) + [s for s in c if s not in b]
+    return {str(s): add_counter_dicts(b.get(s), c.get(s)) for s in stages}
+
+
+def previous_attempt_carry(prev: Any) -> Optional[Dict[str, Any]]:
+    """EVAL-17: the history a new run_telemetry.json attempt carries forward from the file
+    it replaces (``prev``, its parsed content), or None when ``prev`` holds none. This is
+    the one merge rule behind the pipeline's incremental flush and
+    :meth:`LLMMeter.write_run_telemetry`, so the two cannot drift apart.
+
+    - A file qualifies on its own calls or on its cumulative fields: an attempt that made
+      no LLM call (cancelled right after a resume, a provider outage or quota cap before
+      the first call) still carries the pipeline's history.
+    - The per-stage base is the file's cumulative_by_stage, or its by_stage for a file
+      written before EVAL-17.
+    - ``partial`` marks a pre-EVAL-17 file that already spans attempts (it has
+      cumulative_total but kept only its last attempt's by_stage), so the per-stage rows
+      under-report against cumulative_total. Once set it is carried forward.
+    """
+    if not isinstance(prev, dict):
+        return None
+    total = prev.get("total")
+    calls = total.get("calls") if isinstance(total, dict) else None
+    if not (calls or prev.get("cumulative_total") or prev.get("cumulative_by_stage")):
+        return None
+    return {
+        "previous_attempt": {
+            "total": total,
+            "report_id": prev.get("report_id"),
+            "status": prev.get("status"),
+        },
+        "cumulative_total": prev.get("cumulative_total") or total or {},
+        "cumulative_by_stage": prev.get("cumulative_by_stage") or prev.get("by_stage") or {},
+        "partial": bool(prev.get("cumulative_by_stage_partial")
+                        or (prev.get("cumulative_total") and not prev.get("cumulative_by_stage"))),
+    }
+
+
+def apply_previous_attempt_carry(data: Dict[str, Any], carry: Optional[Dict[str, Any]]) -> None:
+    """EVAL-17: fold a :func:`previous_attempt_carry` result into the snapshot ``data`` in
+    place: previous_attempt, cumulative_total and cumulative_by_stage (base + this attempt),
+    plus cumulative_by_stage_partial when the base is partial. No-op for None."""
+    if not carry:
+        return
+    data["previous_attempt"] = carry["previous_attempt"]
+    data["cumulative_total"] = add_counter_dicts(carry["cumulative_total"], data.get("total"))
+    data["cumulative_by_stage"] = add_stage_counter_dicts(
+        carry["cumulative_by_stage"], data.get("by_stage"))
+    if carry["partial"]:
+        # cumulative_total stays authoritative; the split misses early attempts.
+        data["cumulative_by_stage_partial"] = True
 
 
 @dataclass
@@ -213,6 +327,33 @@ class _RunMeter:
     # FOG-TEL-1: 无 run 上下文、经「单活跃 run」回退归属到本 run 的那部分（total 的子集，
     # 单独累计使推断归属与显式归属可区分/可审计）。
     fallback: _Counter = field(default_factory=_Counter)
+    # INFRA-1: {stage: {normalized finish_reason: calls}}，仅计入带 finish_reason 的 record()。
+    finish_reasons: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    # INFRA-2: {label: {stage: {ok, repaired, failed, truncation_repaired}}}（record_structured）。
+    structured: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
+    # INFRA-8: {stage: {'provider:requested label': {'calls': n, 'served': {served id: n}}}}.
+    model_resolution: Dict[str, Dict[str, Dict[str, Any]]] = field(default_factory=dict)
+    # INFRA-3: {kind: {stage: {outcome: episodes}}}（record_recovery）。
+    recovery: Dict[str, Dict[str, Dict[str, int]]] = field(default_factory=dict)
+
+
+# INFRA-2: chat_json 结构化输出的结局。ok = 首轮即得合法 JSON 对象；repaired = 修复轮才得到；
+# failed = 两轮皆失败（chat_json 抛 ValueError）。
+STRUCTURED_OUTCOMES = ("ok", "repaired", "failed")
+
+
+def _structured_counts() -> Dict[str, int]:
+    return {"ok": 0, "repaired": 0, "failed": 0, "truncation_repaired": 0}
+
+
+# INFRA-3: outcomes of one transport recovery episode (kind 'length_escalation': an empty reply
+# cut by max_tokens re-sent with a larger cap). recovered = an escalated attempt returned a
+# complete reply; partial = it returned text that the raised cap cut again (finish_reason
+# length); exhausted = escalation gave up (attempts or headroom used up, or the provider refused
+# the raised cap) and the call went on to failover; failed = an escalated attempt ended in
+# another failure (an empty non-length reply, a content filter, transport retries used up, the
+# run budget) and the call went on to failover or aborted. An escalating call counts once.
+RECOVERY_OUTCOMES = ("recovered", "partial", "exhausted", "failed")
 
 
 # TEL-1: '_global' 桶只该接住零星的无归属调用（reset 从不清它，跨 run 累积）。它一旦变大，
@@ -227,10 +368,10 @@ class LLMMeter:
     _lock = threading.Lock()
     _runs: Dict[str, _RunMeter] = {}
 
-    @classmethod
-    def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
-               latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
-               run_id: Optional[str] = None) -> None:
+    @staticmethod
+    def _attribute(run_id: Optional[str], stage: Optional[str]) -> Tuple[str, str, bool]:
+        """(run id, stage, fallback-attributed) for one record: explicit run_id → the run
+        contextvar → the sole active run (FOG-TEL-1 fallback) → '_global'."""
         rid = run_id or _current_run.get()
         fallback = False
         if not rid:
@@ -241,19 +382,56 @@ class LLMMeter:
             fallback = rid is not None
         if not rid:
             rid = _DEFAULT_BUCKET
-        stg = stage or _current_stage.get() or "_unstaged"
+        return rid, stage or _current_stage.get() or "_unstaged", fallback
+
+    @classmethod
+    def record(cls, provider: str, model: str, prompt_tokens: int, completion_tokens: int,
+               latency_ms: float, *, cached: bool = False, stage: Optional[str] = None,
+               run_id: Optional[str] = None, finish_reason: Optional[str] = None,
+               prompt_cache_read_tokens: int = 0, served_model: Optional[str] = None,
+               requested_model: Optional[str] = None, aggregate: bool = False) -> None:
+        """Accumulate one LLM call. ``finish_reason`` (INFRA-1, normalized by
+        llm_text.normalize_finish_reason) is tallied per stage when given.
+        ``prompt_cache_read_tokens`` (EVAL-17) is the provider-reported cache-read share of
+        the prompt, clamped to >= 0 (unparseable → 0); it never changes cost.
+
+        INFRA-8 (RECORD_MODEL_PROVENANCE): the call is also counted per stage under
+        ``provider:requested label`` with the provider-reported ``served_model`` (None = not
+        reported, counted in calls only). ``requested_model`` is the label the transport
+        actually requested; None derives it from ``provider`` and ``model``
+        (model_provenance.effective_model_label). by_model keys are unchanged.
+        ``aggregate=True`` marks a synthetic record of a child process's whole spend (the
+        research child, the simulation child): its provider/model label is no call's
+        requested model, so it is never counted in ``model_resolution``."""
+        rid, stg, fallback = cls._attribute(run_id, stage)
         cost = 0.0 if cached else estimate_cost(provider, prompt_tokens, completion_tokens)
+        try:
+            pcr = max(0, int(prompt_cache_read_tokens or 0))
+        except (TypeError, ValueError, OverflowError):
+            pcr = 0
+        resolution_key = None
+        if not aggregate and _model_provenance_enabled():
+            resolution_key = f"{provider}:{requested_model or effective_model_label(provider, model)}"
         warn_calls = 0
         first_fallback = False
         with cls._lock:
             rm = cls._runs.setdefault(rid, _RunMeter())
-            rm.total.add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
-            rm.by_stage.setdefault(stg, _Counter()).add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
+            rm.total.add(prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
+            rm.by_stage.setdefault(stg, _Counter()).add(
+                prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
             rm.by_model.setdefault(f"{provider}:{model}", _Counter()).add(
-                prompt_tokens, completion_tokens, latency_ms, cost, cached)
+                prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
             if fallback:
-                rm.fallback.add(prompt_tokens, completion_tokens, latency_ms, cost, cached)
+                rm.fallback.add(prompt_tokens, completion_tokens, latency_ms, cost, cached, pcr)
                 first_fallback = rm.fallback.calls == 1
+            if finish_reason:
+                reasons = rm.finish_reasons.setdefault(stg, {})
+                reasons[finish_reason] = reasons.get(finish_reason, 0) + 1
+            if resolution_key is not None:
+                entry = rm.model_resolution.setdefault(stg, {}).setdefault(
+                    resolution_key, {"calls": 0, "served": {}})
+                entry["calls"] += 1
+                count_served(entry["served"], served_model)
             if rid == _DEFAULT_BUCKET and rm.total.calls in _GLOBAL_BUCKET_WARN_AT:
                 warn_calls = rm.total.calls
         if first_fallback:
@@ -270,6 +448,53 @@ class LLMMeter:
             )
 
     @classmethod
+    def record_structured(cls, label: str, outcome: str, *, json_truncation_repaired: bool = False,
+                          stage: Optional[str] = None, run_id: Optional[str] = None) -> None:
+        """INFRA-2: tally one structured-output (chat_json) result under ``label``.
+
+        ``outcome`` is one of STRUCTURED_OUTCOMES; ``json_truncation_repaired`` counts an
+        accepted reply whose unterminated brackets had to be closed locally. Run attribution
+        is identical to record(); the stage keeps graph / report / sim failures apart.
+        Observability only: an unknown outcome or any internal failure is logged at debug
+        level and swallowed.
+        """
+        try:
+            if outcome not in STRUCTURED_OUTCOMES:
+                raise ValueError(f"unknown structured outcome {outcome!r}")
+            rid, stg, _fallback = cls._attribute(run_id, stage)
+            with cls._lock:
+                rm = cls._runs.setdefault(rid, _RunMeter())
+                by_stage = rm.structured.setdefault(str(label or "chat_json"), {})
+                counts = by_stage.setdefault(stg, _structured_counts())
+                counts[outcome] += 1
+                if json_truncation_repaired:
+                    counts["truncation_repaired"] += 1
+        except Exception as exc:  # noqa: BLE001 — telemetry must never fail the call path
+            import logging
+            logging.getLogger("mirofish.telemetry").debug(f"结构化输出计数失败（忽略）: {exc}")
+
+    @classmethod
+    def record_recovery(cls, kind: str, outcome: str, *, stage: Optional[str] = None,
+                        run_id: Optional[str] = None) -> None:
+        """INFRA-3: tally one transport recovery episode of ``kind`` (e.g. 'length_escalation').
+
+        ``outcome`` is one of RECOVERY_OUTCOMES. Run and stage attribution are identical to
+        record(). Observability only: an unknown outcome or any internal failure is logged at
+        debug level and swallowed.
+        """
+        try:
+            if outcome not in RECOVERY_OUTCOMES:
+                raise ValueError(f"unknown recovery outcome {outcome!r}")
+            rid, stg, _fallback = cls._attribute(run_id, stage)
+            with cls._lock:
+                rm = cls._runs.setdefault(rid, _RunMeter())
+                counts = rm.recovery.setdefault(str(kind), {}).setdefault(stg, {})
+                counts[outcome] = counts.get(outcome, 0) + 1
+        except Exception as exc:  # noqa: BLE001 — telemetry must never fail the call path
+            import logging
+            logging.getLogger("mirofish.telemetry").debug(f"恢复事件计数失败（忽略）: {exc}")
+
+    @classmethod
     def snapshot(cls, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Per-run usage snapshot. Additive keys (existing keys keep their meaning):
 
@@ -282,8 +507,25 @@ class LLMMeter:
           shared across concurrent runs; carried on every run snapshot so persisted
           artifacts (run_telemetry.json) can never hide unattributed spend. Omitted only
           when snapshotting the '_global' bucket itself (it would duplicate ``total``).
+        - ``finish_reasons`` (INFRA-1): ``{stage: {finish_reason: calls}}`` for the calls
+          recorded with a finish reason; present only when at least one was.
+        - ``structured_outputs`` (INFRA-2): ``{label: {ok, repaired, failed,
+          truncation_repaired}}`` (integer counts only) from record_structured(), and
+          ``structured_outputs_by_stage``: ``{label: {stage: {same four counts}}}``; both
+          present only when at least one was recorded.
+        - ``prompt_cache_read_tokens`` (EVAL-17) inside every counter (total, by_stage,
+          by_model, fallback_attributed, unattributed_process): the provider-reported
+          prompt-cache reads passed to record(); 0 when none were.
+        - ``model_resolution`` (INFRA-8): ``{stage: {'provider:requested label': {calls,
+          served: {served id: calls}}}}``, at most model_provenance.MAX_SERVED_IDS served ids
+          per entry (later ids under '_other'); present only when at least one call was
+          recorded with RECORD_MODEL_PROVENANCE on (``aggregate`` records never count).
+        - ``recovery`` (INFRA-3): ``{kind: {outcome: episodes}}`` from record_recovery()
+          (only the outcomes that occurred), and ``recovery_by_stage``: ``{kind: {stage:
+          {outcome: episodes}}}``; both present only when at least one was recorded.
         """
         rid = run_id or _current_run.get() or _DEFAULT_BUCKET
+        declared_sub = _declared_subscription_providers()
         with cls._lock:
             g = cls._runs.get(_DEFAULT_BUCKET)
             unattributed = g.total.as_dict() if g else _Counter().as_dict()
@@ -309,14 +551,18 @@ class LLMMeter:
             )
             # XRUN-8: CLI 订阅提供方的 $0 不是「免费」而是「订阅内边际成本 0」。显式标注计价
             # 基准，避免 ~940K token 的报告 run 在成本审计里显得凭空免费。
-            _sub = {"claude-cli", "codex-cli"}
+            # EVAL-17: providers declared flat-rate via LLM_SUBSCRIPTION_PROVIDERS (matched
+            # case-insensitively) count as subscription too; cost_usd stays their API-rate
+            # equivalent. Empty knob → the built-in CLI set only (unchanged classification).
             _vol_providers = {k.split(":", 1)[0] for k, v in by_model.items()
                               if v.get("total_tokens", 0) > 0}
+            _sub = {p for p in _vol_providers
+                    if p in _SUBSCRIPTION_PROVIDERS or p.strip().lower() in declared_sub}
             if not _vol_providers:
                 cost_basis = "api"
-            elif _vol_providers <= _sub:
+            elif _sub == _vol_providers:
                 cost_basis = "subscription"
-            elif _vol_providers & _sub:
+            elif _sub:
                 cost_basis = "mixed"
             else:
                 cost_basis = "api"
@@ -329,6 +575,40 @@ class LLMMeter:
                 "cost_basis": cost_basis,
                 "fallback_attributed": rm.fallback.as_dict(),
             }
+            if rm.finish_reasons:
+                out["finish_reasons"] = {stg: dict(reasons)
+                                         for stg, reasons in rm.finish_reasons.items()}
+            if rm.structured:
+                structured: Dict[str, Dict[str, int]] = {}
+                structured_by_stage: Dict[str, Dict[str, Dict[str, int]]] = {}
+                for label, by_stage in rm.structured.items():
+                    totals = _structured_counts()
+                    for counts in by_stage.values():
+                        for key in totals:
+                            totals[key] += counts.get(key, 0)
+                    structured[label] = totals
+                    structured_by_stage[label] = {stg: dict(counts) for stg, counts in by_stage.items()}
+                out["structured_outputs"] = structured
+                out["structured_outputs_by_stage"] = structured_by_stage
+            if rm.model_resolution:
+                out["model_resolution"] = {
+                    stg: {key: {"calls": entry["calls"], "served": dict(entry["served"])}
+                          for key, entry in entries.items()}
+                    for stg, entries in rm.model_resolution.items()
+                }
+            if rm.recovery:
+                recovery: Dict[str, Dict[str, int]] = {}
+                for kind, by_stage in rm.recovery.items():
+                    totals: Dict[str, int] = {}
+                    for counts in by_stage.values():
+                        for outcome, n in counts.items():
+                            totals[outcome] = totals.get(outcome, 0) + n
+                    recovery[kind] = totals
+                out["recovery"] = recovery
+                out["recovery_by_stage"] = {
+                    kind: {stg: dict(counts) for stg, counts in by_stage.items()}
+                    for kind, by_stage in rm.recovery.items()
+                }
             if rid != _DEFAULT_BUCKET:
                 out["unattributed_process"] = unattributed
             return out
@@ -368,6 +648,12 @@ class LLMMeter:
         （以及它指向的 report_id）凭空消失，跨 run 的 token 审计对不上账。改为合并：保留上一
         attempt 的 total/report_id 摘要（previous_attempt），并滚动累计 cumulative_total，
         使文件既反映「本 attempt」又反映「整条管线」的真实开销。首写行为不变。
+
+        EVAL-17: the merge is :func:`previous_attempt_carry` + :func:`apply_previous_attempt_carry`,
+        the same rule as the pipeline's run_telemetry flush (cumulative_by_stage included).
+        Every call treats the file on disk as the previous attempt, so call it once per
+        attempt; the pipeline itself flushes through PipelineOrchestrator._flush_run_telemetry,
+        which fixes the base at the attempt start.
         """
         import os as _os
         from .atomic import write_json_atomic
@@ -378,22 +664,7 @@ class LLMMeter:
             if _os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     prev = json.load(f)
-                if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
-                    data["previous_attempt"] = {
-                        "total": prev.get("total"),
-                        "report_id": prev.get("report_id"),
-                        "status": prev.get("status"),
-                    }
-                    base = prev.get("cumulative_total") or prev.get("total") or {}
-                    cur = data.get("total") or {}
-                    cum: Dict[str, Any] = {}
-                    for k in ("calls", "cached", "prompt_tokens", "completion_tokens",
-                              "total_tokens", "latency_ms", "cost_usd"):
-                        try:
-                            cum[k] = round((base.get(k) or 0) + (cur.get(k) or 0), 6)
-                        except TypeError:
-                            continue
-                    data["cumulative_total"] = cum
+                apply_previous_attempt_carry(data, previous_attempt_carry(prev))
         except Exception:  # noqa: BLE001 — 合并是观测增益，失败退回单 attempt 覆盖写
             pass
         write_json_atomic(path, data)
@@ -442,15 +713,30 @@ def estimate_tokens(text: str) -> int:
 _PIPELINE_STAGE_ORDER = ("research", "ontology", "graph", "prepare", "run", "report")
 
 
+def _latest_stage_reuse(stage_decisions: Any) -> Dict[str, bool]:
+    """INFRA-7：把 ``[{stage, reused}, ...]`` 折成 {stage: reused}（后写覆盖前写；畸形行跳过）。"""
+    folded: Dict[str, bool] = {}
+    if not isinstance(stage_decisions, (list, tuple)):
+        return folded
+    for row in stage_decisions:
+        if isinstance(row, dict) and isinstance(row.get("stage"), str):
+            folded[row["stage"]] = bool(row.get("reused"))
+    return folded
+
+
 def build_stage_telemetry(run_id: Optional[str],
-                          stage_walls: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+                          stage_walls: Optional[Dict[str, float]] = None,
+                          stage_decisions: Optional[Any] = None) -> Dict[str, Any]:
     """ITEM-18：构建 {stage: {calls, input_tokens, output_tokens, est_cost_usd, wall_seconds}}。
 
     token/调用/成本取自 :meth:`LLMMeter.snapshot` 的 ``by_stage``（成本已按 estimate_cost 计入，
     含 LLM_COST_PER_MTOK 覆盖）；``wall_seconds`` 取自编排器传入的 ``stage_walls``（各阶段
     started_at→finished_at 墙钟差——反映整段阶段耗时，与纯 LLM 在飞延迟不同）。某阶段可能只在
     一侧出现（graph/prepare 常有墙钟但 0 LLM 调用；run 阶段 LLM 在子进程、计量归 0）——两侧取
-    并集，缺失侧填 0。degrade-safe：snapshot 空 → 仅墙钟骨架。"""
+    并集，缺失侧填 0。degrade-safe：snapshot 空 → 仅墙钟骨架。
+
+    INFRA-7：``stage_decisions``（编排器本 attempt 的 stage_reuse_v1 记录 ``[{stage, reused}]``）
+    给出时，为已出现的阶段附加 ``reused`` 标志（同一阶段多条记录取最后一条）；None → 输出不变。"""
     walls: Dict[str, float] = {}
     for k, v in (stage_walls or {}).items():
         if isinstance(v, (int, float)) and v >= 0:
@@ -467,6 +753,9 @@ def build_stage_telemetry(run_id: Optional[str],
             "est_cost_usd": round(float(c.get("cost_usd", 0.0) or 0.0), 6),
             "wall_seconds": round(walls.get(name, 0.0), 1),
         }
+    for name, reused in _latest_stage_reuse(stage_decisions).items():
+        if name in stages:
+            stages[name]["reused"] = reused
     total = {
         "calls": sum(s["calls"] for s in stages.values()),
         "input_tokens": sum(s["input_tokens"] for s in stages.values()),
@@ -592,3 +881,18 @@ class LLMCache:
                     evict = cls._order.pop(0)
                     cls._store.pop(evict, None)
             cls._store[key] = value
+
+    @classmethod
+    def discard(cls, key: str) -> bool:
+        """INFRA-2: forget one entry (a reply its caller rejected, e.g. unparseable JSON), so
+        an identical later call makes a fresh completion instead of replaying it. Returns
+        whether the key was present."""
+        with cls._lock:
+            if key not in cls._store:
+                return False
+            del cls._store[key]
+            try:
+                cls._order.remove(key)
+            except ValueError:
+                pass
+            return True

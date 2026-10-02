@@ -236,3 +236,298 @@ def test_http_client_falls_back_to_http1_without_h2(monkeypatch):
         assert client.timeout.read and client.timeout.read >= 120.0
     finally:
         client.close()
+
+
+# ---------------------------------------------------------------- INFRA-2 tests
+def test_cache_discard_removes_key_and_reports_missing():
+    k1 = T.LLMCache.key("p", "m", [{"role": "user", "content": "discard"}], 0.0, 100, None)
+    k2 = T.LLMCache.key("p", "m", [{"role": "user", "content": "keep"}], 0.0, 100, None)
+    T.LLMCache.put(k1, "bad reply")
+    T.LLMCache.put(k2, "good reply")
+
+    assert T.LLMCache.discard(k1) is True
+    assert T.LLMCache.get(k1) is None and k1 not in T.LLMCache._order
+    assert T.LLMCache.get(k2) == "good reply" and k2 in T.LLMCache._order
+    assert T.LLMCache.discard(k1) is False
+    assert T.LLMCache.discard("never-cached") is False
+    # A re-put after a discard is tracked once in the FIFO order again.
+    T.LLMCache.put(k1, "fresh reply")
+    assert T.LLMCache._order.count(k1) == 1 and T.LLMCache.get(k1) == "fresh reply"
+
+
+def test_snapshot_has_no_structured_outputs_until_one_is_recorded():
+    T.LLMMeter.reset("so")
+    try:
+        T.LLMMeter.record("minimax", "MiniMax-M3", 10, 5, 1.0, stage="graph", run_id="so")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so")
+        assert "structured_outputs_by_stage" not in T.LLMMeter.snapshot("so")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so-never-seen")
+
+        T.LLMMeter.record_structured("chat_json", "ok", stage="graph", run_id="so")
+        T.LLMMeter.record_structured("chat_json", "repaired", json_truncation_repaired=True,
+                                     stage="report", run_id="so")
+        T.LLMMeter.record_structured("critique", "failed", stage="report", run_id="so")
+        snap = T.LLMMeter.snapshot("so")
+        # The spec shape: every value under a label is an integer counter.
+        assert snap["structured_outputs"] == {
+            "chat_json": {"ok": 1, "repaired": 1, "failed": 0, "truncation_repaired": 1},
+            "critique": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0},
+        }
+        assert all(isinstance(n, int) for counts in snap["structured_outputs"].values()
+                   for n in counts.values())
+        # The per-stage breakdown lives in a sibling key.
+        assert snap["structured_outputs_by_stage"] == {
+            "chat_json": {
+                "graph": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0},
+                "report": {"ok": 0, "repaired": 1, "failed": 0, "truncation_repaired": 1},
+            },
+            "critique": {"report": {"ok": 0, "repaired": 0, "failed": 1, "truncation_repaired": 0}},
+        }
+        # record_structured never touches the call counters.
+        assert snap["total"]["calls"] == 1
+        T.LLMMeter.reset("so")
+        after_reset = T.LLMMeter.snapshot("so")
+        assert "structured_outputs" not in after_reset
+        assert "structured_outputs_by_stage" not in after_reset
+    finally:
+        T.LLMMeter.reset("so")
+
+
+def test_record_structured_attribution_matches_record():
+    T.LLMMeter.reset("so-ctx")
+    T.LLMMeter.reset("so-solo")
+    try:
+        T.set_run_context("so-ctx", "research")
+        T.LLMMeter.record_structured("chat_json", "ok")
+        T.set_run_context(None)
+        assert T.LLMMeter.snapshot("so-ctx")["structured_outputs_by_stage"]["chat_json"] == {
+            "research": {"ok": 1, "repaired": 0, "failed": 0, "truncation_repaired": 0}}
+
+        # No run contextvar on the thread + exactly one active run -> fallback attribution.
+        T.set_run_context("so-solo")
+        token_ctx = T._current_run.set(None)
+        try:
+            T.LLMMeter.record_structured("chat_json", "failed")
+        finally:
+            T._current_run.reset(token_ctx)
+        assert T.LLMMeter.snapshot("so-solo")["structured_outputs"]["chat_json"]["failed"] == 1
+    finally:
+        T.set_run_context(None)
+        T.LLMMeter.reset("so-ctx")
+        T.LLMMeter.reset("so-solo")
+
+
+def test_record_structured_swallows_bad_outcomes():
+    T.LLMMeter.reset("so-bad")
+    try:
+        T.LLMMeter.record_structured("chat_json", "exhausted", run_id="so-bad")
+        assert "structured_outputs" not in T.LLMMeter.snapshot("so-bad")
+    finally:
+        T.LLMMeter.reset("so-bad")
+
+
+# ---------------------------------------------------------------- EVAL-17 tests
+_PRE_EVAL17_COUNTER_KEYS = ("calls", "cached", "prompt_tokens", "completion_tokens",
+                            "total_tokens", "latency_ms", "cost_usd")
+
+
+def test_cache_read_tokens_accumulate_and_snapshot_additive():
+    """record() without the kwarg keeps every existing key/value (the new key is 0);
+    with it, cache reads accumulate into total/by_stage/by_model and never change cost."""
+    T.LLMMeter.reset("eval17_plain")
+    T.LLMMeter.record("minimax", "MiniMax-M3", 1000, 500, 100.0, stage="report",
+                      run_id="eval17_plain")
+    plain = T.LLMMeter.snapshot("eval17_plain")
+    for counter in (plain["total"], plain["by_stage"]["report"],
+                    plain["by_model"]["minimax:MiniMax-M3"]):
+        assert list(counter)[:len(_PRE_EVAL17_COUNTER_KEYS)] == list(_PRE_EVAL17_COUNTER_KEYS)
+        assert {k: counter[k] for k in _PRE_EVAL17_COUNTER_KEYS} == {
+            "calls": 1, "cached": 0, "prompt_tokens": 1000, "completion_tokens": 500,
+            "total_tokens": 1500, "latency_ms": 100.0,
+            "cost_usd": round(T.estimate_cost("minimax", 1000, 500), 6)}
+        assert counter["prompt_cache_read_tokens"] == 0
+    assert set(plain["fallback_attributed"]) == set(_PRE_EVAL17_COUNTER_KEYS) | {
+        "prompt_cache_read_tokens"}
+
+    T.LLMMeter.reset("eval17_cache")
+    T.LLMMeter.record("glm", "glm-5", 12000, 900, 10.0, stage="research", run_id="eval17_cache",
+                      prompt_cache_read_tokens=8000)
+    T.LLMMeter.record("glm", "glm-5", 4000, 100, 10.0, stage="research", run_id="eval17_cache",
+                      prompt_cache_read_tokens=6500)
+    T.LLMMeter.record("glm", "glm-5", 10, 1, 1.0, stage="report", run_id="eval17_cache",
+                      prompt_cache_read_tokens=-5)              # clamped to 0
+    T.LLMMeter.record("glm", "glm-5", 10, 1, 1.0, stage="report", run_id="eval17_cache",
+                      prompt_cache_read_tokens="junk")          # unparseable → 0
+    T.LLMMeter.record("glm", "glm-5", 10, 1, 1.0, stage="report", run_id="eval17_cache",
+                      prompt_cache_read_tokens=float("inf"))    # OverflowError → 0
+    snap = T.LLMMeter.snapshot("eval17_cache")
+    assert snap["total"]["prompt_cache_read_tokens"] == 14500
+    assert snap["by_stage"]["research"]["prompt_cache_read_tokens"] == 14500
+    assert snap["by_stage"]["report"]["prompt_cache_read_tokens"] == 0
+    assert snap["by_model"]["glm:glm-5"]["prompt_cache_read_tokens"] == 14500
+    # Informational split only: prompt/total tokens and cost are what they were without it.
+    assert snap["total"]["prompt_tokens"] == 16030
+    assert snap["total"]["cost_usd"] == round(
+        T.estimate_cost("glm", 16030, 1003), 6)
+    assert T.LLMMeter.status_snapshot("eval17_cache")["total"]["prompt_cache_read_tokens"] == 14500
+    T.LLMMeter.reset("eval17_plain")
+    T.LLMMeter.reset("eval17_cache")
+
+
+def test_cache_read_tokens_follow_fallback_attribution():
+    """The fallback_attributed subset carries its share of cache reads too."""
+    T._clear_active_runs()
+    T.LLMMeter.reset("eval17_fb")
+    T.set_run_context("eval17_fb")
+    try:
+        import threading
+
+        def unattributed():  # a fresh thread has no run contextvar
+            T.LLMMeter.record("glm", "glm-5", 100, 10, 1.0, prompt_cache_read_tokens=40)
+
+        t = threading.Thread(target=unattributed)
+        t.start()
+        t.join()
+        snap = T.LLMMeter.snapshot("eval17_fb")
+        assert snap["fallback_attributed"]["prompt_cache_read_tokens"] == 40
+        assert snap["total"]["prompt_cache_read_tokens"] == 40
+    finally:
+        T.set_run_context(None)
+        T.LLMMeter.reset("eval17_fb")
+
+
+def _basis_for(run_id, providers):
+    T.LLMMeter.reset(run_id)
+    for prov in providers:
+        T.LLMMeter.record(prov, "m", 100, 10, 1.0, run_id=run_id)
+    basis = T.LLMMeter.snapshot(run_id)["cost_basis"]
+    T.LLMMeter.reset(run_id)
+    return basis
+
+
+def test_subscription_providers_knob(monkeypatch):
+    from app.config import Config
+    # Default '' → the built-in classification, unchanged.
+    monkeypatch.setattr(Config, "LLM_SUBSCRIPTION_PROVIDERS", "", raising=False)
+    assert _basis_for("eval17_sub0", []) == "api"
+    assert _basis_for("eval17_sub1", ["minimax"]) == "api"
+    assert _basis_for("eval17_sub2", ["claude-cli"]) == "subscription"
+    assert _basis_for("eval17_sub3", ["claude-cli", "codex-cli"]) == "subscription"
+    assert _basis_for("eval17_sub4", ["claude-cli", "minimax"]) == "mixed"
+
+    # Declared flat-rate plans (case-insensitive, whitespace tolerant) count as subscription.
+    monkeypatch.setattr(Config, "LLM_SUBSCRIPTION_PROVIDERS", " MiniMax , glm,", raising=False)
+    assert _basis_for("eval17_sub5", ["minimax"]) == "subscription"
+    assert _basis_for("eval17_sub6", ["minimax", "glm", "claude-cli"]) == "subscription"
+    assert _basis_for("eval17_sub7", ["minimax", "openai"]) == "mixed"
+    assert _basis_for("eval17_sub8", ["openai"]) == "api"
+    # cost_usd stays the API-rate equivalent (the knob only relabels the basis).
+    T.LLMMeter.reset("eval17_sub9")
+    T.LLMMeter.record("minimax", "m", 1000, 100, 1.0, run_id="eval17_sub9")
+    snap = T.LLMMeter.snapshot("eval17_sub9")
+    assert snap["cost_basis"] == "subscription"
+    assert snap["total"]["cost_usd"] > 0
+    assert snap["total"]["cost_usd"] == round(T.estimate_cost("minimax", 1000, 100), 6)
+    T.LLMMeter.reset("eval17_sub9")
+    # The stage telemetry / appendix inherit the relabelled basis.
+    T.LLMMeter.record("minimax", "m", 1000, 100, 1.0, run_id="eval17_sub10", stage="report")
+    assert T.build_stage_telemetry("eval17_sub10")["cost_basis"] == "subscription"
+    T.LLMMeter.reset("eval17_sub10")
+
+
+def test_subscription_providers_knob_default_is_empty_and_documented():
+    import os
+    backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(backend, "app", "config.py"), encoding="utf-8") as f:
+        assert "os.environ.get('LLM_SUBSCRIPTION_PROVIDERS', '').strip()" in f.read()
+    with open(os.path.join(os.path.dirname(backend), ".env.example"), encoding="utf-8") as f:
+        assert "# LLM_SUBSCRIPTION_PROVIDERS=  " in f.read()
+
+
+def test_add_counter_dicts_sums_cumulative_keys_and_tolerates_bad_rows():
+    base = {"calls": 2, "cached": 1, "prompt_tokens": 100, "completion_tokens": 10,
+            "total_tokens": 110, "latency_ms": 1.25, "cost_usd": 0.1}      # pre-EVAL-17 row
+    cur = {"calls": 1, "cached": 0, "prompt_tokens": 50, "completion_tokens": 5,
+           "total_tokens": 55, "latency_ms": 2.5, "cost_usd": 0.2,
+           "prompt_cache_read_tokens": 30}
+    out = T.add_counter_dicts(base, cur)
+    assert out == {"calls": 3, "cached": 1, "prompt_tokens": 150, "completion_tokens": 15,
+                   "total_tokens": 165, "latency_ms": 3.75,
+                   "cost_usd": pytest.approx(0.3), "prompt_cache_read_tokens": 30}
+    assert list(out) == list(T.CUMULATIVE_COUNTER_KEYS)
+    assert T.add_counter_dicts(None, "junk")["calls"] == 0
+    assert "calls" not in T.add_counter_dicts({"calls": "x"}, {"calls": 1})  # unaddable → skipped
+
+    stages = T.add_stage_counter_dicts(
+        {"research": base, "graph": {"calls": 4}},
+        {"research": cur, "report": {"calls": 1}, "bad": None})
+    assert list(stages) == ["research", "graph", "report", "bad"]
+    assert stages["research"]["calls"] == 3
+    assert stages["graph"]["calls"] == 4 and stages["report"]["calls"] == 1
+    assert stages["bad"]["calls"] == 0
+    assert T.add_stage_counter_dicts(None, ["x"]) == {}
+
+
+def test_previous_attempt_carry_qualifies_history_and_tolerates_junk():
+    assert T.previous_attempt_carry(None) is None
+    assert T.previous_attempt_carry(["junk"]) is None
+    assert T.previous_attempt_carry({}) is None
+    assert T.previous_attempt_carry({"total": {"calls": 0}}) is None   # no history at all
+    # A zero-call attempt still carries the pipeline's history in its cumulative fields.
+    carry = T.previous_attempt_carry({"total": {"calls": 0}, "cumulative_total": {"calls": 3},
+                                      "cumulative_by_stage": {"graph": {"calls": 3}},
+                                      "report_id": "r1", "status": "cancelled"})
+    assert carry == {"previous_attempt": {"total": {"calls": 0}, "report_id": "r1",
+                                          "status": "cancelled"},
+                     "cumulative_total": {"calls": 3},
+                     "cumulative_by_stage": {"graph": {"calls": 3}},
+                     "partial": False}
+    # A malformed total does not hide the cumulative history.
+    assert T.previous_attempt_carry({"total": ["junk"], "cumulative_total": {"calls": 2}}
+                                    )["cumulative_total"] == {"calls": 2}
+    # Pre-EVAL-17 file spanning attempts: by_stage is the base and the split is partial.
+    legacy = T.previous_attempt_carry({"total": {"calls": 1}, "cumulative_total": {"calls": 4},
+                                       "by_stage": {"graph": {"calls": 1}}})
+    assert legacy["cumulative_by_stage"] == {"graph": {"calls": 1}}
+    assert legacy["partial"] is True
+    data = {"total": {"calls": 1}, "by_stage": {"graph": {"calls": 1}}}
+    T.apply_previous_attempt_carry(data, None)
+    assert data == {"total": {"calls": 1}, "by_stage": {"graph": {"calls": 1}}}   # no-op
+    T.apply_previous_attempt_carry(data, legacy)
+    assert data["cumulative_total"]["calls"] == 5
+    assert data["cumulative_by_stage"]["graph"]["calls"] == 2
+    assert data["cumulative_by_stage_partial"] is True
+
+
+def test_write_run_telemetry_uses_the_shared_merge_rule(tmp_path):
+    """LLMMeter.write_run_telemetry merges like the pipeline flush: cumulative_total carries
+    prompt_cache_read_tokens, cumulative_by_stage keeps the per-stage split, and a zero-call
+    attempt no longer wipes the history (the old calls gate dropped it)."""
+    import json
+
+    rid = "eval17_write_rt"
+    path = str(tmp_path / "run_telemetry.json")
+    T.LLMMeter.reset(rid)
+    T.LLMMeter.record("minimax", "m", 100, 10, 1.0, run_id=rid, stage="research",
+                      prompt_cache_read_tokens=60)
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "a"})
+    with open(path, encoding="utf-8") as f:
+        first = json.load(f)
+    assert "cumulative_total" not in first and "cumulative_by_stage" not in first  # first write
+
+    T.LLMMeter.reset(rid)                                     # attempt 2: zero calls
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "b"})
+    T.LLMMeter.reset(rid)                                     # attempt 3
+    T.LLMMeter.record("minimax", "m", 50, 5, 1.0, run_id=rid, stage="report",
+                      prompt_cache_read_tokens=20)
+    T.LLMMeter.write_run_telemetry(path, run_id=rid, extra={"report_id": "c"})
+    T.LLMMeter.reset(rid)
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["previous_attempt"]["report_id"] == "b"
+    assert data["cumulative_total"]["calls"] == 2
+    assert data["cumulative_total"]["prompt_tokens"] == 150
+    assert data["cumulative_total"]["prompt_cache_read_tokens"] == 80
+    assert data["cumulative_by_stage"]["research"]["prompt_cache_read_tokens"] == 60
+    assert data["cumulative_by_stage"]["report"]["calls"] == 1
+    assert "cumulative_by_stage_partial" not in data

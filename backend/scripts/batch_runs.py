@@ -60,7 +60,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.config import Config  # noqa: E402
 from app.services.ensemble import aggregate_forecasts  # noqa: E402
+from app.services.hindcast_policy import HINDCAST_POLICY_OPTION  # noqa: E402
 from app.services.pipeline_orchestrator import (  # noqa: E402
+    EVALUATION_RUN_OPTION,
     PIPELINE_SCHEMA_VERSION,
     STAGE_BANDS,
     STAGE_GRAPH,
@@ -73,9 +75,13 @@ from app.services.pipeline_orchestrator import (  # noqa: E402
     PipelineOrchestrator,
     PipelineState,
     StageState,
+    evaluation_pin_for_question_fork,
+    fork_safety_policy_v1,
     preflight_pipeline,
+    warn_if_fork_feeds_shared_graph,
 )
 from app.services.report_agent import ReportManager  # noqa: E402
+from app.services.run_shape import ORIGIN_FORK, SHARED_GRAPH_OPTION  # noqa: E402
 from app.utils.atomic import write_json_atomic  # noqa: E402
 from app.utils.logger import get_logger  # noqa: E402
 
@@ -307,6 +313,26 @@ def fork_question(
     }
     if batch_id:
         options["batch_id"] = batch_id
+    evaluation_pin = evaluation_pin_for_question_fork(base_pipeline_id, base_state)
+    if evaluation_pin is not None:
+        # EVAL-13: a question fork of an evaluation run stays in the evaluation lane without
+        # the base's cell identity; carried in options, so its lane survives the loss of the
+        # base's handoff marker.
+        options[EVALUATION_RUN_OPTION] = evaluation_pin
+    hindcast_pin = (base_state.options or {}).get(HINDCAST_POLICY_OPTION)
+    if isinstance(hindcast_pin, dict):
+        # TIME-6: the fork answers its question from the base's as-of research, so it keeps
+        # the base's hindcast pin (carried, never re-captured, as in fork()); its reports then
+        # withhold live market odds and carry the hindcast label.
+        options[HINDCAST_POLICY_OPTION] = dict(hindcast_pin)
+    # INFRA-9：与 PipelineOrchestrator.fork() 同一规则——问题分叉沿用锚点的安全政策钉（锚点无钉则
+    # 按分叉准入捕获）；FORK_INHERIT_SAFETY_POLICY 关闭 = 不写（旧行为）。
+    safety_policy = fork_safety_policy_v1(base_state.options)
+    if safety_policy is not None:
+        options["safety_policy_v1"] = safety_policy
+        warn_if_fork_feeds_shared_graph(safety_policy, fork_id=new_id,
+                                        base_pipeline_id=base_pipeline_id,
+                                        graph_id=base_state.graph_id)
     if max_rounds:
         try:
             options["max_rounds"] = int(max_rounds)
@@ -328,7 +354,14 @@ def fork_question(
     else:
         new_state.current_stage = STAGE_ONTOLOGY
 
+    if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+        # INFRA-7：本体按本问题重生成、图谱刻意沿用锚点——向图谱血统守卫声明这一设计，
+        # 否则本 attempt 的本体重算会被当作陈旧上游而重建共享图谱。
+        options[SHARED_GRAPH_OPTION] = base_pipeline_id
     new_state.options = options
+    # INFRA-7：批次问题分叉是新准入——按分叉时刻的环境钉运行形状（origin=fork），并记下锚点的钉
+    # （复用的研究/图谱是在锚点的形状下建的）。
+    PipelineOrchestrator._pin_run_shape(new_state, ORIGIN_FORK, base_state=base_state)
 
     PipelineManager.ensure_dirs(new_id)
 

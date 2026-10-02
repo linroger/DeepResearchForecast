@@ -893,7 +893,21 @@ def _metric_row_is_publishable(
         f"{source} {definition}"))
 
 
+def _typed_epistemic_class(row: Dict[str, Any]) -> Optional[str]:
+    """QUANT_TYPED_RENDERING (RESEARCH-5): the research typing's ``reported`` /
+    ``projected`` stamp (epistemic_class), read before any label or text
+    heuristic; None when the knob is off or the row carries no such stamp, so
+    the legacy reading below applies unchanged."""
+    label = str(row.get("epistemic_class") or "").strip().lower()
+    if label not in ("reported", "projected") or not bool(_cfg("QUANT_TYPED_RENDERING", False)):
+        return None
+    return label
+
+
 def _quant_is_projection(row: Dict[str, Any]) -> bool:
+    typed = _typed_epistemic_class(row)
+    if typed is not None:
+        return typed == "projected"
     explicit = row.get("is_projection")
     if isinstance(explicit, bool):
         return explicit
@@ -1086,7 +1100,10 @@ def _prepare_quantitative_panels(
                 q, "forecast" if projection else "actual"):
             continue
         staleness = _to_float(q.get("staleness_days"))
-        if staleness is not None and staleness < 0 and not projection:
+        # A future-dated actual is no observation: negative age, or the typed
+        # recency pass's is_future_dated (which withholds the age).
+        future_dated = (staleness is not None and staleness < 0) or q.get("is_future_dated") is True
+        if future_dated and not projection:
             continue
         denominator = _quant_denominator_key(unit, definition)
         if not denominator:
@@ -1326,7 +1343,11 @@ def _metric_row_value(row: Dict[str, Any]) -> Optional[float]:
 
 def _metric_row_kind(row: Dict[str, Any]) -> str:
     """观测/预测判定（actual|forecast）：value_kind 优先，回退 value_type，再回退
-    _quant_is_projection 语义推断。用于轨迹/区域图上区分实测点与预测点的记号样式。"""
+    _quant_is_projection 语义推断。用于轨迹/区域图上区分实测点与预测点的记号样式。
+    QUANT_TYPED_RENDERING 开启时研究分型 epistemic_class（projected/reported）最先生效。"""
+    typed = _typed_epistemic_class(row)
+    if typed is not None:
+        return "forecast" if typed == "projected" else "actual"
     for key in ("value_kind", "value_type"):
         raw = row.get(key)
         if isinstance(raw, str):
@@ -2146,6 +2167,21 @@ class ReportVisualizer:
         finally:
             _close_matplotlib_figure(fig)
 
+    def _worldstate_not_valid(self, trajectory: Any) -> bool:
+        """SIM-1（fail-closed，REPORT_WORLDSTATE_HIDE_INVALID 默认开）：轨迹文档带显式非 valid
+        的顶层 validity → 登记跳过说明 {"reason": "trajectory_not_valid", "validity": v}
+        （build_all 的 _attempt 消费；plotly 缺席时由 matplotlib 回退族补记）并返回 True，
+        世界态图（HTML 与 matplotlib 回退）一律不画。
+        valid / 无 validity 的旧轨迹 / 直接列表 → False（行为字节不变）。"""
+        if not bool(_cfg("REPORT_WORLDSTATE_HIDE_INVALID", True)) or not isinstance(trajectory, dict):
+            return False
+        validity = str(trajectory.get("validity") or "").strip().lower()
+        if not validity or validity == "valid":
+            return False
+        self._skip_notes["worldstate_trajectory"] = {"reason": "trajectory_not_valid",
+                                                     "validity": validity}
+        return True
+
     def build_worldstate_area(self, trajectory: Any, charts_dir: str) -> Optional[str]:
         """(3) 结果世界态堆叠面积（world_state_trajectory.json 的 trajectory[].shares 随轮次）。
 
@@ -2153,6 +2189,8 @@ class ReportVisualizer:
         少于 2 个时间点 → None（面积图无意义）。CAL-TEMPORAL：若所有行都带可解析的
         period_end/as_of（轨迹 schema v3，日历模式）→ 横轴改用日历日期并标注 "Date"；
         否则保持旧的 "Forecast update step" 轮次横轴（hours 模式行为字节不变）。"""
+        if self._worldstate_not_valid(trajectory):
+            return None
         if not self._chart_ok():
             return None
         fig = None
@@ -3109,6 +3147,8 @@ class ReportVisualizer:
         兼容 {trajectory:[{round,shares:{name:share}}]} 或直接列表；<2 时间点 → None。
         CAL-TEMPORAL：所有行都带可解析的 period_end/as_of（schema v3）→ 横轴用日历日期
         （"Date"）；否则维持旧的 "Forecast update step" 轮次横轴（hours 模式字节不变）。"""
+        if self._worldstate_not_valid(trajectory):
+            return None
         if not self._interactive_ok():
             return None
         try:
@@ -4603,6 +4643,14 @@ class ReportVisualizer:
                   "Forecast Outcome-Share Trajectory", "scenarios",
                   lambda: self.build_worldstate_area(
                       artifacts.get("world_state_trajectory"), charts_dir))
+        # SIM-1：非 valid 轨迹的跳过说明——plotly 缺席的主机上 _attempt 从不调用构建器、
+        # 不会消费它，在此补记进 skipped（plotly 路径已记过同一原因则只清除，不重复），
+        # 让 viz_manifest.json 在纯 matplotlib 主机上也写明世界态图为何缺席。
+        ws_note = self._skip_notes.pop("worldstate_trajectory", None)
+        if ws_note and not any(s.get("builder") == "worldstate_trajectory"
+                               and s.get("reason") == ws_note.get("reason")
+                               for s in skipped):
+            skipped.append({"builder": "worldstate_trajectory", **ws_note})
 
         # 价格历史回退：任何 plotly 价格历史项缺 PNG 时重画 matplotlib 版（同名 stem 覆盖挂载）。
         ph_items = [it for it in items if it["id"].startswith("market_price_history")]

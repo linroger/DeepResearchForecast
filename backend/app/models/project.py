@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 from ..config import Config
+from ..utils.security import UnsafeIdError, contained_child, is_safe_id
 
 
 class ProjectStatus(str, Enum):
@@ -111,8 +112,9 @@ class ProjectManager:
     
     @classmethod
     def _get_project_dir(cls, project_id: str) -> str:
-        """获取项目目录路径"""
-        return os.path.join(cls.PROJECTS_DIR, project_id)
+        """获取项目目录路径（INFRA-10：id 经 contained_child 校验，非法/逃逸 id 抛 UnsafeIdError；
+        返回值与 os.path.join(PROJECTS_DIR, project_id) 逐字节相同）。"""
+        return contained_child(cls.PROJECTS_DIR, project_id, "project")
     
     @classmethod
     def _get_project_meta_path(cls, project_id: str) -> str:
@@ -188,7 +190,10 @@ class ProjectManager:
         Returns:
             Project对象，如果不存在返回None
         """
-        meta_path = cls._get_project_meta_path(project_id)
+        try:
+            meta_path = cls._get_project_meta_path(project_id)
+        except UnsafeIdError:
+            return None  # INFRA-10: 非法 id 与「不存在」同义
         
         if not os.path.exists(meta_path):
             return None
@@ -213,6 +218,8 @@ class ProjectManager:
         
         projects = []
         for project_id in os.listdir(cls.PROJECTS_DIR):
+            if not is_safe_id(project_id):  # INFRA-10: 跳过 .DS_Store、_tmp 等非 id 条目
+                continue
             project = cls.get_project(project_id)
             if project:
                 projects.append(project)
@@ -232,6 +239,10 @@ class ProjectManager:
             
         Returns:
             是否删除成功
+
+        Raises:
+            UnsafeIdError: project_id 非法或逃逸 PROJECTS_DIR（INFRA-10：rmtree 的目标
+                只可能是 contained_child 的结果）
         """
         project_dir = cls._get_project_dir(project_id)
         

@@ -1,0 +1,191 @@
+"""Offline tests for app/utils/llm_text.py (INFRA-1): content flattening, think stripping
+and finish-reason normalization, pinned to the research gateway's vocabulary."""
+
+import os
+import sys
+import time
+from types import SimpleNamespace
+
+import pytest
+
+from app.utils.llm_text import (
+    FINISH_REASONS,
+    flatten_content,
+    has_dangling_think,
+    normalize_finish_reason,
+    strip_think,
+)
+
+# Same bridge import pattern as test_research_gateway.py, used only to read the gateway's
+# finish-reason frozensets so the two transports keep one vocabulary.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_BRIDGE_DIR = os.path.join(_REPO_ROOT, "deerflow_bridge")
+if _BRIDGE_DIR not in sys.path:
+    sys.path.insert(0, _BRIDGE_DIR)
+
+import research_gateway as rg  # noqa: E402
+
+
+# ---------------------------------------------------------------- flatten_content
+def test_flatten_content_str_and_none():
+    assert flatten_content("hello") == "hello"
+    assert flatten_content("") == ""
+    assert flatten_content(None) == ""
+
+
+def test_flatten_content_list_of_dict_parts_keeps_text_only():
+    parts = [
+        {"type": "text", "text": "alpha"},
+        {"type": "reasoning", "text": "hidden chain"},
+        {"type": "output_text", "text": "beta"},
+        {"text": "gamma"},  # a missing type counts as text
+        {"type": "image_url", "image_url": {"url": "x"}},
+        {"type": "text", "text": 42},  # non-string text is skipped
+        "delta",
+    ]
+    assert flatten_content(parts) == "alpha beta gamma delta"
+
+
+def test_flatten_content_list_of_objects():
+    parts = [
+        SimpleNamespace(type="text", text="one"),
+        SimpleNamespace(type="thinking", thinking="nope", text="nope"),
+        SimpleNamespace(text="two"),
+    ]
+    assert flatten_content(parts) == "one two"
+    assert flatten_content(()) == ""
+
+
+def test_flatten_content_joins_parts_with_a_space_like_the_gateway():
+    # research_gateway._flatten_content semantics: text parts only, joined with " ".
+    assert flatten_content([{"type": "text", "text": "a"}, {"type": "tool_use"}, "b"]) == "a b"
+    assert flatten_content(12) == "12"
+
+
+# ---------------------------------------------------------------- strip_think
+def test_strip_think_closed_block():
+    assert strip_think("<think>x</think>answer") == ("answer", True)
+    assert strip_think("<THINK>x</Think>  answer  ") == ("answer", True)
+
+
+def test_strip_think_leading_unterminated_block_returns_empty():
+    assert strip_think("<think>unterminated reasoning") == ("", True)
+    assert strip_think("<think>") == ("", True)
+
+
+def test_strip_think_orphan_closer_and_trailing_dangling_opener():
+    assert strip_think("reasoning</think>answer") == ("answer", True)
+    assert strip_think("answer <think> cut mid-reasoning") == ("answer", True)
+
+
+@pytest.mark.parametrize("raw, clean", [
+    # U+0130 lower-cases to two characters; an index taken from text.lower() cut into the answer.
+    ("İ reasoning</think>answer", "answer"),
+    ("İstanbul İzmir reasoning</think>answer", "answer"),
+    ("İ</think>ok", "ok"),
+    ("İ<think>x</think>y</THINK>answer", "answer"),
+    ("reasoning</thİnk>answer", "answer"),  # the tag regex is case-insensitive, as for blocks
+])
+def test_strip_think_orphan_closer_after_non_ascii_text(raw, clean):
+    assert strip_think(raw) == (clean, True)
+
+
+def test_orphan_closer_inside_a_plain_answer_is_still_cut():
+    """The documented trade-off of the gateway's orphan rule: a plain reply cannot be told
+    apart from reasoning, so an answer containing a literal closer loses its head."""
+    assert strip_think('{"k": "</think>"}') == ('"}', True)
+    assert strip_think("Use </think> to end reasoning.") == ("to end reasoning.", True)
+
+
+@pytest.mark.parametrize("raw, clean, changed", [
+    ('{"k": "</think>"}', '{"k": "</think>"}', False),
+    ('  [1, "</think>", 2]  ', '[1, "</think>", 2]', False),
+    ('{"k": "<think>"}', '{"k": "<think>"}', False),
+    ('```json\n{"k": "</think>"}\n```', '```json\n{"k": "</think>"}\n```', False),
+    ('```\n[1, "<think>"]\n```', '```\n[1, "<think>"]\n```', False),
+    ('<think>plan</think>{"k": "</think>"}', '{"k": "</think>"}', True),
+    # Leading reasoning (no opening tag) is still cut, even when it mentions braces.
+    ('plan the {"a": ...} shape</think>{"a": 1}', '{"a": 1}', True),
+    ("<think>cut by the cap", "", True),
+    ('plan</think>```json\n{"a": 1}\n```', '```json\n{"a": 1}\n```', True),
+])
+def test_json_reply_keeps_think_tags_inside_the_json_value(raw, clean, changed):
+    assert strip_think(raw, json_reply=True) == (clean, changed)
+
+
+def test_json_reply_dangling_flag():
+    assert not has_dangling_think('{"k": "<think>"}', json_reply=True)
+    assert has_dangling_think('{"k": "<think>"}')
+    assert has_dangling_think("<think>cut", json_reply=True)
+
+
+def test_strip_think_without_think_is_unchanged():
+    assert strip_think("plain answer") == ("plain answer", False)
+    # whitespace trimming alone is not a think change
+    assert strip_think("  padded  ") == ("padded", False)
+    assert strip_think("") == ("", False)
+
+
+@pytest.mark.parametrize("raw, clean", [
+    # Expected values are research_gateway._strip_think's output for the same input.
+    ("<think>a</think>b", "b"),
+    ("x</think>y", "y"),
+    ("q <think> r", "q"),
+    ("<think>a<think>b</think>c</think>d", "d"),
+    ("a</think>b<think>c</think>d", "bd"),
+])
+def test_strip_think_gateway_semantics(raw, clean):
+    assert strip_think(raw) == (clean, True)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("<think>" * 200_000, ("", True)),
+    ("</think>" * 200_000 + "answer", ("answer", True)),
+    ("<think>a</think>" * 100_000 + "answer", ("answer", True)),
+])
+def test_strip_think_is_linear_time(raw, expected):
+    # The linear scan takes ~0.03s here; the backtracking regex it replaced takes minutes, so
+    # this loose bound stays decisive without being sensitive to a loaded machine.
+    started = time.monotonic()
+    assert strip_think(raw) == expected
+    assert time.monotonic() - started < 5.0
+
+
+def test_has_dangling_think():
+    assert has_dangling_think("<think>cut")
+    assert has_dangling_think("answer <think> cut")
+    assert not has_dangling_think("<think>a</think>answer")
+    assert not has_dangling_think("reasoning</think>answer")
+    assert not has_dangling_think("plain")
+    assert not has_dangling_think("")
+
+
+# ---------------------------------------------------------------- finish reasons
+@pytest.mark.parametrize("raw, expected", [
+    ("stop", "stop"), ("end_turn", "stop"), ("stop_sequence", "stop"), ("eos", "stop"),
+    ("length", "length"), ("max_tokens", "length"), ("MAX_TOKENS", "length"),
+    ("max_output_tokens", "length"),
+    ("tool_calls", "tool_calls"), ("function_call", "tool_calls"), ("tool_use", "tool_calls"),
+    ("content_filter", "content_filter"), ("safety", "content_filter"),
+    ("SAFETY", "content_filter"), ("sensitive", "content_filter"),
+    ("content_filtered", "content_filter"),
+    ("error", "error"), ("network_error", "error"), ("aborted", "error"),
+    (None, "unknown"), ("", "unknown"), ("something_new", "unknown"),
+])
+def test_normalize_finish_reason(raw, expected):
+    assert normalize_finish_reason(raw) == expected
+
+
+def test_normalize_finish_reason_reads_enum_value():
+    assert normalize_finish_reason(SimpleNamespace(value="MAX_TOKENS")) == "length"
+
+
+def test_normalize_finish_reason_output_vocabulary():
+    assert set(FINISH_REASONS) == {"stop", "length", "tool_calls", "content_filter", "error", "unknown"}
+
+
+def test_every_gateway_finish_reason_maps_to_a_known_value():
+    assert all(normalize_finish_reason(r) == "content_filter"
+               for r in rg._CONTENT_FILTER_FINISH_REASONS)
+    assert all(normalize_finish_reason(r) == "length" for r in rg._TRUNCATION_FINISH_REASONS)
+    assert all(normalize_finish_reason(r) == "error" for r in rg._ABORTED_FINISH_REASONS)

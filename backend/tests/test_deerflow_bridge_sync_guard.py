@@ -230,7 +230,14 @@ def test_setup_sh_deploys_every_bare_imported_bridge_module():
     setup_modules = _setup_sh_bridge_module_list()
     assert "linear_research.py" in setup_modules
     assert "research_gateway.py" in setup_modules
-    assert {"linear_research.py", "research_gateway.py"} <= set(_DEPLOYED_BRIDGE_MODULES)
+    # RESEARCH-7: linear_research imports evidence_spans by bare name too.
+    assert "evidence_spans.py" in setup_modules
+    # TIME-2: cached_fetch and research_gateway import source_dates by bare name.
+    assert "source_dates.py" in setup_modules
+    # TIME-10: the official-data vendor tools, bare-imported once the engine binds them.
+    assert "data_tools.py" in setup_modules
+    assert {"linear_research.py", "research_gateway.py", "evidence_spans.py",
+            "source_dates.py", "data_tools.py"} <= set(_DEPLOYED_BRIDGE_MODULES)
     missing = sorted(set(_DEPLOYED_BRIDGE_MODULES) - set(setup_modules))
     assert not missing, f"setup.sh does not deploy drift-guarded modules: {missing}"
 

@@ -21,6 +21,7 @@ from .graphiti_client import EpisodeData, EntityEdgeSourceTarget
 
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
+from ..utils.security import UnsafeIdError, contained_child
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 from ..utils.actors import (
     ACTOR_INTELLIGENCE_SCHEMA_VERSION,
@@ -857,15 +858,22 @@ def slim_graph_payload(
 
 # --------------------------- 布局预计算（positions.json） ---------------------------
 def layout_positions_path(graph_id: str) -> str:
-    """positions.json 紧邻图谱工件（GRAPHITI_DATA_DIR/layouts/<graph_id>/positions.json）。"""
-    return os.path.join(Config.GRAPHITI_DATA_DIR, "layouts", graph_id, "positions.json")
+    """positions.json 紧邻图谱工件（GRAPHITI_DATA_DIR/layouts/<graph_id>/positions.json）。
+
+    INFRA-10：graph_id 经 contained_child 校验（非法/逃逸 id 抛 UnsafeIdError）。
+    """
+    layout_dir = contained_child(os.path.join(Config.GRAPHITI_DATA_DIR, "layouts"), graph_id, "graph")
+    return os.path.join(layout_dir, "positions.json")
 
 
 def load_layout_positions(graph_id: str) -> Dict[str, List[float]]:
-    """读预计算布局；缺失/损坏返回 {}（前端退回客户端力导布局，degrade-safe）。"""
+    """读预计算布局；缺失/损坏/非法 id 返回 {}（前端退回客户端力导布局，degrade-safe）。"""
     import json
 
-    path = layout_positions_path(graph_id)
+    try:
+        path = layout_positions_path(graph_id)
+    except UnsafeIdError:
+        return {}
     try:
         if not os.path.isfile(path):
             return {}

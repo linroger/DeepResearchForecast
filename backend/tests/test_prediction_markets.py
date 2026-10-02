@@ -6,6 +6,7 @@
 
 import json
 import time
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -314,6 +315,9 @@ def test_snapshot_per_query_limit_widened_to_15_and_knob(enabled, monkeypatch):
 def test_normalize_enrichment_url_enddate_and_book(enabled, monkeypatch):
     """API 行带 endDate/oneDayPriceChange/bestBid/bestAsk、事件带 slug 时富化输出；
     缺失字段不造假（键不出现）。"""
+    # TIME-3: render_markets_block compares endDate against market_clock_now(); pin it so the
+    # rendered bytes never depend on the wall clock (2026-12-31 has not passed on 2026-10-01).
+    monkeypatch.setattr(pm, "market_clock_now", lambda: datetime(2026, 10, 1, tzinfo=timezone.utc))
     rich = _raw("m-rich", vol=5000, yes="0.4000", endDate="2026-12-31T00:00:00Z",
                 oneDayPriceChange="-0.021", bestBid=0.39, bestAsk="0.41")
     lean = _raw("m-lean", vol=4000, yes="0.3000")
@@ -334,6 +338,7 @@ def test_normalize_enrichment_url_enddate_and_book(enabled, monkeypatch):
     block = render_markets_block(out, lang="en")     # 渲染把问题变成可点链接
     assert "[Will m-rich resolve yes?](https://polymarket.com/event/us-tariffs-2026)" in block
     assert "| 2 | Will m-lean resolve yes? (m-lean) |" in block  # 无 URL 行保持旧格式
+    assert "window ended" not in block               # endDate 未过（钉住的时钟）→ 不打标
 
 
 # ------------------------------------------------------------- requote

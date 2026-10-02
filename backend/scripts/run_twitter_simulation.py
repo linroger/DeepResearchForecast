@@ -36,15 +36,14 @@ _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
-from dotenv import load_dotenv
+# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）。INFRA-12：经 load_project_dotenv
+# 加载——行为同 load_dotenv(override=False)，测试进程（DRF_TEST_PROCESS=1）内为 no-op。
+from app.utils.env_loading import load_project_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
-    load_dotenv(_env_file)
+    load_project_dotenv(_env_file)
 else:
-    _backend_env = os.path.join(_backend_dir, '.env')
-    if os.path.exists(_backend_env):
-        load_dotenv(_backend_env)
+    load_project_dotenv(os.path.join(_backend_dir, '.env'))
 
 
 import re
@@ -118,8 +117,6 @@ def setup_oasis_logging(log_dir: str):
 from app.utils.oasis_llm import create_oasis_model, get_oasis_semaphore
 
 try:
-    from camel.models import ModelFactory
-    from camel.types import ModelPlatformType
     import oasis
     from oasis import (
         ActionType,
@@ -129,7 +126,7 @@ try:
     )
 except ImportError as e:
     print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print("请先安装 camel-oasis（提供 oasis 模块）: cd backend && uv sync --python 3.12")
     sys.exit(1)
 
 # EXECPLAN F-9-0: 单平台脚本必须写 twitter/actions.jsonl 才能让 SimulationRunner

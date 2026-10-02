@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import atexit
+import copy
 import glob
 import hashlib
 import json
@@ -46,8 +47,19 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from ..config import Config
+from ..config_audit import ConfigurationError
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
+from ..services.hindcast_policy import (
+    HINDCAST_POLICY_OPTION,
+    PIT_RESEARCH_ENV_PREFIX,
+    POINT_IN_TIME_FILENAME,
+    as_of_enforcement_record,
+    capture_hindcast_policy_v1,
+    hindcast_policy,
+    pit_research_env,
+    research_audit_record,
+)
 from ..services.graph_builder import (
     GraphBuilderService,
     build_actor_graph_seed_manifest,
@@ -62,6 +74,10 @@ from ..services.research_progress import (
     ResearchProgressEstimator,
     aggregate_parallel_progress,
 )
+from ..services import backbone_sensitivity, run_shape
+from ..services.sim_prior_echo import (
+    VERDICT_PRIOR_ECHO, VERDICT_PRIOR_LEADER_HERD, prior_echo_diagnostics,
+)
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from ..services.text_processor import TextProcessor
@@ -74,8 +90,11 @@ from ..utils.actors import (
     situation_brief_block,
     valid_scenario_distribution,
 )
-from ..utils.dates import parse_as_of
+from ..utils.canonical_json import canonical_json_sha256
+from ..utils.dates import date_period, parse_as_of
 from ..utils.logger import get_logger
+from ..utils import model_provenance
+from ..utils.numeric_guards import normalize_mode as _numeric_guard_mode
 
 logger = get_logger('mirofish.pipeline')
 
@@ -103,6 +122,24 @@ STAGE_BANDS: dict[str, tuple[int, int]] = {
 
 # research_only 模式下，研究阶段独占 0-100
 RESEARCH_ONLY_BANDS: dict[str, tuple[int, int]] = {STAGE_RESEARCH: (0, 100)}
+
+# EVAL-17: LLMMeter band (not a pipeline stage) for the simulation-subprocess spend of the
+# extra ensemble seeds. The seeds' prepare/persona calls meter under "ensemble"; their
+# ReportAgent calls meter under "report" (ReportAgent.generate_report sets its own stage).
+SIM_METER_STAGE_ENSEMBLE = "ensemble_sim"
+# EVAL-17: per-simulation exactly-once sim-meter markers in state.options:
+# {simulation_id: {meter_run_token, stage, recorded_at}}.
+SIM_METER_MARKERS_OPTION = "sim_llm_telemetry_recorded_by_sim"
+# Pre-EVAL-17 single-slot marker {simulation_id, meter_run_token, recorded_at}: honoured on
+# read, migrated into the map, and still mirrored for the main run's recordings.
+SIM_METER_LEGACY_MARKER_OPTION = "sim_llm_telemetry_recorded"
+
+# SIM-7: a scenario overlay may declare a human-authored, whole-run outcome power per actor
+# in [0, SCENARIO_OUTCOME_POWER_MAX], stored rounded to SCENARIO_OUTCOME_POWER_DECIMALS
+# places; each applied value is labelled with this basis.
+SCENARIO_OUTCOME_POWER_MAX = 10.0
+SCENARIO_OUTCOME_POWER_DECIMALS = 6
+SCENARIO_OUTCOME_POWER_BASIS = "scenario_overlay"
 
 ACTOR_INTELLIGENCE_SCHEMA_VERSION = "actor-intelligence/v1"
 ACTOR_INTELLIGENCE_POLICY_VERSION = "actor-intelligence-policy/v1"
@@ -403,6 +440,12 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
     （llm_client._is_deterministic_auth_error）、连接/传输失败、以及 llm_client 的
     双通道快失败（主提供方熔断冷却 + 回退不可用）。内容审查（422）、JSON 解析、
     预算护栏（BudgetExceeded）、取消信号等都不是「提供方中断」——既不计数也不清零。
+
+    INFRA-4（LLM_ERROR_CLASSIFY_STATUS_FIRST，默认开）：异常先按类型/HTTP 状态判定
+    （RateLimitError/429 → quota，AuthenticationError/401/403 → auth；422/400 定论为非中断，
+    不再看文本），无状态时其次是熔断快失败文本，最后按文本「配额先于认证」判定（MiniMax 2056 /
+    GLM 1113 用量上限消息可能带认证样措辞）；纯文本输入只走文本判定。关闭时为旧顺序：
+    认证文本 → 熔断 → 配额文本。
     """
     if isinstance(exc, (PipelineCancelled, ProviderOutageHalt)):
         return None
@@ -417,23 +460,38 @@ def _classify_provider_outage(exc: Any) -> Optional[str]:
         return None
     if text.startswith(_PROVIDER_OUTAGE_FAST_FAIL_PREFIX):
         return None  # 本熔断器自己的快失败信号，不得自我喂养
-    _is_quota = _is_auth = None
+    _is_quota = _is_auth = _status_first = _status_kind = _text_kind = None
     try:
         from ..utils.llm_client import (
+            _classify_status_first as _status_first,
             _is_deterministic_auth_error as _is_auth,
             _is_quota,
+            _llm_error_status_kind as _status_kind,
+            _llm_error_text_kind as _text_kind,
         )
     except Exception:  # noqa: BLE001 — 帮手不可导入时退化为本地指纹
         pass
-    if _is_auth is not None and _is_auth(exc):
-        return "auth"
     # llm_client 双通道中断快失败（消息含 '422/429 熔断冷却' → _is_quota 也会命中，
     # 但显式归类更可读）。
     low = text.casefold()
-    if "熔断冷却" in text or "circuit-breaker" in low or "回退提供方不可用" in text:
-        return "circuit_breaker"
-    if _is_quota is not None and _is_quota(exc):
-        return "quota"
+    circuit_breaker = ("熔断冷却" in text or "circuit-breaker" in low
+                       or "回退提供方不可用" in text)
+    if _status_first is not None and _status_first():
+        kind = _status_kind(exc) if isinstance(exc, BaseException) else None
+        if kind is not None:  # 状态定论：429/401/403 计中断，422/400 不计
+            return kind if kind in ("quota", "auth") else None
+        if circuit_breaker:
+            return "circuit_breaker"
+        kind = _text_kind(exc)
+        if kind in ("quota", "auth"):
+            return kind
+    else:
+        if _is_auth is not None and _is_auth(exc):
+            return "auth"
+        if circuit_breaker:
+            return "circuit_breaker"
+        if _is_quota is not None and _is_quota(exc):
+            return "quota"
     if isinstance(exc, BaseException):
         tname = type(exc).__name__.casefold()
         if "connection" in tname or "timeout" in tname:
@@ -776,11 +834,25 @@ SAFETY_POLICY_VERSION = "safety-policy/v1"
 def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
     """Snapshot the containment-relevant effective flags at admission time.
 
-    ``origin`` records how the pin came to exist: ``admission`` (new run) or
+    ``origin`` records how the pin came to exist: ``admission`` (new run),
     ``resume_reconstructed_safe`` (legacy run resumed after WP1 — it receives
     the SAFE containment policy, never a reconstruction of unsafe legacy
     ambient defaults; reconstruction of an unsafe policy is not approval to
-    resume it).
+    resume it) or ``fork_admission`` (INFRA-9: a fork of such an unpinned
+    legacy base). The fourth origin, ``fork_inherited``, is never captured
+    here: ``fork_safety_policy_v1`` stamps it on a deep copy of the base's pin.
+    Every capture snapshots the ambient Config, which is the safe containment
+    policy only while the operator keeps the WP1 defaults.
+
+    ``backbone_check`` (EVAL-11) is the opt-in of the shadow cross-backbone spine
+    check. Only an ``admission`` or ``fork_admission`` capture snapshots the
+    ambient BACKBONE_CHECK_* knobs; any other origin (a legacy resume) records it
+    disabled, so a resume never turns the check on from the current environment.
+
+    ``numeric_guard_mode`` (TIME-5) is the normalised NUMERIC_GUARD_MODE (off |
+    shadow) of the shadow numeric-coherence guard, so a reload never changes the
+    shape of an admitted run's forecast.json. A run pinned before the key existed
+    reads the ambient value (``_pinned_safety`` default).
     """
     return {
         "version": SAFETY_POLICY_VERSION,
@@ -797,7 +869,96 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
         "simulation_forecast_effect": str(
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
+        # REPORT-11: probability-moving binary prompt policy. Recorded for audit like the
+        # other report-stage keys; the report stage reads the ambient Config.
+        "forecast_binary_symmetric_guard": bool(
+            getattr(Config, "FORECAST_BINARY_SYMMETRIC_GUARD", False)),
+        "backbone_check": (
+            backbone_sensitivity.capture_policy(Config)
+            if origin in ("admission", "fork_admission")
+            else dict(backbone_sensitivity.DISABLED_POLICY)),
+        "numeric_guard_mode": _pinned_numeric_guard_mode(),
     }
+
+
+def _pinned_numeric_guard_mode() -> str:
+    """TIME-5: the NUMERIC_GUARD_MODE a capture pins (off | shadow). An invalid
+    ambient value is pinned as shadow with a warning here: ReportAgent only ever
+    sees the normalised pin, so its own invalid-mode warning cannot fire."""
+    raw = getattr(Config, "NUMERIC_GUARD_MODE", "shadow")
+    mode, valid = _numeric_guard_mode(raw)
+    if not valid:
+        logger.warning("NUMERIC_GUARD_MODE=%r 不是 off|shadow，按 shadow 钉住", raw)
+    return mode
+
+
+def fork_safety_policy_v1(base_options: Any) -> Optional[dict[str, Any]]:
+    """INFRA-9: the ``safety_policy_v1`` pin a fork of a base run receives.
+
+    Scenario and batch-question forks reuse the base's research and graph and
+    continue its forecast, so they keep the base's containment semantics: a
+    deep copy of the base pin with origin ``fork_inherited`` (every other field,
+    ``pinned_at`` included, is the base's; the base's own origin stays on the
+    base's pin, reachable through the fork's ``base_pipeline_id``). A base
+    admitted before the pin existed yields a capture at fork admission (origin
+    ``fork_admission``: the current ambient policy, which is the safe policy
+    under the default Config, never a reconstruction of the base's unknown
+    legacy defaults). Returns None when FORK_INHERIT_SAFETY_POLICY is off; the
+    fork then carries no pin and every site reads the ambient Config (legacy).
+
+    Forks share the base's ``graph_id``, so a pin with ``sim_graph_feedback``
+    on lets the fork's simulations write into the graph the base and its
+    sibling forks read; callers report that with
+    ``warn_if_fork_feeds_shared_graph``.
+    """
+    if not bool(getattr(Config, "FORK_INHERIT_SAFETY_POLICY", True)):
+        return None
+    base_policy = base_options.get("safety_policy_v1") if isinstance(base_options, dict) else None
+    if isinstance(base_policy, dict):
+        return {**copy.deepcopy(base_policy), "origin": "fork_inherited"}
+    return capture_safety_policy_v1("fork_admission")
+
+
+def warn_if_fork_feeds_shared_graph(policy: Optional[dict[str, Any]], *, fork_id: str,
+                                    base_pipeline_id: str, graph_id: Optional[str]) -> bool:
+    """INFRA-9: warn when a fork's safety pin turns on simulation → graph feedback.
+
+    The fork reuses the base's graph, so with ``sim_graph_feedback`` pinned on
+    its simulations (overlay-injected counterfactual events included) write
+    into the observed graph that the base and every sibling fork read. The pin
+    is kept as the spec requires; this only makes the consequence visible.
+    Returns whether the warning was logged.
+    """
+    if not (isinstance(policy, dict) and policy.get("sim_graph_feedback") and graph_id):
+        return False
+    logger.warning(
+        "[%s] 分叉自 %s 的安全政策钉（origin=%s）开启 sim_graph_feedback：本分叉的模拟活动"
+        "（情景分叉含注入的反事实事件）将写入与 base 及其他分叉共享的图谱 %s。",
+        fork_id, base_pipeline_id, policy.get("origin"), graph_id,
+    )
+    return True
+
+
+def capture_run_shape_v1(options: Any, origin: str) -> Optional[dict[str, Any]]:
+    """INFRA-7: pin the run shape (result-affecting knobs + provenance).
+
+    The second admission snapshot next to ``safety_policy_v1``; see
+    ``run_shape``.  ``origin`` is ``admission`` (start), ``fork`` (scenario and
+    batch-question forks) or ``resume_unpinned`` (a run admitted before the
+    pin existed, captured at its first resume).  The pin is observational, so
+    a capture failure is logged and yields None instead of blocking admission.
+    """
+    try:
+        return run_shape.pin(
+            Config,
+            options,
+            origin=origin,
+            pinned_at=_utcnow(),
+            research_engine=research_engine_for_run(options),
+        )
+    except Exception as exc:  # noqa: BLE001 — the pin must never block a run
+        logger.warning("run-shape pin skipped (origin=%s): %s", origin, exc)
+        return None
 
 
 def capture_actor_intelligence_policy_v1(
@@ -852,6 +1013,189 @@ def admission_actor_intelligence_policy_v1() -> dict[str, Any]:
     return policy
 
 
+class RunAdmissionError(ValueError):
+    """A run request refused at admission, before any pipeline dir, task or thread exists.
+
+    TIME-7: the run API routes map only this class to 400.  A ValueError raised after
+    admission (while the pipeline is being created) is an internal fault and keeps its 500.
+    It subclasses ValueError so callers that catch ValueError are unaffected.
+    """
+
+
+def admit_hindcast_as_of(as_of: Any) -> tuple[str, dict[str, Any], str]:
+    """TIME-7: the fail-closed hindcast admission rule for a run request carrying ``as_of``.
+
+    Returns ``(as_of, actor policy, research engine)``: the canonical date, the actor-plane
+    policy the admission pins and the engine the run's research stage will select from it.
+    Raises RunAdmissionError, in this order, when ``Config.HINDCAST_ENABLED`` is off, when
+    ``as_of`` is not a canonical YYYY-MM-DD date on or before today (UTC; ``validate_as_of``)
+    and when that engine is not v3: only v3 honours a pinned as-of, while the legacy engine's
+    ``_clamp_asof_reference`` would roll a past as-of forward to the run date.  Pure (nothing
+    is written); ``PipelineOrchestrator.start`` and the run API routes share it.
+    """
+    from ..utils.point_in_time import validate_as_of
+    if not bool(getattr(Config, "HINDCAST_ENABLED", False)):
+        raise RunAdmissionError("as_of requires HINDCAST_ENABLED=true")
+    try:
+        canonical = validate_as_of(as_of)
+    except ValueError as exc:
+        raise RunAdmissionError(str(exc)) from exc
+    actor_policy = admission_actor_intelligence_policy_v1()
+    engine = research_engine_for_run({"actor_intelligence_policy_v1": actor_policy})
+    if engine != RESEARCH_ENGINE_V3:
+        raise RunAdmissionError("hindcast runs require the v3 research engine")
+    return canonical, actor_policy, engine
+
+
+# ---------------------------------------------------------------------------
+# EVAL-13: evaluation-run admission pin.
+#
+# A run started with ``PipelineOrchestrator.start(..., evaluation={...})`` is an
+# evaluation cell, never a production forecast: its reports skip the production
+# calibration read, commit to the isolated evaluation ledger and are skipped by
+# the resolution monitor. The context is validated before any directory or task
+# exists and pinned once at admission into ``state.options['evaluation_run_v1']``
+# plus the handoff marker ``evaluation_run.json`` (read back by
+# ``evaluation_context_for_simulation`` for report entry points that have no
+# orchestrator context). Resume and fork carry the pin; it is never re-captured.
+# ---------------------------------------------------------------------------
+EVALUATION_RUN_VERSION = "evaluation-run/v1"
+EVALUATION_RUN_OPTION = "evaluation_run_v1"
+EVALUATION_RUN_MARKER = "evaluation_run.json"
+EVAL_RUN_ID_MAX_LEN = 64
+EVALUATION_ID_MAX_CHARS = 128
+EVALUATION_STATEMENT_MAX_CHARS = 1000
+EVALUATION_CRITERIA_MAX_CHARS = 4000
+_EVALUATION_KEYS = ("eval_run_id", "cell_id", "question_id", "target")
+_EVALUATION_TARGET_KEYS = ("question_id", "statement", "resolution_criteria", "resolution_date")
+# Control (Cc: C0, DEL, C1 incl. U+0085), format (Cf: bidi overrides, zero-width) and
+# line/paragraph separators (Zl/Zp: U+2028/U+2029): anything that breaks a value across
+# lines or hides/reorders text in ledger rows and log lines. Lone surrogates (Cs, e.g. a
+# JSON '\ud800' escape) cannot be encoded as UTF-8, so the admission marker write would
+# fail after the pipeline dir and task exist: they are refused at validation too.
+_EVALUATION_REJECTED_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+
+
+def _evaluation_text(value: Any, name: str, max_chars: int) -> str:
+    """A stripped, non-empty, single-line string of at most ``max_chars`` (ValueError otherwise).
+
+    Errors name the field, never echo the value.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"evaluation {name} must be a non-empty string")
+    if len(value) > max_chars:
+        raise ValueError(f"evaluation {name} exceeds {max_chars} characters")
+    if any(unicodedata.category(ch) in _EVALUATION_REJECTED_CATEGORIES for ch in value):
+        raise ValueError(f"evaluation {name} contains control, format, surrogate or "
+                         "line-break characters")
+    return value.strip()
+
+
+def _validate_evaluation_target(target: Any) -> dict[str, Any]:
+    if not isinstance(target, dict):
+        raise ValueError("evaluation target must be an object")
+    if any(key not in _EVALUATION_TARGET_KEYS for key in target):
+        raise ValueError(f"evaluation target accepts only {', '.join(_EVALUATION_TARGET_KEYS)}")
+    out: dict[str, Any] = {
+        "question_id": _evaluation_text(target.get("question_id"), "target.question_id",
+                                        EVALUATION_ID_MAX_CHARS),
+        "statement": _evaluation_text(target.get("statement"), "target.statement",
+                                      EVALUATION_STATEMENT_MAX_CHARS),
+        "resolution_criteria": None,
+        "resolution_date": None,
+    }
+    if target.get("resolution_criteria") is not None:
+        out["resolution_criteria"] = _evaluation_text(
+            target["resolution_criteria"], "target.resolution_criteria",
+            EVALUATION_CRITERIA_MAX_CHARS)
+    if target.get("resolution_date") is not None:
+        from datetime import date as _date
+        from ..utils.point_in_time import validate_as_of
+        try:
+            # A resolution date normally lies ahead, so only the canonical-spelling half
+            # of the point-in-time contract applies (no "not after today" bound).
+            out["resolution_date"] = validate_as_of(target["resolution_date"],
+                                                    today_utc=_date.max)
+        except ValueError:
+            raise ValueError(
+                "evaluation target.resolution_date must be a canonical YYYY-MM-DD date") from None
+    return out
+
+
+def validate_evaluation_context(ctx: Any) -> dict[str, Any]:
+    """Validate an evaluation-run context; return its normalized copy or raise ValueError.
+
+    ``eval_run_id`` is required and must be a path-safe id of at most 64 characters
+    (``security.safe_id``: ``[A-Za-z0-9][A-Za-z0-9_-]{0,63}``, so '../x', 'a/b' and a
+    trailing newline are refused). ``cell_id`` / ``question_id`` are optional
+    single-line strings of at most 128 characters. ``target`` is optional:
+    ``{question_id, statement, resolution_criteria?, resolution_date?}`` with a
+    canonical ``YYYY-MM-DD`` resolution date; build it from a golden row with
+    :func:`evaluation_target_from_golden` so only outcome-free text reaches the
+    run. A top-level ``question_id`` must equal the target's (it defaults to it).
+    Unknown keys are refused. Missing optional fields normalize to None.
+    """
+    from ..utils.security import safe_id
+    if not isinstance(ctx, dict):
+        raise ValueError("evaluation context must be an object")
+    if any(key not in _EVALUATION_KEYS for key in ctx):
+        raise ValueError(f"evaluation context accepts only {', '.join(_EVALUATION_KEYS)}")
+    out: dict[str, Any] = {
+        "eval_run_id": safe_id(ctx.get("eval_run_id"), "eval_run", max_len=EVAL_RUN_ID_MAX_LEN),
+        "cell_id": None,
+        "question_id": None,
+        "target": None,
+    }
+    for key in ("cell_id", "question_id"):
+        if ctx.get(key) is not None:
+            out[key] = _evaluation_text(ctx[key], key, EVALUATION_ID_MAX_CHARS)
+    if ctx.get("target") is not None:
+        target = _validate_evaluation_target(ctx["target"])
+        if out["question_id"] is None:
+            out["question_id"] = target["question_id"]
+        elif out["question_id"] != target["question_id"]:
+            raise ValueError("evaluation question_id differs from target.question_id")
+        out["target"] = target
+    return out
+
+
+def build_evaluation_pin(ctx: Any, *, pinned_at: Optional[str] = None) -> dict[str, Any]:
+    """The ``evaluation_run_v1`` admission pin for a validated evaluation context.
+
+    Raises ValueError (via :func:`validate_evaluation_context`) before anything is
+    written. Other admissions (TIME-7 hindcasts) reuse it to pin themselves as
+    evaluation runs.
+    """
+    valid = validate_evaluation_context(ctx)
+    return {
+        "version": EVALUATION_RUN_VERSION,
+        "record_class": "evaluation",
+        "characterization_only": True,
+        "eval_run_id": valid["eval_run_id"],
+        "cell_id": valid["cell_id"],
+        "question_id": valid["question_id"],
+        "target": valid["target"],
+        "pinned_at": pinned_at or _utcnow(),
+    }
+
+
+def evaluation_target_from_golden(question: dict[str, Any]) -> dict[str, Any]:
+    """An evaluation ``target`` built from a golden row's forecaster view only (EVAL-9).
+
+    ``golden_set.forecaster_view`` is the sanctioned outcome-free subset (id,
+    question, resolution_criteria, as_of_date): the outcome, its note and the
+    resolution date are grader-only and never reach the pin, the prompts or the
+    report. The question text is the statement the binary extraction must emit.
+    """
+    from .golden_set import forecaster_view
+    view = forecaster_view(question)
+    return {
+        "question_id": view.get("id"),
+        "statement": view.get("question"),
+        "resolution_criteria": view.get("resolution_criteria"),
+    }
+
+
 # ---------------------------------------------------------------------------
 # 管线状态持久化（file-backed，沿用 MiroFish 的目录约定）
 # ---------------------------------------------------------------------------
@@ -862,12 +1206,14 @@ class PipelineManager:
 
     # 管线 id 形如 pipe_<hex>（见 create()/fork()），亦含少量历史/手工 id（如 pipe_e2egold02）。
     # 允许字母数字/下划线/连字符；不含 '.' '/' '\\' 故天然无法 ..  逃逸（EXECPLAN2 F-13-4）。
-    _PIPELINE_ID_RE = re.compile(r"^pipe_[A-Za-z0-9_-]+$")
+    # \A…\Z + fullmatch（INFRA-10）：旧的 ``$`` 会放过尾随换行（'pipe_x\n'）。
+    # 后缀上限 123 = 总长 ≤ 128（utils.security.SAFE_ID_MAX_LEN），与 Flask id 闸门对
+    # pipeline_id 的校验一致，否则 129–133 字符的 id 在此合法、到路由却被 404。
+    _PIPELINE_ID_RE = re.compile(r"\Apipe_[A-Za-z0-9_-]{1,123}\Z")
 
     @classmethod
     def _validate_id(cls, pipeline_id: str) -> str:
-        if (not pipeline_id or "/" in pipeline_id or "\\" in pipeline_id
-                or ".." in pipeline_id or not cls._PIPELINE_ID_RE.match(pipeline_id)):
+        if not isinstance(pipeline_id, str) or not cls._PIPELINE_ID_RE.fullmatch(pipeline_id):
             raise ValueError(f"invalid pipeline_id: {pipeline_id!r}")
         return pipeline_id
 
@@ -1354,11 +1700,18 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # (deerflow_research.py runs with sys.path[0]==deer-flow/): the config-reflected
 # tools (`use: market_tools:...` / `search_tools:...` / `cached_fetch:...`), the
 # LOOP-007 budget control plane they share, and the deep-research engine v3
-# (linear_research.py phases + research_gateway.py LLM gateway/research tools).
+# (linear_research.py phases + research_gateway.py LLM gateway/research tools +
+# evidence_spans.py verbatim evidence-span matching), plus source_dates.py (the
+# source publication-date parser cached_fetch and research_gateway import) and
+# data_tools.py (TIME-10 official-data vendor tools: FRED/ALFRED vintage-pinned
+# macro series; SEC EDGAR as-filed company statements, TIME-11) and
+# derived_numbers.py (RESEARCH-8 derivation evaluator, which linear_research
+# imports).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
-    "research_budget.py", "linear_research.py", "research_gateway.py",
+    "research_budget.py", "linear_research.py", "research_gateway.py", "evidence_spans.py",
+    "source_dates.py", "data_tools.py", "derived_numbers.py",
 )
 
 
@@ -1528,8 +1881,11 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
         # setup.sh copies them, but a bridge-only edit (no ./setup.sh rerun) would
         # otherwise drift exactly like deerflow_research.py did; mirror that guard here.
         # Engine v3 is imported by bare name the same way: linear_research.py (the
-        # phases) and research_gateway.py (LLM gateway + research tools) must both
-        # sit next to the deployed script or the v3 dispatch raises ImportError.
+        # phases), research_gateway.py (LLM gateway + research tools),
+        # evidence_spans.py (evidence-quote matching) and derived_numbers.py
+        # (derivation evaluator) must all sit next to the
+        # deployed script or the v3 dispatch raises ImportError; source_dates.py
+        # (source publication dates) sits there for cached_fetch/research_gateway.
         for _tool_mod in _DEPLOYED_BRIDGE_MODULES:
             _tool_src = os.path.join(bridge_dir, _tool_mod)
             if os.path.isfile(_tool_src):
@@ -1983,6 +2339,75 @@ def _synthesis_provider_unavailable(error: Any) -> bool:
     return any(marker in text for marker in _SYNTHESIS_PROVIDER_UNAVAILABLE_MARKERS)
 
 
+# Research-child knob forwarding registry: (Config attribute, kind).  The parent
+# writes each entry's Config value into the child env, so the backend's Config
+# is the single source of truth and an ambient os.environ value never decides.
+# RESEARCH_CHILD_KNOBS reach every engine; RESEARCH_CHILD_V3_KNOBS only a v3
+# child.  A work package that forwards a Config knob adds exactly one entry,
+# keeping each table alphabetical; every name must exist on Config and be
+# documented in .env.example (test_orchestrator_research_wiring checks both).
+# Credentials are never registered (no value of theirs is written by the
+# parent): the official-data tools' FRED_API_KEY and SEC_EDGAR_USER_AGENT
+# (TIME-13) reach the child with the inherited environment.
+RESEARCH_CHILD_KNOBS: tuple[tuple[str, str], ...] = (
+    ("MARKET_ANCHOR_PRICE_TIME", "bool"),
+    ("PREDICTION_MARKETS_END_DATE_GATE", "bool"),
+    ("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "float"),
+    ("RESEARCH_EVIDENCE_GRADING", "bool"),
+    ("RESEARCH_FORECAST_INPUTS", "bool"),
+    ("RESEARCH_QUANT_RECONCILE", "bool"),
+    ("RESEARCH_SOURCE_TAXONOMY", "bool"),
+)
+RESEARCH_CHILD_V3_KNOBS: tuple[tuple[str, str], ...] = (
+    ("DATA_EDGAR_CACHE_TTL_H", "float"),
+    ("DATA_FRED_CACHE_TTL_H", "float"),
+    ("DATA_FRED_WINDOW_YEARS", "int"),
+    ("DATA_QUANT_ROWS_MAX", "int"),
+    ("DATA_TOOLS_CACHE_DIR", "str"),
+    ("DATA_TOOL_TIMEOUT_S", "float"),
+    ("RECORD_MODEL_PROVENANCE", "bool"),
+    ("RESEARCH_ABSENCE_DISCIPLINE", "bool"),
+    ("RESEARCH_AS_OF_PIN", "bool"),
+    ("RESEARCH_DATA_TOOLS", "str"),
+    ("RESEARCH_DERIVED_FINDINGS", "bool"),
+    ("RESEARCH_EVIDENCE_HEADERS", "bool"),
+    ("RESEARCH_EVIDENCE_QUOTES", "str"),
+    ("RESEARCH_EVIDENCE_SUPPORTS", "bool"),
+    ("RESEARCH_FORECASTER_ATTRIBUTION", "bool"),
+    ("RESEARCH_JSON_STRICT_NUMBERS", "bool"),
+    ("RESEARCH_QUANT_TYPING", "bool"),
+    ("RESEARCH_QUESTION_SPEC", "bool"),
+    ("RESEARCH_SOURCE_DATES", "bool"),
+    ("RESEARCH_SOURCE_DATE_TEXT_FALLBACK", "bool"),
+    ("RESEARCH_TRUNCATION_FAIRNESS", "bool"),
+    ("RESEARCH_V3_CITATION_STATS", "bool"),
+    ("RESEARCH_V3_FORECAST_INPUTS", "bool"),
+    ("RESEARCH_VERIFIED_FACTS", "bool"),
+)
+# Child-env text per registry kind: bools are 'true'/'false', never '1'/'0'.
+_RESEARCH_KNOB_FORMATTERS: dict[str, Callable[[Any], str]] = {
+    "bool": lambda value: "true" if value else "false",
+    "int": lambda value: str(int(value)),
+    "float": lambda value: str(float(value)),
+    "str": str,
+}
+
+
+def _forward_research_knobs(env: dict[str, str],
+                            table: tuple[tuple[str, str], ...]) -> None:
+    """Write each registry knob's Config value into the research child ``env``.
+
+    A name missing from Config or an unknown kind raises: the registry is code,
+    and a broken entry must fail loudly rather than silently leave the child on
+    its own default.
+    """
+    for name, kind in table:
+        formatter = _RESEARCH_KNOB_FORMATTERS.get(kind)
+        if formatter is None:
+            raise ValueError(f"research child knob {name}: unknown kind {kind!r}")
+        env[name] = formatter(getattr(Config, name))
+
+
 def _configure_research_budget_env(
     env: dict[str, str],
     handoff_dir: str,
@@ -2061,9 +2486,9 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
     if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
         return False
     try:
-        # 仅用于审计日志（LLMMeter 无 prompt-cache 字段位）；脏值绝不影响入账本身。
+        # EVAL-17: 进审计日志，也作 prompt_cache_read_tokens 进计量；脏值退回 0，绝不影响入账本身。
         t_cached = max(0, int(spend.get("tokens_cached") or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         t_cached = 0
     try:
         from ..utils.telemetry import LLMMeter
@@ -2084,6 +2509,8 @@ def _flush_failed_research_attempt_spend(spend: Optional[dict[str, Any]],
             latency_ms=wall_ms,
             stage=STAGE_RESEARCH,
             run_id=str(run_id) if run_id else None,  # None → contextvar/单活跃 run 回退
+            prompt_cache_read_tokens=t_cached,
+            aggregate=True,  # INFRA-8: the child's whole spend, no call's requested model
         )
         logger.warning(
             "研究 attempt 以 %s 终止，已消耗 tokens in=%d out=%d cached=%d（model=%s）——"
@@ -2168,6 +2595,8 @@ class DeerFlowResearchRunner:
         evidence_only: bool = False,
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
+        as_of: Optional[str] = None,
+        pit: Optional[dict[str, Any]] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2193,6 +2622,23 @@ class DeerFlowResearchRunner:
         ``Config.RESEARCH_ENGINE``.  Lane-contract invocations (evidence-only,
         synthesis manifest) always run the legacy engine regardless.
 
+        TIME-7 ``as_of``: a pinned hindcast's as-of date (``hindcast_policy_v1``).
+        The child then gets ``RESEARCH_AS_OF`` (the v3 plan, brief and actors are
+        dated to it), ``PREDICTION_MARKETS_ENABLED=false`` and
+        ``RESEARCH_AS_OF_PIN=true``, written after every Config forward so they
+        win.  Only v3 honours it: any other engine raises RuntimeError before a
+        file or process exists, and a watchdog timeout that leaves no actors.json
+        raises ``hindcast_salvage_refused`` instead of launching the legacy
+        ``--extract-only`` salvage.  An ambient ``RESEARCH_AS_OF`` never reaches a
+        child (live runs stay live).
+
+        TIME-8 ``pit``: the pinned hindcast's ``hindcast_policy_v1['pit']`` block.  With
+        ``as_of`` set and ``pit['gates']`` True the child gets ``RESEARCH_PIT_GATES`` /
+        ``_SAME_DAY`` / ``_UNDATED`` / ``_PROVIDER_BOUNDS`` / ``_OVERFETCH`` from that block
+        (never from the current Config, so a resume keeps the admitted gates) and
+        ``RESEARCH_SOURCE_DATES=true``, written after the as-of exports; otherwise every
+        ``RESEARCH_PIT_*`` key is removed, so an ambient value never half-activates gates.
+
         W9-9 ``kg_graph_id``：非空且 RESEARCH_MCP_KG 开启时，把 DEER_FLOW_EXTENSIONS_CONFIG_PATH
         指向部署目录的 extensions_config.json 并注入 DRF_MCP_KG_GRAPH_ID——研究子进程可经 MCP
         （kg_search/kg_trace_cascade 等）直查既有基线图谱。调用方仅在图谱已存在的路径
@@ -2202,6 +2648,23 @@ class DeerFlowResearchRunner:
             PipelineCancelled: cancel_event 被置位（用户取消），子进程组已被终止。
             RuntimeError: 子进程失败、超时或未产出报告。
         """
+        # Engine v3: the parent — never ambient env inheritance — decides which
+        # research engine the child runs, using the same resolver as the
+        # outer-lane topology so the two cannot disagree.  Evidence lanes and
+        # global synthesis are lane contracts only the legacy engine implements,
+        # so those invocations always declare it explicitly.
+        research_engine = (
+            RESEARCH_ENGINE_LEGACY
+            if (evidence_only or synthesis_manifest_path)
+            else (resolve_research_engine(research_engine) if research_engine
+                  else resolve_research_engine())
+        )
+        if as_of and research_engine != RESEARCH_ENGINE_V3:
+            # TIME-7: a pinned as-of is honoured only by v3 (legacy would roll it forward
+            # to the run date).  Fail before any file, process or spend exists.
+            raise RuntimeError(
+                f"hindcast_engine_mismatch: as_of {as_of} requires the v3 research engine, "
+                f"not {research_engine}")
         deerflow_dir = Config.DEERFLOW_DIR
         script = os.path.join(deerflow_dir, "deerflow_research.py")
         if not os.path.isdir(deerflow_dir):
@@ -2287,17 +2750,8 @@ class DeerFlowResearchRunner:
         # Checkpoint identity is parent-owned per launch; never inherit an
         # ambient value from the backend process into a different handoff.
         env.pop("RESEARCH_CHECKPOINT_ID", None)
-        # Engine v3: the parent — never ambient env inheritance — decides which
-        # research engine the child runs, using the same resolver as the
-        # outer-lane topology so the two cannot disagree.  Evidence lanes and
-        # global synthesis are lane contracts only the legacy engine implements,
-        # so those invocations always declare it explicitly.
-        research_engine = (
-            RESEARCH_ENGINE_LEGACY
-            if (evidence_only or synthesis_manifest_path)
-            else (resolve_research_engine(research_engine) if research_engine
-                  else resolve_research_engine())
-        )
+        # TIME-7: so is the research as-of — only a pinned hindcast sets it (below).
+        env.pop("RESEARCH_AS_OF", None)
         env["RESEARCH_ENGINE"] = research_engine
         if research_engine == RESEARCH_ENGINE_V3:
             # v3 caps its own wall-clock plan at 0.85 × this value so it writes
@@ -2363,6 +2817,33 @@ class DeerFlowResearchRunner:
         env["PREDICTION_MARKETS_PER_QUERY"] = str(getattr(Config, "PREDICTION_MARKETS_PER_QUERY", 15))
         env["PREDICTION_MARKETS_MIN_RELEVANCE"] = str(
             getattr(Config, "PREDICTION_MARKETS_MIN_RELEVANCE", 5.0))
+        # Registry-forwarded knobs (RESEARCH_CHILD_KNOBS / RESEARCH_CHILD_V3_KNOBS):
+        # Config decides, never ambient env.
+        _forward_research_knobs(env, RESEARCH_CHILD_KNOBS)
+        if research_engine == RESEARCH_ENGINE_V3:
+            _forward_research_knobs(env, RESEARCH_CHILD_V3_KNOBS)
+        if as_of:
+            # TIME-7 pinned hindcast (v3 only, checked above).  Written after the inline
+            # PREDICTION_MARKETS_* lines and the registry forward so these values win: the
+            # child dates its plan/brief/actors to as_of, never snapshots live Polymarket odds
+            # (they would leak the outcome), and never adopts a model-supplied as-of.
+            env["RESEARCH_AS_OF"] = as_of
+            env["PREDICTION_MARKETS_ENABLED"] = "false"
+            env["RESEARCH_AS_OF_PIN"] = "true"
+        # TIME-8: the point-in-time gates come only from the admission pin's 'pit' block
+        # (never Config, never ambient env) and only for a pinned hindcast; written after
+        # the as-of exports and the registry forward, so RESEARCH_SOURCE_DATES is on.
+        for _pit_key in [key for key in env if key.startswith(PIT_RESEARCH_ENV_PREFIX)]:
+            env.pop(_pit_key)
+        if as_of:
+            env.update(pit_research_env(pit))
+        # RESEARCH-1: fetch-layer shell detection and the per-call fetch bound
+        # come from Config too (cached_fetch / research_gateway / linear_research
+        # read them from os.environ with the same defaults).
+        env["RESEARCH_FETCH_SHELL_DETECTION"] = (
+            "true" if getattr(Config, "RESEARCH_FETCH_SHELL_DETECTION", True) else "false")
+        env["RESEARCH_FETCH_CALL_TIMEOUT_S"] = str(
+            max(0, int(getattr(Config, "RESEARCH_FETCH_CALL_TIMEOUT_S", 150))))
         if max_concurrent_subagents is not None:
             env["DEER_FLOW_MAX_CONCURRENT_SUBAGENTS"] = str(
                 max(1, min(8, int(max_concurrent_subagents))))
@@ -2584,6 +3065,16 @@ class DeerFlowResearchRunner:
             # 超时打捞：研究主报告先于 actors/sources 提取阶段落盘——若被看门狗
             # 杀掉时报告已经写出，没必要丢弃整轮研究，降级继续（仅缺结构化档案）。
             if _fresh_expected_artifact():
+                if as_of and not os.path.exists(os.path.join(handoff_dir, "actors.json")):
+                    # TIME-7: a pinned hindcast never degrades here.  The ITEM-14 salvage
+                    # child runs the legacy engine (--extract-only is a legacy-only mode),
+                    # which ignores RESEARCH_AS_OF, and going on without actors.json would
+                    # anchor the simulation calendar at the run date.  Fail closed: v3's
+                    # identity-bound work dir lets a resume finish only the finalize phase.
+                    raise RuntimeError(
+                        f"hindcast_salvage_refused: research timed out (>{budget}s) before v3 "
+                        f"wrote actors.json; the legacy --extract-only salvage cannot honour "
+                        f"RESEARCH_AS_OF {as_of}; resume so v3 finishes its finalize phase")
                 logger.warning(
                     f"DeerFlow 研究超时（>{budget}s），但 {artifact_label} 已写出——打捞继续"
                 )
@@ -2664,6 +3155,15 @@ class DeerFlowResearchRunner:
             logger.warning("actor_dossier.md 疑似降级产物（错误串/过短），按缺失处理")
             actor_dossier = ""
         actors = _read_json(os.path.join(handoff_dir, "actors.json"))
+        if as_of:
+            # TIME-7: actors.json as_of_date anchors the simulation calendar and the persona
+            # as-of lines.  A pinned hindcast is returned only when the child dated it to the
+            # pin; anything else (no actors.json, another date) fails closed and stays resumable.
+            _actors_as_of = actors.get("as_of_date") if isinstance(actors, dict) else None
+            if _actors_as_of != as_of:
+                raise RuntimeError(
+                    f"hindcast_as_of_mismatch: actors.json as_of_date {_actors_as_of!r} is not the "
+                    f"pinned as_of {as_of}; resume so v3 rewrites it")
         sources = _read_json(os.path.join(handoff_dir, "sources.json"))
         timeline = _read_json(os.path.join(handoff_dir, "timeline.json"))
         # I-5-7: 汇总研究阶段遥测。token 行可能整轮缺失（某些研究模型不报 usage）→ 全 0/None。
@@ -2678,6 +3178,13 @@ class DeerFlowResearchRunner:
             "results": _result_events,
             "wall_s": round(time.time() - _t_start, 1),
         }
+        if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+            # INFRA-8: the resolved model id and served ids the v3 child wrote into meta.json.
+            _child_meta = _read_json(os.path.join(handoff_dir, "meta.json"))
+            _resolution = (_child_meta.get("model_resolution")
+                           if isinstance(_child_meta, dict) else None)
+            if isinstance(_resolution, dict):
+                research_telemetry["model_resolution"] = _resolution
         on_progress(
             100,
             f"研究完成（{'证据包' if evidence_only else '报告'} {len(report)} 字）",
@@ -3146,6 +3653,8 @@ _RESEARCH_CONTRACT_FILES = (
     "prediction_markets.json", "market_price_history.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
     "charts.json",
+    # TIME-9: a gated hindcast's research audit (sealed when present).
+    POINT_IN_TIME_FILENAME,
 )
 
 _RESEARCH_JUDGE_DIMS = (
@@ -3808,20 +4317,21 @@ def _run_extract_only_salvage(
                 pass
 
 
-def _stage_walls(state: "PipelineState") -> dict[str, float]:
-    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+def _stage_windows(state: "PipelineState") -> dict[str, tuple[str, str, float]]:
+    """ITEM-18：每阶段计入墙钟的时间窗 stage → (started_at, finished_at, seconds)。
 
-    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。仅在两端时间戳
-    都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。"""
-    walls: dict[str, float] = {}
+    仅在两端时间戳都存在且差值非负时计入（未开始/未结束/时钟回拨 → 跳过，degrade-safe，绝不抛）。
+    EVAL-18 的成本卡据此判断各阶段墙钟窗是否覆盖其调用（见 cost_accounting 模块文档）。"""
+    windows: dict[str, tuple[str, str, float]] = {}
     for name, st in (getattr(state, "stages", None) or {}).items():
-        started = _parse_iso(getattr(st, "started_at", None))
-        finished = _parse_iso(getattr(st, "finished_at", None))
+        started_raw = getattr(st, "started_at", None)
+        finished_raw = getattr(st, "finished_at", None)
+        started, finished = _parse_iso(started_raw), _parse_iso(finished_raw)
         if started is None or finished is None:
             continue
         dt = (finished - started).total_seconds()
         if dt >= 0:
-            walls[str(name)] = dt
+            windows[str(name)] = (started_raw, finished_raw, dt)
     # W9-2：多种子集成不占 stages（避免污染阶段带/前端渲染），墙钟从 options.ensemble_wall
     # 补入——此前 report 完成后的 +1h31m 集成窗口不归属任何阶段带（遥测里凭空消失）。
     try:
@@ -3830,10 +4340,61 @@ def _stage_walls(state: "PipelineState") -> dict[str, float]:
         if e0 is not None and e1 is not None:
             edt = (e1 - e0).total_seconds()
             if edt >= 0:
-                walls["ensemble"] = edt
+                windows["ensemble"] = (ew.get("started_at"), ew.get("finished_at"), edt)
     except Exception:  # noqa: BLE001 — 纯观测，绝不抛
         pass
-    return walls
+    return windows
+
+
+def _stage_walls(state: "PipelineState") -> dict[str, float]:
+    """ITEM-18：从各阶段的 started_at→finished_at 时间戳算出每阶段墙钟秒数（stage → seconds）。
+
+    供 build_stage_telemetry 把编排器的阶段级墙钟与 LLMMeter 的 token/成本合并。"""
+    return {name: window[2] for name, window in _stage_windows(state).items()}
+
+
+def _read_bytes(path: str) -> Optional[bytes]:
+    """The file's bytes, or None when it is missing or unreadable."""
+    try:
+        with open(path, "rb") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def pipeline_cost_card(state: "PipelineState") -> dict[str, Any]:
+    """EVAL-18: the drf-cost-card/v1 card of ``state`` from its durable inputs.
+
+    One gatherer for the ``_run`` finally hook and ``scripts/cost_card.py`` (offline
+    rebuild), so both project the same inputs: run_telemetry.json (parsed, plus the sha256
+    of the same bytes) and run.json from the pipeline dir, and from the state the stage
+    timing windows and statuses and the options, with the report stage's ``config_hash_v1``
+    pin, the attempt start's ``cost_card_attempt_v1`` record (the unattributed-spend
+    baseline) and the ``cost_card_windows_v1`` window records. Pure apart from those reads.
+    """
+    from ..utils.cost_accounting import build_cost_card
+    raw = _read_bytes(os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json"))
+    run_telemetry: Any = None
+    if raw is not None:
+        try:
+            run_telemetry = json.loads(raw)
+        except ValueError:
+            run_telemetry = None
+    windows = _stage_windows(state)
+    return build_cost_card(
+        pipeline_id=state.pipeline_id,
+        mode=state.mode,
+        status=state.status,
+        run_telemetry=run_telemetry,
+        run_telemetry_sha256=hashlib.sha256(raw).hexdigest() if raw is not None else None,
+        stage_walls={name: window[2] for name, window in windows.items()},
+        stage_windows={name: {"started_at": window[0], "finished_at": window[1]}
+                       for name, window in windows.items()},
+        run_manifest=_read_json(PipelineManager.manifest_path(state.pipeline_id)),
+        options=state.options,
+        stage_status={name: getattr(st, "status", None)
+                      for name, st in (state.stages or {}).items()},
+    )
 
 
 def _reset_stage_attempt(stage: "StageState") -> None:
@@ -6492,6 +7053,59 @@ def merge_research_quality(track_metas: list[Any]) -> dict:
     return merged
 
 
+def _source_count(value: Any) -> int:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def merge_source_health(track_metas: list[Any]) -> Optional[dict]:
+    """RESEARCH-2（纯）：合并各轨 meta.source_health（每轨是独立研究子进程，计数互不重叠）。
+
+    tools / search_providers 按键求和；fetch_providers 按 provider→结果类求和 count，reason
+    取最后一个非空值；search_refused 取首个非空；merged_from_tracks = 带该块的轨数。
+    没有任何轨带该块（RESEARCH_SOURCE_TAXONOMY 关）→ None，合并 meta 不新增键。
+    """
+    blocks = [meta["source_health"] for meta in track_metas
+              if isinstance(meta, dict) and isinstance(meta.get("source_health"), dict)]
+    if not blocks:
+        return None
+    tools: dict[str, int] = {}
+    search_providers: dict[str, int] = {}
+    fetch_providers: dict[str, dict[str, dict[str, Any]]] = {}
+    refused: Any = None
+    for block in blocks:
+        for target, counts in ((tools, block.get("tools")), (search_providers, block.get("search_providers"))):
+            for name, count in (counts.items() if isinstance(counts, dict) else ()):
+                target[str(name)] = target.get(str(name), 0) + _source_count(count)
+        providers = block.get("fetch_providers")
+        for provider, outcomes in (providers.items() if isinstance(providers, dict) else ()):
+            merged_outcomes = fetch_providers.setdefault(str(provider), {})
+            for outcome, entry in (outcomes.items() if isinstance(outcomes, dict) else ()):
+                if not isinstance(entry, dict):
+                    continue
+                merged_entry = merged_outcomes.setdefault(str(outcome), {"count": 0, "reason": ""})
+                merged_entry["count"] += _source_count(entry.get("count"))
+                if entry.get("reason"):
+                    merged_entry["reason"] = str(entry["reason"])
+        if refused is None and block.get("search_refused"):
+            refused = block["search_refused"]
+    return {"version": 1, "tools": tools, "search_providers": search_providers,
+            "fetch_providers": fetch_providers, "search_refused": refused,
+            "merged_from_tracks": len(blocks)}
+
+
+def _research_health_stage(research_quality: Any) -> Optional[dict]:
+    """RESEARCH-2（纯）：research_quality 已降级 → pipeline_health 的 research 阶段块
+    {health: degraded, issues: 前 8 条降级说明（各 ≤200 字符）, score}；否则 None。"""
+    if not isinstance(research_quality, dict) or not research_quality.get("degraded"):
+        return None
+    degradation = research_quality.get("degradation")
+    if isinstance(degradation, str):
+        degradation = [degradation]
+    issues = [str(item)[:200] for item in (degradation if isinstance(degradation, list) else [])
+              if str(item).strip()][:8]
+    return {"health": "degraded", "issues": issues, "score": research_quality.get("score")}
+
+
 def _source_tier_histogram(sources: Any) -> dict[str, int]:
     """PAR-2（纯）：从（合并后的）sources 重算 {s1_count..s4_count,s_unknown}，键名与 bridge 一致。"""
     hist = {"s1_count": 0, "s2_count": 0, "s3_count": 0, "s4_count": 0, "s_unknown": 0}
@@ -6578,6 +7192,9 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "tool_observation_count": 0,
     }
     empty_reason_counts: dict[str, int] = {}
+    end_date_gate_seen = False
+    # A track whose snapshot deadline ran out left queries unanswered (RESEARCH-3).
+    deadline_exhausted = False
     for track_index, pm in enumerate(snapshots, start=1):
         snap_as_of = str(pm.get("as_of") or "")
         source_value = pm.get("registry_sources") or pm.get("source")
@@ -6605,6 +7222,13 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         empty_reason = str(track_status.get("empty_reason") or "").strip()
         if empty_reason:
             empty_reason_counts[empty_reason] = empty_reason_counts.get(empty_reason, 0) + 1
+        if "end_date_passed_count" in track_status:
+            end_date_gate_seen = True
+        try:
+            if int(track_status.get("deadline_exhausted") or 0) > 0:
+                deadline_exhausted = True
+        except (TypeError, ValueError, OverflowError):
+            pass
         for query in pm.get("queries") or []:
             text = str(query or "").strip()
             key = text.casefold()
@@ -6634,6 +7258,9 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
             if existing is None or snap_as_of >= row_as_of.get(market_id, ""):
                 merged = dict(existing or {})
                 merged.update(row)
+                if "observed_at" not in row:
+                    # FU-11: an older track's fetch time never dates the fresher price.
+                    merged.pop("observed_at", None)
                 by_id[market_id] = merged
                 row_as_of[market_id] = snap_as_of
             by_id[market_id]["track_provenance"] = provenance
@@ -6679,7 +7306,10 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     elif (status_totals["inflight_timeout_count"] > 0
           and status_totals["successful_query_count"] == 0):
         evidence_state = "inflight_timeout"
-    elif status_totals["transport_failure_count"] > 0:
+    elif (status_totals["transport_failure_count"] > 0 or deadline_exhausted
+          or status_totals["inflight_timeout_count"] > 0):
+        # FU-6: a timed-out (unanswered) query leaves coverage unknown, like an
+        # exhausted deadline: never a verified empty search.
         evidence_state = "partial_transport_failure"
     else:
         evidence_state = "verified_empty"
@@ -6695,12 +7325,34 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
         "empty_reason_counts": empty_reason_counts,
         **status_totals,
         "attempted_query_count": status_totals["query_count"],
+        # A failed or unanswered query with no candidate means coverage is unknown:
+        # never the generic 'no_equivalent_market' (the bridge collector's rule, RESEARCH-3).
+        # FU-6: with no transport failure and no exhausted deadline, an in-flight
+        # timeout is unanswered too: 'inflight_timeout' when no query succeeded (it
+        # used to sit beside state 'inflight_timeout' as 'no_equivalent_market'),
+        # 'partial_transport_failure' next to an answered empty query.
         "empty_reason": None if selected else (
             "all_candidates_irrelevant" if candidate_count else (
-                "transport_failure" if all_network_attempts_failed else "no_equivalent_market"
+                "transport_failure" if all_network_attempts_failed else (
+                    "partial_transport_failure"
+                    if status_totals["transport_failure_count"] > 0 or deadline_exhausted
+                    else (
+                        "no_equivalent_market" if status_totals["inflight_timeout_count"] == 0
+                        else "inflight_timeout" if status_totals["successful_query_count"] == 0
+                        else "partial_transport_failure"
+                    )
+                )
             )
         ),
     }
+    if deadline_exhausted:
+        status["deadline_exhausted"] = 1
+    # TIME-3: keep the endDate-gate exclusion telemetry across tracks by recounting the
+    # stamped rows that survived selection. Only tracks that ran with the gate on carry the
+    # key, so an all-gate-off merge keeps its bytes.
+    if end_date_gate_seen:
+        status["end_date_passed_count"] = sum(
+            1 for row in selected if row.get("window_ended") is True)
     return {
         "as_of": latest_as_of,
         "source": "polymarket",
@@ -6754,13 +7406,9 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     if not simulation_id:
         return out
     try:
-        for entry in PipelineManager.list_pipelines():
-            pid = entry.get("pipeline_id")
-            if not pid:
-                continue
-            data = PipelineManager.load(pid)
-            if not data or data.get("simulation_id") != simulation_id:
-                continue
+        owner = _pipeline_for_simulation(simulation_id)
+        if owner is not None:
+            pid, data = owner
             hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
             actors = _read_json(os.path.join(hd, "actors.json"))
             report = _read_text(os.path.join(hd, "research_report.md"))
@@ -6770,10 +7418,401 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
             out["research_report"] = report or None
             out["actor_dossier"] = dossier or None
             out["situation_brief"] = situation_brief(actors) if actors else None
-            break
     except Exception:  # best-effort enrichment must never break manual report generation
         pass
     return out
+
+
+def _pipeline_for_simulation(simulation_id: str) -> Optional[tuple[str, dict[str, Any]]]:
+    """(pipeline_id, persisted state) of the newest pipeline whose simulation is ``simulation_id``."""
+    for entry in PipelineManager.list_pipelines():
+        pid = entry.get("pipeline_id")
+        if not pid:
+            continue
+        data = PipelineManager.load(pid)
+        if data and data.get("simulation_id") == simulation_id:
+            return pid, data
+    return None
+
+
+def validated_as_of_from_options(options: Optional[dict[str, Any]]) -> Optional[str]:
+    """EVAL-1: the graph stage's validated as-of anchor recorded in pipeline options.
+
+    A what-if fork reuses its base's research and graph (its graph stage never
+    re-runs), so it inherits the anchor of the nearest base pipeline that recorded
+    one. None when no validated anchor exists (the ledger then falls back to the
+    strict actors date, then the commit date). Never raises: it runs on the report
+    stage's critical path.
+    """
+    opts = options if isinstance(options, dict) else {}
+    seen: set[str] = set()
+    while True:
+        value = opts.get("as_of_date_validated")
+        if isinstance(value, str) and value:
+            return value
+        base_pid = str(opts.get("base_pipeline_id") or "")
+        if not base_pid or base_pid in seen:
+            return None
+        seen.add(base_pid)
+        try:
+            base = PipelineManager.load(base_pid)
+        except Exception:  # noqa: BLE001 — an unreadable base simply has no anchor
+            return None
+        base_opts = base.get("options") if isinstance(base, dict) else None
+        opts = base_opts if isinstance(base_opts, dict) else {}
+
+
+def _scenario_ledger_identity(options: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """EVAL-1: what-if identity of a pipeline for the ledger ({} for a plain pipeline).
+
+    ``scenario_key`` fingerprints the fork's label + overlay, so two forks of one
+    base with different overlays are different conditional forecast targets.
+    """
+    opts = options if isinstance(options, dict) else {}
+    label = str(opts.get("scenario_label") or "").strip()
+    if not label:
+        return {}
+    overlay = opts.get("scenario_overlay")
+    try:
+        key = canonical_json_sha256({"label": label,
+                                     "overlay": overlay if isinstance(overlay, dict) else {}})
+    except (TypeError, ValueError):
+        key = canonical_json_sha256({"label": label, "overlay": {}})
+    return {"scenario_label": label, "scenario_key": key}
+
+
+def _ledger_owner_of_simulation(
+        simulation_id: str) -> Optional[tuple[str, dict[str, Any], bool, Any]]:
+    """(pipeline_id, persisted state, is_member, seed) of the pipeline that ran ``simulation_id``.
+
+    ``is_member`` is False (seed None) for the pipeline's own simulation, and True
+    with the member's recorded seed for a seed-ensemble simulation
+    (``options['ensemble_member_simulations']``). One scan, newest pipeline
+    first, like ``_pipeline_for_simulation``.
+    """
+    for entry in PipelineManager.list_pipelines():
+        pid = entry.get("pipeline_id")
+        if not pid:
+            continue
+        data = PipelineManager.load(pid)
+        if not data:
+            continue
+        if data.get("simulation_id") == simulation_id:
+            return pid, data, False, None
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        members = options.get("ensemble_member_simulations")
+        if isinstance(members, dict) and simulation_id in members:
+            return pid, data, True, members[simulation_id]
+    return None
+
+
+def ledger_identity_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
+    """EVAL-1: ledger identity fields of the pipeline that owns ``simulation_id``.
+
+    Report entry points without orchestrator context (``/api/report/generate``
+    regenerations) must key the forecast ledger exactly like the pipeline's own
+    report: on the graph stage's validated as-of anchor rather than the raw
+    actors.json date, a what-if fork's simulation stays a conditional scenario,
+    and a seed-ensemble member's simulation stays that seed's ensemble member.
+    Returns ``{pipeline_id, as_of_date[, scenario_label, scenario_key]
+    [, record_class='ensemble_member', seed]}``, or {} when no pipeline ran the
+    simulation. Best-effort: never raises.
+    """
+    if not simulation_id:
+        return {}
+    try:
+        owner = _ledger_owner_of_simulation(simulation_id)
+        if owner is None:
+            return {}
+        pid, data, is_member, member_seed = owner
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        identity: dict[str, Any] = {
+            "pipeline_id": pid,
+            "as_of_date": validated_as_of_from_options(options),
+        }
+        identity.update(_scenario_ledger_identity(options))
+        if is_member:
+            # Fail closed: an unreadable seed still never makes a member a production row.
+            identity["record_class"] = "ensemble_member"
+            try:
+                identity["seed"] = int(member_seed)
+            except (TypeError, ValueError):
+                pass
+        return identity
+    except Exception as exc:  # noqa: BLE001 — identity lookup must never break a report
+        logger.warning("ledger identity lookup for simulation %s failed (ignored): %s",
+                       simulation_id, exc)
+        return {}
+
+
+def _fail_closed_evaluation_pin(**reason: Any) -> dict[str, Any]:
+    """EVAL-13: an evaluation context without run provenance or target (fail closed).
+
+    Used when a run cannot be shown to be production but its own pin is not
+    available: the report stays out of the production ledger, calibration read
+    and monitor, and no cell identity is claimed. ``reason`` flags why
+    (``lookup_failed`` / ``foreign_marker`` + ``marker_pipeline_id`` /
+    ``marker_unreadable`` / ``pin_unreadable``); the report carries it into
+    forecast['evaluation'] and its ledger row (``ledger_commit.evaluation_fail_closed``).
+    """
+    pin: dict[str, Any] = {"version": EVALUATION_RUN_VERSION, "record_class": "evaluation",
+                           "characterization_only": True, "eval_run_id": None,
+                           "cell_id": None, "question_id": None, "target": None}
+    pin.update(reason)
+    return pin
+
+
+def _evaluation_pin_of(pipeline_id: str, data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """EVAL-13: the evaluation pin of one pipeline (None for a production run).
+
+    ``options['evaluation_run_v1']`` is authoritative; a value that is present but
+    not an object (a corrupted or hand-edited state) fails closed
+    (``pin_unreadable``). A state without it still counts as an evaluation run
+    when its handoff holds the admission marker. The marker's presence alone
+    decides, and it yields the full pin only to the pipeline it names
+    (``pipeline_id``, written at admission): handoff dirs are shared (``fork``,
+    ``scripts/batch_runs.fork_question``), and a pipeline that merely sees another
+    run's marker answers a different question, so it gets a fail-closed context
+    without that run's cell identity or target (``foreign_marker``). An
+    unreadable marker fails closed too (``marker_unreadable``).
+    """
+    options = data.get("options") if isinstance(data.get("options"), dict) else {}
+    if EVALUATION_RUN_OPTION in options:
+        pin = options[EVALUATION_RUN_OPTION]
+        if isinstance(pin, dict):
+            return dict(pin)
+        logger.warning("[%s] unreadable options.%s: treating the run as an evaluation run",
+                       pipeline_id, EVALUATION_RUN_OPTION)
+        return _fail_closed_evaluation_pin(pin_unreadable=True)
+    handoff_dir = data.get("handoff_dir")
+    if not handoff_dir:
+        try:
+            handoff_dir = PipelineManager.handoff_dir(pipeline_id)
+        except ValueError:
+            return None  # an id PipelineManager refuses owns no pipeline dir, hence no marker
+    marker_path = os.path.join(handoff_dir, EVALUATION_RUN_MARKER)
+    if not os.path.exists(marker_path):
+        return None
+    marker = _read_json(marker_path)
+    if not isinstance(marker, dict):
+        logger.warning("[%s] unreadable %s: treating the run as an evaluation run",
+                       pipeline_id, EVALUATION_RUN_MARKER)
+        return _fail_closed_evaluation_pin(marker_unreadable=True)
+    owner = marker.get("pipeline_id")
+    if owner != pipeline_id:
+        logger.warning("[%s] %s belongs to pipeline %s: evaluation lane without its cell identity",
+                       pipeline_id, EVALUATION_RUN_MARKER, owner)
+        return _fail_closed_evaluation_pin(foreign_marker=True, marker_pipeline_id=owner)
+    return {key: value for key, value in marker.items() if key != "pipeline_id"}
+
+
+def evaluation_pin_for_question_fork(base_pipeline_id: str,
+                                     base_state: "PipelineState") -> Optional[dict[str, Any]]:
+    """EVAL-13: the pin a new-question fork of ``base_state`` carries in its options.
+
+    ``scripts/batch_runs.fork_question`` forks a base to answer another question.
+    A fork of an evaluation run stays in the evaluation lane, but it is not the
+    base's cell: it carries the fail-closed context that the base's shared handoff
+    marker would yield it (``foreign_marker`` naming the admitted run, no cell
+    identity or target), so its lane no longer depends on that marker surviving.
+    None for a production base (the fork's options stay unchanged).
+    """
+    base_pin = PipelineOrchestrator._evaluation_pin(base_state)
+    if base_pin is None:
+        return None
+    return _fail_closed_evaluation_pin(
+        foreign_marker=True,
+        marker_pipeline_id=base_pin.get("marker_pipeline_id") or base_pipeline_id)
+
+
+# Bound on following ``options['shared_simulation_from']`` links (a chain of batch forks).
+_SHARED_SIMULATION_MAX_HOPS = 8
+
+
+def _evaluation_pin_of_simulation_owner(simulation_id: str, pipeline_id: str,
+                                        data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """EVAL-13: the evaluation pin that answers for ``simulation_id`` owned by ``pipeline_id``.
+
+    ``scripts/batch_runs.fork_question(shared_simulation=True)`` points a child at
+    its base's simulation (``options['shared_simulation_from']``), so the
+    newest-first owner scan finds the child, whose own context claims no cell
+    identity. The simulation still is the base's run (a regeneration on it uses
+    the base's question), so while the owner's context has no ``eval_run_id`` the
+    pipeline it borrowed the simulation from answers instead, provided that
+    pipeline still names the same simulation. A production base never downgrades
+    a fail-closed child context.
+    """
+    pin = _evaluation_pin_of(pipeline_id, data)
+    seen = {pipeline_id}
+    while not (pin or {}).get("eval_run_id") and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+        if data.get("simulation_id") != simulation_id:
+            break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        origin_id = options.get("shared_simulation_from")
+        if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+            break
+        seen.add(origin_id)
+        origin = PipelineManager.load(origin_id)
+        if not isinstance(origin, dict) or origin.get("simulation_id") != simulation_id:
+            break
+        origin_pin = _evaluation_pin_of(origin_id, origin)
+        if origin_pin is not None:
+            pin = origin_pin
+        data = origin
+    return pin
+
+
+def evaluation_context_for_simulation(simulation_id: Optional[str]) -> Optional[dict[str, Any]]:
+    """EVAL-13: the evaluation pin of the pipeline that ran ``simulation_id``, else None.
+
+    Report entry points without orchestrator context (``/api/report/generate``
+    regenerations, reports on a seed-ensemble member's simulation) must honour the
+    evaluation run their simulation belongs to, so ``ReportAgent`` falls back to
+    this lookup when no ``evaluation_context`` was assigned. Same owner scan as
+    ``ledger_identity_for_simulation``; a shared-simulation batch child defers to
+    the base whose simulation it borrowed. Never raises, and fails closed: a scan
+    that raises is logged and yields an evaluation context without run provenance
+    (``lookup_failed``), never a production answer.
+    """
+    if not simulation_id:
+        return None
+    try:
+        owner = _ledger_owner_of_simulation(str(simulation_id))
+        if owner is None:
+            return None
+        pid, data, _is_member, _seed = owner
+        return _evaluation_pin_of_simulation_owner(str(simulation_id), pid, data)
+    except Exception as exc:  # noqa: BLE001 — the lookup must never break a report
+        logger.warning("evaluation context lookup for simulation %s failed "
+                       "(treated as an evaluation run): %s", simulation_id, exc)
+        return _fail_closed_evaluation_pin(lookup_failed=True)
+
+
+# TIME-7: at most this many later-dated source URLs are recorded per graph build of a hindcast.
+HINDCAST_VIOLATIONS_MAX = 50
+
+
+def hindcast_pin_for_simulation(simulation_id: Optional[str]) -> Optional[dict[str, Any]]:
+    """TIME-6: the hindcast pin of the pipeline that ran ``simulation_id``, else None.
+
+    ``ReportAgent._hindcast_pin`` falls back to this lookup when no ``hindcast``
+    kwarg was passed (``/api/report`` regenerate and chat), so those entry points
+    withhold live market data from a hindcast too. Same owner scan as
+    ``evaluation_context_for_simulation`` (newest pipeline first; a seed-ensemble
+    member's simulation belongs to the pipeline that recorded it). A
+    shared-simulation batch child without a pin of its own defers to the pipeline
+    it borrowed the simulation from, provided that pipeline still names the same
+    simulation. Exceptions from the scan propagate to the caller.
+    """
+    if not simulation_id:
+        return None
+    simulation_id = str(simulation_id)
+    owner = _ledger_owner_of_simulation(simulation_id)
+    if owner is None:
+        return None
+    pipeline_id, data, _is_member, _seed = owner
+    pin = hindcast_policy(data.get("options"))
+    seen = {pipeline_id}
+    while pin is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+        if data.get("simulation_id") != simulation_id:
+            break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+        options = data.get("options") if isinstance(data.get("options"), dict) else {}
+        origin_id = options.get("shared_simulation_from")
+        if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+            break
+        seen.add(origin_id)
+        origin = PipelineManager.load(origin_id)
+        if not isinstance(origin, dict) or origin.get("simulation_id") != simulation_id:
+            break
+        pin = hindcast_policy(origin.get("options"))
+        data = origin
+    return pin
+
+
+def pinned_interview_graph_feedback(options: Any) -> Optional[bool]:
+    """FU-8: the ``sim_interview_graph_feedback`` a run's ``safety_policy_v1`` pins, or None.
+
+    None when ``options`` carries no pin, or a pin without the key (a run pinned before
+    the key existed): the ambient Config then decides. Only a real bool counts. A pin
+    that is not a dict, or a value that is not a bool (a hand-edited or damaged state,
+    where ``bool('false')`` would be True), reads False with a warning: interview text
+    is a simulation artifact and is never written to the graph because the pin could
+    not be read.
+    """
+    policy = options.get("safety_policy_v1") if isinstance(options, dict) else None
+    if policy is None:
+        return None
+    if not isinstance(policy, dict):
+        logger.warning("safety_policy_v1 不是对象（%s），采访事实不写入图谱（失败关闭）",
+                       type(policy).__name__)
+        return False
+    value = policy.get("sim_interview_graph_feedback")
+    if value is None or isinstance(value, bool):
+        return value
+    logger.warning("safety_policy_v1.sim_interview_graph_feedback=%r 不是布尔值，"
+                   "采访事实不写入图谱（失败关闭）", value)
+    return False
+
+
+def interview_graph_feedback_for_simulation(simulation_id: Optional[str]) -> bool:
+    """FU-8 (INFRA-9 open issue): whether interview answers of ``simulation_id`` may be
+    written to the observation graph.
+
+    The fallback for reports that were not handed a pinned value: ``/api/report``
+    regenerate and chat, and orchestrator reports of an unpinned run. An orchestrator
+    report of a pinned run gets the value through the ``interview_graph_feedback``
+    ReportAgent kwarg (``PipelineOrchestrator._interview_feedback_agent_kwargs``),
+    because a seed-ensemble member's simulation has no persisted owner while its report
+    runs. Here the pinned value (:func:`pinned_interview_graph_feedback`) of the pipeline
+    that ran the simulation decides, found by the same owner scan as
+    :func:`hindcast_pin_for_simulation`: newest pipeline first, and a shared-simulation
+    batch child without a pinned value defers to the pipeline it borrowed the simulation
+    from, provided that pipeline still names the same simulation. So a run, and a fork
+    that inherited its pin, keeps the semantics it was admitted with after a config
+    change. Without a pinned value anywhere on that chain (legacy runs, unpinned forks,
+    unowned simulations, an origin pipeline that was deleted) the ambient
+    ``Config.SIM_INTERVIEW_GRAPH_FEEDBACK`` decides, as before. Fails closed (False,
+    logged) when the scan raises or a named origin pipeline's state file exists but
+    cannot be read (corrupt, or written by a newer schema).
+    """
+    ambient = bool(getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False))
+    if not simulation_id:
+        return ambient
+    simulation_id = str(simulation_id)
+    try:
+        owner = _ledger_owner_of_simulation(simulation_id)
+        if owner is None:
+            return ambient
+        pipeline_id, data, _is_member, _seed = owner
+        pinned = pinned_interview_graph_feedback(data.get("options"))
+        seen = {pipeline_id}
+        while pinned is None and len(seen) <= _SHARED_SIMULATION_MAX_HOPS:
+            if data.get("simulation_id") != simulation_id:
+                break  # a seed-ensemble member's simulation is its own pipeline's, never borrowed
+            options = data.get("options") if isinstance(data.get("options"), dict) else {}
+            origin_id = options.get("shared_simulation_from")
+            if not isinstance(origin_id, str) or not origin_id or origin_id in seen:
+                break
+            seen.add(origin_id)
+            try:
+                origin_path = PipelineManager.state_path(origin_id)
+            except ValueError:
+                break  # a malformed id names no pipeline (PipelineManager.load: not found)
+            if not os.path.exists(origin_path):
+                break  # the origin was deleted: it has no pin left to honour
+            origin = PipelineManager.load(origin_id)
+            if not isinstance(origin, dict) or PipelineManager.is_incompatible(origin) is not None:
+                logger.warning("[%s] 共享模拟来源管线 %s 的状态文件不可读，采访事实不写入图谱（失败关闭）",
+                               simulation_id, origin_id)
+                return False
+            if origin.get("simulation_id") != simulation_id:
+                break
+            pinned = pinned_interview_graph_feedback(origin.get("options"))
+            data = origin
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning("[%s] 安全政策钉查找失败，采访事实不写入图谱（失败关闭）: %s", simulation_id, exc)
+        return False
+    return ambient if pinned is None else pinned
 
 
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
@@ -6848,6 +7887,10 @@ def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[
     elif df_model == 'codex':
         if not os.path.exists(os.path.expanduser('~/.codex/auth.json')) and shutil.which('codex') is None:
             errors.append("DEERFLOW_MODEL=codex 需要 Codex 登录凭据（~/.codex/auth.json）：安装 `codex` CLI 并登录")
+
+    # 5) INFRA-14 config audit: non-canonical booleans, malformed numbers, enum / range /
+    #    coupled-pair violations (empty when CONFIG_STRICT_VALIDATION is off).
+    errors.extend(Config.config_errors())
 
     return errors
 
@@ -7327,6 +8370,14 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
         max_rounds = opts.get("max_rounds") or None
     else:
         max_rounds = opts.get("max_rounds") or (getattr(Config, "OASIS_DEFAULT_MAX_ROUNDS", 0) or None)
+    sim_graph_feedback = bool(getattr(Config, "SIM_GRAPH_FEEDBACK", True))
+    if bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+        # INFRA-7：模拟实际遵循的是准入钉住的安全政策，而非当前环境默认值。
+        _safety = opts.get("safety_policy_v1")
+        _pinned_feedback = (
+            _safety.get("sim_graph_feedback") if isinstance(_safety, dict) else None)
+        if _pinned_feedback is not None:
+            sim_graph_feedback = bool(_pinned_feedback)
 
     manifest: dict[str, Any] = {
         "schema_version": PIPELINE_SCHEMA_VERSION,
@@ -7355,7 +8406,7 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
                 "max_rounds": int(max_rounds) if max_rounds else None,
                 "total_rounds": None,  # 真实总轮数运行时填
                 "recsys_wired": bool(getattr(Config, "SIM_WIRE_RECSYS", False)),
-                "sim_graph_feedback": bool(getattr(Config, "SIM_GRAPH_FEEDBACK", True)),
+                "sim_graph_feedback": sim_graph_feedback,
             },
         },
         "graph": {
@@ -7372,6 +8423,10 @@ def _build_run_manifest(state: "PipelineState") -> dict[str, Any]:
         # secrets_redacted / key_packages，避免观测字段被误脱敏。
         "redacted_flag": True,
     }
+    _hindcast = hindcast_policy(opts)
+    if _hindcast is not None:
+        # TIME-6: a pinned hindcast records how its as-of date was enforced (only then).
+        manifest["resolved"]["as_of_enforcement"] = as_of_enforcement_record(_hindcast)
     if bool(getattr(Config, "MANIFEST_CAPTURE_VERSIONS", False)):
         pkgs = _capture_key_packages()
         if pkgs:
@@ -7519,6 +8574,97 @@ def _actions_simulation_end_present(path: str, tail_bytes: int = 262144) -> bool
         return False
 
 
+def seed_scenario_pin(primary_fc: Any) -> Optional[list]:
+    """W9-5：主跑情景脊柱钉给额外种子的内容——只含 ``{name, resolution_criteria}``。
+
+    REPORT-10（信息墙）：钉的是命名与判定标准，绝不携带主跑的概率/理由——种子报告在同一组
+    命名情景上独立给出概率（集成聚合才是独立抽样）。无命名情景 → None（种子自由起名）；
+    坏数据（非 dict、scenarios 不可迭代等）同样回退 None（脊柱纯增强）。纯函数。
+    """
+    try:
+        return [
+            {"name": s.get("name"), "resolution_criteria": s.get("resolution_criteria")}
+            for s in (primary_fc.get("scenarios") or [])
+            if isinstance(s, dict) and s.get("name")
+        ] or None
+    except Exception:  # noqa: BLE001 — 脊柱纯增强，坏数据回退自由起名
+        return None
+
+
+def _apply_outcome_power_overrides(agents: list[dict[str, Any]], overrides: Any) -> None:
+    """SIM-7: apply an overlay's ``outcome_power_overrides`` to ``agents`` in place.
+
+    Every entry is validated on its own and a bad one is skipped with a warning (fail
+    closed per entry, never a PREPARE crash). The result never depends on the key order
+    of ``overrides``, so the EVAL-1 ``scenario_key`` (a sorted-key fingerprint of the
+    overlay) names exactly one effective config:
+
+    * a name reaches every agent whose ``entity_name`` normalizes to the same key, so
+      duplicate graph nodes of one actor all lose (or gain) authority together; a
+      warning names the agent count;
+    * spellings of one name that declare different powers (after rounding) are all
+      skipped; spellings that agree apply once;
+    * a positive power that rounds to 0 is skipped, because the stored 0 would read as
+      "loses all authority", which the author did not declare.
+
+    An absent or empty value changes nothing; a non-dict one is ignored with a warning.
+    """
+    if not overrides:
+        return
+    if not isinstance(overrides, dict):
+        logger.warning("outcome_power_overrides ignored: expected {name: power}, got %s",
+                       type(overrides).__name__)
+        return
+    agents_by_key: dict[str, list[dict[str, Any]]] = {}
+    for agent in agents:
+        entity_name = agent.get("entity_name")
+        key = normalize_name(entity_name) if entity_name else ""
+        if key:  # a name that normalizes to "" (punctuation only) is never matchable
+            agents_by_key.setdefault(key, []).append(agent)
+
+    resolution = 10.0 ** -SCENARIO_OUTCOME_POWER_DECIMALS
+    declared: dict[str, list[tuple[str, float]]] = {}  # normalized key → [(spelling, power)]
+    for name, value in overrides.items():
+        key = normalize_name(str(name))
+        if key not in agents_by_key:
+            logger.warning("outcome_power_overrides: no agent named %r", name)
+            continue
+        try:
+            # A JSON bool is not a power level (float(True) would read it as 1.0); an
+            # oversized JSON integer raises OverflowError instead of becoming inf.
+            p = float("nan") if isinstance(value, bool) else float(value)
+        except (TypeError, ValueError, OverflowError):
+            p = float("nan")
+        if not (math.isfinite(p) and 0.0 <= p <= SCENARIO_OUTCOME_POWER_MAX):
+            logger.warning("outcome_power_overrides: skipped %r for %r (need a finite number "
+                           "in [0, %g])", value, name, SCENARIO_OUTCOME_POWER_MAX)
+            continue
+        power = round(p, SCENARIO_OUTCOME_POWER_DECIMALS) or 0.0  # `or 0.0` folds -0.0 into 0.0
+        if p > 0.0 and power == 0.0:
+            logger.warning("outcome_power_overrides: skipped %r for %r (positive, but it rounds "
+                           "to 0 at %d decimals and a stored 0 means no authority; declare 0 or "
+                           "at least %g)", value, name, SCENARIO_OUTCOME_POWER_DECIMALS,
+                           resolution)
+            continue
+        declared.setdefault(key, []).append((str(name), power))
+
+    for key, entries in declared.items():
+        spellings = sorted(spelling for spelling, _ in entries)
+        powers = sorted({power for _, power in entries})
+        if len(powers) > 1:
+            logger.warning("outcome_power_overrides: %s name the same actor with different "
+                           "powers %s; all of them skipped", spellings, powers)
+            continue
+        targets = agents_by_key[key]
+        if len(targets) > 1:
+            logger.warning("outcome_power_overrides: %s reaches %d agents with the same "
+                           "normalized name; each gets power %g",
+                           spellings, len(targets), powers[0])
+        for agent in targets:
+            agent["outcome_power"] = powers[0]
+            agent["outcome_power_basis"] = SCENARIO_OUTCOME_POWER_BASIS
+
+
 # ---------------------------------------------------------------------------
 # 编排器
 # ---------------------------------------------------------------------------
@@ -7534,6 +8680,13 @@ class PipelineOrchestrator:
     # POST /resume 都能在对方落盘 running 之前通过状态检查，对同一管线起两条 _run
     # 线程（双倍烧额度 + 状态互相覆盖）。
     _lifecycle_lock: threading.Lock = threading.Lock()
+    # EVAL-17: serialises _record_sim_run_telemetry. The main run and up to
+    # ENSEMBLE_SEED_CONCURRENCY seed threads read-check-write one marker map in
+    # state.options; class-level so instances built without __init__ have it too.
+    # _note_ensemble_member_simulation takes it as well: it is the only other seed-thread
+    # write to state.options, and the full save inside _record_sim_run_telemetry
+    # (asdict) must never iterate a dict another seed thread is growing.
+    _sim_meter_lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
         # I-4-6: 运行中临时产物扫描的「上次扫描壁钟」按阶段节流戳（仅本实例/本次运行有效）。
@@ -7541,9 +8694,19 @@ class PipelineOrchestrator:
         # W9-3: run_telemetry.json 增量落盘状态（attempt 起点由 _init_telemetry_flush 填充）。
         self._tel_lock = threading.Lock()
         self._tel_path: Optional[str] = None
-        self._tel_prev: Optional[dict] = None
-        self._tel_prev_cum: Optional[dict] = None
+        # EVAL-17: what this attempt carries forward from the previous run_telemetry.json
+        # (telemetry.previous_attempt_carry), fixed at the attempt start.
+        self._tel_carry: Optional[dict] = None
         self._tel_last_flush_calls: int = 0
+        # INFRA-7: stages recomputed (not reused) in this attempt, read by the
+        # resume lineage guards; this attempt's stage_reuse_v1 records, passed
+        # to the stage telemetry; the attempt's fresh run.json ``resolved``
+        # blocks used to restamp recomputed research/simulation blocks; and the
+        # simulation runtime fields this attempt's RUN wrote to run.json.
+        self._recomputed_this_attempt: set[str] = set()
+        self._stage_reuse_this_attempt: list[dict[str, Any]] = []
+        self._fresh_resolved: Optional[dict[str, Any]] = None
+        self._sim_runtime_this_attempt: dict[str, Any] = {}
 
     # -- W9-3: run 遥测增量落盘 --------------------------------------------
     # 两条失败跑的教训：LLMMeter 是进程内存累加器，重启即清零；run_telemetry.json 只在
@@ -7557,18 +8720,13 @@ class PipelineOrchestrator:
     def _init_telemetry_flush(self, state: "PipelineState") -> None:
         """attempt 起点：定位 run_telemetry.json 并捕获上一 attempt 的账作为合并基底。"""
         self._tel_path = os.path.join(PipelineManager._dir(state.pipeline_id), "run_telemetry.json")
-        self._tel_prev = None
-        self._tel_prev_cum = None
+        self._tel_carry = None
         self._tel_last_flush_calls = 0
         try:
-            prev = _read_json(self._tel_path)
-            if isinstance(prev, dict) and (prev.get("total") or {}).get("calls"):
-                self._tel_prev = {
-                    "total": prev.get("total"),
-                    "report_id": prev.get("report_id"),
-                    "status": prev.get("status"),
-                }
-                self._tel_prev_cum = prev.get("cumulative_total") or prev.get("total") or {}
+            # EVAL-17: the shared carry-forward rule (a zero-call attempt keeps the history;
+            # per-stage base with the pre-EVAL-17 by_stage fallback and partial marker).
+            from ..utils.telemetry import previous_attempt_carry
+            self._tel_carry = previous_attempt_carry(_read_json(self._tel_path))
         except Exception:  # noqa: BLE001 — 基底捕获失败按首写处理
             pass
 
@@ -7582,7 +8740,7 @@ class PipelineOrchestrator:
         tpath = self._tel_path
         if not tpath:
             return
-        from ..utils.telemetry import LLMMeter
+        from ..utils.telemetry import LLMMeter, apply_previous_attempt_carry
         from ..utils.atomic import write_json_atomic
         with self._tel_lock:
             try:
@@ -7596,18 +8754,9 @@ class PipelineOrchestrator:
                     data.update(extra)
                 if not final:
                     data["in_flight"] = True  # 运行中快照标记（终版落盘时消失）
-                if self._tel_prev:
-                    data["previous_attempt"] = self._tel_prev
-                    base = self._tel_prev_cum or {}
-                    cur = data.get("total") or {}
-                    cum: dict[str, Any] = {}
-                    for k in ("calls", "cached", "prompt_tokens", "completion_tokens",
-                              "total_tokens", "latency_ms", "cost_usd"):
-                        try:
-                            cum[k] = round((base.get(k) or 0) + (cur.get(k) or 0), 6)
-                        except TypeError:
-                            continue
-                    data["cumulative_total"] = cum
+                # EVAL-17: cumulative_total and the per-stage cumulative_by_stage both survive
+                # resumes (base fixed at the attempt start).
+                apply_previous_attempt_carry(data, self._tel_carry)
                 write_json_atomic(tpath, data, fsync=final)
                 self._tel_last_flush_calls = int((data.get("total") or {}).get("calls") or 0)
             except Exception as _fe:  # noqa: BLE001 — 遥测落盘失败不得影响管线
@@ -7630,6 +8779,124 @@ class PipelineOrchestrator:
             return
         if calls - self._tel_last_flush_calls >= n:
             self._flush_run_telemetry(state)
+
+    # -- EVAL-18: 精简成本卡 cost_card.json ---------------------------------
+
+    @staticmethod
+    def _drop_cost_card(state: "PipelineState") -> None:
+        """EVAL-18: remove <pipeline_dir>/cost_card.json and ``artifacts['cost_card']``.
+
+        A card describes the attempt that wrote it; it must never pass for a later one.
+        The caller saves the state. Never raises (logs instead).
+        """
+        if isinstance(getattr(state, "artifacts", None), dict):
+            state.artifacts.pop("cost_card", None)
+        try:
+            from ..utils.cost_accounting import COST_CARD_FILENAME
+            path = os.path.join(PipelineManager._dir(state.pipeline_id), COST_CARD_FILENAME)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益
+            logger.warning("[%s] 移除上一 attempt 的成本卡失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+
+    def _start_cost_card_attempt(self, state: "PipelineState") -> None:
+        """EVAL-18: attempt start of the cost card (before the attempt's first telemetry flush).
+
+        Removes the previous attempt's card and ``artifacts['cost_card']`` (an attempt that
+        dies and is reconciled as an orphan never reaches the finally block, so the old card
+        must not pass for it; same rule as EVAL-15's _reset_stage_scorecard_sidecar), then
+        pins ``options['cost_card_attempt_v1']``: the attempt marker, the process-wide
+        unattributed LLM calls now and the sha256 of the run_telemetry.json this attempt
+        starts from. The hook and ``scripts/cost_card.py`` read the baseline from that
+        record, never from another attempt's card. Before ``_run``'s try, so it never
+        raises; a failure leaves no record (an unknown baseline). Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        try:
+            from ..utils.cost_accounting import COST_CARD_ATTEMPT_OPTION, cost_card_attempt_record
+            from ..utils.telemetry import LLMMeter
+            self._drop_cost_card(state)
+            state.options.pop(COST_CARD_ATTEMPT_OPTION, None)
+            unattributed = LLMMeter.snapshot(state.pipeline_id).get("unattributed_process")
+            raw = _read_bytes(self._tel_path or os.path.join(
+                PipelineManager._dir(state.pipeline_id), "run_telemetry.json"))
+            state.options[COST_CARD_ATTEMPT_OPTION] = cost_card_attempt_record(
+                resume_count=state.options.get("resume_count"),
+                started_at=_utcnow(),
+                unattributed_calls_at_start=(unattributed.get("calls")
+                                             if isinstance(unattributed, dict) else None),
+                run_telemetry_sha256=hashlib.sha256(raw).hexdigest() if raw is not None else None)
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线
+            logger.warning("[%s] 成本卡 attempt 起点记录失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+        try:
+            PipelineManager.save(state)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[%s] 保存成本卡 attempt 记录失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+
+    def _note_cost_card_window(self, state: "PipelineState", window: str,
+                               started_at: Optional[str]) -> None:
+        """EVAL-18: pin ``options['cost_card_windows_v1'][window]`` as a wall window opens.
+
+        Records the calls earlier attempts had already made in the window's stages (from
+        this attempt's telemetry carry, the same base its run_telemetry.json cumulative
+        numbers are built on), so the cost card can tell a window that covers all of its
+        stage's calls (a stage reused since its only execution) from one that covers only
+        the latest execution. The caller saves the state. Never raises; a failure, or an
+        instance whose attempt telemetry was never initialised (no carry to read), leaves
+        no record for this window (the card then flags it whenever earlier attempts spent
+        in it). Knob off → nothing at all.
+        """
+        if (not bool(getattr(Config, "COST_CARD_ENABLED", True))
+                or not getattr(self, "_tel_path", None)):
+            return
+        try:
+            from ..utils.cost_accounting import COST_CARD_WINDOWS_OPTION, cost_card_window_record
+            records = state.options.get(COST_CARD_WINDOWS_OPTION)
+            records = dict(records) if isinstance(records, dict) else {}
+            records[window] = cost_card_window_record(
+                window, started_at=started_at, carry=getattr(self, "_tel_carry", None))
+            state.options[COST_CARD_WINDOWS_OPTION] = records
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线
+            logger.debug("[%s] 成本卡墙钟窗记录失败（忽略）: %s",
+                         getattr(state, "pipeline_id", None), exc)
+
+    def _write_cost_card(self, state: "PipelineState") -> None:
+        """EVAL-18: write the terminal attempt's <pipeline_dir>/cost_card.json.
+
+        Called by the ``_run`` finally block after the final run_telemetry.json /
+        telemetry.json writes and before ``LLMMeter.reset``, outside their try so a
+        telemetry failure never skips it. Never the report folder (W9-6). Observation
+        only: it never changes status or health and never raises (every step, the
+        cleanup included, is guarded). On failure no card is left for this attempt and
+        ``artifacts['cost_card']`` is dropped. Knob off → nothing at all.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        try:
+            from ..utils.atomic import write_json_atomic
+            from ..utils.cost_accounting import COST_CARD_FILENAME
+            path = os.path.join(PipelineManager._dir(state.pipeline_id), COST_CARD_FILENAME)
+            card = pipeline_cost_card(state)
+            write_json_atomic(path, card, allow_nan=False)
+            state.artifacts = getattr(state, "artifacts", None) or {}
+            if isinstance(state.artifacts, dict):
+                state.artifacts["cost_card"] = path
+            if not card["completeness"]["complete"]:
+                logger.info("[%s] 成本卡不完整: %s", state.pipeline_id,
+                            "; ".join(card["completeness"]["reasons"]))
+        except Exception as exc:  # noqa: BLE001 — 成本卡为观测增益，失败不影响管线终态
+            logger.warning("[%s] 成本卡写入失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
+            self._drop_cost_card(state)
+        try:
+            PipelineManager.save(state)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[%s] 保存成本卡指针失败（忽略）: %s",
+                           getattr(state, "pipeline_id", None), exc)
 
     # -- 生命周期：启动回收 + 关闭清理 ------------------------------------
 
@@ -7927,8 +9194,44 @@ class PipelineOrchestrator:
         max_rounds: Optional[int] = None,
         language: Optional[str] = None,
         model: Optional[str] = None,
+        evaluation: Optional[dict[str, Any]] = None,
+        as_of: Optional[str] = None,
     ) -> PipelineState:
-        """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。"""
+        """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。
+
+        EVAL-13 ``evaluation``：评估运行上下文（见 validate_evaluation_context）。在创建任何
+        目录/任务之前校验，非法即 ValueError；合法时钉入 options['evaluation_run_v1'] 并落
+        handoff/evaluation_run.json。缺省 None → options 与 handoff 逐字节不变。
+
+        TIME-7 ``as_of``：回测准入（规范 YYYY-MM-DD，不晚于今天 UTC）。同样在创建任何目录/任务
+        之前 fail-closed 校验：Config.HINDCAST_ENABLED 未开、日期非规范/在未来、或本次运行将用
+        的研究引擎不是 v3 → ValueError（绝不悄悄按实时运行）。合法时钉入 options['hindcast_policy_v1']
+        （TIME-6 capture_hindcast_policy_v1），并作为评估运行准入：调用方未给 evaluation 时以
+        eval_run_id ``hindcast_<YYYYMMDD>`` 走 EVAL-13 同一条钉/标记路径（评估账本、跳过生产
+        校准、解析监测排除）；调用方给了 evaluation（golden 回放）则沿用其值。缺省 None → 今日路径。
+
+        两类准入拒绝（as_of 与 evaluation）都抛 RunAdmissionError（ValueError 子类）：运行 API
+        只把它映射为 400；创建目录/任务之后抛出的 ValueError 是内部故障，仍是 500。
+
+        INFRA-14：CONFIG_STRICT_VALIDATION 开启（默认）且配置审计有错误时，在任何准入与
+        目录/任务之前抛 ConfigurationError（RuntimeError 子类，errors 列出各条原因）。
+        """
+        config_errors = Config.config_errors()
+        if config_errors:
+            raise ConfigurationError(config_errors)
+        admission_actor_policy: Optional[dict[str, Any]] = None
+        hindcast_pin: Optional[dict[str, Any]] = None
+        if as_of is not None:
+            as_of, admission_actor_policy, engine = admit_hindcast_as_of(as_of)
+            hindcast_pin = capture_hindcast_policy_v1(as_of, research_engine=engine)
+            if evaluation is None:
+                evaluation = {"eval_run_id": "hindcast_" + as_of.replace("-", "")}
+        evaluation_pin: Optional[dict[str, Any]] = None
+        if evaluation is not None:
+            try:
+                evaluation_pin = build_evaluation_pin(evaluation)
+            except ValueError as exc:
+                raise RunAdmissionError(str(exc)) from exc
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
 
@@ -7960,11 +9263,27 @@ class PipelineOrchestrator:
             "research_model": model or None,
         })
         state.options["actor_intelligence_policy_v1"] = (
-            admission_actor_intelligence_policy_v1()
+            admission_actor_policy if admission_actor_policy is not None
+            else admission_actor_intelligence_policy_v1()
         )
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
         state.options["safety_policy_v1"] = capture_safety_policy_v1("admission")
+        if hindcast_pin is not None:
+            # TIME-7：回测钉（研究子进程据此拿到 RESEARCH_AS_OF、扣下预测市场；图谱锚定钉日；
+            # 报告阶段按 TIME-6 扣下市场并盖 hindcast 章）。resume 原样保留，fork 携带。
+            state.options[HINDCAST_POLICY_OPTION] = hindcast_pin
+        if evaluation_pin is not None:
+            # EVAL-13：评估运行准入钉——报告跳过生产校准读、只入评估账本、不进解析监测。
+            # handoff 标记供无编排器上下文的报告入口（API 重生成）按模拟 id 查回。标记另记
+            # 准入管线 id：handoff 目录可被共享（what-if 分叉、batch_runs 子问题），只有它自己
+            # 才能凭标记取回整份钉（见 _evaluation_pin_of）。
+            from ..utils.atomic import write_json_atomic
+            state.options[EVALUATION_RUN_OPTION] = evaluation_pin
+            write_json_atomic(os.path.join(state.handoff_dir, EVALUATION_RUN_MARKER),
+                              dict(evaluation_pin, pipeline_id=pipeline_id))
+        # INFRA-7：第二份准入快照——影响结果的旋钮 + provider 出处（resume 时据此检测漂移）。
+        cls._pin_run_shape(state, run_shape.ORIGIN_ADMISSION)
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -8144,11 +9463,18 @@ class PipelineOrchestrator:
                 # ORCH-3(b): completed 但交付物健康降级/失败时，允许 force 重驱报告阶段。
                 _ph = ((data.get("options") or {}).get("pipeline_health") or {})
                 if not (force and _ph.get("status") in ("degraded", "failed")):
-                    raise RuntimeError(
-                        "管线已完成，无需恢复"
-                        + ("（如需重生成降级报告，请带 force=true 重试）"
-                           if _ph.get("status") in ("degraded", "failed") else "")
-                    )
+                    _degraded_stages = sorted(
+                        name for name, st in (_ph.get("stages") or {}).items()
+                        if isinstance(st, dict) and st.get("health") in ("degraded", "failed"))
+                    if _ph.get("status") not in ("degraded", "failed"):
+                        _hint = ""
+                    elif _degraded_stages and "report" not in _degraded_stages:
+                        # force 只重生成报告：上游阶段（如 RESEARCH-2 的研究降级）的问题它修不了。
+                        _hint = ("（降级来自 " + "/".join(_degraded_stages)
+                                 + " 阶段；force=true 只会重生成报告，无法修复这些阶段，请重新运行管线）")
+                    else:
+                        _hint = "（如需重生成降级报告，请带 force=true 重试）"
+                    raise RuntimeError("管线已完成，无需恢复" + _hint)
 
             state = PipelineState.from_dict(data)
             PipelineManager.ensure_dirs(pipeline_id)
@@ -8197,6 +9523,10 @@ class PipelineOrchestrator:
                     state.options["safety_policy_v1"]["n_forecast_seeds"],
                     state.options["safety_policy_v1"]["simulation_forecast_effect"],
                 )
+            # INFRA-7：早于 run-shape 钉准入的管线在首次 resume 时补钉当前形状（origin 标明
+            # resume_unpinned——它不是准入时的形状，只是此后漂移检测的基线）。
+            if not isinstance(state.options.get("run_shape_v1"), dict):
+                cls._pin_run_shape(state, run_shape.ORIGIN_RESUME_UNPINNED)
             PipelineManager.save(state)
 
             cls._cancel_events[pipeline_id] = threading.Event()
@@ -8262,6 +9592,9 @@ class PipelineOrchestrator:
             state.error = None
             state.current_stage = STAGE_ONTOLOGY
             state.options["continued_to_full_at"] = _utcnow()
+            # INFRA-7：继续为完整管线与 resume 同理——未钉形状的旧管线补钉基线。
+            if not isinstance(state.options.get("run_shape_v1"), dict):
+                cls._pin_run_shape(state, run_shape.ORIGIN_RESUME_UNPINNED)
             PipelineManager.save(state)
 
             cls._cancel_events[pipeline_id] = threading.Event()
@@ -8281,7 +9614,10 @@ class PipelineOrchestrator:
         """T4.6: 在 PREPARE 处分叉一个 what-if 情景管线（复用 base 的研究/本体/图谱）。
 
         overlay = {label, max_rounds?, influence_overrides{name:weight}, stance_overrides{name:stance},
-                   injected_events[{round,poster_name,content}], as_of_shift?}。新管线复用 base 的
+                   outcome_power_overrides{name:power in [0,10]}?,
+                   injected_events[{round,poster_name,content}], as_of_shift?}
+        （SIM-7：outcome_power_overrides 是人工声明、全程生效的结果权力，见
+        apply_scenario_overlay_to_config）。新管线复用 base 的
         project_id/graph_id/handoff（研究+本体+图谱直接命中复用守卫），仅重跑 prepare/run/report。
         要求 base 已完成图谱阶段。返回新建管线状态。
         """
@@ -8324,11 +9660,32 @@ class PipelineOrchestrator:
             # the base run's exact actor requirement instead of consulting
             # today's ambient dual-track flag.
             new_state.options["actor_intelligence_policy_v1"] = dict(_actor_policy)
+        # INFRA-9：分叉沿用 base 的安全政策钉（base 无钉则按分叉准入捕获）；旋钮关闭 = 不写（旧行为）。
+        _safety_policy = fork_safety_policy_v1(base_state.options)
+        if _safety_policy is not None:
+            new_state.options["safety_policy_v1"] = _safety_policy
+            warn_if_fork_feeds_shared_graph(_safety_policy, fork_id=new_id,
+                                            base_pipeline_id=base_pipeline_id,
+                                            graph_id=base_state.graph_id)
+        _evaluation_pin = cls._evaluation_pin(base_state)
+        if _evaluation_pin is not None:
+            # EVAL-13: a what-if fork of an evaluation run stays in the evaluation lane
+            # (the admission pin is carried, never re-captured; the fork shares the base's
+            # handoff dir, whose marker names the base, so the pin must travel in options).
+            new_state.options[EVALUATION_RUN_OPTION] = _evaluation_pin
+        _hindcast_pin = base_state.options.get(HINDCAST_POLICY_OPTION)
+        if isinstance(_hindcast_pin, dict):
+            # TIME-6: a what-if fork reuses the base's as-of research, so it keeps the base's
+            # hindcast pin (carried, never re-captured) and its reports withhold live markets too.
+            new_state.options[HINDCAST_POLICY_OPTION] = dict(_hindcast_pin)
         if (overlay or {}).get("max_rounds"):
             try:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
             except (TypeError, ValueError):
                 pass
+        # INFRA-7：情景分叉是新准入——按分叉时刻的环境钉形状（origin=fork），并记下 base 的钉
+        # （复用的研究/本体/图谱是在 base 的形状下建的）。
+        cls._pin_run_shape(new_state, run_shape.ORIGIN_FORK, base_state=base_state)
 
         PipelineManager.ensure_dirs(new_id)
         task_manager = TaskManager()
@@ -8356,6 +9713,20 @@ class PipelineOrchestrator:
         influence_overrides{name:weight} / stance_overrides{name:stance} 按 agent 名匹配覆盖
         （两路都覆盖，闭合 T3.6 旁路）；injected_events 追加为 scheduled_events（解析 poster_name
         → agent_id）；不破坏缺省字段。
+
+        SIM-7 (C31): outcome_power_overrides{name: power in [0, 10]} is a human-authored,
+        whole-run outcome power — the counterfactual lever ("what if the regulator loses
+        authority") that influence_overrides cannot express, because visibility never becomes
+        power (I-15). A valid entry sets ``outcome_power`` (rounded to 6 places) and
+        ``outcome_power_basis="scenario_overlay"`` on every agent whose name normalizes to the
+        entry's; the decision channel (both producers) reads it through ``_outcome_power_map``
+        and its decisions rows carry it. 0 keeps the actor in the roster with zero outcome
+        weight. Entries that name no agent, are not a number (bools included), are non-finite,
+        fall outside [0, 10] or are positive but round to 0 are skipped with a warning; spellings
+        of one name that declare different powers are all skipped, so the result never depends
+        on key order; a non-dict value is ignored with a warning. Assignment is idempotent, so
+        the corrupt-RUN reapply stays stable; an overlay without the key leaves the config
+        untouched. See ``_apply_outcome_power_overrides``.
         """
         from ..utils.actors import normalize_name
         agents = config.get("agent_configs") or []
@@ -8374,6 +9745,9 @@ class PipelineOrchestrator:
             a = by_name.get(normalize_name(str(name)))
             if a is not None:
                 a["stance"] = str(stance)
+
+        # SIM-7: human-authored outcome power (validation and resolution rules in the helper).
+        _apply_outcome_power_overrides(agents, (overlay or {}).get("outcome_power_overrides"))
 
         injected = (overlay or {}).get("injected_events") or []
         if injected:
@@ -8465,6 +9839,8 @@ class PipelineOrchestrator:
         委托 sim_timeline.extract_horizon 的四层确定性抽取（explicit_date/anchored_period/
         relative/bare_year——bare_year 层即旧实现，行为超集）。as_of 取 actors.as_of_date
         （不可解析→今天）。无合法候选 → None（不做日期映射）；任何异常回退旧的裸年份正则。
+        RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：确定性抽取落空时回退到 actors.json 问题规范
+        的判定日（哈希复核、(as_of, as_of+30年] 内）；无规范/旗标关 → 与旧行为一致。
         """
         text = str(prompt or "")
         if isinstance(actors, dict):
@@ -8472,12 +9848,16 @@ class PipelineOrchestrator:
         try:
             from datetime import date as _date
             from ..utils import sim_timeline
+            from . import question_spec as _qspec
             as_of = None
             if isinstance(actors, dict):
                 parsed = parse_as_of(actors.get("as_of_date"))
                 as_of = parsed.date() if parsed else None
             hr = sim_timeline.extract_horizon(text, as_of or _date.today())
-            return hr.horizon_date if hr else None
+            if hr:
+                return hr.horizon_date
+            spec_day = _qspec.spec_horizon_date(_qspec.downstream_spec(actors), as_of or _date.today())
+            return spec_day.isoformat() if spec_day else None
         except Exception:  # noqa: BLE001 — degrade-safe：模块缺失/异常时保持旧行为
             # 数字边界（非 \b：\b 在中日韩字符旁不触发，"2027年" 取不到年份）。
             years = [int(y) for y in re.findall(r"(?<!\d)(20\d{2})(?!\d)", text)]
@@ -8526,6 +9906,559 @@ class PipelineOrchestrator:
         except Exception:  # noqa: BLE001 — 安全政策读取绝不让管线崩溃；回退环境值
             return default
 
+    @classmethod
+    def _backbone_check_policy(cls, state: "PipelineState") -> Optional[dict[str, Any]]:
+        """EVAL-11: the main report's shadow backbone-check policy from the run's pin, or None.
+
+        Read from ``safety_policy_v1['backbone_check']`` with no ambient fallback: a run
+        admitted before the key existed, a legacy resume and a fork without a pin all stay
+        disabled, whatever BACKBONE_CHECK_ENABLED says now.
+        """
+        return backbone_sensitivity.enabled_policy(
+            cls._pinned_safety(state, "backbone_check", None))
+
+    # -- INFRA-7: run-shape pin, drift detection and resume lineage guards ----
+
+    @staticmethod
+    def _pin_run_shape(state: "PipelineState", origin: str, *,
+                       base_state: Optional["PipelineState"] = None) -> None:
+        """Store ``options['run_shape_v1']`` when RUN_SHAPE_PIN is on.
+
+        A fork passes ``base_state``: its pin then records the base's pin
+        under ``fork_base`` (sha256 plus the identity knobs that differ), since
+        the fork reuses upstream artifacts built under the base's shape.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        shape = capture_run_shape_v1(state.options, origin)
+        if shape is None:
+            return
+        if base_state is not None:
+            base_options = base_state.options if isinstance(base_state.options, dict) else {}
+            shape["fork_base"] = run_shape.fork_base_record(
+                base_options.get("run_shape_v1"), shape, base_state.pipeline_id)
+        state.options["run_shape_v1"] = shape
+
+    @staticmethod
+    def _run_shape_drift(state: "PipelineState") -> Optional[dict[str, Any]]:
+        """Diff the run's pinned shape against the ambient config (None if unpinned)."""
+        pinned = (state.options or {}).get("run_shape_v1")
+        if not isinstance(pinned, dict):
+            return None
+        current = run_shape.capture(
+            Config, state.options, research_engine=research_engine_for_run(state.options))
+        return run_shape.diff(pinned, current)
+
+    def _check_run_shape_drift(self, state: "PipelineState") -> None:
+        """INFRA-7: record admission-shape drift for this attempt; refuse on policy.
+
+        ``record`` (default) discloses the drift in ``options.run_shape_drift``
+        (+ a capped history) and continues; ``refuse`` fails the attempt naming
+        the changed identity knobs.  Provenance-only drift never refuses.
+        ``run_shape_drift`` keeps the latest non-empty drift: a later attempt
+        run under the restored admission shape does not erase it, because the
+        stages completed under the drifted shape are still part of the run.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        raw_policy = getattr(Config, "RUN_SHAPE_DRIFT_POLICY", run_shape.DRIFT_POLICY_RECORD)
+        policy, valid = run_shape.resolve_drift_policy(raw_policy)
+        if not valid:
+            logger.warning(
+                "[%s] RUN_SHAPE_DRIFT_POLICY=%r 未知（可选 record | refuse）——按 record 处理",
+                state.pipeline_id, str(raw_policy)[:64],
+            )
+        try:
+            drift = self._run_shape_drift(state)
+        except Exception as exc:  # noqa: BLE001 — refuse 下无法证明未漂移即拒绝
+            if policy == run_shape.DRIFT_POLICY_REFUSE:
+                raise RuntimeError(
+                    "run-shape drift check failed under RUN_SHAPE_DRIFT_POLICY=refuse: "
+                    f"{exc}") from exc
+            logger.warning("[%s] run-shape 漂移检测跳过: %s", state.pipeline_id, exc)
+            return
+        if not run_shape.has_drift(drift):
+            return
+        state.options["run_shape_drift"] = drift
+        state.options["run_shape_drift_history"] = run_shape.append_capped(
+            state.options.get("run_shape_drift_history"),
+            {"at": _utcnow(), "policy": policy, **drift},
+            run_shape.DRIFT_HISTORY_CAP,
+        )
+        PipelineManager.save(state)
+        if run_shape.refuses(policy, drift):
+            raise RuntimeError(run_shape.refusal_message(drift))
+        logger.warning(
+            "[%s] 运行形状自准入以来已漂移（已记录，继续执行）: %s",
+            state.pipeline_id, ", ".join(run_shape.drifted_knobs(drift)),
+        )
+
+    def _attempt_recomputed(self) -> set[str]:
+        """Stages recomputed this attempt (lazily created for bare instances)."""
+        recomputed = getattr(self, "_recomputed_this_attempt", None)
+        if recomputed is None:
+            recomputed = set()
+            self._recomputed_this_attempt = recomputed
+        return recomputed
+
+    def _attempt_sim_runtime(self) -> dict[str, Any]:
+        """Simulation runtime fields this attempt's RUN wrote to run.json (lazy)."""
+        runtime = getattr(self, "_sim_runtime_this_attempt", None)
+        if runtime is None:
+            runtime = {}
+            self._sim_runtime_this_attempt = runtime
+        return runtime
+
+    def _lineage_refuses_reuse(
+        self,
+        state: "PipelineState",
+        stage: str,
+        *,
+        bound_ids: Optional[tuple[Any, Any]] = None,
+        exempt: tuple[str, ...] = (),
+        artifact_id: Any = None,
+    ) -> Optional[str]:
+        """INFRA-7 resume lineage guard: the refusal reason when ``stage`` must recompute.
+
+        Consults this attempt's recomputes and the durable
+        ``options.lineage_invalidated`` map, so a stage made stale by an earlier
+        attempt whose rebuild failed is still refused.  ``artifact_id`` names
+        the candidate artifact (REPORT: its report_id, passed only for a
+        COMPLETED report, so an unfinished minted report is never exempt);
+        when it is the one ``options.lineage_rebuilt`` records for the stage, the durable entry
+        does not refuse it (a rebuild from current inputs cut off before the
+        stage completed).  A refusal is recorded in the invalidated map and
+        leaves a ``reuse_refused: <reason>`` note under
+        ``options.stage_notes[stage]`` (a per-stage list, so it never clobbers
+        the single-valued ``resumed_stage_validation`` breadcrumb that names
+        the upstream cause); the caller then falls through to its rebuild
+        branch.  None = reuse may proceed (always None with
+        RESUME_LINEAGE_GUARDS off).
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return None
+        invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
+        invalidated = dict(invalidated) if isinstance(invalidated, dict) else {}
+        reason = run_shape.lineage_refusal(
+            stage, self._attempt_recomputed(), bound_ids=bound_ids, exempt=exempt,
+            invalidated=invalidated, artifact_id=artifact_id,
+            rebuilt=state.options.get(run_shape.LINEAGE_REBUILT_OPTION))
+        if reason is None:
+            return None
+        invalidated.setdefault(stage, reason)
+        state.options[run_shape.LINEAGE_INVALIDATED_OPTION] = invalidated
+        notes = state.options.get("stage_notes")
+        notes = dict(notes) if isinstance(notes, dict) else {}
+        notes[stage] = run_shape.append_capped(
+            notes.get(stage), f"reuse_refused: {reason}", run_shape.STAGE_NOTES_CAP)
+        state.options["stage_notes"] = notes
+        logger.warning(
+            "[%s] %s 阶段拒绝复用（%s）：上游已变化（本 attempt 或此前未完成重建的 attempt），"
+            "重算以免复用陈旧产物",
+            state.pipeline_id, stage, reason,
+        )
+        return reason
+
+    def _forbid_shared_fork_rebuild(
+        self, state: "PipelineState", stage: str, project: Any, reason: str,
+    ) -> None:
+        """INFRA-7: fail closed instead of rebuilding a fork's shared artifacts in place.
+
+        A scenario fork (``fork``) runs on its base pipeline's project record.
+        When a lineage guard refuses its ontology/graph reuse, the rebuild would
+        overwrite ``project.ontology`` / ``project.graph_id`` that the base (and
+        sibling forks) still use.  Every fork (scenario and batch question)
+        also works in the base's handoff directory, where a graph rebuild writes
+        communities.json, entity_merges.json, graph_prune.json and the graph
+        priors that the base's artifact manifest seals.  In either case the
+        attempt fails naming the base instead.  A fork that owns its project
+        still regenerates its ontology (a batch question fork does so by
+        design).
+        """
+        base_pid = (state.options or {}).get("base_pipeline_id")
+        if not base_pid:
+            return
+        shared: list[str] = []
+        project_id = getattr(project, "project_id", None)
+        if project_id:
+            try:
+                base = PipelineManager.load(str(base_pid))
+            except Exception:  # noqa: BLE001 — an unreadable base cannot prove the project is ours
+                base = None
+            if isinstance(base, dict):
+                project_shared = base.get("project_id") == project_id
+            else:
+                # Base record gone or unreadable: scenario forks share the base
+                # project by construction, so treat them as shared.
+                project_shared = "scenario_overlay" in (state.options or {})
+            if project_shared:
+                shared.append(f"project {project_id}")
+        if stage == STAGE_GRAPH:
+            own_handoff = PipelineManager.handoff_dir(state.pipeline_id)
+            handoff = state.handoff_dir or own_handoff
+            if os.path.realpath(handoff) != os.path.realpath(own_handoff):
+                shared.append(f"handoff dir {handoff}")
+        if not shared:
+            return
+        raise RuntimeError(
+            f"resume lineage guard: the {stage} artifact of fork {state.pipeline_id} must be "
+            f"rebuilt ({reason}), but its {' and '.join(shared)} "
+            f"{'are' if len(shared) > 1 else 'is'} shared with base pipeline "
+            f"{base_pid}; refusing to overwrite the base's {stage} artifacts in place. Fork "
+            "again from a healthy base, or set RESUME_LINEAGE_GUARDS=false to reuse the "
+            "shared artifacts knowingly."
+        )
+
+    @staticmethod
+    def _store_lineage_map(state: "PipelineState", key: str, value: dict[str, str]) -> None:
+        """Write a durable lineage map into ``state.options``; drop the key when empty."""
+        if value:
+            state.options[key] = value
+        else:
+            state.options.pop(key, None)
+
+    def _record_stage_lineage(self, state: "PipelineState", stage: str, reused: bool) -> None:
+        """INFRA-7: remember a recompute (or a settled rebuild) for the lineage guards.
+
+        A recompute adds ``stage`` to this attempt's recomputed set and, with
+        the guards on, updates the durable maps: the stage's own
+        ``lineage_invalidated`` / ``lineage_rebuilt`` entries are cleared
+        (rebuilt from current inputs), every guarded downstream stage is marked
+        stale and loses its rebuilt artifact.  A reuse settles the stage's
+        interrupted rebuild when the reused artifact is the rebuilt one.  The
+        maps are saved with the stage's completion, so the invalidation
+        survives a failed downstream rebuild.  With the guards off a recompute
+        still drops the rebuilt artifacts it made stale (a map only a guards-on
+        attempt wrote), so a later guards-on attempt cannot exempt an artifact
+        built before this recompute; nothing else is touched.  Pure in-memory
+        bookkeeping; the caller does not swallow its errors (the guard is an
+        honesty check and fails closed).
+        """
+        guards = bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
+        invalidated = state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION)
+        rebuilt = state.options.get(run_shape.LINEAGE_REBUILT_OPTION)
+        if reused:
+            if guards:
+                invalidated, rebuilt = run_shape.settle_reused_rebuild(invalidated, rebuilt, stage)
+                self._store_lineage_map(state, run_shape.LINEAGE_INVALIDATED_OPTION, invalidated)
+                self._store_lineage_map(state, run_shape.LINEAGE_REBUILT_OPTION, rebuilt)
+            return
+        self._attempt_recomputed().add(stage)
+        exemptions = run_shape.lineage_exemptions(state.options)
+        if not guards:
+            if run_shape.LINEAGE_REBUILT_OPTION in state.options:
+                self._store_lineage_map(
+                    state, run_shape.LINEAGE_REBUILT_OPTION,
+                    run_shape.settle_rebuilt(rebuilt, stage, exemptions=exemptions))
+            return
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_INVALIDATED_OPTION,
+            run_shape.invalidate_downstream(invalidated, stage, exemptions=exemptions))
+        self._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.settle_rebuilt(rebuilt, stage, exemptions=exemptions))
+
+    def _record_lineage_artifact_replaced(self, state: "PipelineState", stage: str) -> None:
+        """INFRA-7: ``stage``'s artifact was just overwritten from current inputs.
+
+        ONTOLOGY reuse is keyed on ``project.ontology`` being present, not on
+        the stage bit, so its lineage bookkeeping cannot wait for
+        ``_complete_stage``: an attempt cut off in between would keep the
+        invalidation and refuse the fresh ontology on the next resume.  The
+        recompute is recorded (and persisted) as soon as the artifact is
+        saved; ``_complete_stage`` repeats it idempotently.  A crash before
+        this save only costs a redundant rebuild.  With the guards off only an
+        existing ``lineage_rebuilt`` map is settled (see ``_record_stage_lineage``).
+        """
+        if (not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True))
+                and run_shape.LINEAGE_REBUILT_OPTION not in state.options):
+            return
+        self._record_stage_lineage(state, stage, reused=False)
+        PipelineManager.save(state)
+
+    @staticmethod
+    def _record_lineage_rebuild_started(state: "PipelineState", stage: str,
+                                        artifact_id: str) -> None:
+        """INFRA-7: an invalidated ``stage`` starts building ``artifact_id`` from current inputs.
+
+        REPORT reuse is keyed on a persisted report, not on the stage bit: a
+        report minted and published after the upstream recompute, whose
+        attempt ended before ``_complete_stage`` (a cancel or outage halt
+        raised from its final progress callback, a restart), must be reused on
+        the next resume rather than regenerated under a new id.  The minted id
+        goes into ``options.lineage_rebuilt``; any other report of the stage
+        (such as the stale one the simulation-id fallback lookup would find
+        when the minted report never reached disk) is still refused.  The
+        caller persists the state together with the minted id.
+        """
+        if not bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+            return
+        PipelineOrchestrator._store_lineage_map(
+            state, run_shape.LINEAGE_REBUILT_OPTION,
+            run_shape.mark_rebuilt(
+                state.options.get(run_shape.LINEAGE_INVALIDATED_OPTION),
+                state.options.get(run_shape.LINEAGE_REBUILT_OPTION),
+                stage, artifact_id))
+
+    def _record_stage_decision(self, state: "PipelineState", stage: str, reused: bool) -> None:
+        """INFRA-7: typed reuse fact per stage + run.json provider stamp on recompute.
+
+        A reused REPORT whose mint is still pending (``options.report_producer_v1``,
+        written when an earlier attempt minted it) is stamped with the recorded
+        producer; the record is dropped once REPORT completes either way.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        record = {"stage": stage, "reused": bool(reused), "at": _utcnow()}
+        state.options["stage_reuse_v1"] = run_shape.append_capped(
+            state.options.get("stage_reuse_v1"), record, run_shape.STAGE_REUSE_LOG_CAP)
+        attempt_records = getattr(self, "_stage_reuse_this_attempt", None)
+        if attempt_records is None:
+            attempt_records = []
+            self._stage_reuse_this_attempt = attempt_records
+        attempt_records.append(dict(record))
+        if not reused:
+            self._stamp_run_manifest_stage(state, stage)
+        elif stage == STAGE_REPORT:
+            stamp = run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), state.report_id)
+            if stamp is not None:
+                self._stamp_run_manifest_stage(state, stage, provider=stamp)
+        if stage == STAGE_REPORT:
+            state.options.pop(run_shape.REPORT_PRODUCER_OPTION, None)
+
+    def _record_report_mint(self, state: "PipelineState", report_id: str) -> None:
+        """INFRA-7: remember who produces a newly minted report (caller saves the state).
+
+        Stored with the minted report_id in the same state save, so a later
+        attempt that reuses this report (published, but its attempt ended
+        before ``_complete_stage``) can stamp run.json with its real producer.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        state.options[run_shape.REPORT_PRODUCER_OPTION] = run_shape.producer_record(
+            report_id, _current_provider_pair())
+
+    def _stamp_produced_artifact(self, state: "PipelineState", stage: str) -> None:
+        """INFRA-7: restamp run.json as soon as ``stage`` starts or finishes producing
+        an artifact whose reuse is keyed on the persisted artifact, not on the stage bit.
+
+        ONTOLOGY (after ``save_project``) and REPORT (after the minted id is
+        saved) can be reused by an attempt that never reached their
+        ``_complete_stage`` restamp; without this, run.json would keep naming
+        the replaced artifact's producer (or none on a fresh run).  REPORT
+        uses the pair recorded at the mint.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        provider = None
+        if stage == STAGE_REPORT:
+            provider = run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), state.report_id)
+        self._stamp_run_manifest_stage(state, stage, provider=provider)
+
+    def _reset_run_manifest_simulation(self, state: "PipelineState") -> None:
+        """INFRA-7: RUN re-executes, so run.json's simulation block restarts fresh.
+
+        The carried-forward block describes the simulation being replaced; while
+        the new run is in flight (or after it fails) run.json must not present
+        those values as this run's.  ``_update_manifest`` then adds the runtime
+        fields this attempt's RUN writes.
+        """
+        if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+            return
+        self._stamp_run_manifest_stage(state, STAGE_RUN)
+
+    def _stamp_run_manifest_stage(self, state: "PipelineState", stage: str, *,
+                                  provider: Optional[dict[str, Any]] = None) -> None:
+        """Restamp the run.json ``resolved`` block of a stage recomputed this attempt.
+
+        Reused stages keep the stamp carried forward from the attempt that
+        produced them.  ``provider`` overrides the current provider pair for a
+        provider-stamped stage (the recorded producer of a reused report).  A
+        missing run.json is left missing (the attempt-start writer owns
+        creating it); any failure is swallowed like every other run.json
+        writer.
+        """
+        if not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
+            return
+        if stage not in run_shape.RESOLVED_BLOCK_FOR_STAGE:
+            return
+        try:
+            from ..utils.security import redact_secrets
+            from ..utils.atomic import write_json_atomic
+            path = PipelineManager.manifest_path(state.pipeline_id)
+            manifest = _read_json(path)
+            if not isinstance(manifest, dict):
+                return
+            fresh = getattr(self, "_fresh_resolved", None)
+            if fresh is None:
+                fresh = _build_run_manifest(state).get("resolved") or {}
+            resolved = manifest.get("resolved")
+            resolved = resolved if isinstance(resolved, dict) else {}
+            run_shape.stamp_resolved_stage(
+                resolved, stage, fresh=fresh,
+                provider=provider if provider is not None else _current_provider_pair(),
+                sim_runtime=self._attempt_sim_runtime())
+            manifest["resolved"] = resolved
+            manifest["updated_at"] = _utcnow()
+            write_json_atomic(path, redact_secrets(manifest))
+        except Exception as e:  # noqa: BLE001 — 清单是观测产物，写失败必须静默降级
+            logger.debug("[%s] run.json 阶段戳跳过: %s", state.pipeline_id, e)
+
+    def _stage_model_record(self, state: "PipelineState", stage: str) -> dict[str, Any]:
+        """INFRA-8: the model provenance of ``stage`` as recomputed by this attempt.
+
+        RESEARCH: the resolved model id and served ids of this attempt's research child
+        (``_record_research_telemetry``; None / [] when it reported none). RUN: the
+        simulation child's own record (:meth:`_sim_model_record`). Every other stage: the
+        requested labels and served ids this attempt's LLMMeter recorded for the stage
+        (model_provenance.stage_record: tier routing and failover included), falling back to
+        the current provider pair (the pair INFRA-7 stamps, ``requested_source``
+        'configured') when the stage recorded no call, e.g. with LLM_TELEMETRY_ENABLED off.
+        """
+        if stage == STAGE_RESEARCH:
+            record = getattr(self, "_research_model_provenance", None)
+            return dict(record) if isinstance(record, dict) else model_provenance.research_stage_record(None)
+        if stage == STAGE_RUN:
+            return self._sim_model_record(state)
+        pair = _current_provider_pair()
+        from ..utils.telemetry import LLMMeter
+        resolution = LLMMeter.snapshot(state.pipeline_id).get("model_resolution")
+        return model_provenance.stage_record(
+            model_provenance.resolution_entries(resolution, stage),
+            pair.get("provider"), pair.get("model_name"))
+
+    @staticmethod
+    def _sim_model_record(state: "PipelineState") -> dict[str, Any]:
+        """INFRA-8: RUN's requested labels and served ids from the simulation child.
+
+        The child records them per call (sim_llm_telemetry.json ``model_resolution``, stashed
+        in ``options.sim_llm_telemetry`` and merged across the child runs a SIM_RESUME
+        continuation chains together): the direct camel calls with the id the provider
+        reported, and every LLMClient call (CLI bridge, failover, decision channel) with its
+        own requested label and served id. Only a stash of the current simulation
+        (``state.simulation_id``) counts: one left by an earlier simulation (this RUN's
+        telemetry was unreadable) is ignored. Without the child's record the requested label
+        is the effective label of the simulation provider and the model oasis_llm sends
+        (LLM_MODEL_NAME), with no served ids (``requested_source`` 'configured'). The
+        telemetry's ``model`` is never used: it is the dominant by_model key, i.e. a served
+        id or, for the CLI bridge, the provider name.
+        """
+        from ..utils.llm_client import CLI_PROVIDERS, OPENAI_COMPATIBLE_PROVIDERS
+        pair = _current_provider_pair()
+        sim_tel = model_provenance.sim_stash_of(
+            state.options.get("sim_llm_telemetry"), state.simulation_id) or {}
+        provider = sim_tel.get("provider")
+        if provider not in (*CLI_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS):
+            # Missing, or the pricing key _record_sim_run_telemetry guessed from the model.
+            provider = pair.get("provider")
+        return model_provenance.stage_record(
+            sim_tel.get("model_resolution"), provider, pair.get("model_name"))
+
+    @staticmethod
+    def _sim_child_resumed(simulation_id: str) -> bool:
+        """INFRA-8: whether the latest child run of ``simulation_id`` continued its earlier
+        rounds from a round checkpoint (SIM_RESUME: the run state's ``resumed_from_round``) or
+        started afresh, discarding them. False when the run state is unavailable."""
+        try:
+            run_state = SimulationRunner.get_run_state(simulation_id)
+        except Exception:  # noqa: BLE001 — 未知按全新运行处理（只记本次子进程）
+            return False
+        return getattr(run_state, "resumed_from_round", None) is not None
+
+    def _reused_stage_model_record(self, state: "PipelineState", stage: str,
+                                   block: dict[str, Any]) -> Optional[dict[str, Any]]:
+        """INFRA-8: the model keys to merge into a reused stage's block that lacks them.
+
+        A block the attempt that produced the stage stamped keeps its keys (None). A reused
+        ONTOLOGY / GRAPH / REPORT restamped by INFRA-7 without a recomputing completion (the
+        early ONTOLOGY stamp after save_project, a pending report mint) gets the effective
+        label of its stamped pair with unknown served ids; only with RUN_SHAPE_PIN on, since
+        the legacy stage-entry stamp names the current provider, not the producer. A reused
+        RUN gets the simulation child's own record when the stash of the current simulation
+        holds one. Other stages stay as carried forward.
+        """
+        if "requested_model" in block:
+            return None
+        if stage in run_shape.PROVIDER_STAMPED_STAGES:
+            if not bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+                return None
+            return model_provenance.reused_stage_record(block)
+        if stage == STAGE_RUN:
+            sim_tel = model_provenance.sim_stash_of(
+                state.options.get("sim_llm_telemetry"), state.simulation_id)
+            if sim_tel is not None and sim_tel.get("model_resolution"):
+                return self._sim_model_record(state)
+        return None
+
+    def _stamp_stage_model_provenance(self, state: "PipelineState", stage: str, *,
+                                      reused: bool = False) -> None:
+        """INFRA-8: merge a stage's requested and served models into its run.json
+        ``resolved`` block (RUN's block is ``simulation``; PREPARE gets a ``prepare`` block).
+
+        A recomputed stage merges this attempt's record after INFRA-7's restamp, so its
+        provider/model_name keys stay. A reused stage keeps the carried-forward stamp of the
+        attempt that produced it, and only a block lacking the keys is filled in
+        (:meth:`_reused_stage_model_record`). A missing run.json is left missing; failures
+        propagate to ``_complete_stage``, which logs and continues.
+        """
+        if not (bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True))
+                and bool(getattr(Config, "RECORD_RUN_MANIFEST", True))):
+            return
+        block_name = model_provenance.RESOLVED_BLOCK_FOR_STAGE.get(stage)
+        if block_name is None:
+            return
+        from ..utils.security import redact_secrets
+        from ..utils.atomic import write_json_atomic
+        path = PipelineManager.manifest_path(state.pipeline_id)
+        manifest = _read_json(path)
+        if not isinstance(manifest, dict):
+            return
+        resolved = manifest.get("resolved")
+        resolved = resolved if isinstance(resolved, dict) else {}
+        block = resolved.get(block_name)
+        block = dict(block) if isinstance(block, dict) else {}
+        record = (self._reused_stage_model_record(state, stage, block) if reused
+                  else self._stage_model_record(state, stage))
+        if record is None:
+            return
+        block.update(record)
+        resolved[block_name] = block
+        manifest["resolved"] = resolved
+        manifest["updated_at"] = _utcnow()
+        write_json_atomic(path, redact_secrets(manifest))
+
+    def _assign_run_provenance(self, agent: Any, state: "PipelineState") -> None:
+        """INFRA-8: hand the report stage's ReportAgent the upstream model provenance.
+
+        ``agent.run_provenance`` (model-provenance/v1) holds the model keys of run.json's
+        research / ontology / graph / prepare / run blocks and the latest recorded run-shape
+        drift (``options.run_shape_drift``, kept across attempts by INFRA-7, so it may come
+        from an earlier attempt); ReportAgent adds the report stage itself and writes the
+        block into forecast.json. Unset (key omitted) with RECORD_MODEL_PROVENANCE off;
+        stages is empty when run.json is not recorded. Degrades to unset on any failure.
+        """
+        if not bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+            return
+        try:
+            manifest = (_read_json(PipelineManager.manifest_path(state.pipeline_id))
+                        if bool(getattr(Config, "RECORD_RUN_MANIFEST", True)) else None)
+            resolved = manifest.get("resolved") if isinstance(manifest, dict) else None
+            agent.run_provenance = model_provenance.run_provenance(
+                resolved, state.options.get("run_shape_drift"))
+        except Exception as exc:  # noqa: BLE001 — 出处是观测增益，绝不阻断报告
+            logger.debug("[%s] run_provenance 跳过: %s", state.pipeline_id, exc)
+
+    @staticmethod
+    def _derive_extra_seeds(base_seed: int, n_seeds: int) -> list[tuple[int, int]]:
+        """SIM-4 (C30): the extra ensemble members' (index, seed) pairs, members 2..n_seeds.
+
+        ``(base_seed or 0) + k * 7919``: distinct and deterministic even for base 0 (7919 is
+        prime). The primary run keeps its own SIM_SEED; seeding it differently is an owner
+        decision, so it is not done here."""
+        return [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
         """NEXTSTEPS P0-3: 同问多种子集成。
@@ -8547,6 +10480,15 @@ class PipelineOrchestrator:
                 or not getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                 or state.options.get("ensemble_done")):
             return
+        # EVAL-17: a seed whose process died hard (SIGKILL, OOM, host reboot) before the
+        # metering finally in _do_seed ran left a simulation that is neither checkpointed nor
+        # recorded, and the resumed ensemble re-runs that seed under a new simulation. Meter
+        # every persisted member once here; the per-simulation marker makes recorded ones
+        # no-ops.
+        _members = state.options.get("ensemble_member_simulations")
+        if isinstance(_members, dict):
+            for _member_sim in list(_members):
+                self._record_sim_run_telemetry(state, _member_sim, stage=SIM_METER_STAGE_ENSEMBLE)
         if not (project and graph_id and state.report_id):
             return
         from ..utils.atomic import write_json_atomic
@@ -8564,22 +10506,14 @@ class PipelineOrchestrator:
         max_rounds = int(_mr) if _mr else None
         handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
         # 派生互异种子（base=0 时也确定性互异）；每个种子跑一次独立 (prepare→run→report)。
-        seed_jobs = [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
+        seed_jobs = self._derive_extra_seeds(base_seed, n_seeds)
         cancel_ev0 = type(self)._cancel_events.get(state.pipeline_id)
         if cancel_ev0 is not None and cancel_ev0.is_set():
             raise PipelineCancelled("多种子集成期间被取消")
 
         # W9-5：主跑的情景脊柱（名 + 判定标准）钉给每个额外种子——种子间共享同一组命名情景
         # （概率自由），集成聚合才有稳定的对齐坐标（此前 3 种子自由起名 → 11 桶全 support=1）。
-        _spine: Optional[list] = None
-        try:
-            _spine = [
-                {"name": s.get("name"), "resolution_criteria": s.get("resolution_criteria")}
-                for s in (primary_fc.get("scenarios") or [])
-                if isinstance(s, dict) and s.get("name")
-            ] or None
-        except Exception:  # noqa: BLE001 — 脊柱纯增强，坏数据回退自由起名
-            _spine = None
+        _spine = seed_scenario_pin(primary_fc)
 
         # W9-2：集成 checkpoint + 遥测阶段带 + 心跳。此前集成运行在「report 完成之后」的
         # 无保护窗口：无 checkpoint、心跳陈旧、墙钟不归属任何阶段——两条失败跑都死在这里。
@@ -8613,6 +10547,8 @@ class PipelineOrchestrator:
                                state.pipeline_id, _ce)
 
         state.options.setdefault("ensemble_wall", {})["started_at"] = _utcnow()
+        self._note_cost_card_window(  # EVAL-18
+            state, "ensemble", state.options["ensemble_wall"]["started_at"])
         try:
             _set_stage("ensemble")
         except Exception:  # noqa: BLE001
@@ -8641,21 +10577,38 @@ class PipelineOrchestrator:
             except Exception:  # noqa: BLE001
                 pass
             _prev = _done_seeds.get(seed)
+            if _prev and _prev.get("simulation_id"):
+                # EVAL-17: a checkpointed seed's simulation spend is real whether its report is
+                # reused below or the seed re-runs under a new simulation. A seed completed
+                # before seed metering existed was never recorded; the per-simulation marker
+                # makes this a no-op for one recorded when it ran.
+                self._record_sim_run_telemetry(
+                    state, _prev.get("simulation_id"), stage=SIM_METER_STAGE_ENSEMBLE)
             if _prev and _prev.get("report_id"):
                 _fc_prev = self._read_report_forecast(_prev.get("report_id"))
                 if _fc_prev and _fc_prev.get("scenarios"):
                     logger.info("[%s] 集成种子 %s 已在 checkpoint 中完成，复用其报告 %s",
                                 state.pipeline_id, seed, _prev.get("report_id"))
+                    self._note_ensemble_member_simulation(state, _prev.get("simulation_id"), seed)
                     extra_runs.append({"seed": seed,
                                        "simulation_id": _prev.get("simulation_id"),
                                        "report_id": _prev.get("report_id"),
                                        "resumed_from_checkpoint": True})
                     forecasts.append(_fc_prev)
                     return
-            sim_id, rid, fc = self._run_one_seed(
-                state, project, graph_id, actors, research, report_md,
-                seed=seed, max_rounds=max_rounds, scenario_spine=_spine,
-            )
+            # EVAL-17: meter the seed simulation's subprocess spend exactly once under
+            # 'ensemble_sim' on every exit (success, failure, cancel) once it exists.
+            _sink: list = []
+            try:
+                sim_id, rid, fc = self._run_one_seed(
+                    state, project, graph_id, actors, research, report_md,
+                    seed=seed, max_rounds=max_rounds, scenario_spine=_spine,
+                    sim_id_sink=_sink,
+                )
+            finally:
+                if _sink:
+                    self._record_sim_run_telemetry(
+                        state, _sink[0], stage=SIM_METER_STAGE_ENSEMBLE)
             with _ckpt_lock:
                 _done_seeds[seed] = {
                     "k": k, "seed": seed, "simulation_id": sim_id, "report_id": rid,
@@ -8709,7 +10662,9 @@ class PipelineOrchestrator:
                             logger.warning("[%s] 集成种子 %s 失败（跳过）: %s", state.pipeline_id, k, _se)
                 if cancelled is not None:
                     raise cancelled
-            if len(forecasts) < 2:
+            # REPORT-1：概率待复核（needs_review）的 run 会被 aggregate_forecasts 剔除，不算有效
+            # 样本——否则 1 个可读 run 会被写成集成，一致度 1.0 被映射成「high」信心。
+            if sum(1 for f in forecasts if f.get("probability_status") != "needs_review") < 2:
                 logger.info("[%s] 有效集成样本<2，不写 ensemble_forecast.json", state.pipeline_id)
                 state.options["ensemble_done"] = True
                 PipelineManager.save(state)
@@ -8759,21 +10714,340 @@ class PipelineOrchestrator:
                 pass
             self._flush_run_telemetry(state)  # W9-3：集成窗口结束即落一版遥测
 
+    @staticmethod
+    def _report_ledger_context(state: "PipelineState", simulation_id: Optional[str], *,
+                               run_kind: str, seed: int,
+                               record_class: Optional[str] = None) -> dict[str, Any]:
+        """EVAL-1: ledger provenance for one ReportAgent (``agent.ledger_context``).
+
+        ``as_of_date`` is the graph stage's validated anchor, inherited from the base
+        pipeline by a what-if fork (None when it was not validated → the ledger falls
+        back to strict actors / commit date). A fork also carries its scenario identity
+        (``scenario_label`` / ``scenario_key``). Without an explicit ``record_class`` the
+        ledger derives production / conditional_scenario. An evaluation run's pin
+        (EVAL-13) re-classes the context as ``evaluation`` with its run provenance, so
+        a reused report's repair commit lands in the evaluation ledger too. With
+        COST_CARD_ENABLED the pinned ``config_hash`` (EVAL-18) rides along.
+        """
+        context: dict[str, Any] = {
+            "pipeline_id": state.pipeline_id,
+            "simulation_id": simulation_id,
+            "seed": seed,
+            "run_kind": run_kind,
+            "as_of_date": validated_as_of_from_options(state.options),
+        }
+        if bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            # EVAL-18: the config_hash the report stage pinned (_pin_config_hash), so commit
+            # rows join this pipeline's cost card on the same hash. Provenance only.
+            from ..utils.cost_accounting import pinned_config_hash
+            config_hash = pinned_config_hash(state.options)
+            if config_hash:
+                context["config_hash"] = config_hash
+        context.update(_scenario_ledger_identity(state.options))
+        if record_class:
+            context["record_class"] = record_class
+        evaluation = PipelineOrchestrator._evaluation_pin(state)
+        if evaluation is not None:
+            from .ledger_commit import apply_evaluation_context
+            context = apply_evaluation_context(context, evaluation)
+        return context
+
+    @staticmethod
+    def _evaluation_pin(state: "PipelineState") -> Optional[dict[str, Any]]:
+        """EVAL-13: this run's evaluation pin (None for a production run).
+
+        The same resolution as the report-side lookup (``_evaluation_pin_of``): the
+        options pin, else this pipeline's own handoff marker, else the fail-closed
+        context of a shared handoff whose marker names another run. Orchestrator
+        paths and ``evaluation_context_for_simulation`` therefore always agree.
+        """
+        return _evaluation_pin_of(state.pipeline_id, {"options": state.options or {},
+                                                      "handoff_dir": state.handoff_dir})
+
+    @staticmethod
+    def _hindcast_agent_kwargs(state: "PipelineState") -> dict[str, Any]:
+        """TIME-6: ``{'hindcast': pin}`` for a pinned hindcast run's ReportAgent, else {}."""
+        pin = hindcast_policy(state.options)
+        return {"hindcast": pin} if pin is not None else {}
+
+    @staticmethod
+    def _interview_feedback_agent_kwargs(state: "PipelineState") -> dict[str, Any]:
+        """FU-8: ``{'interview_graph_feedback': pinned}`` for a run with a pinned value, else {}.
+
+        The run's pinned ``sim_interview_graph_feedback`` (only a real bool counts, see
+        :func:`pinned_interview_graph_feedback`) goes to the main and seed ReportAgents
+        directly: a seed's simulation is recorded only in the in-memory
+        ``ensemble_member_simulations`` map while its report runs, so the by-simulation
+        lookup would find no owner and read the ambient value. Without a pinned value the
+        kwarg is left out, as ``_hindcast_agent_kwargs`` does, and the report falls back to
+        :func:`interview_graph_feedback_for_simulation`, the lookup ``/api/report``
+        regenerate and chat use: an unpinned shared-simulation child then follows the base
+        whose simulation it interviews on both paths, and every other unpinned run (no
+        owner, or the run itself) reads the ambient Config as before.
+        """
+        pinned = pinned_interview_graph_feedback(state.options)
+        return {"interview_graph_feedback": pinned} if pinned is not None else {}
+
+    def _record_research_audit(self, state: "PipelineState", handoff_dir: str) -> None:
+        """TIME-9: stamp the gated research's audit into the hindcast pin before any report reads it.
+
+        Under a hindcast pin whose ``pit.gates`` ran, the handoff's ``point_in_time.json`` (the
+        audit of the research this run consumes) becomes the pin's ``research_audit`` (``{'status',
+        'sha256'}``, :func:`hindcast_policy.research_audit_record`, hashed and parsed from the
+        same bytes; only an audit of this pin's as-of and policies counts).  It is recorded once
+        per research generation: a resume that reuses the research finds the same bytes and
+        changes nothing, and a re-run research replaces the audit of the research it replaced.
+        No other pin field is touched.  A missing, unreadable or unrecognised audit records none
+        and drops a stale one, so the report stays ``labelled`` rather than vouched for (fail
+        closed).  When the audit changes, run.json's ``resolved.as_of_enforcement`` is refreshed
+        from the pin.  Never raises; the stage completion that follows saves the state.
+        """
+        pin = hindcast_policy(state.options)
+        stored = state.options.get(HINDCAST_POLICY_OPTION) if pin is not None else None
+        if not isinstance(stored, dict):
+            return
+        pit = pin.get("pit")
+        audit: Optional[dict[str, Any]] = None
+        if isinstance(pit, dict) and pit.get("gates") is True:
+            path = os.path.join(handoff_dir, POINT_IN_TIME_FILENAME)
+            try:
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+                audit = research_audit_record(json.loads(raw.decode("utf-8")), hashlib.sha256(raw).hexdigest(),
+                                              pin=pin)
+                if audit is None:
+                    logger.warning("[%s] %s is not a recognised research audit of this hindcast pin; "
+                                   "the hindcast stays labelled", state.pipeline_id, POINT_IN_TIME_FILENAME)
+            except FileNotFoundError:
+                logger.warning("[%s] gated hindcast research wrote no %s; the hindcast stays labelled",
+                               state.pipeline_id, POINT_IN_TIME_FILENAME)
+            except Exception as exc:  # noqa: BLE001 — an unreadable audit vouches for nothing
+                logger.warning("[%s] %s unreadable (%s); the hindcast stays labelled",
+                               state.pipeline_id, POINT_IN_TIME_FILENAME, exc)
+        previous = stored.get("research_audit")
+        if audit == previous and (audit is not None or "research_audit" not in stored):
+            return
+        if audit is None:
+            stored.pop("research_audit", None)
+        else:
+            if previous is not None:
+                logger.warning("[%s] research regenerated: research audit %s replaced by %s",
+                               state.pipeline_id, previous, audit)
+            stored["research_audit"] = audit
+            logger.info("[%s] research audit recorded in the hindcast pin: %s",
+                        state.pipeline_id, audit["status"])
+        self._refresh_as_of_enforcement(state)
+
+    def _refresh_as_of_enforcement(self, state: "PipelineState") -> None:
+        """TIME-9: rewrite run.json ``resolved.as_of_enforcement`` from the current hindcast pin.
+
+        Best-effort like every run.json writer (a failure is logged at debug level); a
+        missing run.json is left missing (the attempt-start writer owns creating it and
+        builds the same record from the pin).
+        """
+        pin = hindcast_policy(state.options)
+        if pin is None or not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
+            return
+        try:
+            from ..utils.security import redact_secrets
+            from ..utils.atomic import write_json_atomic
+            path = PipelineManager.manifest_path(state.pipeline_id)
+            manifest = _read_json(path)
+            if not isinstance(manifest, dict):
+                return
+            resolved = manifest.setdefault("resolved", {})
+            resolved["as_of_enforcement"] = as_of_enforcement_record(pin)
+            manifest["updated_at"] = _utcnow()
+            write_json_atomic(path, redact_secrets(manifest))
+        except Exception as e:  # noqa: BLE001 — run.json is an observation artifact
+            logger.debug("[%s] run.json as_of_enforcement 更新跳过: %s", state.pipeline_id, e)
+
+    @classmethod
+    def _assign_evaluation_context(cls, agent: Any, state: "PipelineState") -> None:
+        """EVAL-13: give a report agent this run's evaluation context.
+
+        An evaluation run's agent gets its pin as ``evaluation_context``. A production
+        run's agent is marked as already resolved (production), so its report skips
+        the pipeline-state scan of ``ReportAgent._resolve_evaluation_context``: this
+        run's options and handoff decide, exactly as that scan would.
+        """
+        pin = cls._evaluation_pin(state)
+        if pin is not None:
+            agent.evaluation_context = pin
+            return
+        agent._evaluation_context_lookup = None
+        agent._evaluation_context_looked_up = True
+
+    @staticmethod
+    def _record_validated_as_of(state: "PipelineState", as_of: Optional[datetime],
+                                validated: bool) -> None:
+        """EVAL-1: record the graph stage's as-of anchor as the ledger pre-registration date.
+
+        Only an anchor the validator actually produced counts (``validated``); the
+        raw-parse fallback date is unvalidated and never recorded. Every graph build
+        re-decides, so a stale anchor from an earlier attempt is dropped first.
+        """
+        state.options.pop("as_of_date_validated", None)
+        if not validated or as_of is None:
+            return
+        from ..utils.point_in_time import validate_as_of
+        try:
+            state.options["as_of_date_validated"] = validate_as_of(as_of.date().isoformat())
+        except ValueError:
+            pass
+
+    @staticmethod
+    def _pin_config_hash(state: "PipelineState", *, report_id: Any,
+                         report_producer: Optional[dict[str, Any]],
+                         keep_existing: bool = False) -> None:
+        """EVAL-18: pin ``options['config_hash_v1']`` = ``{config_hash, fingerprint, report_id}``.
+
+        Computed once per report, at report-stage construction, from pinned state (run
+        shape, safety policy, run.json research/ontology/graph stamps, run options, the
+        unpinned forecast knobs) plus ``report_producer``; ``_report_ledger_context``
+        stamps it on the ledger rows and the cost card reuses it, so both carry the same
+        hash even though INFRA-7 restamps run.json's report block only at stage completion.
+        ``keep_existing`` keeps a valid earlier pin computed for this ``report_id`` (a
+        reused report); a pin computed for another report (the minted one never reached
+        disk and an older report was found) is recomputed. The caller saves the state. A
+        failure drops the pin (no hash rather than a stale one). Knob off → no-op.
+        """
+        if not bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            return
+        from ..utils.cost_accounting import CONFIG_HASH_OPTION
+        try:
+            from ..utils.cost_accounting import config_hash_record, pinned_for_report
+            if keep_existing and pinned_for_report(state.options, report_id):
+                return
+            state.options[CONFIG_HASH_OPTION] = config_hash_record(
+                state.options, _read_json(PipelineManager.manifest_path(state.pipeline_id)),
+                report_producer=report_producer, report_id=report_id)
+        except Exception as exc:  # noqa: BLE001 — 配置指纹为观测增益，绝不阻断报告
+            state.options.pop(CONFIG_HASH_OPTION, None)
+            logger.warning("[%s] config_hash 钉入失败（忽略，本报告不带 config_hash）: %s",
+                           state.pipeline_id, exc)
+
+    def _generate_stage_report(self, state: "PipelineState", agent: Any,
+                               simulation_id: Optional[str], *, report_id: str,
+                               progress_callback: Callable[[str, int, str], None]) -> Any:
+        """EVAL-1: generate the report stage's report with its ledger wiring.
+
+        The agent gets its ledger context before generation (production, or the
+        conditional_scenario a what-if's scenario label derives), and its ledger
+        receipt is copied into ``state.options['forecast_ledger']`` whatever the
+        outcome: completed, FAILED, or a cancellation raised after the completed
+        report was committed. An evaluation run's agent also gets its admission pin
+        as ``evaluation_context`` (EVAL-13, :meth:`_assign_evaluation_context`), and every
+        agent the upstream model provenance as ``run_provenance`` (INFRA-8,
+        :meth:`_assign_run_provenance`). The report's config_hash is pinned first
+        (EVAL-18, :meth:`_pin_config_hash`).
+        """
+        # EVAL-18: pin the config fingerprint once, before the ledger context is built; the
+        # report's producer is the provider pair generating it now (the pair the mint recorded).
+        self._pin_config_hash(state, report_id=report_id,
+                              report_producer=_current_provider_pair())
+        agent.ledger_context = self._report_ledger_context(
+            state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0))
+        self._assign_run_provenance(agent, state)  # INFRA-8
+        self._assign_evaluation_context(agent, state)
+        try:
+            return agent.generate_report(progress_callback=progress_callback, report_id=report_id)
+        finally:
+            receipt = getattr(agent, "ledger_receipt", None)
+            if isinstance(receipt, dict):
+                state.options["forecast_ledger"] = dict(receipt)
+
+    def _repair_reused_report_ledger(self, state: "PipelineState", report: Any,
+                                     simulation_id: Optional[str], actors: Any,
+                                     research_report: Optional[str]) -> None:
+        """EVAL-1: commit a reused report whose ledger commit never landed (best-effort).
+
+        A resume reuses the finished report, so a commit that failed (ledger I/O) or
+        was cut off by a crash would otherwise never happen. The report gets the
+        context the report stage gives it; ``ledger_commit.recommit_reused_report``
+        writes only for a completed report with no ledger row at all. A stored
+        receipt proving the report already has its row skips the ledger read.
+        """
+        report_id = getattr(report, "report_id", None) or state.report_id
+        if not report_id:
+            return
+        prior = state.options.get("forecast_ledger")
+        if (isinstance(prior, dict) and prior.get("report_id") == report_id
+                and (prior.get("status") in ("committed", "revision", "duplicate")
+                     or prior.get("unpublished_row") in ("recorded", "duplicate"))):
+            return
+        # EVAL-18: the pin of the attempt that produced this report stays; any other report
+        # (produced before the pin existed, or not the report the pin was computed for) gets
+        # one now, with the producer its mint recorded (unknown for a non-matching report).
+        self._pin_config_hash(
+            state, report_id=report_id, keep_existing=True,
+            report_producer=run_shape.reused_report_stamp(
+                state.options.get(run_shape.REPORT_PRODUCER_OPTION), report_id))
+        try:
+            from . import ledger_commit
+            status = getattr(report, "status", None)
+            receipt = ledger_commit.recommit_reused_report(
+                report_id,
+                report_status=getattr(status, "value", status),
+                question=state.prompt,
+                language=ReportAgent.resolve_output_language(
+                    state.prompt, research_report or "", situation_brief(actors) or ""),
+                actors=actors,
+                scenario_label=str(state.options.get("scenario_label") or ""),
+                ledger_context=self._report_ledger_context(
+                    state, simulation_id, run_kind="pipeline", seed=int(Config.SIM_SEED or 0)),
+                publication_status_fn=ReportManager.publication_status,
+                load_forecast_fn=ReportManager.load_structured_forecast,
+            )
+        except Exception as exc:  # noqa: BLE001 — 账本补提交为旁路记账，绝不阻断复用
+            logger.warning("[%s] [ledger] reused report %s: repair failed (ignored): %s",
+                           state.pipeline_id, report_id, exc)
+            return
+        if receipt is None:
+            return
+        state.options["forecast_ledger"] = receipt
+        log = logger.warning if receipt.get("status") == "error" else logger.info
+        log("[%s] [ledger] status=%s commit_id=%s report=%s (reused report repaired)",
+            state.pipeline_id, receipt.get("status"), receipt.get("commit_id"), report_id)
+
+    @staticmethod
+    def _note_ensemble_member_simulation(state: "PipelineState", simulation_id: Optional[str],
+                                         seed: int) -> None:
+        """EVAL-1: remember which ensemble seed a member simulation ran.
+
+        No pipeline owns a member's simulation as its ``simulation_id``, so without
+        this map a later /api/report/generate on it would key a second PRODUCTION
+        primary; ``ledger_identity_for_simulation`` reads it to keep it an
+        ensemble member. Persisted by the ensemble's own state saves. Seed threads call it
+        concurrently with the full state save in _record_sim_run_telemetry, so the write
+        takes the same lock (EVAL-17).
+        """
+        if simulation_id:
+            with PipelineOrchestrator._sim_meter_lock:
+                state.options.setdefault(
+                    "ensemble_member_simulations", {})[str(simulation_id)] = int(seed)
+
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
-                      scenario_spine: Optional[list] = None) -> tuple:
+                      scenario_spine: Optional[list] = None,
+                      sim_id_sink: Optional[list] = None) -> tuple:
         """对同一图谱跑一次额外 (prepare→run→report)，返回 (sim_id, report_id, forecast|None)。
 
         自包含、串行、运行在管线线程内；不触碰主 sim/report 的 id 与状态。带停滞看门狗。
         W9-5 ``scenario_spine``：主跑的情景脊柱（名+判定标准），钉给种子的 ReportAgent 使
         种子对同一组命名情景打分（概率自由）；报告链尚未支持该参数时回退旧签名。
+        EVAL-17 ``sim_id_sink``: receives the seed's simulation_id as soon as it exists, so
+        the caller can meter the seed simulation's spend even when this method raises.
         """
         sim_manager = SimulationManager()
         _is_http = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
         sim_state = sim_manager.create_simulation(
             project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
         sim_id = sim_state.simulation_id
+        if sim_id_sink is not None:
+            sim_id_sink.append(sim_id)
+        self._note_ensemble_member_simulation(state, sim_id, seed)
         # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
         # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
         # CLI providers stay capped at 3 (local CLI throughput bound).
@@ -8873,7 +11147,16 @@ class PipelineOrchestrator:
             "actors": actors,
             "sources": research.get("sources"),
             "research_report": report_md,
+            # TIME-5：数值一致性影子检查模式读准入钉（服务重载不改变已准入运行）。
+            "numeric_guard_mode": self._pinned_safety(
+                state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
         }
+        # TIME-6：回测运行的种子报告同样扣下市场——钉随构造参数直接交给报告，不依赖报告侧
+        # 按模拟 id 的所属管线查找（种子模拟不是任何管线自己的 simulation_id）。
+        _agent_kwargs.update(self._hindcast_agent_kwargs(state))
+        # FU-8：采访事实写图的门同理——有钉值时随构造参数交给报告（种子模拟的所属管线在报告期间
+        # 尚未落盘，ensemble_member_simulations 只在内存）；无钉值不加参数，报告按模拟 id 查找。
+        _agent_kwargs.update(self._interview_feedback_agent_kwargs(state))
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -8885,6 +11168,12 @@ class PipelineOrchestrator:
             logger.info("[%s] ReportAgent 尚未支持 scenario_spine，种子 %s 回退自由情景命名",
                         state.pipeline_id, seed)
             agent = ReportAgent(**_agent_kwargs)
+        # EVAL-1: 集成种子报告是相关抽样而非独立预测——以 ensemble_member 入账（不进生产校准）。
+        agent.ledger_context = self._report_ledger_context(
+            state, sim_id, run_kind="seed_ensemble", seed=int(seed),
+            record_class="ensemble_member")
+        # EVAL-13: 评估运行的种子报告同样只进评估通道（跳过生产校准读、入评估账本）。
+        self._assign_evaluation_context(agent, state)
         agent.generate_report(report_id=rid)
         return sim_id, rid, self._read_report_forecast(rid)
 
@@ -8976,6 +11265,7 @@ class PipelineOrchestrator:
             st.message = message
             if st.started_at is None:
                 st.started_at = _utcnow()
+                self._note_cost_card_window(state, stage, st.started_at)  # EVAL-18
             state.current_stage = stage
             # I-5-6: 记录最近一次进度信号的壁钟时间戳，供状态 API 计算 elapsed/stale，
             # 让 UI 把「长时间无进度」诚实地呈现为「仍在思考」而非「卡死的进度条」。
@@ -9044,6 +11334,16 @@ class PipelineOrchestrator:
             self._record_stage_artifacts(state, stage)  # T6.3
         except Exception:
             pass
+        # INFRA-7：血统记账是诚实性检查（fail closed，不吞异常），随本次 save 与阶段完成一起落盘。
+        self._record_stage_lineage(state, stage, reused)
+        try:
+            self._record_stage_decision(state, stage, reused)  # INFRA-7
+        except Exception as _sd_err:  # noqa: BLE001 — 复用记账是观测增益，绝不阻断阶段完成
+            logger.debug("[%s] stage_reuse_v1 记账跳过: %s", state.pipeline_id, _sd_err)
+        try:
+            self._stamp_stage_model_provenance(state, stage, reused=reused)  # INFRA-8
+        except Exception as _mp_err:  # noqa: BLE001 — 出处记录是观测增益，绝不阻断阶段完成
+            logger.debug("[%s] run.json 模型出处跳过: %s", state.pipeline_id, _mp_err)
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -9223,6 +11523,12 @@ class PipelineOrchestrator:
                 bq = fc.get("binary_quality") or {}
                 if bq and not bq.get("passed", True):
                     q_issues.append("binary-forecast conviction/objectivity gate failed (A3/A4): " + "；".join(bq.get("issues", [])[:2]))
+                elif bq.get("needs_review_count"):
+                    # REPORT-1：部分二元概率不可读被扣下、其余仍过门时，扣下说明只在
+                    # binary_quality 里——作为降级信号浮到健康面（不阻断发布；门未过时
+                    # 上一分支的 issues 已以该说明行打头）。
+                    from .forecast_extractor import _binary_withheld_issue
+                    q_issues.append(_binary_withheld_issue(bq["needs_review_count"]))
                 # XRUN-1(c): 二元预测对模拟不敏感（与另一份报告输出同一概率向量）→ 降级信号。
                 if (q.get("sim_insensitivity") or {}).get("issue"):
                     q_issues.append(
@@ -9381,6 +11687,7 @@ class PipelineOrchestrator:
         organic = db_rows
         organic_source = "db_rows"
         summary_health = None
+        schedule_issue = None
         try:
             _sum_path = os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id, "run_summary.json")
             if os.path.exists(_sum_path):
@@ -9394,6 +11701,11 @@ class PipelineOrchestrator:
                     _sh = _summary.get("simulation_health")
                     if isinstance(_sh, str) and _sh:
                         summary_health = _sh
+                    # SIM-3（SIM_SCHEDULE_AUDIT）：run_summary 记下的永不触发的定时事件 → degraded
+                    # issue（绝不判失败）；无该键 / 计数为 0 → 不加 issue。
+                    if getattr(Config, "SIM_SCHEDULE_AUDIT", True):
+                        from .sim_schedule_audit import unreachable_issue
+                        schedule_issue = unreachable_issue(_summary.get("schedule_audit"))
         except Exception:  # noqa: BLE001 — 老 run 无 summary → 沿用 db 口径
             pass
         err = None
@@ -9439,6 +11751,9 @@ class PipelineOrchestrator:
             issues.append(
                 f"{dead_letters} graph-feedback episode(s) in the dead-letter queue — "
                 "report may read an episode-starved graph (replay via replay_zep_dead_letters.py)")
+        if schedule_issue:
+            meta["schedule_audit_unreachable"] = schedule_issue[0]
+            issues.append(schedule_issue[1])
         health = "degraded" if issues else "ok"
         return health, issues, meta
 
@@ -9483,6 +11798,12 @@ class PipelineOrchestrator:
                     "issues": graph_issues,
                     **graph_meta,
                 }
+            # RESEARCH-2: a degraded research_quality is a degraded research stage
+            # (degrade-only: it never adds a hard issue).
+            if getattr(Config, "PIPELINE_HEALTH_RESEARCH_STAGE", False):
+                research_stage = _research_health_stage(state.options.get("research_quality"))
+                if research_stage is not None:
+                    health["stages"]["research"] = research_stage
             degraded = any(s.get("health") in ("degraded", "failed")
                            for s in health["stages"].values())
             health["status"] = "failed" if hard_issues else ("degraded" if degraded else "ok")
@@ -9495,6 +11816,64 @@ class PipelineOrchestrator:
         if health["status"] == "degraded":
             logger.warning("[%s] 管线健康降级: %s", state.pipeline_id,
                            json.dumps(health["stages"], ensure_ascii=False)[:400])
+
+    @staticmethod
+    def _reset_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: attempt 起点移除上一 attempt 的记分卡侧车与 options 摘要。
+
+        侧车/摘要只描述「到达 finally 块的最近一次 attempt」。本 attempt 若崩溃后被
+        reconcile_orphans 收尾（不走 finally），旧结果不得冒充本次，也不得让 CLI 回填把它
+        当作管线亲写的证据而跳过。旋钮关闭 = 不动（逐字节不变）。位于 _run 的 try 之前，
+        故自身兜住一切异常、绝不抛出。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        try:
+            from .stage_scorecard import sidecar_path
+            _stale = sidecar_path(state.pipeline_id)
+            if os.path.exists(_stale):
+                os.remove(_stale)
+            if state.options.pop("stage_scorecard_summary", None) is not None:
+                PipelineManager.save(state)
+        except Exception as _rse:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线
+            logger.warning("[%s] 清理上一 attempt 的记分卡失败（忽略）: %s",
+                           state.pipeline_id, _rse)
+
+    @staticmethod
+    def _write_stage_scorecard_sidecar(state: PipelineState) -> None:
+        """EVAL-15: 确定性分阶段记分卡侧车 <pipeline_dir>/stage_scorecard.json。
+
+        纯投影、绝不是门：不改 status/pipeline_health，不写报告目录；由 _run 的 finally 块在
+        每个终态调用（位于任何 try 之外），故自身兜住一切异常、绝不抛出。成功时把
+        {stage: passed} 折入 state.options['stage_scorecard_summary']；失败时移除上一 attempt
+        的摘要与侧车文件（宁缺毋错——旧结果不得冒充本次结果）。旋钮关闭 = 不写文件、不动
+        options（逐字节不变）。
+        """
+        if not getattr(Config, "STAGE_SCORECARD_ENABLED", True):
+            return
+        summary = None
+        try:
+            from .stage_scorecard import summarize_checks, write_stage_scorecard
+            summary = summarize_checks(
+                write_stage_scorecard(state.pipeline_id, state=state.to_dict()))
+        except Exception as _sce:  # noqa: BLE001 — 记分卡为观测增益，失败不影响管线终态
+            logger.warning("[%s] 分阶段记分卡写入失败（忽略）: %s", state.pipeline_id, _sce)
+            try:
+                from .stage_scorecard import sidecar_path
+                _stale = sidecar_path(state.pipeline_id)
+                if os.path.exists(_stale):
+                    os.remove(_stale)
+            except Exception as _rme:  # noqa: BLE001
+                logger.warning("[%s] 移除上一 attempt 的记分卡失败（忽略）: %s",
+                               state.pipeline_id, _rme)
+        try:
+            if summary is not None:
+                state.options["stage_scorecard_summary"] = summary
+            else:
+                state.options.pop("stage_scorecard_summary", None)
+            PipelineManager.save(state)
+        except Exception as _sse:  # noqa: BLE001
+            logger.warning("[%s] 保存记分卡摘要失败（忽略）: %s", state.pipeline_id, _sse)
 
     @staticmethod
     def _stage_artifact_specs(state: PipelineState, stage: str) -> list[tuple[str, str]]:
@@ -9514,6 +11893,16 @@ class PipelineOrchestrator:
             specs.append(("sources", os.path.join(hd, "sources.json")))
             specs.append(("quantitative", os.path.join(hd, "quantitative.json")))
             specs.append(("contested", os.path.join(hd, "contested.json")))
+            # REPORT-7 (RESEARCH_VERIFIED_FACTS): v3's claim/figure-to-page-span projection;
+            # optional (absent with the knob off, on legacy runs and older handoffs).
+            specs.append(("verified_facts", os.path.join(hd, "verified_facts.json")))
+            # RESEARCH-11 (RESEARCH_QUESTION_SPEC): v3's operational definition of the
+            # question (drf.question_spec/v1), written at plan time; optional (absent
+            # with the knob off, on legacy runs and older handoffs).
+            specs.append(("question_spec", os.path.join(hd, "question_spec.json")))
+            # TIME-9: a gated hindcast's research audit (drf-point-in-time/v1); optional
+            # (only a gated hindcast's v3 research writes it).
+            specs.append(("point_in_time", os.path.join(hd, POINT_IN_TIME_FILENAME)))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("prediction_market_candidates",
@@ -9681,6 +12070,14 @@ class PipelineOrchestrator:
     @staticmethod
     def _clear_report_attempt_artifacts(state: PipelineState) -> None:
         """Remove old REPORT-owned pointers and integrity rows at a new attempt boundary."""
+        # EVAL-1: the previous attempt's ledger receipt must not pass for the verdict of
+        # the new report (a cancelled/halted attempt never replaces it).
+        state.options.pop("forecast_ledger", None)
+        if bool(getattr(Config, "COST_CARD_ENABLED", True)):
+            # EVAL-18: nor may the previous report's config_hash pin describe the new report
+            # when the attempt ends before _generate_stage_report pins it (the card recomputes).
+            from ..utils.cost_accounting import CONFIG_HASH_OPTION
+            state.options.pop(CONFIG_HASH_OPTION, None)
         stale_names = {
             name for name in list(state.artifacts)
             if name.endswith("_partial") or name == "report_viz_manifest"
@@ -9742,15 +12139,31 @@ class PipelineOrchestrator:
             for name, path in self._report_viz_dynamic_artifact_specs(report_dir):
                 add_if(name, path)
 
+        # REPORT-7: a research completion describes the whole research artifact set.
+        # A research spec file absent at this boundary (the v3 child removes
+        # verified_facts.json when RESEARCH_VERIFIED_FACTS is off or its step fails)
+        # loses the pointer and manifest row an earlier attempt left; a row whose
+        # file is gone fails _validate_reuse, which would re-run research on every
+        # later resume.
+        stale: list[str] = []
+        if stage == STAGE_RESEARCH:
+            present = {name for name, _ in recorded}
+            stale = [name for name, _ in self._stage_artifact_specs(state, stage) if name not in present]
+            for name in stale:
+                state.artifacts.pop(name, None)
+                state.artifacts.pop(f"{name}_partial", None)
+
         # I-4-3: 把本阶段实际登记到的产物写入完整性清单。
-        if recorded and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
+        if (recorded or stale) and bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
             try:
                 manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+                removed = [name for name in stale if manifest.pop(name, None) is not None]
                 for name, path in recorded:
                     entry = _manifest_entry_for(name, path, stage)
                     if entry is not None:
                         manifest[name] = entry
-                PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+                if recorded or removed:
+                    PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
             except Exception as e:  # noqa: BLE001 — 清单是复用保障，写失败仅退化为无校验
                 logger.debug("[%s] 产物清单写出跳过: %s", state.pipeline_id, e)
 
@@ -10382,13 +12795,51 @@ class PipelineOrchestrator:
         try:
             from ..utils.security import redact_secrets
             from ..utils.atomic import write_json_atomic
-            manifest = redact_secrets(_build_run_manifest(state))
+            manifest = _build_run_manifest(state)
+            if bool(getattr(Config, "RUN_SHAPE_PIN", True)):
+                manifest = self._fold_prior_run_manifest(state, manifest)
+            manifest = redact_secrets(manifest)
             write_json_atomic(PipelineManager.manifest_path(state.pipeline_id), manifest)
             # 登记可深链指针，供 StageTimeline / GET /manifest 复用。
             if isinstance(state.artifacts, dict):
                 state.artifacts["run_manifest"] = PipelineManager.manifest_path(state.pipeline_id)
         except Exception as e:  # noqa: BLE001 — 清单是观测产物，写失败必须静默降级
             logger.debug("[%s] run.json 写出跳过: %s", state.pipeline_id, e)
+
+    def _fold_prior_run_manifest(self, state: PipelineState,
+                                 manifest: dict[str, Any]) -> dict[str, Any]:
+        """INFRA-7: keep run.json history across attempts instead of rewriting it.
+
+        The previous run.json's ``resolved`` blocks are carried forward (a
+        reused stage keeps the stamp of the attempt that produced it; stages
+        recomputed this attempt are restamped in ``_complete_stage``), one
+        ``attempts`` entry is appended (capped), and the pinned run shape plus
+        this attempt's drift are published under ``run_shape``.
+        """
+        # carry_forward_resolved deep-copies, so this attempt's fresh blocks stay
+        # untouched for restamping recomputed research/simulation blocks.
+        self._fresh_resolved = manifest.get("resolved") or {}
+        prior = _read_json(PipelineManager.manifest_path(state.pipeline_id))
+        prior = prior if isinstance(prior, dict) else {}
+        manifest["resolved"] = run_shape.carry_forward_resolved(
+            prior.get("resolved"), manifest.get("resolved"))
+        if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+            # INFRA-8: PREPARE's model-provenance block is not a run-shape block.
+            model_provenance.carry_forward_extra_blocks(prior.get("resolved"), manifest["resolved"])
+        pinned = (state.options or {}).get("run_shape_v1")
+        pinned = pinned if isinstance(pinned, dict) else None
+        try:
+            drift = self._run_shape_drift(state)
+        except Exception as exc:  # noqa: BLE001 — 漂移判定由 _check_run_shape_drift 负责
+            logger.debug("[%s] run.json 漂移摘要跳过: %s", state.pipeline_id, exc)
+            drift = None
+        manifest["attempts"] = run_shape.append_capped(
+            prior.get("attempts"),
+            run_shape.attempt_record(_utcnow(), pinned, drift),
+            run_shape.ATTEMPTS_CAP,
+        )
+        manifest["run_shape"] = {"pin": pinned, "drift": drift}
+        return manifest
 
     def _update_manifest(self, state: PipelineState, stage: str,
                          total_rounds: Optional[int] = None,
@@ -10402,6 +12853,15 @@ class PipelineOrchestrator:
         if not bool(getattr(Config, "RECORD_RUN_MANIFEST", True)):
             return
         try:
+            if stage == STAGE_RUN:
+                # INFRA-7：记下本 attempt 的 RUN 实际写入的运行期字段——RUN 重算的阶段戳只保留这些，
+                # 不沿用被替换模拟的旧值。
+                _runtime = self._attempt_sim_runtime()
+                if total_rounds is not None:
+                    _runtime["total_rounds"] = int(total_rounds)
+                for _k in ("calendar_unit", "n_rounds", "horizon_date"):
+                    if temporal and temporal.get(_k) is not None:
+                        _runtime[_k] = temporal[_k]
             from ..utils.security import redact_secrets
             from ..utils.atomic import write_json_atomic
             path = PipelineManager.manifest_path(state.pipeline_id)
@@ -10410,7 +12870,10 @@ class PipelineOrchestrator:
                 # 清单缺失（如老管线 resume）：重建首版骨架。
                 manifest = redact_secrets(_build_run_manifest(state))
             resolved = manifest.setdefault("resolved", {})
-            if stage in (STAGE_ONTOLOGY, STAGE_GRAPH, STAGE_REPORT):
+            # INFRA-7：RUN_SHAPE_PIN 开启时 provider 戳改在 _complete_stage 按「是否重算」落下——
+            # 阶段进入时尚不知是否复用，此处重戳会把复用阶段的出处改写成当前 provider。
+            if (stage in (STAGE_ONTOLOGY, STAGE_GRAPH, STAGE_REPORT)
+                    and not bool(getattr(Config, "RUN_SHAPE_PIN", True))):
                 resolved[stage] = _current_provider_pair()
             if total_rounds is not None:
                 sim = resolved.setdefault("simulation", {})
@@ -10443,12 +12906,23 @@ class PipelineOrchestrator:
             PipelineManager.save(state)
         except Exception:  # noqa: BLE001 — stash 失败不影响主流程
             pass
+        if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+            # INFRA-8: resolved.research.model_id / served_models of this attempt's research;
+            # _complete_stage merges them into run.json after INFRA-7 restamps the block.
+            self._research_model_provenance = model_provenance.research_stage_record(
+                telemetry.get("model_resolution"))
         if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
             return
         t_in = int(telemetry.get("tokens_in") or 0)
         t_out = int(telemetry.get("tokens_out") or 0)
         if t_in <= 0 and t_out <= 0:
             return  # 该研究模型未报 usage → 无可计量 token，跳过合成记录
+        try:
+            # EVAL-17: the runner's summed [usage] cached= reads (no new parsing here); a
+            # malformed value degrades to 0 instead of dropping the whole record.
+            t_cached = max(0, int(telemetry.get("tokens_cached") or 0))
+        except (TypeError, ValueError, OverflowError):
+            t_cached = 0
         try:
             from ..utils.telemetry import LLMMeter
             model = str(telemetry.get("model") or getattr(Config, "DEERFLOW_MODEL", "claude"))
@@ -10464,98 +12938,196 @@ class PipelineOrchestrator:
                 latency_ms=wall_ms,
                 stage=STAGE_RESEARCH,
                 run_id=state.pipeline_id,
+                prompt_cache_read_tokens=t_cached,
+                aggregate=True,  # INFRA-8: the child's whole spend, no call's requested model
             )
         except Exception as e:  # noqa: BLE001
             logger.debug("[%s] 研究阶段合成计量跳过: %s", state.pipeline_id, e)
 
     # -- 内部：模拟阶段遥测 (DEFECT-3) -------------------------------------
 
+    @staticmethod
+    def _sim_meter_markers(state: PipelineState) -> tuple[dict[str, Any], bool]:
+        """EVAL-17: a copy of the per-simulation sim-meter markers, plus whether the
+        pre-EVAL-17 single slot had to be migrated into it.
+
+        The legacy slot only ever held the main run's marker (seeds were never recorded),
+        so it migrates as a stage='run' entry; a map entry already present for that
+        simulation wins. The caller stores the copy back when it writes.
+        """
+        stored = state.options.get(SIM_METER_MARKERS_OPTION)
+        markers: dict[str, Any] = dict(stored) if isinstance(stored, dict) else {}
+        legacy = state.options.get(SIM_METER_LEGACY_MARKER_OPTION)
+        legacy_sid = str(legacy.get("simulation_id") or "") if isinstance(legacy, dict) else ""
+        if legacy_sid and legacy_sid not in markers:
+            markers[legacy_sid] = {
+                "meter_run_token": str(legacy.get("meter_run_token") or ""),
+                "stage": STAGE_RUN,
+                "recorded_at": legacy.get("recorded_at"),
+            }
+            return markers, True
+        return markers, False
+
     def _record_sim_run_telemetry(
-        self, state: PipelineState, simulation_id: Optional[str]
+        self, state: PipelineState, simulation_id: Optional[str], *,
+        stage: str = STAGE_RUN,
     ) -> None:
         """DEFECT-3: 把模拟子进程落盘的 sim_llm_telemetry.json 纳入统一计量（恰好一次）。
 
         RUN 的 LLM 调用发生在 detached 子进程——contextvars 与 LLMMeter 都不跨进程，
         这是 run_telemetry.json 拿到模拟花费的唯一入口。镜像 _record_research_telemetry：
-        (1) 始终 stash 摘要到 state.options['sim_llm_telemetry']（计量关闭也是免费观测）；
-        (2) 计量开启且确有 token 时，向 LLMMeter 写一条 stage='run' 的合成记录
+        (1) 主模拟（stage='run'）始终 stash 摘要到 state.options['sim_llm_telemetry']
+            （计量关闭也是免费观测；INFRA-8 开启时连同子进程逐调用的 model_resolution）；
+        (2) 计量开启且确有 token 时，向 LLMMeter 写一条 ``stage`` 的合成记录
             （provider/model 取快照自报值；缺失时按研究路径同款映射兜底——CLI 订阅类
             claude/codex → 'claude-cli' 边际成本 0，其余复用同名 provider 定价表）。
 
-        恰好一次（跨 attempt 持久）：state.options['sim_llm_telemetry_recorded'] 记住
-        快照的 ``meter_run_token``（每次子进程启动铸新、同进程重写不变）。同一场运行的
-        后续边界调用（成功收尾、后续 resume 的复用路径）全部跳过；重跑产生新 token →
-        新一笔真实花费照记。标记先持久化、计量后写：中间窗口崩溃宁可少记（诚实下限），
-        绝不双计。成功、复用与失败边界各调用一次；全程 degrade-safe，绝不抛出。
+        EVAL-17: ``stage`` is 'run' for the main simulation and SIM_METER_STAGE_ENSEMBLE
+        ('ensemble_sim') for an extra ensemble seed's simulation; a seed never touches the
+        'sim_llm_telemetry' stash.
+
+        恰好一次（跨 attempt 持久）：state.options[SIM_METER_MARKERS_OPTION][simulation_id]
+        记住快照的 ``meter_run_token``（每次子进程启动铸新、同进程重写不变）及 stage/
+        recorded_at。同一场运行的后续边界调用（成功收尾、后续 resume 的复用路径）全部跳过；
+        重跑产生新 token → 新一笔真实花费照记。标记先持久化、计量后写：中间窗口崩溃宁可
+        少记（诚实下限），绝不双计。EVAL-17: markers are kept per simulation, so recording a
+        seed can no longer evict the main run's marker. The pre-EVAL-17 single slot
+        'sim_llm_telemetry_recorded' is honoured on read and migrated into the map (a resumed
+        legacy run never double counts), and is still written for stage='run' so a rollback
+        to older code cannot double count the main simulation either. When the marker save
+        fails, the marker is rolled back and nothing is metered, so a later boundary or
+        resume retries instead of trusting a marker that exists only in memory. The whole
+        check-and-mark runs under self._sim_meter_lock because seed threads record
+        concurrently. 成功、复用与失败边界各调用一次；全程 degrade-safe，绝不抛出。
         """
         try:
             if not simulation_id:
                 return
-            tel_path = os.path.join(
-                SimulationRunner.RUN_STATE_DIR, str(simulation_id),
-                "sim_llm_telemetry.json")
-            tel = _read_json(tel_path)
-            if not isinstance(tel, dict):
-                return
-            token = str(tel.get("meter_run_token") or "") or (
-                _sha256_file(tel_path) or "")
-            marker = state.options.get("sim_llm_telemetry_recorded")
-            if (isinstance(marker, dict)
-                    and str(marker.get("simulation_id") or "") == str(simulation_id)
-                    and str(marker.get("meter_run_token") or "") == token):
-                return  # 恰好一次：这场子进程运行已入账
-            # 先解析全部字段（解析失败 → 不入账也不落标记，下个边界重试）。
-            t_in = int(tel.get("prompt_tokens") or 0)
-            t_out = int(tel.get("completion_tokens") or 0)
-            calls = int(tel.get("calls") or 0)
-            model = str(tel.get("model") or "unknown")
-            provider = str(tel.get("provider") or "")
-            if not provider or provider == "unknown":
-                provider = "claude-cli" if model in ("claude", "codex") else model
-            try:
-                wall_ms = float(tel.get("wall_s") or 0.0) * 1000.0
-            except (TypeError, ValueError):
-                wall_ms = 0.0
-            state.options["sim_llm_telemetry"] = {
-                "provider": provider,
-                "model": model,
-                "calls": calls,
-                "errors": int(tel.get("errors") or 0),
-                "prompt_tokens": t_in,
-                "completion_tokens": t_out,
-                "total_tokens": int(tel.get("total_tokens") or (t_in + t_out)),
-                "by_source": (tel.get("by_source")
-                              if isinstance(tel.get("by_source"), dict) else {}),
-                "wall_s": tel.get("wall_s"),
-            }
-            state.options["sim_llm_telemetry_recorded"] = {
-                "simulation_id": str(simulation_id),
-                "meter_run_token": token,
-                "recorded_at": _utcnow(),
-            }
-            try:
-                PipelineManager.save(state)
-            except Exception:  # noqa: BLE001 — stash/标记落盘失败不影响主流程
-                pass
-            if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
-                return
-            if t_in <= 0 and t_out <= 0:
-                return  # 无可计量 token（空场/0 调用）→ 不写空记录
-            from ..utils.telemetry import LLMMeter
-            LLMMeter.record(
-                provider=provider,
-                model=model,
-                prompt_tokens=t_in,
-                completion_tokens=t_out,
-                latency_ms=wall_ms,
-                stage=STAGE_RUN,
-                run_id=state.pipeline_id,
-            )
-            logger.info(
-                "[%s] 模拟子进程花费已入账 stage='run'（provider=%s model=%s "
-                "calls=%d tokens in=%d out=%d）",
-                state.pipeline_id, provider, model, calls, t_in, t_out,
-            )
+            sid = str(simulation_id)
+            with self._sim_meter_lock:
+                tel_path = os.path.join(
+                    SimulationRunner.RUN_STATE_DIR, sid, "sim_llm_telemetry.json")
+                tel = _read_json(tel_path)
+                if not isinstance(tel, dict):
+                    return
+                token = str(tel.get("meter_run_token") or "") or (
+                    _sha256_file(tel_path) or "")
+                markers, migrated = self._sim_meter_markers(state)
+                prior = markers.get(sid)
+                legacy = state.options.get(SIM_METER_LEGACY_MARKER_OPTION)
+                if ((isinstance(prior, dict)
+                        and str(prior.get("meter_run_token") or "") == token)
+                        or (isinstance(legacy, dict)
+                            and str(legacy.get("simulation_id") or "") == sid
+                            and str(legacy.get("meter_run_token") or "") == token)):
+                    if migrated:
+                        state.options[SIM_METER_MARKERS_OPTION] = markers
+                        if state.owner_boot_id is not None:  # W9-2: see the marker save below
+                            state.heartbeat_at = _utcnow()
+                        try:
+                            PipelineManager.save(state)
+                        except Exception:  # noqa: BLE001 — 迁移落盘失败：旧槽仍被读取兜底
+                            pass
+                    return  # 恰好一次：这场子进程运行已入账
+                # 先解析全部字段（解析失败 → 不入账也不落标记，下个边界重试）。
+                t_in = int(tel.get("prompt_tokens") or 0)
+                t_out = int(tel.get("completion_tokens") or 0)
+                calls = int(tel.get("calls") or 0)
+                model = str(tel.get("model") or "unknown")
+                provider = str(tel.get("provider") or "")
+                if not provider or provider == "unknown":
+                    provider = "claude-cli" if model in ("claude", "codex") else model
+                try:
+                    wall_ms = float(tel.get("wall_s") or 0.0) * 1000.0
+                except (TypeError, ValueError):
+                    wall_ms = 0.0
+                recorded_at = _utcnow()
+                # The marker slots as they were, for the rollback when the save below fails.
+                prior_slots = {key: state.options[key]
+                               for key in (SIM_METER_MARKERS_OPTION,
+                                           SIM_METER_LEGACY_MARKER_OPTION)
+                               if key in state.options}
+                if stage == STAGE_RUN:
+                    _prior_stash = state.options.get("sim_llm_telemetry")
+                    state.options["sim_llm_telemetry"] = {
+                        "provider": provider,
+                        "model": model,
+                        "calls": calls,
+                        "errors": int(tel.get("errors") or 0),
+                        "prompt_tokens": t_in,
+                        "completion_tokens": t_out,
+                        "total_tokens": int(tel.get("total_tokens") or (t_in + t_out)),
+                        "by_source": (tel.get("by_source")
+                                      if isinstance(tel.get("by_source"), dict) else {}),
+                        "wall_s": tel.get("wall_s"),
+                    }
+                    if bool(getattr(Config, "RECORD_MODEL_PROVENANCE", True)):
+                        # INFRA-8: the child's own per-call requested label -> served ids
+                        # (absent from a child that predates it or recorded no call), tagged
+                        # with its simulation and, when the child resumed that simulation
+                        # (SIM_RESUME), merged into its earlier child runs once per
+                        # meter_run_token; a fresh start replaces them.
+                        state.options["sim_llm_telemetry"].update(
+                            model_provenance.sim_stash_model_keys(
+                                _prior_stash, sid, token, tel.get("model_resolution"),
+                                resumed=self._sim_child_resumed(sid)))
+                    state.options[SIM_METER_LEGACY_MARKER_OPTION] = {
+                        "simulation_id": sid,
+                        "meter_run_token": token,
+                        "recorded_at": recorded_at,
+                    }
+                markers[sid] = {
+                    "meter_run_token": token,
+                    "stage": stage,
+                    "recorded_at": recorded_at,
+                }
+                state.options[SIM_METER_MARKERS_OPTION] = markers
+                # W9-2: a full save must not overwrite the fresh on-disk heartbeat with a stale
+                # in-memory one. Seed threads call this too, and nothing refreshes their in-memory
+                # heartbeat_at (the watchdog and the seed poll loop only touch the disk copy).
+                if state.owner_boot_id is not None:
+                    state.heartbeat_at = _utcnow()
+                try:
+                    PipelineManager.save(state)
+                except Exception as save_err:  # noqa: BLE001 — 落盘失败不影响主流程
+                    # EVAL-17: exactly-once needs the marker on disk before the spend is
+                    # metered. A marker living only in memory would be lost by a crash before
+                    # the next successful save, and the resume would record this run again.
+                    # Roll the marker back and meter nothing: a later boundary or resume
+                    # retries, and until then the spend is under-counted, never doubled.
+                    for key in (SIM_METER_MARKERS_OPTION, SIM_METER_LEGACY_MARKER_OPTION):
+                        if key in prior_slots:
+                            state.options[key] = prior_slots[key]
+                        else:
+                            state.options.pop(key, None)
+                    logger.warning(
+                        "[%s] 模拟计量标记落盘失败：本边界不入账，留待后续边界或 resume 重试"
+                        "（stage='%s' simulation=%s）: %s",
+                        state.pipeline_id, stage, sid, save_err,
+                    )
+                    return
+                if not bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
+                    return
+                if t_in <= 0 and t_out <= 0:
+                    return  # 无可计量 token（空场/0 调用）→ 不写空记录
+                from ..utils.telemetry import LLMMeter
+                LLMMeter.record(
+                    provider=provider,
+                    model=model,
+                    prompt_tokens=t_in,
+                    completion_tokens=t_out,
+                    latency_ms=wall_ms,
+                    stage=stage,
+                    run_id=state.pipeline_id,
+                    # INFRA-8: the child's whole spend under its dominant by_model key (a
+                    # served id or the CLI bridge's provider name), no call's requested model.
+                    aggregate=True,
+                )
+                logger.info(
+                    "[%s] 模拟子进程花费已入账 stage='%s'（simulation=%s provider=%s model=%s "
+                    "calls=%d tokens in=%d out=%d）",
+                    state.pipeline_id, stage, sid, provider, model, calls, t_in, t_out,
+                )
         except Exception as e:  # noqa: BLE001 — 计量是观测增益，绝不放大失败
             logger.debug("[%s] 模拟阶段合成计量跳过: %s", state.pipeline_id, e)
 
@@ -10758,13 +13330,29 @@ class PipelineOrchestrator:
         outcome = (traj.get("outcome") if isinstance(traj, dict) else None) or {}
         shares = outcome.get("shares") if isinstance(outcome, dict) else None
         converged_at = traj.get("converged_at") if isinstance(traj, dict) else None
+        # SIM-1：两路决策通道产物共用的有效性裁定（顶层；旧轨迹缺席 → None）。只观测：
+        # 通道本就 diagnostic_only，非 valid 裁定只告警，不进 _assess_run_health。
+        validity = traj.get("validity") if isinstance(traj, dict) else None
+        # SIM-2：名册校验的 run 级汇总（DECISION_CHANNEL_VALIDATION 关或旧轨迹 → None）。
+        validation = traj.get("decision_validation") if isinstance(traj, dict) else None
+        validation = validation if isinstance(validation, dict) else {}
         summary = {
             "scenarios_seeded": len(scenarios),
             "trajectory_produced": bool(produced),
             "leader": (outcome.get("leader") if isinstance(outcome, dict) else None),
             "leader_share": (outcome.get("leader_share") if isinstance(outcome, dict) else None),
             "converged_at": converged_at,
+            "validity": validity,
+            "validity_reasons": (traj.get("validity_reasons") if isinstance(traj, dict) else None),
+            "forecast_effect": (traj.get("forecast_effect") if isinstance(traj, dict) else None),
+            "fallback_share": validation.get("fallback_share"),
+            "decision_validation_measured_rounds": validation.get("measured_rounds"),
         }
+        # SIM-4（SIM_PRIOR_ECHO_DIAGNOSTIC，默认开）：零 LLM 的先验回声诊断——终局份额是否只是
+        # 种子先验的复述、承诺是否扎堆先验领先情景。纯观测：只写摘要、只告警，不进
+        # _assess_run_health，不动任何概率（通道本就 diagnostic_only）。
+        if getattr(Config, "SIM_PRIOR_ECHO_DIAGNOSTIC", True) and isinstance(traj, dict):
+            summary["prior_echo"] = prior_echo_diagnostics(traj)
         state.options["decision_channel_summary"] = summary
         try:
             PipelineManager.save(state)
@@ -10788,6 +13376,26 @@ class PipelineOrchestrator:
             logger.warning(
                 "[%s] 决策通道未点火：world_state_seed 无情景（研究阶段未产出概率分布）",
                 state.pipeline_id)
+        validity_norm = str(validity or "").strip().lower()
+        if validity_norm and validity_norm != "valid":
+            logger.warning(
+                "[%s] 决策通道有效性裁定=%s（原因 %s；forecast_effect=%s）——推演结果分布不可用作"
+                "任何依据（REPORT_WORLDSTATE_HIDE_INVALID 开时报告隐藏份额/图表/对比表）",
+                state.pipeline_id, validity_norm, summary["validity_reasons"],
+                summary["forecast_effect"])
+        # 回声＝终局≈先验，可断言「没有提供信息」；扎堆＝终局已离开先验（TV≥echo_tv），只能
+        # 审慎地说「可能只是在复述先验」（与报告提示行同口径）。
+        _echo = summary.get("prior_echo") or {}
+        _echo_finding = {
+            VERDICT_PRIOR_ECHO: "终局分布与种子先验几乎一致，推演没有在研究先验之外提供信息，不得作为独立佐证",
+            VERDICT_PRIOR_LEADER_HERD: "承诺扎堆先验领先情景，推演可能只是在复述先验，不构成独立佐证",
+        }.get(_echo.get("verdict"))
+        if _echo_finding:
+            logger.warning(
+                "[%s] 决策通道先验回声诊断=%s（tv_to_prior=%s，先验领先=%s，领先承诺占比=%s；%s）——%s",
+                state.pipeline_id, _echo.get("verdict"), _echo.get("tv_to_prior"),
+                _echo.get("prior_leader"), _echo.get("prior_leader_commit_rate"),
+                _echo.get("policy_version"), _echo_finding)
 
     # -- 内部：研究 as_of 锚校验 (R2-RES-7) -------------------------------
 
@@ -10812,7 +13420,10 @@ class PipelineOrchestrator:
                 if not isinstance(s, dict):
                     continue
                 d = parse_as_of(s.get("date"))
-                if d is not None and (max_src is None or d > max_src):
+                # TIME-2 (defensive): a source dated after the run is a misdated
+                # page, never evidence newer than today, so it cannot push a
+                # valid as_of_date off (the research tools already reject it).
+                if d is not None and d <= run_dt and (max_src is None or d > max_src):
                     max_src = d
         raw = actors.get("as_of_date") if isinstance(actors, dict) else None
         parsed = parse_as_of(raw)
@@ -10835,6 +13446,73 @@ class PipelineOrchestrator:
             return None, None
         # as_of_date 存在但无效且无来源日可回退 → 运行日兜底（优于带脏日期入图）。
         return run_dt, note
+
+    @classmethod
+    def _pin_hindcast_graph_anchor(cls, state: "PipelineState", pin: dict[str, Any],
+                                   sources: Any) -> datetime:
+        """TIME-7: the bi-temporal graph anchor of a pinned hindcast (midnight UTC of its as-of).
+
+        ``_validate_as_of_date`` is not consulted: it moves an anchor forward to the newest
+        source date, and in a hindcast a source dated after the as-of is a leak, never newer
+        evidence.  Such sources are recorded, never adopted: up to
+        ``HINDCAST_VIOLATIONS_MAX`` of their URLs go to ``state.options['hindcast_violations']``
+        (only when there is one; every graph build re-decides).  A source date is read at
+        its precision (``utils.dates.date_period``: a day, a month or a year, the coarser of
+        the row's ``date_precision`` and its text): it is after the as-of only when its whole
+        period is, and a month or year that starts on or before the as-of but ends after it
+        is ambiguous, neither cleared nor recorded as a violation.  The check can only see
+        dated sources (v3 dates them only with RESEARCH_SOURCE_DATES), so its coverage is
+        always recorded in ``state.options['hindcast_source_dates']`` = ``{'dated',
+        'undated', 'after_as_of', 'ambiguous'}`` (source rows; ``after_as_of`` and
+        ``ambiguous`` count dated rows and are not capped): no violations with every source
+        undated or ambiguous means "not checked", never "no leak".  The pinned date is also
+        the ledger pre-registration anchor (EVAL-1 ``as_of_date_validated``).  A pin whose
+        as-of is not a canonical, non-future date raises ValueError: the graph stage fails
+        closed rather than anchor a hindcast anywhere else.
+        """
+        from ..utils.point_in_time import validate_as_of
+        anchor = datetime.strptime(validate_as_of(pin.get("as_of")), "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        pin_day = anchor.date()
+        violations: list[str] = []
+        coverage = {"dated": 0, "undated": 0, "after_as_of": 0, "ambiguous": 0}
+        for source in sources if isinstance(sources, list) else []:
+            if not isinstance(source, dict):
+                continue
+            period = date_period(source.get("date"), source.get("date_precision"))
+            if period is None:
+                coverage["undated"] += 1
+                continue
+            coverage["dated"] += 1
+            first_day, last_day = period
+            if last_day <= pin_day:
+                continue
+            if first_day <= pin_day:
+                coverage["ambiguous"] += 1
+                continue
+            coverage["after_as_of"] += 1
+            url = source.get("url")
+            if (isinstance(url, str) and url and url not in violations
+                    and len(violations) < HINDCAST_VIOLATIONS_MAX):
+                violations.append(url)
+        state.options.pop("hindcast_violations", None)
+        state.options["hindcast_source_dates"] = coverage
+        if violations:
+            state.options["hindcast_violations"] = violations
+            logger.warning("[%s] hindcast: %d source(s) dated after the pinned as-of %s recorded "
+                           "in hindcast_violations, never adopted as the graph anchor",
+                           state.pipeline_id, len(violations), anchor.date())
+        if coverage["undated"]:
+            logger.info("[%s] hindcast: %d of %d source(s) carry no publication date; the "
+                        "later-dated check covers only dated sources (RESEARCH_SOURCE_DATES)",
+                        state.pipeline_id, coverage["undated"],
+                        coverage["undated"] + coverage["dated"])
+        if coverage["ambiguous"]:
+            logger.info("[%s] hindcast: %d source(s) dated only to a month or year that spans "
+                        "the pinned as-of %s; the later-dated check can neither clear nor flag "
+                        "them", state.pipeline_id, coverage["ambiguous"], pin_day)
+        cls._record_validated_as_of(state, anchor, True)
+        return anchor
 
     # -- 内部：仅综合恢复（复用 immutable evidence lanes）-----------------
 
@@ -11619,6 +14297,11 @@ class PipelineOrchestrator:
                 "parallel_tracks": survived,
                 "global_synthesis_runs": synthesis_attempts,
             }
+            # INFRA-8: every lane's and the synthesis child's resolved model and served ids.
+            _resolution = model_provenance.merge_research_model_resolutions(
+                tel.get("model_resolution") for tel in all_tels)
+            if _resolution is not None:
+                merged_tel["model_resolution"] = _resolution
             report_path = os.path.join(handoff_dir, "research_report.md")
             return {
                 "report": _read_text(report_path),
@@ -11716,6 +14399,9 @@ class PipelineOrchestrator:
         base_meta: dict = next((m for m in track_metas if m), {})
         merged_meta = dict(base_meta)
         merged_meta["research_quality"] = merged_rq
+        merged_source_health = merge_source_health(track_metas)
+        if merged_source_health is not None:
+            merged_meta["source_health"] = merged_source_health
         merged_meta["source_tiers"] = _source_tier_histogram(merged_sources)
         merged_meta["sources_count"] = len(merged_sources)
         if isinstance(merged_actors, dict):
@@ -11809,6 +14495,11 @@ class PipelineOrchestrator:
             "wall_s": max((float(t.get("wall_s") or 0.0) for t in tels), default=0.0),
             "parallel_tracks": survived,
         }
+        # INFRA-8: every lane's resolved model and served ids.
+        _resolution = model_provenance.merge_research_model_resolutions(
+            t.get("model_resolution") for t in tels)
+        if _resolution is not None:
+            merged_tel["model_resolution"] = _resolution
 
         state.options["parallel_research"] = merged_meta["parallel_research"]
         state.options["actor_dossier_compaction"] = dossier_audit
@@ -11892,13 +14583,20 @@ class PipelineOrchestrator:
             _install_llm_outage_probe()
         # W9-3: attempt 起点初始化遥测增量落盘（捕获上一 attempt 的账作合并基底）。
         self._init_telemetry_flush(state)
+        # EVAL-18: 成本卡 attempt 起点——移除上一 attempt 的卡与指针，钉入本 attempt 的无归属
+        # 调用基线与起始 run_telemetry.json 摘要（须在本 attempt 首次遥测落盘之前）。
+        self._start_cost_card_attempt(state)
         # I-8-1: 管线起飞即写首版 run.json（解析后的研究深度/模型/图谱/环境指纹），
         # 后续每阶段进入时把热切换出的报告/模拟 provider 钉入。
         self._write_run_manifest(state)
+        # EVAL-15: 清掉上一 attempt 的记分卡侧车与摘要（本 attempt 的 finally 块会重写）。
+        self._reset_stage_scorecard_sidecar(state)
         # I-4-1: 钉入本进程的 owner 指纹 + 启动一个独立于阶段进度的壁钟心跳看护线程。
         # 心跳让 reconcile_orphans 把「死管线」与「慢但活（深研究/persona 静默数分钟）」区分开。
         hb_stop = self._start_heartbeat(state)
         try:
+            # INFRA-7：对比准入钉住的运行形状与当前环境；漂移默认记录后继续，refuse 策略下失败。
+            self._check_run_shape_drift(state)
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
@@ -11967,6 +14665,18 @@ class PipelineOrchestrator:
                     state.research_pid = pid
                     PipelineManager.save(state)
 
+                # TIME-7: a pinned hindcast reaches research only through the v3 single-lane
+                # launch below, the one path that dates the child to its as-of.  The global
+                # synthesis recovery re-runs the legacy synthesis child without it, and its
+                # manifest is written only by legacy parallel lanes, which a hindcast never
+                # runs: fail closed before any spend.
+                _hindcast_pin = hindcast_policy(state.options)
+                if _hindcast_pin is not None and _synthesis_recovery_manifest:
+                    raise RuntimeError(
+                        "hindcast_synthesis_refused: pinned hindcast (as_of "
+                        f"{_hindcast_pin.get('as_of')}) cannot recover a legacy global synthesis, "
+                        "which runs without the as-of; remove evidence_synthesis_manifest.json "
+                        "from its handoff dir and resume to re-run v3 research")
                 if _synthesis_recovery_manifest:
                     research = self._run_research_synthesis_recovery(
                         state,
@@ -11981,6 +14691,15 @@ class PipelineOrchestrator:
                     # legacy engine keeps today's RESEARCH_PARALLEL_TRACKS rule.
                     # The run's pinned actor policy may require the legacy engine.
                     _research_engine = research_engine_for_run(state.options)
+                    # TIME-7: a pinned hindcast is re-checked at launch (config drift or a
+                    # resume could select legacy, which would roll the as-of forward): fail
+                    # closed before any spend; the stage stays resumable once v3 is back.
+                    if _hindcast_pin is not None and _research_engine != RESEARCH_ENGINE_V3:
+                        raise RuntimeError(
+                            "hindcast_engine_mismatch: pinned hindcast (as_of "
+                            f"{_hindcast_pin.get('as_of')}) requires the v3 research engine, "
+                            f"but this run resolves {_research_engine}; set RESEARCH_ENGINE=v3 "
+                            "and resume")
                     _n_tracks = research_outer_track_count(
                         getattr(Config, "RESEARCH_PARALLEL_TRACKS", 3),
                         _research_engine,
@@ -12072,6 +14791,10 @@ class PipelineOrchestrator:
                             max_concurrent_subagents=max(1, _single_subagent_cap),
                             model_concurrency_global=_single_model_concurrency,
                             research_engine=_research_engine,
+                            as_of=_hindcast_pin["as_of"] if _hindcast_pin else None,
+                            # TIME-8: the admission pin's gates (None: no pin, or a pin
+                            # admitted before TIME-8 -> no gates).
+                            pit=(_hindcast_pin or {}).get("pit"),
                         )
                 state.research_pid = None  # 子进程已结束，清掉以免 reconcile 误杀复用 PID
                 # PAR-2：并行轨 PID 清单也一并清空（研究阶段已结束，避免 reconcile 误杀复用 PID）。
@@ -12265,6 +14988,9 @@ class PipelineOrchestrator:
             # single manifest-last generation.  The producer generation stays
             # valid throughout this operation and is restored on install error.
             _finalize_research_contract(handoff_dir, research)
+            # TIME-9: a gated hindcast's research audit joins the pin before any report reads it
+            # (forecast.json hindcast.integrity, run.json as_of_enforcement).
+            self._record_research_audit(state, handoff_dir)
             # R2-RES-3: 由 dossier 覆盖度 + 来源层级 + 研究质量记分牌派生一个咨询性
             # forecast_confidence_penalty 写入 options，供发布门后续消费（gate refine 推迟；
             # 此处纯写值，不读不阻断，永不 wedge）。
@@ -12309,7 +15035,15 @@ class PipelineOrchestrator:
             self._update_manifest(state, STAGE_ONTOLOGY)  # I-8-1: 钉入本阶段实际 provider
             project_name = state.options.get("project_name") or f"研究预测 {state.pipeline_id}"
             project = ProjectManager.get_project(state.project_id) if state.project_id else None
-            if project is not None and project.ontology:
+            _reuse_ontology = bool(project is not None and project.ontology)
+            # INFRA-7：研究已重算（本 attempt，或此前重建未完成的 attempt）→ 旧本体派生自旧研究，
+            # 拒绝复用并在本管线自有项目上重生成；与 base 共用项目的情景分叉 fail closed。
+            _onto_refusal = (
+                self._lineage_refuses_reuse(state, STAGE_ONTOLOGY) if _reuse_ontology else None)
+            if _onto_refusal:
+                self._forbid_shared_fork_rebuild(state, STAGE_ONTOLOGY, project, _onto_refusal)
+                _reuse_ontology = False
+            if _reuse_ontology:
                 upd(100, "复用已有本体…")
                 self._complete_stage(state, STAGE_ONTOLOGY, "本体已恢复", reused=True)
             else:
@@ -12375,6 +15109,11 @@ class PipelineOrchestrator:
                 project.analysis_summary = ontology.get("analysis_summary", "")
                 project.status = ProjectStatus.ONTOLOGY_GENERATED
                 ProjectManager.save_project(project)
+                # INFRA-7：本体复用以 project.ontology 存在为准（非阶段位）——新本体一落盘即结清其血统
+                # 失效项并改戳 run.json，否则在 _complete_stage 前被打断的 attempt 会让下次 resume
+                # 拒绝这份新本体，或复用它却沿用被替换本体的 provider 戳。
+                self._record_lineage_artifact_replaced(state, STAGE_ONTOLOGY)
+                self._stamp_produced_artifact(state, STAGE_ONTOLOGY)
                 # T6.3: 把本体落到 handoff/ontology.json，供 artifact 深链。
                 # ONT-10: 原子写（对齐 actors.json 的 write_json_atomic 约定）——半写的
                 # ontology.json 会让 resume 校验静默强制重建；失败留 warning 而非无声吞掉。
@@ -12392,6 +15131,15 @@ class PipelineOrchestrator:
             graph_stage_done = state.stages.get(STAGE_GRAPH) and state.stages[STAGE_GRAPH].status == "completed"
             graph_id = state.graph_id or getattr(project, "graph_id", None)
             _reuse_graph = bool(graph_stage_done and graph_id)
+            # INFRA-7：研究/本体已重算（本 attempt 或此前未完成重建的 attempt）→ 旧图谱派生自旧种子，
+            # 拒绝复用、重建；与 base 共用项目的情景分叉 fail closed。批次问题分叉声明了「共用锚点
+            # 图谱、按问题重生成本体」，其本体重算不视为陈旧上游。
+            _graph_refusal = self._lineage_refuses_reuse(
+                state, STAGE_GRAPH,
+                exempt=run_shape.graph_lineage_exempt(state.options)) if _reuse_graph else None
+            if _graph_refusal:
+                self._forbid_shared_fork_rebuild(state, STAGE_GRAPH, project, _graph_refusal)
+                _reuse_graph = False
             _reuse_builder: Optional[GraphBuilderService] = None
             # I-4-3: 复用前先按产物清单校验 GRAPH 阶段的文件产物（communities.json 等）未被半写/篡改；
             # 不符则回落重建并留痕（与下方既有的实体数健康检查并列，两道防线各管一半）。
@@ -12509,18 +15257,31 @@ class PipelineOrchestrator:
                 # bi-temporal anchor; fall back to newest source date / run date on a
                 # future, pre-evidence, or unparseable value. Gated default-on; any
                 # error or a disabled flag reverts to the plain parse (today's behavior).
-                if getattr(Config, "VALIDATE_AS_OF_DATE", True):
+                _as_of_validated = False
+                # TIME-7: a pinned hindcast anchors at its as-of date; the validator below would
+                # roll the anchor forward to a later-dated source (a leak, never newer evidence).
+                _hindcast_anchor_pin = hindcast_policy(state.options)
+                if _hindcast_anchor_pin is not None:
+                    as_of = self._pin_hindcast_graph_anchor(
+                        state, _hindcast_anchor_pin, research.get("sources"))
+                elif getattr(Config, "VALIDATE_AS_OF_DATE", True):
                     try:
                         as_of, _as_of_note = self._validate_as_of_date(actors, research.get("sources"))
                         if _as_of_note:
                             state.options["as_of_date_correction"] = _as_of_note
                             logger.warning("[%s] %s → %s", state.pipeline_id, _as_of_note,
                                            as_of.date() if as_of else None)
+                        _as_of_validated = True
                     except Exception as _ae:  # noqa: BLE001 — 校验失败回退原始解析
                         logger.debug("[%s] as_of 校验跳过: %s", state.pipeline_id, _ae)
                         as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
                 else:
                     as_of = parse_as_of((actors or {}).get("as_of_date")) if isinstance(actors, dict) else None
+                # EVAL-1: 只有校验器实际给出的锚点才成为账本预注册键的 as_of（本次建图重新判定，
+                # 旧值先清掉）；回退到原始解析的日期未经校验，不写入。回测钉的锚点已由
+                # _pin_hindcast_graph_anchor 记为钉日。
+                if _hindcast_anchor_pin is None:
+                    self._record_validated_as_of(state, as_of, _as_of_validated)
                 seeded = _seed_research_actors(
                     builder, graph_id, actors, valid_at=as_of
                 )
@@ -12738,6 +15499,11 @@ class PipelineOrchestrator:
             # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
             # 不符则当作未完成、走重建分支并留痕（半写的 sim_config 会让模拟/报告静默降级）。
             _prepare_reuse = bool(prepare_stage_done and sim_state is not None)
+            # INFRA-7：模拟必须绑定当前图谱，且图谱本 attempt 未重建；否则重建模拟环境。
+            if _prepare_reuse and self._lineage_refuses_reuse(
+                    state, STAGE_PREPARE,
+                    bound_ids=(getattr(sim_state, "graph_id", None), state.graph_id)):
+                _prepare_reuse = False
             if _prepare_reuse and not self._reuse_ok(state, STAGE_PREPARE):
                 _prepare_reuse = False
                 state.options["resumed_stage_validation"] = "prepare_rebuilt_manifest_mismatch"
@@ -12972,6 +15738,8 @@ class PipelineOrchestrator:
                 _run_completion_message = "模拟已恢复"
             else:
                 upd(2, "启动 OASIS 模拟…")
+                # INFRA-7：重跑期间/失败后 run.json 不得把被替换模拟的轮数/日历字段当作本次的。
+                self._reset_run_manifest_simulation(state)
                 run_kwargs: dict[str, Any] = {"platform": "parallel"}
                 # T3.7: 每次运行的 max_rounds 优先，否则用 Config.OASIS_DEFAULT_MAX_ROUNDS（0→None=跑满）。
                 # CAL：日历模式运行期不注入默认上限——轮数由 temporal_config.n_rounds 定，
@@ -13204,6 +15972,20 @@ class PipelineOrchestrator:
                     existing_report = ReportManager.get_report_by_simulation(sim_state.simulation_id)
                 except Exception:
                     existing_report = None
+            # INFRA-7：报告必须绑定当前模拟，且 RUN 未在其后重跑（本 attempt，或尚未结清的此前
+            # attempt——该 attempt 为重建铸出且已完成（COMPLETED）的报告除外；未写完的铸出报告不豁免）；
+            # 否则铸新报告。
+            if (existing_report is not None
+                    and getattr(existing_report, "status", None) != ReportStatus.FAILED
+                    and self._lineage_refuses_reuse(
+                        state, STAGE_REPORT,
+                        bound_ids=(getattr(existing_report, "simulation_id", None),
+                                   state.simulation_id),
+                        artifact_id=(
+                            getattr(existing_report, "report_id", None)
+                            if getattr(existing_report, "status", None) == ReportStatus.COMPLETED
+                            else None))):
+                existing_report = None
             # ORCH-1: 复用前评估交付物本身。meta 说 COMPLETED 但全章占位/无 forecast.json 的
             # 报告若被复用，S1 健康门必再抛错 → resume 陷入「复用坏报告→健康门失败」死循环
             # （report_id=None 手工修复也不够：get_report_by_simulation 兜底会把它找回来）。
@@ -13241,6 +16023,11 @@ class PipelineOrchestrator:
             if existing_report is not None and getattr(existing_report, "status", None) != ReportStatus.FAILED:
                 upd(100, "复用已有报告")
                 state.report_id = getattr(existing_report, "report_id", state.report_id)
+                # EVAL-1: 上一 attempt 若没把这份报告记进账本（账本 I/O 失败 / 提交前崩溃），补提交。
+                self._repair_reused_report_ledger(
+                    state, existing_report,
+                    getattr(sim_state, "simulation_id", None) or state.simulation_id,
+                    actors, report_md)
                 self._complete_stage(state, STAGE_REPORT, "报告完成（复用）", reused=True)
             else:
                 # ORCH-8: 报告是最贵的 LLM 阶段，而健康门在全部章节成本烧完后才触发。双 provider
@@ -13255,17 +16042,38 @@ class PipelineOrchestrator:
                             temperature=0.0, max_tokens=64,
                         )
                     except Exception as _pf_err:  # noqa: BLE001
-                        raise RuntimeError(
-                            "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
-                            f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
-                        ) from _pf_err
+                        from ..utils.llm_client import EmptyCompletion as _PreflightEmpty
+                        if not (bool(getattr(Config, "LLM_LENGTH_ESCALATION", True))
+                                and isinstance(_pf_err, _PreflightEmpty)
+                                and _pf_err.finish_reason == "length"):
+                            raise RuntimeError(
+                                "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
+                                f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
+                            ) from _pf_err
+                        # INFRA-3 (LLM_LENGTH_ESCALATION): an empty reply cut by the probe's output
+                        # cap (a reasoning model thinking past it, even after escalation) proves the
+                        # provider answered, so the probe passes. A model that never produces text
+                        # still fails the report stage loudly. Off: legacy (the probe fails).
+                        logger.info("[%s] 报告前置探测：提供方可达（空回复被 max_tokens 截断，"
+                                    "finish_reason=length），继续报告阶段", state.pipeline_id)
+                if bool(getattr(Config, "RESUME_LINEAGE_GUARDS", True)):
+                    # INFRA-7：一次性 force 标记所要求的重生成此刻开始——血统守卫（或其它复用否决）
+                    # 先于上方的 pop 拒绝了复用时标记会残留，下次普通 resume 会丢弃这份新报告再重生成。
+                    state.options.pop("force_report_regen", None)
                 # XRUN-15/LOOP-005: 铸新报告 = 新 attempt。清掉上一 attempt 的临时及正式
                 # REPORT-owned 指针/完整性行，随后在生成开始前持久化新 report_id。这样每次
                 # progress callback 都扫描当前 attempt 的 sections/charts，而非旧目录或空目录。
                 self._clear_report_attempt_artifacts(state)
                 report_id = f"report_{uuid.uuid4().hex[:12]}"
                 state.report_id = report_id
+                # INFRA-7：报告复用以已落盘报告为准（非阶段位）——记下本次铸出的报告是从当前上游重建的，
+                # 使发布后、阶段完成前被取消/熔断/重启打断的 attempt 下次复用它，而非再生成一份。
+                self._record_lineage_rebuild_started(state, STAGE_REPORT, report_id)
+                # INFRA-7：同一次落盘记下这份报告的生产者；run.json 随即改戳为它（被替换报告的旧戳作废），
+                # 发布后、阶段完成前被打断的 attempt 下次复用它时仍按此戳。
+                self._record_report_mint(state, report_id)
                 PipelineManager.save(state)
+                self._stamp_produced_artifact(state, STAGE_REPORT)
                 upd(5, "生成预测报告…")
                 # T4.6/T4.7: 情景报告 → 传情景标签 + base 模拟 id（反事实对比 scenario_diff）
                 _scenario_label = state.options.get("scenario_label")
@@ -13293,7 +16101,16 @@ class PipelineOrchestrator:
                     "research_report": report_md,
                     "scenario_label": _scenario_label,
                     "base_simulation_id": _base_sim_id,
+                    # TIME-5：数值一致性影子检查模式读准入钉（API 重生成路径读当前 Config）。
+                    "numeric_guard_mode": cls._pinned_safety(
+                        state, "numeric_guard_mode", Config.NUMERIC_GUARD_MODE),
                 }
+                # TIME-6：回测运行把钉交给报告（不读/不重报价/不现抓预测市场，盖 hindcast 章）；
+                # 实时运行不加该参数，构造调用逐字节不变。
+                _ra_kwargs.update(self._hindcast_agent_kwargs(state))
+                # FU-8：采访事实写图的门有钉值时交给报告；无钉值不加参数，报告与 API 重生成/对话
+                # 同走按模拟 id 的查找（共享模拟子管线跟随 base 的钉），两条路径结论一致。
+                _ra_kwargs.update(self._interview_feedback_agent_kwargs(state))
                 # W9-8: 研究昂贵产物直通报告链——quantitative(339 行)/contested(29 条)/
                 # timeline(101 事件)/graph_priors(_structural) 此前落盘后零下游读者。
                 # 构造参数由报告链工作流并行落地（None 默认）；尚未支持时 TypeError →
@@ -13314,10 +16131,18 @@ class PipelineOrchestrator:
                                 state.pipeline_id)
                     agent = ReportAgent(**_ra_kwargs)
 
+                # EVAL-11：只有主报告按准入钉决定是否跑骨架跨底座影子检查（None = 不跑）；种子报告 /
+                # model_comparison / API 重生成从不设置。
+                agent.backbone_check_policy = self._backbone_check_policy(state)
+
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
 
-                report = agent.generate_report(progress_callback=report_cb, report_id=report_id)
+                # EVAL-1: 主报告以 production（what-if 由 scenario_label 派生 conditional_scenario）
+                # 入账；报告的封印发布即提交权威——其后的集成/健康门失败不撤回账本行。
+                report = self._generate_stage_report(
+                    state, agent, sim_state.simulation_id, report_id=report_id,
+                    progress_callback=report_cb)
                 try:
                     ReportManager.save_report(report)
                 except Exception:
@@ -13440,7 +16265,12 @@ class PipelineOrchestrator:
                 try:
                     from ..utils.atomic import write_json_atomic, write_text_atomic
                     from ..utils.telemetry import build_stage_telemetry, render_telemetry_appendix
-                    _stage_tel = build_stage_telemetry(state.pipeline_id, _stage_walls(state))
+                    # INFRA-7：RUN_SHAPE_PIN 开启时附上本 attempt 的 stage_reuse_v1 记录（每阶段 reused 标志）。
+                    _stage_tel = build_stage_telemetry(
+                        state.pipeline_id, _stage_walls(state),
+                        stage_decisions=(
+                            self._stage_reuse_this_attempt
+                            if bool(getattr(Config, "RUN_SHAPE_PIN", True)) else None))
                     try:
                         _stpath = os.path.join(
                             PipelineManager._dir(state.pipeline_id), "telemetry.json")
@@ -13480,9 +16310,20 @@ class PipelineOrchestrator:
                                         _rpath, _existing.rstrip() + "\n\n" + _appendix.rstrip() + "\n")
                 except Exception as _ste:  # noqa: BLE001 — 阶段遥测为观测增益，失败不影响管线终态
                     logger.debug(f"[{state.pipeline_id}] 阶段级遥测处理失败（忽略）: {_ste}")
-                LLMMeter.reset(state.pipeline_id)
             except Exception as _te:
                 logger.debug(f"[{state.pipeline_id}] 写入 run_telemetry 失败（忽略）: {_te}")
+            # EVAL-18: 精简成本卡 <pipeline_dir>/cost_card.json（读上方刚落盘的 run_telemetry.json）。
+            # 与遥测块平级（遥测任一步抛错都不得跳过它）、在 reset 之前；方法自身兜住一切异常。
+            self._write_cost_card(state)
+            # INFRA-9：reset 是本 run 在 LLMMeter 与活跃 run 注册表里的权威终局，放在遥测 try 之外
+            # （仍在其后：上面的落盘/阶段遥测要先读计量）。此前它在 try 内，终版落盘任一步抛错就被
+            # 跳过——该 run 的计量与活跃登记滞留到进程结束，此后每条单独运行的管线都面对 2 个「活跃」
+            # run，单活跃 run 回退归属失效。
+            LLMMeter.reset(state.pipeline_id)
+            # EVAL-15: 分阶段记分卡侧车。放在遥测 try 之外（与之平级）——遥测块任何一步抛错都
+            # 不得让终态管线缺记分卡、或让上一 attempt 的摘要冒充本次结果。记分卡不读 LLMMeter，
+            # 位于 reset 之后无影响；方法自身兜住一切异常。
+            self._write_stage_scorecard_sidecar(state)
             # DEFECT-1：本 attempt 的中断熔断器随线程终结注销（下一 attempt 重新注册，
             # 计数不跨 attempt 遗留；注册表清空后探针对全进程完全透传）。
             _clear_outage_breaker(state.pipeline_id)

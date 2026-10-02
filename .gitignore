@@ -66,6 +66,9 @@ logs/
 
 # 本地临时产物（截图/PDF 抓取等）
 /tmp/
+# utils/atomic.py 原子写的同目录临时文件（进程被 SIGKILL 时可能残留）；.env 的临时副本
+# 含 API 密钥，绝不能被 `git add .` 提交
+.tmp-*
 
 # 上传文件（运行时数据：研究档案/模拟/报告）
 backend/uploads/

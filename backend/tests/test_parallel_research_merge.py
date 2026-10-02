@@ -230,6 +230,31 @@ def test_market_snapshot_merge_unions_tracks_and_keeps_freshest_quote():
     assert len(by_id["a"]["track_provenance"]) == 2
     assert merged["queries"] == ["AI bubble", "US recession"]
     assert merged["status"]["selected_count"] == 3
+    assert "end_date_passed_count" not in merged["status"]  # no track ran the TIME-3 gate
+
+
+def test_market_snapshot_merge_recounts_end_date_passed_rows_that_survive_selection():
+    """TIME-3: tracks that ran the endDate gate carry status.end_date_passed_count; the merge
+    recounts the window_ended rows it actually selected, so the telemetry survives."""
+    def row(mid, volume, ended):
+        out = {"market_id": mid, "question": f"{mid}?", "implied_yes_prob": 0.3,
+               "volume": volume, "event_title": mid}
+        if ended:
+            out.update(window_ended=True, window_ended_at="2026-09-30T12:00:00+00:00")
+        return out
+
+    first = {"as_of": "2026-10-01T00:00:00Z", "status": {"end_date_passed_count": 1},
+             "markets": [row("a", 1000, True), row("b", 500, False)]}
+    second = {"as_of": "2026-10-02T00:00:00Z", "status": {"end_date_passed_count": 2},
+              "markets": [row("a", 1500, True), row("c", 100, True)]}
+    gate_off_track = {"as_of": "2026-10-02T00:00:00Z", "markets": [row("d", 50, False)]}
+
+    merged = merge_market_snapshots([first, second, gate_off_track])
+    assert merged["status"]["end_date_passed_count"] == 2  # a and c; the row stays stamped
+    assert {r["market_id"] for r in merged["markets"] if r.get("window_ended")} == {"a", "c"}
+    capped = merge_market_snapshots([first, second], max_total=2)  # c falls to the cap
+    assert [r["market_id"] for r in capped["markets"]] == ["a", "b"]
+    assert capped["status"]["end_date_passed_count"] == 1
 
 
 def test_market_price_history_merge_filters_selected_and_deduplicates_timestamps():
@@ -310,7 +335,9 @@ def test_market_snapshot_merge_transport_requires_every_attempt_to_fail():
     assert merged["status"]["query_count"] == 6
     assert merged["status"]["successful_query_count"] == 2
     assert merged["status"]["transport_failure_count"] == 4
-    assert merged["status"]["empty_reason"] == "no_equivalent_market"
+    # RESEARCH-3: a partial outage with no candidate is labelled, never folded
+    # into the generic 'no_equivalent_market'.
+    assert merged["status"]["empty_reason"] == "partial_transport_failure"
     assert merged["status"]["state"] == "partial_transport_failure"
     assert merged["status"]["empty_reason_counts"] == {
         "transport_failure": 1, "no_equivalent_market": 1,
@@ -327,7 +354,9 @@ def test_market_snapshot_merge_exposes_inflight_timeout_without_calling_it_outag
         },
     }])
 
-    assert merged["status"]["empty_reason"] == "no_equivalent_market"
+    # FU-6: the empty_reason names the timeout too (it was the generic
+    # 'no_equivalent_market'); still not an outage ('transport_failure').
+    assert merged["status"]["empty_reason"] == "inflight_timeout"
     assert merged["status"]["state"] == "inflight_timeout"
     assert merged["status"]["inflight_timeout_count"] == 2
     assert merged["status"]["empty_reason_counts"] == {"inflight_timeout": 1}

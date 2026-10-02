@@ -21,6 +21,7 @@ from queue import Queue
 
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.security import UnsafeIdError, contained_child, is_safe_id
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
 
@@ -305,6 +306,15 @@ class SimulationRunner:
     # SimulationManager 也复用此锁（见 simulation_manager._save_simulation_state），
     # 让两个 writer 串行，避免基于陈旧快照的写覆盖刚落盘的状态。
     _run_state_lock: threading.RLock = threading.RLock()
+
+    @classmethod
+    def _sim_dir(cls, simulation_id: str) -> str:
+        """uploads/simulations/<simulation_id>：本类所有按 id 拼接的路径都经此处（INFRA-10）。
+
+        contained_child 校验 id 并要求 realpath 严格位于 RUN_STATE_DIR 之下；非法/逃逸 id
+        抛 UnsafeIdError。返回值与原 os.path.join(RUN_STATE_DIR, id) 逐字节相同。
+        """
+        return contained_child(cls.RUN_STATE_DIR, simulation_id, "simulation")
     
     @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
@@ -339,8 +349,11 @@ class SimulationRunner:
 
     @classmethod
     def _load_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
-        """从文件加载运行状态"""
-        state_file = os.path.join(cls.RUN_STATE_DIR, simulation_id, "run_state.json")
+        """从文件加载运行状态（非法 id 与「不存在」同义，返回 None；INFRA-10）"""
+        try:
+            state_file = os.path.join(cls._sim_dir(simulation_id), "run_state.json")
+        except UnsafeIdError:
+            return None
         if not os.path.exists(state_file):
             return None
         
@@ -428,7 +441,7 @@ class SimulationRunner:
         立即落盘，绝不丢终态。默认 interval=0 → 每次都写，与现状逐字节一致（degrade-safe）。
         """
         from ..utils.atomic import write_json_atomic
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
+        sim_dir = cls._sim_dir(state.simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
         state_file = os.path.join(sim_dir, "run_state.json")
 
@@ -488,7 +501,7 @@ class SimulationRunner:
             )
         
         # 加载模拟配置
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
         
         if not os.path.exists(config_path):
@@ -937,6 +950,10 @@ class SimulationRunner:
             # 原子落盘 checkpoint.json，使后续崩溃/重启可以续跑而非从第 0 轮重烧额度。
             if sim_resume_flag or resume_active:
                 env['SIM_RESUME'] = 'true'
+            # INFRA-8: the child records per-call model provenance into sim_llm_telemetry.json
+            # exactly when this process's Config does (never an ambient env value alone).
+            env['RECORD_MODEL_PROVENANCE'] = (
+                'true' if bool(getattr(Config, 'RECORD_MODEL_PROVENANCE', True)) else 'false')
 
             # 设置工作目录为模拟目录（数据库等文件会生成在此）
             # 使用 start_new_session=True 创建新的进程组，确保可以通过 os.killpg 终止所有子进程
@@ -1011,7 +1028,7 @@ class SimulationRunner:
     @classmethod
     def _monitor_simulation(cls, simulation_id: str):
         """监控模拟进程，解析动作日志"""
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         
         # 新的日志结构：分平台的动作日志
         twitter_actions_log = os.path.join(sim_dir, "twitter", "actions.jsonl")
@@ -1304,6 +1321,9 @@ class SimulationRunner:
         # DEFECT-3: 上一轮子进程的 token 计量快照必须随重跑轮转——否则新一轮启动即失败时,
         # 编排器会把上一轮（可能已入账过的）花费当作本轮的账消费。
         "sim_llm_telemetry.json",
+        # SIM-3: in-band 世界演化以 append 模式写 world_digest.jsonl——不轮转则全新重跑会续写在
+        # 上一轮的摘要之后。续跑（resume）不走轮转，照旧续写，这是预期行为。
+        "world_digest.jsonl",
     )
 
     @classmethod
@@ -1402,7 +1422,7 @@ class SimulationRunner:
         # 向后兼容：极旧的 run_state.json 没有 *_enabled 字段（均为 False）时，
         # 回退到原先的「文件存在即启用」启发式，避免误判历史运行。
         if not twitter_enabled and not reddit_enabled:
-            sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
+            sim_dir = cls._sim_dir(state.simulation_id)
             twitter_enabled = os.path.exists(os.path.join(sim_dir, "twitter", "actions.jsonl"))
             reddit_enabled = os.path.exists(os.path.join(sim_dir, "reddit", "actions.jsonl"))
 
@@ -1544,6 +1564,8 @@ class SimulationRunner:
             if not os.path.isdir(cls.RUN_STATE_DIR):
                 return
             for sim_id in os.listdir(cls.RUN_STATE_DIR):
+                if not is_safe_id(sim_id):  # INFRA-10: 跳过 .DS_Store、_zep_dead_letter 等非 id 条目
+                    continue
                 try:
                     if sim_id in cls._processes:
                         continue  # 本进程自己起的，不是孤儿
@@ -1576,7 +1598,7 @@ class SimulationRunner:
         """
         from ..utils.atomic import write_json_atomic
         try:
-            sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+            sim_dir = cls._sim_dir(simulation_id)
             if not os.path.isdir(sim_dir):
                 return
             write_json_atomic(os.path.join(sim_dir, "env_status.json"), {
@@ -1593,7 +1615,7 @@ class SimulationRunner:
         """把 state.json 的 status 原子更新为终态，与 run_state 保持一致（复用共享锁，F-6-9）。"""
         from ..utils.atomic import write_json_atomic
         try:
-            state_file = os.path.join(cls.RUN_STATE_DIR, simulation_id, "state.json")
+            state_file = os.path.join(cls._sim_dir(simulation_id), "state.json")
             if not os.path.exists(state_file):
                 return
             with cls._run_state_lock:
@@ -1818,7 +1840,7 @@ class SimulationRunner:
         Returns:
             完整的动作列表（按时间戳排序，新的在前）
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         actions = []
         
         # 读取 Twitter 动作文件（根据文件路径自动设置 platform 为 twitter）
@@ -1983,6 +2005,13 @@ class SimulationRunner:
         # EXECPLAN2 F-6-3：per-agent 统计须基于完整历史，否则超过 1w 动作后早期轮次/Agent 会被截断、
         # engagement 总量被低估。
         actions = cls.get_all_actions(simulation_id)
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：附加 organic_actions / injected_actions /
+        # organic_action_types——种子、定时事件回放、种子动作、采样点赞不是该 agent 的自发行为
+        # （回放帖挂在名字匹配或最高影响力回退的行为者名下）。排序仍按 total_actions（API 兼容）；
+        # 开关关 → 不写新字段，run_summary.json 逐字节不变。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        if provenance_on:
+            from .sim_event_provenance import is_injected_row
 
         agent_stats: Dict[int, Dict[str, Any]] = {}
         
@@ -2000,6 +2029,9 @@ class SimulationRunner:
                     "first_action_time": action.timestamp,
                     "last_action_time": action.timestamp,
                 }
+                if provenance_on:
+                    agent_stats[agent_id].update(
+                        {"organic_actions": 0, "injected_actions": 0, "organic_action_types": {}})
             
             stats = agent_stats[agent_id]
             stats["total_actions"] += 1
@@ -2010,6 +2042,13 @@ class SimulationRunner:
                 stats["reddit_actions"] += 1
             
             stats["action_types"][action.action_type] = stats["action_types"].get(action.action_type, 0) + 1
+            if provenance_on:
+                if is_injected_row(action.action_args, action.round_num):
+                    stats["injected_actions"] += 1
+                else:
+                    stats["organic_actions"] += 1
+                    organic_types = stats["organic_action_types"]
+                    organic_types[action.action_type] = organic_types.get(action.action_type, 0) + 1
             # XRUN-9: 同 get_timeline——比较时间戳而非按遍历顺序覆盖，修复 first>last 反转。
             if action.timestamp:
                 if not stats["first_action_time"] or action.timestamp < stats["first_action_time"]:
@@ -2099,6 +2138,16 @@ class SimulationRunner:
             and (a.round_num or 0) > 0
             and not (a.action_args or {}).get("is_scheduled_event")
         ]
+        # SIM-3（SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES，默认开）：采样赞（is_engagement_sample）
+        # 是引擎随机代点而非 agent 决策——同样剔出有机量，否则只有采样赞与定时事件帖的零自主
+        # 运行逃过 hollow（summary 与管线健康门两处）。剔出条数记 engagement_sample_count（>0 才写），
+        # 与定时事件一样落入 seed_action_count 的非有机口径；关闭 → 旧计数逐字节不变。
+        engagement_sample_count = 0
+        if getattr(Config, "SIM_ORGANIC_EXCLUDES_ENGAGEMENT_SAMPLES", True):
+            _agent_chosen = [a for a in organic
+                             if not (a.action_args or {}).get("is_engagement_sample")]
+            engagement_sample_count = len(organic) - len(_agent_chosen)
+            organic = _agent_chosen
         organic_count = len(organic)
         seed_count = max(0, len(actions) - organic_count)
         rounds_with_organic = len({a.round_num for a in organic})
@@ -2109,7 +2158,7 @@ class SimulationRunner:
         # 是 coverage_end 的第一数据源（hours 模式无此键 → None）。
         current_period_end = None
         try:
-            _rsp = os.path.join(cls.RUN_STATE_DIR, simulation_id, "run_state.json")
+            _rsp = os.path.join(cls._sim_dir(simulation_id), "run_state.json")
             if os.path.exists(_rsp):
                 with open(_rsp, encoding="utf-8") as _f:
                     _rs = json.load(_f)
@@ -2135,7 +2184,7 @@ class SimulationRunner:
         # ok 降为 llm_degraded（errored/hollow/truncated 语义更强者不被覆盖）。老运行无此文件 → 行为不变。
         llm_health = None
         try:
-            _lhp = os.path.join(cls.RUN_STATE_DIR, simulation_id, "llm_health.json")
+            _lhp = os.path.join(cls._sim_dir(simulation_id), "llm_health.json")
             if os.path.exists(_lhp):
                 with open(_lhp, encoding="utf-8") as _lf:
                     llm_health = json.load(_lf)
@@ -2151,7 +2200,7 @@ class SimulationRunner:
         agent_dynamics = {}
         for _plat in ("twitter", "reddit"):
             try:
-                _dsp = os.path.join(cls.RUN_STATE_DIR, simulation_id, f"{_plat}_dynamics_summary.json")
+                _dsp = os.path.join(cls._sim_dir(simulation_id), f"{_plat}_dynamics_summary.json")
                 if os.path.exists(_dsp):
                     with open(_dsp, encoding="utf-8") as _df:
                         _ds = json.load(_df)
@@ -2167,17 +2216,22 @@ class SimulationRunner:
         # CAL-TEMPORAL：顺带读取 temporal_config（仅 mode=="calendar" 时保留）；
         # hours 模式恒为空 dict → run_summary 不写任何日历键（逐字节不变）。
         _temporal_cfg: Dict[str, Any] = {}
+        # SIM-3：保留解析后的配置，供下方定时事件可达性审计读取 event_config.scheduled_events。
+        _sim_cfg: Dict[str, Any] = {}
         try:
-            _cfgp = os.path.join(cls.RUN_STATE_DIR, simulation_id, "simulation_config.json")
+            _cfgp = os.path.join(cls._sim_dir(simulation_id), "simulation_config.json")
             if os.path.exists(_cfgp):
                 with open(_cfgp, encoding="utf-8") as _cf:
                     _sc = json.load(_cf)
-                _mpr = (_sc.get("time_config") or {}).get("minutes_per_round", 60)
-                _minutes_per_round = float(_mpr) if _mpr else 60.0
-                _tc_block = _sc.get("temporal_config")
-                if isinstance(_tc_block, dict) and _tc_block.get("mode") == "calendar":
-                    _temporal_cfg = _tc_block
-        except (OSError, ValueError, TypeError):
+                # A config that is not a JSON object (e.g. a list) keeps the defaults.
+                if isinstance(_sc, dict):
+                    _sim_cfg = _sc
+                    _mpr = (_sc.get("time_config") or {}).get("minutes_per_round", 60)
+                    _minutes_per_round = float(_mpr) if _mpr else 60.0
+                    _tc_block = _sc.get("temporal_config")
+                    if isinstance(_tc_block, dict) and _tc_block.get("mode") == "calendar":
+                        _temporal_cfg = _tc_block
+        except (OSError, ValueError, TypeError, AttributeError):
             _minutes_per_round = 60.0
             _temporal_cfg = {}
         try:
@@ -2191,7 +2245,6 @@ class SimulationRunner:
         # 掩盖 agent 自身零点赞的塌缩。连续 ≥K 轮 posts>0 而 comments+likes==0 → 结构化告警。
         organic_ratio_warnings: List[Dict[str, Any]] = []
         try:
-            from app.config import Config
             if getattr(Config, "SIM_ORGANIC_RATIO_DETECTOR", True):
                 from app.services.agent_dynamics import (
                     classify_organic_action, detect_organic_ratio_collapse,
@@ -2211,6 +2264,21 @@ class SimulationRunner:
                 organic_ratio_warnings = detect_organic_ratio_collapse(_prc, _minc)
         except Exception:  # noqa: BLE001 — 侦测器失败不阻断 run_summary（degrade-safe）
             organic_ratio_warnings = []
+
+        # SIM-3（SIM_SCHEDULE_AUDIT，默认开）：定时事件可达性审计。round 非法 / ≥ total_rounds、
+        # 缺发帖者或内容的 scheduled_events 永远不会被 fire_scheduled_events 触发，模拟角色从未
+        # 看到它们。仅当存在不可达事件时写 schedule_audit（全部可达 → summary 键不变）。
+        schedule_audit: Optional[Dict[str, Any]] = None
+        try:
+            _ec = _sim_cfg.get("event_config")
+            _events = _ec.get("scheduled_events") if isinstance(_ec, dict) else None
+            if getattr(Config, "SIM_SCHEDULE_AUDIT", True) and isinstance(_events, list) and _events:
+                from app.services.sim_schedule_audit import audit_scheduled_events
+                _audit = audit_scheduled_events(_events, total_rounds)
+                if _audit["unreachable"] > 0:
+                    schedule_audit = _audit
+        except Exception:  # noqa: BLE001 — 审计失败不阻断 run_summary（degrade-safe）
+            schedule_audit = None
 
         summary = {
             "simulation_id": simulation_id,
@@ -2272,9 +2340,15 @@ class SimulationRunner:
         if organic_ratio_warnings:
             # ITEM 20: 有机互动塌缩告警——报告端据此对相关平台样本施加「不得叙述为活跃讨论」caveat。
             summary["organic_ratio_warnings"] = organic_ratio_warnings
+        if engagement_sample_count:
+            # SIM-3：被剔出有机量的采样赞条数（审计可对账 seed_action_count 的构成）。
+            summary["engagement_sample_count"] = engagement_sample_count
+        if schedule_audit:
+            # SIM-3：永不触发的定时事件（scheduled/unreachable/by_reason/samples）——管线运行健康据此降级。
+            summary["schedule_audit"] = schedule_audit
 
         try:
-            sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+            sim_dir = cls._sim_dir(simulation_id)
             os.makedirs(sim_dir, exist_ok=True)
             out = os.path.join(sim_dir, "run_summary.json")
             tmp = out + ".tmp"
@@ -2322,7 +2396,7 @@ class SimulationRunner:
         """
         import shutil
         
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         
         if not os.path.exists(sim_dir):
             return {"success": True, "message": "模拟目录不存在，无需清理"}
@@ -2602,7 +2676,7 @@ class SimulationRunner:
         Returns:
             True 表示环境存活，False 表示环境已关闭
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             return False
 
@@ -2620,7 +2694,7 @@ class SimulationRunner:
         Returns:
             状态详情字典，包含 status, twitter_available, reddit_available, timestamp
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         status_file = os.path.join(sim_dir, "env_status.json")
         
         default_status = {
@@ -2674,7 +2748,7 @@ class SimulationRunner:
             ValueError: 模拟不存在或环境未运行
             TimeoutError: 等待响应超时
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
 
@@ -2763,7 +2837,7 @@ class SimulationRunner:
             ValueError: 模拟不存在或环境未运行
             TimeoutError: 等待响应超时
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
 
@@ -2826,7 +2900,7 @@ class SimulationRunner:
         Returns:
             全局采访结果字典
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
 
@@ -2879,7 +2953,7 @@ class SimulationRunner:
         Returns:
             操作结果字典
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
         
@@ -2990,7 +3064,7 @@ class SimulationRunner:
         Returns:
             Interview历史记录列表
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        sim_dir = cls._sim_dir(simulation_id)
         
         results = []
         

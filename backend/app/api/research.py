@@ -21,10 +21,13 @@ from flask import jsonify, request
 
 from . import research_bp
 from ..config import Config
+from ..config_audit import ConfigurationError, parse_int_option
 from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
     PipelineState,
+    RunAdmissionError,
+    admit_hindcast_as_of,
     preflight_pipeline,
     refresh_research_artifact_manifest,
     research_dossier_is_sealed,
@@ -57,6 +60,9 @@ def run_pipeline():
         project_name: str      可选
         depth: str             quick | standard | deep（默认 standard）
         max_rounds: int        OASIS 最大轮数（可选，截断模拟）
+        as_of: str             回测 as-of 日期（可选，TIME-7）：规范 YYYY-MM-DD、不晚于今天（UTC）；
+                               需 HINDCAST_ENABLED=true 且研究引擎为 v3，否则 400（绝不按实时运行）。
+                               准入后为评估运行（characterization-only）。
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -74,9 +80,10 @@ def run_pipeline():
 
         max_rounds = data.get('max_rounds')
         if max_rounds is not None:
+            # INFRA-14: strict — a JSON true (int(True) == 1) or 3.5 (int() truncates) is refused.
             try:
-                max_rounds = int(max_rounds)
-            except (TypeError, ValueError):
+                max_rounds = parse_int_option(max_rounds, 'max_rounds')
+            except ValueError:
                 return jsonify({"success": False, "error": "max_rounds 必须是整数"}), 400
 
         # T5.5: 每次运行可覆盖研究语言/模型（缺省回退 Config）。在任何子进程启动前校验，杜绝
@@ -97,6 +104,15 @@ def run_pipeline():
         if model:
             model = model.lower()
 
+        # TIME-7 回测准入：带 as_of 的请求 fail-closed（HINDCAST_ENABLED / 规范且不在未来的日期 /
+        # v3 引擎），不满足即 400，在体检与任何目录/任务之前。
+        as_of = data.get('as_of')
+        if as_of is not None:
+            try:
+                admit_hindcast_as_of(as_of)
+            except RunAdmissionError as e:
+                return jsonify({"success": False, "error": str(e)}), 400
+
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         preflight_errors = preflight_pipeline(mode=mode, model=model)
         if preflight_errors:
@@ -106,15 +122,25 @@ def run_pipeline():
                 "preflight_errors": preflight_errors,
             }), 400
 
-        state = PipelineOrchestrator.start(
-            prompt=prompt,
-            mode=mode,
-            project_name=data.get('project_name'),
-            depth=depth,
-            max_rounds=max_rounds,
-            language=language,
-            model=model,
-        )
+        try:
+            state = PipelineOrchestrator.start(
+                prompt=prompt,
+                mode=mode,
+                project_name=data.get('project_name'),
+                depth=depth,
+                max_rounds=max_rounds,
+                language=language,
+                model=model,
+                as_of=as_of,
+            )
+        except RunAdmissionError as e:
+            # start() re-checks the admission before creating anything; any other
+            # ValueError is an internal fault (500 below).
+            return jsonify({"success": False, "error": str(e)}), 400
+        except ConfigurationError as e:
+            # INFRA-14: start() re-checks the config audit (the environment changed after
+            # preflight); a refusal lists its errors like preflight does, never a 500.
+            return jsonify({"success": False, "error": str(e), "preflight_errors": e.errors}), 400
         return jsonify({
             "success": True,
             "data": {
@@ -151,7 +177,12 @@ def resume_pipeline(pipeline_id: str):
         existing = PipelineManager.load(pipeline_id)
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
-        preflight_errors = preflight_pipeline(mode=existing.get("mode") or "full")
+        # INFRA-14: check the research model the run pinned at admission, not the Config default.
+        options = existing.get("options")
+        preflight_errors = preflight_pipeline(
+            mode=existing.get("mode") or "full",
+            model=options.get("research_model") if isinstance(options, dict) else None,
+        )
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -230,6 +261,12 @@ def fork_scenario(pipeline_id: str):
         overlay = request.get_json(silent=True) or {}
         if not (overlay.get("label") or "").strip():
             return jsonify({"success": False, "error": "缺少情景标签 label"}), 400
+        if overlay.get("max_rounds") is not None:
+            # INFRA-14: strict like the run routes (fork() would read true as 1 and 3.5 as 3).
+            try:
+                parse_int_option(overlay["max_rounds"], "max_rounds")
+            except ValueError:
+                return jsonify({"success": False, "error": "max_rounds 必须是整数"}), 400
         preflight_errors = preflight_pipeline(mode="full")
         if preflight_errors:
             return jsonify({
@@ -364,6 +401,16 @@ def preflight():
     mode = request.args.get('mode', 'full')
     if mode not in ('full', 'research_only'):
         mode = 'full'
+    # INFRA-8: an unknown research model is refused like POST /run refuses it, instead of
+    # being reported as a warning row of a readiness document for a model that cannot run.
+    model = (request.args.get('model') or '').strip() or None
+    if model is not None and model.lower() not in Config.SUPPORTED_DEERFLOW_MODELS:
+        return jsonify({
+            "success": False,
+            "error": f"model 必须是 {', '.join(Config.SUPPORTED_DEERFLOW_MODELS)} 之一",
+        }), 400
+    if model:
+        model = model.lower()  # 与 POST /run 同样归一，两种响应都按该模型体检
 
     if (request.args.get('format') or '').strip().lower() == 'full':
         # 复用 backend/scripts/preflight.py 的 environment_report()（同一引擎，零漂移）。
@@ -376,13 +423,12 @@ def preflight():
                 sys.path.insert(0, _scripts_dir)
             from preflight import environment_report  # type: ignore
             deep = (request.args.get('deep') or '').strip().lower() in ('1', 'true', 'yes')
-            model = (request.args.get('model') or '').strip() or None
             report = environment_report(mode=mode, model=model, deep=deep)
             return jsonify({"success": True, "data": report})
         except Exception as e:
             logger.warning(f"preflight format=full 降级到精简响应: {e}")
 
-    errors = preflight_pipeline(mode=mode)
+    errors = preflight_pipeline(mode=mode, model=model)
     return jsonify({"success": True, "data": {"ready": not errors, "errors": errors, "mode": mode}})
 
 

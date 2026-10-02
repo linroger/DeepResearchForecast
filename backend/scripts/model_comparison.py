@@ -230,6 +230,15 @@ def _run_report_for_provider(
             sources=ctx.get("sources"),
             research_report=ctx.get("research_report"),
         )
+        # EVAL-1: 提供方对比重跑是同一问题的重复作答——以 comparison 入账，不进生产校准；
+        # provider 区分各提供方的目标键（彼此不是修订关系）。
+        agent.ledger_context = {
+            "pipeline_id": ctx["base_pipeline_id"],
+            "simulation_id": ctx["simulation_id"],
+            "record_class": "comparison",
+            "run_kind": "model_comparison",
+            "provider": provider,
+        }
 
         def _cb(stage: str, progress: int, message: str) -> None:
             logger.info("[%s] %s: %s (%s%%)", provider, stage, message, progress)
@@ -319,10 +328,12 @@ def build_comparison(base_pipeline_id: str, results: List[Dict[str, Any]]) -> Di
             prob = None
             for s in (r["forecast"].get("scenarios") or []):
                 if _norm_name(s.get("name")) == key:
-                    try:
-                        prob = round(float(s.get("probability") or 0.0), 4)
-                    except (TypeError, ValueError):
-                        prob = None
+                    # REPORT-1：待复核（null）概率保持 None——绝不在对比表里显示成 0.0。
+                    if s.get("probability") is not None:
+                        try:
+                            prob = round(float(s.get("probability") or 0.0), 4)
+                        except (TypeError, ValueError):
+                            prob = None
                     break
             row["by_provider"][r["provider"]] = prob
         per_scenario.append(row)

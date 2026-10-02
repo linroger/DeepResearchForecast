@@ -39,6 +39,7 @@ from ..utils.actors import (
 from ..utils.dates import parse_as_of
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
+from . import question_spec
 from .zep_entity_reader import EntityNode, ZepEntityReader
 from .actor_context import (
     ACTOR_CONTEXT_VERSION,
@@ -945,8 +946,9 @@ class SimulationConfigGenerator:
         * as_of：actors["as_of_date"] 经 parse_as_of 解析；不可解析/缺失 → 运行日 +
           warning ``as_of_defaulted``。
         * 判定日阶梯：sim_timeline.extract_horizon（确定性四层，输入 =
-          模拟需求 + "\\n" + central_question）→ _llm_extract_horizon（单次 JSON 兜底）
-          → default_horizon(as_of, SIM_HORIZON_DEFAULT_MONTHS)。
+          模拟需求 + "\\n" + central_question）→ 研究问题规范的判定日（RESEARCH-12，
+          QUESTION_SPEC_DOWNSTREAM；horizon_source='question_spec'，命中即不调 LLM）
+          → _llm_extract_horizon（单次 JSON 兜底）→ default_horizon(as_of, SIM_HORIZON_DEFAULT_MONTHS)。
         * target_max = min(SIM_CALENDAR_TARGET_MAX_ROUNDS, max_rounds, OASIS_DEFAULT_MAX_ROUNDS)
           （后两者未设/非正视为 ∞）——显式回合上限只粗化时间粒度、绝不截断预测期
           （build_timeline 记 round_cap_coarsened）。
@@ -958,9 +960,15 @@ class SimulationConfigGenerator:
         if as_of_defaulted:
             logger.warning(f"as_of_date 不可解析（{as_of_raw!r}），默认取运行日 {as_of.isoformat()}")
 
-        # 判定日阶梯：确定性抽取 → LLM 兜底 → 默认 12 个月
+        # 判定日阶梯：确定性抽取 → 问题规范判定日 → LLM 兜底 → 默认 12 个月
         cq = str(actors.get("central_question", "") or "") if isinstance(actors, dict) else ""
         horizon = sim_timeline.extract_horizon(f"{simulation_requirement}\n{cq}", as_of)
+        if horizon is None:
+            # RESEARCH-12：研究阶段钉住的判定日（actors.json question_spec，哈希复核）排在提示词
+            # 显式日期之后、LLM 兜底之前；无规范/旗标关/越界 → None，阶梯与旧路径逐字节一致。
+            spec_day = question_spec.spec_horizon_date(question_spec.downstream_spec(actors), as_of)
+            if spec_day is not None:
+                horizon = sim_timeline.HorizonResult(spec_day.isoformat(), "question_spec", "", False, 0.9)
         if horizon is None:
             horizon = self._llm_extract_horizon(context, as_of)
         if horizon is None:
@@ -1357,6 +1365,8 @@ class SimulationConfigGenerator:
 
         开关关 / 无 simulation_id / 无对应管线 / 文件缺失 / 解析失败 → []（degrade-safe，
         world_brief 与今日逐字节一致）。
+        TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（market_clock_now()）或
+        已盖 window_ended 章的市场不作为模拟先验（其近定盘价会被当成开放信念），剔除数记日志。
         """
         if not self._market_priors_enabled() or not simulation_id:
             return []
@@ -1375,7 +1385,13 @@ class SimulationConfigGenerator:
                     with open(path, "r", encoding="utf-8") as f:
                         payload = json.load(f)
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
-                    return [m for m in (markets or []) if isinstance(m, dict)]
+                    from ..utils.prediction_markets import drop_window_ended_rows
+                    rows, ended = drop_window_ended_rows(
+                        [m for m in (markets or []) if isinstance(m, dict)])
+                    if ended:
+                        logger.info(f"市场先验：剔除 {ended} 个已过截止日的市场"
+                                    "（PREDICTION_MARKETS_END_DATE_GATE）")
+                    return rows
                 break  # 找到对应管线即停（无论有无市场文件）
         except Exception as e:  # noqa: BLE001 — 加载失败 → 空，绝不阻断配置生成
             logger.debug(f"读取 handoff prediction_markets.json 失败（降级跳过）: {e}")
@@ -1891,7 +1907,11 @@ class SimulationConfigGenerator:
                           else "## 核心预测问题（这个世界正在争论什么）\n")
                          + question[:self.WORLD_BRIEF_QUESTION_CHARS])
         try:
-            brief_block = situation_brief_block(actors, english=english)
+            # SIM-5: agent 可见的世界简报如实标注未逐条溯源的研究综述（SIM_WORLD_BRIEF_HONEST_LABEL，
+            # 默认开；关 → 旧「权威背景」标题）。
+            brief_block = situation_brief_block(
+                actors, english=english,
+                honest_label=bool(getattr(Config, "SIM_WORLD_BRIEF_HONEST_LABEL", True)))
         except Exception:  # noqa: BLE001 — 局势简报渲染失败绝不阻断配置生成
             brief_block = ""
         if brief_block:

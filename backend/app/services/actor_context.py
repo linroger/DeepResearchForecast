@@ -20,7 +20,15 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from ..utils.actors import (
+    actor_identity_key,
+    actor_key_is_lossy,
+    legacy_actor_key,
+    normalize_name,
+    stable_actor_id,
+)
 from ..utils.atomic import write_json_atomic
+from ..utils.canonical_json import canonical_json_sha256
 
 
 ACTOR_CONTEXT_VERSION = "actor-context/v1"
@@ -393,17 +401,6 @@ _GENERIC_RELEVANCE_TERMS = {
 }
 
 
-def canonical_json_sha256(value: Any) -> str:
-    """Hash strict canonical JSON, rejecting NaN and unserialisable objects."""
-    return hashlib.sha256(json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")).hexdigest()
-
-
 def text_sha256(value: str) -> str:
     return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()
 
@@ -439,19 +436,36 @@ def is_hard_public_relationship(row: Any) -> bool:
     )
 
 
-def _canonical_name(value: Any) -> str:
-    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
-    return re.sub(r"[^0-9a-z\u3400-\u9fff]+", "", normalized)
+# INFRA-11: the surface-matching key lives in utils.actors (shared with actor_role_prompt).
+_canonical_name = legacy_actor_key
+
+
+def _term_key(value: Any) -> str:
+    """INFRA-11: the report-relevance key of a term or surface.
+
+    The legacy key for any text it keeps losslessly (every Latin term keeps its historical
+    length floor, de-duplication and surface equality); ``normalize_name`` for text whose
+    kana/hangul/Cyrillic letters the legacy key would drop, so such a term is neither
+    discarded as empty nor equated with another name sharing its kanji ('ホンダ自動車' is
+    not 'トヨタ自動車' although both legacy keys are '自動車').
+    """
+    return normalize_name(value) if actor_key_is_lossy(value) else _canonical_name(value)
+
+
+_GENERIC_RELEVANCE_KEYS = frozenset(_term_key(item) for item in _GENERIC_RELEVANCE_TERMS)
 
 
 def actor_id_for(actor: Mapping[str, Any]) -> str:
+    """Explicit producer id, else ``stable_actor_id`` of the name.
+
+    Latin names keep their historical hash; names whose legacy key would drop non-Latin
+    letters (kana, hangul, Cyrillic…) get a distinct lossless id instead of an empty or
+    colliding one.  Raises ValueError when the name normalizes to nothing.
+    """
     explicit = str(actor.get("actor_id") or actor.get("id") or "").strip()
     if explicit:
         return explicit
-    name = _canonical_name(actor.get("name"))
-    if not name:
-        raise ValueError("selected actor is missing a stable name or actor_id")
-    return "actor_" + hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+    return stable_actor_id(actor.get("name"))
 
 
 def _safe_pack_filename(actor_id: str) -> str:
@@ -542,12 +556,12 @@ def _actor_terms(actor: Mapping[str, Any]) -> List[str]:
         # an unrelated actor's section look relevant merely because both
         # actors operate in the same domain.
         clean = " ".join(str(value).split()).strip(" ,.;:()[]{}")
-        norm = _canonical_name(clean)
+        norm = _term_key(clean)
         if (
             len(norm) < 4
             or norm in seen
             or clean.casefold() in _GENERIC_RELEVANCE_TERMS
-            or norm in {_canonical_name(item) for item in _GENERIC_RELEVANCE_TERMS}
+            or norm in _GENERIC_RELEVANCE_KEYS
         ):
             continue
         seen.add(norm)
@@ -621,8 +635,9 @@ def _relevance(text: str, actor: Mapping[str, Any]) -> Tuple[int, List[str]]:
             matched.append(surface)
             surface_matches.append(surface)
             score += 120 if index == 0 else 90
+    surface_keys = {_term_key(item) for item in surfaces}
     for term in terms:
-        if any(_canonical_name(term) == _canonical_name(item) for item in surfaces):
+        if _term_key(term) in surface_keys:
             continue
         if _contains_surface(text, term):
             matched.append(term)
@@ -632,7 +647,7 @@ def _relevance(text: str, actor: Mapping[str, Any]) -> Tuple[int, List[str]]:
     # an explicit name/alias anchor, require either two independent actor terms
     # or one long exact actor-specific phrase.
     discriminating_phrase = any(
-        len(_canonical_name(term)) >= 14 and (" " in term or any(ch.isdigit() for ch in term))
+        len(_term_key(term)) >= 14 and (" " in term or any(ch.isdigit() for ch in term))
         for term in term_matches
     )
     if not surface_matches and len(term_matches) < 2 and not discriminating_phrase:
@@ -783,7 +798,9 @@ def _incident_relationships(
 ) -> List[Dict[str, Any]]:
     if not isinstance(rows, list):
         return []
-    actor_names = {_canonical_name(item) for item in _actor_surfaces(actor)}
+    # INFRA-11: lossless identity keys, never the empty legacy key of a kana/hangul/Cyrillic
+    # name, so a non-Latin actor cannot collect every relationship with a non-Latin endpoint.
+    actor_names = {key for key in map(actor_identity_key, _actor_surfaces(actor)) if key}
     intelligence = actor.get("intelligence")
     canonical_v1 = (
         isinstance(intelligence, Mapping)
@@ -799,8 +816,8 @@ def _incident_relationships(
         ):
             continue
         endpoints = {
-            _canonical_name(row.get("source")),
-            _canonical_name(row.get("target")),
+            actor_identity_key(row.get("source")),
+            actor_identity_key(row.get("target")),
         }
         if actor_names.intersection(endpoints):
             out.append(row)
@@ -811,7 +828,36 @@ def _incident_relationships(
     ))[:24]
 
 
+# RESEARCH-6 forecaster attribution adds these fields to quantitative rows (none of them
+# existed on a row before it; the bridge's _CONSENSUS_KEYS) and sets ``analyst`` to the
+# forecaster, where it used to be the source (the bridge's enrich_quantitative_rows
+# fallback).  A row the actor matches only through attribution must not push a row it
+# matched without it out of a capped pack (FU-10).
+_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters", "range_kind")
+
+
+def _unattributed_view(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """``row`` as it read before RESEARCH-6 attribution (see _ATTRIBUTION_FIELDS)."""
+    view = {key: value for key, value in row.items() if key not in _ATTRIBUTION_FIELDS}
+    forecaster = row.get("forecaster")
+    if forecaster is not None and view.get("analyst") == forecaster:
+        source = re.sub(r"\s+", " ", str(row.get("source") or "")).strip()
+        if source:
+            view["analyst"] = source
+        else:
+            view.pop("analyst", None)
+    return view
+
+
 def _relevant_rows(rows: Any, actor: Mapping[str, Any], limit: int) -> List[Dict[str, Any]]:
+    """The first ``limit`` rows (in row order) that match ``actor``.
+
+    When the cap binds and RESEARCH-6 attribution fields are present, the rows
+    that match without those fields are kept first and rows matching only
+    through them fill the remaining slots, so attribution never displaces a
+    previously matched row; the result keeps row order.  Rows without the
+    fields (attribution off) give exactly ``matched[:limit]``.
+    """
     if not isinstance(rows, list):
         return []
     intelligence = actor.get("intelligence")
@@ -831,7 +877,19 @@ def _relevant_rows(rows: Any, actor: Mapping[str, Any], limit: int) -> List[Dict
         )
         and _matches_structured_row(row, actor)
     ]
-    return matched[:limit]
+    if len(matched) <= limit or not any(
+            field in row for row in matched for field in _ATTRIBUTION_FIELDS):
+        return matched[:limit]
+    base = [
+        index for index, row in enumerate(matched)
+        if _matches_structured_row(_unattributed_view(row), actor)
+    ]
+    keep = set(base[:limit])
+    for index in range(len(matched)):
+        if len(keep) >= limit:
+            break
+        keep.add(index)
+    return [row for index, row in enumerate(matched) if index in keep]
 
 
 def _shared_context(actors: Mapping[str, Any]) -> Dict[str, Any]:

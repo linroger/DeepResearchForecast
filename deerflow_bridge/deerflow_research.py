@@ -870,6 +870,7 @@ ACTOR_INTELLIGENCE_LINEAGE_FILENAME = "actor_intelligence_lineage.json"
 SOURCES_FILENAME = "sources.json"
 TIMELINE_FILENAME = "timeline.json"
 QUANTITATIVE_FILENAME = "quantitative.json"   # EXECPLAN2 I-0-5
+VERIFIED_FACTS_FILENAME = "verified_facts.json"   # REPORT-7: the v3 engine's figure/claim projection
 CONTESTED_FILENAME = "contested.json"         # EXECPLAN2 I-0-1
 PROGRESS_FILENAME = "research_progress.log"
 META_FILENAME = "meta.json"
@@ -9910,18 +9911,39 @@ def flag_implausible_quant(facts: Any, ref_date: "_dt.date | None") -> list:
     return flags
 
 
-def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date_key: str = "date") -> dict:
+def annotate_recency_rows(rows: Any, ref_date: "_dt.date", stale_days: int, date_key: str = "date",
+                          future_bucket: bool = False) -> dict:
     """R2-RES-4: annotate each row IN PLACE with ``staleness_days`` + ``is_stale`` and
     return a freshness histogram. ``ref_date`` is the research as-of date; a row older
     than ``stale_days`` is flagged stale. Undated rows are counted but not annotated.
+
+    ``future_bucket`` (RESEARCH-4, v3 RESEARCH_QUANT_TYPING): a row dated after
+    ``ref_date`` (typically a forecast's target date) is no fresh evidence — it gets
+    ``staleness_days=None``, ``is_stale=False``, ``is_future_dated=True`` and counts
+    under ``future_dated`` instead of ``fresh_le_90``.  So does a row the typing pass
+    flagged ``as_of_is_target`` or ``published_after_as_of`` (its ``as_of_date`` lies
+    wholly after as-of), even when that date reads here as an earlier year start
+    ("2026-Q4") or not at all ("FY2027", "Q4 2026").  Without it the histogram keys
+    and row annotations are exactly the legacy ones.
     """
     hist = {"fresh_le_90": 0, "recent_le_365": 0, "stale_gt_365": 0, "undated": 0, "n_stale": 0}
+    if future_bucket:
+        hist["future_dated"] = 0
     if not isinstance(rows, list):
         return hist
     for r in rows:
         if not isinstance(r, dict):
             continue
         d = _parse_date(r.get(date_key) or r.get("as_of_date") or r.get("date"))
+        flags = r.get("epistemic_flags")
+        after_as_of = isinstance(flags, (list, tuple)) and any(
+            flag in flags for flag in ("as_of_is_target", "published_after_as_of"))
+        if future_bucket and (after_as_of or (d is not None and d > ref_date)):
+            r["staleness_days"] = None
+            r["is_stale"] = False
+            r["is_future_dated"] = True
+            hist["future_dated"] += 1
+            continue
         if d is None:
             hist["undated"] += 1
             continue
@@ -14975,6 +14997,115 @@ def _pm_fetch_price_history(clob_token_id: Any, interval: str = "1d",
     return _pm_parse_price_history(data, days)
 
 
+# TIME-3 endDate hygiene. A market past its endDate can stay open (closed=false) at a
+# near-settled price while it awaits UMA resolution. The final snapshot stamps such rows
+# (window_ended / window_ended_at) and never drops them — their prices are still evidence —
+# so backend anchoring and SIM priors can exclude them. These helpers mirror the backend
+# parse_market_end / market_window_ended in app/utils/prediction_markets.py; keep them
+# 逐条一致 (test_market_end_date_gate.py asserts parity on one shared vector table).
+_PM_END_DATE_GRACE_MAX_HOURS = 168.0
+_PM_ISO_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_PM_DATE_ONLY_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[Zz]?$")
+
+
+def _pm_now() -> _dt.datetime:
+    """Current UTC instant for endDate comparisons (the bridge's test monkeypatch point)."""
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def _pm_as_utc(moment: _dt.datetime) -> _dt.datetime:
+    """Aware UTC view of ``moment``; a naive datetime is read as UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=_dt.timezone.utc)
+    return moment.astimezone(_dt.timezone.utc)
+
+
+def _pm_parse_market_end(value: Any) -> _dt.datetime | None:
+    """Parse a Polymarket endDate into an aware UTC datetime; anything unusable → None.
+
+    Mirrors backend parse_market_end: strings only (extended ``YYYY-MM-DD`` prefix); a
+    trailing ``Z`` means UTC; offsets and fractional seconds are accepted; a date-only
+    ``YYYY-MM-DD`` (a bare ``Z`` designator allowed) means 23:59:59.999999 UTC that day;
+    naive → UTC. Never raises."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not _PM_ISO_DATE_PREFIX_RE.match(text):
+        return None
+    try:
+        date_only = _PM_DATE_ONLY_RE.match(text)
+        if date_only:
+            day = _dt.date.fromisoformat(date_only.group(1))
+            return _dt.datetime(day.year, day.month, day.day, 23, 59, 59, 999999,
+                                tzinfo=_dt.timezone.utc)
+        if text[-1] in "Zz":
+            text = text[:-1] + "+00:00"
+        return _pm_as_utc(_dt.datetime.fromisoformat(text))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _pm_clamp_grace_hours(value: Any) -> float:
+    """Grace hours as a finite float in [0, 168]; anything unusable → 0 (mirrors backend)."""
+    hours = _pm_float(value)
+    if hours is None or not math.isfinite(hours):
+        return 0.0
+    return max(0.0, min(_PM_END_DATE_GRACE_MAX_HOURS, hours))
+
+
+def _pm_end_date_grace_hours() -> float:
+    """PREDICTION_MARKETS_END_DATE_GRACE_HOURS from the env (forwarded from Config), with
+    the same semantics as backend end_date_gate_settings(): finite, clamped to [0, 168]."""
+    try:
+        hours = float(os.environ.get("PREDICTION_MARKETS_END_DATE_GRACE_HOURS", "0") or 0)
+    except ValueError:
+        return 0.0
+    return _pm_clamp_grace_hours(hours)
+
+
+def _pm_market_window_ended(row: Any, now: _dt.datetime, grace_hours: float = 0.0) -> bool:
+    """True iff the row's end (``end_date``, then ``endDate``) plus grace lies before ``now``.
+    Missing/unparseable end dates → False. Mirrors backend market_window_ended; never raises."""
+    if not isinstance(row, dict) or not isinstance(now, _dt.datetime):
+        return False
+    end = _pm_parse_market_end(row.get("end_date") or row.get("endDate"))
+    if end is None:
+        return False
+    try:
+        return end + _dt.timedelta(hours=_pm_clamp_grace_hours(grace_hours)) < _pm_as_utc(now)
+    except OverflowError:
+        return False
+
+
+def _pm_stamp_window_ended(markets: list[dict], now: _dt.datetime,
+                           grace_hours: float) -> tuple[list[dict], int]:
+    """Shallow-copy the rows; ended rows gain window_ended=True and window_ended_at (the
+    parsed end, ISO UTC). Rows are never dropped. Returns the copies and the stamped count."""
+    out: list[dict] = []
+    stamped = 0
+    for m in markets:
+        row = dict(m)
+        if _pm_market_window_ended(row, now, grace_hours):
+            row["window_ended"] = True
+            row["window_ended_at"] = _pm_parse_market_end(
+                row.get("end_date") or row.get("endDate")).isoformat()
+            stamped += 1
+        out.append(row)
+    return out, stamped
+
+
+def _pm_window_ended_label(m: dict) -> str:
+    """Suffix for a stamped row in the research section (same English label as the backend
+    market pack); unstamped rows → "" so the table stays byte-identical."""
+    if m.get("window_ended") is not True:
+        return ""
+    end = (_pm_parse_market_end(m.get("window_ended_at"))
+           or _pm_parse_market_end(m.get("end_date") or m.get("endDate")))
+    if end is None:
+        return " — window ended, awaiting settlement"
+    return f" — window ended {end.date().isoformat()}, awaiting settlement"
+
+
 def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
                          event_title: str = "", event_slug: str = "") -> dict | None:
     """单条 Polymarket 市场规整化（镜像 backend 规则）；已关闭/无价/定盘价/低量 → None。"""
@@ -15238,10 +15369,11 @@ def _pm_render_section(markets: list[dict], as_of: str) -> str:
     for i, m in enumerate(markets, 1):
         prob = _pm_float(m.get("implied_yes_prob"))
         vol = _pm_float(m.get("volume"))
-        lines.append("| {i} | {q} ({mid}) | {ex} | {p} | {v} |".format(
+        lines.append("| {i} | {q} ({mid}){ended} | {ex} | {p} | {v} |".format(
             i=i,
             q=_cell(str(m.get("question") or "")[:160]),
             mid=_cell(m.get("market_id") or ""),
+            ended=_pm_window_ended_label(m),
             ex=_cell(m.get("exchange") or "—"),
             p=(f"{prob * 100:.0f}%" if prob is not None else "—"),
             v=(f"{vol:,.0f}" if vol is not None else "—"),
@@ -15279,7 +15411,8 @@ def _pm_per_query() -> int:
 
 def _pm_render_pricing_block(markets: list[dict], as_of: str, limit: int = 8) -> str:
     """PM-4: 一段紧凑的『当前市场定价』块，注入 pass-0 提示词让开场带着锚点搜。
-    确定性、无 LLM。空市场 → 空串。"""
+    确定性、无 LLM。空市场 → 空串。TIME-3：已盖 window_ended 章的行在行尾追加
+    「window ended …, awaiting settlement」标注；未盖章的行逐字节不变。"""
     if not markets:
         return ""
     lines = [
@@ -15293,7 +15426,7 @@ def _pm_render_pricing_block(markets: list[dict], as_of: str, limit: int = 8) ->
         q = str(m.get("question") or "").replace("\n", " ").strip()[:140]
         pct = f"{prob * 100:.0f}%" if prob is not None else "—"
         vtxt = f", volume ${vol:,.0f}" if vol is not None else ""
-        lines.append(f"- {q}: market prices YES at {pct}{vtxt}")
+        lines.append(f"- {q}: market prices YES at {pct}{vtxt}{_pm_window_ended_label(m)}")
     return "\n".join(lines)
 
 
@@ -15406,6 +15539,33 @@ def _load_tool_market_candidates(out_dir: Path, *, max_bytes: int = 4_000_000) -
     return [by_id[mid] for mid in order if mid in by_id]
 
 
+def _pm_price_time_enabled() -> bool:
+    """FU-11: MARKET_ANCHOR_PRICE_TIME (EVAL-6's knob, forwarded by the parent; default on)."""
+    return _env_flag("MARKET_ANCHOR_PRICE_TIME", True)
+
+
+def _pm_stamp_observed(rows: list, observed_at: str | None) -> list:
+    """FU-11: copies of the dict rows, each with ``observed_at`` = when its price was fetched.
+
+    ``observed_at`` None stamps a row with its own ``captured_at`` (an agent-tool row: the
+    time its tool call fetched the price), else the given time (the snapshot fetch that
+    priced the row; taken when the fetch returned, so it is late by at most the fetch's
+    own duration). A row without a usable time is copied unstamped. The snapshot's
+    top-level ``as_of`` is written later, after relevance scoring, so it only bounds
+    these times from above."""
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        row2 = dict(row)
+        stamp = observed_at if observed_at is not None else str(row2.get("captured_at") or "").strip()
+        if stamp:
+            row2["observed_at"] = stamp
+        out.append(row2)
+    return out
+
+
 def _merge_market_rows(primary: list[dict], secondary: list[dict]) -> list[dict]:
     """Merge market rows by ID; primary rows win fields, order is deterministic."""
     order: list[str] = []
@@ -15470,7 +15630,17 @@ def _pm_initial_snapshot(question: str, model_name: str, plog: "ProgressLog") ->
         return []
     _set_pm_transport_unavailable(False)
     scores = score_market_relevance(question, markets, model_name, plog)
-    return _apply_relevance_gate(markets, scores, _pm_min_relevance())
+    selected = _apply_relevance_gate(markets, scores, _pm_min_relevance())
+    # TIME-3: these rows feed the pass-0 pricing block and the INT-1 extraction input; stamp
+    # (never drop) the ones past their endDate so both surfaces label them as awaiting
+    # settlement instead of presenting a near-settled price as live. Gate off → rows untouched.
+    if selected and _env_flag("PREDICTION_MARKETS_END_DATE_GATE", True):
+        selected, stamped = _pm_stamp_window_ended(
+            selected, _pm_now(), _pm_end_date_grace_hours())
+        if stamped:
+            plog.write("warn", f"prediction markets (pre-pass): {stamped} market(s) past their "
+                               "endDate (kept, labelled as awaiting settlement)")
+    return selected
 
 
 def _collect_prediction_markets(out_dir: Path, question: str, report: str,
@@ -15566,6 +15736,13 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                                      max_total=max_total, min_volume=min_volume,
                                      max_per_event=max_per_event,
                                      diagnostics=refresh_diagnostics) if queries else []
+    # FU-11 (EVAL-6 open issue): every row records when ITS price was fetched: the refresh
+    # time on re-priced rows (the refresh wins the merge's mutable fields, observed_at
+    # included), the tool call's captured_at on tool-only rows. Knob off → rows unchanged.
+    price_time = _pm_price_time_enabled()
+    if price_time:
+        refreshed_markets = _pm_stamp_observed(refreshed_markets, _utcnow())
+        tool_candidates = _pm_stamp_observed(tool_candidates, None)
     initial_all_transport_failed = bool(
         queries
         and refresh_diagnostics.get("attempted_query_count", 0) > 0
@@ -15636,12 +15813,17 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                                  max_total=max_total, min_volume=min_volume,
                                  max_per_event=max_per_event,
                                  diagnostics=_stage_diagnostics)
+            if price_time:
+                _cand = _pm_stamp_observed(_cand, _utcnow())
             for _key in (
                 "attempted_query_count", "successful_query_count", "transport_failure_count"
             ):
                 refresh_diagnostics[_key] = (
                     refresh_diagnostics.get(_key, 0) + _stage_diagnostics.get(_key, 0)
                 )
+            # RESEARCH-3: a retry stage that ran out of time also leaves coverage unknown.
+            if _stage_diagnostics.get("deadline_exhausted", 0):
+                refresh_diagnostics["deadline_exhausted"] = 1
             for _label, _n in (_stage_diagnostics.get("transport_error_classes") or {}).items():
                 _cls = refresh_diagnostics.setdefault("transport_error_classes", {})
                 _cls[_label] = _cls.get(_label, 0) + _n
@@ -15665,6 +15847,15 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     # Cross-call tool capture can contain more rows than a single refresh.  Keep
     # the same case-level diversity and size contract after reconciliation.
     markets = _pm_cap_per_event(markets, max_per_event, max_total)
+    # TIME-3: stamp (never drop) markets whose endDate already passed so the backend can keep
+    # them out of binary anchoring and SIM priors; gate off → no stamp, no status key.
+    end_date_passed_count: int | None = None
+    if _env_flag("PREDICTION_MARKETS_END_DATE_GATE", True):
+        markets, end_date_passed_count = _pm_stamp_window_ended(
+            markets, _pm_now(), _pm_end_date_grace_hours())
+        if end_date_passed_count:
+            plog.write("warn", f"prediction markets: {end_date_passed_count} market(s) past "
+                               "their endDate (kept, labelled; never anchors or SIM priors)")
     as_of = _utcnow()
     payload = {"as_of": as_of, "source": "polymarket", "queries": queries, "markets": markets}
     if tool_candidates:
@@ -15674,21 +15865,35 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
         payload["horizon_degraded"] = degraded_stage
         payload["degraded_queries"] = degraded_queries
     all_queries_failed = initial_all_transport_failed
+    transport_failures = refresh_diagnostics.get("transport_failure_count", 0)
+    # Queries still unanswered when the snapshot deadline hit (or the circuit
+    # opened) were never searched: coverage is as unknown as after a failure.
+    deadline_exhausted = bool(refresh_diagnostics.get("deadline_exhausted", 0))
     payload["status"] = {
         "attempted": True,
         "query_count": len(queries),
         "successful_query_count": refresh_diagnostics.get("successful_query_count", 0),
-        "transport_failure_count": refresh_diagnostics.get("transport_failure_count", 0),
+        "transport_failure_count": transport_failures,
         "tool_observation_count": len(tool_candidates),
         "refresh_candidate_count": len(refreshed_markets),
         "candidate_count": len(combined_candidates),
         "selected_count": len(markets),
+        # RESEARCH-3: some queries failed or went unanswered and none found a
+        # candidate, so market coverage is unknown: 'partial_transport_failure',
+        # never the generic 'no_equivalent_market' ("no such market exists").
         "empty_reason": None if markets else (
             "all_candidates_irrelevant" if combined_candidates else (
-                "transport_failure" if all_queries_failed else "no_equivalent_market"
+                "transport_failure" if all_queries_failed else (
+                    "partial_transport_failure" if transport_failures > 0 or deadline_exhausted
+                    else "no_equivalent_market"
+                )
             )
         ),
     }
+    if deadline_exhausted:
+        payload["status"]["deadline_exhausted"] = 1
+    if end_date_passed_count is not None:
+        payload["status"]["end_date_passed_count"] = end_date_passed_count
     # TRANSPORT-DIAG: additive——失败查询的具体错误类名[:HTTP 状态] 计数，使断网可诊断
     #（真实事故里只有 failure 计数、无错误类别，41/41 全灭无从归因）。
     if refresh_diagnostics.get("transport_error_classes"):
@@ -16254,9 +16459,35 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
                 extra_contested: list = []
                 if quant and _env_flag("RESEARCH_QUANT_RECONCILE", True):
                     try:
-                        extra_contested, _unit_errors = reconcile_quantitative(quant)
+                        extra_contested, unit_errors = reconcile_quantitative(quant)
+                        if unit_errors:
+                            meta["quant_unit_warnings"] = unit_errors
+                            plog.write("warn", f"extract-only: quant reconcile: {len(unit_errors)} probable "
+                                               "unit-scale (~1000x) disagreement(s)")
                     except Exception:  # noqa: BLE001 — 数值对账是加法
                         extra_contested = []
+                    # TIME-4: the full run's quant sanity check (claimed actuals dated after
+                    # the reference date, extreme growth), with its reference date: the
+                    # extracted as_of_date when it names a day, clamped to the run date
+                    # (a stale one is the run date) and never after it (no source
+                    # publishes later), else today (UTC).  A year or month names no
+                    # cutoff day (its first day would flag that period's actuals).
+                    # Additive: meta only; quantitative.json is unchanged.
+                    try:
+                        _today = _dt.datetime.now(_dt.timezone.utc).date()
+                        _extracted_as_of = str(obj.get("as_of_date") or "")
+                        _sanity_ref, _ = _clamp_asof_reference(
+                            _parse_date(_extracted_as_of) if _DATE_FULL_RE.match(_extracted_as_of) else None,
+                            _today)
+                        _sanity_ref = min(_sanity_ref, _today)
+                        _implausible = flag_implausible_quant(quant, _sanity_ref)
+                        if _implausible:
+                            meta["quant_implausible"] = _implausible
+                            plog.write("warn", f"extract-only: quant sanity: {len(_implausible)} implausible/"
+                                               f"future-dated fact(s) against {_sanity_ref.isoformat()}: "
+                                               f"{_implausible[:2]}")
+                    except Exception as _sanity_err:  # noqa: BLE001 — 数值体检是加法
+                        plog.write("warn", f"extract-only: quant sanity check skipped (non-fatal): {_sanity_err}")
                 if quant:
                     _atomic_write_text(out_dir / QUANTITATIVE_FILENAME, json.dumps(quant, ensure_ascii=False, indent=2))
                     meta["quantitative_count"] = len(quant)
@@ -16415,8 +16646,19 @@ def _legacy_only_mode(args: Any) -> str:
     return ""
 
 
-# Lifecycle keys of a previous meta.json that a salvage run must not inherit.
-_SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at"})
+# Keys of a previous meta.json that a salvage run must not inherit: its lifecycle,
+# quant_provenance (RESEARCH-4), which summarises v3-labelled quantitative rows
+# that the legacy extraction rewrites without labels, and as_of_model_disagreement
+# (TIME-1), which describes the v3 actors.json as_of_date the legacy extraction
+# rewrites with its own as-of, and verified_facts (REPORT-7), whose quant counts
+# describe that same rewritten quantitative.json (the salvage also removes
+# verified_facts.json, which indexes that file's rows), and the v3 quant sanity
+# keys (TIME-4), which describe the quantitative.json and contested.json the
+# salvage rewrites (it records its own unit warnings and implausible facts).
+_SALVAGE_VOLATILE_META_KEYS = frozenset({"status", "error", "traceback", "finished_at", "quant_provenance",
+                                         "as_of_model_disagreement", "verified_facts", "quant_unit_warnings",
+                                         "quant_implausible", "quant_reconcile_contested",
+                                         "quant_sanity_truncated"})
 
 
 def _prior_v3_meta(out_dir: Path) -> dict[str, Any] | None:
@@ -16807,6 +17049,20 @@ def main() -> int:
                        if key not in _SALVAGE_VOLATILE_META_KEYS},
                     **meta, "research_engine": "v3",
                     "salvage": {"mode": "extract_only", "engine": "legacy", "started_at": started_at}}
+            data_tools = meta.get("data_tools")
+            if isinstance(data_tools, dict):
+                # TIME-13: its quant-row counts describe the v3 quantitative.json the legacy
+                # extraction rewrites; the tool binding and call counts stay true.
+                meta["data_tools"] = {key: value for key, value in data_tools.items()
+                                      if not key.startswith("quant_rows_")}
+            # verified_facts.json goes with its meta counts (above): it indexes the
+            # v3 quantitative.json rows the legacy extraction rewrites, and the
+            # parent SHA-manifests whatever the handoff holds.
+            try:
+                (out_dir / VERIFIED_FACTS_FILENAME).unlink(missing_ok=True)
+            except OSError as exc:
+                plog.write("warn", f"extract-only: could not remove the v3 {VERIFIED_FACTS_FILENAME} ({exc}); "
+                                   "its quantitative_sha256 marks it stale once quantitative.json is rewritten")
     if args.depth == "deep" and not use_v3_engine:
         meta["deep_research_phases"] = [
             # SCALE-2: 与 run_research_stage 的实际读值保持一致（开场默认 300；各 pass

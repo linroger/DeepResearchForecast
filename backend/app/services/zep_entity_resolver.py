@@ -78,8 +78,14 @@ def actor_alias_map(actors: Any) -> Dict[str, str]:
     ``aliases`` field already correctly listed all five — this map lets plan_merges
     treat any of those exact alias strings as high-precision merge signals even when
     the graph node carries zero alias metadata of its own.
+
+    INFRA-11 (ACTOR_NAME_MATCH_STRICT, default on): an alias claimed by two different
+    actors — listed by both, or one actor's alias equal to another actor's canonical name —
+    is excluded and logged instead of resolving to whichever row came last.  Without a
+    collision the map is identical to the legacy one; flag off = legacy last-writer-wins.
     """
     out: Dict[str, str] = {}
+    claims: Dict[str, set] = {}
     for row in extract_actor_rows(actors):
         canon = normalize_name(row.get("name", ""))
         if not canon:
@@ -92,6 +98,38 @@ def actor_alias_map(actors: Any) -> Dict[str, str]:
                 na = normalize_name(al)
                 if na and na != canon:
                     out[na] = canon
+                    claims.setdefault(na, set()).add(canon)
+    from ..config import Config
+    if not getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
+        return out
+    canonicals = canonical_norm_set(actors)
+    contested = [alias for alias, owners in claims.items()
+                 if len(owners) > 1 or alias in canonicals]
+    for alias in contested:
+        del out[alias]
+    if contested:
+        logger.info("actor_alias_map: %d alias(es) claimed by two different actors excluded: %s",
+                    len(contested), ", ".join(
+                        f"{alias}→{'/'.join(sorted(claims[alias] | ({alias} & canonicals)))}"
+                        for alias in contested[:8]))
+    return out
+
+
+def actor_alias_norms(actors: Any) -> set:
+    """Every normalized alias surface in actors.json (other than the row's own canonical),
+    contested ones included: the graph pruner protects all of them, whichever actor an
+    ambiguous alias denotes (``actor_alias_map`` drops those under INFRA-11)."""
+    out: set = set()
+    for row in extract_actor_rows(actors):
+        canon = normalize_name(row.get("name", ""))
+        raw_aliases = row.get("aliases")
+        if not canon or not isinstance(raw_aliases, list):
+            continue
+        for al in raw_aliases:
+            if isinstance(al, str):
+                na = normalize_name(al)
+                if na and na != canon:
+                    out.add(na)
     return out
 
 

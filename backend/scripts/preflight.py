@@ -60,6 +60,7 @@ if _BACKEND not in sys.path:
 
 from app.config import Config  # noqa: E402
 from app.services.pipeline_orchestrator import preflight_pipeline  # noqa: E402
+from app.utils.provider_overrides import openai_compat_request_overrides  # noqa: E402
 
 # Severity ordering: a "bad" check blocks (exit 1); a "warn" only nudges exit to 2.
 SEVERITY_OK = "ok"
@@ -120,6 +121,18 @@ def environment_report(
     # Lightweight informational checks the run gate does not block on but which
     # are genuinely useful in a readiness panel: placeholder credentials.
     _append_placeholder_checks(checks, df_model)
+    # INFRA-8: model settings that silently do nothing (a fallback model without a
+    # fallback provider, a CLI tier model that resolves to cli-default) are WARN rows.
+    for i, warning in enumerate(Config.validation_warnings()):
+        checks.append(
+            {
+                "id": f"config.warning.{i}",
+                "severity": SEVERITY_WARN,
+                "ok": False,
+                "message": warning,
+                "fix": None,
+            }
+        )
 
     if deep:
         # In-process deep probes (text/json document path). doctor.sh prefers the
@@ -226,28 +239,23 @@ def _live_openai_compat(label: str, provider: str, api_key, base_url, model):
     except Exception:
         return (SEVERITY_WARN, f"{label}: openai SDK 不可用 — 跳过实测")
 
+    # INFRA-6: 请求头 / 推理开关体 / 温度规则与生产调用同源（provider_overrides，与 settings.py
+    # 的「测试连接」一致）。实测时一律关闭推理，避免 reasoning 吃光 max_tokens 导致空 content；
+    # 温度用 0，Kimi K2.7 Code 网关只接受关推理时的 0.6（0 会 400），由同一规则修正。
+    overrides = openai_compat_request_overrides(provider, 0, force_disable_thinking=True)
     client_kwargs = {"api_key": api_key, "base_url": base_url, "timeout": 25, "max_retries": 0}
-    # Kimi-for-coding 网关按 User-Agent 校验 coding-agent 身份（与 settings.py 一致）。
-    if provider == "kimi":
-        client_kwargs["default_headers"] = {
-            "User-Agent": getattr(Config, "LLM_USER_AGENT", "claude-cli/1.0.0")
-        }
+    # Kimi-for-coding 网关按 User-Agent 校验 coding-agent 身份。
+    if overrides["default_headers"]:
+        client_kwargs["default_headers"] = overrides["default_headers"]
 
     kwargs = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply with exactly: pong"}],
-        "temperature": 0,
+        "temperature": overrides["temperature"],
         "max_tokens": 16,
     }
-    # 推理提供方：实测时关闭推理，避免 reasoning 吃光 max_tokens 导致空 content。
-    extra = getattr(Config, "_DISABLE_THINKING_EXTRA_BODY", {}).get(provider)
-    if extra:
-        kwargs["extra_body"] = extra
-    # Kimi K2.7 Code 网关硬校验温度（开推理只接受 1、关推理只接受 0.6），temperature=0 会 400。
-    # 与 LLMClient._coerce_temperature 同源，否则 kimi 实测会被误报为不可用。
-    if provider == "kimi":
-        thinking_disabled = bool(extra and (extra.get("thinking") or {}).get("type") == "disabled")
-        kwargs["temperature"] = 0.6 if thinking_disabled else 1.0
+    if overrides["extra_body"]:
+        kwargs["extra_body"] = overrides["extra_body"]
 
     started = time.monotonic()
     try:

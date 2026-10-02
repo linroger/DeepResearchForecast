@@ -1,6 +1,7 @@
 """Golden tests for structured forecast extraction + citation audit (EXECPLAN2 I-3-0/I-3-1)."""
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -14,6 +15,7 @@ from app.services.forecast_extractor import (
     audit_proposition_consistency,
     audit_scenario_contract,
     build_market_comparison,
+    build_spine_user_prompt,
     derive_forecast_spine,
     enforce_market_divergence,
     extract_binary_forecasts,
@@ -28,6 +30,7 @@ from app.services.forecast_extractor import (
     validate_citation_markers,
 )
 from app.services.ensemble import pool_binary_forecasts
+from app.utils import prediction_markets
 from tests.conftest import FakeLLMClient
 
 
@@ -1363,7 +1366,10 @@ def test_general_scenario_membership_and_unbound_market_equivalence_fail_closed(
     assert result["passed"] is True
 
 
-def test_extract_binary_forecasts_anchors_and_emits_comparison():
+def test_extract_binary_forecasts_anchors_and_emits_comparison(monkeypatch):
+    # TIME-3: pin the endDate clock so the 2028-12-31 market never ages out of anchoring.
+    monkeypatch.setattr(prediction_markets, "market_clock_now",
+                        lambda: datetime(2026, 10, 1, tzinfo=timezone.utc))
     markets = [{"market_id": "mkt-1", "question": "Tariffs > 10%?", "implied_yes_prob": 0.30,
                 "url": "https://polymarket.com/event/t", "end_date": "2028-12-31"}]
     fake = FakeLLMClient(json_responses=[
@@ -1522,3 +1528,93 @@ def test_render_binary_block_shows_pm_spread_and_low_agreement():
     plain = {"binary_forecasts": [{"id": "F1", "statement": "X", "probability": 0.5,
                                    "resolution_criteria": "z", "theme": "t"}]}
     assert "±" not in render_binary_forecasts_block(plain, language="English")
+
+
+# ----------------------------------------------- RESEARCH-13: context_pack kwargs
+_R13_DOSSIER = "## Executive Summary\n\n" + "\n".join(
+    f"Dossier line {i}: analysis of the question." for i in range(2400))
+_R13_BRIEF = "Situation brief sentence. " * 120
+_R13_PACK = ("[DEVELOPMENTS — events dated on or before 2026-09-15; newest first; event dates "
+             "only, source availability not verified]\n- 2026-07-23 (54 days before as-of): X\n\n"
+             "[DOSSIER EXCERPT — packed]\n## Resolution-ready forecasts\n| F1 | ... |")
+
+
+def _r13_binary_prompts(monkeypatch, **kwargs):
+    from app.config import Config
+    monkeypatch.setattr(Config, "FORECAST_BINARY_CONTRARIAN", False, raising=False)
+    monkeypatch.setattr(Config, "FORECAST_ENSEMBLE_MODELS", "", raising=False)
+    fake = FakeLLMClient(json_responses=[
+        {"binary_forecasts": [_binary("F1", "Alpha exceeds 10% by 2027", 0.30)]}])
+    extract_binary_forecasts(_R13_DOSSIER, fake, min_count=1, language="English",
+                             situation_brief=_R13_BRIEF, **kwargs)
+    return [c["messages"][0]["content"] for c in fake.calls]
+
+
+def test_binary_prompt_byte_identical_without_context_pack(monkeypatch):
+    legacy = _r13_binary_prompts(monkeypatch)
+    assert _r13_binary_prompts(monkeypatch, context_pack=None) == legacy
+    assert len(legacy) == 1
+    prompt = legacy[0]
+    assert f"\n\n[Situation brief]\n{_R13_BRIEF[:2000]}" in prompt
+    assert prompt.endswith("\n\n[Research dossier]\n" + slice_head_tail(_R13_DOSSIER, 48000, 0.6))
+    assert "…(中段略)…" in prompt
+
+
+def test_binary_prompt_with_context_pack_replaces_slice_and_brief(monkeypatch):
+    legacy = _r13_binary_prompts(monkeypatch)[0]
+    packed = _r13_binary_prompts(monkeypatch, context_pack=_R13_PACK)[0]
+    assert "…(中段略)…" not in packed and "[Situation brief]" not in packed
+    assert packed.endswith("\n\n[Research dossier]\n" + _R13_PACK)
+    # the instruction text and every block before the dossier are unchanged
+    assert packed.split("\n\n[Research dossier]\n")[0] == \
+        legacy.split("\n\n[Situation brief]\n")[0]
+
+
+_R13_SPINE_REPLY = {"headline": "H", "horizon": "2030", "confidence": "medium", "scenarios": [
+    {"name": "情景A", "probability": 0.6, "resolution_criteria": "到2030 A>50%"},
+    {"name": "维持现状/其它", "probability": 0.4, "resolution_criteria": "无变化"}]}
+_R13_SPINE_KWARGS = {"central_question": "谁会赢", "horizon": "2030",
+                     "situation_brief": "态势简报内容。" * 600,
+                     "forecast_inputs": "### 外部视角基率\n- 历史延续率 70%"}
+
+
+@pytest.mark.parametrize("markers", [True, False])
+def test_spine_prompt_byte_identical_without_context_pack(monkeypatch, markers):
+    from app.config import Config
+    monkeypatch.setattr(Config, "REPORT_ABSENCE_MARKERS", markers, raising=False)
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 1, raising=False)
+    base, _ = build_spine_user_prompt(**_R13_SPINE_KWARGS)
+    assert build_spine_user_prompt(**_R13_SPINE_KWARGS, context_pack=None)[0] == base
+    assert "\n\n[态势简报]\n" + _R13_SPINE_KWARGS["situation_brief"][:2000] + "\n\n" in base
+    prompts = []
+    for extra in ({}, {"context_pack": None}):
+        fake = FakeLLMClient(json_responses=[dict(_R13_SPINE_REPLY)])
+        derive_forecast_spine(fake, **_R13_SPINE_KWARGS, **extra)
+        prompts.append(fake.calls[0]["messages"][0]["content"])
+    assert prompts == [base, base]
+
+
+@pytest.mark.parametrize("markers", [True, False])
+def test_spine_prompt_with_context_pack_carries_the_full_pack(monkeypatch, markers):
+    from app.config import Config
+    monkeypatch.setattr(Config, "REPORT_ABSENCE_MARKERS", markers, raising=False)
+    monkeypatch.setattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 1, raising=False)
+    pack = ("[研究档案摘录]\n" + "执行摘要正文。" * 400
+            + "\n\n[近期进展 — 日期在 2026-09-15 当日或之前的事件]\n- 2026-07-23（as-of 前 54 天）：LANE-MARKER")
+    assert pack.index("LANE-MARKER") > 2000
+    user, _ = build_spine_user_prompt(**_R13_SPINE_KWARGS, context_pack=pack)
+    assert "\n\n[研究证据包（按时点标注）]\n" + pack + "\n\n" in user
+    assert "[态势简报]" not in user and "LANE-MARKER" in user
+    lead = user.split("\n", 1)[0]
+    if markers:  # REPORT-4 lead names the block actually supplied
+        assert "研究证据包" in lead and "态势简报" not in lead
+    fake = FakeLLMClient(json_responses=[dict(_R13_SPINE_REPLY)])
+    derive_forecast_spine(fake, **_R13_SPINE_KWARGS, context_pack=pack)
+    assert fake.calls[0]["messages"][0]["content"] == user
+
+
+def test_critique_view_never_carries_the_context_pack_digest():
+    from app.services.forecast_extractor import _llm_forecast_view
+    forecast = {"headline": "H", "scenarios": [], "context_pack": {"binary": {"status": "ok"}}}
+    assert "context_pack" not in _llm_forecast_view(forecast)
+

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import tempfile
 from typing import Any
 
@@ -50,6 +51,35 @@ def write_text_atomic(
         raise
 
 
+def write_secret_text_atomic(path: str, text: str, *, encoding: str = "utf-8") -> None:
+    """Atomically write a secret-bearing file (e.g. ``.env``) readable only by its owner.
+
+    Same temp-file + ``fsync`` + ``os.replace`` contract as :func:`write_text_atomic`,
+    but the owner-only mode is explicit rather than an unasserted side effect of
+    ``tempfile.mkstemp``: the temp file is created with ``O_CREAT | O_EXCL`` at
+    ``0o600`` and ``fchmod``-ed to ``0o600`` (independent of the umask), so the file
+    that replaces *path* is always ``0600``. Failures propagate to the caller, and a
+    failed write never leaves the temp file behind.
+    """
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp = os.path.join(directory, f".tmp-{secrets.token_hex(8)}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            os.fchmod(fh.fileno(), 0o600)
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def write_json_atomic(
     path: str,
     obj: Any,
@@ -63,15 +93,23 @@ def write_json_atomic(
 
     *fsync* is forwarded to :func:`write_text_atomic`; pass ``fsync=False`` at
     high-frequency status/progress sites only. (ATOMIC-1)
+
+    ``allow_nan=False`` refuses NaN / +/-Infinity with a
+    :class:`~app.utils.numeric.NonFiniteJSONError` (a ``ValueError``) naming the
+    offending JSON paths and *path*; nothing is written. (INFRA-4)
     """
-    write_text_atomic(
-        path,
-        json.dumps(
+    try:
+        text = json.dumps(
             obj,
             ensure_ascii=ensure_ascii,
             indent=indent,
             default=str,
             allow_nan=allow_nan,
-        ),
-        fsync=fsync,
-    )
+        )
+    except ValueError as exc:
+        if allow_nan:
+            raise
+        # Lazy: this leaf helper is imported by subprocess scripts; keep its import cheap.
+        from .numeric import raise_nonfinite
+        raise_nonfinite(obj, exc, artifact=path)
+    write_text_atomic(path, text, fsync=fsync)

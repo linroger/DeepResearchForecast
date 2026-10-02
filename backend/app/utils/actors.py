@@ -97,6 +97,8 @@ handoff 契约中的 actors.json 形如（NEW 字段均为可选，缺失即降�
 
 本模块提供：
 * ``match_actor``            — 把 Zep 实体名匹配回研究档案中的 actor（标准化精确匹配 → 双向包含）。
+* ``actor_match_candidates`` — INFRA-11：同口径但列出全部候选（精确命中优先，否则 ≥4 字符包含），供歧义时点名。
+* ``legacy_actor_key`` / ``actor_key_is_lossy`` / ``actor_identity_key`` / ``stable_actor_id`` — INFRA-11：稳定 actor id（拉丁名沿用旧哈希，非拉丁名走无损 idk1 命名空间）。
 * ``actor_briefing``         — 单个 actor 的提示词注入块（persona / agent 配置生成用）。
 * ``actors_digest``          — 全量 actors + key_events + hot_topics 的上下文摘要（配置生成用）。
 * ``extract_relationship_rows`` — 过滤出 source/target 都能匹配到 actor 的关系行。
@@ -125,6 +127,7 @@ None / 空串 / 空列表，绝不让结构化数据的缺陷阻断原有的纯 
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 import unicodedata
@@ -154,6 +157,78 @@ def normalize_name(name: str) -> str:
     # 去掉所有空白与常见标点（中英文），保留字母数字与 CJK
     s = re.sub(r"[\s\.\,\:\;\-\_\(\)\[\]【】（）'\"·]+", "", s)
     return s
+
+
+# INFRA-11：稳定的 actor 身份键。历史 actor id 取 NFKC+casefold 后只保留 [0-9a-z] 与
+# U+3400–U+9FFF 汉字的键再做 sha256——假名 / 韩文 / 西里尔 / 阿拉伯字母全部被丢弃，
+# 于是「トヨタ」「한국은행」等名字塌缩成空键（PREPARE 抛错），或只剩相同的汉字/数字而互撞。
+_LEGACY_ACTOR_KEY_DROP = re.compile(r"[^0-9a-z\u3400-\u9fff]+")
+
+
+def legacy_actor_key(name: Any) -> str:
+    """The pre-INFRA-11 actor identity key, byte for byte (NFKC, casefold, keep [0-9a-z] + CJK).
+
+    Existing Latin-name ids (sealed actor-context packs, role contracts) hash this key, so it
+    must never change; lossless identity lives in ``stable_actor_id``'s second namespace.
+    """
+    normalized = unicodedata.normalize("NFKC", str(name or "")).casefold()
+    return _LEGACY_ACTOR_KEY_DROP.sub("", normalized)
+
+
+def actor_key_is_lossy(name: Any) -> bool:
+    """Whether ``legacy_actor_key`` drops a letter of a non-Latin script from ``name``.
+
+    Accented Latin letters (é, ñ, ã) are dropped by the legacy key too, but those names
+    keep their historical ids; Unicode spacing modifiers (ʻ, ʼ — "MODIFIER LETTER …") are
+    punctuation inside Latin transliterations and are ignored for the same reason.  Kana,
+    hangul, Cyrillic, Arabic and CJK ideographs outside U+3400–U+9FFF make the key lossy.
+    """
+    normalized = unicodedata.normalize("NFKC", str(name or "")).casefold()
+    if normalized.isascii():
+        return False  # ASCII letters casefold to a-z, which the legacy key keeps
+    for ch in normalized:
+        if _LEGACY_ACTOR_KEY_DROP.fullmatch(ch) is None:
+            continue  # kept by the legacy key
+        if not unicodedata.category(ch).startswith("L"):
+            continue
+        char_name = unicodedata.name(ch, "")
+        if char_name.startswith("LATIN") or char_name.startswith("MODIFIER LETTER"):
+            continue
+        return True
+    return False
+
+
+def actor_identity_key(name: Any) -> str:
+    """The identity key ``stable_actor_id`` hashes ("" when the name normalizes to nothing).
+
+    The legacy key when it is non-empty and lossless; otherwise ``normalize_name`` in its
+    own ``idk1`` namespace, so two names are the same actor only when they really are.
+    """
+    normalized = normalize_name(name)
+    if not normalized:
+        return ""
+    legacy = legacy_actor_key(name)
+    if legacy and not actor_key_is_lossy(name):
+        return legacy
+    return "idk1\x1f" + normalized
+
+
+def stable_actor_id(name: Any) -> str:
+    """Deterministic actor id: the legacy hash when that key is lossless, else a lossless one.
+
+    A non-empty, non-lossy legacy key yields exactly the historical ``actor_<sha256[:16]>``
+    (backward compatible artifacts).  Otherwise the id hashes ``normalize_name`` in its own
+    ``idk1`` namespace, so non-Latin names get distinct, NFKC-stable ids instead of an empty
+    or colliding key.  Raises ValueError only when ``normalize_name(name)`` is empty.
+
+    This is the backend fallback behind ``actor_context.actor_id_for``, not the research
+    producer's ``deerflow_research.stable_actor_id`` (a different key, so different ids for
+    the same name); explicit producer ``actor_id`` values always take precedence over it.
+    """
+    key = actor_identity_key(name)
+    if not key:
+        raise ValueError(f"actor name {name!r} is empty after normalization; no stable actor id")
+    return "actor_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 def _actor_norm_aliases(row: Dict[str, Any]) -> List[str]:
@@ -492,6 +567,48 @@ def match_actor(entity_name: str, actors: Optional[Any]) -> Optional[Dict[str, A
     return next(iter(best_rows.values())) if len(best_rows) == 1 else None
 
 
+def actor_match_candidates(
+    entity_name: str, actors: Optional[Any], *, exact_only: bool = False,
+) -> List[Dict[str, Any]]:
+    """INFRA-11: every roster row a name could denote, for callers that must name an ambiguity.
+
+    Exact normalized hits are decisive: when any exist only they are returned, and a row
+    whose canonical name is the name outranks rows that merely list it as an alias (the
+    canonical wins, as in ``actor_alias_map``: "China" is the China actor even when the
+    Chinese Communist Party lists "China" as an alias; an alias two rows share stays two
+    candidates).  Otherwise (unless ``exact_only``) every row whose name or alias shares a
+    containment of at least 4 normalized characters with the name is a candidate (no
+    longest-name tie-break, unlike ``match_actor``: "Bank" against "Bank of Japan" and
+    "Bank of England" is two candidates).  One entry per distinct canonical name, in roster
+    order; the caller resolves only a single candidate and reports several as ambiguous.
+    """
+    rows = extract_actor_rows(actors)
+    target = normalize_name(entity_name)
+    if not rows or not target:
+        return []
+
+    def _distinct(matched: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        for row in matched:
+            out.setdefault(normalize_name(str(row.get("name", ""))), row)
+        return [row for canonical, row in out.items() if canonical]
+
+    exact = [row for row in rows if normalize_name(str(row.get("name", ""))) == target] or [
+        row for row in rows if target in _actor_norm_aliases(row)
+    ]
+    if exact or exact_only:
+        return _distinct(exact)
+    contained = []
+    for row in rows:
+        surfaces = [normalize_name(str(row.get("name", ""))), *_actor_norm_aliases(row)]
+        if any(
+            min(len(surface), len(target)) >= 4 and (surface in target or target in surface)
+            for surface in surfaces
+        ):
+            contained.append(row)
+    return _distinct(contained)
+
+
 def influence_weight(actor: Optional[Dict[str, Any]]) -> Optional[float]:
     """actor.influence（high/medium/low 等自由文本）→ 数值权重；无法解析返回 None。"""
     if not isinstance(actor, dict):
@@ -760,9 +877,15 @@ def extract_relationship_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def situation_brief_block(actors: Optional[Any], english: bool = False) -> str:
+def situation_brief_block(actors: Optional[Any], english: bool = False,
+                          honest_label: bool = False) -> str:
     """把 situation_brief 渲染为紧凑的提示块（默认中文标题；english=True 用英文标题，
-    供英文模拟的 agent 可见世界简报使用）；缺失返回空串。"""
+    供英文模拟的 agent 可见世界简报使用）；缺失返回空串。
+
+    SIM-5 honest_label=True：标题如实标注为「研究综述，未逐条标注来源；背景参考，并非已核实
+    事实」——v3 situation_brief 不带 [S#] 来源标记，不得自称「实证/权威」。只有 agent 可见的
+    世界简报（SimulationConfigGenerator._build_world_brief，受 SIM_WORLD_BRIEF_HONEST_LABEL
+    控制）传 True；其余调用点默认 False，逐字节不变。"""
     sb = actors.get("situation_brief") if isinstance(actors, dict) else None
     if not isinstance(sb, dict):
         return ""
@@ -770,11 +893,14 @@ def situation_brief_block(actors: Optional[Any], english: bool = False) -> str:
         prose = (("Current situation", "current_situation"), ("Background", "context"),
                  ("Tensions and dynamics", "dynamics"))
         lists = (("Fault lines", "fault_lines"), ("Potential triggers", "catalysts"))
-        title = "## Situation brief (deep-research evidence, authoritative background)"
+        title = ("## Situation brief (research synthesis, not individually sourced; "
+                 "background, not verified fact)" if honest_label
+                 else "## Situation brief (deep-research evidence, authoritative background)")
     else:
         prose = (("当前态势", "current_situation"), ("来龙去脉", "context"), ("张力/动态", "dynamics"))
         lists = (("争议断层", "fault_lines"), ("潜在触发", "catalysts"))
-        title = "## 局势简报（深度研究实证，作为权威背景）"
+        title = ("## 局势简报（深度研究综述，未逐条标注来源；作为背景参考，并非已核实事实）"
+                 if honest_label else "## 局势简报（深度研究实证，作为权威背景）")
     parts: List[str] = []
     for label, key in prose:
         v = str(sb.get(key, "") or "").strip()
@@ -1799,19 +1925,38 @@ def extract_quantitative_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20) -> str:
+# typed 表「类型」列的中文标签（quant_typing.quant_class 的三类）。
+_QUANT_CLASS_LABELS_ZH = {"reported": "已报告", "projected": "预期", "unknown": "未定"}
+
+
+def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20, *,
+                             typed: bool = False) -> str:
     """把 quantitative_facts 渲染为紧凑的中文 markdown 表；缺省返回空串。
 
     每行携带单位 + as-of 日 + 定义 + 来源/层级，报告代理可直接引用精确、带日期、
     有定义的数字，无需再次联网检索，亦避免 SKILL §6 警示的「定义漂移」。
+
+    typed=True（RESEARCH-5，供选择接入的报告侧调用方）：增加「类型」列（已报告 / 预期 /
+    未定，quant_typing.quant_class 以 actors.as_of_date 为基准判定），日期列改为数据期
+    （目标日 → 期末 → as-of，quant_typing.reference_period），使预测的目标年不再被读成
+    实测值的时点。typed=False 与旧输出逐字节一致。
     """
     rows = extract_quantitative_rows(actors)
     if not rows:
         return ""
     rows = rows[:max_facts]
-    lines = ["## 定量事实（深度研究实证，引用时务必带单位与 as-of 日）",
-             "| 指标 | 数值 | 单位 | as-of | 定义 | 来源 |",
-             "| --- | --- | --- | --- | --- | --- |"]
+    if typed:
+        from .dates import parse_as_of  # 同包相对导入，匹配代码库约定
+        from .quant_typing import quant_class, reference_period
+        as_of = parse_as_of(actors.get("as_of_date"))
+        as_of_day = as_of.date() if as_of is not None else None
+        lines = ["## 定量事实（深度研究数据；类型=已报告/预期/未定，预期值须注明预期方与目标期）",
+                 "| 指标 | 数值 | 单位 | 数据期 | 类型 | 定义 | 来源 |",
+                 "| --- | --- | --- | --- | --- | --- | --- |"]
+    else:
+        lines = ["## 定量事实（深度研究实证，引用时务必带单位与 as-of 日）",
+                 "| 指标 | 数值 | 单位 | as-of | 定义 | 来源 |",
+                 "| --- | --- | --- | --- | --- | --- |"]
 
     def cell(v: Any) -> str:
         # markdown 表格安全：转义竖线、压平换行
@@ -1824,6 +1969,13 @@ def quantitative_facts_block(actors: Optional[Any], max_facts: int = 20) -> str:
             src = f"{src}（{tier}）"
         elif tier:
             src = tier
+        if typed:
+            lines.append("| " + " | ".join((
+                cell(r.get("metric")) or "?", cell(r.get("value")), cell(r.get("unit")),
+                cell(reference_period(r)), _QUANT_CLASS_LABELS_ZH[quant_class(r, as_of_day)],
+                cell(r.get("definition")), src,
+            )) + " |")
+            continue
         lines.append(
             "| {metric} | {value} | {unit} | {as_of} | {definition} | {source} |".format(
                 metric=cell(r.get("metric")) or "?",
@@ -2943,6 +3095,9 @@ def forecast_inputs_block(actors: Optional[Any], max_per_section: int = 6) -> st
         for sc in scenarios:
             raw = str(sc.get("name", "") or "").strip().lower()
             label = _SCENARIO_LABEL.get(raw, raw or "情景")
+            # REPORT-10（信息墙）：只渲染旧式 probability_band；v3 情景的数值 ``probability``
+            # 是研究规划期的权重，刻意不渲染——它经本块会进入骨架/报告的概率权威，把研究
+            # 先验当成已定的概率（test_information_walls_static 钉住此选择）。
             band = str(sc.get("probability_band", "") or "").strip()
             narrative = str(sc.get("narrative", "") or "").strip()
             seg = f"- {label}"

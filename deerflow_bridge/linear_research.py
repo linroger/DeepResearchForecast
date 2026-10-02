@@ -56,10 +56,12 @@ answered (see ``_Engine._require_model_output``).
 from __future__ import annotations
 
 import bisect
+import calendar
 import datetime as _dt
 import difflib
 import functools
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -71,19 +73,23 @@ import threading
 import time
 import traceback
 import unicodedata
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping, MutableMapping, Sequence
 
+import derived_numbers as dn
+import evidence_spans as es
 import research_gateway as rg
 
 __all__ = [
     "ENGINE_CORE",
     "ENGINE_VERSION",
     "Preset",
+    "classify_quant_row",
     "detect_language",
     "parse_report_scenarios",
     "postprocess_notes",
@@ -170,7 +176,101 @@ ACTOR_PROMPT_CEILING = 60
 MAX_TIMELINE_ROWS = 40
 MAX_QUANT_ROWS = 60
 MAX_CONTESTED_ROWS = 15
+# Quantitative sanity checks (RESEARCH_QUANT_RECONCILE, the legacy engine's
+# reconcile_quantitative / flag_implausible_quant): contested.json takes at
+# most this many reconciled numeric disagreements (probable unit-scale errors
+# first), and meta keeps at most QUANT_SANITY_MAX_FLAGS unit-scale warnings
+# and implausible-fact flags (meta.quant_sanity_truncated then holds the
+# totals before the cut).  In contested.json the reconciled claims follow
+# the model's (at most MAX_CONTESTED_ROWS); report_agent's contested block
+# renders at most 15 claims, and with RESEARCH_QUANT_RECONCILE on it keeps
+# up to 3 of them (more when its plain cut already shows more) for
+# reconciled claims, probable unit-scale errors first, and notes how many
+# it still cuts (FU-9).
+QUANT_RECONCILE_MAX_CONTESTED = 10
+QUANT_SANITY_MAX_FLAGS = 20
+# forecast_inputs rows the facts task asks for (RESEARCH_V3_FORECAST_INPUTS).
+MAX_FORECAST_DRIVERS = 8
+MAX_FORECAST_INDICATORS = 8
 DEFAULT_STALE_DAYS = 365
+# Evidence windows (REPORT-7, RESEARCH_VERIFIED_FACTS): the page sentences that
+# state a verified figure next to at least EVIDENCE_WINDOW_MIN_ANCHORS of its
+# metric words, published in sources.json ``supports`` (EXCERPT_CHARS only
+# covers a page's head) and projected with the findings into
+# verified_facts.json.
+EVIDENCE_WINDOW_CHARS = 360
+EVIDENCE_WINDOW_MIN_ANCHORS = 2
+EVIDENCE_WINDOWS_PER_FACT = 2
+EVIDENCE_WINDOWS_PER_SOURCE = 8
+VERIFIED_FACTS_FILENAME = "verified_facts.json"
+VERIFIED_FACTS_SCHEMA = "drf.verified_facts/v1"
+# Point-in-time research audit (TIME-9; a gated hindcast only, ``tools.pit``):
+# the report cites only sources admissible as of the as-of date, and finalize
+# writes this file, whose verdict the parent stamps into the hindcast pin.
+POINT_IN_TIME_FILENAME = "point_in_time.json"
+POINT_IN_TIME_SCHEMA = "drf-point-in-time/v1"
+# In the work dir: the gates' counts of the attempts of this run so far (saved at
+# every phase exit, after every KIQ record and on every exit), so a resumed
+# attempt's audit counts the searches and fetches of the attempts before it.
+PIT_COUNTS_FILENAME = "pit_counts.json"
+# The state.json counter of the gated attempts started in the work dir (bumped as
+# each starts, so it survives a killed attempt): the audit's search and fetch
+# counts cover the whole run only when every earlier attempt saved its final ones.
+PIT_ATTEMPTS_KEY = "pit_attempts_started"
+# The state.json record of the citation-wall rule a gated hindcast's evidence
+# digest was built with (FU-2), saved before the digest is written.  The audit's
+# digest counters recount that rule and name it (wall.digest_rule), so a digest a
+# resumed attempt reuses from a build that wrote no such record (an earlier rule)
+# leaves them unknown (None, digest_rule "unknown").
+PIT_DIGEST_WALL_KEY = "pit_digest_wall"
+PIT_DIGEST_WALL_RULE = "any_inadmissible_marker"
+# Verbatim evidence spans (RESEARCH-7, RESEARCH_EVIDENCE_QUOTES = off | audit |
+# enforce; default off).  Not off: the KIQ task asks each finding for an
+# EVIDENCE clause quoting its source verbatim, the ledger keeps every distinct
+# search snippet of a row, and postprocess_notes locates the quotes
+# (evidence_spans) and records the result on the facts; enforce also demotes
+# facts whose quotes are not on what the agent was shown or whose numbers lie
+# outside the quoted passages.  A KIQ record carries the contract it was
+# postprocessed under (evidence_contract = "<mode>:v1"); records of another
+# contract are never postprocessed again and count as not_requested.
+EVIDENCE_OFF = "off"
+EVIDENCE_AUDIT = "audit"
+EVIDENCE_ENFORCE = "enforce"
+EVIDENCE_MODES = (EVIDENCE_OFF, EVIDENCE_AUDIT, EVIDENCE_ENFORCE)
+EVIDENCE_CONTRACT_VERSION = "v1"
+EVIDENCE_QUOTES_PER_FACT = 2
+EVIDENCE_QUOTE_CHARS = 300
+# RESEARCH_EVIDENCE_SUPPORTS (default false; also needs a mode other than off):
+# up to EVIDENCE_QUOTES_PER_SOURCE located quotes per source, page quotes
+# first, join its sources.json supports ahead of REPORT-7's windows.
+EVIDENCE_QUOTES_PER_SOURCE = 3
+EVIDENCE_SUPPORT_CHARS = 280
+# Enforce: a run where fewer than this share of the claimed-VERIFIED findings
+# had a located quote is a degradation event.
+EVIDENCE_MIN_LOCATED_SHARE = 0.5
+# Why a quote was never checked (fact evidence_unchecked; meta.evidence
+# unchecked counts quotes): no reading of it lies within evidence_spans' length
+# bounds, or it is not in a source seen only in search results whose kept
+# snippet sightings are at the ledger's cap (the sighting the agent copied may
+# never have been stored).  An unchecked quote is never a demotion.
+EVIDENCE_UNCHECKED_LENGTH = "length"
+EVIDENCE_UNCHECKED_SNIPPETS_CAPPED = "snippets_capped"
+# Derived findings (RESEARCH-8, RESEARCH_DERIVED_FINDINGS; default false).  On,
+# the KIQ task asks for a "(DERIVED: <formula>; a=<value> [S<n>], …)" clause on
+# every figure the agent calculated, and postprocess_notes recomputes it
+# (derived_numbers): every data operand from the one fetched, shown source the
+# finding cites, each operand's value exactly as the formula uses it on that
+# page, a number of the finding that is no operand's equal to the (signed)
+# result at its display precision, and every other number of the finding on
+# that page make the fact DERIVED — never VERIFIED (ADR-0002 I-11); anything
+# else makes it UNVERIFIED with a derivation_error, one of DERIVED_ERRORS.
+DERIVED_TAG = "DERIVED"
+DERIVED_ERRORS = ("operand_not_on_page", "unshown_source", "cross_source", "eval_error", "result_mismatch",
+                  "no_result_token")
+# sources.json ``derived_supports`` (a field of its own, never merged into
+# ``supports``): up to this many calculated statements per source, each at
+# most EVIDENCE_SUPPORT_CHARS long.
+DERIVED_SUPPORTS_PER_SOURCE = 3
 # Upper bounds of each phase's wall clock, as a fraction of the run time left
 # when the phase starts.  Gathering can never consume the time synthesis needs.
 PHASE_TIME_SHARE: Mapping[str, float] = {
@@ -180,7 +280,9 @@ PHASE_TIME_SHARE: Mapping[str, float] = {
 ENGLISH = "English"
 CHINESE = "Chinese"
 
-AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA  # the one tools object bound on every agent call
+# The one tools object bound on every agent call; an engine with official-data
+# tools (TIME-13) binds one list of its own instead (_Engine.agent_tools).
+AGENT_TOOLS = rg.AGENT_TOOLS_SCHEMA
 
 PRIME_TASK = "CACHE WARM-UP: Reply with OK only; do not call tools."
 STOP_TEXT = ("STOP: you have enough — write your final notes now in the required format; "
@@ -197,6 +299,15 @@ DUPLICATE_CALL_TEXT = ("DUPLICATE: another call of this step already reads this 
                        "(or runs this search); use its result.")
 STORED_READS_EXHAUSTED_TEXT = ("READ_BUDGET_EXHAUSTED: stop re-reading stored pages; write your notes "
                                "from what you have.")
+# EVAL-16: per-agent counts of the calls KiqAgent._call_tool answered with an
+# INVALID_TOOL_CALL, UNKNOWN_TOOL or TOOL_ERROR string (the strings the model
+# sees are unchanged); each KIQ record's stats and meta.kiqs carry them.  Like
+# the other meta.kiqs sums they describe the KIQ records kept: an attempt that
+# leaves no record (a provider failure before any page was read, a cancelled
+# run) or whose record a resumed run rewrote is not counted.  A record without
+# them (kept by a resumed run from before the counters) adds 0 to the sums and
+# is counted in meta.kiqs.tool_counters_missing (written only when non-zero).
+TOOL_CALL_COUNTERS = ("invalid_tool_calls", "unknown_tool_calls", "tool_exceptions")
 LABEL_EVIDENCE = "research evidence"
 LABEL_SCOUT = "scout search results"
 LABEL_SEEDS = "seed search results"
@@ -216,6 +327,29 @@ _RETRYABLE_FALLBACKS = frozenset({"deadline", "budget", "unstructured_notes", "n
 # What a search or fetch of a run that is being stopped (SIGINT/SIGTERM)
 # answers instead of calling the backend.
 CANCELLED_TOOL_TEXT = "CANCELLED: the run is stopping; write your notes from what you have."
+# TIME-13 official-data tools (RESEARCH_DATA_TOOLS: a comma list of these vendors,
+# or "all"; research_gateway.DATA_TOOL_VENDORS names each one's tool).  A vendor
+# is bound only with its credential, and without one nothing below is reached.
+DATA_VENDORS: tuple[str, ...] = ("fred", "sec_edgar")
+# In the work dir: the as-of cutoff and FRED vintage every data call of the run is
+# pinned to, fixed by the first call and read back on resume (plan.json untouched).
+DATA_PINS_FILENAME = "data_pins.json"
+# quantitative.json opens with at most this many deterministic rows, the cited data
+# sources' structured values (DATA_QUANT_ROWS_MAX; always within MAX_QUANT_ROWS).
+DEFAULT_DATA_QUANT_ROWS = 12
+# A data row's sources.json supports: its vendor sentences (data_tools.SUPPORTS_MAX).
+DATA_SUPPORTS_MAX = 40
+# meta.data_tools.quant_rows_rejected lists at most this many dropped model rows.
+DATA_QUANT_REJECTED_MAX = 20
+# The form data_tools accepts a FRED API key in (its _FRED_KEY_RE): any other key
+# makes every FRED call unavailable, so such a key never binds macro_series.
+_FRED_API_KEY_RE = re.compile(r"[a-z0-9]{32}")
+# The KIQ task's description of each bound data tool (a data-kind KIQ only).
+_KIQ_DATA_TOOL_TEXT: Mapping[str, str] = {
+    "macro_series": "macro_series(series) returns an official FRED series as published on the run's vintage date",
+    "company_filings": ("company_filings(company, freq) returns a US SEC filer's statements as filed on or before "
+                        "the as-of date"),
+}
 
 
 # ===========================================================================
@@ -413,6 +547,32 @@ Field rules:
 - scenarios: 2 to 6 mutually exclusive, collectively exhaustive outcome scenarios for the forecast horizon. name: 2 to 5 words in $language without numbers or percent signs; weight: an integer probability, all weights summing to 100; thesis: one sentence in $language describing the causal path.
 - actors: up to $actor_cap actors (people, organisations, governments, platforms) whose decisions most affect the outcome; type is one of Person, Organization, Government, Media, Platform, Other; why: one short clause.""")
 
+# RESEARCH_QUESTION_SPEC: one post-scout call between the scope and the plan
+# call (same cached [pre-brief, scout] prefix) that pins how the forecast
+# resolves (see normalize_question_spec).
+_T_QSPEC = string.Template("""QUESTION SPEC TASK
+Pin down how the forecast for the research question in the brief will be resolved, before the research plan is made. The scout search results above only show which evidence exists; do not answer the question.
+Reply with ONE JSON object only, in exactly this shape:
+{"operational_question": "...", "outcome_definition": "...", "resolution_source": {"name": "...", "url": "", "kind": "official_statistic|index|market|consensus_reporting|expert_panel|other"}, "horizon": {"label": "...", "date": "YYYY-MM-DD", "basis": "explicit|implied|default"}, "reference_class": "...", "assumptions": [{"text": "...", "slot": "horizon|resolution_source|units|entity|outcome"}]}
+Field rules:
+- operational_question: the research question as one precise question that a named source settles on a known date.
+- outcome_definition: exactly what counts as the outcome (the measure and its unit, the threshold or the set of candidates, the geography), so that two readers of the resolution source reach the same answer.
+- resolution_source: the publication, data series, market or panel that settles the question; url is its address when you know it, otherwise ""; kind is one of the listed values.
+- horizon: label is the resolution deadline in words; date is that deadline as YYYY-MM-DD; basis is "explicit" when the question states the deadline, "implied" when it follows from the question and "default" when you chose it.
+- Dates: anchor every date to the as-of date in the brief and to the scout results. A bare year means 31 December of that year; a relative horizon ("within two years", "by next year") counts from the as-of date.
+- reference_class: the class of comparable past cases whose frequency gives the base rate for this outcome.
+- assumptions: prefer proceeding. Where the question leaves a choice open, choose a reasonable operationalization yourself and record it here as a default: at most 3, the most important slot first (horizon, then resolution_source, units, entity, outcome); [] when the question leaves nothing open.
+- Never ask questions: record a default instead.
+- This spec governs how the forecast resolves, not how widely it is researched: it never narrows the research to the resolution source or the outcome definition.
+- Write the text values in $language.""")
+
+# Clauses of the line appended to the plan task (the template stays as it is)
+# when a usable question spec precedes it in the shared context; each is used
+# only when the spec has the field it names (question_spec_plan_rule).
+_QSPEC_PARTITION_CLAUSE = ("scenarios must partition the question spec's outcome (one per candidate when the "
+                           "question asks which one) with a residual where needed")
+_QSPEC_BASE_RATE_CLAUSE = "one KIQ must establish the base rate for the spec's reference class"
+
 _T_KIQ_TASK = string.Template("""KIQ INVESTIGATION TASK
 Investigate $kiq_id: $question
 Why it matters: $why
@@ -420,7 +580,7 @@ Emphasis: $emphasis
 Starting points (search results already registered for you; fetch the most authoritative ones directly by URL):
 $seeds
 Budget for this investigation: at most $max_searches web_search calls, $max_fetches web_fetch calls and $max_steps tool rounds. Use fewer when the evidence is already sufficient.
-Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.
+Tools: web_search(query) returns results tagged [S<n>] with their URLs; web_fetch(url, focus) returns the passages of one page that are relevant to focus, tagged with the page's [S<n>]; web_fetch also accepts a marker such as S12 in place of the URL.$data_tools
 When you are done, reply WITHOUT calling tools, with your notes in exactly this format (keep the four headings in English exactly as written; write the bullet text in $language):
 ## Findings
 - <fact: number + unit + as-of date + context> [S<n>] (VERIFIED|REPORTED)
@@ -479,9 +639,63 @@ Field rules:
 - contested_claims: at most $max_contested claims on which the report shows sources disagreeing; status is contested, resolved or single-origin; sources are the markers of each position.
 - Write text values in $language.""")
 
+# Field rules the facts task appends after _T_FACTS's own (``_Engine._facts_task``).
+# RESEARCH_QUANT_TYPING: the legacy extraction contract's date semantics
+# (deerflow_research quant schema), which v3's one-line schema lost — models put
+# a forecast's target date in as_of_date, so it counted as fresh evidence.
+_FACTS_DATE_RULE = ("Dates: as_of_date is when the source published or last revised the number (YYYY, YYYY-MM "
+                    "or YYYY-MM-DD; never pad a year to -01-01); period_end is the period the number measures "
+                    "or, for a forecast or target, its target date; never put a target date in as_of_date.")
+# RESEARCH_V3_FORECAST_INPUTS: the forecast_inputs drivers and dated leading
+# indicators the legacy extraction contract asked for and v3's facts task
+# never did (actors.json forecast_inputs then carried them empty).
+_FACTS_FORECAST_INPUTS_RULE = (
+    'Forecast inputs: also return "drivers": [{"variable": "...", "direction": "...", "why_it_matters": "..."}] '
+    f"with at most {MAX_FORECAST_DRIVERS} causal variables the report says move the outcome, and "
+    '"indicators": [{"indicator": "...", "signals_what": "...", "date_or_trigger": "..."}] '
+    f"with at most {MAX_FORECAST_INDICATORS} leading indicators or signposts the report names; date_or_trigger "
+    "is the date the report gives, at the precision it gives (YYYY, YYYY-MM or YYYY-MM-DD; never pad a year to "
+    "-01-01 or a month to -01), or the triggering event when the report gives no date.")
+# RESEARCH_FORECASTER_ATTRIBUTION: who made each forecast, and the range and
+# forecaster count the report states (attribute_forecast_row keeps a bound or
+# count only when the report text states it).
+_FACTS_FORECASTER_RULE = (
+    "For value_type estimate, forecast or target rows also give: forecaster (who made the forecast: "
+    "institution, poll or analyst group) and write metric without the forecaster's name; low and high only "
+    "when the report states a range or the lowest and highest individual forecasts; n_forecasters only when "
+    'the report states how many forecasters. Never compute these; use "" or 0 when not stated.')
+
+# The line the KIQ task appends with RESEARCH_EVIDENCE_QUOTES on (``_Engine._kiq_task_addenda``).
+_KIQ_EVIDENCE_RULE = ('Evidence: end each finding with EVIDENCE: "<a passage copied character for character '
+                      'from the page or search result you were shown, 8 to 60 words>" (keep the word EVIDENCE in '
+                      'English; the passage for a VERIFIED finding must contain its numbers).')
+# The lines RESEARCH_ABSENCE_DISCIPLINE appends to the KIQ task (``_Engine._kiq_task_addenda``)
+# and to the section rules (``_Engine._section_rule_addenda``): web search is
+# relevance-ranked and undated, so an empty search never shows that something did not happen.
+_KIQ_ABSENCE_RULE = ("Absence: an empty or failed search is not evidence that something did not happen. "
+                     "Write that something did not happen or was not reported only when a source you read "
+                     "says so, and cite it; otherwise record it under Open questions.")
+_SECTION_ABSENCE_RULE = ("- Never state that something did not happen, was not reported or does not exist unless "
+                         "a cited source says so; otherwise say the sources reviewed do not establish it.")
+# The lines RESEARCH_DERIVED_FINDINGS appends to the KIQ task (``_Engine._kiq_task_addenda``)
+# and to the section rules (``_Engine._section_rule_addenda``): a figure the agent
+# calculated carries its formula and page operands, which postprocess_notes recomputes.
+_KIQ_DERIVED_RULE = ("Derived figures: when a finding states a growth rate, ratio, share or other figure you "
+                     "calculated, write it as a calculation and end the finding with (DERIVED: <formula>; "
+                     "a=<value> [S<n>], b=<value> [S<n>]) using values exactly as on one fetched page; use names, "
+                     "not numbers, in the formula.")
+_SECTION_DERIVED_RULE = ("- (DERIVED) findings are calculations from the cited figures: state them as calculations "
+                         "(implying about X, calculated from [S<n>]), never as reported values.")
+# The line RESEARCH_EVIDENCE_HEADERS appends to the section rules (last of
+# ``_Engine._section_rule_addenda``): the digest's evidence lines label each KIQ.
+_SECTION_THIN_EVIDENCE_RULE = ("- Where a primary KIQ's evidence line says thin or insufficient, state the conclusions "
+                               "that depend on it with explicit uncertainty; never copy evidence lines, counts or "
+                               "labels into the text.")
+
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
     "scope": _T_SCOPE,
+    "question_spec": _T_QSPEC,
     "plan": _T_PLAN,
     "kiq_task": _T_KIQ_TASK,
     "gap": _T_GAP,
@@ -532,6 +746,34 @@ def _iso_now() -> str:
 
 def _utc_date() -> str:
     return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+
+
+def _canonical_date(value: Any) -> bool:
+    """True for the exact canonical ``YYYY-MM-DD`` spelling of a real calendar date.
+
+    The rule of the backend's ``utils.point_in_time.validate_as_of`` (this child cannot
+    import the backend): a string that survives a strptime/strftime round trip, so
+    '2024-6-1', '2024-06-01 00:00' and '2024-02-30' are refused.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        return _dt.datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d") == value
+    except ValueError:
+        return False
+
+
+def _hindcast_as_of(env: Mapping[str, Any] | None) -> str | None:
+    """RESEARCH_AS_OF of the run env when it pins a canonical date before today (UTC), else None.
+
+    Such a run is a hindcast: its prompts carry the point-in-time rule and fetched pages
+    are labelled as live.  A pin equal to today is live; the engine refuses an invalid
+    or future value before this matters (:class:`_Engine`).
+    """
+    raw = str((env or {}).get("RESEARCH_AS_OF", "") or "").strip()
+    if not _canonical_date(raw):
+        return None
+    return raw if _dt.date.fromisoformat(raw) < _dt.date.fromisoformat(_utc_date()) else None
 
 
 def _compact_utc() -> str:
@@ -606,6 +848,24 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def _record_stat_count(record: Mapping[str, Any], name: str) -> int:
+    """A KIQ record's ``stats[name]`` count; 0 when the record predates the
+    field (EVAL-16 TOOL_CALL_COUNTERS) or holds anything but a count."""
+    stats = record.get("stats")
+    value = stats.get(name, 0) if isinstance(stats, Mapping) else 0
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _record_lacks_tool_counters(record: Mapping[str, Any]) -> bool:
+    """True when a KIQ record's stats miss one of the EVAL-16 TOOL_CALL_COUNTERS
+    (the record predates them) or hold anything but a count there."""
+    stats = record.get("stats")
+    if not isinstance(stats, Mapping):
+        return True
+    values = [stats.get(name) for name in TOOL_CALL_COUNTERS]
+    return any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values)
+
+
 # ===========================================================================
 # Depth presets (V3_SPEC §3.1) — typed env overrides, never env mutation
 # ===========================================================================
@@ -617,17 +877,18 @@ _DEPTH_PRESETS: Mapping[str, Mapping[str, Any]] = {
               "max_searches_total": 30, "max_fetches_total": 24, "gap_rounds": 0, "followups_per_round": 0,
               "sections_min": 6, "sections_max": 8, "target_units": 3000, "critique": False,
               "budget_units": 1_200_000.0, "time_budget_s": 1200.0, "workers": 4, "digest_cap": 30_000,
-              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+              "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 2, "max_data_calls_total": 12},
     "standard": {"max_kiqs": 7, "agent_max_steps": 7, "searches_per_kiq": 4, "fetches_per_kiq": 4,
                  "max_searches_total": 70, "max_fetches_total": 50, "gap_rounds": 1, "followups_per_round": 3,
                  "sections_min": 8, "sections_max": 12, "target_units": 6000, "critique": False,
                  "budget_units": 2_500_000.0, "time_budget_s": 2700.0, "workers": 4, "digest_cap": 60_000,
-                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+                 "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 3,
+                 "max_data_calls_total": 30},
     "deep": {"max_kiqs": 10, "agent_max_steps": 9, "searches_per_kiq": 5, "fetches_per_kiq": 6,
              "max_searches_total": 140, "max_fetches_total": 110, "gap_rounds": 2, "followups_per_round": 4,
              "sections_min": 11, "sections_max": 16, "target_units": 11000, "critique": True,
              "budget_units": 5_000_000.0, "time_budget_s": 5400.0, "workers": 4, "digest_cap": 90_000,
-             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS},
+             "max_tokens_extract": DEFAULT_EXTRACT_MAX_TOKENS, "data_calls_per_kiq": 4, "max_data_calls_total": 60},
 }
 
 # (minimum, maximum) accepted for each knob; out-of-range values are clamped.
@@ -638,6 +899,7 @@ _KNOB_BOUNDS: Mapping[str, tuple[float, float]] = {
     "sections_max": (3, 24), "target_units": (500, 60_000), "critique": (0, 1),
     "budget_units": (0, 1e10), "time_budget_s": (60, 7 * 86400), "workers": (1, 16),
     "digest_cap": (5000, 400_000), "max_tokens_extract": (1024, 128_000),
+    "data_calls_per_kiq": (0, 20), "max_data_calls_total": (0, 500),
 }
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -666,6 +928,10 @@ class Preset:
     workers: int
     digest_cap: int
     max_tokens_extract: int
+    # TIME-13: official-data tool calls per KIQ agent and per run (bound only
+    # when RESEARCH_DATA_TOOLS enables a tool; meta's v3_preset leaves them out).
+    data_calls_per_kiq: int
+    max_data_calls_total: int
     notes: tuple[str, ...] = ()
 
 
@@ -684,6 +950,92 @@ def _parse_knob(raw: str, default: Any) -> Any:
     if not math.isfinite(number):
         return None
     return int(number) if isinstance(default, int) else number
+
+
+def _env_flag(env: Mapping[str, Any] | None, name: str, default: bool) -> bool:
+    """Boolean knob from the run env: truthy/falsy words, anything else -> default."""
+    parsed = _parse_knob((env or {}).get(name, ""), bool(default))
+    return default if parsed is None else parsed
+
+
+def _evidence_mode(env: Mapping[str, Any] | None) -> str:
+    """RESEARCH_EVIDENCE_QUOTES of the run env: off, audit or enforce; blank
+    or any other value is off (the default: nothing changes)."""
+    value = str((env or {}).get("RESEARCH_EVIDENCE_QUOTES", "") or "").strip().lower()
+    return value if value in EVIDENCE_MODES else EVIDENCE_OFF
+
+
+# cached_fetch._resilient_fetch's provider order: the first one with recorded
+# outcomes is the run's fetch primary (RESEARCH-2 source events).
+_FETCH_PROVIDER_CHAIN = ("firecrawl", "jina", "exa", "direct")
+
+
+def _bridge_provider_events(module: str) -> dict:
+    """``<module>.provider_events()`` of a bridge tool module (search_tools or
+    cached_fetch: this process's provider outcomes), ``{}`` when the module or
+    its events are unavailable: source telemetry never breaks a run."""
+    try:
+        events = importlib.import_module(module).provider_events()
+    except Exception:  # noqa: BLE001 — fail-open telemetry
+        return {}
+    return events if isinstance(events, dict) else {}
+
+
+def _event_count(entry: Any) -> int:
+    return int(entry.get("count") or 0) if isinstance(entry, Mapping) else 0
+
+
+def _source_health_events(tools: Mapping[str, Any], search_events: Mapping[str, Any],
+                          fetch_events: Mapping[str, Any]) -> list[str]:
+    """Source-health degradation events (RESEARCH_SOURCE_TAXONOMY on; pure).
+
+    ``tools``: :meth:`_Engine._tool_failures` with the taxonomy on;
+    ``search_events`` / ``fetch_events``: search_tools / cached_fetch
+    ``provider_events()``.  Events: a search credential/quota refusal, a
+    configured search provider replaced by another, a search provider's
+    per-run call ceiling refusing 1 in 5 or more of the search attempts
+    (searches + budget denials), a fetch primary whose service failed while
+    fallback providers served pages (a credential/quota refusal at any count,
+    an outage at 1 in 5 or more of its attempts; a page's own failure does
+    not count), and unconfirmed empty searches at 1 in 5 or more of the
+    searches.
+    """
+    events: list[str] = []
+    refused = tools.get("search_refused")
+    if refused:
+        events.append(f"search provider {refused[0]} refused this run ({refused[1]}); "
+                      "no further search was possible")
+    attempts = int(tools.get("searches") or 0) + int(tools.get("search_budget") or 0)
+    for name, count in sorted(search_events.items()):
+        kind, _, detail = str(name).partition(":")
+        if kind == "substitution":
+            configured, _, served = detail.partition("->")
+            if served:
+                events.append(f"configured search provider {configured} unavailable; {count} searches "
+                              f"served by {served}")
+        elif kind == "ceiling" and isinstance(count, int) and count and 5 * count >= attempts:
+            events.append(f"search provider {detail} reached its per-run call ceiling; {count} of {attempts} "
+                          "searches refused")
+    chain = [name for name in _FETCH_PROVIDER_CHAIN if isinstance(fetch_events.get(name), Mapping)]
+    if chain:
+        primary = fetch_events[chain[0]]
+        failures = {cls: entry for cls, entry in primary.items()
+                    if cls in ("not_configured", "unavailable") and _event_count(entry)}
+        failed = sum(_event_count(value) for value in failures.values())
+        primary_attempts = sum(_event_count(value) for value in primary.values())
+        # A refused credential stays refused for the run; a few transient
+        # outages among many served pages are routine, not a degradation.
+        broken = "not_configured" in failures or 5 * failed >= primary_attempts
+        served = sum(_event_count(fetch_events[name].get("ok")) for name in chain[1:])
+        if failures and broken and served:
+            cls, entry = max(failures.items(), key=lambda item: _event_count(item[1]))
+            events.append(f"fetch primary {chain[0]} failed {failed} times ({cls}: "
+                          f"{entry.get('reason') or 'unknown'}); fallback providers served the pages")
+    empty = int(tools.get("search_empty_unconfirmed") or 0)
+    if empty and 5 * empty >= int(tools.get("searches") or 0):
+        events.append(f"{empty} of {tools.get('searches')} searches came back empty from a backend that may "
+                      "have failed (not evidence of absence)")
+    return events
 
 
 def scheduled_tool_calls(values: Mapping[str, Any]) -> tuple[int, int]:
@@ -944,6 +1296,24 @@ class _RunState:
         with self._lock:
             return dict(self._data["kiqs"].get(kid) or {})
 
+    def bump(self, key: str) -> int | None:
+        """Add one to the counter ``key`` and save; returns the value it
+        replaced (None: none, or one that is not a non-negative int, restarted
+        at 1)."""
+        with self._lock:
+            before = self._data.get(key)
+            if not isinstance(before, int) or isinstance(before, bool) or before < 0:
+                before = None
+            self._data[key] = (before or 0) + 1
+            self.save()
+            return before
+
+    def put(self, key: str, value: Any) -> None:
+        """Record the JSON value ``value`` under the top-level ``key`` and save."""
+        with self._lock:
+            self._data[key] = value
+            self.save()
+
     def reset_kiqs(self) -> None:
         """Forget every KIQ completion (their notes belong to a discarded plan)."""
         with self._lock:
@@ -970,23 +1340,47 @@ def _unique_stale_path(out_dir: Path) -> Path:
     return candidate
 
 
+def _identity_matches(stored: Any, identity: Mapping[str, Any]) -> bool:
+    """Whether a stored v3 identity is this run's.
+
+    Every key must be equal except ``model_id`` (INFRA-8, the resolved model id,
+    added only when resolvable): a side without one is compatible, so a work dir
+    written before it existed (or when resolution failed) still resumes, while
+    two different resolved ids never share a work dir.
+    """
+    if not isinstance(stored, dict):
+        return False
+    current = dict(identity)
+    stored_id, current_id = stored.get("model_id"), current.get("model_id")
+    if stored_id and current_id and stored_id != current_id:
+        return False
+    return ({k: v for k, v in stored.items() if k != "model_id"}
+            == {k: v for k, v in current.items() if k != "model_id"})
+
+
 def _open_work_dir(out_dir: Path, identity: Mapping[str, Any],
                    writer: Callable[[Path, str], None],
                    reporter: _Reporter) -> tuple[Path, _RunState, bool]:
     """Reuse ``v3/`` only when its state proves the same run identity.
 
-    Anything else (another question/depth/model/language/engine version, a
-    corrupt or missing state file) is archived to ``v3.stale-<utc>`` so
-    artifacts of a different run can never leak into this one.  Returns
+    Anything else (another question/depth/model/language/engine version or
+    resolved model id, a corrupt or missing state file) is archived to
+    ``v3.stale-<utc>`` so artifacts of a different run can never leak into
+    this one.  A reused state without a ``model_id`` adopts this run's, so a
+    later resume under another resolved model is refused.  Returns
     ``(work_dir, state, resumed)``.
     """
     work = out_dir / WORK_DIRNAME
     if work.exists():
         data = _read_json(work / STATE_FILENAME)
         if (isinstance(data, dict) and data.get("engine_version") == ENGINE_VERSION
-                and data.get("identity") == dict(identity)
+                and _identity_matches(data.get("identity"), identity)
                 and isinstance(data.get("phases"), dict) and isinstance(data.get("kiqs"), dict)):
-            return work, _RunState(work / STATE_FILENAME, data, writer), True
+            state = _RunState(work / STATE_FILENAME, data, writer)
+            if identity.get("model_id") and not data["identity"].get("model_id"):
+                data["identity"]["model_id"] = identity["model_id"]
+                state.save()
+            return work, state, True
         target = _unique_stale_path(out_dir)
         work.rename(target)
         reporter.write("warn", f"v3: previous work dir belongs to another run identity or is "
@@ -1101,9 +1495,16 @@ class Plan:
     key_entities: list[str]
     scout_queries: list[str]
     fallback: dict = field(default_factory=dict)
+    # The normalized question spec (RESEARCH_QUESTION_SPEC), any status; None
+    # when the run made no spec call (plan.json then has no such key).
+    question_spec: dict | None = None
+    # The scope call's horizon when the question spec replaced it as
+    # ``horizon`` (a re-plan reuses the scope, never an earlier spec's
+    # horizon); None otherwise (plan.json then has no such key).
+    scope_horizon: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "question": self.question, "language": self.language, "as_of": self.as_of,
             "restated_question": self.restated_question, "horizon": self.horizon,
             "kiqs": [k.to_dict() for k in self.kiqs],
@@ -1112,6 +1513,11 @@ class Plan:
             "actors": list(self.actors), "key_entities": list(self.key_entities),
             "scout_queries": list(self.scout_queries), "fallback": dict(self.fallback),
         }
+        if self.question_spec is not None:
+            data["question_spec"] = dict(self.question_spec)
+        if self.scope_horizon is not None:
+            data["scope_horizon"] = self.scope_horizon
+        return data
 
     @classmethod
     def from_dict(cls, data: Any) -> "Plan | None":
@@ -1142,7 +1548,9 @@ class Plan:
             scenarios=scenarios, actors=[a for a in data.get("actors") or [] if isinstance(a, dict)],
             key_entities=_as_str_list(data.get("key_entities")),
             scout_queries=_as_str_list(data.get("scout_queries")),
-            fallback=dict(data.get("fallback") or {}))
+            fallback=dict(data.get("fallback") or {}),
+            question_spec=data["question_spec"] if isinstance(data.get("question_spec"), dict) else None,
+            scope_horizon=data["scope_horizon"] if isinstance(data.get("scope_horizon"), str) else None)
 
 
 def _short_query_base(question: str, language: str) -> str:
@@ -1460,9 +1868,15 @@ def _normalize_plan_actors(raw: Any, cap: int) -> list[dict]:
 
 
 def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_cap: int,
-               scope: Mapping[str, Any] | None, raw_plan: Mapping[str, Any] | None) -> Plan:
+               scope: Mapping[str, Any] | None, raw_plan: Mapping[str, Any] | None, *,
+               question_spec: Mapping[str, Any] | None = None) -> Plan:
     """Normalise model output into a valid plan; any missing part falls back to
-    deterministic defaults so planning can never fail the run."""
+    deterministic defaults so planning can never fail the run.
+
+    ``question_spec`` (a :func:`normalize_question_spec` result) is kept on the
+    plan whatever its status; a usable spec pins the plan's horizon
+    (:func:`question_spec_plan_horizon`), so the brief has one horizon source,
+    and the scope's own horizon is then kept as ``scope_horizon``."""
     scope = scope or {}
     raw_plan = raw_plan or {}
     fallback: dict[str, bool] = {"scope": not scope, "plan": not raw_plan}
@@ -1499,26 +1913,53 @@ def build_plan(question: str, language: str, as_of: str, preset: Preset, actor_c
     if routed != valid_ids:
         fallback.setdefault("unrouted_kiqs", True)
     scout = [q[:rg.MAX_QUERY_CHARS] for q in _as_str_list(scope.get("scout_queries"), limit=SCOUT_QUERIES_MAX)]
+    scope_horizon = _collapse(scope.get("horizon"), 120)
+    horizon = question_spec_plan_horizon(question_spec, scope_horizon, as_of)
     return Plan(
         question=question, language=language, as_of=as_of,
         restated_question=_collapse(scope.get("restated_question"), 400),
-        horizon=_collapse(scope.get("horizon"), 120), kiqs=kiqs, sections=sections,
+        horizon=horizon, kiqs=kiqs, sections=sections,
         scenarios=scenarios, actors=_normalize_plan_actors(raw_plan.get("actors"), actor_cap),
         key_entities=_as_str_list(scope.get("key_entities"), limit=12, item_chars=120),
-        scout_queries=scout, fallback={k: v for k, v in fallback.items() if v})
+        scout_queries=scout, fallback={k: v for k, v in fallback.items() if v},
+        question_spec=dict(question_spec) if question_spec is not None else None,
+        scope_horizon=scope_horizon if horizon != scope_horizon else None)
 
 
-def render_pre_brief(question: str, language: str, as_of: str) -> str:
-    return _render(_T_PRE_BRIEF, question=_collapse(question), language=language, as_of=as_of)
+def point_in_time_rule(as_of: str) -> str:
+    """The brief line of a hindcast (RESEARCH_AS_OF before today): research as of ``as_of``."""
+    return (f"Point-in-time rule: treat {as_of} as today. Use only information published on or "
+            f"before {as_of}. Web pages are served as they are now and may show later content: "
+            f"ignore any event, figure or status dated after {as_of}.")
 
 
-def render_brief(plan: Plan) -> str:
-    """The RUN BRIEF: built once after planning, persisted, reused byte-identically."""
+def render_pre_brief(question: str, language: str, as_of: str, *, point_in_time: bool = False) -> str:
+    """The planning-stage brief; ``point_in_time`` (a hindcast) adds :func:`point_in_time_rule`
+    after the As-of line, which is the last line."""
+    brief = _render(_T_PRE_BRIEF, question=_collapse(question), language=language, as_of=as_of)
+    return f"{brief}\n{point_in_time_rule(as_of)}" if point_in_time else brief
+
+
+# The RUN BRIEF's References outline line (a writer echoing it verbatim is a
+# scaffold echo: see :func:`scaffold_echo_lines`).
+BRIEF_REFERENCES_LINE = "- [References: generated by the engine from the citation markers]"
+
+
+def render_brief(plan: Plan, *, point_in_time: bool = False) -> str:
+    """The RUN BRIEF: built once after planning, persisted, reused byte-identically.
+
+    ``point_in_time`` (a hindcast) inserts :func:`point_in_time_rule` after the As-of line;
+    ENGINE_CORE and the tools schema never change, so the prompt-cache prefix does not either.
+    """
     lines = [
         "RUN BRIEF",
         f"Research question: {_collapse(plan.question)}",
         f"Output language: {plan.language}",
         f"As-of date (UTC): {plan.as_of}",
+    ]
+    if point_in_time:
+        lines.append(point_in_time_rule(plan.as_of))
+    lines += [
         f"Forecast horizon: {plan.horizon or 'not stated in the question'}",
     ]
     if plan.restated_question and _norm_key(plan.restated_question) != _norm_key(plan.question):
@@ -1528,7 +1969,7 @@ def render_brief(plan: Plan) -> str:
     lines += ["", "Report outline (in order):",
               f"- [{_text(plan.language, 'exec_title')}: written last from the sections]"]
     lines += [f"- §{s.index} {s.title}" for s in plan.sections]
-    lines += ["- [References: generated by the engine from the citation markers]", "",
+    lines += [BRIEF_REFERENCES_LINE, "",
               "Canonical scenario frame (fixed for the whole run; restate names and probabilities exactly):"]
     lines += [f"- {s.name} — {s.weight}% — {s.thesis}".rstrip(" —") for s in plan.scenarios]
     if plan.actors:
@@ -1537,7 +1978,373 @@ def render_brief(plan: Plan) -> str:
                   for a in plan.actors]
     if plan.key_entities:
         lines += ["", "Key entities: " + "; ".join(plan.key_entities)]
+    spec_block = render_question_spec_block(plan.question_spec)
+    if spec_block:
+        lines += ["", spec_block]
     return "\n".join(lines)
+
+
+# ===========================================================================
+# Question spec (RESEARCH_QUESTION_SPEC): how the forecast resolves
+# ===========================================================================
+# One post-scout JSON call operationalizes the question (outcome definition,
+# resolution source, horizon, reference class) and discloses at most three
+# defaults it chose instead of asking.  The normalized spec is persisted
+# (handoff question_spec.json, plan.json, actors.json) and fixed for the run.
+# The DRF names and rules are original: the proceed-biased, date-anchored,
+# capped-output scaffold is the only borrowed idea.
+
+QUESTION_SPEC_SCHEMA = "drf.question_spec/v1"
+QUESTION_SPEC_FILENAME = "question_spec.json"
+QUESTION_SPEC_USABLE = ("ok", "partial")
+QUESTION_SPEC_MAX_ASSUMPTIONS = 3
+# A horizon date is kept only in (as_of, as_of + this many years].
+QUESTION_SPEC_MAX_YEARS = 30
+# The spec call's share of the plan-phase time left when it starts: this
+# optional call (transient retries and backoff included) can never starve the
+# plan call, which keeps the rest.
+QUESTION_SPEC_TIME_SHARE = 0.35
+_QSPEC_SOURCE_KINDS = ("official_statistic", "index", "market", "consensus_reporting", "expert_panel", "other")
+_QSPEC_BASES = ("explicit", "implied", "default")
+# Assumption slots in disclosure priority order (the most important first).
+_QSPEC_SLOTS = ("horizon", "resolution_source", "units", "entity", "outcome")
+_QSPEC_URL_CHARS = 300
+_ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A year named in a horizon label, with an optional two-digit end year
+# ("FY2025/26", "2029-30"); ASCII digits only, never part of a longer or
+# decimal number.
+_QSPEC_LABEL_YEAR_RE = re.compile(
+    r"(?<![0-9])((?:19|20|21)[0-9]{2})(?:[/-]([0-9]{2})(?![0-9]))?(?![0-9])(?![.,][0-9])")
+# A number followed by a unit is a quantity, not a year ("within 2000 days",
+# "a 2030 MW target").
+_QSPEC_YEAR_UNIT_RE = re.compile(
+    r"\s*(?:(?:days?|weeks?|months?|hours?|units?|percent|per\s+cent|[kMGT]Wh?)(?![A-Za-z])"
+    r"|%|天|周|个月|小时|万|亿)", re.IGNORECASE)
+# A label year this far before the as-of year or earlier is read as a number
+# (a model anchored to its training cutoff names a year or two back).
+_QSPEC_LABEL_YEARS_BACK = 10
+# An assumption ending in one of these asks instead of recording a default.
+_QSPEC_QUESTION_MARKS = ("?", "？")
+# Values a model writes for "no value" (or echoes from the template): never content.
+_QSPEC_EMPTY = frozenset({"", "...", "…", "-", "n/a", "na", "none", "null", "unknown", "false", "true"})
+
+
+def _canonical_json(value: Any) -> str:
+    """The backend's canonical JSON profile (``app.utils.canonical_json``; the
+    bridge cannot import the backend): sorted keys, compact separators, UTF-8
+    text without ASCII escapes, NaN rejected."""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def question_spec_sha256(spec: Mapping[str, Any]) -> str:
+    """sha256 of the canonical JSON of every key but ``spec_sha256``."""
+    return _sha256(_canonical_json({key: value for key, value in spec.items() if key != "spec_sha256"}))
+
+
+def _qspec_text(value: Any, limit: int) -> str:
+    """Strictly typed spec text: a string (a finite number is formatted, a bool
+    or any container is no text), instruction-neutralized, collapsed and
+    capped at ``limit`` (0: uncapped); placeholder values ("...", "n/a",
+    "false") are empty."""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, int):
+        value = str(value)
+    elif isinstance(value, float):
+        value = format(value, "g") if math.isfinite(value) else ""
+    if not isinstance(value, str):
+        return ""
+    text = _collapse(rg.neutralize_instructions(value), limit)
+    if text.casefold() in _QSPEC_EMPTY or not text.replace(rg.INSTRUCTION_REMOVED, "").strip():
+        return ""
+    return text
+
+
+def _qspec_enum(value: Any, allowed: Sequence[str], default: str) -> str:
+    """``value`` as one of ``allowed`` (case, spaces and hyphens tolerated), else ``default``."""
+    text = re.sub(r"[\s-]+", "_", value.strip().lower()) if isinstance(value, str) else ""
+    return text if text in allowed else default
+
+
+def _qspec_url(value: Any) -> str:
+    text = value.strip() if isinstance(value, str) else ""
+    if len(text) > _QSPEC_URL_CHARS or re.search(r"\s", text) or not re.match(r"https?://[^/?#]+", text, re.I):
+        return ""
+    return text
+
+
+def _qspec_window_end(as_of: _dt.date) -> _dt.date:
+    """as_of + QUESTION_SPEC_MAX_YEARS (29 February → 28 February)."""
+    year = as_of.year + QUESTION_SPEC_MAX_YEARS
+    return as_of.replace(year=year, day=min(as_of.day, calendar.monthrange(year, as_of.month)[1]))
+
+
+def _qspec_anchor(as_of: Any) -> _dt.date | None:
+    """The as-of day the horizon checks are anchored to (``None``: not an ISO day)."""
+    return _parse_iso_date(as_of) if _ISO_DAY_RE.match(str(as_of or "")) else None
+
+
+def _qspec_horizon_date(value: Any, anchor: _dt.date | None) -> tuple[_dt.date | None, str]:
+    """``(day, problem)`` for ``horizon.date``: an ISO day in (as_of, as_of +
+    30 years] is kept; an absent or blank value is no date; any other value is
+    dropped as ``"malformed"`` (not an ISO day, or no as-of to anchor it) or
+    ``"outside_window"`` (a real day not after the as-of or too far after it)."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None, ""
+    text = value.strip() if isinstance(value, str) else ""
+    day = _parse_iso_date(text) if _ISO_DAY_RE.match(text) else None
+    if anchor is None or day is None:
+        return None, "malformed"
+    if not anchor < day <= _qspec_window_end(anchor):
+        return None, "outside_window"
+    return day, ""
+
+
+def _qspec_label_years(text: str, anchor: _dt.date) -> list[int]:
+    """The years a horizon text names ("FY2025/26" names 2025 and 2026): a
+    4-digit token from ``_QSPEC_LABEL_YEARS_BACK`` years before the as-of year
+    on, unless a unit follows it ("within 2000 days", "2030 MW")."""
+    years: list[int] = []
+    for match in _QSPEC_LABEL_YEAR_RE.finditer(text):
+        if _QSPEC_YEAR_UNIT_RE.match(text, match.end()):
+            continue
+        start = int(match.group(1))
+        named = [start]
+        if match.group(2) and int(match.group(2)) > start % 100:     # "2025/26" ends in 2026
+            named.append(start - start % 100 + int(match.group(2)))
+        years += [year for year in named if year >= anchor.year - _QSPEC_LABEL_YEARS_BACK]
+    return years
+
+
+def _qspec_label_stale(label: str, anchor: _dt.date | None) -> bool:
+    """True when the horizon ``label`` names years (:func:`_qspec_label_years`)
+    and every one precedes the as-of year: a deadline in words already past
+    (the model anchored to an earlier year), which the window check on
+    ``horizon.date`` cannot catch (the date may be missing, malformed or a
+    later day)."""
+    years = _qspec_label_years(label, anchor) if anchor is not None else []
+    return bool(years) and max(years) < anchor.year
+
+
+def _qspec_years_agree(text: str, day: _dt.date, anchor: _dt.date) -> bool:
+    """False when ``text`` names years (:func:`_qspec_label_years`) and ``day``
+    falls outside them ("between 2027 and 2029" covers the years between)."""
+    years = _qspec_label_years(text, anchor)
+    return not years or min(years) <= day.year <= max(years)
+
+
+def _qspec_assumptions(value: Any, degradation: list[str]) -> list[dict]:
+    """A list of ``{"text", "slot"}`` dicts only (a string is never split into
+    characters), deduplicated, ordered by slot priority (stable) and capped.
+
+    The spec never asks: a text ending in a question mark (checked before the
+    300-character cap, which would end it in "…") is dropped
+    (``assumption_question_dropped``).  A missing or unknown slot becomes
+    ``outcome`` (the last slot, so it sorts last and its default is still
+    disclosed) and ``assumption_slot_coerced`` records that a kept row's slot
+    was not the model's."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        degradation.append("assumptions_invalid")
+        return []
+    rows: list[tuple[dict, bool]] = []          # (row, slot coerced)
+    seen: set[str] = set()
+    invalid = question = False
+    for item in value:
+        if not isinstance(item, dict):
+            invalid = True
+            continue
+        full = _qspec_text(item.get("text"), 0)
+        if full.endswith(_QSPEC_QUESTION_MARKS):
+            question = True
+            continue
+        text = _collapse(full, 300)
+        key = _norm_key(text)
+        if not text or not key or key in seen:
+            continue
+        seen.add(key)
+        slot = _qspec_enum(item.get("slot"), _QSPEC_SLOTS, "")
+        rows.append(({"text": text, "slot": slot or _QSPEC_SLOTS[-1]}, not slot))
+    if invalid:
+        degradation.append("assumptions_invalid")
+    if question:
+        degradation.append("assumption_question_dropped")
+    rows.sort(key=lambda pair: _QSPEC_SLOTS.index(pair[0]["slot"]))
+    kept = rows[:QUESTION_SPEC_MAX_ASSUMPTIONS]
+    if any(coerced for _row, coerced in kept):
+        degradation.append("assumption_slot_coerced")
+    if len(rows) > QUESTION_SPEC_MAX_ASSUMPTIONS:
+        degradation.append("assumptions_capped")
+    return [row for row, _coerced in kept]
+
+
+def normalize_question_spec(raw: Any, *, question: str, as_of: str,
+                            status_if_failed: str | None = None) -> dict:
+    """The persisted question spec (``drf.question_spec/v1``) from the model's
+    reply ``raw``; total over any JSON value and deterministic.
+
+    ``status_if_failed`` (``"unavailable"``) marks a failed call: every field is
+    then empty and ``degradation`` is ``["call_failed"]``.  Otherwise:
+
+    * text fields are strictly typed (:func:`_qspec_text`) and capped;
+    * ``resolution_source.url`` is kept only when it is http(s) and at most
+      300 characters; ``kind`` / ``basis`` are enum-coerced (``other`` /
+      ``implied``);
+    * ``horizon.date`` is kept only when ISO and in (as_of, as_of + 30y],
+      else dropped with ``horizon_date_invalid``;
+    * ``horizon.label`` (the plan horizon and the brief's Resolves line) is
+      dropped with ``horizon_label_dropped`` when the date was a real day
+      outside that window (the label states the same deadline) or when every
+      year it names precedes the as-of year (:func:`_qspec_label_stale`); a
+      malformed date ("2027", "31/12/2027") takes no label with it;
+    * a kept label and a kept date that name different years
+      (:func:`_qspec_years_agree`) are both dropped with ``horizon_mismatch``:
+      which one is wrong cannot be told, and a pinned deadline must never
+      contradict the plan horizon;
+    * at most 3 assumptions, slot priority first, never a question
+      (:func:`_qspec_assumptions`).
+
+    ``status`` is ``unavailable`` for a failed call or a reply with no usable
+    field, ``ok`` when there is an outcome definition and a horizon date or a
+    resolution source name, and ``partial`` otherwise.  ``spec_sha256``
+    (:func:`question_spec_sha256`) covers every other key.
+    """
+    if status_if_failed not in (None, "unavailable"):
+        raise ValueError(f"normalize_question_spec: a failed call has status 'unavailable', not {status_if_failed!r}")
+    failed = status_if_failed is not None
+    data = raw if isinstance(raw, dict) and not failed else {}
+    degradation: list[str] = ["call_failed"] if failed else []
+    if not failed and not isinstance(raw, dict):
+        degradation.append("not_an_object")
+    source = data.get("resolution_source")
+    source = source if isinstance(source, dict) else {}
+    horizon = data.get("horizon")
+    horizon = horizon if isinstance(horizon, dict) else {}
+    anchor = _qspec_anchor(as_of)
+    day, date_problem = _qspec_horizon_date(horizon.get("date"), anchor)
+    if date_problem:
+        degradation.append("horizon_date_invalid")
+    label = _qspec_text(horizon.get("label"), 120)
+    if label and (date_problem == "outside_window" or _qspec_label_stale(label, anchor)):
+        label = ""
+        degradation.append("horizon_label_dropped")
+    elif label and day is not None and not _qspec_years_agree(label, day, anchor):
+        label, day = "", None
+        degradation.append("horizon_mismatch")
+    date = day.isoformat() if day is not None else ""
+    fields: dict[str, Any] = {
+        "operational_question": _qspec_text(data.get("operational_question"), 400),
+        "outcome_definition": _qspec_text(data.get("outcome_definition"), 600),
+        "resolution_source": {"name": _qspec_text(source.get("name"), 200), "url": _qspec_url(source.get("url")),
+                              "kind": _qspec_enum(source.get("kind"), _QSPEC_SOURCE_KINDS, "other")},
+        "horizon": {"label": label, "date": date, "basis": _qspec_enum(horizon.get("basis"), _QSPEC_BASES, "implied")},
+        "reference_class": _qspec_text(data.get("reference_class"), 300),
+        "assumptions": _qspec_assumptions(data.get("assumptions"), degradation),
+    }
+    usable = any((fields["operational_question"], fields["outcome_definition"], fields["resolution_source"]["name"],
+                  fields["horizon"]["label"], date, fields["reference_class"], fields["assumptions"]))
+    if failed or not usable:
+        status = "unavailable"
+        if not failed and "not_an_object" not in degradation:
+            degradation.append("no_usable_field")
+    elif fields["outcome_definition"] and (date or fields["resolution_source"]["name"]):
+        status = "ok"
+    else:
+        status = "partial"
+    spec: dict[str, Any] = {"schema": QUESTION_SPEC_SCHEMA, "status": status, "as_of": str(as_of or ""),
+                            "question_sha256": _sha256(" ".join(str(question or "").split())), **fields,
+                            "degradation": degradation}
+    spec["spec_sha256"] = question_spec_sha256(spec)
+    return spec
+
+
+def question_spec_usable(spec: Any) -> bool:
+    """A well-formed spec of status ok or partial whose hash recomputes (a
+    damaged plan.json never feeds the brief, the plan or actors.json)."""
+    if not (isinstance(spec, Mapping) and spec.get("schema") == QUESTION_SPEC_SCHEMA
+            and spec.get("status") in QUESTION_SPEC_USABLE and isinstance(spec.get("horizon"), Mapping)
+            and isinstance(spec.get("resolution_source"), Mapping) and isinstance(spec.get("assumptions"), list)):
+        return False
+    try:
+        return spec.get("spec_sha256") == question_spec_sha256(spec)
+    except (TypeError, ValueError):
+        return False
+
+
+def question_spec_plan_horizon(spec: Any, scope_horizon: str, as_of: str) -> str:
+    """The plan horizon under ``spec``: a usable spec's horizon label; else its
+    date when the scope's horizon is empty or names other years than the date
+    (:func:`_qspec_years_agree`); else ``scope_horizon``.  The brief's
+    Forecast horizon line then never contradicts the spec's Resolves line or
+    actors.json ``horizon_date``."""
+    if not question_spec_usable(spec):
+        return scope_horizon
+    label, date = spec["horizon"].get("label"), spec["horizon"].get("date")
+    if isinstance(label, str) and label:
+        return label
+    anchor = _qspec_anchor(as_of)
+    day = _parse_iso_date(date) if isinstance(date, str) and _ISO_DAY_RE.match(date) else None
+    if day is None or anchor is None or (scope_horizon and _qspec_years_agree(scope_horizon, day, anchor)):
+        return scope_horizon
+    return day.isoformat()
+
+
+def render_question_spec_block(spec: Any) -> str:
+    """The spec as brief text (the plan call's shared block and the tail of
+    the RUN BRIEF); ``""`` unless :func:`question_spec_usable` and the spec
+    has a field the block shows (a spec with only an operational question
+    pins nothing the brief states, so it gets no bare header)."""
+    if not question_spec_usable(spec):
+        return ""
+    horizon, source = spec["horizon"], spec["resolution_source"]
+    lines = ["Question spec (fixed for this run; forecasts resolve against it; it does not narrow the research):"]
+    if spec.get("outcome_definition"):
+        lines.append(f"- Outcome: {spec['outcome_definition']}")
+    if horizon.get("label") or horizon.get("date"):
+        when = horizon.get("label") or horizon.get("date")
+        if horizon.get("label") and horizon.get("date"):
+            when += f" ({horizon['date']})"
+        # "Resolves:" rather than "Resolves by": labels usually carry their own
+        # preposition ("by 31 December 2027", "before the 2028 election").
+        lines.append(f"- Resolves: {when}")
+    if source.get("name"):
+        lines.append(f"- Resolution source: {source['name']} ({str(source.get('kind')).replace('_', ' ')})")
+    if spec.get("reference_class"):
+        lines.append(f"- Reference class: {spec['reference_class']}")
+    assumptions = [row for row in spec["assumptions"] if isinstance(row, Mapping) and row.get("text")]
+    if assumptions:
+        lines.append("Assumptions this run made:")
+        lines += [f"- {row['text']}" for row in assumptions]
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
+def question_spec_plan_rule(spec: Any) -> str:
+    """The line appended to the plan task for a usable spec: the partition
+    clause when it has an outcome definition, the base-rate clause when it
+    has a reference class, ``""`` when it has neither (a partial spec never
+    points the planner at a field it lacks)."""
+    if not question_spec_usable(spec):
+        return ""
+    text = "; ".join(clause for field, clause in (("outcome_definition", _QSPEC_PARTITION_CLAUSE),
+                                                   ("reference_class", _QSPEC_BASE_RATE_CLAUSE))
+                     if spec.get(field))
+    return text[:1].upper() + text[1:] + "." if text else ""
+
+
+def question_spec_telemetry(spec: Mapping[str, Any]) -> dict:
+    """``meta.question_spec``: status, assumptions_n, spec_sha256, horizon_date.
+
+    The status is ``invalid`` for a spec that is not ``unavailable`` yet not
+    :func:`question_spec_usable` (a damaged plan.json): the brief, the plan
+    and actors.json ignore it, so the telemetry never reports it as usable."""
+    horizon = spec.get("horizon") if isinstance(spec.get("horizon"), Mapping) else {}
+    assumptions = spec.get("assumptions") if isinstance(spec.get("assumptions"), list) else []
+    status = spec.get("status")
+    if status != "unavailable" and not question_spec_usable(spec):
+        status = "invalid"
+    return {"status": status, "assumptions_n": len(assumptions),
+            "spec_sha256": spec.get("spec_sha256"), "horizon_date": horizon.get("date") or None}
 
 
 # ===========================================================================
@@ -2671,8 +3478,893 @@ def _split_tag(text: str) -> tuple[str, str]:
     return _collapse(text), tag
 
 
+# Evidence clauses (RESEARCH-7): an "EVIDENCE:" / "Evidence:" / "证据：" label
+# (emphasised or not; [S<n>] markers before its colon belong to the clause and
+# bind its first quote) opens a finding's clause only where it starts a word
+# (no letter or CJK character right before it: "关键证据：" is prose) and a
+# quoted string ("…", “…”, 「…」) opens the clause, after optional [S<n>]
+# markers, verification tags, emphasis and separators (_CLAUSE_LEAD_RE):
+# "Supporting Evidence: capacity reached …" and a label inside the quoted
+# passage are prose too.  The LAST such label splits.  Up to
+# EVIDENCE_QUOTES_PER_FACT quoted strings follow, each optionally bound to a
+# source by an [S<n>] marker written right before it.  Separators, an opening
+# bracket and loose emphasis a finding ends with before its label
+# (_FINDING_TAIL_CHARS: "… [S1] — EVIDENCE:", "… (EVIDENCE: …)", and a run of
+# ASCII hyphens with no letter or digit right before it: "… [S1] - EVIDENCE:")
+# are dropped; emphasis closing a word ("**176 GW** EVIDENCE:") and the minus
+# of a rating ("BBB- EVIDENCE:") stay.
+_EVIDENCE_LABEL_RE = re.compile(r"[*_]{0,2}(?:EVIDENCE|Evidence|证据)[*_]{0,2}"
+                                r"(?P<refs>(?:[ \t]?\[S\d{1,9}\])*)[ \t]{0,3}[:：][*_]{0,2}")
+_CLAUSE_LEAD_RE = re.compile(rf"(?:[ \t*_:：,，;；\-–—]|\[S\d{{1,9}}\]|(?i:{_TAG_RE.pattern}))*")
+_FINDING_TAIL_CHARS = " \t*_:：,，;；–—(（"
+_QUOTE_OPEN_RE = re.compile("[\"“「]")
+_QUOTE_CLOSERS = {"\"": "\"", "“": "”", "「": "」"}
+_BOUND_MARKER_RE = re.compile(r"\[S(\d{1,9})\]$")
+_BOUND_MARKER_TRIM = " \t*_:：,，;；-–—"
+# What the REPORTED-number audit never checks, removed before the fact's
+# numbers are read: scientific-notation exponents (10^9, 10**-3, 10⁹, 1.2e9;
+# "**" only after a base of 10, so a bold number, "**99%**", is still read),
+# bibliographic ids (vol./pp./No./article numbers, DOIs, arXiv ids), dates
+# written with month names or CJK date units, and bare years 1900-2100
+# (calendar dates are already skipped by fact_number_tokens).
+_MONTHS = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+           r"|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?")
+_UNCHECKABLE_NUMBER_RES = (
+    re.compile(r"\b10[ \t]?\*\*[ \t]?[-−+]?\d{1,3}|(?:\b10[ \t]?)?\^[ \t]?[-−+]?\d{1,3}|(?:\b10)?[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+"
+               r"|(?<=\d)[eE][-+]?\d{1,3}\b"),
+    re.compile(r"\b(?:vols?|pp?|nos?|iss)\.[ \t]?\d[\d.,/–-]*|\b(?:article|art\.)[ \t]?(?:no\.?[ \t]?|#[ \t]?)?\d[\d.,/-]*"
+               r"|\bdoi(?:[ \t]?[:.]|[ \t])[ \t]?\S+|\barxiv(?:[ \t]?:|\.org/)[ \t]?\S+", re.I),
+    re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?[ \t]{_MONTHS}|\b{_MONTHS}[ \t]\d{{1,2}}(?:st|nd|rd|th)?\b"
+               r"|\d{1,4}[ \t]?[年月日号]", re.I),
+    re.compile(r"(?<![\d.,])(?:19\d{2}|20\d{2}|2100)(?![\d]|[.,]\d)"),
+)
+
+
+def _split_evidence_clause(text: str) -> tuple[str, str | None]:
+    """``(finding, clause)``: the text before the last evidence label that
+    opens a clause (see _EVIDENCE_LABEL_RE) and the clause after it, or
+    ``(text, None)`` when no label does; the clause starts at the [S<n>]
+    markers written before the label's colon.  Linear: a label's lead scan
+    stops at the next label's first letter."""
+    for match in reversed(list(_EVIDENCE_LABEL_RE.finditer(text))):
+        if match.start() and text[match.start() - 1].isalpha():
+            continue
+        lead = _CLAUSE_LEAD_RE.match(text, match.end())
+        if _QUOTE_OPEN_RE.match(text, lead.end()):
+            return text[:match.start()], text[match.start("refs"):]
+    return text, None
+
+
+def _finding_before_clause(text: str) -> str:
+    """A finding's text split off before its evidence label, without the
+    separators, opening bracket and loose emphasis it ends with
+    (_FINDING_TAIL_CHARS, and ASCII hyphen runs no letter or digit comes
+    right before); emphasis closing its last word stays, and so does a
+    hyphen ending its last token ("BBB-").  Linear: one backward scan."""
+    end = len(text)
+    while end:
+        if text[end - 1] in _FINDING_TAIL_CHARS:
+            end -= 1
+            continue
+        start = end
+        while start and text[start - 1] == "-":
+            start -= 1
+        if start == end or (start and text[start - 1].isalnum()):
+            break
+        end = start
+    kept = text[:end]
+    tail = text[end:]
+    closing = len(tail) - len(tail.lstrip("*_"))
+    return kept + tail[:closing] if kept else ""
+
+
+def _bound_sid(lead: str) -> int | None:
+    """The sid of an [S<n>] marker that ends ``lead`` (the clause text right
+    before a quote), separators allowed after it; else None."""
+    bound = _BOUND_MARKER_RE.search(lead.rstrip(_BOUND_MARKER_TRIM)[-16:])
+    return int(bound.group(1)) if bound else None
+
+
+def _quote_pairs(clause: str) -> Iterator[tuple[int, int]]:
+    """``(opener, closer)`` offsets of the quoted strings of an evidence
+    clause, in order: one linear scan over matched pairs; an unclosed quote
+    ends the scan."""
+    position = 0
+    while True:
+        opener = _QUOTE_OPEN_RE.search(clause, position)
+        if opener is None:
+            return
+        close = clause.find(_QUOTE_CLOSERS[opener.group(0)], opener.end())
+        if close < 0:
+            return
+        yield opener.start(), close
+        position = close + 1
+
+
+def _clause_quotes(clause: str) -> list[tuple[str, int | None]]:
+    """The first EVIDENCE_QUOTES_PER_FACT non-empty quoted strings of an
+    evidence clause as written (:func:`_quote_pairs`), each with the sid of an
+    [S<n>] marker written right before it (:func:`_bound_sid`), else None."""
+    quotes: list[tuple[str, int | None]] = []
+    position = 0
+    for opener, close in _quote_pairs(clause):
+        text = _collapse(clause[opener + 1:close])
+        if text:
+            quotes.append((text, _bound_sid(clause[position:opener])))
+            if len(quotes) == EVIDENCE_QUOTES_PER_FACT:
+                break
+        position = close + 1
+    return quotes
+
+
+def _unquoted(clause: str) -> str:
+    """An evidence clause without its quoted strings (:func:`_quote_pairs`)."""
+    parts: list[str] = []
+    position = 0
+    for opener, close in _quote_pairs(clause):
+        parts.append(clause[position:opener])
+        position = close + 1
+    parts.append(clause[position:])
+    return " ".join(parts)
+
+
+def _claimed_tag(bullet: str, body: str, clause: str | None) -> str:
+    """The tag the agent wrote on a finding (``bullet`` = ``body`` + evidence
+    label + ``clause``): the last one outside the quoted strings of its
+    clause (a quoted page passage may itself say "(reported)"), else one
+    written inside the quote marks, else REPORTED.  Off reads the last tag
+    of the whole bullet (:func:`_split_tag`), which audit keeps as the fact's
+    tag; enforce works with this one."""
+    if clause is not None:
+        outside = f"{body} {_unquoted(clause)}"
+        if _TAG_RE.search(outside):
+            return _split_tag(outside)[1]
+    return _split_tag(bullet)[1]
+
+
+def _quote_variants(quote: str) -> list[str]:
+    """The readings a quote is looked for in: as written, then (when that
+    differs) without a verification tag written inside its quote marks, the
+    agent's own ("… in 2023 (VERIFIED)") unless the page says it too."""
+    stripped = _collapse(_TAG_RE.sub(" ", quote))
+    return [quote] if not stripped or stripped == quote else [quote, stripped]
+
+
+def _outer_quote(clause: str) -> tuple[str, int | None] | None:
+    """The text between the first and the last straight double quote of a
+    clause with three or more of them: a passage that itself quotes someone
+    ("The agency said "176 GW" was reached") is split into fragments by the
+    pair scan, and is located whole through this fallback.  None otherwise."""
+    if clause.count('"') < 3:
+        return None
+    first, last = clause.find('"'), clause.rfind('"')
+    text = _collapse(clause[first + 1:last])
+    return (text, _bound_sid(clause[:first])) if text else None
+
+
+def _nested_passage(clause: str) -> bool:
+    """Whether a clause's straight quotes are one passage that itself quotes
+    someone ('"The IEA said "176 GW" in its report"') rather than separate
+    quoted strings ('"reached 176 GW" "up from 150 GW"'): a quote the pair
+    scan (:func:`_quote_pairs`) reads as a closer instead opens an inner
+    quote, with whitespace before it and a letter or digit after it."""
+    return any(clause[close] == '"' and close and clause[close - 1].isspace()
+               and close + 1 < len(clause) and clause[close + 1].isalnum()
+               for _, close in _quote_pairs(clause))
+
+
+def _row_search_texts(row: Mapping[str, Any] | None) -> list[str]:
+    """The search text a ledger row holds: every snippet sighting kept
+    (RESEARCH-7), its first snippet and its title, each once."""
+    row = row or {}
+    snippets = row.get("snippets")
+    texts = [*(snippets if isinstance(snippets, list) else []), row.get("snippet"), row.get("title")]
+    return list(dict.fromkeys(text for text in texts if isinstance(text, str) and text.strip()))
+
+
+def _missing_numbers(text: str, tokens: Sequence[str], available: frozenset[str] | set[str]) -> list[str]:
+    """The number tokens of ``text`` that are not in ``available`` (a union of
+    :func:`page_number_set`), read as :func:`_number_on_pages` reads them."""
+    values = fact_number_values(text)
+    percents = fact_percent_tokens(text)
+    units = fact_unit_tokens(text)
+    return [token for token in tokens
+            if not _number_on_pages(token, available, values.get(token, frozenset()),
+                                    percent=token in percents, units=units.get(token, frozenset()))]
+
+
+@dataclass
+class _QuoteCheck:
+    """What :meth:`_EvidenceChecker.locate` made of a fact's quotes."""
+
+    entries: list[dict] = field(default_factory=list)   # evidence entries of the located quotes
+    windows: list[str] = field(default_factory=list)    # evidence windows of the located page quotes
+    near: bool = False                                   # a missed quote starts or ends verbatim
+    missed: int = 0                                      # checked quotes not located
+    unchecked: list[str] = field(default_factory=list)  # EVIDENCE_UNCHECKED_* of each quote never checked
+
+
+class _EvidenceChecker:
+    """Locates a KIQ's evidence quotes (RESEARCH-7) in what its agent was
+    shown: the stored page of a cited fetched source first, then the search
+    text of any cited source (:func:`_row_search_texts`); each text is
+    prepared for matching once per notes."""
+
+    def __init__(self, ledger_get: Callable[[int], Mapping[str, Any] | None],
+                 page_numbers: Callable[[int], frozenset[str] | None],
+                 page_text: Callable[[int], str | None] | None,
+                 row_text: Callable[[int], Sequence[str]] | None) -> None:
+        self.ledger_get = ledger_get
+        self.page_numbers = page_numbers
+        self.page_text = page_text
+        self.row_text = row_text or (lambda sid: _row_search_texts(ledger_get(sid)))
+        self._targets: dict[int, list[tuple[str, es.MatchText]]] = {}
+        self._numbers: dict[int, frozenset[str]] = {}
+
+    def targets(self, sid: int) -> list[tuple[str, es.MatchText]]:
+        if sid not in self._targets:
+            found: list[tuple[str, es.MatchText]] = []
+            if (self.ledger_get(sid) or {}).get("fetched") and self.page_text is not None:
+                page = self.page_text(sid)
+                if page:
+                    found.append(("page", es.MatchText(page)))
+            found += [("snippet", es.MatchText(text)) for text in self.row_text(sid) or ()]
+            self._targets[sid] = found
+        return self._targets[sid]
+
+    def source_numbers(self, sid: int) -> frozenset[str]:
+        """The :func:`page_number_set` of a cited source's stored page (when
+        fetched) and of its search text together."""
+        if sid not in self._numbers:
+            numbers: set[str] = set()
+            if (self.ledger_get(sid) or {}).get("fetched"):
+                numbers |= self.page_numbers(sid) or frozenset()
+            for text in self.row_text(sid) or ():
+                numbers |= page_number_set(text)
+            self._numbers[sid] = frozenset(numbers)
+        return self._numbers[sid]
+
+    def capped(self, sid: int) -> bool:
+        """Whether a cited source was seen only in search results and its kept
+        snippet sightings are at the ledger's cap (SNIPPETS_PER_ROW): a
+        quote copied from a later sighting was never stored, so not finding
+        it there proves nothing."""
+        row = self.ledger_get(sid) or {}
+        snippets = row.get("snippets")
+        return (not row.get("fetched") and isinstance(snippets, list)
+                and len(snippets) >= rg.SourceLedger.SNIPPETS_PER_ROW)
+
+    def locate(self, quotes: Sequence[tuple[str, int | None]], sids: Sequence[int]) -> _QuoteCheck:
+        """Look for a fact's quotes in its cited sources.
+
+        A quote bound to a cited source is looked for there first, then in the
+        other cited sources (a marker written after each quote, '"q1" [S1];
+        "q2" [S2]', binds the next quote to the previous source); any other
+        quote in every cited source in order; each in its readings
+        (:func:`_quote_variants`).  A quote with no reading inside
+        evidence_spans' length bounds is never looked for, and one not found
+        whose claimed sources (the bound one, else every cited one) are all
+        :meth:`capped` is unchecked rather than missed."""
+        check = _QuoteCheck()
+        for quote, bound in quotes:
+            variants = [variant for variant in _quote_variants(quote) if es.quote_in_bounds(variant)]
+            if not variants:
+                check.unchecked.append(EVIDENCE_UNCHECKED_LENGTH)
+                continue
+            order = [bound, *(sid for sid in sids if sid != bound)] if bound in sids else list(sids)
+            located = self._find(variants, order)
+            if located is None:
+                claimed = order[:1] if bound in sids else order
+                if claimed and all(self.capped(sid) for sid in claimed):
+                    check.unchecked.append(EVIDENCE_UNCHECKED_SNIPPETS_CAPPED)
+                else:
+                    check.missed += 1
+                    check.near = check.near or any(es.near_miss(text, variant) for variant in variants
+                                                   for sid in order for _, text in self.targets(sid))
+                continue
+            sid, target, text, variant, match = located
+            check.entries.append({"sid": sid, "quote": _collapse(variant, EVIDENCE_QUOTE_CHARS),
+                                  "basis": match.basis, "start": match.start, "end": match.end, "target": target})
+            if target == "page":
+                check.windows.append(es.evidence_window(text, match))
+        return check
+
+    def _find(self, variants: Sequence[str],
+              order: Sequence[int]) -> tuple[int, str, es.MatchText, str, es.SpanMatch] | None:
+        """``(sid, target, text, reading, match)`` of the first reading found,
+        sources in ``order``, each source's stored page before its search
+        text; None when no reading is anywhere."""
+        for sid in order:
+            for target, text in self.targets(sid):
+                for variant in variants:
+                    match = es.locate_span(text, variant)
+                    if match is not None:
+                        return sid, target, text, variant, match
+        return None
+
+    def check_reported_numbers(self, fact: dict) -> None:
+        """The REPORTED-number audit (telemetry only, never changes a tag):
+        ``number_check`` ok | missing | not_checkable against the stored pages,
+        snippets and titles of the fact's cited sources."""
+        text = str(fact.get("text") or "")
+        for pattern in _UNCHECKABLE_NUMBER_RES:
+            text = pattern.sub(" ", text)
+        tokens = fact_number_tokens(text)
+        available: set[str] = set()
+        for sid in fact["sids"]:
+            available |= self.source_numbers(sid)
+        if not tokens or not available:
+            fact["number_check"] = "not_checkable"
+            return
+        missing = _missing_numbers(text, tokens, available)
+        fact["number_check"] = "missing" if missing else "ok"
+        if missing:
+            fact["number_check_missing"] = missing
+
+
+def _verified_rules(tag: str, text: str, sids: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None],
+                    page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What the VERIFIED rules of :func:`postprocess_notes` make of a finding
+    (``text`` citing ``sids``) tagged ``tag``: its ``tag`` and, for a VERIFIED
+    one, ``verification`` no_fetched_source (no cited fetched page → REPORTED)
+    or ``verified_numbers`` (it has number tokens) and ``missing_numbers`` (a
+    number token on none of the cited fetched pages → UNVERIFIED)."""
+    if tag != "VERIFIED":
+        return {"tag": tag}
+    fetched = [sid for sid in sids if (ledger_get(sid) or {}).get("fetched")]
+    if not fetched:
+        return {"tag": "REPORTED", "verification": "no_fetched_source"}
+    tokens = fact_number_tokens(text)
+    if not tokens:
+        return {"tag": tag}
+    available: set[str] = set()
+    for sid in fetched:
+        available |= page_numbers(sid) or frozenset()
+    missing = _missing_numbers(text, tokens, available)
+    if not missing:
+        return {"tag": tag, "verified_numbers": True}
+    return {"tag": "UNVERIFIED", "verified_numbers": False, "missing_numbers": missing}
+
+
+def _apply_evidence(fact: dict, claimed: str, clause: str | None, mode: str, checker: _EvidenceChecker,
+                    enforce_tag: str) -> None:
+    """Record a fact's evidence (RESEARCH-7) and, in enforce mode, act on it.
+
+    ``claimed_tag`` is the tag the agent wrote; ``evidence`` the located
+    quotes (when none of the quoted strings is found, a passage with nested
+    straight quotes is tried whole: :func:`_outer_quote`; its miss fails the
+    fact only when the clause is one passage quoting someone
+    (:func:`_nested_passage`) or a quote of the pair scan missed too, so two
+    separate quotes too short to check are never failed through it);
+    ``evidence_status`` verified (a quote located) | failed (quotes
+    checked, none located) | absent (no clause, no quoted string or no quote
+    that could be checked: never a demotion); ``evidence_unchecked`` (only
+    when there is one) why each quote never checked was not
+    (EVIDENCE_UNCHECKED_*); ``evidence_near_miss`` whether a missed quote
+    starts or ends verbatim.  ``evidence_verdict`` says what enforce does
+    (audit records it and changes no tag), weighed on ``enforce_tag``: what
+    the VERIFIED rules (:func:`_verified_rules`) make of the claimed tag on
+    the fact's text, the fact's own tag in enforce mode (audit keeps the tag
+    off gives the whole bullet):
+
+    * ``evidence_not_on_page`` — quotes checked, none located, on a fact not
+      already UNVERIFIED → UNVERIFIED;
+    * ``numbers_outside_evidence`` — a VERIFIED fact with located quotes whose
+      numbers (all on its pages, or the fact would already be UNVERIFIED) are
+      not all inside the evidence windows of its page quotes → REPORTED.  A
+      fact whose quotes were located only in search text has no page window,
+      so its numbers are outside page evidence too: stricter than applying
+      the rule to facts with a page quote only, a VERIFIED fact with quotes
+      keeps its tag only on page evidence that holds its numbers.
+
+    A fact left REPORTED gets the REPORTED-number audit (``number_check``)."""
+    quotes = _clause_quotes(clause) if clause else []
+    check = checker.locate(quotes, fact["sids"])
+    outer = _outer_quote(clause) if quotes and not check.entries else None
+    if outer is not None and outer not in quotes:
+        whole = checker.locate([outer], fact["sids"])
+        if whole.entries:
+            check = whole
+        elif check.missed or _nested_passage(clause):
+            check.missed += whole.missed
+            check.near = check.near or whole.near
+    entries = check.entries
+    fact["claimed_tag"] = claimed
+    fact["evidence"] = entries
+    fact["evidence_status"] = "verified" if entries else ("failed" if check.missed else "absent")
+    fact["evidence_near_miss"] = bool(check.near and not entries)
+    if check.unchecked:
+        fact["evidence_unchecked"] = check.unchecked
+    verdict = None
+    outside: list[str] = []
+    if check.missed and not entries and enforce_tag != "UNVERIFIED":
+        verdict = "evidence_not_on_page"
+    elif entries and enforce_tag == "VERIFIED":
+        tokens = fact_number_tokens(fact["text"])
+        if tokens:
+            window_numbers = page_number_set("\n\n".join(check.windows)) if check.windows else frozenset()
+            outside = _missing_numbers(fact["text"], tokens, window_numbers)
+            if outside:
+                verdict = "numbers_outside_evidence"
+    if verdict is not None:
+        fact["evidence_verdict"] = verdict
+        if mode == EVIDENCE_ENFORCE:
+            fact["tag"] = "UNVERIFIED" if verdict == "evidence_not_on_page" else "REPORTED"
+            fact["verification"] = verdict
+            if outside:
+                fact["outside_evidence_numbers"] = outside
+    if fact["tag"] == "REPORTED":
+        checker.check_reported_numbers(fact)
+
+
+def evidence_summary(records: Iterable[Mapping[str, Any]], mode: str) -> dict:
+    """meta.evidence (RESEARCH-7): the evidence of the facts of ``records``
+    postprocessed under ``mode``'s contract; the facts of records of another
+    contract (written under another mode, e.g. resumed from an off run) are
+    ``not_requested`` and counted nowhere else.
+
+    ``with_spans``: facts with a located quote; ``located``: located quotes by
+    basis; ``demoted``: facts by ``evidence_verdict`` (in audit mode what
+    enforce would demote); ``unchecked``: quotes never checked, by
+    EVIDENCE_UNCHECKED_* reason; ``claim_grounding``: with_spans / facts;
+    ``claimed_verified``: the facts the agent tagged VERIFIED and how many of
+    them have a located quote; ``reported_numbers``: the REPORTED-number audit
+    (``checked`` = ok + missing)."""
+    contract = f"{mode}:{EVIDENCE_CONTRACT_VERSION}"
+    counts = Counter()
+    located = {es.BASIS_EXACT: 0, es.BASIS_NORMALIZED: 0, es.BASIS_SEGMENTED: 0}
+    demoted = {"numbers_outside_evidence": 0, "evidence_not_on_page": 0}
+    unchecked = {EVIDENCE_UNCHECKED_LENGTH: 0, EVIDENCE_UNCHECKED_SNIPPETS_CAPPED: 0}
+    reported = {"checked": 0, "missing": 0, "not_checkable": 0}
+    for record in records:
+        facts = [fact for fact in record.get("facts") or [] if isinstance(fact, dict)]
+        if record.get("evidence_contract") != contract:
+            counts["not_requested"] += len(facts)
+            continue
+        for fact in facts:
+            counts["facts"] += 1
+            entries = [entry for entry in fact.get("evidence") or [] if isinstance(entry, dict)]
+            counts["with_spans"] += bool(entries)
+            for entry in entries:
+                if entry.get("basis") in located:
+                    located[entry["basis"]] += 1
+            counts[str(fact.get("evidence_status"))] += 1
+            counts["near_miss"] += bool(fact.get("evidence_near_miss"))
+            if fact.get("evidence_verdict") in demoted:
+                demoted[fact["evidence_verdict"]] += 1
+            for reason in fact.get("evidence_unchecked") or []:
+                if reason in unchecked:
+                    unchecked[reason] += 1
+            check = fact.get("number_check")
+            if check in ("ok", "missing"):
+                reported["checked"] += 1
+                reported["missing"] += check == "missing"
+            elif check == "not_checkable":
+                reported["not_checkable"] += 1
+            if fact.get("claimed_tag") == "VERIFIED":
+                counts["claimed_verified"] += 1
+                counts["claimed_verified_located"] += bool(entries)
+    facts_total = counts["facts"]
+    return {
+        "mode": mode, "contract": contract, "facts": facts_total, "with_spans": counts["with_spans"],
+        "located": located, "failed": counts["failed"], "near_miss": counts["near_miss"], "demoted": demoted,
+        "absent": counts["absent"], "unchecked": unchecked, "not_requested": counts["not_requested"],
+        "claim_grounding": round(counts["with_spans"] / facts_total, 3) if facts_total else None,
+        "claimed_verified": {"facts": counts["claimed_verified"], "located": counts["claimed_verified_located"]},
+        "reported_numbers": reported,
+    }
+
+
+def _gap_counts_verified(fact: Mapping[str, Any], *, enforce: bool) -> bool:
+    """Whether a follow-up fact counts toward a gap round's new VERIFIED facts
+    (GAP_MIN_NEW_VERIFIED): in enforce mode the tag the agent claimed, so the
+    stricter evidence rules never end gap rounds early (RESEARCH-7)."""
+    tag = (fact.get("claimed_tag") or fact.get("tag")) if enforce else fact.get("tag")
+    return tag == "VERIFIED"
+
+
+# Derivation clauses (RESEARCH-8): a pattern of their own, so _TAG_RE never
+# reads a "(DERIVED: …)" clause as a tag.
+_DERIVED_CLAUSE_RE = dn.CLAUSE_OPEN_RE
+
+
+def _split_derivation_clause(text: str) -> tuple[str, str | None]:
+    """``(finding, clause)``: ``text`` without its LAST derivation clause
+    (:data:`_DERIVED_CLAUSE_RE` up to its matching closing bracket, found by
+    one linear depth scan; an unclosed clause runs to the end) and that
+    clause, or ``(text, None)``.  The finding keeps what followed the clause
+    (a marker, a tag) and loses the separators it ended with before it
+    (:func:`_finding_before_clause`)."""
+    matches = list(_DERIVED_CLAUSE_RE.finditer(text))
+    if not matches:
+        return text, None
+    start = matches[-1].start()
+    depth, end = 0, len(text)
+    for index in range(start, len(text)):
+        if text[index] in "(（":
+            depth += 1
+        elif text[index] in ")）":
+            depth -= 1
+            if depth == 0:
+                end = index + 1
+                break
+    return _collapse(f"{_finding_before_clause(text[:start])} {text[end:]}"), text[start:end]
+
+
+def _clause_tail_derivation(clause: str) -> tuple[str, str | None]:
+    """A derivation clause written after the quotes of an evidence clause
+    ('EVIDENCE: "…" (DERIVED: …)'): ``(the evidence clause without it, the
+    derivation clause)``, else ``(clause, None)``."""
+    tail = 0
+    for _, close in _quote_pairs(clause):
+        tail = close + 1
+    rest, derivation = _split_derivation_clause(clause[tail:])
+    return (f"{clause[:tail]} {rest}", derivation) if derivation is not None else (clause, None)
+
+
+# A minus sign or dash before an operand's number: page numbers are unsigned
+# (page_number_set), so a sign written into an operand is never on its page.
+_OPERAND_MINUS_RE = re.compile(r"[-−–—‐‑]")
+
+
+def _value_on_page(token: str, full: str, percent: bool, units: Iterable[str],
+                   available: frozenset[str] | set[str]) -> bool:
+    """Whether a number written as ``token`` with the full value ``full``
+    (``"=" + value``, :func:`_number_values_at`) is on a page (``available``,
+    :func:`page_number_set`) at that value, not merely as the same digits: a
+    percentage (``percent``) as a page percentage and never scaled, a figure
+    written with a unit (``units``) as a page number of one of those unit
+    classes at the same full value, any other number as a page number of the
+    same full value ("37 billion" is no page "37 GW")."""
+    if percent:
+        return full == "=" + token and "%" + token in available
+    if units:
+        return any(f"{unit}:{full}" in available for unit in units)
+    return full in available
+
+
+def _operand_reading(value: str, available: frozenset[str] | None) -> tuple[Decimal, str, bool] | None:
+    """A derivation operand's value exactly as the evaluator uses it, ``(value,
+    number token, written as a percentage)``, when its page (``available``,
+    :func:`page_number_set`) shows that value; None otherwise (fail closed).
+
+    The value must hold exactly one number (:func:`_number_values_at`, dates
+    and year ranges out: "5 plants out of 13 GW" is no operand), with no minus
+    sign or dash before it (:data:`_OPERAND_MINUS_RE`), whose token is
+    checkable (>= 2 digits, a decimal, a percentage or a unit-class figure:
+    a bare "5" is not) and whose FULL value is on the page, not merely its
+    digits: a percentage as a page percentage (and never scaled), a figure
+    written with a unit as a page number of that unit class at the same full
+    value, any other number as a page number of the same full value.  Scale
+    words count: "37 billion" needs 37000000000 on the page, a page "37 GW"
+    is not it.  The Decimal is that full value ("1.2 trillion" →
+    1200000000000)."""
+    if available is None:
+        return None
+    text = _join_digit_groups(_number_text(value, strip_dates=True))
+    found = _number_values_at(text)
+    if len(found) != 1:
+        return None
+    offset, token, full = found[0]
+    if _OPERAND_MINUS_RE.search(text[:offset]):
+        return None
+    percent = token in fact_percent_tokens(value)
+    units = fact_unit_tokens(value).get(token, frozenset())
+    if not (sum(ch.isdigit() for ch in token) >= 2 or "." in token or percent or units):
+        return None
+    return (Decimal(full[1:]), token, percent) if _value_on_page(token, full, percent, units, available) else None
+
+
+# A minus sign or dash right before a finding's number, through a currency
+# sign ("-185%", "−$5 billion", "CNY -8.3 billion"): the finding writes it as
+# negative, so it states a negative result only.  A range's upper bound
+# ("180-185%") reads as signed too, which fails closed.
+_SIGNED_LEAD_RE = re.compile(r"[-−–—‐‑][^\S\n]*(?:[A-Za-z]{0,2}\$|[€£¥₹₩])?[^\S\n]*\Z")
+_SIGNED_LEAD_CHARS = 16  # how far before a number its sign is looked for
+# A percentage written in percentage points (the point words of _PERCENT_WORD):
+# "26 percentage points", "a 26-percentage-point gap", "26 pp", "1.5 pts", "3个百分点".
+_POINTS_NUMBER_RE = re.compile(r"(?<![\d.,])(\d++(?:[.,]\d++)*+)(?:[^\S\n]*+(?:\n[^\S\n]*+)?+|-)"
+                               r"(?:percentage[\s-]+points?\b|pp\b|ppts?\b|pts\b|p\.p\.|个?百分点)", re.I)
+
+
+@dataclass(frozen=True)
+class _NumberOccurrence:
+    """One number of a finding as it is written there (:func:`_number_occurrences`)."""
+
+    token: str               # its canonical digits: "185", "2.85"
+    full: str                # "=" + its full value: "=2850000000000" for "2.85 trillion"
+    percent: bool            # written as a percentage: "185%", "26 percentage points"
+    points: bool             # a percentage written in points (:data:`_POINTS_NUMBER_RE`): "26 pp"
+    units: frozenset[str]    # its unit classes (:data:`_UNIT_WORDS`): {"power"} for "185 GW"
+    signed: bool             # a minus sign or dash right before it (:data:`_SIGNED_LEAD_RE`)
+
+    @property
+    def scaled(self) -> bool:
+        """Written with a scale word: "$185 billion", "1.2万亿"."""
+        return self.full != "=" + self.token
+
+    @property
+    def checkable(self) -> bool:
+        """A number the number rules read (:func:`fact_number_tokens`: >= 2 digits or a decimal)."""
+        return sum(ch.isdigit() for ch in self.token) >= 2 or "." in self.token
+
+    @property
+    def can_state(self) -> bool:
+        """A number that may state a derivation's result: a checkable one, or a
+        single digit written as a percentage or with a unit class ("7%", "5 GW";
+        a bare "7" never)."""
+        return self.checkable or self.percent or bool(self.units)
+
+
+def _number_occurrences(text: str) -> list[_NumberOccurrence]:
+    """Every number of a finding ``text`` in order (dates and year ranges out,
+    grouped digits joined: :func:`_number_values_at`), each read where it is
+    written: unlike the per-token :func:`fact_percent_tokens`,
+    :func:`fact_unit_tokens` and :func:`fact_number_values`, the "185" of
+    "185%" and the "185" of "$185 billion" stay two numbers."""
+    value = _join_digit_groups(_number_text(text, strip_dates=True))
+    percents = {match.start(1) for match in _PERCENT_NUMBER_RE.finditer(value)}
+    points = percents.intersection(match.start(1) for match in _POINTS_NUMBER_RE.finditer(value))
+    units: dict[int, set[str]] = {}
+    for unit, pattern in _UNIT_SUFFIX_RES.items():
+        for match in pattern.finditer(value):
+            units.setdefault(match.start(1), set()).add(unit)
+    for match in _UNIT_PREFIX_RE.finditer(value):
+        units.setdefault(match.start(1), set()).add("currency")
+    return [_NumberOccurrence(token, full, offset in percents, offset in points, frozenset(units.get(offset, ())),
+                              _SIGNED_LEAD_RE.search(value, max(0, offset - _SIGNED_LEAD_CHARS), offset) is not None)
+            for offset, token, full in _number_values_at(value)]
+
+
+def _numbers_off_page(numbers: Iterable[_NumberOccurrence], available: frozenset[str]) -> list[str]:
+    """The tokens of the ``numbers`` (:func:`_number_occurrences`) that are not
+    on a page (``available``) at the value each is written with
+    (:func:`_value_on_page`): stricter than a VERIFIED finding's
+    :func:`_missing_numbers`, which accepts the same digits at another scale."""
+    return list(dict.fromkeys(number.token for number in numbers
+                              if not _value_on_page(number.token, number.full, number.percent, number.units,
+                                                    available)))
+
+
+def _operand_units(value: str) -> frozenset[str]:
+    """The unit classes a derivation operand's value is written in: those of
+    its one number, as :func:`_operand_reading` reads it (none when the value
+    holds no single number)."""
+    found = _number_values_at(_join_digit_groups(_number_text(value, strip_dates=True)))
+    return fact_unit_tokens(value).get(found[0][1], frozenset()) if len(found) == 1 else frozenset()
+
+
+def _result_is_points(expr: str, data_operands: Mapping[str, str]) -> bool:
+    """Whether a derivation's result is in percentage points: every data
+    operand value (``data_operands``, name → value) is a percentage and the
+    formula only adds and subtracts them, the literal 0 aside, or takes them
+    from 100 (:func:`derived_numbers.gives_points`: "a-b", "100-a"; "a+100"
+    gives no points).  68% - 42% is 26 percentage points; "26%" would
+    misstate it as a relative change, which is 61.9%."""
+    return (bool(data_operands) and dn.gives_points(expr, data_operands)
+            and all(fact_percent_tokens(value) for value in data_operands.values()))
+
+
+def _result_is_percent(expr: str, data_operands: Mapping[str, str]) -> bool:
+    """Whether a derivation's result is a percentage as it is: its formula
+    multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
+    or it is in percentage points (:func:`_result_is_points`).  A ratio or
+    product of percentages is no percentage as it is (68% / 42% is "162%",
+    never "1.6%": :func:`_result_form` reads it as a ratio)."""
+    return dn.scales_to_percent(expr) or _result_is_points(expr, data_operands)
+
+
+@dataclass(frozen=True)
+class _ResultForm:
+    """How a derivation's result may be written (:func:`_result_form`)."""
+
+    percent: bool            # a percentage already (:func:`_result_is_percent`)
+    points: bool             # in percentage points (:func:`_result_is_points`): stated in points only
+    units: frozenset[str]    # the unit classes a number stating it may be written with
+    ratio: bool              # a unitless quotient of data operands: the one result a percentage states x 100
+
+
+def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
+    """The form of the result of formula ``expr`` over its data operands
+    (``data_operands``, name → value as the clause writes it): a percentage
+    (:func:`_result_is_percent`) and whether in percentage points
+    (:func:`_result_is_points`); when the formula keeps their unit
+    (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
+    or a sum scaled by literals), the unit classes every data operand is
+    written in (:func:`_operand_units`); and whether it is a ratio, a
+    quotient of two terms in the data operands' unit
+    (:func:`derived_numbers.is_quotient`: "a/b", "(a-b)/b"; "a*b/b" is
+    none).  A ratio, product or power of operands, a rate per
+    ``years()`` period and a clause without data operands keep no unit; a
+    result that keeps the unit is never a ratio, whether or not that unit is
+    a unit class ("107 units", a bare count), and neither is a product,
+    power or call of operands ("a*b", "a**1", "sqrt(a)")."""
+    values = list(data_operands.values())
+    keeps = bool(values) and dn.keeps_unit(expr, data_operands)
+    units = [_operand_units(value) for value in values] if keeps else []
+    return _ResultForm(percent=_result_is_percent(expr, data_operands),
+                       points=_result_is_points(expr, data_operands),
+                       units=frozenset.intersection(*units) if units else frozenset(),
+                       ratio=dn.is_quotient(expr, data_operands))
+
+
+def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm) -> bool:
+    """Whether one number of a finding, as it is written there
+    (:func:`_number_occurrences`), states a derivation ``result`` of the form
+    ``form`` (:func:`_result_form`) at its display precision
+    (:func:`derived_numbers.token_matches`).  One reading:
+
+    * its sign is the result's: a number with a minus sign or dash right
+      before it states a negative result only, any other a non-negative one;
+    * a result that is a percentage already is stated by a percentage only
+      ("185%", "185 percent"), never by a bare number ("185 workers", "185
+      times"), one written with a unit class or a scale word ("185 GW",
+      "$185 billion"), and in percentage points exactly when it is in points
+      (``form.points``: 68% - 42% is "26 percentage points", "26 pp" or
+      "26个百分点", never "26%"; (a-b)/b*100 over them is "62%", never "62
+      percentage points");
+    * any other result is stated by a number written with a unit class only
+      in a unit class of every data operand through a formula that keeps it
+      (``form.units``: "24 TWh" and "€24" state no difference of GW figures,
+      "2.85 GW" no ratio of them, "24 GW" no difference of bare numbers);
+    * a ratio (``form.ratio``) is stated by a percentage at result x 100
+      only, never in points ("162%" for 68% / 42%, never "162 percentage
+      points"), any other result never by a percentage ("2,400%" is no 24 GW
+      difference, "700%" no difference of 107 and 100 units, "48,100%" no
+      product of GW figures), and any other number states the result at its
+      full value only ("2.85 trillion" is 2850000000000, never 2.85)."""
+    result = -result if number.signed else result
+    if form.percent:
+        return (number.percent and number.points == form.points and not number.scaled and not number.units
+                and dn.token_matches(number.token, result))
+    if not number.units <= form.units:
+        return False
+    if number.percent:
+        return (form.ratio and not number.points and not number.scaled
+                and dn.token_matches(number.token, result, percent=True))
+    if not number.scaled:
+        return dn.token_matches(number.token, result)
+    stated, value = Decimal(number.token), Decimal(number.full[1:])
+    shift = value.adjusted() - stated.adjusted()
+    return (not stated.is_zero() and stated.scaleb(shift) == value
+            and dn.token_matches(number.token, result.scaleb(-shift)))
+
+
+def _derived_rules(text: str, cited: Sequence[int], clause: str,
+                   ledger_get: Callable[[int], Mapping[str, Any] | None],
+                   page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What the derivation rules (RESEARCH-8) make of a finding ``text`` whose
+    own markers cite ``cited`` and whose derivation clause is ``clause``.
+
+    ``tag`` DERIVED with ``derivation`` (``expr``, ``operands`` {name:
+    {value, sid}}, ``result`` as :func:`derived_numbers.format_exact` writes
+    it, ``sid``) when all of these hold, else ``tag`` UNVERIFIED with
+    ``derivation_error`` (in this order):
+
+    * the clause parses (:func:`derived_numbers.parse_derivation`) — else
+      eval_error;
+    * it has a data operand and every data operand cites a source the agent
+      was shown (``ledger_get`` is shown-scoped) and fetched — else
+      unshown_source;
+    * they all cite one source and the finding cites it too — else
+      cross_source;
+    * every data operand's value, exactly as the formula uses it, is on that
+      source's page (:func:`_operand_reading`: one checkable, unsigned
+      number at its full value), and so are both years of a period operand
+      ``years(Y1,Y2)`` — else operand_not_on_page;
+    * the formula evaluates over those values (``years(Y1,Y2)`` is Y2 - Y1)
+      — else eval_error;
+    * one of the finding's numbers that may state a result (checkable ones,
+      :func:`fact_number_tokens`, and single digits written as a percentage
+      or with a unit class: :attr:`_NumberOccurrence.can_state`) whose token
+      is no operand's states the result as it is written there
+      (:func:`_states_result`: its sign, percent form, unit class and scale
+      word count, against the result's form, :func:`_result_form`) — else
+      no_result_token when the finding has no such number, result_mismatch
+      when none states it;
+    * every other checkable occurrence of a number in the finding (operands'
+      numbers and other occurrences of the stating digits included) is on
+      the derivation source's page at the value the finding writes it with
+      (:func:`_numbers_off_page`), so a clause never carries an unchecked
+      figure into a DERIVED fact — else result_mismatch with
+      ``missing_numbers``."""
+    def rejected(code: str) -> dict:
+        return {"tag": "UNVERIFIED", "derivation_error": code}
+
+    try:
+        expr, operands = dn.parse_derivation(clause)
+    except dn.CalcError:
+        return rejected("eval_error")
+    data = [sid for _, _, sid, kind in operands if kind == dn.KIND_DATA]
+    if not data or any(sid is None or not (ledger_get(sid) or {}).get("fetched") for sid in data):
+        return rejected("unshown_source")
+    sid = data[0]
+    if any(other != sid for other in data) or sid not in cited:
+        return rejected("cross_source")
+    available = page_numbers(sid)
+    values: dict[str, Decimal] = {}
+    operand_tokens: set[str] = set()
+    for name, value, _, kind in operands:
+        if kind == dn.KIND_DATA:
+            reading = _operand_reading(value, available)
+            if reading is None:
+                return rejected("operand_not_on_page")
+            values[name], token, _ = reading
+            operand_tokens.add(token)
+        else:
+            # parse_derivation read the period already, so period_years cannot raise.
+            first, last = dn.period_years(value)
+            if available is None or f"={first}" not in available or f"={last}" not in available:
+                return rejected("operand_not_on_page")
+            operand_tokens.update(fact_number_tokens(value))
+    try:
+        values.update((name, dn.period_value(value)) for name, value, _, kind in operands
+                      if kind == dn.KIND_PERIOD)
+        result = dn.evaluate(expr, values)
+    except dn.CalcError:
+        return rejected("eval_error")
+    numbers = _number_occurrences(text)
+    candidates = [index for index, number in enumerate(numbers)
+                  if number.can_state and number.token not in operand_tokens]
+    if not candidates:
+        return rejected("no_result_token")
+    form = _result_form(expr, {name: value for name, value, _, kind in operands if kind == dn.KIND_DATA})
+    stating = {index for index in candidates if _states_result(numbers[index], result, form)}
+    if not stating:
+        return rejected("result_mismatch")
+    missing = _numbers_off_page((number for index, number in enumerate(numbers)
+                                 if number.checkable and index not in stating), available)
+    if missing:
+        return {**rejected("result_mismatch"), "missing_numbers": missing}
+    return {"tag": DERIVED_TAG, "derivation": {
+        "expr": expr,
+        "operands": {name: {"value": value, "sid": operand_sid} for name, value, operand_sid, _ in operands},
+        "result": dn.format_exact(result), "sid": sid}}
+
+
+def _off_reading_rules(whole: str, tag: str, known: Callable[[int], bool],
+                       ledger_get: Callable[[int], Mapping[str, Any] | None],
+                       page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What evidence-off postprocessing with derivations on makes of a
+    bullet's ``whole`` text (its tag ``tag`` split off): the derivation rules
+    on the text without its LAST derivation clause (the clause's sources
+    when the rest cites none), else the VERIFIED rules on the whole text.
+    Audit gives a fact exactly these keys, so it changes no tag."""
+    finding, derivation = _split_derivation_clause(whole)
+    finding, sids = strip_unknown_citations(finding, known)
+    finding = _collapse(finding)
+    if derivation is None:
+        return _verified_rules(tag, finding, sids, ledger_get, page_numbers)
+    if not sids:
+        sids = strip_unknown_citations(derivation, known)[1]
+    return _derived_rules(finding, sids, derivation, ledger_get, page_numbers)
+
+
+def derived_summary(records: Iterable[Mapping[str, Any]]) -> dict:
+    """meta.derived (RESEARCH-8): ``facts`` the findings of ``records`` that
+    carried a derivation clause, ``admitted`` the DERIVED ones and
+    ``rejected`` the UNVERIFIED ones by ``derivation_error`` (every
+    DERIVED_ERRORS key, zero when none).  A DERIVED fact the evidence rules
+    demoted afterwards counts in ``facts`` only."""
+    rejected = dict.fromkeys(DERIVED_ERRORS, 0)
+    total = admitted = 0
+    for record in records:
+        for fact in record.get("facts") or []:
+            if not isinstance(fact, dict) or not ("derivation" in fact or "derivation_error" in fact):
+                continue
+            total += 1
+            admitted += fact.get("tag") == DERIVED_TAG
+            code = fact.get("derivation_error")
+            if isinstance(code, str) and code in rejected:
+                rejected[code] += 1
+    return {"facts": total, "admitted": admitted, "rejected": rejected}
+
+
 def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mapping[str, Any] | None],
-                      page_numbers: Callable[[int], frozenset[str] | None]) -> tuple[str, dict]:
+                      page_numbers: Callable[[int], frozenset[str] | None], *, evidence_mode: str = EVIDENCE_OFF,
+                      page_text: Callable[[int], str | None] | None = None,
+                      row_text: Callable[[int], Sequence[str]] | None = None,
+                      derivations: bool = False) -> tuple[str, dict]:
     """Parse agent notes into facts; enforce citation and verification rules.
 
     * markers to sources the ledger does not know are removed;
@@ -2683,12 +4375,41 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
       those pages (a percentage as a percentage, a number with a power,
       energy or currency unit in that unit class: see ``_number_on_pages``),
       otherwise the fact is kept but tagged UNVERIFIED.
+
+    ``evidence_mode`` audit or enforce (RESEARCH-7; off changes nothing):
+    each finding's markers are read from the WHOLE bullet and its claimed tag
+    from the whole bullet outside the clause's quoted strings
+    (:func:`_claimed_tag`); its last EVIDENCE clause is split off
+    (:func:`_split_evidence_clause`; the fact text excludes it and gets the
+    markers only the clause carried; a label that leaves no finding before it
+    splits nothing, nor, with ``derivations``, one that leaves only a
+    derivation clause).  Enforce applies the rules above to the claimed tag and
+    the fact text; audit changes no tag: the tag, verification,
+    verified_numbers and missing_numbers are what off makes of the whole
+    bullet.  :func:`_apply_evidence` locates the
+    clause's quotes in ``page_text(sid)`` of the cited fetched sources and in
+    the search text of the cited sources (``row_text(sid)``, by default
+    :func:`_row_search_texts` of the ledger row).
+
+    ``derivations`` (RESEARCH-8, RESEARCH_DERIVED_FINDINGS; False changes
+    nothing): after any evidence clause is split off, a finding's LAST
+    derivation clause (:func:`_split_derivation_clause`; else one written
+    after its evidence quotes, :func:`_clause_tail_derivation`) is split off
+    too: the fact text excludes it, a finding citing no source outside it
+    cites the clause's sources, and the clause replaces the tag the agent
+    wrote (``claimed_tag`` DERIVED): :func:`_derived_rules` makes the fact
+    DERIVED with its ``derivation`` or UNVERIFIED with a
+    ``derivation_error``, never VERIFIED.  Audit still changes no tag: a
+    fact whose evidence clause was split off gets what off makes of the
+    whole bullet (:func:`_off_reading_rules`).
     Returns ``(cleaned_notes_markdown, parts)`` with facts, unsourced
     findings, conflicts, open questions and discovered leads.
     """
     def known(sid: int) -> bool:
         return ledger_get(sid) is not None
 
+    evidence = evidence_mode in (EVIDENCE_AUDIT, EVIDENCE_ENFORCE)
+    checker = _EvidenceChecker(ledger_get, page_numbers, page_text, row_text) if evidence else None
     # Runs of spaces/tabs collapse first (linear): no pattern below ever sees one.
     normalized = normalize_citations(_HSPACE_RUN_RE.sub(" ", str(notes or "")))
     cleaned_md, _ = strip_unknown_citations(normalized, known)
@@ -2697,36 +4418,72 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     unsourced: list[str] = []
     for bullet in sections["findings"]:
         text, tag = _split_tag(bullet)
+        claimed, clause, off_reading, off_rules = tag, None, None, None
+        if evidence:
+            body, clause = _split_evidence_clause(bullet)
+            if clause is not None:
+                finding = _split_tag(body)[0]
+                # With derivations on, a derivation clause is no finding of its own: a bullet that
+                # is only that clause and an evidence clause is read whole, as evidence off reads it.
+                measured = _split_derivation_clause(finding)[0] if derivations else finding
+                if len(_finding_before_clause(_collapse(strip_unknown_citations(measured, known)[0]))) < 3:
+                    body, clause = bullet, None
+                else:
+                    if evidence_mode == EVIDENCE_AUDIT:
+                        off_text, off_sids = strip_unknown_citations(text, known)
+                        off_reading = (_collapse(off_text), off_sids)
+                        if derivations:
+                            off_rules = _off_reading_rules(text, tag, known, ledger_get, page_numbers)
+                    text = finding
+            claimed = _claimed_tag(bullet, body, clause)
+            if evidence_mode == EVIDENCE_ENFORCE:
+                tag = claimed
+            all_sids = strip_unknown_citations(bullet, known)[1]
+        derivation = None
+        if derivations:
+            text, derivation = _split_derivation_clause(text)
+            if derivation is None and clause is not None:
+                clause, derivation = _clause_tail_derivation(clause)
+            if derivation is not None:
+                claimed = DERIVED_TAG
         text, sids = strip_unknown_citations(text, known)
         text = _collapse(text)
+        if clause is not None:
+            text = _finding_before_clause(text)
         if len(text) < 3:
             continue
+        if derivation is not None and not sids:
+            adopted = strip_unknown_citations(derivation, known)[1]
+            if adopted:
+                text = f"{text} {''.join(f'[S{sid}]' for sid in adopted)}"
+                sids = adopted
+        cited = list(sids)
+        if evidence:
+            extra = [sid for sid in all_sids if sid not in sids]
+            if extra:
+                text = f"{text} {''.join(f'[S{sid}]' for sid in extra)}"
+                sids = [*sids, *extra]
         if not sids:
             unsourced.append(text)
             continue
         fact: dict[str, Any] = {"kiq": kiq_id, "text": text, "sids": sids, "tag": tag,
                                 "verified_numbers": None}
-        if tag == "VERIFIED":
-            fetched = [sid for sid in sids if (ledger_get(sid) or {}).get("fetched")]
-            if not fetched:
-                fact["tag"] = "REPORTED"
-                fact["verification"] = "no_fetched_source"
-            else:
-                tokens = fact_number_tokens(text)
-                if tokens:
-                    available: set[str] = set()
-                    for sid in fetched:
-                        available |= page_numbers(sid) or frozenset()
-                    values = fact_number_values(text)
-                    percents = fact_percent_tokens(text)
-                    units = fact_unit_tokens(text)
-                    missing = [t for t in tokens
-                               if not _number_on_pages(t, available, values.get(t, frozenset()),
-                                                       percent=t in percents, units=units.get(t, frozenset()))]
-                    fact["verified_numbers"] = not missing
-                    if missing:
-                        fact["tag"] = "UNVERIFIED"
-                        fact["missing_numbers"] = missing
+        derived = (_derived_rules(text, cited, derivation, ledger_get, page_numbers) if derivation is not None
+                   else None)
+        # Audit weighs the whole bullet as off does (``off_reading`` / ``off_rules``,
+        # set when a clause was split off; derivation clause and all with
+        # derivations on), so it changes no tag.
+        if off_rules is not None:
+            fact.update(off_rules)
+        elif derived is not None:
+            fact.update(derived)
+        else:
+            fact.update(_verified_rules(tag, *(off_reading or (text, sids)), ledger_get, page_numbers))
+        if checker is not None:
+            enforced = fact["tag"]
+            if evidence_mode == EVIDENCE_AUDIT:
+                enforced = (derived or _verified_rules(claimed, text, sids, ledger_get, page_numbers))["tag"]
+            _apply_evidence(fact, claimed, clause, evidence_mode, checker, enforced)
         facts.append(fact)
 
     def cleaned(items: list[str]) -> list[str]:
@@ -2744,6 +4501,80 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
         "open_questions": cleaned(sections["open_questions"]),
         "discovered": cleaned(sections["discovered"]),
     }
+
+
+# RESEARCH_ABSENCE_DISCIPLINE incidence telemetry (observe only: no tag, fact or
+# prompt depends on it).  An absence claim says that something did not happen,
+# was not reported or does not exist; web search is relevance-ranked and
+# undated, so such a claim holds only when a source says so.  The cues are
+# narrow and bilingual.  Exclusions:
+# - "no longer", "no more than", "no less than", "not only", "no doubt" and the
+#   future forms "will not" / "won't" / "is unlikely to" are never a cue: every
+#   English branch needs a perfect tense ("has not been announced"), "there is
+#   no" plus a record noun, or "no" plus a listed qualifier or noun.  A
+#   comparison, "not only" or "no doubt" next to a real cue does not undo it
+#   ("Growth of no more than 5% has not been confirmed" is a claim), so these
+#   are not looked for around a cue.
+# - A scope-taking exclusion ("no longer", a future form) in a cue's clause
+#   lead-in ("It is no longer true that no deal has been announced", "Officials
+#   will not say whether there is no evidence") disqualifies the cue.  The
+#   lead-in is at most _ABSENCE_LEAD_CHARS long and ends at punctuation or a
+#   clause-joining conjunction ("The firm won't comment and has not disclosed
+#   the fee" is a claim).  It may also drop a real claim ("It will not matter
+#   that there is no public evidence"), so the count is a lower bound.
+# Whitespace is collapsed first and every branch has a bounded length, so a scan
+# is linear in the text.  Idea credit: TradingAgents (Apache-2.0) labels a
+# failed or empty vendor lookup "not an absence"; reimplemented, no code copied.
+_ABSENCE_ACTS = r"(?:announced|reported|disclosed|confirmed)"
+_ABSENCE_QUALIFIERS = r"(?:reported|public|official|known|announced|confirmed)"
+_ABSENCE_CUE_RE = re.compile(
+    rf"\bno {_ABSENCE_QUALIFIERS} "
+    r"(?:talks|negotiations|deal|agreement|plans?|announcement|evidence|market|reports?)\b"
+    rf"|\bno (?:{_ABSENCE_QUALIFIERS} )?"
+    r"(?:talks|negotiations|deals?|agreements?|plans?|announcements?|evidence|markets?|reports?) "
+    rf"(?:has|have|had) (?:yet )?been {_ABSENCE_ACTS}\b"
+    rf"|\b(?:has|have|had)(?: not|n['’]t) (?:yet )?(?:been )?{_ABSENCE_ACTS}\b"
+    r"|\bthere (?:is|are|was|were|has been) no (?:public |official )?"
+    r"(?:evidence|reports?|announcements?|records?)\b"
+    r"|尚未(?:公开|正式)?(?:宣布|公布|披露|报道|确认)"
+    r"|暂无(?:公开)?(?:报道|消息|证据|数据)"
+    r"|未见(?:公开)?(?:报道|证据|消息)",
+    re.IGNORECASE)
+_ABSENCE_SCOPE_EXCLUSION_RE = re.compile(r"\b(?:no longer|will not|won['’]t|is unlikely to)\b",
+                                         re.IGNORECASE)
+# How far back (at most, and never past a clause break) a scope exclusion is looked for.
+_ABSENCE_LEAD_CHARS = 40
+_CLAUSE_BREAK_RE = re.compile(r"[.;:!?,。；：！？，]|\b(?:and|but|while|whereas|although|though)\b",
+                              re.IGNORECASE)
+_FACT_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED")
+
+
+def absence_cue(text: Any) -> str | None:
+    """The first absence-claim cue of ``text`` ("has not been announced",
+    "there is no evidence", "暂无公开报道") whose clause lead-in holds no scope
+    exclusion, or None (also for a non-string).  Pure and linear-time; see
+    :data:`_ABSENCE_CUE_RE`."""
+    if not isinstance(text, str) or not text:
+        return None
+    flat = " ".join(text.split())
+    for match in _ABSENCE_CUE_RE.finditer(flat):
+        lead = _CLAUSE_BREAK_RE.split(flat[max(0, match.start() - _ABSENCE_LEAD_CHARS):match.start()])[-1]
+        if not _ABSENCE_SCOPE_EXCLUSION_RE.search(lead):
+            return match.group(0)
+    return None
+
+
+def absence_cue_counts(facts: Iterable[Any]) -> dict[str, int]:
+    """``{tag: n}``: the sourced facts whose text carries an absence cue, by
+    evidence tag: exactly the :data:`_FACT_TAGS` keys, zero when none (a fact
+    with any other or no tag is not counted; postprocess_notes assigns one of
+    them, or DERIVED to a recomputed calculation with RESEARCH-8 on)."""
+    counts = dict.fromkeys(_FACT_TAGS, 0)
+    for fact in facts or ():
+        tag = fact.get("tag") if isinstance(fact, Mapping) else None
+        if isinstance(tag, str) and tag in counts and absence_cue(fact.get("text")) is not None:
+            counts[tag] += 1
+    return counts
 
 
 # Page chrome that carries digits but is never evidence (deterministic notes):
@@ -2845,13 +4676,220 @@ def numeric_sentences(text: str, limit: int = 2, terms: Sequence[str] = ()) -> l
     return candidates[:limit]
 
 
+# Evidence windows (REPORT-7).  A figure's number being somewhere on its page
+# (VERIFIED) does not say which sentence states it: a common two-digit number
+# recurs in unrelated sentences, and the report's citation checker unions the
+# numbers and words of every span it is given.  A window is therefore one page
+# sentence that states every number of the figure AND shares at least
+# EVIDENCE_WINDOW_MIN_ANCHORS of its anchor words (Latin words) or CJK
+# bigrams.  The unit words below (scale, share, currency, period, measure and
+# count) belong to the number, never to the anchors; the list is not
+# exhaustive, and a unit word it does not name counts as an anchor.
+_ANCHOR_LATIN_RE = re.compile(r"[a-z\u00e0-\u00f6\u00f8-\u00ff]{4,}")  # casefolded Latin-1 letters
+_ANCHOR_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
+_ANCHOR_UNIT_WORDS = frozenset({
+    "hundred", "thousand", "million", "billion", "trillion", "percent", "percentage", "point",
+    "dollar", "euro", "yuan", "renminbi", "pound", "rupee", "peso", "franc", "ruble",
+    "minute", "hour", "day", "week", "month", "quarter", "year", "decade",
+    "ton", "tonne", "barrel", "gallon", "litre", "liter", "metre", "meter", "kilometre", "kilometer", "mile",
+    "kilogram", "hectare", "acre", "watt", "kilowatt", "megawatt", "gigawatt", "terawatt",
+    "unit", "people", "person",
+})
+
+
+def evidence_anchor_terms(text: Any) -> tuple[frozenset[str], frozenset[str]]:
+    """``(Latin words, CJK bigrams)`` a window is anchored on: casefolded
+    Latin words of >= 4 letters (a plural "s" dropped from words over 5
+    letters, as the report's citation checker reads them) minus stopwords and
+    the listed unit words, singular or plural ("years", "euros", "days"), and
+    the 2-grams of every CJK run; citation markers ignored."""
+    value = _CITE_RE.sub(" ", unicodedata.normalize("NFKC", str(text or ""))).casefold()
+    words: set[str] = set()
+    for word in _ANCHOR_LATIN_RE.findall(value):
+        if word.endswith("s") and len(word) > 5:
+            word = word[:-1]
+        if word in rg._STOPWORDS or word in _ANCHOR_UNIT_WORDS \
+                or (word.endswith("s") and word[:-1] in _ANCHOR_UNIT_WORDS):
+            continue
+        words.add(word)
+    grams = {run[i:i + 2] for run in _ANCHOR_CJK_RE.findall(value) for i in range(len(run) - 1)}
+    return frozenset(words), frozenset(grams)
+
+
+@dataclass
+class _EvidenceSentence:
+    """One candidate sentence of a page: its position, text, anchor terms
+    and (computed once, on first use) its :func:`page_number_set` and its
+    text cleaned as web text (every figure the sentence states shares both)."""
+
+    index: int
+    text: str
+    words: frozenset[str]
+    grams: frozenset[str]
+    _numbers: frozenset[str] | None = field(default=None, repr=False, compare=False)
+    _cleaned: str | None = field(default=None, repr=False, compare=False)
+
+    def numbers(self) -> frozenset[str]:
+        if self._numbers is None:
+            self._numbers = page_number_set(self.text)
+        return self._numbers
+
+    def cleaned(self) -> str:
+        """The sentence as ``rg._clean_web_text`` leaves it for model-facing
+        use (instruction-like sentences replaced, page-own ``[S1]`` labels
+        defused), stripped."""
+        if self._cleaned is None:
+            self._cleaned = rg._clean_web_text(self.text).strip()
+        return self._cleaned
+
+
+def evidence_sentences(text: Any) -> list[_EvidenceSentence]:
+    """A page's candidate evidence sentences in page order: those of
+    :func:`_page_sentences` that carry a digit and are no page chrome
+    (consent, legal, sign-in lines, datelines)."""
+    out: list[_EvidenceSentence] = []
+    for index, piece in enumerate(_page_sentences(str(text or ""))):
+        sentence = _collapse(piece)
+        if sentence and re.search(r"\d", sentence) and not _is_page_chrome(sentence):
+            out.append(_EvidenceSentence(index, sentence, *evidence_anchor_terms(sentence)))
+    return out
+
+
+def _number_check(number_text: str) -> tuple[list[str], Callable[[frozenset[str]], bool]]:
+    """The number tokens of ``number_text`` (:func:`fact_number_tokens`) and
+    whether all of them are in a :func:`page_number_set` under the rules of a
+    VERIFIED finding (:func:`_number_on_pages`)."""
+    tokens = fact_number_tokens(number_text)
+    values = fact_number_values(number_text)
+    percents = fact_percent_tokens(number_text)
+    units = fact_unit_tokens(number_text)
+
+    def found(available: frozenset[str]) -> bool:
+        return all(_number_on_pages(token, available, values.get(token, frozenset()),
+                                    percent=token in percents, units=units.get(token, frozenset()))
+                   for token in tokens)
+
+    return tokens, found
+
+
+def _number_offset(sentence: str, tokens: Sequence[str]) -> int:
+    """Offset of the first number of ``sentence`` that is one of ``tokens``
+    (else of its first number, else 0)."""
+    wanted = set(tokens)
+    first: int | None = None
+    for match in _NUMBER_RE.finditer(sentence):
+        if wanted & set(_number_pieces(match.group(0))):
+            return match.start()
+        if first is None:
+            first = match.start()
+    return first or 0
+
+
+def _is_number_cut(text: str, at: int) -> bool:
+    """True when a cut at ``at`` would split a number (or its grouping)."""
+    return 0 < at < len(text) and all(ch.isdigit() or ch in ".," for ch in text[at - 1:at + 1])
+
+
+def _window_around(sentence: str, tokens: Sequence[str], limit: int = EVIDENCE_WINDOW_CHARS) -> str:
+    """``sentence`` when it fits in ``limit`` chars; else the ``limit``-char
+    stretch centred on its first figure number, cut at word boundaries
+    (character boundaries without spaces, never inside a number), with an
+    ellipsis at each cut end."""
+    if len(sentence) <= limit:
+        return sentence
+    centre = _number_offset(sentence, tokens)
+    budget = limit - 2  # room for the two ellipses
+    start = max(0, min(centre - budget // 2, len(sentence) - budget))
+    end = start + budget
+    if start > 0 and not sentence[start - 1].isspace():
+        space = sentence.find(" ", start, centre)
+        start = space + 1 if space >= 0 else start
+    while start < centre and _is_number_cut(sentence, start):
+        start += 1
+    if end < len(sentence) and not sentence[end].isspace():
+        space = sentence.rfind(" ", centre, end)
+        end = space if space > centre else end
+    while end > centre and _is_number_cut(sentence, end):
+        end -= 1
+    body = sentence[start:end].strip()
+    return ("…" if start > 0 else "") + body + ("…" if end < len(sentence) else "")
+
+
+def select_evidence_windows(sentences: Sequence[_EvidenceSentence], number_text: str, anchor_text: Any, *,
+                            limit: int = EVIDENCE_WINDOWS_PER_FACT) -> list[tuple[int, int, str]]:
+    """The best ``limit`` evidence windows of one page for one figure, as
+    ``(anchor score, sentence index, window)`` ranked by score, then page
+    order.
+
+    A sentence qualifies when it states every number of ``number_text``
+    (see :func:`_number_check`) and shares at least
+    EVIDENCE_WINDOW_MIN_ANCHORS Latin anchor words, or as many CJK bigrams,
+    with ``anchor_text`` (:func:`evidence_anchor_terms`); its score is the
+    number of shared terms.  The window is the sentence cleaned as web text
+    for model-facing use (``rg._clean_web_text``: instruction-like sentences
+    replaced, page-own ``[S1]`` labels defused) and cut to
+    EVIDENCE_WINDOW_CHARS around the figure; a window that no longer
+    qualifies after cleaning and cutting is dropped."""
+    tokens, found = _number_check(number_text)
+    words, grams = evidence_anchor_terms(anchor_text)
+    if not tokens or not (words or grams) or limit <= 0:
+        return []
+
+    def score(shared_words: int, shared_grams: int) -> int | None:
+        if shared_words >= EVIDENCE_WINDOW_MIN_ANCHORS or shared_grams >= EVIDENCE_WINDOW_MIN_ANCHORS:
+            return shared_words + shared_grams
+        return None
+
+    ranked: list[tuple[int, int, str]] = []
+    for sentence in sentences:
+        points = score(len(words & sentence.words), len(grams & sentence.grams))
+        if points is None or not found(sentence.numbers()):
+            continue
+        window = _window_around(sentence.cleaned(), tokens)
+        window_words, window_grams = evidence_anchor_terms(window)
+        if score(len(words & window_words), len(grams & window_grams)) is None \
+                or not found(page_number_set(window)):
+            continue
+        ranked.append((points, sentence.index, window))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return ranked[:limit]
+
+
+def select_source_windows(candidates: Iterable[tuple[int, int, int, str]], existing: Sequence[str],
+                          cap: int = EVIDENCE_WINDOWS_PER_SOURCE) -> tuple[list[str], list[str]]:
+    """The evidence windows one source publishes, chosen by coverage.
+
+    ``candidates`` are ``(rank, anchor score, sentence index, window)``, rank
+    0 for a figure's best window and 1 for its second.  Every figure's best
+    window (higher score first, then page order) is taken before any
+    figure's second, each distinct window once, until the source holds
+    ``cap`` spans counting its ``existing`` ones: while a source states at
+    most ``cap`` figures, every figure keeps a published window.  Returns
+    ``(the kept windows in page order, the windows left out)``."""
+    taken: dict[str, int] = {}
+    left_out: list[str] = []
+    seen = set(existing)
+    room = cap - len(seen)
+    for _, _, index, window in sorted(candidates, key=lambda item: (item[0], -item[1], item[2])):
+        if window in seen:
+            continue
+        seen.add(window)
+        if len(taken) < room:
+            taken[window] = index
+        else:
+            left_out.append(window)
+    return sorted(taken, key=taken.__getitem__), left_out
+
+
 # ===========================================================================
 # Evidence digest (V3_SPEC §3.2.4) — built once, byte-stable across writers
 # ===========================================================================
 
-_TAG_ORDER = {"VERIFIED": 0, "REPORTED": 1, "UNVERIFIED": 2}
+# DERIVED (RESEARCH-8) sorts after VERIFIED and is dropped after conflicts;
+# both entries are inert while no fact is DERIVED.
+_TAG_ORDER = {"VERIFIED": 0, DERIVED_TAG: 0.5, "REPORTED": 1, "UNVERIFIED": 2}
 # Drop priority when a KIQ block is over its cap (lowest dropped first).
-_LINE_PRIORITY = {"open": 1, "UNVERIFIED": 2, "REPORTED": 3, "conflict": 4, "VERIFIED": 5}
+_LINE_PRIORITY = {"open": 1, "UNVERIFIED": 2, "REPORTED": 3, "conflict": 4, DERIVED_TAG: 4.5, "VERIFIED": 5}
 
 
 def _is_sourced(fact: Any) -> bool:
@@ -2860,31 +4898,249 @@ def _is_sourced(fact: Any) -> bool:
     return isinstance(fact, dict) and bool(_CITE_RE.search(str(fact.get("text") or "")))
 
 
-def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tuple[str, int]:
-    """One KIQ's digest block within ``cap`` chars; never cuts a line."""
-    header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
+def _derivation_operands(derivation: Mapping[str, Any]) -> str:
+    """``a=37 GW, b=13 GW`` of a DERIVED fact's ``derivation``."""
+    operands = derivation.get("operands")
+    return ", ".join(f"{name}={_collapse(item.get('value'))}"
+                     for name, item in (operands.items() if isinstance(operands, dict) else ())
+                     if isinstance(item, dict))
+
+
+def _cited_derivation_sid(fact: Mapping[str, Any]) -> int | None:
+    """A DERIVED fact's derivation source while the fact text cites it; None
+    when its derivation is unreadable or the text no longer cites that source
+    (a hindcast's per-claim citation wall stripped the marker:
+    :func:`pit_wall_record`)."""
+    derivation = fact.get("derivation")
+    sid = derivation.get("sid") if isinstance(derivation, dict) else None
+    return sid if isinstance(sid, int) and f"[S{sid}]" in str(fact.get("text") or "") else None
+
+
+def _derived_label(fact: Mapping[str, Any]) -> str:
+    """A DERIVED fact's digest tag: ``DERIVED from [S12]: (a-b)/b*100; a=37
+    GW, b=13 GW``, or bare ``DERIVED`` without a cited derivation source
+    (:func:`_cited_derivation_sid`)."""
+    sid = _cited_derivation_sid(fact)
+    if sid is None:
+        return DERIVED_TAG
+    derivation = fact["derivation"]
+    return f"{DERIVED_TAG} from [S{sid}]: {derivation.get('expr')}; {_derivation_operands(derivation)}"
+
+
+# What a fallback bullet appends to a DERIVED fact (RESEARCH-8), so it reads as a
+# calculation and never as a reported value: with its cited derivation source,
+# and without one (the marker a citation wall stripped is never brought back).
+_DERIVED_QUALIFIERS: Mapping[str, tuple[str, str]] = {
+    ENGLISH: (" (calculated from [S{sid}])", " (calculated)"),
+    CHINESE: ("（根据[S{sid}]推算）", "（推算）"),
+}
+
+
+def _derived_qualifier(fact: Mapping[str, Any], language: str) -> str:
+    """``" (calculated from [S12])"`` (``"（根据[S12]推算）"`` in Chinese) for a
+    DERIVED fact, ``" (calculated)"`` without a cited derivation source
+    (:func:`_cited_derivation_sid`), ``""`` for any other fact."""
+    if fact.get("tag") != DERIVED_TAG:
+        return ""
+    sid = _cited_derivation_sid(fact)
+    cited, bare = _DERIVED_QUALIFIERS[_lang_key(language)]
+    return bare if sid is None else cited.format(sid=sid)
+
+
+# RESEARCH_EVIDENCE_HEADERS (RESEARCH-10, default off): each KIQ block of the
+# digest opens with the engine's count of its evidence and a sufficiency label
+# (evidence_profile), so a writer can tell a well-sourced KIQ from one resting
+# on two snippets even when the block lists only a sample of its lines.  The
+# count-header idea follows TradingAgents' deterministic count summaries of
+# screened evidence (no code is copied); the thresholds below are DRF-original
+# and not yet validated on stored kiq/*.json runs: validate them before the
+# knob's default flips.
+SUFFICIENCY_MIN_FINDINGS = 3   # fewer sourced findings: insufficient
+SUFFICIENCY_MIN_VERIFIED = 2   # fewer VERIFIED findings: thin
+SUFFICIENCY_MIN_FETCHED = 2    # no fetched source: insufficient; fewer: thin
+SUFFICIENCY_MIN_DOMAINS = 2    # fewer distinct source domains: thin
+SUFFICIENCY_LABELS = ("insufficient", "thin", "adequate")
+# The evidence-count tags; any other tag counts as REPORTED, the tag the
+# digest groups an untagged finding under.  DERIVED (RESEARCH-8) is shown only
+# when present and never counts toward the VERIFIED thresholds.
+_PROFILE_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED", DERIVED_TAG)
+# The digest's opening paragraph with the headers on.
+EVIDENCE_HEADER_LEGEND = ("Each KIQ block opens with an engine count of its evidence and a sufficiency label; "
+                          "the listed lines may be a sample.")
+
+
+def evidence_profile(record: Mapping[str, Any], ledger_get: Callable[[int], Mapping[str, Any] | None], *,
+                     admissible: Callable[[int], bool] | None = None) -> dict[str, Any]:
+    """The engine's count of one KIQ record's evidence and its sufficiency.
+
+    Counts its sourced findings by tag (``derived`` only when present), the
+    distinct sources they cite (``fetched`` by their ledger rows, the rest
+    ``snippet_only``), the distinct domains of those rows, its conflicts and
+    open questions, and its ``fallback`` (``stats.fallback``: the agent's
+    notes were deterministic).  With ``admissible`` (a gated hindcast's
+    citation wall, TIME-9) the record is first walled like the digest walls it
+    (:func:`pit_wall_record`), so only admissible sources are counted.
+
+    ``sufficiency`` is ``insufficient`` with fallback notes, fewer than
+    SUFFICIENCY_MIN_FINDINGS sourced findings or no fetched source; ``thin``
+    with fewer than SUFFICIENCY_MIN_VERIFIED VERIFIED findings,
+    SUFFICIENCY_MIN_FETCHED fetched sources or SUFFICIENCY_MIN_DOMAINS
+    domains; else ``adequate``.  ``reason`` names every rule of that level
+    the record fails.  Pure and total over any JSON-shaped record."""
+    if admissible is not None:
+        record = pit_wall_record(record, admissible)[0]
+    facts = record.get("facts")
+    facts = [fact for fact in facts if _is_sourced(fact)] if isinstance(facts, list) else []
+    tags = dict.fromkeys(_PROFILE_TAGS, 0)
+    sids: set[int] = set()
+    for fact in facts:
+        tag = str(fact.get("tag") or "")
+        tags[tag if tag in tags else "REPORTED"] += 1
+        sids.update(int(n) for n in _CITE_RE.findall(str(fact.get("text") or "")))
+    fetched = 0
+    domains: set[str] = set()
+    for sid in sids:
+        row = ledger_get(sid)
+        if not isinstance(row, Mapping):
+            continue
+        fetched += bool(row.get("fetched"))
+        domain = str(row.get("domain") or "").strip().casefold()
+        if domain:
+            domains.add(domain)
+    stats = record.get("stats")
+    fallback = (stats.get("fallback") if isinstance(stats, Mapping) else None) or None
+    profile: dict[str, Any] = {"sourced_findings": len(facts), "verified": tags["VERIFIED"],
+                               "reported": tags["REPORTED"], "unverified": tags["UNVERIFIED"]}
+    if tags[DERIVED_TAG]:
+        profile["derived"] = tags[DERIVED_TAG]
+
+    def count(key: str) -> int:
+        value = record.get(key)
+        return len(value) if isinstance(value, list) else 0
+
+    profile.update(sources=len(sids), fetched=fetched, snippet_only=len(sids) - fetched, domains=len(domains),
+                   conflicts=count("conflicts"), open_questions=count("open_questions"),
+                   fallback=str(fallback) if fallback else None)
+    insufficient = []
+    if profile["fallback"]:
+        insufficient.append(f"deterministic fallback notes: {profile['fallback']}")
+    if profile["sourced_findings"] < SUFFICIENCY_MIN_FINDINGS:
+        insufficient.append(f"fewer than {SUFFICIENCY_MIN_FINDINGS} sourced findings")
+    if not fetched:
+        insufficient.append("no fetched source")
+    thin = []
+    if profile["verified"] < SUFFICIENCY_MIN_VERIFIED:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_VERIFIED} VERIFIED findings")
+    if fetched < SUFFICIENCY_MIN_FETCHED:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_FETCHED} fetched sources")
+    if len(domains) < SUFFICIENCY_MIN_DOMAINS:
+        thin.append(f"fewer than {SUFFICIENCY_MIN_DOMAINS} domains")
+    if insufficient:
+        profile.update(sufficiency="insufficient", reason=", ".join(insufficient))
+    elif thin:
+        profile.update(sufficiency="thin", reason=", ".join(thin))
+    else:
+        profile.update(sufficiency="adequate",
+                       reason=(f"at least {SUFFICIENCY_MIN_FINDINGS} sourced findings, {SUFFICIENCY_MIN_VERIFIED} "
+                               f"VERIFIED, {SUFFICIENCY_MIN_FETCHED} fetched sources and {SUFFICIENCY_MIN_DOMAINS} "
+                               "domains"))
+    return profile
+
+
+def evidence_header_line(profile: Mapping[str, Any], omitted: int = 0) -> str:
+    """The evidence line of a KIQ digest block (its second line): the counts of
+    :func:`evidence_profile` and, when ``omitted`` lines were dropped for
+    length, how many.  It carries no [S<n>] marker, so the SOURCE INDEX is
+    the same with or without it.  A profile with DERIVED findings adds
+    ", {d} DERIVED" to the tag counts, so they still sum to the sourced
+    findings; a finding is DERIVED only with RESEARCH_DERIVED_FINDINGS on
+    (RESEARCH-8), so without it the line is exactly the pinned format."""
+    tags = (f"{profile['verified']} VERIFIED, {profile['reported']} REPORTED, "
+            f"{profile['unverified']} UNVERIFIED")
+    if profile.get("derived"):
+        tags += f", {profile['derived']} DERIVED"
+    line = (f"Evidence (engine count): {profile['sourced_findings']} sourced findings ({tags}) from "
+            f"{profile['sources']} sources ({profile['fetched']} fetched, {profile['snippet_only']} snippet-only; "
+            f"{profile['domains']} domains); sufficiency: {profile['sufficiency']} ({profile['reason']})")
+    if omitted:
+        line += f"; {omitted} lines omitted for length"
+    return line
+
+
+def insufficient_evidence_event(profiles: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """The research event RESEARCH_EVIDENCE_HEADERS raises when at least half
+    of the researched KIQs (``profiles``: ``{kiq id: evidence profile}``, one
+    per researched KIQ) have insufficient evidence, naming each with its
+    reason; ``None`` below half or with none insufficient."""
+    insufficient = [f"{kid} ({profile.get('reason')})" for kid, profile in profiles.items()
+                    if profile.get("sufficiency") == "insufficient"]
+    if not insufficient or 2 * len(insufficient) < len(profiles):
+        return None
+    return (f"{len(insufficient)} of {len(profiles)} researched KIQs have insufficient evidence: "
+            f"{'; '.join(insufficient)}")
+
+
+def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
+                      ledger_get: Callable[[int], Mapping[str, Any] | None] | None = None,
+                      headers: bool = False, relevance_drop: bool = False,
+                      admissible: Callable[[int], bool] | None = None) -> tuple[str, int]:
+    """One KIQ's digest block within ``cap`` chars; never cuts a line.
+
+    With ``headers`` (RESEARCH_EVIDENCE_HEADERS; needs ``ledger_get``) the
+    block's second line is :func:`evidence_header_line` of the record's
+    :func:`evidence_profile` (``admissible`` passed on), counted before any
+    line is dropped; the line itself counts against ``cap``.  With
+    ``relevance_drop`` (RESEARCH_TRUNCATION_FAIRNESS) the line dropped first
+    among lines of equal priority is the one sharing the fewest query terms
+    with the KIQ question (then the later one); without it, the later one.  The
+    header is the KIQ id and its question, or the id alone when the citation
+    wall withheld the question (``question_withheld``, :func:`pit_wall_record`).
+    A DERIVED fact (RESEARCH-8) shows its calculation (:func:`_derived_label`)."""
+    if headers and ledger_get is None:
+        raise ValueError("evidence headers need the source ledger (ledger_get)")
+    if record.get("question_withheld"):
+        header = f"### {record.get('id')}"
+    else:
+        header = f"### {record.get('id')} — {_collapse(record.get('question'))}"
     facts = sorted((f for f in record.get("facts") or [] if _is_sourced(f)),
                    key=lambda f: _TAG_ORDER.get(str(f.get("tag")), 3))
     entries: list[tuple[str, str]] = []  # (group, line)
     for fact in facts:
-        entries.append((str(fact.get("tag") or "REPORTED"), f"- {fact.get('text')} ({fact.get('tag')})"))
+        label = _derived_label(fact) if fact.get("tag") == DERIVED_TAG else fact.get("tag")
+        entries.append((str(fact.get("tag") or "REPORTED"), f"- {fact.get('text')} ({label})"))
     entries += [("conflict", f"- {c}") for c in record.get("conflicts") or []]
     entries += [("open", f"- {q}") for q in record.get("open_questions") or []]
     kept = list(range(len(entries)))
     dropped = 0
+    profile = evidence_profile(record, ledger_get, admissible=admissible) if headers else None
+    if relevance_drop:
+        question_terms = set(rg.query_terms(str(record.get("question") or "")))
+        overlap = [len(set(rg.query_terms(line)) & question_terms) for _, line in entries]
+
+        def victim_key(i: int) -> tuple[int, ...]:
+            return _LINE_PRIORITY.get(entries[i][0], 3), overlap[i], -i
+    else:
+        def victim_key(i: int) -> tuple[int, ...]:
+            return _LINE_PRIORITY.get(entries[i][0], 3), -i
 
     def size(indexes: list[int]) -> int:
-        return len(header) + 60 + sum(len(entries[i][1]) + 1 for i in indexes)
+        total = len(header) + 60 + sum(len(entries[i][1]) + 1 for i in indexes)
+        if profile is not None:
+            total += len(evidence_header_line(profile, len(entries) - len(indexes))) + 1
+        return total
 
     while kept and size(kept) > cap:
-        victim = min(kept, key=lambda i: (_LINE_PRIORITY.get(entries[i][0], 3), -i))
+        victim = min(kept, key=victim_key)
         kept.remove(victim)
         dropped += 1
     groups = {"facts": [], "conflict": [], "open": []}
     for i in kept:
         group, line = entries[i]
         groups["facts" if group in _TAG_ORDER else group].append(line)
-    lines = [header, "Findings:"]
+    lines = [header]
+    if profile is not None:
+        lines.append(evidence_header_line(profile, dropped))
+    lines.append("Findings:")
     lines += groups["facts"] or [f"- {_text(language, 'no_findings')}"]
     if groups["conflict"]:
         lines += ["Conflicts:"] + groups["conflict"]
@@ -2894,32 +5150,145 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str) -> tup
 
 
 def build_digest(records: Sequence[Mapping[str, Any]], ledger_get: Callable[[int], Mapping[str, Any] | None],
-                 digest_cap: int, language: str) -> tuple[str, int]:
+                 digest_cap: int, language: str, *, dates: bool = False,
+                 admissible: Callable[[int], bool] | None = None, evidence_headers: bool = False,
+                 relevance_drop: bool = False) -> tuple[str, int]:
     """Digest + SOURCE INDEX of every source the digest cites (ledger order).
 
     KIQs in natural order (K1 < K2 < K10, then follow-ups); each block gets
     ``min(12000, max(3000, digest_cap / n))`` chars and loses its
-    lowest-priority lines first.  Returns ``(text, dropped_line_count)``.
+    lowest-priority lines first.  With ``dates`` (RESEARCH_SOURCE_DATES) a
+    dated source's index entry ends ``, published X`` inside its parentheses.
+    With ``admissible`` (a gated hindcast's citation wall, TIME-9) each record
+    is first walled (:func:`pit_wall_record`, FU-2): a finding, conflict or
+    open question carrying any marker of an inadmissible source is left out
+    whole, never shown with that marker stripped, so no writer sees a
+    withheld source's claim beside or under an admissible marker ("176 GW,
+    while a brief projects 250 GW by 2030 [S1][S2]" with S2 withheld); a KIQ
+    question carrying one (a gap follow-up can quote an open question's
+    markers) leaves the block's header with the KIQ id alone.  The SOURCE
+    INDEX lists only admissible sources.  With ``evidence_headers``
+    (RESEARCH_EVIDENCE_HEADERS) each block's second line is its evidence
+    count (counting only admissible sources when walled) and
+    EVIDENCE_HEADER_LEGEND opens the digest; with ``relevance_drop``
+    (RESEARCH_TRUNCATION_FAIRNESS) equal-priority lines are dropped least
+    KIQ-relevant first (:func:`_kiq_digest_block`).
+    Returns ``(text, dropped_line_count)``; the count is of lines the caps dropped.
     """
+    if admissible is not None:
+        admissible = _memoized_sid_check(admissible)
+        records = [pit_wall_record(record, admissible)[0] for record in records]
     ordered = sorted(records, key=lambda r: _natural_key(str(r.get("id"))))
     per_kiq = int(min(12000, max(3000, digest_cap / max(1, len(ordered)))))
     blocks: list[str] = []
     dropped = 0
     for record in ordered:
-        block, lost = _kiq_digest_block(record, per_kiq, language)
+        block, lost = _kiq_digest_block(record, per_kiq, language, ledger_get=ledger_get,
+                                        headers=evidence_headers, relevance_drop=relevance_drop,
+                                        admissible=admissible)
         blocks.append(block)
         dropped += lost
     digest = "\n\n".join(blocks) if blocks else f"- {_text(language, 'no_findings')}"
+    if evidence_headers and blocks:
+        digest = f"{EVIDENCE_HEADER_LEGEND}\n\n{digest}"
     cited = sorted({int(n) for n in _CITE_RE.findall(digest)})
+    if admissible is not None:
+        cited = [sid for sid in cited if admissible(sid)]
     index_lines = []
     for sid in cited:
         row = ledger_get(sid)
         if row:
             kind = "fetched" if row.get("fetched") else "snippet"
+            published = source_published(row) if dates else ""
+            kind += f", published {published}" if published else ""
             index_lines.append(f"[S{sid}] {row.get('title')} — {row.get('domain')} "
                                f"({rg.tier_label(row.get('tier'))}, {kind})")
     index = "\n".join(index_lines) or "(no sources were cited)"
     return f"EVIDENCE DIGEST\n\n{digest}\n\nSOURCE INDEX\n{index}", dropped
+
+
+# A search result in a scout part starts at its "[S<n>] title — domain" row
+# header line; the lines before the first one are the query line and any tool
+# note (a cached-result note, an empty or failed search).
+_SCOUT_RESULT_RE = re.compile(r"^\[S\d+\]")
+
+
+def _fit_scout_part(part: str, allowance: int) -> str:
+    """One scout part within ``allowance`` chars, cut only between results.
+
+    Whole results are taken in rank order, each one only if it still fits
+    together with the head (the lines before the first result) and the
+    closing "(k results omitted for length)" note, so one oversized result
+    is left out without taking the shorter results after it along.  The head
+    is kept whole unless it does not fit even with every result left out:
+    then its tool-note lines are cut from the end, its first line (the
+    query) always kept, with a "(k search note lines omitted for length)"
+    note.  So the part is over ``allowance`` only when its query line and
+    the two omission notes alone are; in :meth:`_Engine._scout` a query line
+    has at most 7 + 300 chars (:func:`_as_str_list`) and an allowance at
+    least 998."""
+    if len(part) <= allowance:
+        return part
+    head: list[str] = []
+    results: list[list[str]] = []
+    for line in part.split("\n"):
+        if _SCOUT_RESULT_RE.match(line):
+            results.append([line])
+        elif results:
+            results[-1].append(line)
+        else:
+            head.append(line)
+
+    cut = 0  # tool-note lines cut from the end of the head
+
+    def render(kept: list[str], omitted: int) -> str:
+        pieces = head[:len(head) - cut]
+        if cut:
+            pieces.append(f"({cut} search note lines omitted for length)")
+        pieces += kept
+        if omitted:
+            pieces.append(f"({omitted} results omitted for length)")
+        return "\n".join(pieces)
+
+    while cut < len(head) - 1 and len(render([], len(results))) > allowance:
+        cut += 1
+    kept: list[str] = []
+    omitted = len(results)
+    for result in results:
+        text = "\n".join(result)
+        if len(render(kept + [text], omitted - 1)) <= allowance:
+            kept.append(text)
+            omitted -= 1
+    return render(kept, omitted)
+
+
+def fair_scout_digest(parts: Sequence[str], limit: int) -> str:
+    """The scout digest with RESEARCH_TRUNCATION_FAIRNESS: no scout query
+    vanishes silently, as the head-cut of the joined digest let the last ones.
+
+    The ``limit`` chars the blank lines between the parts leave are shared
+    max-min fairly: a part within an equal share of what is left keeps all of
+    it, and the rest split the remainder equally, so every part gets at
+    least ``(limit - separators) // n`` chars and a digest within ``limit``
+    is unchanged.  A part over its allowance is cut between results
+    (:func:`_fit_scout_part`), its query line always kept.  The digest is
+    within ``limit`` whenever each query line and the omission notes fit
+    their part's allowance, as they always do in :meth:`_Engine._scout`."""
+    parts = list(parts)
+    budget = limit - 2 * max(0, len(parts) - 1)
+    allowance: dict[int, int] = {}
+    pending = list(range(len(parts)))
+    while pending:
+        share = max(0, budget) // len(pending)
+        fits = [i for i in pending if len(parts[i]) <= share]
+        if not fits:
+            allowance.update(dict.fromkeys(pending, share))
+            break
+        for i in fits:
+            allowance[i] = len(parts[i])
+            budget -= len(parts[i])
+        pending = [i for i in pending if i not in allowance]
+    return "\n\n".join(_fit_scout_part(part, allowance[i]) for i, part in enumerate(parts))
 
 
 # ===========================================================================
@@ -3271,11 +5640,14 @@ def cjk_ratio(text: str) -> float:
     return cjk / (cjk + latin) if cjk + latin else 1.0
 
 
-def renumber_citations(text: str, known: Callable[[int], bool]) -> tuple[str, list[int]]:
+def renumber_citations(text: str, known: Callable[[int], bool],
+                       dropped: list[int] | None = None) -> tuple[str, list[int]]:
     """Positional ``[S1..Sk]`` by first appearance; unknown markers removed.
 
     Returns the new text and the ledger sids in positional order (the order of
-    References and sources.json).
+    References and sources.json).  ``dropped`` (RESEARCH-9 citation stats), when
+    given, receives the ledger sid of every removed marker, one per occurrence
+    in text order; the text is the same either way.
     """
     order: list[int] = []
     position: dict[int, int] = {}
@@ -3284,16 +5656,472 @@ def renumber_citations(text: str, known: Callable[[int], bool]) -> tuple[str, li
         if sid not in position and known(sid):
             order.append(sid)
             position[sid] = len(order)
-    renumbered = _CITE_RE.sub(
-        lambda m: f"[S{position[int(m.group(1))]}]" if int(m.group(1)) in position else "", text)
-    return _tidy_spaces(renumbered), order
+
+    def replace(match: re.Match) -> str:
+        sid = int(match.group(1))
+        if sid in position:
+            return f"[S{position[sid]}]"
+        if dropped is not None:
+            dropped.append(sid)
+        return ""
+
+    return _tidy_spaces(_CITE_RE.sub(replace, text)), order
 
 
-def render_references(order: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None]) -> str:
+# A TIME-2 ledger date (rg.SourceLedger.set_dates writes source_dates.PubDate values).
+_SOURCE_DATE_RE = re.compile(r"\d{4}(?:-\d{2}(?:-\d{2})?)?")
+# Quant value types whose as_of_date may follow their source's date by design
+# (quant_source_dates never flags them as_of_after_source).
+_SOURCE_DATE_PROJECTED_TYPES = frozenset({"forecast", "target", "estimate"})
+# source_dates labels of the structured-metadata extractors (provider metadata,
+# JSON-LD, <meta>, <time>: ranks 4-7).  Only a modified date read from one of
+# them widens a source's window in quant_source_dates; a page-head "Updated:"
+# line may be site chrome, so it never suppresses as_of_after_source.
+_SOURCE_DATE_METADATA_SOURCES = frozenset({"provider_meta", "json_ld", "meta_tag", "time_tag"})
+
+
+def _date_value(value: Any) -> str:
+    """``value`` when it is a TIME-2 date (``YYYY``, ``YYYY-MM`` or ``YYYY-MM-DD``), else ``""``."""
+    text = str(value or "")
+    return text if _SOURCE_DATE_RE.fullmatch(text) else ""
+
+
+def source_published(row: Mapping[str, Any]) -> str:
+    """A ledger row's TIME-2 publication date, ``""`` when it has none."""
+    return _date_value(row.get("published"))
+
+
+def _source_date_fields(row: Mapping[str, Any]) -> dict[str, Any]:
+    """sources.json date keys of a dated ledger row (TIME-2); ``{}`` when undated."""
+    published = source_published(row)
+    if not published:
+        return {}
+    fields: dict[str, Any] = {"date": published, "date_precision": row.get("date_precision"),
+                              "date_source": row.get("date_source")}
+    for key in ("modified_at", "modified_source", "date_rejected"):
+        if row.get(key):
+            fields[key] = row[key]
+    return fields
+
+
+def source_date_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """meta.source_dates (TIME-2) over the ledger rows of the published
+    sources: dated / undated counts, rows with a rejected ``future`` date and
+    rows with any other rejection (``unparseable`` / ``pre_1900``), and the
+    dated rows by date source and by precision, so that low date coverage is
+    visible rather than read as fresh."""
+    dated = [row for row in rows if source_published(row)]
+    rejected = [set(row.get("date_rejected") or ()) if isinstance(row.get("date_rejected"), list) else set()
+                for row in rows]
+    return {
+        "dated": len(dated),
+        "undated": len(rows) - len(dated),
+        "rejected_future": sum(1 for reasons in rejected if "future" in reasons),
+        "rejected_other": sum(1 for reasons in rejected if reasons - {"future"}),
+        "by_source": dict(sorted(Counter(str(row.get("date_source") or "unknown") for row in dated).items())),
+        "by_precision": dict(sorted(Counter(str(row.get("date_precision") or "unknown") for row in dated).items())),
+    }
+
+
+def quant_source_dates(quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> int:
+    """Stamp each quantitative row whose ``source_url`` is a dated sources.json
+    row with its ``source_date`` (TIME-2), and flag ``as_of_after_source``
+    when the row's ``as_of_date`` starts after the source's latest date ends:
+    a value dated after its source last changed.  The latest date is
+    ``date``, or ``modified_at`` when later and read from structured metadata
+    (``modified_source`` in _SOURCE_DATE_METADATA_SOURCES): a page-head
+    "Updated:" line, which may be site chrome, never widens the window, so
+    the flag fails closed.  Only a row that reports a value (``actual`` or no
+    type) is flagged: a ``forecast`` / ``target`` names a later period by
+    design, and an ``estimate`` dated after its source is a projection too
+    (:func:`classify_quant_row` reads it as projected), so those rows get
+    ``source_date`` only.  Never drops or rewrites a row.  Returns the rows
+    flagged."""
+    dated: dict[str, Mapping[str, Any]] = {}
+    for source in sources:
+        if isinstance(source, Mapping) and source.get("url") and _date_value(source.get("date")):
+            dated.setdefault(str(source["url"]), source)
+    flagged = 0
+    for row in quant:
+        source = dated.get(str(row.get("source_url") or ""))
+        if source is None:
+            continue
+        row["source_date"] = source["date"]
+        if str(row.get("value_type") or "").strip().lower() in _SOURCE_DATE_PROJECTED_TYPES:
+            continue
+        latest_dates = [source.get("date")]
+        if str(source.get("modified_source") or "") in _SOURCE_DATE_METADATA_SOURCES:
+            latest_dates.append(source.get("modified_at"))
+        ends = [_period_bounds(value)[1] for value in latest_dates if _date_value(value)]
+        latest = max((end for end in ends if end is not None), default=None)
+        stated_start = _loose_period_bounds(row.get("as_of_date"))[0]
+        if latest is not None and stated_start is not None and stated_start > latest:
+            row["as_of_after_source"] = True
+            flagged += 1
+    return flagged
+
+
+# ---------------------------------------------------------------------------
+# Point-in-time citation wall and research audit (TIME-9, a gated hindcast)
+# ---------------------------------------------------------------------------
+
+# Ledger pit_status of a source the gates withheld: never citable.
+_PIT_WITHHELD_STATUSES = frozenset({rg.PIT_LATE, rg.PIT_UNDATED_WITHHELD})
+# The pit_status a stored page got from the page gate (a verdict on its dates).
+_PIT_PAGE_STATUSES = frozenset({rg.PIT_ADMITTED, rg.PIT_SAME_DAY, rg.PIT_UNVERIFIABLE})
+# source_dates.gate verdict -> point_in_time.json stream counter.
+_PIT_STREAM_KEYS = {rg._GATE_ADMIT: "admitted", rg._GATE_SAME_DAY: "same_day",
+                    rg._GATE_UNVERIFIABLE: "unverifiable", rg._GATE_LATE: "late"}
+PIT_STATUS_VIOLATED = "violated"
+PIT_STATUS_VERIFIED = "date_verified"
+PIT_STATUS_VERIFIED_UNVERIFIABLE = "date_verified_with_unverifiable"
+
+
+def pit_date_verdict(published: Any, modified: Any, url: Any, pit: rg.PitPolicy) -> str:
+    """``source_dates.gate`` of a source for ``pit``'s as-of and same-day
+    policy, from the dates it is recorded or published with: the later of
+    ``source_dates.availability(published, modified)`` and its URL path date
+    (the gates' own availability rule).  ``admit``, ``same_day``, ``late`` or
+    ``unverifiable``; ``unverifiable`` too when the module cannot be imported
+    or fails (an unreadable date is no date).  Never raises."""
+    module = rg._source_dates()
+    if module is None:
+        return rg._GATE_UNVERIFIABLE
+    try:
+        days = [module.availability(published, modified), module.url_date(url)]
+        known = [day for day in days if day is not None]
+        return module.gate(max(known) if known else None, pit.as_of, same_day=pit.same_day)
+    except Exception:  # noqa: BLE001 — an unreadable date is no date
+        return rg._GATE_UNVERIFIABLE
+
+
+def pit_row_admissible(row: Mapping[str, Any], pit: rg.PitPolicy) -> bool:
+    """Whether a gated hindcast's report may cite a ledger row (the TIME-9
+    citation wall).  Never a source the gates withheld (``pit_status``
+    ``late`` or ``undated_withheld``) or one whose recorded dates
+    (:func:`pit_date_verdict`) show it late; under the ``drop`` undated policy
+    never a source the page gate did not judge (seen only in search rows)
+    without a readable date either.  A stored page keeps the page gate's
+    verdict: admitted, same-day or (``flag``) unverifiable."""
+    status = row.get("pit_status")
+    if status in _PIT_WITHHELD_STATUSES:
+        return False
+    verdict = pit_date_verdict(row.get("published"), row.get("modified_at"), row.get("url"), pit)
+    if verdict == rg._GATE_LATE:
+        return False
+    return not (verdict == rg._GATE_UNVERIFIABLE and pit.undated == "drop" and status not in _PIT_PAGE_STATUSES)
+
+
+def _memoized_sid_check(check: Callable[[int], bool]) -> Callable[[int], bool]:
+    """``check`` answered once per sid (the wall reads each source's dates once)."""
+    verdicts: dict[int, bool] = {}
+
+    def memo(sid: int) -> bool:
+        if sid not in verdicts:
+            verdicts[sid] = bool(check(sid))
+        return verdicts[sid]
+    return memo
+
+
+_WORD_CHAR_RE = re.compile(r"\w")
+
+
+def _citation_clusters(text: str) -> list[list[int]]:
+    """The ``[S<n>]`` sids of ``text`` grouped by claim: runs of markers with
+    no word character between them (``[S1][S2]``, ``[S1], [S2]``) cite one
+    claim; a marker after more text starts the next one."""
+    clusters: list[list[int]] = []
+    end: int | None = None
+    for match in _CITE_RE.finditer(text):
+        if end is None or _WORD_CHAR_RE.search(text, end, match.start()):
+            clusters.append([])
+        clusters[-1].append(int(match.group(1)))
+        end = match.end()
+    return clusters
+
+
+def _pit_wall_text(text: str, admissible: Callable[[int], bool], *,
+                   per_claim: bool = False) -> tuple[str | None, int]:
+    """``(the text the citation wall keeps, the number of its [S<n>] markers
+    of inadmissible sources)``: unchanged when none failed (a marker-less
+    line is kept).  By default the text is ``None`` when any marker failed: the
+    markers do not say which part of the line each source backs, so
+    stripping one ("176 GW, while a brief projects 250 GW by 2030 [S1][S2]"
+    with S2 inadmissible) could leave the withheld source's claim under the
+    admissible marker.  With ``per_claim`` it is ``None`` only when one of
+    its claims, a citation cluster (:func:`_citation_clusters`), has no
+    admissible marker ("176 GW [S1], while a brief projects 250 GW [S2]");
+    otherwise the failing markers are stripped from it.  A cluster is one
+    claim to that rule, so the trailing "[S1][S2]" above keeps [S1] on all
+    the text before it, the withheld source's 250 GW included."""
+    markers = [int(n) for n in _CITE_RE.findall(text)]
+    failed = sum(1 for sid in markers if not admissible(sid))
+    if not failed:
+        return text, 0
+    if not per_claim or any(not any(admissible(sid) for sid in cluster) for cluster in _citation_clusters(text)):
+        return None, failed
+    kept = _CITE_RE.sub(lambda m: m.group(0) if admissible(int(m.group(1))) else "", text)
+    return _tidy_spaces(kept).strip(), failed
+
+
+def pit_wall_record(record: Mapping[str, Any], admissible: Callable[[int], bool], *,
+                    per_claim: bool = False) -> tuple[dict, int, int]:
+    """A KIQ record behind a gated hindcast's citation wall (TIME-9), line
+    by line (the question, each sourced finding, conflict and open question;
+    :func:`_pit_wall_text`).  By default, the rule of the evidence digest
+    the writers read and of the audit's digest counters (FU-2), a line
+    carrying any marker of an inadmissible source is left out whole, so no
+    marker is ever stripped.  With ``per_claim``, the rule of the records
+    the report's deterministic sections publish, a line is left out only
+    when one of its claims would be left without an admissible source, and
+    loses its markers of inadmissible sources otherwise.  A question left
+    out becomes ``""`` with ``question_withheld`` set (the digest header then
+    shows the KIQ id alone) and counts as one line left out.
+    Returns ``(a copy of the record, lines left out, markers removed from
+    the lines kept)``; the record's other fields (``sids``, evidence) are
+    unchanged, as is ``record`` itself."""
+    out = dict(record)
+    dropped = stripped = 0
+    if record.get("question"):
+        text, failed = _pit_wall_text(str(record["question"]), admissible, per_claim=per_claim)
+        if text is None:
+            out.update(question="", question_withheld=True)
+            dropped += 1
+        elif failed:
+            out["question"] = text
+            stripped += failed
+    facts: list[Any] = []
+    for fact in record.get("facts") or []:
+        if not _is_sourced(fact):
+            facts.append(fact)
+            continue
+        text, failed = _pit_wall_text(str(fact.get("text") or ""), admissible, per_claim=per_claim)
+        if text is None:
+            dropped += 1
+            continue
+        stripped += failed
+        facts.append(dict(fact, text=text) if failed else fact)
+    out["facts"] = facts
+    for key in ("conflicts", "open_questions"):
+        kept: list[Any] = []
+        for item in record.get(key) or []:
+            text, failed = _pit_wall_text(str(item), admissible, per_claim=per_claim)
+            if text is None:
+                dropped += 1
+                continue
+            stripped += failed
+            kept.append(text if failed else item)
+        out[key] = kept
+    return out, dropped, stripped
+
+
+def pit_cited_audit(sources: Sequence[Any], pit: rg.PitPolicy) -> dict[str, int]:
+    """point_in_time.json's ``cited`` stream: an independent re-check of the
+    published sources.json rows with ``source_dates.gate``
+    (:func:`pit_date_verdict` of each row's ``date``, ``modified_at`` and URL),
+    not the gates' own verdicts.  ``checked`` rows split into ``admitted``,
+    ``same_day``, ``unverifiable`` (a row that is not an object counts here)
+    and ``late``."""
+    counts = {"checked": 0, "admitted": 0, "same_day": 0, "unverifiable": 0, "late": 0}
+    for row in sources:
+        verdict = (pit_date_verdict(row.get("date"), row.get("modified_at"), row.get("url"), pit)
+                   if isinstance(row, Mapping) else rg._GATE_UNVERIFIABLE)
+        counts["checked"] += 1
+        counts[_PIT_STREAM_KEYS.get(verdict, "unverifiable")] += 1
+    return counts
+
+
+def pit_audit_status(cited: Mapping[str, Any], undated: str) -> str:
+    """The research audit verdict: ``violated`` when a cited source is late,
+    else ``date_verified_with_unverifiable`` when one is undated, the undated
+    policy is ``flag`` (undated pages may back the report) or the report cites
+    no source at all (no date was verified: every claim rests on the model's
+    own knowledge), else ``date_verified``.  Honest naming: the dates of the
+    sources are verified, not the model's own knowledge."""
+    if cited.get("late"):
+        return PIT_STATUS_VIOLATED
+    if cited.get("unverifiable") or undated == "flag" or not cited.get("checked"):
+        return PIT_STATUS_VERIFIED_UNVERIFIABLE
+    return PIT_STATUS_VERIFIED
+
+
+def _pit_count(value: Any) -> int:
+    """``value`` when it is a positive int counter (never a bool), else 0."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def pit_sum_counts(*counts: Mapping[str, Any] | None) -> dict[str, int]:
+    """The per-name sum of gate counter mappings (``ResearchTools.stats()["pit"]``
+    of several attempts); a value that is not a positive int counts 0."""
+    total: dict[str, int] = {}
+    for mapping in counts:
+        for name, value in (mapping or {}).items():
+            if isinstance(name, str):
+                total[name] = total.get(name, 0) + _pit_count(value)
+    return total
+
+
+def pit_gate_streams(counts: Mapping[str, Any] | None, *, attempts: int = 1, attempts_started: int | None = None,
+                     complete: bool = True) -> dict[str, dict[str, Any]]:
+    """point_in_time.json's ``search`` and ``fetch`` streams: the gates' own
+    decisions (``ResearchTools.stats()["pit"]`` summed over the run's
+    ``attempts_counted`` attempts, of ``attempts_started``, default the same).
+    ``scope`` is ``run`` when they cover every attempt of the run
+    (``complete``), else ``partial``: an earlier attempt ended without saving
+    its final counts (killed) or they were lost, so they are a lower bound.
+    Search counts the result rows a render slot reached (admitted, same-day
+    and undated rows shown; late rows dropped); fetch counts the pages judged
+    after a fetch (undated ones withheld under ``drop``, stored under
+    ``flag``) and, apart, the fetches refused before any budget and the
+    re-asks of a withheld page."""
+    def n(name: str) -> int:
+        return _pit_count((counts or {}).get(name))
+
+    coverage = {"scope": "run" if complete else "partial", "attempts_counted": attempts,
+                "attempts_started": attempts if attempts_started is None else attempts_started}
+    search = {"admitted": n("search_admitted_shown"), "same_day": n("search_same_day_shown"),
+              "unverifiable": n("search_undated_shown"), "late": n("search_late_dropped")}
+    undated_withheld, undated_admitted = n("fetch_undated_withheld"), n("fetch_undated_admitted")
+    fetch = {"admitted": n("fetch_admitted"), "same_day": n("fetch_same_day"),
+             "unverifiable": undated_withheld + undated_admitted, "late": n("fetch_late_withheld")}
+    return {
+        "search": {"checked": sum(search.values()), **search,
+                   "no_in_window_results": n("no_in_window_results"),
+                   "bounded_queries": n("searches_bounded"), "unbounded_queries": n("searches_unbounded"),
+                   **coverage},
+        "fetch": {"checked": sum(fetch.values()), **fetch,
+                  "undated_withheld": undated_withheld, "undated_admitted": undated_admitted,
+                  "refused_before_fetch": n("fetch_prefetch_refused"), "withheld_repeats": n("fetch_withheld_repeat"),
+                  **coverage},
+    }
+
+
+@dataclass(frozen=True)
+class PitPriorCounts:
+    """The gate counts of a gated run before one of its attempts (TIME-9):
+    ``attempts`` earlier attempts saved counts (``counts``, summed), of which
+    ``closed`` saved their final ones on exit; ``started`` attempts started
+    in the work dir, this one included; ``complete`` when ``counts`` cover
+    every attempt started before this one."""
+
+    attempts: int = 0
+    closed: int = 0
+    counts: Mapping[str, int] = field(default_factory=dict)
+    started: int = 1
+    complete: bool = True
+
+
+def _pit_tally(value: Any) -> int | None:
+    """``value`` when it is a non-negative int (never a bool), else None."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def pit_prior_counts(saved_text: str | None, *, resumed: bool,
+                     started_before: int | None) -> tuple[PitPriorCounts, str]:
+    """``(the gate counts a gated attempt starts from, why they are partial)``
+    (TIME-9; ``why`` is ``""`` when complete).  ``saved_text`` is the work
+    dir's pit_counts.json (None: none), ``started_before`` the state.json
+    count of the attempts started before this one (None: none recorded).  A
+    fresh work dir starts from nothing, complete.  A resumed one is complete
+    only when the file is readable, says its counts were complete and every
+    attempt started before this one saved its final counts; a killed attempt
+    saves none (its last phase-exit save stays), so the next audit is
+    partial, and so is every later one."""
+    started = (started_before or 0) + 1
+    if not resumed:
+        return PitPriorCounts(started=started), ""
+    if saved_text is None:
+        return (PitPriorCounts(started=started, complete=False),
+                f"no {PIT_COUNTS_FILENAME}: an earlier attempt saved none or it was removed")
+    try:
+        saved = json.loads(saved_text)
+    except ValueError:
+        saved = None
+    saved = saved if isinstance(saved, dict) else {}
+    attempts, closed = _pit_tally(saved.get("attempts")), _pit_tally(saved.get("attempts_closed"))
+    complete, counts = saved.get("counts_complete"), saved.get("counts")
+    if (not attempts or closed is None or closed > attempts or not isinstance(complete, bool)
+            or not isinstance(counts, dict)):
+        return PitPriorCounts(started=started, complete=False), f"{PIT_COUNTS_FILENAME} unreadable"
+    # Never fewer attempts started than counted (a counter missing from state.json).
+    started = max(started, attempts + 1)
+    if not complete:
+        why = "the counts of an earlier attempt were already lost"
+    elif started_before is None:
+        why = f"state.json records no {PIT_ATTEMPTS_KEY}"
+    elif not closed == attempts == started_before:
+        why = f"{closed} of the {started_before} earlier attempts saved their final counts"
+    else:
+        why = ""
+    return PitPriorCounts(attempts=attempts, closed=closed, counts=pit_sum_counts(counts), started=started,
+                          complete=not why), why
+
+
+def parametric_suspects(timeline: Sequence[Mapping[str, Any]], quant: Sequence[Mapping[str, Any]],
+                        as_of: _dt.date, *, typing: bool) -> dict[str, int]:
+    """Rows the extraction may have taken from the model's own knowledge of
+    what came after ``as_of`` (TIME-9; counted, never dropped): timeline
+    events whose date starts after it, and quantitative rows claimed as
+    actuals whose ``as_of_date`` starts after it.  With typing
+    (RESEARCH_QUANT_TYPING) a row is a claimed actual when
+    :func:`classify_quant_row` does not read it as projected; without,
+    when its ``value_type`` is ``actual`` or missing."""
+    def after(value: Any) -> bool:
+        start = _loose_period_bounds(value)[0]
+        return start is not None and start > as_of
+
+    def claimed_actual(row: Mapping[str, Any]) -> bool:
+        if typing:
+            return classify_quant_row(row, as_of)["epistemic_class"] != "projected"
+        return row.get("value_type") in (None, "actual")
+
+    return {"timeline": sum(1 for row in timeline if after(row.get("date"))),
+            "quant": sum(1 for row in quant if claimed_actual(row) and after(row.get("as_of_date")))}
+
+
+def point_in_time_payload(pit: rg.PitPolicy, *, gate_counts: Mapping[str, Any] | None, sources: Sequence[Any],
+                          suspects: Mapping[str, int] | None, wall: Mapping[str, int | str | None],
+                          attempts: int = 1, attempts_started: int | None = None,
+                          counts_complete: bool = True) -> dict[str, Any]:
+    """point_in_time.json (``drf-point-in-time/v1``): the as-of and policies,
+    the gate streams (:func:`pit_gate_streams` of ``gate_counts``, the run's
+    counts over ``attempts`` of its ``attempts_started`` attempts, ``partial``
+    unless ``counts_complete``) and the independent ``cited`` re-check
+    (:func:`pit_cited_audit`), what the citation wall kept out of the report
+    (``wall``), the parametric suspects, what the audit does not guard (the
+    model's own knowledge; live page text is labelled, not an archived copy)
+    and the verdict (:func:`pit_audit_status`; partial gate counts never
+    change it: it rests on the ``cited`` re-check alone)."""
+    cited = pit_cited_audit(sources, pit)
+    streams = pit_gate_streams(gate_counts, attempts=attempts, attempts_started=attempts_started,
+                               complete=counts_complete)
+    streams["cited"] = cited
+    return {
+        "schema": POINT_IN_TIME_SCHEMA,
+        "as_of": pit.as_of.isoformat(),
+        "same_day_policy": pit.same_day,
+        "undated_policy": pit.undated,
+        "streams": streams,
+        "wall": dict(wall),
+        "parametric_suspects": dict(suspects) if suspects is not None else None,
+        "leak_guard": "source_publication_dates_only",
+        "parametric_knowledge": "not_guarded",
+        "live_page_text": "labelled_not_archived",
+        "status": pit_audit_status(cited, pit.undated),
+    }
+
+
+def render_references(order: Sequence[int], ledger_get: Callable[[int], Mapping[str, Any] | None], *,
+                      dates: bool = False) -> str:
+    """The report's References: one line per cited source in positional
+    order; with ``dates`` (RESEARCH_SOURCE_DATES) a dated source's line ends
+    ``; published X`` inside its parentheses."""
     lines = ["## References", ""]
     for position, sid in enumerate(order, start=1):
         row = ledger_get(sid) or {}
         kind = "fetched" if row.get("fetched") else "search snippet"
+        published = source_published(row) if dates else ""
+        kind += f"; published {published}" if published else ""
         lines.append(f"- [S{position}] {_collapse(row.get('title'), 200)} — {row.get('url')} "
                      f"({rg.tier_label(row.get('tier'))}; {kind})")
     return "\n".join(lines)
@@ -3331,6 +6159,145 @@ def citation_density(sections: Sequence[tuple[str, str]]) -> tuple[float, int]:
     return cited / len(paragraphs), len(paragraphs)
 
 
+# RESEARCH-9 citation stats (RESEARCH_V3_CITATION_STATS): QA telemetry of what
+# the citation pass removed and what the published body cites.  Detection only:
+# nothing below strips or rewrites a byte of the report.
+CITATION_STATS_SCHEMA = "v3-citation-stats/1"
+# The citability policy the stats describe: a search-snippet source may be cited
+# and References label its kind (fetched / search snippet).
+CITATION_STATS_POLICY = "labelled"
+CITATION_STATS_SAMPLE = 20      # orphan and unused-page sid samples
+UNTRACED_SAMPLE = 5             # untraced-number sentence sample
+# Prompt scaffold a writer may echo into its section: the context and task
+# labels, the untrusted-evidence boundary (prefix) and the brief's References line.
+_SCAFFOLD_ECHO_LINES = frozenset({"SOURCE INDEX", "EVIDENCE DIGEST", "SECTION WRITING TASK", "RUN BRIEF",
+                                  BRIEF_REFERENCES_LINE})
+_FENCE_LINE_RE = re.compile(r"^\s{0,3}(?:```|~~~)")
+_ANY_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s")
+# A writer bibliography's opener: a ###-###### heading (its text read by
+# stripping, never by a backtracking pattern), a whole-line bold label or a
+# bare "X:" line; X must be a references heading key exactly.
+_BIBLIOGRAPHY_MIN_LEVEL = 3
+_BIBLIOGRAPHY_LABEL_RES = (re.compile(r"^\s*\*\*(?P<label>[^*\n]+)\*\*\s*$"),
+                           re.compile(r"^\s*(?P<label>[^:：\n]{1,60})[:：]\s*$"))
+# A bibliography line: a "-" / "*" / "N." / "N)" list item, a line opening with
+# an [S<n>] marker, or a bare URL.
+_BIBLIOGRAPHY_ITEM_RE = re.compile(r"^\s*(?:[-*]\s|\d{1,3}[.)]\s|\[S\d{1,9}\]|(?:https?://|www\.)\S+\s*$)")
+
+
+def _fenced_lines(lines: Sequence[str]) -> list[bool]:
+    """Per line: a code-fence line or a line inside a fence."""
+    flags: list[bool] = []
+    inside = False
+    for line in lines:
+        fence = bool(_FENCE_LINE_RE.match(line))
+        flags.append(inside or fence)
+        if fence:
+            inside = not inside
+    return flags
+
+
+def _bibliography_label(line: str) -> str | None:
+    """The label of a line shaped like a bibliography opener, else None."""
+    if _ANY_HEADING_RE.match(line):
+        body = line.lstrip()
+        rest = body.lstrip("#")
+        if len(body) - len(rest) < _BIBLIOGRAPHY_MIN_LEVEL:
+            return None
+        return rest.strip().rstrip("#").rstrip() or None
+    for pattern in _BIBLIOGRAPHY_LABEL_RES:
+        match = pattern.match(line)
+        if match:
+            return match.group("label")
+    return None
+
+
+def writer_bibliographies(text: str) -> int:
+    """Writer-made bibliography blocks in report prose (detection only).
+
+    A block opens with a ###-###### heading, a whole-line ``**X**`` or a bare
+    ``X:`` line whose label is a references heading (:data:`_REFERENCE_HEADING_KEYS`,
+    exact key) and runs to the next heading or the end; it counts when it has
+    at least one non-blank line and every one is list-shaped (``-``, ``*``,
+    ``N.``, ``N)``, an ``[S<n>]`` opener or a bare URL).  Fence-aware: nothing
+    inside a code fence opens a block, and a fence inside one is not
+    list-shaped.  The engine's own final References section is not part of the
+    text this reads (see :func:`strip_references`).
+
+    Linear in the text: a block's scan stops at its first line that is not
+    list-shaped and resumes there, since every opener before that line runs
+    to the same heading and fails on the same line.
+    """
+    lines = str(text or "").splitlines()
+    fenced = _fenced_lines(lines)
+    found = 0
+    i = 0
+    while i < len(lines):
+        label = None if fenced[i] else _bibliography_label(lines[i])
+        if label is None or _norm_key(label) not in _REFERENCE_HEADING_KEYS:
+            i += 1
+            continue
+        end, items, offending = i + 1, 0, None
+        while end < len(lines) and (fenced[end] or not _ANY_HEADING_RE.match(lines[end])):
+            if lines[end].strip():
+                if fenced[end] or not _BIBLIOGRAPHY_ITEM_RE.match(lines[end]):
+                    offending = end
+                    break
+                items += 1
+            end += 1
+        if offending is not None:
+            i = offending
+            continue
+        if items:
+            found += 1
+        i = end     # an empty block holds blank lines only: no opener to skip
+    return found
+
+
+def scaffold_echo_lines(text: str) -> int:
+    """Lines of report prose that echo prompt scaffold (detection only): an
+    exact whole-line context or task label, the brief's References line, or an
+    untrusted-evidence boundary line."""
+    count = 0
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if stripped in _SCAFFOLD_ECHO_LINES or stripped.startswith((rg.UNTRUSTED_BEGIN, rg.UNTRUSTED_END)):
+            count += 1
+    return count
+
+
+def prose_sentences(text: str) -> list[str]:
+    """The sentences of report prose that number tracing reads: every line
+    outside code fences except headings, without its list marker, link targets
+    and bare URLs (their digits are no figures), split at sentence ends; a
+    table row is one unit."""
+    lines = str(text or "").splitlines()
+    out: list[str] = []
+    for line, fenced in zip(lines, _fenced_lines(lines), strict=True):
+        value = line.strip()
+        if fenced or not value or _ANY_HEADING_RE.match(line):
+            continue
+        bullet = _BULLET_RE.match(value)
+        value = _BARE_URL_RE.sub("", _MD_LINK_RE.sub(r"\1", bullet.group("text") if bullet else value))
+        out.extend(piece.strip() for piece in _SENTENCE_RE.split(value) if piece.strip())
+    return out
+
+
+def untraced_numbers(sentences: Sequence[str],
+                     traced: frozenset[str] | set[str]) -> list[tuple[str, list[str]]]:
+    """``(sentence, untraced tokens)`` of every sentence with a
+    :func:`fact_number_tokens` number that ``traced`` (a union of
+    :func:`page_number_set`) does not hold, read as a VERIFIED finding's
+    numbers are (:func:`_number_on_pages`)."""
+    out: list[tuple[str, list[str]]] = []
+    for sentence in sentences:
+        tokens = fact_number_tokens(sentence)
+        missing = _missing_numbers(sentence, tokens, traced) if tokens else []
+        if missing:
+            out.append((sentence, missing))
+    return out
+
+
 # ===========================================================================
 # Bounded per-KIQ agent (V3_SPEC §3.2.2)
 # ===========================================================================
@@ -3339,20 +6306,27 @@ _PROVIDER_ERRORS = (rg.ProviderUnavailable, rg.QuotaExhausted)
 _MARKER_URL_RE = re.compile(r"^\s*+\[?\s*+S(\d++)\s*+\]?\s*+$", re.I)
 # The row header ResearchTools renders for a source: "[S13] Title — domain
 # (tier 3)" (a search row) or the same header followed by " — full page …" /
-# " — excerpt …" (the first line of a fetch).
+# " — excerpt …" (the first line of a fetch); with RESEARCH_SOURCE_DATES a
+# dated row adds " — published 2025-05-09" (and "; updated …") after the tier.
 _ROW_HEADER_RE = re.compile(r"^\[S(\d+)\] .* \((?:tier \d+|tier unknown)\)(?: — .*)?$")
+
+
+# Tools whose answer is one source's page headed by its row header: a fetch and
+# an official-data call (TIME-13: an S1 row with its stored page).
+_FETCH_SHAPED_TOOLS = frozenset({"web_fetch", *rg.DATA_TOOL_NAMES})
 
 
 def tool_output_sids(name: str, output: str) -> tuple[int | None, list[int]]:
     """``(fetched sid, sids shown)`` of one tool result, from its row headers only.
 
-    A fetch shows exactly the source of its first line; a search shows the
-    sources of its column-0 row lines (URL and snippet lines are indented).
+    A fetch (or an official-data call, TIME-13) shows exactly the source of its
+    first line; a search shows the sources of its column-0 row lines (URL and
+    snippet lines are indented).
     Nothing inside an untrusted block or a snippet counts: a page that lists
     "[S1] …" in its own references must not make ledger row 1 "shown".
     """
     lines = str(output or "").splitlines()
-    if name == "web_fetch":
+    if name in _FETCH_SHAPED_TOOLS:
         match = _ROW_HEADER_RE.match(lines[0]) if lines else None
         return (int(match.group(1)), [int(match.group(1))]) if match else (None, [])
     sids: list[int] = []
@@ -3417,14 +6391,19 @@ class AgentOutcome:
     # The notes were cut by the output cap (even after one wider try) and
     # only their complete part was kept.
     truncated: bool = False
+    # EVAL-16: see TOOL_CALL_COUNTERS.
+    invalid_tool_calls: int = 0
+    unknown_tool_calls: int = 0
+    tool_exceptions: int = 0
 
 
 class KiqAgent:
     """One KIQ investigation: an append-only tool loop with hard stops.
 
     Messages are ``[ENGINE_CORE][RUN BRIEF][KIQ TASK]`` followed only by
-    appended AI/tool messages; :data:`AGENT_TOOLS` is bound on every call
-    including the forced final one.  Stops: the model answers with notes, the
+    appended AI/tool messages; the engine's one tools list (:data:`AGENT_TOOLS`,
+    or with official-data tools its ``agent_tools``, TIME-13) is bound on every
+    call including the forced final one.  Stops: the model answers with notes, the
     step budget, two steps without a new source or page (novelty), the
     deadline coming within ``grace`` seconds (so the notes call still has time),
     the budget reserve or the context cap — each then forces the notes.  A
@@ -3465,6 +6444,16 @@ class KiqAgent:
         # Focus term sets this agent read each page with, and its stored reads.
         self._reads: dict[int, list[frozenset[str]]] = {}
         self._stored_reads = 0
+        # EVAL-16 TOOL_CALL_COUNTERS.  The calls of one step may run on a thread
+        # pool (see _execute), so _call_tool counts under this lock.
+        self.invalid_tool_calls = 0
+        self.unknown_tool_calls = 0
+        self.tool_exceptions = 0
+        self._counts_lock = threading.Lock()
+        # TIME-13: the tools list bound on every call and the official-data tools
+        # it adds (none, and AGENT_TOOLS itself, unless the engine binds them).
+        self.agent_tools = getattr(engine, "agent_tools", AGENT_TOOLS)
+        self.data_tool_names: tuple[str, ...] = tuple(getattr(engine, "data_tool_names", ()) or ())
         _, self._human, _, self._tool = rg._msg_classes()
 
     # ------------------------------------------------------------------ run
@@ -3490,7 +6479,12 @@ class KiqAgent:
             notes = self.fallback_notes(fallback)
         return AgentOutcome(notes=notes or "", fallback=fallback, steps=self.steps,
                             forced=self.forced, fetched=list(self.fetched), seen=list(self.seen),
-                            truncated=self.truncated)
+                            truncated=self.truncated, **self.call_counts())
+
+    def call_counts(self) -> dict[str, int]:
+        """EVAL-16: this agent's TOOL_CALL_COUNTERS so far."""
+        with self._counts_lock:
+            return {name: getattr(self, name) for name in TOOL_CALL_COUNTERS}
 
     def _cites_shown_source(self, notes: str) -> bool:
         """True when the notes carry at least one finding that cites a source
@@ -3560,7 +6554,7 @@ class KiqAgent:
         researches again."""
         gateway = self.engine.gateway
         try:
-            result = gateway.invoke(messages, kind="agent", label=label, tools=AGENT_TOOLS,
+            result = gateway.invoke(messages, kind="agent", label=label, tools=self.agent_tools,
                                     deadline=self.deadline)
         except rg.EmptyResponse as exc:
             if getattr(exc, "truncated", False):
@@ -3575,7 +6569,7 @@ class KiqAgent:
         self.engine.log("stage", f"v3: {label} reply hit its output cap; asking once more with a "
                                  f"{wider}-token cap")
         try:
-            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=AGENT_TOOLS,
+            again = gateway.invoke(messages, kind="agent", label=f"{label}:wide", tools=self.agent_tools,
                                    deadline=self.deadline, max_tokens=wider)
         except _PROVIDER_ERRORS:
             raise
@@ -3597,7 +6591,7 @@ class KiqAgent:
         if wider <= base or self.deadline.remaining() < TRUNCATION_RETRY_MIN_SECONDS:
             return None
         output_weight = float(gateway.profile.cost_weights.get("output", 1.0))
-        cost = self.engine.units(rg.estimate_tokens(messages, AGENT_TOOLS)) + wider * output_weight
+        cost = self.engine.units(rg.estimate_tokens(messages, self.agent_tools)) + wider * output_weight
         return wider if gateway.can_spend(cost, keep_reserve=True) else None
 
     def _notes(self, result: rg.GatewayResult) -> str | None:
@@ -3618,7 +6612,7 @@ class KiqAgent:
     def _pressure(self, messages: list) -> str | None:
         if self.deadline.expired() or self.deadline.remaining() <= self.grace:
             return "deadline"
-        estimate = rg.estimate_tokens(messages, AGENT_TOOLS)
+        estimate = rg.estimate_tokens(messages, self.agent_tools)
         if estimate > AGENT_CONTEXT_TOKEN_CAP:
             return "context_cap"
         if not self.engine.gateway.can_spend(self.engine.units(estimate), keep_reserve=True):
@@ -3652,11 +6646,13 @@ class KiqAgent:
     # ---------------------------------------------------------------- tools
     def _execute(self, calls: Sequence[Mapping[str, Any]]) -> tuple[list, bool]:
         """Answer every call of one turn, in order; at most
-        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls run, the
-        others are answered "skipped" so the conversation stays valid.  A call
-        repeating an earlier one of the turn (the same search, or the same page
-        — any alias of its URL or its marker — with the same or a near-same
-        focus) is answered with :data:`DUPLICATE_CALL_TEXT` instead of running."""
+        :data:`MAX_TOOL_CALLS_PER_STEP` web_search/web_fetch calls (and calls of
+        the bound official-data tools, TIME-13) run, the others are answered
+        "skipped" so the conversation stays valid.  A call repeating an earlier
+        one of the turn (the same search, the same page — any alias of its URL
+        or its marker — with the same or a near-same focus, or the same data
+        request) is answered with :data:`DUPLICATE_CALL_TEXT` instead of
+        running."""
         outputs: list[str] = [""] * len(calls)
         read_terms: list[frozenset[str] | None] = [None] * len(calls)
         runnable: list[int] = []
@@ -3664,7 +6660,7 @@ class KiqAgent:
         slots = 0
         for index, call in enumerate(calls):
             name = call.get("name")
-            if call.get("error") or name not in ("web_search", "web_fetch"):
+            if call.get("error") or name not in ("web_search", "web_fetch", *self.data_tool_names):
                 runnable.append(index)  # answered with a short error by _call_tool
                 continue
             slots += 1
@@ -3728,10 +6724,21 @@ class KiqAgent:
     def _repeats_in_step(self, call: Mapping[str, Any], terms: frozenset[str] | None,
                          queued: dict[tuple[str, str], list[frozenset[str]]]) -> bool:
         """True when an earlier call of this step (recorded in ``queued``)
-        already runs the same search, or reads the same page — any alias of
-        its URL, or its ``S<n>`` marker — with the same or a near-same focus
-        (:func:`_repeats_read`); otherwise ``call`` is recorded."""
+        already runs the same search, reads the same page — any alias of its
+        URL, or its ``S<n>`` marker — with the same or a near-same focus
+        (:func:`_repeats_read`), or makes the same official-data request (its
+        normalized arguments, TIME-13); otherwise ``call`` is recorded.  A
+        malformed data request is never a repeat (it is answered as invalid)."""
         args = call.get("args") or {}
+        if call.get("name") in self.data_tool_names:
+            normalized, _ = rg.normalize_data_args(call.get("name"), args)
+            if normalized is None:
+                return False
+            key = ("data", rg._data_key(str(call.get("name")), normalized))
+            if key in queued:
+                return True
+            queued[key] = []
+            return False
         if call.get("name") == "web_search":
             query = args.get("query")
             if not isinstance(query, str):
@@ -3775,10 +6782,16 @@ class KiqAgent:
         if terms is not None and terms not in self._reads.setdefault(sid, []):
             self._reads[sid].append(terms)
 
+    def _count_call(self, counter: str) -> None:
+        """EVAL-16: one more call answered with the error kind ``counter`` (TOOL_CALL_COUNTERS)."""
+        with self._counts_lock:
+            setattr(self, counter, getattr(self, counter) + 1)
+
     def _call_tool(self, call: Mapping[str, Any]) -> str:
         tools = self.engine.tools
         try:
             if call.get("error"):
+                self._count_call("invalid_tool_calls")
                 return (f"INVALID_TOOL_CALL: {call['error']}. Call web_search with a query string "
                         "or web_fetch with a url (and optionally a focus).")
             args = call.get("args") or {}
@@ -3786,11 +6799,13 @@ class KiqAgent:
             if name == "web_search":
                 query = args.get("query")
                 if not isinstance(query, str):
+                    self._count_call("invalid_tool_calls")
                     return "INVALID_TOOL_CALL: web_search needs a 'query' string."
                 return tools.search(query, agent_id=self.kiq.id)
             if name == "web_fetch":
                 url = args.get("url")
                 if not isinstance(url, str):
+                    self._count_call("invalid_tool_calls")
                     return "INVALID_TOOL_CALL: web_fetch needs a 'url' string."
                 marker = _MARKER_URL_RE.match(url)
                 if marker:
@@ -3799,8 +6814,16 @@ class KiqAgent:
                 focus = args.get("focus")
                 return tools.fetch(url, focus=focus if isinstance(focus, str) else "",
                                    agent_id=self.kiq.id, kiq_text=self.kiq.question)
-            return "UNKNOWN_TOOL: only web_search and web_fetch are available."
+            if name in self.data_tool_names:
+                # TIME-13: the tools validate the arguments; a malformed call is counted as such.
+                text = str(tools.data(name, args, agent_id=self.kiq.id))
+                if text.startswith("INVALID_TOOL_CALL"):
+                    self._count_call("invalid_tool_calls")
+                return text
+            self._count_call("unknown_tool_calls")
+            return unknown_tool_text(self.data_tool_names)
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
+            self._count_call("tool_exceptions")
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
 
     # ------------------------------------------------------------- fallback
@@ -3863,9 +6886,11 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     place): sections sharing a KIQ would otherwise get identical lists, which
     cross-section deduplication deletes, leaving bare headings.  Findings are
     handed out greedily: the best title/focus term overlap first, ties to the
-    section holding fewer findings, then VERIFIED before REPORTED, then outline
-    and evidence order.  UNVERIFIED findings (figures not found on their cited
-    page) are never published: a plain bullet would state them as fact.  A
+    section holding fewer findings, then VERIFIED before REPORTED (DERIVED,
+    RESEARCH-8, between them), then outline and evidence order.  UNVERIFIED
+    findings (figures not found on their cited page) are never published: a
+    plain bullet would state them as fact.  A DERIVED finding's bullet says
+    it is a calculation (:func:`_derived_qualifier`).  A
     section left without a finding gets the no-evidence line (``""`` with
     ``empty_when_none``).
     """
@@ -3910,7 +6935,8 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     bodies: dict[int, str] = {}
     for section in sections:
         keys = sorted(chosen[section.index], key=lambda key: (catalogue[key][2], catalogue[key][0]))
-        lines = [f"- {catalogue[key][1].get('text')}" for key in keys]
+        lines = [f"- {catalogue[key][1].get('text')}{_derived_qualifier(catalogue[key][1], language)}"
+                 for key in keys]
         bodies[section.index] = "\n".join(lines) or ("" if empty_when_none
                                                      else f"- {_text(language, 'no_evidence')}")
     return bodies
@@ -3967,15 +6993,79 @@ class _Engine:
         self.phase_seconds: dict[str, float] = {}
         self._lock = threading.Lock()
         self._page_numbers: dict[int, frozenset[str]] = {}
+        # TIME-7 RESEARCH_AS_OF (set by the parent only for a pinned hindcast): the plan,
+        # brief and actors are dated to it.  An invalid or future value is refused (exit 2)
+        # rather than silently researching as of today.
+        raw_as_of = str((env or {}).get("RESEARCH_AS_OF", "") or "").strip()
+        if raw_as_of and (not _canonical_date(raw_as_of)
+                          or _dt.date.fromisoformat(raw_as_of) > _dt.date.fromisoformat(_utc_date())):
+            raise _EngineFailure(f"invalid RESEARCH_AS_OF {raw_as_of[:40]!r}: expected a canonical "
+                                 "YYYY-MM-DD date that is not in the future")
+        self.pinned_as_of: str | None = raw_as_of or None
+        # A pin before today is a hindcast: point-in-time rule in the briefs, labelled pages.
+        self.hindcast = _hindcast_as_of(env) is not None
+        # TIME-13 RESEARCH_DATA_TOOLS (default empty = off): the official-data tools of
+        # the vendors that have their credential are bound on every agent call (one
+        # tools list per run, _bind_data_tools) with call budgets of their own, data
+        # KIQ tasks say how to use them, and their cited results reach sources.json and
+        # head quantitative.json.  Off (or nothing available), every path is unchanged.
+        self.data_tools_requested = bool(str((env or {}).get("RESEARCH_DATA_TOOLS", "") or "").strip())
+        self.data_vendors, self.data_disabled, self._data_unknown = data_tools_availability(env)
+        if self.data_vendors and min(self.preset.data_calls_per_kiq, self.preset.max_data_calls_total) <= 0:
+            self.data_disabled.update(dict.fromkeys(self.data_vendors, "no_call_budget"))
+            self.data_vendors = ()
+        self.data_tool_names: tuple[str, ...] = ()
+        self.agent_tools: list[dict] = AGENT_TOOLS
+        quant_rows = _parse_knob((env or {}).get("DATA_QUANT_ROWS_MAX", ""), DEFAULT_DATA_QUANT_ROWS)
+        self.data_quant_rows_max = (DEFAULT_DATA_QUANT_ROWS if quant_rows is None
+                                    else max(0, min(MAX_QUANT_ROWS, quant_rows)))
+        # The vintage pin (data_pins.json) once fixed, and the quantitative.json rows
+        # finalize added from data sources and dropped against them.
+        self._data_lock = threading.Lock()
+        self._data_pins: dict | None = None
+        self._data_quant_added = 0
+        self._data_quant_trimmed = 0
+        self._data_quant_rejected: list[dict] = []
+        self._data_quant_rejected_total = 0
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
+        if self.pinned_as_of:
+            # Only pinned runs carry it, so a live run's work dir is never archived.
+            identity["as_of"] = self.pinned_as_of
+        if self.data_vendors:
+            # Only runs with data tools carry it: their prompts and tools differ.
+            identity["data_tools"] = sorted(self.data_vendors)
+        # INFRA-8 RECORD_MODEL_PROVENANCE (default on): the concrete model id the --model
+        # stanza resolves to joins the identity only when resolvable, so a resume under an
+        # edited stanza cannot reuse this work dir (see _identity_matches).
+        self.record_models = _env_flag(env, "RECORD_MODEL_PROVENANCE", True)
+        self.model_id = _resolved_model_id(args) if self.record_models else None
+        if self.model_id:
+            identity["model_id"] = self.model_id
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.work, self.state, self.resumed = _open_work_dir(
             self.out_dir, identity, self._write_internal, reporter)
         for sub in ("kiq", "sections", "gap", "extract"):
             (self.work / sub).mkdir(exist_ok=True)
         self.ledger = rg.SourceLedger(self.work / "sources_ledger.json", bridge=bridge)
+        # RESEARCH_EVIDENCE_QUOTES (off | audit | enforce, default off; see
+        # EVIDENCE_OFF): not off, the ledger keeps every distinct snippet
+        # sighting of a row, the search text quotes are also located in.
+        self.evidence_mode = _evidence_mode(self.env)
+        raw_mode = str((self.env or {}).get("RESEARCH_EVIDENCE_QUOTES", "") or "").strip()
+        if raw_mode and raw_mode.lower() not in EVIDENCE_MODES:
+            self.log("warn", f"v3: RESEARCH_EVIDENCE_QUOTES={raw_mode!r} is not off, audit or enforce; "
+                             "evidence quotes stay off")
+        if self.evidence_mode != EVIDENCE_OFF:
+            self.ledger.keep_snippets = True
+        # RESEARCH_EVIDENCE_SUPPORTS (default false; only with a mode other than
+        # off): located quotes join sources.json supports (_source_rows).
+        self.evidence_supports = (self.evidence_mode != EVIDENCE_OFF
+                                  and _env_flag(self.env, "RESEARCH_EVIDENCE_SUPPORTS", False))
+        # Data units only when a data tool can be bound (the planner and seeder never call one).
+        data_limits = ({"max_data_total": self.preset.max_data_calls_total,
+                        "max_data_per_agent": self.preset.data_calls_per_kiq} if self.data_vendors else {})
         self.limits = rg.ToolLimits(
             max_searches_total=self.preset.max_searches_total,
             max_fetches_total=self.preset.max_fetches_total,
@@ -3985,9 +7075,108 @@ class _Engine:
                 "planner": (SCOUT_QUERIES_MAX, 0),
                 "seeder": (SEED_QUERIES_PER_KIQ * (self.preset.max_kiqs + self.preset.gap_rounds
                                                    * self.preset.followups_per_round), 0),
-            })
+            }, **data_limits)
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        if self.data_tools_requested:
+            self._bind_data_tools()
+        # RESEARCH_FETCH_SHELL_DETECTION (default on, an honesty check): reader
+        # shells, unavailable pages, bot walls and paywall teasers are failed
+        # fetches at the tool layer and never published as fetched sources.
+        self.shell_detection = _env_flag(self.env, "RESEARCH_FETCH_SHELL_DETECTION", True)
+        if hasattr(self.tools, "shell_detection"):
+            self.tools.shell_detection = self.shell_detection
+        # RESEARCH_SOURCE_TAXONOMY (default off): typed search/fetch outcomes —
+        # honest failure counts, a search credential/quota refusal latch,
+        # service-vs-page fetch texts and meta.source_health.
+        self.source_taxonomy = _env_flag(self.env, "RESEARCH_SOURCE_TAXONOMY", False)
+        if hasattr(self.tools, "source_taxonomy"):
+            self.tools.source_taxonomy = self.source_taxonomy
+        # RESEARCH_ABSENCE_DISCIPLINE (default off): an empty search says it is not
+        # evidence of absence, the KIQ task and the section rules say when an
+        # absence may be stated, and absence-claim findings are counted
+        # (record absence_cues, meta.absence_findings; no tag changes).
+        self.absence_discipline = _env_flag(self.env, "RESEARCH_ABSENCE_DISCIPLINE", False)
+        if hasattr(self.tools, "absence_discipline"):
+            self.tools.absence_discipline = self.absence_discipline
+        # RESEARCH_DERIVED_FINDINGS (default off): the KIQ task asks for a
+        # (DERIVED: …) clause on calculated figures and the section rules say how
+        # to state them; postprocess_notes recomputes each clause (DERIVED or
+        # UNVERIFIED facts), sources.json gains derived_supports, an unverified
+        # quant row stating a DERIVED result gains derived_from, and meta gains
+        # kiqs.derived and derived.
+        self.derived_findings = _env_flag(self.env, "RESEARCH_DERIVED_FINDINGS", False)
+        # RESEARCH_SOURCE_DATES (default off until a precision check on real
+        # pages; TIME-2): sources get publication dates from provider metadata
+        # (and, with RESEARCH_SOURCE_DATE_TEXT_FALLBACK, default on, page-head
+        # datelines and URL paths), shown in tool row headers, the SOURCE INDEX
+        # and References and written to sources.json, the quant rows
+        # (source_date / as_of_after_source) and meta.source_dates.  The
+        # point-in-time gates of a gated hindcast (TIME-8, ``tools.pit``) read
+        # these dates, so they keep them on.
+        pit = getattr(self.tools, "pit", None)
+        pit = pit if isinstance(pit, rg.PitPolicy) else None
+        # TIME-9: under the gates the report cites only admissible sources (the
+        # citation wall: _citable_sids, the digest) and finalize writes
+        # point_in_time.json; None (every other run) changes nothing.
+        self.pit = pit
+        # The parametric suspects _write_structured counts under the gates (None
+        # when it has not, or the count failed).
+        self.parametric_suspects: dict[str, int] | None = None
+        # The gate counts the earlier attempts of this run saved (set by
+        # _start_pit_counts at the end of __init__): the audit's search and fetch
+        # streams add this attempt's counts to them.  _pit_closed: this attempt
+        # has saved its final counts (attach_telemetry).
+        self._pit_prior = PitPriorCounts()
+        self._pit_closed = False
+        self._pit_save_lock = threading.Lock()
+        self.source_dates = _env_flag(self.env, "RESEARCH_SOURCE_DATES", False) or pit is not None
+        if pit is not None:
+            self.log("stage", f"point-in-time gates on (as of {pit.as_of.isoformat()}; same-day "
+                              f"{pit.same_day}, undated {pit.undated}, provider bounds "
+                              f"{'on' if pit.provider_bounds else 'off'}, overfetch {pit.overfetch})")
+        if hasattr(self.tools, "source_dates"):
+            self.tools.source_dates = self.source_dates
+            self.tools.date_text_fallback = _env_flag(self.env, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True)
+        # RESEARCH_QUESTION_SPEC (default off): one post-scout call pins the
+        # outcome definition, resolution source, horizon, reference class and
+        # the defaults it chose (handoff question_spec.json, brief, actors.json).
+        self.question_spec_enabled = _env_flag(self.env, "RESEARCH_QUESTION_SPEC", False)
+        # The normalized spec of the latest _plan_calls (None: no spec call).
+        self._pending_question_spec: dict | None = None
+        # RESEARCH_V3_FORECAST_INPUTS (default off; RESEARCH_FORECAST_INPUTS, on by
+        # default, is the master switch it shares with the legacy engine): the
+        # facts task also asks for forecast_inputs drivers and dated indicators.
+        self.v3_forecast_inputs = (_env_flag(self.env, "RESEARCH_V3_FORECAST_INPUTS", False)
+                                   and _env_flag(self.env, "RESEARCH_FORECAST_INPUTS", True))
+        # RESEARCH_V3_CITATION_STATS (default on: detection-only telemetry): the QA
+        # phase records qa.json citation_stats (_citation_stats), mirrored into
+        # meta.research_qa and meta.research_quality.  Report and sources.json
+        # bytes are the same either way; off = no key.
+        self.citation_stats_enabled = _env_flag(self.env, "RESEARCH_V3_CITATION_STATS", True)
+        # RESEARCH_FORECASTER_ATTRIBUTION (default off): the facts task also asks
+        # projected rows for their forecaster, stated range and forecaster count,
+        # which _write_structured checks against the report (attribute_forecast_row).
+        self.forecaster_attribution = _env_flag(self.env, "RESEARCH_FORECASTER_ATTRIBUTION", False)
+        # RESEARCH_EVIDENCE_HEADERS (default off): each digest block opens with the
+        # engine's evidence count and sufficiency label (evidence_profile), which the
+        # gap review's coverage matrix, a section rule, meta.kiqs and the research
+        # events also read.  RESEARCH_TRUNCATION_FAIRNESS (default off): the scout
+        # digest shares its chars fairly between the queries (fair_scout_digest) and an
+        # over-cap digest block drops its least KIQ-relevant equal-priority line first.
+        self.evidence_headers = _env_flag(self.env, "RESEARCH_EVIDENCE_HEADERS", False)
+        self.truncation_fairness = _env_flag(self.env, "RESEARCH_TRUNCATION_FAIRNESS", False)
+        # Fetched rows whose stored page is a shell, published as cited (_source_rows).
+        self.shell_sources_demoted = 0
+        # sid -> reason for the shells a resumed work dir stored as fetched pages
+        # before the tool-layer check existed (un-marked once, here).
+        self.stored_shells: dict[int, str] = (
+            self._unmark_stored_shells() if self.shell_detection and self.resumed else {})
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
+        ledger = getattr(self.gateway, "ledger", None)
+        if isinstance(ledger, rg.UsageLedger):
+            # INFRA-8: the ledger follows this engine's RECORD_MODEL_PROVENANCE (the env the
+            # parent forwards from its Config), whatever the factory built it with.
+            ledger.record_models = self.record_models
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
         # tally tells a provider that never answered from a phase that ran out
@@ -3997,6 +7186,8 @@ class _Engine:
         self._search_failures = 0
         self.tools.search = self._watch_tool(self.tools.search, "search")
         self.tools.fetch = self._watch_tool(self.tools.fetch, "fetch")
+        if self.data_tool_names:
+            self.tools.data = self._watch_tool(self.tools.data, "data")
         # The run deadline runs on the gateway's clock (its backoff and latency
         # clock), wrapped by _clock so that a stopped run has no time left.
         self._gateway_clock = getattr(self.gateway, "_clock", time.monotonic)
@@ -4016,6 +7207,10 @@ class _Engine:
         self.qa: dict = {}
         self.final_report = ""
         self._synth_context_cache: str | None = None
+        if self.pit is not None:
+            # Last, so an attempt counts as started only once nothing here can fail
+            # (run() then always reaches attach_telemetry unless the process is killed).
+            self._pit_prior = self._start_pit_counts()
 
     # ------------------------------------------------------------ utilities
     def log(self, kind: str, message: str) -> None:
@@ -4033,10 +7228,102 @@ class _Engine:
         sets a flag, so a signal handler may call it."""
         self.cancelled = True
 
+    def _bind_data_tools(self) -> None:
+        """Bind the official-data tools RESEARCH_DATA_TOOLS enables (TIME-13):
+        one tools list for the run (``agent_tools``, the gateway binds it once by
+        identity) and the context the tools' data functions read
+        (``tools.data_context``).  A tools object that cannot answer data calls
+        (no ``data`` method, or no data function: its stats carry no ``data``
+        counters) binds nothing (``tools_unavailable``).  Every requested tool
+        left unbound is logged with why."""
+        if self._data_unknown:
+            self.log("warn", f"v3: RESEARCH_DATA_TOOLS names no known vendor in {', '.join(self._data_unknown)} "
+                             f"(known: {', '.join(DATA_VENDORS)}, all); ignored")
+        if self.data_vendors:
+            try:
+                stats = self.tools.stats()
+            except Exception:  # noqa: BLE001 — a tools object without stats cannot answer data calls
+                stats = {}
+            if not (callable(getattr(self.tools, "data", None)) and isinstance(stats, Mapping)
+                    and isinstance(stats.get("data"), Mapping)):
+                self.data_disabled.update(dict.fromkeys(self.data_vendors, "tools_unavailable"))
+                self.data_vendors = ()
+        for vendor, reason in sorted(self.data_disabled.items()):
+            self.log("warn", f"v3: official-data tool {rg.DATA_TOOL_VENDORS[vendor]} ({vendor}) not bound: {reason}")
+        if not self.data_vendors:
+            return
+        self.data_tool_names = tuple(rg.DATA_TOOL_VENDORS[vendor] for vendor in self.data_vendors)
+        self.agent_tools = rg.data_tool_schema_list(self.data_vendors)
+        self.tools.data_context = self._data_context
+        self.log("stage", f"official-data tools bound: {', '.join(self.data_tool_names)} (at most "
+                          f"{self.preset.data_calls_per_kiq} calls per KIQ, {self.preset.max_data_calls_total} "
+                          "per run)")
+
+    def _data_context(self) -> dict | None:
+        """What every official-data call is pinned to (TIME-13): ``as_of``, the
+        cutoff (the plan's as-of; in a gated hindcast that excludes same-day
+        sources the day before it, so every data row is dated strictly before
+        the as-of TIME-9's citation re-check reads), ``pit`` (the FRED vintage,
+        fixed once per run, :meth:`_data_pin_record`) and ``language`` (the
+        run's: vendor sentences in the report's language).  None before a plan
+        exists or when no pin can be fixed; the call then answers unavailable.
+        Never raises."""
+        try:
+            pins = self._data_pin_record(create=True)
+        except Exception as exc:  # noqa: BLE001 — a data call never breaks an agent
+            self.log("warn", f"v3: official-data vintage not pinned ({type(exc).__name__}: {exc})")
+            return None
+        if pins is None:
+            return None
+        return {"as_of": _dt.date.fromisoformat(pins["cutoff"]), "pit": _dt.date.fromisoformat(pins["pit"]),
+                "language": self.language}
+
+    def _data_pin_record(self, *, create: bool) -> dict | None:
+        """The run's official-data pin ``{as_of, cutoff, same_day, pit}``
+        (TIME-13): the one data_pins.json in the work dir holds for this plan's
+        as-of and the gates' same-day policy (so a resumed attempt keeps the
+        vintage of the first, even across FRED's midnight), else, with
+        ``create``, a new one (``pit`` = data_tools.fred_pit(cutoff)) written
+        atomically there.  None without a plan, or when nothing is pinned yet
+        and ``create`` is false."""
+        plan = self.plan
+        as_of = _parse_iso_date(plan.as_of) if plan is not None else None
+        if as_of is None:
+            return None
+        with self._data_lock:
+            if self._data_pins is not None:
+                return self._data_pins
+            same_day = self.pit.same_day if self.pit is not None else None
+            cutoff = as_of - _dt.timedelta(days=1) if same_day == "exclude" else as_of
+            expected = {"as_of": as_of.isoformat(), "cutoff": cutoff.isoformat(), "same_day": same_day}
+            path = self.work / DATA_PINS_FILENAME
+            stored = _read_json(path)
+            if (isinstance(stored, dict) and {key: stored.get(key) for key in expected} == expected
+                    and _canonical_date(stored.get("pit")) and stored["pit"] <= expected["cutoff"]):
+                self._data_pins = {**expected, "pit": stored["pit"]}
+                return self._data_pins
+            if not create:
+                return None
+            if stored is not None:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} holds another as-of or an invalid vintage; "
+                                 "pinning the vintage again")
+            pit = importlib.import_module("data_tools").fred_pit(cutoff)
+            if pit is None:
+                return None
+            record = {**expected, "pit": pit.isoformat()}
+            try:
+                self.write_json(path, record)
+            except OSError as exc:
+                self.log("warn", f"v3: {DATA_PINS_FILENAME} not written ({exc}); a resumed attempt pins the "
+                                 "vintage again")
+            self._data_pins = record
+            self.log("stage", f"official-data vintage pinned to {record['pit']} (as of {record['cutoff']})")
+            return record
+
     def _watch_tool(self, tool: Callable[..., str], kind: str) -> Callable[..., str]:
-        """``tool`` (a ResearchTools search/fetch) answering
-        :data:`CANCELLED_TOOL_TEXT` once the run is stopped; failed searches
-        are counted for the degradation events."""
+        """``tool`` (a ResearchTools search/fetch, or the data call of bound
+        official-data tools) answering :data:`CANCELLED_TOOL_TEXT` once the run
+        is stopped; failed searches are counted for the degradation events."""
         @functools.wraps(tool)
         def watched(*args: Any, **kwargs: Any) -> str:
             if self.cancelled:
@@ -4115,6 +7402,54 @@ class _Engine:
             self._page_numbers[sid] = numbers
         return numbers
 
+    def _unmark_stored_shells(self) -> dict[int, str]:
+        """Un-mark the fetched ledger rows of a resumed work dir whose stored
+        page is an extraction shell (stored before the tool-layer check), so
+        the tool layer fetches the URL again instead of serving the shell as a
+        stored copy, notes cannot VERIFY against it and References call it a
+        snippet.  Returns ``{sid: reason}`` (see :meth:`_source_rows`)."""
+        page_text = getattr(self.tools, "page_text", None)
+        if not callable(page_text):
+            return {}
+        shells: dict[int, str] = {}
+        for row in self.ledger.rows():
+            if not row.get("fetched") or row.get("via") == "data":  # a vendor record (TIME-13), never a shell
+                continue
+            text = page_text(row["sid"])
+            reason = rg._extraction_failure_reason(text) if text else None
+            if reason is not None and self.ledger.unmark_fetched(row["sid"]) is not None:
+                shells[int(row["sid"])] = reason
+        if shells:
+            self.ledger.flush()
+            self.log("warn", f"v3: {len(shells)} stored page(s) of the resumed work dir are extraction "
+                             "shells; they no longer count as fetched and are fetched again when needed")
+        return shells
+
+    def _demote_shell_facts(self, record: dict) -> None:
+        """A reloaded fact VERIFIED only by pages :meth:`_unmark_stored_shells`
+        found to be shells becomes REPORTED (``no_fetched_source``), and a
+        DERIVED one (RESEARCH-8) whose derivation source is such a page
+        UNVERIFIED (``unshown_source``, no derivation): the tags
+        :func:`postprocess_notes` gives such facts now."""
+        if not self.stored_shells:
+            return
+        for fact in record["facts"]:
+            if isinstance(fact, dict) and fact.get("tag") == DERIVED_TAG:
+                derivation = fact.get("derivation")
+                sid = derivation.get("sid") if isinstance(derivation, dict) else None
+                if sid in self.stored_shells and not (self.ledger.get(sid) or {}).get("fetched"):
+                    fact.pop("derivation", None)
+                    fact.update(tag="UNVERIFIED", derivation_error="unshown_source")
+                continue
+            if not isinstance(fact, dict) or fact.get("tag") != "VERIFIED":
+                continue
+            sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
+            if not any(sid in self.stored_shells for sid in sids):
+                continue
+            if any((self.ledger.get(sid) or {}).get("fetched") for sid in sids):
+                continue
+            fact.update(tag="REPORTED", verification="no_fetched_source", verified_numbers=None)
+
     def json_call(self, shared: Sequence[str], task: str, *, label: str, required: Sequence[str],
                   deadline: rg.Deadline | None) -> dict:
         """JSON call whose repair note only ever lands in the last message."""
@@ -4147,6 +7482,9 @@ class _Engine:
             with self._lock:
                 self.phase_seconds[name] = round(self.phase_seconds.get(name, 0.0)
                                                  + time.monotonic() - started, 2)
+            if self.pit is not None:
+                # TIME-9: a killed attempt loses at most its phase in flight's gate counts.
+                self._save_pit_counts()
 
     def invalidate(self, phases: Sequence[str]) -> None:
         """Forget later phases whose inputs changed and delete their artifacts."""
@@ -4206,24 +7544,26 @@ class _Engine:
         if plan and brief and not self._discard_outage_plan(plan):
             self.plan, self.brief, self.kiqs = plan, brief, list(plan.kiqs)
             self.meta["plan_fallback"] = sorted(plan.fallback)
+            self._publish_question_spec(plan)
             self.log("resume", f"research:v3:plan reused ({len(plan.kiqs)} KIQs, {len(plan.sections)} sections)")
             return
         self.log("stage", "research:v3:plan start")
         with self.phase("plan") as deadline:
-            as_of = _utc_date()
-            pre_brief = render_pre_brief(self.question, self.language, as_of)
-            scope, raw_plan, outage = self._plan_calls(pre_brief, deadline)
+            as_of = self.pinned_as_of or _utc_date()
+            pre_brief = render_pre_brief(self.question, self.language, as_of, point_in_time=self.hindcast)
+            scope, raw_plan, outage = self._plan_calls(pre_brief, deadline, as_of=as_of)
             plan = build_plan(self.question, self.language, as_of, self.preset, self.actor_cap,
-                              scope, raw_plan)
+                              scope, raw_plan, question_spec=self._pending_question_spec)
             if outage:
                 plan.fallback[PLAN_OUTAGE_KEY] = True
                 self._outage_plan = True
             if plan.fallback:
                 self.log("warn", "v3: plan uses deterministic defaults for: "
                                  + ", ".join(sorted(plan.fallback)))
-            brief = render_brief(plan)
+            brief = render_brief(plan, point_in_time=self.hindcast)
             self.write_json(self.work / "plan.json", plan.to_dict())
             self._write_internal(self.work / "brief.md", brief)
+            self._publish_question_spec(plan)
             self.ledger.flush()
             self.state.set_phase("plan", "done", f"{len(plan.kiqs)} KIQs")
         self.plan, self.brief, self.kiqs = plan, brief, list(plan.kiqs)
@@ -4259,8 +7599,9 @@ class _Engine:
 
         One provider attempt per call, only while at least
         ``REPLAN_MIN_REMAINING_SHARE`` of the run's time budget remains; the
-        scope is reused when it had succeeded and the scout searches are served
-        from the run's search cache.  A usable plan replaces the template plan
+        scope is reused when it had succeeded (with its own horizon, never the
+        earlier question spec's) and the scout searches are served from the
+        run's search cache.  A usable plan replaces the template plan
         (persisted; nothing else has run for it yet); otherwise the template
         plan stays exactly as it is, still flagged for a resumed attempt.
         """
@@ -4273,19 +7614,24 @@ class _Engine:
         self.log("stage", "v3: the plan fell back to templates during a model outage; "
                           "trying the planning calls once more before gathering")
         scope = None if plan.fallback.get("scope") else {
-            "restated_question": plan.restated_question, "horizon": plan.horizon,
+            "restated_question": plan.restated_question,
+            "horizon": plan.horizon if plan.scope_horizon is None else plan.scope_horizon,
             "scout_queries": list(plan.scout_queries), "key_entities": list(plan.key_entities)}
         deadline = self.deadline.child(PHASE_TIME_SHARE["plan"], label="replan")
         with self.gateway.phase("plan"):
-            scope, raw_plan, _ = self._plan_calls(render_pre_brief(self.question, self.language, plan.as_of),
-                                                  deadline, scope=scope, single_attempt=True)
+            scope, raw_plan, _ = self._plan_calls(render_pre_brief(self.question, self.language, plan.as_of,
+                                                                   point_in_time=self.hindcast),
+                                                  deadline, as_of=plan.as_of, scope=scope, single_attempt=True,
+                                                  prior_spec=plan.question_spec)
         if raw_plan is None:
             self.log("warn", "v3: re-planning failed as well; researching the template plan")
             return
-        new = build_plan(self.question, self.language, plan.as_of, self.preset, self.actor_cap, scope, raw_plan)
-        brief = render_brief(new)
+        new = build_plan(self.question, self.language, plan.as_of, self.preset, self.actor_cap, scope, raw_plan,
+                         question_spec=self._pending_question_spec)
+        brief = render_brief(new, point_in_time=self.hindcast)
         self.write_json(self.work / "plan.json", new.to_dict())
         self._write_internal(self.work / "brief.md", brief)
+        self._publish_question_spec(new)
         self.ledger.flush()
         self.state.set_phase("plan", "done", f"{len(new.kiqs)} KIQs (re-planned after an outage)")
         self.plan, self.brief, self.kiqs = new, brief, list(new.kiqs)
@@ -4308,14 +7654,25 @@ class _Engine:
             raise rg.JsonUnparseable(f"{label}: the reply has no usable JSON object")
         return parsed
 
-    def _plan_calls(self, pre_brief: str, deadline: rg.Deadline, *, scope: dict | None = None,
-                    single_attempt: bool = False) -> tuple[dict | None, dict | None, bool]:
-        """Scope (unless given) + scout + plan; provider or parse failures yield ``None`` parts.
+    def _plan_calls(self, pre_brief: str, deadline: rg.Deadline, *, as_of: str, scope: dict | None = None,
+                    single_attempt: bool = False,
+                    prior_spec: dict | None = None) -> tuple[dict | None, dict | None, bool]:
+        """Scope (unless given) + scout + question spec (RESEARCH_QUESTION_SPEC)
+        + plan; provider or parse failures yield ``None`` parts.
 
         The flag is True when the plan call failed because the model was
         unreachable or out of time (not because its answer was unusable).
+
+        The spec call reuses the plan call's ``[pre_brief, scout]`` prefix and
+        never fails planning: its normalized result (``unavailable`` when the
+        call failed, then ``prior_spec`` when one is given) is left in
+        ``self._pending_question_spec``, and a usable spec's block (when it
+        shows a field, :func:`render_question_spec_block`) is appended to the
+        plan call's shared context with :func:`question_spec_plan_rule` on its
+        task.
         """
         suffix = ":replan" if single_attempt else ""
+        self._pending_question_spec = None
         if scope is None:
             try:
                 scope = self._plan_json(
@@ -4333,6 +7690,20 @@ class _Engine:
         task = _render(_T_PLAN, min_kiqs=min(4, self.preset.max_kiqs), max_kiqs=self.preset.max_kiqs,
                        min_sections=self.preset.sections_min, max_sections=self.preset.sections_max,
                        language=self.language, actor_cap=self.actor_prompt_cap)
+        if self.question_spec_enabled:
+            spec = self._question_spec_call(shared, as_of, deadline, label=f"plan:question_spec{suffix}",
+                                            single_attempt=single_attempt)
+            if spec["status"] == "unavailable" and prior_spec is not None:
+                self.log("warn", "v3: question spec call failed again; keeping the spec of the earlier plan")
+                spec = dict(prior_spec)
+            self._pending_question_spec = spec
+            block = render_question_spec_block(spec)
+            if block:
+                # A new list: the spec call's request was built from ``shared``.
+                shared = [*shared, block]
+                rule = question_spec_plan_rule(spec)
+                if rule:
+                    task += "\n- " + rule
         raw_plan: dict | None = None
         outage = False
         try:
@@ -4346,8 +7717,69 @@ class _Engine:
             scope = dict(scope, scout_queries=queries)
         return scope, raw_plan, outage
 
+    def _question_spec_call(self, shared: Sequence[str], as_of: str, deadline: rg.Deadline, *, label: str,
+                            single_attempt: bool) -> dict:
+        """The question spec call, normalized; a gateway failure (outage,
+        deadline, unparseable reply) is status ``unavailable``, never raised.
+        It runs under ``QUESTION_SPEC_TIME_SHARE`` of ``deadline``."""
+        try:
+            raw = self._plan_json(shared, _render(_T_QSPEC, language=self.language), label=label,
+                                  required=("outcome_definition",),
+                                  deadline=deadline.child(QUESTION_SPEC_TIME_SHARE, label=label),
+                                  single_attempt=single_attempt)
+        except rg.GatewayError as exc:
+            self.log("warn", f"v3: question spec call failed ({exc.category}: {exc}); the forecasts get no "
+                             "pinned outcome definition")
+            return normalize_question_spec(None, question=self.question, as_of=as_of,
+                                           status_if_failed="unavailable")
+        spec = normalize_question_spec(raw, question=self.question, as_of=as_of)
+        if spec["status"] == "unavailable":
+            self.log("warn", "v3: the question spec reply had no usable field; the forecasts get no pinned "
+                             "outcome definition")
+        return spec
+
+    def _publish_question_spec(self, plan: Plan) -> None:
+        """Handoff ``question_spec.json`` mirrors ``plan.question_spec`` (any
+        status, so an outage is visible) before the plan phase is marked done;
+        a reused plan rewrites a missing or changed file and a plan without a
+        spec leaves no earlier attempt's file behind.  ``meta.question_spec``
+        records the spec.  Degrades safe: a failed write is recorded and the
+        run goes on (the stage manifest treats the file as optional)."""
+        path = self.out_dir / QUESTION_SPEC_FILENAME
+        spec = plan.question_spec
+        # Total over a damaged reused plan.json (any status, any field type).
+        telemetry = question_spec_telemetry(spec) if spec is not None else None
+        try:
+            if spec is None:
+                if path.exists():
+                    path.unlink()
+                    self.log("warn", f"v3: removed {QUESTION_SPEC_FILENAME} of an earlier attempt (this plan "
+                                     "has no question spec)")
+                return
+            payload = json.dumps(spec, ensure_ascii=False, indent=2)
+            if _read_text(path) != payload:
+                self.write_text(path, payload)
+                self.log("ok", f"wrote {QUESTION_SPEC_FILENAME} (status {telemetry['status']}, "
+                               f"{telemetry['assumptions_n']} assumption(s))")
+        except OSError as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "question_spec:publish", "error": error[:300]})
+            self.log("warn", f"v3: writing {QUESTION_SPEC_FILENAME} failed ({error})")
+        if telemetry is not None:
+            self.meta["question_spec"] = telemetry
+            if telemetry["status"] == "invalid":
+                self.log("warn", "v3: the plan's question spec fails its integrity check; it is not used")
+
     def _scout(self, queries: Sequence[str]) -> str:
-        """Concurrent scout searches (planner budget) → digest of <= 6,000 chars."""
+        """Concurrent scout searches (planner budget) → digest of <= 6,000 chars.
+
+        Off RESEARCH_TRUNCATION_FAIRNESS the joined digest is cut at its last
+        line within the cap, which can silently lose the last queries; on,
+        every query keeps a fair share cut between results
+        (:func:`fair_scout_digest`), within the cap because a query line (at
+        most 7 + 300 chars) and the omission notes fit the smallest share
+        (998 chars for SCOUT_QUERIES_MAX queries); an oversized tool note is
+        cut by whole lines with a note."""
         queries = list(queries)[:SCOUT_QUERIES_MAX]
         jobs = [(lambda q=q: self.tools.search(q, agent_id="planner")) for q in queries]
         results = self.gateway.fan_out(jobs, warm_first=False, workers=self.preset.workers)
@@ -4355,6 +7787,8 @@ class _Engine:
         for query, result in zip(queries, results, strict=True):
             text = result if isinstance(result, str) else f"(search failed: {type(result).__name__})"
             parts.append(f"Query: {query}\n{text}")
+        if self.truncation_fairness:
+            return fair_scout_digest(parts, SCOUT_DIGEST_CHARS) or "(no scout results)"
         digest = "\n\n".join(parts)
         if len(digest) > SCOUT_DIGEST_CHARS:
             digest = digest[:SCOUT_DIGEST_CHARS].rsplit("\n", 1)[0]
@@ -4391,6 +7825,7 @@ class _Engine:
                 continue
             data = _read_json(self.work / "kiq" / f"{kiq.id}.json")
             if isinstance(data, dict) and data.get("id") == kiq.id and isinstance(data.get("facts"), list):
+                self._demote_shell_facts(data)
                 self.records[kiq.id] = data
 
     def phase_gather(self) -> None:
@@ -4458,10 +7893,32 @@ class _Engine:
                 self.state.set_phase("gather", "done", f"{len(plan_kiqs)} KIQs")
         self.flush_meta()
 
-    def _tool_failures(self) -> dict[str, int]:
+    def _tool_failures(self) -> dict[str, Any]:
         """This attempt's backend searches and fetches and how many failed
-        (a fetch of an invalid URL fails without reaching the backend)."""
+        (a fetch of an invalid URL fails without reaching the backend).
+
+        With the source taxonomy on the counts come from the tools' outcome
+        classes: every non-budget outcome is one search/fetch (a latched
+        search refusal, which reserves nothing, included) and budget denials
+        are neither searches/fetches nor failures (they are returned apart,
+        with the search refusal, if any)."""
         stats = self.tools.stats()
+        outcome_counts = getattr(self.tools, "outcome_counts", None)
+        if self.source_taxonomy and callable(outcome_counts):
+            counts = outcome_counts()
+
+            def total(*names: str) -> int:
+                return sum(int(counts.get(name) or 0) for name in names)
+
+            search_failed = total("search_unavailable", "search_not_configured", "search_empty_unconfirmed")
+            fetch_failed = total("fetch_content", "fetch_unavailable")
+            refusal = getattr(self.tools, "search_refusal", None)
+            return {"searches": search_failed + total("search_ok", "search_no_result"),
+                    "search_failed": search_failed,
+                    "fetches": fetch_failed + total("fetch_ok"), "fetch_failed": fetch_failed,
+                    "search_budget": total("search_budget"), "fetch_budget": total("fetch_budget"),
+                    "search_empty_unconfirmed": total("search_empty_unconfirmed"),
+                    "search_refused": refusal() if callable(refusal) else None}
         with self._lock:
             search_failed = self._search_failures
         fetch_failed = max(0, int(stats.get("failures") or 0) - search_failed)
@@ -4477,6 +7934,10 @@ class _Engine:
         tools = self._tool_failures()
         detail = (f"{tools['search_failed']} of {tools['searches']} searches and {tools['fetch_failed']} of "
                   f"{tools['fetches']} fetches failed")
+        refused = tools.get("search_refused")
+        if refused:
+            detail += f"; search provider refused: {refused[0]} {refused[1]}"
+        detail += _pit_starvation_detail(self.tools.stats().get("pit"))
         self.state.reset_kiqs()
         self.records.clear()
         self.state.set_phase("gather", "failed", f"no sourced evidence ({detail})")
@@ -4490,7 +7951,7 @@ class _Engine:
         abort = threading.Event()
         if len(kiqs) >= 2:
             self.gateway.prime(rg.build_messages(ENGINE_CORE, [self.brief], PRIME_TASK), kind="agent",
-                               label="gather:prime", tools=AGENT_TOOLS, deadline=deadline)
+                               label="gather:prime", tools=self.agent_tools, deadline=deadline)
         grace = self._final_notes_grace(deadline)
         jobs = [(lambda kiq=kiq: self._gather_job(kiq, self._kiq_task(kiq, seeds[kiq.id]),
                                                    [row["sid"] for row in seeds[kiq.id]], abort, deadline,
@@ -4538,7 +7999,7 @@ class _Engine:
                     self._finish_kiq(kiq, AgentOutcome(
                         notes=agent.fallback_notes("provider"), fallback="provider", steps=agent.steps,
                         forced=agent.forced, fetched=list(agent.fetched), seen=list(agent.seen),
-                        truncated=agent.truncated))
+                        truncated=agent.truncated, **agent.call_counts()))
                 except Exception as exc:  # noqa: BLE001 — the provider failure is what the phase decides on
                     self.log("warn", f"v3: {kiq.id} reads not kept ({type(exc).__name__}: {exc})")
             raise
@@ -4554,13 +8015,40 @@ class _Engine:
         tool results): a marker of a ledger row only another agent saw is a
         guess that would attach the claim to an unrelated page, so it is
         dropped like an unknown marker.
+
+        With evidence quotes on, the record carries its ``evidence_contract``;
+        an evidence check that fails unexpectedly degrades to the legacy
+        postprocessing (logged; no contract, so the KIQ counts as
+        not_requested; ``evidence_error`` on the record, a degradation event
+        in enforce mode: :meth:`_research_events`).
+
+        With absence discipline on, the record carries ``absence_cues``: its
+        facts that state an absence, by tag (observe only: no tag changes).
+
+        With derived findings on, derivation clauses are recomputed
+        (``postprocess_notes(derivations=True)``), also when the evidence check
+        degrades.
         """
         shown = set(outcome.seen) | set(outcome.fetched)
 
         def ledger_get(sid: int) -> Mapping[str, Any] | None:
             return self.ledger.get(sid) if sid in shown else None
 
-        notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers)
+        contract = self._evidence_contract() if self.evidence_mode != EVIDENCE_OFF else None
+        evidence_error = None
+        try:
+            notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers,
+                                                evidence_mode=self.evidence_mode, page_text=self.tools.page_text,
+                                                derivations=self.derived_findings)
+        except Exception as exc:  # noqa: BLE001 — the evidence check never breaks a run
+            if contract is None:
+                raise
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "evidence_quotes", "kiq": kiq.id, "error": error[:300]})
+            self.log("warn", f"v3: {kiq.id} evidence check failed ({error}); notes kept without it")
+            notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers,
+                                                derivations=self.derived_findings)
+            contract, evidence_error = None, error[:300]
         facts = parts["facts"]
         verified = sum(1 for fact in facts if fact["tag"] == "VERIFIED")
         sources = sorted({sid for fact in facts for sid in fact["sids"]})
@@ -4569,9 +8057,18 @@ class _Engine:
             "sources": sources,
             "stats": {"steps": outcome.steps, "forced": outcome.forced, "fallback": outcome.fallback,
                       "truncated": outcome.truncated, "fetched": outcome.fetched, "seen": len(outcome.seen),
-                      "tools": self.tools.stats()["per_agent"].get(kiq.id, {})},
+                      "tools": self.tools.stats()["per_agent"].get(kiq.id, {}),
+                      **{name: getattr(outcome, name) for name in TOOL_CALL_COUNTERS}},
             "finished_at": _iso_now(),
         }
+        if contract is not None:
+            record["evidence_contract"] = contract
+        if evidence_error is not None:
+            record["evidence_error"] = evidence_error
+        if self.absence_discipline:
+            cues = self._absence_cues(kiq.id, facts)
+            if cues is not None:
+                record["absence_cues"] = cues
         self.ledger.flush()  # every source the record cites is on disk before the record
         self._write_internal(self.work / "kiq" / f"{kiq.id}.md", notes_md + "\n")
         self.write_json(self.work / "kiq" / f"{kiq.id}.json", record)
@@ -4579,11 +8076,38 @@ class _Engine:
                             fallback=outcome.fallback)
         with self._lock:
             self.records[kiq.id] = record
+        if self.pit is not None:
+            # TIME-9: a killed attempt keeps the gate counts of every KIQ it recorded.
+            self._save_pit_counts()
         if outcome.fallback:
             self.log("warn", f"research:v3:gather {kiq.id} deterministic notes ({outcome.fallback})")
         suffix = f" fallback={outcome.fallback}" if outcome.fallback else ""
         self.log("ok", f"research:v3:gather {kiq.id} facts={len(facts)} verified={verified} "
                        f"sources={len(sources)}{suffix}")
+        if contract is not None:
+            counts = evidence_summary([record], self.evidence_mode)
+            demoted = "demoted" if self.evidence_mode == EVIDENCE_ENFORCE else "would_demote"
+            self.log("evidence", f"v3: {kiq.id} {self.evidence_mode} facts={counts['facts']} "
+                                 f"with_spans={counts['with_spans']} failed={counts['failed']} "
+                                 f"absent={counts['absent']} near_miss={counts['near_miss']} "
+                                 f"unchecked={sum(counts['unchecked'].values())} "
+                                 f"{demoted}={sum(counts['demoted'].values())}")
+
+    def _evidence_contract(self) -> str:
+        """The evidence contract KIQ records are postprocessed under ("audit:v1")."""
+        return f"{self.evidence_mode}:{EVIDENCE_CONTRACT_VERSION}"
+
+    def _absence_cues(self, kiq_id: str, facts: Sequence[Mapping[str, Any]]) -> dict[str, int] | None:
+        """:func:`absence_cue_counts` of a KIQ's facts; None (logged, recorded in
+        analytics_errors) when the count fails: observe-only telemetry never
+        breaks a run."""
+        try:
+            return absence_cue_counts(facts)
+        except Exception as exc:  # noqa: BLE001 — telemetry degrades safe
+            error = f"{type(exc).__name__}: {exc}"[:300]
+            self.analytics_errors.append({"helper": "absence_cues", "kiq": kiq_id, "error": error})
+            self.log("warn", f"v3: {kiq_id} absence cues not counted ({error})")
+            return None
 
     def _run_seeds(self, kiqs: Sequence[Kiq]) -> dict[str, list[dict]]:
         """Up to 2 queries per KIQ, deduped run-wide and run concurrently, so the
@@ -4625,13 +8149,34 @@ class _Engine:
         # Seed rows are web text inside the (trusted) task message: delimited
         # and filtered like every other untrusted block.
         seeds = rg.delimit_untrusted(LABEL_SEEDS, "\n".join(lines)) if lines else ""
-        return _render(
+        # TIME-13: only a data KIQ's task names the official-data tools (every agent has
+        # them bound); without them the slot is empty and the task is the template exactly.
+        data_tools = getattr(self, "data_tool_names", ())  # engines built without __init__ have none
+        task = _render(
             _T_KIQ_TASK, kiq_id=kiq.id, question=kiq.question,
             why=kiq.why or "Background evidence for the report.",
             emphasis=_KIND_EMPHASIS.get(kiq.kind, _KIND_EMPHASIS["general"]),
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
-            max_steps=self.preset.agent_max_steps, language=self.language)
+            max_steps=self.preset.agent_max_steps, language=self.language,
+            data_tools=(kiq_data_guidance(data_tools, self.preset.data_calls_per_kiq)
+                        if data_tools and kiq.kind == "data" else ""))
+        addenda = self._kiq_task_addenda()
+        return task + ("\n" + "\n".join(addenda) if addenda else "")
+
+    def _kiq_task_addenda(self) -> list[str]:
+        """Lines the enabled knobs append to the KIQ task, in canonical order:
+        absence discipline (RESEARCH-3), evidence quotes (RESEARCH-7),
+        derivations (RESEARCH-8).  Volatile last-message text: ENGINE_CORE and
+        the RUN BRIEF never change; none: exactly the template."""
+        addenda: list[str] = []
+        if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
+            addenda.append(_KIQ_ABSENCE_RULE)
+        if self.evidence_mode != EVIDENCE_OFF:
+            addenda.append(_KIQ_EVIDENCE_RULE)
+        if getattr(self, "derived_findings", False):
+            addenda.append(_KIQ_DERIVED_RULE)
+        return addenda
 
     # ================================================================== gap
     def phase_gap(self) -> None:
@@ -4725,8 +8270,9 @@ class _Engine:
                 self.invalidate(("synthesize", "qa", "finalize"))
             if summary["provider_error"] is not None:
                 return f"{GAP_PROVIDER_STOP} ({type(summary['provider_error']).__name__})"
+        enforce = self.evidence_mode == EVIDENCE_ENFORCE
         gained = sum(1 for k in followups for f in (self.records.get(k.id) or {}).get("facts") or []
-                     if f.get("tag") == "VERIFIED")
+                     if _gap_counts_verified(f, enforce=enforce))
         if gained < GAP_MIN_NEW_VERIFIED:
             return f"diminishing returns ({gained} new verified facts)"
         return None
@@ -4777,10 +8323,26 @@ class _Engine:
             verified = sum(1 for f in facts if f.get("tag") == "VERIFIED")
             open_q = " | ".join(_collapse(q, 120) for q in (record.get("open_questions") or [])[:3])
             leads = " | ".join(_collapse(q, 120) for q in (record.get("discovered") or [])[:3])
-            lines.append(f"- {kiq.id} ({_collapse(kiq.question, 120)}): facts={len(facts)} "
-                         f"verified={verified} sources={len(record.get('sources') or [])}; "
+            counts = f"facts={len(facts)} verified={verified} sources={len(record.get('sources') or [])}"
+            if self.evidence_headers:
+                profile = self._evidence_profile(record)
+                counts += (f" fetched={profile['fetched']} domains={profile['domains']} "
+                           f"sufficiency={profile['sufficiency']}")
+            lines.append(f"- {kiq.id} ({_collapse(kiq.question, 120)}): {counts}; "
                          f"open: {open_q or 'none'}; leads: {leads or 'none'}")
         return "\n".join(lines)
+
+    def _evidence_profile(self, record: Mapping[str, Any]) -> dict[str, Any]:
+        """:func:`evidence_profile` of one KIQ record against the source ledger;
+        in a gated hindcast (TIME-9) only its admissible sources count, as in
+        the digest's evidence line."""
+        admissible = self._pit_admissible if self.pit is not None else None
+        return evidence_profile(record, self.ledger.get, admissible=admissible)
+
+    def _evidence_profiles(self) -> dict[str, dict[str, Any]]:
+        """``{kiq id: evidence profile}`` of every researched KIQ, in natural order."""
+        return {kid: self._evidence_profile(self.records[kid])
+                for kid in sorted(self.records, key=_natural_key)}
 
 
     # =========================================================== synthesize
@@ -4794,10 +8356,18 @@ class _Engine:
         raw = _read_text(path)
         if not raw:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
-            raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language)
+            # The RESEARCH-10 knobs join the call only when on: off, it is the call before them.
+            knobs = {key: True for key, on in (("evidence_headers", self.evidence_headers),
+                                               ("relevance_drop", self.truncation_fairness)) if on}
+            raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language,
+                                        dates=self.source_dates,
+                                        admissible=self._pit_admissible if self.pit is not None else None,
+                                        **knobs)
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
+            if self.pit is not None:
+                self.state.put(PIT_DIGEST_WALL_KEY, PIT_DIGEST_WALL_RULE)
             self._write_internal(path, raw)
         self._synth_context_cache = self.delimit(LABEL_EVIDENCE, raw)
         return self._synth_context_cache
@@ -4838,9 +8408,10 @@ class _Engine:
                 if provider_error is not None:
                     raise provider_error
                 # Built after the fan-out, in outline order, so that no two
-                # deterministic sections share a finding (deterministic output).
+                # deterministic sections share a finding (deterministic output);
+                # a gated hindcast's findings are walled (_report_records).
                 fallback = fallback_section_bodies([s for s in plan.sections if s.index not in bodies],
-                                                   self.records, self.language)
+                                                   self._report_records(), self.language)
                 sections = [{"index": s.index, "title": s.title, "is_scenario": s.is_scenario,
                              "body": bodies.get(s.index) or fallback.get(s.index, ""),
                              "origin": "writer" if s.index in bodies else "fallback"}
@@ -4936,13 +8507,27 @@ class _Engine:
             lines += [f"## {section.title}", detail]
             if section.is_scenario:
                 lines.append("   " + _SCENARIO_SECTION_NOTE)
-        lines += ["", _SECTION_RULES]
+        lines += ["", _SECTION_RULES, *self._section_rule_addenda()]
         if current:
             lines += ["", "Current version of this section (rewrite it to fix the problem below and "
                           "keep every correct citation):", current]
         if note:
             lines += ["", note]
         return "\n".join(lines)
+
+    def _section_rule_addenda(self) -> list[str]:
+        """Rule lines the enabled knobs append right after ``_SECTION_RULES``,
+        in canonical order: absence discipline (RESEARCH-3), DERIVED
+        (RESEARCH-8), thin evidence (RESEARCH-10).  Volatile last-message text:
+        ENGINE_CORE and the RUN BRIEF never change; none: exactly the rules."""
+        addenda: list[str] = []
+        if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
+            addenda.append(_SECTION_ABSENCE_RULE)
+        if getattr(self, "derived_findings", False):
+            addenda.append(_SECTION_DERIVED_RULE)
+        if getattr(self, "evidence_headers", False):
+            addenda.append(_SECTION_THIN_EVIDENCE_RULE)
+        return addenda
 
     def clean_body(self, body: str, section: OutlineSection) -> str:
         text = str(body or "").strip()
@@ -5079,26 +8664,45 @@ class _Engine:
             body = self._trim_cut(body, f"§{section.index} {section.title}")
         return (body, result.truncated) if len(body) >= WRITER_BODY_MIN_CHARS else None
 
+    def _report_records(self) -> dict[str, dict]:
+        """The KIQ records the report's deterministic sections draw on.  In a
+        gated hindcast (TIME-9) each is walled claim by claim
+        (:func:`pit_wall_record` with ``per_claim``: markers of inadmissible
+        sources stripped, a finding left out when one of its claims would be
+        left without an admissible source), so no fallback bullet states a
+        claim cited by inadmissible sources alone (which renumbering would
+        otherwise leave uncited); else :attr:`records`.  Unlike the evidence
+        digest's rule (:func:`build_digest`), a co-citation is one claim here:
+        a finding ending "[S1][S2]" with S2 withheld is published with [S1]
+        alone, even a part of it only S2 backs (:func:`_pit_wall_text`)."""
+        if self.pit is None:
+            return self.records
+        admissible = _memoized_sid_check(self._pit_admissible)
+        return {kid: pit_wall_record(record, admissible, per_claim=True)[0] for kid, record in self.records.items()}
+
     def _fallback_section(self, section: OutlineSection) -> str:
         """Bullets of the best findings routed to the section (citations kept);
-        see :func:`fallback_section_bodies`."""
-        return fallback_section_bodies([section], self.records, self.language)[section.index]
+        see :func:`fallback_section_bodies` and :meth:`_report_records`."""
+        return fallback_section_bodies([section], self._report_records(), self.language)[section.index]
 
     def _refill_emptied(self, sections: list[dict]) -> list[str]:
         """Never publish a bare heading: a section left without content (its
         paragraphs all removed as cross-section duplicates) is rebuilt from
         findings no section publishes yet, or, with none left, emptied so the
-        report omits it (origin "dropped").  Returns the omitted titles."""
+        report omits it (origin "dropped").  Findings are read from
+        :meth:`_report_records`, so "published yet" compares the texts the
+        fallback bullets carry.  Returns the omitted titles."""
         dropped: list[str] = []
+        records = self._report_records()
         published = "\n".join(str(section["body"]) for section in sections)
-        taken = {_fact_key(fact) for record in self.records.values() for fact in record.get("facts") or []
+        taken = {_fact_key(fact) for record in records.values() for fact in record.get("facts") or []
                  if isinstance(fact, dict) and str(fact.get("text") or "") in published}
         for section in sections:
             if (section.get("is_scenario") or section.get("origin") == "dropped"
                     or has_section_content(section["body"])):
                 continue
             outline = self._outline(int(section["index"]))
-            body = fallback_section_bodies([outline], self.records, self.language, taken,
+            body = fallback_section_bodies([outline], records, self.language, taken,
                                            empty_when_none=True)[outline.index]
             section["body"], section["origin"] = body, ("fallback" if body else "dropped")
             section.pop("trimmed", None)
@@ -5186,10 +8790,13 @@ class _Engine:
                        f"repaired={len(qa['repaired'])}")
         self.flush_meta()
 
-    @staticmethod
-    def _qa_meta(qa: Mapping[str, Any]) -> dict:
-        return {"passed": bool(qa.get("passed")), "failures": list(qa.get("failures") or []),
+    def _qa_meta(self, qa: Mapping[str, Any]) -> dict:
+        meta = {"passed": bool(qa.get("passed")), "failures": list(qa.get("failures") or []),
                 "repaired": list(qa.get("repaired") or []), "checks": list(qa.get("checks") or [])}
+        # RESEARCH-9: a qa.json of an attempt without the stats (or the flag off) has no key.
+        if self.citation_stats_enabled and isinstance(qa.get("citation_stats"), dict):
+            meta["citation_stats"] = qa["citation_stats"]
+        return meta
 
     def _run_qa(self, deadline: rg.Deadline) -> tuple[dict, str]:
         """Deterministic checks, bounded section repairs, positional citations."""
@@ -5255,9 +8862,11 @@ class _Engine:
         if stale:
             repaired.append({"check": "no_stale_citations", "action": f"removed {len(stale)} unresolved "
                                                                      "citation groups", "groups": stale[:20]})
+        # RESEARCH-9: the ledger sid of every marker renumbering drops (citation stats only).
+        orphans: list[int] | None = [] if self.citation_stats_enabled else None
         body, order = renumber_citations(
-            normalized, lambda sid: sid in citable and self.ledger.get(sid) is not None)
-        final = body.rstrip() + "\n\n" + render_references(order, self.ledger.get) + "\n"
+            normalized, lambda sid: sid in citable and self.ledger.get(sid) is not None, orphans)
+        final = body.rstrip() + "\n\n" + render_references(order, self.ledger.get, dates=self.source_dates) + "\n"
         trimmed = self._trimmed_titles(bool(self.synth.get("exec_trimmed")), sections)
         dropped = [str(s["title"]) for s in sections
                    if not s.get("is_scenario") and not has_section_content(s["body"])]
@@ -5267,19 +8876,121 @@ class _Engine:
               "critique_issues": issues, "truncated_sections": trimmed, "dropped_sections": dropped,
               "citation_order": order, "report_chars": len(final), "report_sha256": _sha256(final),
               "created_at": _iso_now()}
+        if orphans is not None:
+            try:
+                qa["citation_stats"] = self._citation_stats(report, body, order, orphans, stale)
+            except Exception as exc:  # noqa: BLE001 — telemetry never fails the QA phase
+                error = f"{type(exc).__name__}: {exc}"
+                self.analytics_errors.append({"helper": "citation_stats", "error": error[:300]})
+                self.log("warn", f"v3: citation stats failed ({error})")
         return qa, final
 
-    def _citable_sids(self) -> set[int]:
-        """Sources the report may cite: the evidence digest's markers (the
-        SOURCE INDEX writers were shown) plus the sources of recorded findings
-        (deterministic sections cite those).  Any other marker names a ledger
-        row no writer was shown — a guess that would attach the claim to an
-        unrelated page — and is removed before References are built."""
+    def _citation_stats(self, report: str, body: str, order: Sequence[int], orphans: Sequence[int],
+                        stale: Sequence[str]) -> dict:
+        """qa.json ``citation_stats`` (RESEARCH_V3_CITATION_STATS, schema
+        :data:`CITATION_STATS_SCHEMA`), detection only: nothing is stripped.
+
+        ``report`` is the rendered report before citation normalisation,
+        ``body`` the published report without References, ``order`` the cited
+        ledger sids by position, ``orphans`` the sid of every marker
+        renumbering removed (one per occurrence) and ``stale`` the citation
+        groups normalisation could not resolve.  A cited source is fetched or
+        a snippet exactly as sources.json publishes it (:meth:`_published_page`),
+        so ``cited_fetched + cited_snippet == cited_sources == len(sources.json)``;
+        ``snippet_marker_share`` is the share of the body's markers that point
+        at a snippet source, and ``unused_fetched_sids`` reads fetched the same
+        way (:meth:`_unused_fetched_sids`).  A sentence of the body counts in
+        ``untraced_prose_numbers`` when one of its numbers is in no VERIFIED,
+        DERIVED or REPORTED finding, on no cited fetched page and in no cited
+        snippet row's search text (:meth:`_traced_numbers`).
+        """
+        fetched = {sid for sid in order if self._published_page(sid, self.ledger.get(sid) or {})[0]}
+        markers = [int(position) for position in _CITE_RE.findall(body)]
+        snippet_markers = sum(1 for position in markers
+                              if 0 < position <= len(order) and order[position - 1] not in fetched)
+        unused = self._unused_fetched_sids(set(order))
+        untraced = untraced_numbers(prose_sentences(body), self._traced_numbers(order, fetched))
+        return {
+            "schema": CITATION_STATS_SCHEMA,
+            "policy": CITATION_STATS_POLICY,
+            "markers_pre_qa": len(_CITE_RE.findall(report)),
+            "markers_final": len(markers),
+            "n_orphans_stripped": len(orphans),
+            "n_orphan_sids_distinct": len(set(orphans)),
+            "orphan_ledger_sids": list(orphans[:CITATION_STATS_SAMPLE]),
+            "n_stale_groups_stripped": len(stale),
+            "cited_sources": len(order),
+            "cited_fetched": len(fetched),
+            "cited_snippet": len(order) - len(fetched),
+            "snippet_marker_share": round(snippet_markers / len(markers), 4) if markers else 0.0,
+            "unused_fetched_sids": {"count": len(unused), "sample": unused[:CITATION_STATS_SAMPLE]},
+            "writer_bibliographies_detected": writer_bibliographies(body),
+            "scaffold_echo_lines_detected": scaffold_echo_lines(body),
+            "untraced_prose_numbers": {
+                "sentences": len(untraced),
+                "tokens": sum(len(numbers) for _, numbers in untraced),
+                "sample": [{"sentence": _collapse(sentence, 300), "numbers": numbers}
+                           for sentence, numbers in untraced[:UNTRACED_SAMPLE]],
+            },
+        }
+
+    def _unused_fetched_sids(self, cited: set[int]) -> list[int]:
+        """Ledger sids, in ledger order, of the fetched pages the report does
+        not cite, fetched as sources.json would publish them
+        (:meth:`_published_page`): an uncited extraction shell is no unused page."""
+        return [int(row["sid"]) for row in self.ledger.rows()
+                if row.get("fetched") and int(row["sid"]) not in cited
+                and self._published_page(int(row["sid"]), row)[0]]
+
+    def _traced_numbers(self, order: Sequence[int], fetched: set[int]) -> frozenset[str]:
+        """The numbers a published sentence may trace to (a union of
+        :func:`page_number_set`): the VERIFIED, DERIVED (RESEARCH-8) and
+        REPORTED findings' texts, the pages of the cited fetched sources, the
+        search text of the cited snippet sources (:func:`_row_search_texts`)
+        and the scenario frame's weights as percentages only (the plan's forecast, which the report
+        restates by design; a bare number equal to a weight stays untraced)."""
+        traced: set[str] = set()
+        for record in self.records.values():
+            for fact in record.get("facts") or []:
+                if isinstance(fact, dict) and fact.get("tag") in ("VERIFIED", DERIVED_TAG, "REPORTED"):
+                    traced |= page_number_set(str(fact.get("text") or ""))
+        for sid in order:
+            if sid in fetched:
+                traced |= self.page_numbers(sid) or frozenset()
+            else:
+                for text in _row_search_texts(self.ledger.get(sid)):
+                    traced |= page_number_set(text)
+        traced |= {"%" + _canonical_number(str(scenario.weight)) for scenario in self.plan.scenarios}
+        return frozenset(traced)
+
+    def _evidence_sids(self) -> set[int]:
+        """The evidence digest's markers (the SOURCE INDEX writers were shown)
+        plus the sources of recorded findings (deterministic sections cite
+        those)."""
         sids = {int(n) for n in _CITE_RE.findall(_read_text(self.work / "digest.md") or "")}
         for record in self.records.values():
             for fact in record.get("facts") or []:
                 sids.update(int(sid) for sid in fact.get("sids") or [] if isinstance(sid, int))
         return sids
+
+    def _citable_sids(self) -> set[int]:
+        """Sources the report may cite: :meth:`_evidence_sids`.  Any other
+        marker names a ledger row no writer was shown — a guess that would
+        attach the claim to an unrelated page — and is removed before
+        References are built.  In a gated hindcast (TIME-9) only the admissible
+        ones (:meth:`_pit_admissible`), so References and sources.json list
+        only sources available as of the as-of date."""
+        sids = self._evidence_sids()
+        if self.pit is not None:
+            sids = {sid for sid in sids if self._pit_admissible(sid)}
+        return sids
+
+    def _pit_admissible(self, sid: int) -> bool:
+        """The citation wall of a gated hindcast (TIME-9): whether the ledger
+        row ``sid`` may be cited as of the as-of date (:func:`pit_row_admissible`);
+        False for an unknown sid or without the gates."""
+        row = self.ledger.get(sid)
+        return row is not None and self.pit is not None and pit_row_admissible(row, self.pit)
 
     def _repairs(self, sections: list[dict], context: str, deadline: rg.Deadline) -> list[dict]:
         """At most 3 section rewrites for empty, deterministic-fallback or
@@ -5532,6 +9243,10 @@ class _Engine:
                 self.state.set_phase("finalize", "failed", "report too short")
                 raise _EngineFailure(f"report_too_short: {len(report.strip())} chars < {MIN_REPORT_CHARS}")
             report_name = self._filename("REPORT_FILENAME", "research_report.md")
+            if self.pit is not None:
+                # TIME-9: an earlier attempt's audit never describes this attempt's sources.
+                with suppress(OSError):
+                    (self.out_dir / POINT_IN_TIME_FILENAME).unlink(missing_ok=True)
             order = [int(sid) for sid in self.qa.get("citation_order") or []]
             sources = self._source_rows(order)
             sources_name = self._filename("SOURCES_FILENAME", "sources.json")
@@ -5542,11 +9257,26 @@ class _Engine:
             self.write_text(self.out_dir / report_name, report)
             self.log("ok", f"wrote {report_name} ({len(report)} chars)")
             self.log("ok", f"wrote {sources_name} ({len(sources)} sources)")
-            actors_raw, facts_raw = self._structured(strip_references(report), deadline)
-            counts = self._write_structured(actors_raw, facts_raw, sources)
+            report_body = strip_references(report)
+            actors_raw, facts_raw = self._structured(report_body, deadline)
+            counts = self._write_structured(actors_raw, facts_raw, sources, order, report_body)
+            if not self._publish_evidence(counts.pop("_evidence", None)):
+                counts.pop("verified_facts", None)
             self._analytics(sources, counts.pop("_actors_obj"))
-            self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
-                             self.meta, self.reporter, model_name=self.model_name)
+            if self.source_dates:
+                self._source_date_meta(order)
+            if self.pinned_as_of:
+                # TIME-7: today's odds are not as of the pinned date (the parent also turns
+                # PREDICTION_MARKETS_ENABLED off for such a run); nothing is fetched.
+                self.log("stage", f"prediction markets withheld (RESEARCH_AS_OF={self.pinned_as_of})")
+                self.meta["point_in_time"] = {
+                    "as_of": self.pinned_as_of, "hindcast": self.hindcast, "markets": "withheld",
+                    "fetch": "label" if self.hindcast else "live", "search": "unbounded"}
+            else:
+                self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
+                                 self.meta, self.reporter, model_name=self.model_name)
+            if self.pit is not None:
+                self._write_point_in_time(sources_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
                              question=self.question)
             final_text = _read_text(self.out_dir / report_name) or report
@@ -5567,6 +9297,114 @@ class _Engine:
                          f"{self.meta['report_chars']} chars)")
         return 0
 
+    def _start_pit_counts(self) -> PitPriorCounts:
+        """Count this attempt as started (state.json :data:`PIT_ATTEMPTS_KEY`)
+        and read the gate counts the earlier attempts of this run (this work
+        dir) saved (:meth:`_save_pit_counts`; :func:`pit_prior_counts`).  When
+        they do not cover every earlier attempt (one was killed before its
+        final save, or the file is missing or unreadable) it is logged, and the
+        audit's search and fetch streams say ``scope`` ``partial`` (its
+        ``cited`` stream, a re-check of the published sources, and so its
+        verdict never depend on them)."""
+        started_before = self.state.bump(PIT_ATTEMPTS_KEY)
+        saved = _read_text(self.work / PIT_COUNTS_FILENAME)
+        prior, why = pit_prior_counts(saved, resumed=self.resumed, started_before=started_before)
+        if why:
+            self.log("warn", f"v3: point-in-time search and fetch counts are partial ({why}); the audit "
+                             f"counts {prior.attempts + 1} of the run's {prior.started} attempts")
+        return prior
+
+    def _pit_run_counts(self) -> tuple[int, dict[str, int]]:
+        """``(attempts, gate counts)`` of the run so far: the earlier attempts'
+        saved counts plus this attempt's (``ResearchTools.stats()["pit"]``)."""
+        prior = self._pit_prior
+        return prior.attempts + 1, pit_sum_counts(prior.counts, self.tools.stats().get("pit"))
+
+    def _save_pit_counts(self) -> None:
+        """Save :meth:`_pit_run_counts` in the work dir (TIME-9, a gated
+        hindcast) for the audit of a resumed attempt: at every phase exit,
+        after every KIQ record and, as the attempt's final counts, on every
+        exit (:meth:`attach_telemetry`), so a killed attempt loses at most
+        the counts of its work in flight and the next attempt knows it
+        (``attempts_closed`` short of the attempts started).  Serialized, so a
+        stale snapshot never replaces a newer one.  Best effort: a failure is
+        logged (a resumed audit then reads the counts as partial)."""
+        prior = self._pit_prior
+        with self._pit_save_lock:
+            try:
+                attempts, counts = self._pit_run_counts()
+                self.write_json(self.work / PIT_COUNTS_FILENAME, {
+                    "attempts": attempts, "attempts_closed": prior.closed + (1 if self._pit_closed else 0),
+                    "counts_complete": prior.complete, "counts": counts})
+            except Exception as exc:  # noqa: BLE001 — a lost count is flagged later, never fatal
+                self.log("warn", f"v3: {PIT_COUNTS_FILENAME} not written ({type(exc).__name__}: {exc})")
+
+    def _pit_wall_counts(self) -> dict[str, int | str | None]:
+        """What the citation wall kept out of the report (TIME-9): the
+        evidence's sources that are not admissible (``sids_withheld``), and the
+        evidence digest's lines left out and markers stripped, recounted with
+        the digest's rule (:func:`pit_wall_record`, FU-2) over the records the
+        digest is built from, so they are what the writers saw (a withheld KIQ
+        question counts as one line left out).  That rule strips no marker:
+        ``digest_markers_stripped`` stays 0 (the key is kept for readers).
+        ``digest_rule`` names the rule the counts are of: the one state.json
+        records (:data:`PIT_DIGEST_WALL_KEY`), else ``"unknown"`` with both
+        digest counts None, i.e. the digest is one a resumed attempt reused
+        from an earlier build."""
+        admissible = _memoized_sid_check(self._pit_admissible)
+        withheld = sum(1 for sid in self._evidence_sids() if not admissible(sid))
+        if self.state.snapshot().get(PIT_DIGEST_WALL_KEY) != PIT_DIGEST_WALL_RULE:
+            self.log("warn", f"v3: state.json records no {PIT_DIGEST_WALL_RULE} wall for the reused evidence "
+                             f"digest (an earlier build's); {POINT_IN_TIME_FILENAME} leaves its digest counts unknown")
+            return {"sids_withheld": withheld, "digest_rule": "unknown", "digest_lines_dropped": None,
+                    "digest_markers_stripped": None}
+        lines = markers = 0
+        for record in (self.records[k.id] for k in self.kiqs if k.id in self.records):
+            _, dropped, stripped = pit_wall_record(record, admissible)
+            lines += dropped
+            markers += stripped
+        return {"sids_withheld": withheld, "digest_rule": PIT_DIGEST_WALL_RULE, "digest_lines_dropped": lines,
+                "digest_markers_stripped": markers}
+
+    def _write_point_in_time(self, sources_name: str) -> None:
+        """point_in_time.json (TIME-9, a gated hindcast): the research audit of
+        :func:`point_in_time_payload` over the published sources.json as it
+        is on disk (after every rewrite of this finalize), the gates' counts of
+        the run (:meth:`_pit_run_counts`; ``partial`` when they miss an earlier
+        attempt's, :meth:`_start_pit_counts`) and the parametric suspects;
+        mirrored (without its schema and as-of) into
+        ``meta.point_in_time.audit``.  Fails closed without breaking the run: a
+        failure is recorded in ``analytics_errors`` (``point_in_time``), no
+        point_in_time.json is left (so no verdict vouches for the report) and
+        the mirror says ``unavailable``."""
+        path = self.out_dir / POINT_IN_TIME_FILENAME
+        block = self.meta.setdefault("point_in_time", {})
+        try:
+            sources = _read_json(self.out_dir / sources_name)
+            if not isinstance(sources, list):
+                raise ValueError(f"{sources_name} is not a JSON list")
+            attempts, gate_counts = self._pit_run_counts()
+            payload = point_in_time_payload(self.pit, gate_counts=gate_counts, sources=sources,
+                                            suspects=self.parametric_suspects, wall=self._pit_wall_counts(),
+                                            attempts=attempts, attempts_started=self._pit_prior.started,
+                                            counts_complete=self._pit_prior.complete)
+            self.write_json(path, payload, internal=False)
+        except Exception as exc:  # noqa: BLE001 — the audit never fails a finished report; it fails closed
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "point_in_time", "error": error[:300]})
+            self.log("warn", f"v3: point-in-time audit failed ({error}); no {POINT_IN_TIME_FILENAME}")
+            with suppress(OSError):
+                path.unlink(missing_ok=True)
+            block["audit"] = {"status": "unavailable"}
+            return
+        block["audit"] = {key: value for key, value in payload.items() if key not in ("schema", "as_of")}
+        cited = payload["streams"]["cited"]
+        self.log("ok" if payload["status"] != PIT_STATUS_VIOLATED else "warn",
+                 f"wrote {POINT_IN_TIME_FILENAME} ({payload['status']}; cited {cited['checked']}: "
+                 f"{cited['admitted']} admitted, {cited['same_day']} same-day, {cited['unverifiable']} undated, "
+                 f"{cited['late']} late; {payload['wall']['sids_withheld']} sources kept out of the report"
+                 f"{'' if self._pit_prior.complete else '; search and fetch counts partial'})")
+
     def _source_id(self, url: str) -> str:
         func = getattr(self.bridge, "stable_source_id", None)
         if callable(func):
@@ -5578,43 +9416,195 @@ class _Engine:
                 pass
         return "src_" + _sha256(rg.canonical_url(url))[:16]
 
+    def _published_page(self, sid: int, row: Mapping[str, Any]) -> tuple[bool, str | None, str | None]:
+        """``(fetched, page text, shell reason)`` of ledger row ``sid`` as
+        sources.json publishes it: a fetched row whose stored page is an
+        extraction shell (RESEARCH_FETCH_SHELL_DETECTION), like a resumed work
+        dir's stored shell, is published as a cited snippet (fetched False)."""
+        fetched = bool(row.get("fetched"))
+        text = self.tools.page_text(sid) if fetched else None
+        if fetched:
+            # An official-data row's page (TIME-13) is the vendor's record, never a web extraction shell.
+            shell = (rg._extraction_failure_reason(text)
+                     if (self.shell_detection and text and row.get("via") != "data") else None)
+        else:
+            shell = self.stored_shells.get(sid)
+        return fetched and shell is None, text, shell
+
     def _source_rows(self, order: Sequence[int]) -> list[dict]:
-        """sources.json: cited sources only, in positional citation order."""
+        """sources.json: cited sources only, in positional citation order.
+
+        With shell detection on, a fetched row whose stored page is an
+        extraction shell (a page stored before the tool-layer check), and a
+        row :meth:`_unmark_stored_shells` un-marked when this resumed run
+        started, is published as ``cited`` with ``fetch_status``
+        ``shell:<reason>`` and no excerpt or hash, so grounding excludes it.
+
+        With RESEARCH_EVIDENCE_SUPPORTS (and evidence quotes not off) a
+        source's located quotes (:meth:`_evidence_support_quotes`) are its
+        ``supports``, through :func:`_merge_supports`; REPORT-7's evidence
+        windows join after them.  Otherwise ``supports`` is ``[]``.
+
+        With RESEARCH_DERIVED_FINDINGS every row also carries
+        ``derived_supports`` (:meth:`_derived_supports`; ``[]`` for a shell),
+        a field of its own that is never merged into ``supports``.
+
+        With RESEARCH_SOURCE_DATES a dated ledger row (TIME-2) publishes its
+        ``date`` and, right after it, ``date_precision``, ``date_source`` and,
+        when present, ``modified_at`` / ``modified_source`` /
+        ``date_rejected``; an undated row keeps ``date`` None and no other
+        date key.  In a gated hindcast (TIME-9) every row also carries the
+        ledger's ``pit_status``.
+
+        An official-data row (TIME-13, ``via`` ``data``) is dated by its vendor
+        (the FRED vintage or the latest filing served), its ``supports`` are
+        the vendor's own sentences (at most DATA_SUPPORTS_MAX, first; no quote
+        or evidence window joins them) and its ``data`` block names the vendor,
+        the series or filer and the vintage or filing date."""
         rows: list[dict] = []
+        demoted = 0
+        quotes = self._evidence_support_quotes() if self.evidence_supports else {}
+        derived = self._derived_supports() if getattr(self, "derived_findings", False) else None
         for sid in order:
             row = self.ledger.get(sid)
             if not row:
                 continue
-            fetched = bool(row.get("fetched"))
+            fetched, text, shell = self._published_page(sid, row)
+            if shell is not None:
+                demoted += 1
             entry: dict[str, Any] = {
                 "source_id": self._source_id(row["url"]), "url": row["url"], "title": row.get("title"),
                 "tier": row.get("tier"), "date": None,
-                "source_origin": "fetched" if fetched else "cited",
-                "reachable": True if fetched else None,
             }
+            if self.source_dates:
+                entry.update(_source_date_fields(row))
+            data = row.get("data") if row.get("via") == "data" and isinstance(row.get("data"), Mapping) else None
+            if data is not None and data.get("date"):
+                entry["date"] = data["date"]
+            if self.pit is not None:
+                # TIME-9: the gates' verdict (None: a source seen only in search rows).
+                entry["pit_status"] = row.get("pit_status")
+            entry.update({"source_origin": "fetched" if fetched else "cited",
+                          "reachable": True if fetched else None})
+            if shell is not None:
+                entry["fetch_status"] = f"shell:{shell}"
             if fetched:
                 entry["content_sha256"] = row.get("content_sha256")
-                text = self.tools.page_text(sid)
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
             entry["supports"] = []
+            if data is not None:
+                supports = data.get("supports")
+                _merge_supports(entry, (supports if isinstance(supports, list) else [])[:DATA_SUPPORTS_MAX],
+                                DATA_SUPPORTS_MAX)
+                entry["data"] = data_source_block(data, row["url"])
+            elif shell is None and quotes.get(sid):
+                _merge_supports(entry, quotes[sid], EVIDENCE_QUOTES_PER_SOURCE)
+            if derived is not None:
+                entry["derived_supports"] = list(derived.get(sid, ())) if shell is None else []
             entry["independent"] = None
             rows.append(entry)
+        self.shell_sources_demoted = demoted
         return rows
+
+    def _evidence_support_quotes(self) -> dict[int, list[str]]:
+        """sid -> the located evidence quotes of the facts of this run's
+        contract (KIQs in natural order, facts and quotes in order), page
+        quotes before search-text ones; each cleaned like web text (a quote
+        the instruction filter touches is left out) and cut to
+        EVIDENCE_SUPPORT_CHARS.  Offsets stay in the KIQ records: sources.json
+        ``supports`` is a list of strings."""
+        contract = self._evidence_contract()
+        ranked: dict[int, list[tuple[int, int, str]]] = {}
+        sequence = 0
+        for record in sorted(self.records.values(), key=lambda r: _natural_key(str(r.get("id")))):
+            if record.get("evidence_contract") != contract:
+                continue
+            for fact in record.get("facts") or []:
+                for entry in (fact.get("evidence") or []) if isinstance(fact, dict) else []:
+                    if not isinstance(entry, dict) or not isinstance(entry.get("sid"), int):
+                        continue
+                    text = _collapse(rg._clean_web_text(entry.get("quote")), EVIDENCE_SUPPORT_CHARS)
+                    if not text or rg.INSTRUCTION_REMOVED in text:
+                        continue
+                    rank = 0 if entry.get("target") == "page" else 1
+                    ranked.setdefault(entry["sid"], []).append((rank, sequence, text))
+                    sequence += 1
+        return {sid: [text for _, _, text in sorted(items)] for sid, items in ranked.items()}
+
+    def _derived_facts(self) -> list[dict]:
+        """The DERIVED facts (RESEARCH-8) of this run with a readable
+        derivation (an int ``sid``, ``expr`` and ``result``), KIQs in natural
+        order, facts in order."""
+        found: list[dict] = []
+        for record in sorted(self.records.values(), key=lambda r: _natural_key(str(r.get("id")))):
+            for fact in record.get("facts") or []:
+                if not isinstance(fact, dict) or fact.get("tag") != DERIVED_TAG:
+                    continue
+                derivation = fact.get("derivation")
+                if (isinstance(derivation, dict) and isinstance(derivation.get("sid"), int)
+                        and derivation.get("expr") and derivation.get("result")):
+                    found.append(fact)
+        return found
+
+    def _derived_supports(self) -> dict[int, list[str]]:
+        """sid -> up to DERIVED_SUPPORTS_PER_SOURCE distinct calculated
+        statements of the DERIVED facts whose derivation draws on it:
+        ``{fact text} [calculated: {expr}; a=…, b=…]`` without markers, at most
+        EVIDENCE_SUPPORT_CHARS long (the fact text is shortened first)."""
+        supports: dict[int, list[str]] = {}
+        for fact in self._derived_facts():
+            derivation = fact["derivation"]
+            suffix = f" [calculated: {derivation['expr']}; {_derivation_operands(derivation)}]"
+            text = _collapse(_tidy_spaces(_CITE_RE.sub("", str(fact.get("text") or ""))),
+                             max(40, EVIDENCE_SUPPORT_CHARS - len(suffix)))
+            statement = _collapse(f"{text}{suffix}", EVIDENCE_SUPPORT_CHARS)
+            items = supports.setdefault(derivation["sid"], [])
+            if statement not in items and len(items) < DERIVED_SUPPORTS_PER_SOURCE:
+                items.append(statement)
+        return supports
+
+    def _facts_task_addenda(self) -> list[str]:
+        """Field rules the enabled knobs append to the facts task, in canonical
+        order: the date rule (RESEARCH_QUANT_TYPING) first, then the forecast
+        inputs (RESEARCH_V3_FORECAST_INPUTS), then the forecaster fields
+        (RESEARCH_FORECASTER_ATTRIBUTION), later rules after them."""
+        addenda: list[str] = []
+        if _env_flag(self.env, "RESEARCH_QUANT_TYPING", False):
+            addenda.append(_FACTS_DATE_RULE)
+        if self.v3_forecast_inputs:
+            addenda.append(_FACTS_FORECAST_INPUTS_RULE)
+        if self.forecaster_attribution:
+            addenda.append(_FACTS_FORECASTER_RULE)
+        return addenda
+
+    def _facts_task(self) -> str:
+        """The facts extraction task: ``_T_FACTS`` plus one field-rule line per
+        addendum (none: exactly the template)."""
+        task = _render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
+                       max_contested=MAX_CONTESTED_ROWS, language=self.language)
+        return task + "".join(f"\n- {rule}" for rule in self._facts_task_addenda())
 
     def _structured(self, report_body: str, deadline: rg.Deadline) -> tuple[dict | None, dict | None]:
         """Actors + facts extraction over one shared cached report prefix,
         memoized by report hash so a resumed finalize never pays twice.
 
+        The facts memo also records the task's hash when addenda extend it
+        (``task_sha256``): it is reused only for the same task, and a memo
+        without the hash only while the task has no addenda.
+
         A reply still cut by the output cap after the wider retry keeps its
         repaired complete part and flags ``meta.<kind>_truncated``."""
         report_sha = _sha256(report_body)
+        facts_task = self._facts_task()
+        facts_task_sha = _sha256(facts_task) if self._facts_task_addenda() else None
         results: dict[str, dict] = {}
         truncated: list[str] = []
         for kind in ("actors", "facts"):
             cached = _read_json(self.work / "extract" / f"{kind}.json")
             if isinstance(cached, dict) and cached.get("report_sha256") == report_sha \
-                    and isinstance(cached.get("result"), dict):
+                    and isinstance(cached.get("result"), dict) \
+                    and (kind != "facts" or cached.get("task_sha256") == facts_task_sha):
                 results[kind] = cached["result"]
                 if cached.get("truncated"):
                     truncated.append(kind)
@@ -5625,9 +9615,7 @@ class _Engine:
             tasks = {
                 "actors": (_render(_T_ACTORS, actor_cap=self.actor_prompt_cap, language=self.language),
                            ("actors",)),
-                "facts": (_render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
-                                  max_contested=MAX_CONTESTED_ROWS, language=self.language),
-                          ("quantitative_facts",)),
+                "facts": (facts_task, ("quantitative_facts",)),
             }
             if len(todo) >= 2:
                 self.gateway.prime(rg.build_messages(ENGINE_CORE, shared, PRIME_TASK), kind="json",
@@ -5644,8 +9632,10 @@ class _Engine:
                 results[kind], cut = result
                 if cut:
                     truncated.append(kind)
-                self.write_json(self.work / "extract" / f"{kind}.json",
-                                {"report_sha256": report_sha, "result": results[kind], "truncated": cut})
+                memo = {"report_sha256": report_sha, "result": results[kind], "truncated": cut}
+                if kind == "facts" and facts_task_sha:
+                    memo["task_sha256"] = facts_task_sha
+                self.write_json(self.work / "extract" / f"{kind}.json", memo)
         for kind in truncated:
             self.meta[f"{kind}_truncated"] = True
             self.log("warn", f"v3: the {kind} extraction reply was truncated at its output cap even with the "
@@ -5707,10 +9697,37 @@ class _Engine:
         return parsed, truncated
 
     def _write_structured(self, actors_raw: dict | None, facts_raw: dict | None,
-                          sources: Sequence[Mapping[str, Any]]) -> dict:
+                          sources: list[dict], order: Sequence[int], report_body: str = "") -> dict:
         """actors/timeline/quantitative/contested — ALWAYS all four (possibly
-        empty) so no stale file of an earlier attempt survives."""
+        empty) so no stale file of an earlier attempt survives.
+
+        With RESEARCH_FORECASTER_ATTRIBUTION the quant rows get their
+        forecaster, range and forecaster count (:meth:`_attribute_forecasters`,
+        checked against ``report_body``, the report the facts were extracted
+        from) before the bridge enriches them.
+
+        With RESEARCH_VERIFIED_FACTS the quant rows also keep ``source_ref``
+        and get ``future_dated`` / ``evidence_window`` (see
+        :meth:`_verified_evidence`, over the ledger sids of ``order``, the
+        report's citation order), whose windows :meth:`_evidence_step`
+        publishes in sources.json (``sources`` then holds the rewritten rows)
+        before any row is stamped or any of the four files is written; the
+        returned counts then carry ``verified_facts`` and the private
+        ``_evidence`` (the verified_facts.json payload) that
+        :meth:`_publish_evidence` writes.
+
+        With RESEARCH_QUANT_RECONCILE (default on) :meth:`_quant_sanity` adds
+        the reconciled numeric disagreements to contested.json (actors.json
+        keeps the extracted claims, as in the legacy engine) and its warnings
+        to meta; it never changes a quant row.
+
+        With official-data tools bound (TIME-13) the cited data sources'
+        structured values head the quant rows (:meth:`_with_data_quant_rows`)
+        before any enrichment, typing or verification, and after
+        verification the model rows a data source's page contradicts are
+        dropped (:meth:`_drop_data_contradictions`)."""
         plan = self.plan
+        verify = _env_flag(self.env, "RESEARCH_VERIFIED_FACTS", True)
         if getattr(self.args, "no_actors", False):
             actors_raw = None
             self.meta["actors_skipped"] = True
@@ -5724,14 +9741,36 @@ class _Engine:
             self.meta["structured_facts_degraded"] = True
         facts_raw = facts_raw or {}
         timeline = normalize_events(facts_raw.get("key_events"))
-        quant = normalize_quant(facts_raw.get("quantitative_facts"), sources)
+        if self.forecaster_attribution:
+            quant = self._attribute_forecasters(
+                normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify, with_items=True),
+                report_body)
+        else:
+            quant = normalize_quant(facts_raw.get("quantitative_facts"), sources, keep_ref=verify)
+        if self.data_tool_names:
+            # TIME-13: before every enrichment, typing and verification step, like a model row.
+            quant = self._with_data_quant_rows(quant, sources)
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
         as_of = str(actors_raw.get("as_of_date") or "")
+        if _env_flag(self.env, "RESEARCH_AS_OF_PIN", True):
+            # TIME-1: the as-of anchors graph valid_at and the simulation calendar,
+            # and the extraction model has reported its training cutoff as the
+            # as-of.  Pin it to the plan's date; a different model value is only
+            # recorded in meta (never in actors.json, whose readers are the
+            # backend actor contract).
+            as_of_value = plan.as_of
+            model_as_of = _collapse(as_of, 40)
+            if model_as_of and model_as_of != plan.as_of:
+                self.meta["as_of_model_disagreement"] = {"plan_as_of": plan.as_of, "model_as_of": model_as_of}
+                self.log("warn", f"v3: extraction as_of_date {model_as_of} differs from the plan as-of "
+                                 f"{plan.as_of}; pinned to the plan date")
+        else:
+            as_of_value = as_of if re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else plan.as_of
         obj: dict[str, Any] = {
             "central_question": _collapse(actors_raw.get("central_question"), 600)
             or plan.restated_question or self.question,
-            "as_of_date": as_of if re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else plan.as_of,
+            "as_of_date": as_of_value,
             "situation_brief": normalize_situation(actors_raw.get("situation_brief")),
             "actors": actors,
             "relationships": normalize_relationships(actors_raw.get("relationships"), actors),
@@ -5745,40 +9784,663 @@ class _Engine:
         enriched = self.bridge_call("enrich_quantitative_rows", quant)
         if isinstance(enriched, list):
             quant = enriched
+        if self.source_dates:
+            self._quant_source_dates(quant, sources)
         ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
-        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date")
+        typing = _env_flag(self.env, "RESEARCH_QUANT_TYPING", False)
+        # TIME-13: model rows an official-data page contradicts are dropped right after verification.
+        drop = (functools.partial(self._drop_data_contradictions, verify=verify) if self.data_tool_names else None)
+        if verify or typing:
+            # Typing tests dates against the day after the plan's as-of: plan.as_of
+            # is the UTC date fixed at plan time, and a run that crosses UTC midnight
+            # can cite a source published the next day (no target date, no
+            # future-dated actual).
+            self._quant_provenance(quant, ref_date + _dt.timedelta(days=1), verify=verify, typing=typing,
+                                   drop=drop)
+        elif drop is not None:
+            drop(quant)
+        if self.pit is not None:
+            self._count_parametric_suspects(timeline, quant, typing=typing)
+        # After typing (the claimed-actual test reads its epistemic_class).  The
+        # future-dated bound: a pinned run's as-of itself (a fixed date, so a
+        # number published after it is a leak), else typing's publication bound,
+        # the day after the plan's as-of (a live run can cross UTC midnight).
+        if quant and _env_flag(self.env, "RESEARCH_QUANT_RECONCILE", True):
+            sanity_bound = ref_date if self.pinned_as_of else ref_date + _dt.timedelta(days=1)
+            reconciled = self._quant_sanity(quant, sanity_bound)
+        else:
+            reconciled = []
+        # Typed runs count forecast target dates as future-dated, never as fresh
+        # (by date, and by the as_of_is_target / published_after_as_of flags
+        # when typing stamped them).
+        recency = {"future_bucket": True} if typing else {}
+        quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date",
+                                      **recency)
         timeline_hist = self.bridge_call("annotate_recency_rows", timeline, ref_date, stale_days, date_key="date")
         if isinstance(quant_hist, dict):
             self.meta["quant_freshness"] = quant_hist
         if isinstance(timeline_hist, dict):
             self.meta["timeline_freshness"] = timeline_hist
-        obj.update(key_events=timeline, quantitative_facts=quant, contested_claims=contested,
-                   forecast_inputs=self.forecast_inputs())
+        # Same publication bound as typing: the day after the plan's as-of.
+        evidence = (self._evidence_step(quant, sources, order, ref_date + _dt.timedelta(days=1))
+                    if verify else None)
+        # actors.json keeps the rows without their window text: its readers
+        # serialize whole rows into budgeted actor context packs.  The text
+        # lives in quantitative.json, sources.json and verified_facts.json.
+        actor_quant = quant if evidence is None else [
+            {key: value for key, value in row.items() if key != "evidence_window"} for row in quant]
+        obj.update(key_events=timeline, quantitative_facts=actor_quant, contested_claims=contested,
+                   forecast_inputs=self.forecast_inputs(facts_raw))
+        if question_spec_usable(plan.question_spec):
+            # The whole normalized spec, so a consumer (RESEARCH-12) can recompute
+            # spec_sha256 from actors.json alone.
+            obj["question_spec"] = dict(plan.question_spec)
+            if plan.question_spec["horizon"].get("date"):
+                obj["horizon_date"] = plan.question_spec["horizon"]["date"]
         for key in ("sources", "actor_intelligence_contract"):
             obj.pop(key, None)
         for row in obj.get("actors") or []:
             if isinstance(row, dict):
                 row.pop("intelligence", None)
+        contested_rows = contested + reconciled
         names = {
             "actors": (self._filename("ACTORS_FILENAME", "actors.json"), obj, len(obj.get("actors") or []), "actors"),
             "timeline": (self._filename("TIMELINE_FILENAME", "timeline.json"), timeline, len(timeline), "events"),
             "quantitative": (self._filename("QUANTITATIVE_FILENAME", "quantitative.json"), quant, len(quant), "rows"),
-            "contested": (self._filename("CONTESTED_FILENAME", "contested.json"), contested, len(contested), "claims"),
+            "contested": (self._filename("CONTESTED_FILENAME", "contested.json"), contested_rows,
+                          len(contested_rows), "claims"),
         }
         for filename, payload, count, unit in names.values():
             self.write_json(self.out_dir / filename, payload, internal=False)
             self.log("ok", f"wrote {filename} ({count} {unit})")
-        return {"actors_count": len(obj.get("actors") or []),
-                "relationships_count": len(obj.get("relationships") or []),
-                "timeline_count": len(timeline), "quantitative_count": len(quant),
-                "contested_count": len(contested), "has_situation_brief": bool(obj["situation_brief"]),
-                "_actors_obj": obj}
+        counts: dict[str, Any] = {
+            "actors_count": len(obj.get("actors") or []),
+            "relationships_count": len(obj.get("relationships") or []),
+            "timeline_count": len(timeline), "quantitative_count": len(quant),
+            "contested_count": len(contested_rows), "has_situation_brief": bool(obj["situation_brief"]),
+            "_actors_obj": obj}
+        if evidence is not None:
+            # Binds the projection to the exact quantitative.json it indexes (a
+            # salvage that rewrites that file leaves the hash stale, detectably).
+            evidence["payload"]["quantitative_sha256"] = _sha256(json.dumps(quant, ensure_ascii=False, indent=2))
+            counts["verified_facts"] = dict(evidence["payload"]["counts"])
+            counts["_evidence"] = evidence
+        return counts
 
-    def forecast_inputs(self) -> dict:
+    def _with_data_quant_rows(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> list[dict]:
+        """``quant`` headed by the structured values of the cited official-data
+        sources (TIME-13, :func:`data_quant_row`), in citation order and each
+        source's fact order, at most DATA_QUANT_ROWS_MAX; the model rows are
+        trimmed from the end so the whole stays within MAX_QUANT_ROWS (logged
+        and counted in ``meta.data_tools.quant_rows_trimmed``).  The
+        facts are the ledger row's (the vendor's record), never the model's."""
+        rows: list[dict] = []
+        for position, entry in enumerate(sources, 1):
+            if len(rows) >= self.data_quant_rows_max:
+                break
+            if not isinstance(entry.get("data"), Mapping):
+                continue
+            ledger_row = self.ledger.find(entry.get("url")) or {}
+            data = ledger_row.get("data") if ledger_row.get("via") == "data" else None
+            facts = data.get("facts") if isinstance(data, Mapping) else None
+            for fact in facts if isinstance(facts, list) else []:
+                row = data_quant_row(fact, entry, position)
+                if row is not None and len(rows) < self.data_quant_rows_max:
+                    rows.append(row)
+        kept = quant[:MAX_QUANT_ROWS - len(rows)]
+        self._data_quant_added = len(rows)
+        self._data_quant_trimmed = len(quant) - len(kept)
+        if rows:
+            self.log("ok", f"v3: {len(rows)} quantitative row(s) copied from cited official-data sources")
+        if self._data_quant_trimmed:
+            self.log("warn", f"v3: {self._data_quant_trimmed} model quantitative row(s) trimmed from the end to keep "
+                             f"{MAX_QUANT_ROWS} rows")
+        return rows + kept
+
+    def _drop_data_contradictions(self, quant: list[dict], *, verify: bool) -> None:
+        """Remove from ``quant``, in place, the model rows citing an
+        official-data source whose number is not on that source's page
+        (TIME-13): RESEARCH-4's ``verification`` ``unverified``
+        (RESEARCH_VERIFIED_FACTS), else the same check
+        (:func:`verify_quant_row`) without stamping anything.  A
+        deterministic row, a row without a checkable number and a row whose
+        data page is unavailable are kept.  The dropped rows are listed (at
+        most DATA_QUANT_REJECTED_MAX) in ``meta.data_tools.quant_rows_rejected``
+        and counted in ``quant_rows_rejected_total``."""
+        kept: list[dict] = []
+        dropped: list[dict] = []
+        for row in quant:
+            source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
+            if is_data_quant_row(row) or source is None or source.get("via") != "data":
+                kept.append(row)
+                continue
+            if verify:
+                contradicted = row.get("verification") == "unverified"
+            else:
+                pages = self.page_numbers(source["sid"]) if source.get("fetched") else None
+                contradicted = pages is not None and verify_quant_row(row, pages, "")[1] == "none"
+            (dropped if contradicted else kept).append(row)
+        quant[:] = kept
+        self._data_quant_rejected_total = len(dropped)
+        self._data_quant_rejected = [
+            {key: row.get(key) for key in ("metric", "value", "unit", "source_ref", "source_url")}
+            for row in dropped[:DATA_QUANT_REJECTED_MAX]]
+        if dropped:
+            self.log("warn", f"v3: dropped {len(dropped)} quantitative row(s) whose number is not on the "
+                             "official-data source they cite")
+
+    def _quant_sanity(self, quant: Sequence[Mapping[str, Any]], as_of: _dt.date) -> list[dict]:
+        """The legacy engine's quantitative sanity checks (RESEARCH_QUANT_RECONCILE).
+        Read-only: the bridge helpers get copies of the rows, so no quant row
+        changes.
+
+        * ``reconcile_quantitative`` runs once per scope (:func:`_quant_scopes`:
+          same period end and length, geography and reported/projected),
+          since it compares every row on one (metric, unit) and a v3 row keeps
+          its period and geography outside the metric — across scopes a
+          forecast trajectory, a series over time, a year next to its fourth
+          quarter or two regions would read as disagreements.  Its probable
+          unit-scale (~1000x) errors go to ``meta.quant_unit_warnings``, and
+          its synthesized disagreements (origin ``quant_reconcile``) are
+          returned for contested.json, the probable unit-scale errors first
+          and at most QUANT_RECONCILE_MAX_CONTESTED, counted in
+          ``meta.quant_reconcile_contested``; both name their scope (the
+          claim's suffix, the warning's ``scope``);
+        * ``flag_implausible_quant`` checks the claimed actuals
+          (:func:`_claimed_actual`) against ``as_of``, the last day a cited
+          source can have published on: future-dated actuals and extreme
+          growth rates go to ``meta.quant_implausible``, followed by the
+          claimed actuals dated after ``as_of`` that it leaves out
+          (:func:`_future_dated_flags`: it reads only a YYYY-MM-DD, YYYY-MM
+          or YYYY prefix of ``as_of_date``, and a v3 row states its period
+          in ``period_end``).
+
+        Each meta list keeps at most QUANT_SANITY_MAX_FLAGS entries;
+        ``meta.quant_sanity_truncated`` records the total before any cut, by
+        meta key.  Degrade-safe: a missing or failing helper is recorded by
+        :meth:`bridge_call` in ``analytics_errors`` (reconcile stops at its
+        first failed or malformed result, keeping the scopes before it), a
+        result of another shape is ignored, and the run goes on."""
+        found: list[dict] = []
+        unit_errors: list[Any] = []
+        for label, rows in _quant_scopes(quant):
+            result = self.bridge_call("reconcile_quantitative", rows)
+            if not (isinstance(result, tuple) and len(result) == 2
+                    and all(isinstance(part, list) for part in result)):
+                break
+            for claim in result[0]:
+                if isinstance(claim, dict):
+                    claim = dict(claim)
+                    if label and claim.get("claim"):
+                        claim["claim"] = f"{claim['claim']} ({label})"
+                    found.append(claim)
+            unit_errors.extend({**warning, "scope": label} if label and isinstance(warning, dict) else warning
+                               for warning in result[1])
+        # Probable unit-scale errors first, so the cap keeps them; the sort is
+        # stable, so each kind keeps its scopes' first-seen order.
+        found.sort(key=lambda claim: "probable unit-scale error" not in str(claim.get("why_they_differ") or ""))
+        truncated: dict[str, int] = {}
+        if unit_errors:
+            self.meta["quant_unit_warnings"] = unit_errors[:QUANT_SANITY_MAX_FLAGS]
+            if len(unit_errors) > QUANT_SANITY_MAX_FLAGS:
+                truncated["quant_unit_warnings"] = len(unit_errors)
+            self.log("warn", f"v3: quant reconcile: {len(unit_errors)} probable unit-scale (~1000x) "
+                             "disagreement(s)")
+        extra = found[:QUANT_RECONCILE_MAX_CONTESTED]
+        if extra:
+            self.meta["quant_reconcile_contested"] = len(extra)
+            capped = ""
+            if len(found) > len(extra):
+                truncated["quant_reconcile_contested"] = len(found)
+                capped = f" (the first {len(extra)} of {len(found)})"
+            self.log("ok", f"v3: quant reconcile: +{len(extra)} contested claim(s) from numeric "
+                           f"disagreement{capped}")
+        claimed = [dict(row) for row in quant if _claimed_actual(row)]
+        implausible = self.bridge_call("flag_implausible_quant", claimed, as_of)
+        helper_ran = isinstance(implausible, list)
+        implausible = [*(implausible if helper_ran else ()), *_future_dated_flags(quant, as_of, helper_ran=helper_ran)]
+        if implausible:
+            self.meta["quant_implausible"] = implausible[:QUANT_SANITY_MAX_FLAGS]
+            if len(implausible) > QUANT_SANITY_MAX_FLAGS:
+                truncated["quant_implausible"] = len(implausible)
+            self.log("warn", f"v3: quant sanity: {len(implausible)} implausible/future-dated fact(s): "
+                             f"{implausible[:2]}")
+        if truncated:
+            self.meta["quant_sanity_truncated"] = truncated
+        return extra
+
+    def _attribute_forecasters(self, pairs: Sequence[tuple[dict, Any]], report_body: str) -> list[dict]:
+        """The quant rows of ``pairs`` (``normalize_quant(..., with_items=True)``:
+        each row with the extracted item it came from) after
+        :func:`attribute_forecast_row` against ``report_body``, summarised in
+        ``meta.forecaster_attribution``: ``rows``, ``with_forecaster``,
+        ``with_range`` (rows with low/high), ``with_n`` and ``fields_dropped``
+        (dropped field name -> count).  Degrade-safe: the rows are attributed
+        as copies, so a failure is recorded in ``analytics_errors``
+        (``forecaster_attribution``), returns the rows as normalize_quant made
+        them, writes no summary and the run goes on."""
+        rows = [row for row, _ in pairs]
+        try:
+            numbers = page_number_set(report_body)
+            attributed = [dict(row) for row in rows]
+            dropped: Counter[str] = Counter()
+            for row, (_, item) in zip(attributed, pairs, strict=True):
+                dropped.update(attribute_forecast_row(row, item, report_body, numbers))
+        except Exception as exc:  # noqa: BLE001 — attribution never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "forecaster_attribution", "error": error[:300]})
+            self.log("warn", f"v3: forecaster attribution failed ({error}); quantitative rows kept unattributed")
+            return rows
+        summary = {
+            "rows": len(attributed),
+            "with_forecaster": sum(1 for row in attributed if "forecaster" in row),
+            "with_range": sum(1 for row in attributed if "low" in row),
+            "with_n": sum(1 for row in attributed if "n_forecasters" in row),
+            "fields_dropped": dict(sorted(dropped.items())),
+        }
+        self.meta["forecaster_attribution"] = summary
+        self.log("ok", "v3: forecaster attribution: " + json.dumps(summary, ensure_ascii=False))
+        return attributed
+
+    def _count_parametric_suspects(self, timeline: Sequence[Mapping[str, Any]],
+                                   quant: Sequence[Mapping[str, Any]], *, typing: bool) -> None:
+        """:func:`parametric_suspects` against the gates' as-of (TIME-9) into
+        :attr:`parametric_suspects`; the rows are counted, never dropped or
+        changed.  Degrade-safe: a failure is recorded in ``analytics_errors``
+        (``point_in_time:suspects``), the count stays None and the run goes on."""
+        try:
+            self.parametric_suspects = parametric_suspects(timeline, quant, self.pit.as_of, typing=typing)
+        except Exception as exc:  # noqa: BLE001 — an uncounted suspect never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "point_in_time:suspects", "error": error[:300]})
+            self.log("warn", f"v3: parametric suspects not counted ({error})")
+            self.parametric_suspects = None
+
+    def _quant_source_dates(self, quant: list[dict], sources: Sequence[Mapping[str, Any]]) -> None:
+        """:func:`quant_source_dates` (RESEARCH_SOURCE_DATES), degrade-safe: a
+        failure is recorded in ``analytics_errors`` (``source_dates:quant``)
+        and the rows keep what they had; the run goes on."""
+        try:
+            stamps = [dict(row) for row in quant]
+            flagged = quant_source_dates(stamps, sources)
+        except Exception as exc:  # noqa: BLE001 — source dates never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "source_dates:quant", "error": error[:300]})
+            self.log("warn", f"v3: quantitative source dates failed ({error})")
+            return
+        for row, stamped in zip(quant, stamps, strict=True):
+            row.update(stamped)
+        if flagged:
+            self.log("warn", f"v3: {flagged} quantitative row(s) dated after their source's latest date "
+                             "(as_of_after_source)")
+
+    def _quant_provenance(self, quant: list[dict], as_of: _dt.date, *, verify: bool, typing: bool,
+                          drop: Callable[[list[dict]], None] | None = None) -> None:
+        """Page verification (RESEARCH_VERIFIED_FACTS) and reported/projected
+        typing (RESEARCH_QUANT_TYPING) of the quant rows, in place, summarised
+        in ``meta.quant_provenance`` with only the enabled parts: ``rows``;
+        verification adds ``verification_hist`` (rows without a label as
+        ``unchecked``) and ``verified_ratio`` (verified / labelled rows; None
+        when none is); typing (:func:`classify_quant_row` against ``as_of``)
+        adds ``class_hist`` and the ``future_dated_reported`` /
+        ``period_unparsed`` / ``as_of_is_target`` / ``published_after_as_of``
+        flag counts.  With RESEARCH_DERIVED_FINDINGS too, verification is
+        followed by :meth:`_derive_quant_rows` and adds ``derived_from``, the
+        number of rows it gave one.
+
+        Degrades safe, part by part: a failed part is recorded in
+        ``analytics_errors`` (``quant_provenance:verify`` / ``:derived`` /
+        ``:typing``) and left out of the summary, stamps no row (each part
+        computes every row's keys before it stamps any; a row without
+        ``verification`` counts as unchecked, never as verified), and the
+        other parts and the run go on.
+
+        ``drop`` (TIME-13, official-data tools bound) removes rows from
+        ``quant`` in place right after verification, so derivation, typing
+        and the summary describe only the rows quantitative.json keeps."""
+        def part(name: str, step: Callable[[], None]) -> bool:
+            try:
+                step()
+            except Exception as exc:  # noqa: BLE001 — provenance labels never fail a finished report
+                error = f"{type(exc).__name__}: {exc}"
+                self.analytics_errors.append({"helper": f"quant_provenance:{name}", "error": error[:300]})
+                self.log("warn", f"v3: quantitative provenance ({name}) failed ({error})")
+                return False
+            return True
+
+        verified = verify and part("verify", lambda: self._verify_quant_rows(quant))
+        if drop is not None:
+            # TIME-13: the rows an official-data page contradicts leave before typing and the summary.
+            drop(quant)
+        summary: dict[str, Any] = {"rows": len(quant)}
+        if verified:
+            labels = Counter(row.get("verification", "unchecked") for row in quant)
+            checked = len(quant) - labels["unchecked"]
+            summary["verification_hist"] = dict(sorted(labels.items()))
+            summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
+            if getattr(self, "derived_findings", False) and part("derived", lambda: self._derive_quant_rows(quant)):
+                summary["derived_from"] = sum(1 for row in quant if "derived_from" in row)
+        if typing and part("typing", lambda: _stamp_rows(quant, [classify_quant_row(row, as_of) for row in quant])):
+            summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
+            for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target", "published_after_as_of"):
+                summary[flag] = sum(1 for row in quant if flag in row.get("epistemic_flags", ()))
+        if len(summary) > 1:
+            self.meta["quant_provenance"] = summary
+            self.log("ok", "v3: quantitative provenance: " + json.dumps(summary, ensure_ascii=False))
+
+    def _verify_quant_rows(self, quant: list[dict]) -> None:
+        """Stamp each row's ``verification`` against the source its
+        ``source_url`` resolves to in the ledger (values are never modified):
+
+        * ``verified`` — every number of the value is on the fetched page;
+        * ``unverified`` — the page was fetched but a number is not on it;
+        * ``snippet_only`` — the cited source was never fetched or its stored
+          page is unavailable (its search snippet is not checked: the label
+          says nothing about the number);
+        * ``none`` — no resolvable source.
+
+        A value without a checkable number on a fetched page gets no label
+        (absent = unchecked).  ``verified`` mirrors the label as a bool.
+        Every label is decided before any row is stamped."""
+        stamps: list[dict] = []
+        for row in quant:
+            url = row.get("source_url")
+            source = self.ledger.find(url) if url else None
+            pages = self.page_numbers(source["sid"]) if source and source.get("fetched") else None
+            if source is None:
+                verification = "none"
+            elif pages is None:
+                verification = "snippet_only"
+            else:
+                ok, detail = verify_quant_row(row, pages, str(source.get("snippet") or ""))
+                if detail == "not_checkable":
+                    stamps.append({})
+                    continue
+                verification = "verified" if ok else "unverified"
+            stamps.append({"verification": verification, "verified": verification == "verified"})
+        _stamp_rows(quant, stamps)
+
+    def _derive_quant_rows(self, quant: list[dict]) -> None:
+        """RESEARCH-8: a quant row labelled ``unverified`` (its number is not on
+        its fetched page) whose source is the derivation source of a DERIVED
+        fact stating it (:func:`derived_quant_match`) keeps its label and
+        gains ``derived_from`` {sid, expr, result} of the first such fact
+        (KIQs in natural order).  Every row's key is decided before any row
+        is stamped."""
+        by_sid: dict[int, list[Mapping[str, Any]]] = {}
+        for fact in self._derived_facts():
+            by_sid.setdefault(fact["derivation"]["sid"], []).append(fact["derivation"])
+        stamps: list[dict] = []
+        for row in quant:
+            stamp: dict[str, Any] = {}
+            url = row.get("source_url")
+            source = self.ledger.find(url) if url and row.get("verification") == "unverified" else None
+            derivation = derived_quant_match(row, by_sid.get(source["sid"], ())) if source else None
+            if derivation is not None:
+                stamp["derived_from"] = {"sid": derivation["sid"], "expr": derivation["expr"],
+                                         "result": derivation["result"]}
+            stamps.append(stamp)
+        _stamp_rows(quant, stamps)
+
+    def _evidence_step(self, quant: list[dict], sources: list[dict], order: Sequence[int],
+                       as_of: _dt.date) -> dict | None:
+        """:meth:`_verified_evidence`, its windows published in sources.json
+        (:meth:`_publish_windows`), then its row stamps applied: no row
+        claims a ``published`` window unless sources.json holds it.  Degrades
+        safe: a failure of either step is recorded in ``analytics_errors``
+        (``verified_facts`` / ``verified_facts:supports``), stamps no row,
+        leaves sources.json as finalize wrote it, publishes nothing and the
+        run goes on."""
+        try:
+            evidence = self._verified_evidence(quant, sources, order, as_of)
+        except Exception as exc:  # noqa: BLE001 — evidence windows never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "verified_facts", "error": error[:300]})
+            self.log("warn", f"v3: verified facts failed ({error}); no evidence windows and no "
+                             f"{VERIFIED_FACTS_FILENAME}")
+            return None
+        sources_name = self._filename("SOURCES_FILENAME", "sources.json")
+        try:
+            self._publish_windows(evidence, sources, sources_name)
+        except Exception as exc:  # noqa: BLE001 — evidence windows never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "verified_facts:supports", "error": error[:300]})
+            self.log("warn", f"v3: adding evidence windows to {sources_name} failed ({error}); no evidence "
+                             f"windows and no {VERIFIED_FACTS_FILENAME}")
+            return None
+        _stamp_rows(quant, evidence.pop("stamps"))
+        return evidence
+
+    def _publish_windows(self, evidence: Mapping[str, Any], sources: list[dict], sources_name: str) -> None:
+        """The windows of :meth:`_verified_evidence` join their rows'
+        ``supports`` (:func:`_merge_supports`) in ONE atomic sources.json
+        rewrite: the same rows in the same order, so the report's positional
+        [S#] are unaffected; the selection is deterministic, so a resumed
+        finalize writes the same bytes.  ``sources`` takes the rewritten rows
+        only once the file is written: a failed write raises with ``sources``
+        and sources.json as they were.  Windows the per-source cap left out
+        are logged."""
+        counts = evidence["payload"]["counts"]
+        if evidence["windows"]:
+            rows = list(sources)
+            for position, spans in evidence["windows"].items():
+                rows[position - 1] = dict(rows[position - 1])
+                _merge_supports(rows[position - 1], spans, EVIDENCE_WINDOWS_PER_SOURCE)
+            self.write_json(self.out_dir / sources_name, rows, internal=False)
+            sources[:] = rows
+            self.log("ok", f"v3: added {counts['windows']} evidence window(s) to the supports of "
+                           f"{len(evidence['windows'])} source(s) in {sources_name}")
+        if counts["windows_dropped"]:
+            self.log("warn", f"v3: {counts['windows_dropped']} evidence window(s) of "
+                             f"{len(evidence['dropped'])} source(s) not added to {sources_name} (cap "
+                             f"{EVIDENCE_WINDOWS_PER_SOURCE} per source; their figures keep them with "
+                             "published false)")
+
+    def _verified_evidence(self, quant: Sequence[Mapping[str, Any]], sources: Sequence[Mapping[str, Any]],
+                           order: Sequence[int], as_of: _dt.date) -> dict:
+        """Evidence windows and the verified_facts.json projection (REPORT-7),
+        computed before anything is stamped or written; zero model calls.
+
+        * Quant rows (labelled by :meth:`_verify_quant_rows`): an ``actual``
+          whose ``as_of_date`` is a day (an ISO date, or date-time, read as
+          typing reads it: :func:`_period_bounds`) after ``as_of`` (the last
+          day a cited source can have published on, recorded as the
+          projection's ``future_dated_after``) gets ``future_dated``; a year
+          or month is never future-dated.  A ``verified`` row gets
+          ``evidence_window`` — ``{"text": <its best window>, "basis":
+          "number_and_anchor", "published": <bool>}`` on the fetched page of
+          its source (anchors: metric, series, definition), else ``{"text":
+          None, "basis": "number_only"}``: the number is on the page but no
+          sentence states it next to its metric, and nothing is published;
+          or ``{"text": None, "basis": "source_not_fetched"}`` when
+          sources.json does not publish its source as fetched (a stored page
+          demoted as a shell): no window was looked for.
+        * Findings: every fact of ``self.records`` in KIQ order as a claim
+          (``K3-F2``: KIQ K3's second fact) with its status (the fact's tag),
+          numbers, the positional refs and source ids of its sources in
+          sources.json (``citable``: it has one and is not unverified) and,
+          when VERIFIED, ``spans``: its best windows over its fetched pages
+          (anchors: the finding's words), each with ``published``.
+
+        At most EVIDENCE_WINDOWS_PER_FACT windows per figure
+        (:func:`select_evidence_windows`).  A source publishes at most
+        EVIDENCE_WINDOWS_PER_SOURCE of the windows found on it, chosen by
+        coverage (:func:`select_source_windows`: every figure's best window
+        before any figure's second) and merged in page order
+        (:func:`_merge_supports`).  ``published`` says whether a window is in
+        its source's supports, the spans the report's citation check reads;
+        a window left out stays its figure's evidence and is counted in
+        ``windows_dropped``.  Only sources.json rows published as ``fetched``
+        get windows.
+
+        Returns ``{"stamps": [per quant row], "windows": {position: [new
+        supports spans]}, "dropped": {position: [windows left out]},
+        "payload": <verified_facts.json>}``."""
+        by_url = {str(entry.get("url")): position for position, entry in enumerate(sources, 1)}
+        positions: dict[int, int] = {}
+        for sid in order:
+            row = self.ledger.get(sid)
+            position = by_url.get(str(row.get("url"))) if row else None
+            if position is not None:
+                positions.setdefault(sid, position)
+        fetched = {sid: position for sid, position in positions.items()
+                   if sources[position - 1].get("source_origin") == "fetched"}
+        pages: dict[int, list[_EvidenceSentence]] = {}
+        candidates: dict[int, list[tuple[int, int, int, str]]] = {}
+
+        def best_windows(sids: Sequence[int], number_text: str, anchor_text: str) -> list[tuple[int, str]]:
+            """``(position, window)`` of the figure's best windows over the
+            fetched pages of ``sids``, recorded as supports candidates with
+            their rank in the figure (see :func:`select_source_windows`)."""
+            ranked: list[tuple[int, int, int, int, str]] = []
+            for rank, sid in enumerate(dict.fromkeys(sids)):
+                if sid not in fetched:
+                    continue
+                if sid not in pages:
+                    pages[sid] = evidence_sentences(self.tools.page_text(sid))
+                for score, index, text in select_evidence_windows(pages[sid], number_text, anchor_text):
+                    ranked.append((-score, rank, index, fetched[sid], text))
+            ranked.sort()
+            chosen = ranked[:EVIDENCE_WINDOWS_PER_FACT]
+            for figure_rank, (negative_score, _, index, position, text) in enumerate(chosen):
+                candidates.setdefault(position, []).append((figure_rank, -negative_score, index, text))
+            return [(position, text) for _, _, _, position, text in chosen]
+
+        stamps: list[dict] = []
+        row_windows: list[tuple[int, str] | None] = []
+        for row in quant:
+            stamp: dict[str, Any] = {}
+            stated, _, precision = _period_bounds(row.get("as_of_date"))
+            if row.get("value_type") == "actual" and precision == "day" and stated is not None and stated > as_of:
+                stamp["future_dated"] = True
+            window: tuple[int, str] | None = None
+            if row.get("verification") == "verified":
+                source = self.ledger.find(row.get("source_url")) if row.get("source_url") else None
+                if source is None or source["sid"] not in fetched:
+                    stamp["evidence_window"] = {"text": None, "basis": "source_not_fetched"}
+                else:
+                    anchors = " ".join(str(row.get(key) or "") for key in ("metric", "series", "definition"))
+                    found = best_windows([source["sid"]], _quant_number_text(row), anchors)
+                    window = found[0] if found else None
+                    stamp["evidence_window"] = ({"text": window[1], "basis": "number_and_anchor"} if window
+                                                else {"text": None, "basis": "number_only"})
+            stamps.append(stamp)
+            row_windows.append(window)
+
+        claims: list[tuple[dict, list[tuple[int, str]]]] = []
+        for kiq in self.kiqs:
+            record = self.records.get(kiq.id)
+            for number, fact in enumerate((record or {}).get("facts") or [], 1):
+                if not isinstance(fact, dict):
+                    continue
+                text = _collapse(_tidy_spaces(_CITE_RE.sub("", str(fact.get("text") or ""))))
+                status = str(fact.get("tag") or "REPORTED").lower()
+                sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
+                cited = list(dict.fromkeys(positions[sid] for sid in sids if sid in positions))
+                claims.append(({
+                    "claim_id": f"{kiq.id}-F{number}", "kiq": kiq.id, "text_plain": text, "status": status,
+                    "numbers": fact_number_tokens(text),
+                    "missing_numbers": [str(token) for token in fact.get("missing_numbers") or []],
+                    "source_refs": [f"S{position}" for position in cited],
+                    "source_ids": [sources[position - 1].get("source_id") for position in cited],
+                    "citable": bool(cited) and status != "unverified",
+                }, best_windows(sids, text, text) if status == "verified" else []))
+
+        windows: dict[int, list[str]] = {}
+        dropped: dict[int, list[str]] = {}
+        published: dict[int, frozenset[str]] = {}
+        for position in sorted(candidates):
+            scratch = {"supports": list(sources[position - 1].get("supports") or [])}
+            _merge_supports(scratch, (), EVIDENCE_WINDOWS_PER_SOURCE)   # the row's own spans, as merged
+            if sources[position - 1].get("data"):
+                # TIME-13: an official-data row's supports are its vendor sentences; no window joins them.
+                published[position] = frozenset(scratch["supports"])
+                continue
+            kept, left_out = select_source_windows(candidates[position], scratch["supports"],
+                                                   EVIDENCE_WINDOWS_PER_SOURCE)
+            added = _merge_supports(scratch, kept, EVIDENCE_WINDOWS_PER_SOURCE)
+            if added:
+                windows[position] = added
+            if left_out:
+                dropped[position] = left_out
+            published[position] = frozenset(scratch["supports"])
+
+        def is_published(position: int, text: str) -> bool:
+            return text in published.get(position, frozenset())
+
+        quant_rows: list[dict] = []
+        for number, (row, stamp, window) in enumerate(zip(quant, stamps, row_windows, strict=True)):
+            if window is not None:
+                stamp["evidence_window"]["published"] = is_published(*window)
+            quant_rows.append({"row": number, "metric": row.get("metric"),
+                               "verification": row.get("verification"), "source_ref": row.get("source_ref"),
+                               "future_dated": bool(stamp.get("future_dated")),
+                               "evidence_window": stamp.get("evidence_window")})
+        facts = [dict(claim, spans=[{"source_ref": f"S{position}", "span_text": span, "span_sha256": _sha256(span),
+                                     "published": is_published(position, span)} for position, span in spans])
+                 for claim, spans in claims]
+        labels = Counter(row.get("verification") for row in quant)
+        counts = {"facts": len(facts), "verified": sum(1 for fact in facts if fact["status"] == "verified"),
+                  "quant_verified": labels["verified"], "quant_unverified": labels["unverified"],
+                  "quant_snippet_only": labels["snippet_only"], "quant_none": labels["none"],
+                  "windows": sum(len(spans) for spans in windows.values()),
+                  "windows_dropped": sum(len(spans) for spans in dropped.values())}
+        # report_sha256 is the QA'd report (qa.json) as finalize writes it, the
+        # text the findings and the citation order come from; the chart step
+        # later appends its Visual Annex to research_report.md, so it is not
+        # the published file's hash.  _write_structured stamps
+        # quantitative_sha256.
+        payload = {"schema": VERIFIED_FACTS_SCHEMA, "as_of": self.plan.as_of,
+                   "future_dated_after": as_of.isoformat(),
+                   "report_sha256": self.qa.get("report_sha256"), "quantitative_sha256": None,
+                   "facts": facts, "quant": quant_rows, "counts": counts}
+        return {"stamps": stamps, "windows": windows, "dropped": dropped, "payload": payload}
+
+    def _publish_evidence(self, evidence: dict | None) -> bool:
+        """Write the verified_facts.json projection of :meth:`_evidence_step`
+        (whose windows sources.json already holds, :meth:`_publish_windows`).
+
+        Without evidence (the knob off, or the step failed) nothing is
+        published and a verified_facts.json an earlier attempt left is
+        removed.  Degrades safe: a failure is recorded and logged, no
+        verified_facts.json is left behind and the run goes on.  Returns
+        whether verified_facts.json was written."""
+        path = self.out_dir / VERIFIED_FACTS_FILENAME
+        try:
+            if evidence is None:
+                path.unlink(missing_ok=True)
+                return False
+            payload = evidence["payload"]
+            counts = payload["counts"]
+            self.write_json(path, payload, internal=False)
+            self.log("ok", f"wrote {VERIFIED_FACTS_FILENAME} ({counts['facts']} findings, {counts['verified']} "
+                           f"verified; {counts['quant_verified']} of {len(payload['quant'])} quantitative rows "
+                           "verified on their page)")
+            return True
+        except Exception as exc:  # noqa: BLE001 — evidence windows never fail a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "verified_facts:publish", "error": error[:300]})
+            self.log("warn", f"v3: publishing verified facts failed ({error}); no {VERIFIED_FACTS_FILENAME}")
+            with suppress(OSError):  # best effort: never leave an earlier attempt's projection behind
+                path.unlink(missing_ok=True)
+            return False
+
+    def forecast_inputs(self, facts_raw: Mapping[str, Any] | None = None) -> dict:
+        """actors.json ``forecast_inputs``: the plan's scenario frame; the usable
+        question spec's reference class as the one base-rate row (its frequency
+        is left to the research); with RESEARCH_V3_FORECAST_INPUTS the drivers
+        and indicators of the facts extraction ``facts_raw``."""
+        spec = self.plan.question_spec
+        base_rates: list[dict] = []
+        if question_spec_usable(spec) and spec.get("reference_class"):
+            base_rates.append({"reference_class": spec["reference_class"], "outcome_frequency": "",
+                               "basis": "question spec (engine default; base rate to be established by research)"})
+        facts_raw = facts_raw if self.v3_forecast_inputs and isinstance(facts_raw, Mapping) else {}
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
                                "narrative": s.thesis} for s in self.plan.scenarios],
-                "base_rates": [], "drivers": [], "indicators": []}
+                "base_rates": base_rates, "drivers": normalize_forecast_drivers(facts_raw.get("drivers")),
+                "indicators": normalize_forecast_indicators(facts_raw.get("indicators"))}
 
     def _analytics(self, sources: Sequence[Mapping[str, Any]], actors_obj: Mapping[str, Any]) -> None:
         tiers = self.bridge_call("source_tier_histogram", list(sources))
@@ -5796,15 +10458,44 @@ class _Engine:
                 quality["degraded"] = True
                 quality["degradation"] = list(dict.fromkeys([*(quality.get("degradation") or []), *events]))
                 self.log("warn", f"v3: research degraded ({len(events)} event(s)): {'; '.join(events)}")
+            if self.citation_stats_enabled and isinstance(self.qa.get("citation_stats"), dict):
+                quality["citation_stats"] = self.qa["citation_stats"]   # RESEARCH-9
             self.meta["research_quality"] = quality
             self.log("ok", f"research_quality={quality.get('score')} (grounding={grounding})")
 
+    def _source_date_meta(self, order: Sequence[int]) -> None:
+        """meta.source_dates (RESEARCH_SOURCE_DATES): :func:`source_date_summary`
+        over the ledger rows sources.json publishes, plus ``skipped`` (dating
+        attempts the tool layer skipped) when any was.  Degrade-safe."""
+        try:
+            summary = source_date_summary([row for row in (self.ledger.get(sid) for sid in order) if row])
+            date_stats = getattr(self.tools, "date_stats", None)
+            skipped = int((date_stats() if callable(date_stats) else {}).get("skipped") or 0)
+            if skipped:
+                summary["skipped"] = skipped
+        except Exception as exc:  # noqa: BLE001 — telemetry never fails a finished report
+            error = f"{type(exc).__name__}: {exc}"
+            self.analytics_errors.append({"helper": "source_dates", "error": error[:300]})
+            self.log("warn", f"v3: source date summary failed ({error})")
+            return
+        self.meta["source_dates"] = summary
+        self.log("ok", f"source dates: {summary['dated']} dated, {summary['undated']} undated "
+                       f"({summary['rejected_future']} with a future date rejected)")
+
     def _research_events(self) -> list[str]:
         """Research the report rests on incompletely: a template plan from a
-        model outage, content-filter refusals of every model call, KIQs never
-        researched or ended in deterministic notes, a gap review a failure
-        ended early, failed searches, and a page fetch failure rate of 50% or
-        more."""
+        model outage, content-filter refusals of every model call, a question
+        spec the model never delivered or that fails its integrity check
+        (RESEARCH_QUESTION_SPEC), KIQs never researched or ended in
+        deterministic notes, with evidence headers (RESEARCH_EVIDENCE_HEADERS)
+        at least half of the researched KIQs with insufficient evidence
+        (:func:`evidence_profile`), a gap review a failure ended early, failed
+        searches, a page fetch failure rate of 50% or more, with official-data
+        tools (TIME-13) a data-call failure rate of 50% or more over at least
+        two calls and, with evidence quotes enforced, KIQs whose evidence
+        check failed (their findings kept
+        their tags unchecked) and a located-quote share of the findings tagged
+        VERIFIED below EVIDENCE_MIN_LOCATED_SHARE."""
         events: list[str] = []
         if self.plan is not None and self.plan.fallback.get(PLAN_OUTAGE_KEY):
             events.append("research plan built from the deterministic templates: the model was unavailable "
@@ -5823,6 +10514,13 @@ class _Engine:
         if self.refused_calls:
             events.append(f"the provider's content filter refused every model call ({self.refused_calls} "
                           "refused); the report is built from the deterministic fallbacks")
+        if self.question_spec_enabled and self.plan is not None and self.plan.question_spec is not None:
+            spec_status = question_spec_telemetry(self.plan.question_spec)["status"]
+            if spec_status == "unavailable":
+                events.append("question spec unavailable: forecasts have no pinned outcome definition")
+            elif spec_status == "invalid":
+                events.append("question spec invalid (it fails its integrity check): forecasts have no pinned "
+                              "outcome definition")
         for label, kiqs in (("planned", [k for k in self.kiqs if k.round == 0]),
                             ("gap follow-up", [k for k in self.kiqs if k.round > 0])):
             missing = [k.id for k in kiqs if k.id not in self.records]
@@ -5833,6 +10531,10 @@ class _Engine:
         if stubbed:
             events.append(f"{len(stubbed)} of {len(self.records)} KIQ investigations ended in deterministic "
                           f"notes: {', '.join(stubbed)}")
+        if self.evidence_headers:
+            event = insufficient_evidence_event(self._evidence_profiles())
+            if event:
+                events.append(event)
         gap = self.state.phase("gap")
         detail = str(gap.get("detail") or "")
         if gap.get("status") == "partial" or detail.startswith("stopped:"):
@@ -5844,6 +10546,25 @@ class _Engine:
             events.append(f"{tools['search_failed']} of {tools['searches']} searches failed")
         if tools["fetch_failed"] and 2 * tools["fetch_failed"] >= tools["fetches"]:
             events.append(f"{tools['fetch_failed']} of {tools['fetches']} page fetches failed")
+        if self.source_taxonomy:
+            events.extend(_source_health_events(tools, _bridge_provider_events("search_tools"),
+                                                _bridge_provider_events("cached_fetch")))
+        if self.data_tool_names:
+            # TIME-13: official-data calls that failed (never counted as fetch failures above).
+            data = self.tools.stats().get("data") or {}
+            calls, failed = int(data.get("data_calls") or 0), int(data.get("data_failures") or 0)
+            if calls >= 2 and 2 * failed >= calls:
+                events.append(f"official-data tool failure rate >= 50%: {failed} of {calls} data calls failed")
+        if self.evidence_mode == EVIDENCE_ENFORCE:
+            records = list(self.records.values())
+            check_failed = sum(1 for record in records if record.get("evidence_error"))
+            if check_failed:
+                events.append(f"the evidence check failed for {check_failed} KIQ(s): their findings kept their "
+                              "tags without being checked against their evidence quotes")
+            claimed = evidence_summary(records, self.evidence_mode)["claimed_verified"]
+            if claimed["facts"] and claimed["located"] < EVIDENCE_MIN_LOCATED_SHARE * claimed["facts"]:
+                events.append(f"evidence quotes located for only {claimed['located']} of {claimed['facts']} "
+                              "findings the research agents tagged VERIFIED")
         return events
 
     def _degradation_events(self, actor_count: int) -> list[str]:
@@ -5879,6 +10600,29 @@ class _Engine:
         return events
 
     # ============================================================ telemetry
+    def _data_tools_meta(self) -> dict:
+        """meta.data_tools (TIME-13, RESEARCH_DATA_TOOLS set): the bound
+        vendors, the requested ones left unbound with why, the run's vintage
+        pin (None until a data call fixed one), this attempt's data calls,
+        answers from run memory, invalid requests and failures, and the
+        quantitative rows finalize copied from data sources, trimmed to make
+        room for them and dropped against them (listed up to
+        DATA_QUANT_REJECTED_MAX, with their total)."""
+        counts = self.meta.get("tools", {}).get("data") if isinstance(self.meta.get("tools"), Mapping) else None
+        counts = counts if isinstance(counts, Mapping) else {}
+        try:
+            pins = self._data_pin_record(create=False)
+        except Exception:  # noqa: BLE001 — telemetry never fails the run
+            pins = None
+        return {"enabled": list(self.data_vendors), "disabled": dict(sorted(self.data_disabled.items())),
+                "pit": pins["pit"] if pins else None,
+                **{name: int(counts.get(key) or 0) for name, key in (
+                    ("calls", "data_calls"), ("cached", "cached_data"), ("invalid", "data_invalid"),
+                    ("failures", "data_failures"))},
+                "quant_rows_added": self._data_quant_added, "quant_rows_trimmed": self._data_quant_trimmed,
+                "quant_rows_rejected": list(self._data_quant_rejected),
+                "quant_rows_rejected_total": self._data_quant_rejected_total}
+
     def attach_telemetry(self) -> None:
         """Usage, tools, phase and KIQ summaries into meta (called on every exit)."""
         ledger = self.gateway.ledger.to_dict()
@@ -5888,7 +10632,32 @@ class _Engine:
             self.log("warn", f"v3: usage.json not written ({exc})")
         self.meta["usage"] = {"total": ledger["total"], "phases": ledger["phases"],
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
+        if getattr(self, "record_models", False):
+            # INFRA-8: which model the run asked for (stanza, resolved id) and which ids served it.
+            self.meta["model_resolution"] = {"model": self.model_name or None, "model_id": self.model_id,
+                                             "models": ledger.get("models") or {}}
         self.meta["tools"] = self.tools.stats()
+        if self.data_tools_requested:
+            self.meta["data_tools"] = self._data_tools_meta()
+        if self.pit is not None:
+            # This attempt's final gate counts (a resumed audit's run scope needs them).
+            self._pit_closed = True
+            self._save_pit_counts()
+        if self.shell_detection:
+            shell_stats = getattr(self.tools, "shell_stats", None)
+            self.meta["fetch_shells"] = {"rejected": shell_stats() if callable(shell_stats) else {},
+                                         "sources_demoted": self.shell_sources_demoted}
+        if self.source_taxonomy:
+            outcome_counts = getattr(self.tools, "outcome_counts", None)
+            refusal = getattr(self.tools, "search_refusal", None)
+            refused = refusal() if callable(refusal) else None
+            self.meta["source_health"] = {
+                "version": 1,
+                "tools": outcome_counts() if callable(outcome_counts) else {},
+                "search_providers": _bridge_provider_events("search_tools"),
+                "fetch_providers": _bridge_provider_events("cached_fetch"),
+                "search_refused": {"provider": refused[0], "reason": refused[1]} if refused else None,
+            }
         self.meta["phases"] = {name: {**self.state.phase(name), "seconds": self.phase_seconds.get(name)}
                                for name in PHASES if self.state.phase(name)}
         records = list(self.records.values())
@@ -5899,7 +10668,31 @@ class _Engine:
             "fallback": sum(1 for r in records if (r.get("stats") or {}).get("fallback")),
             "facts": sum(len(r.get("facts") or []) for r in records),
             "verified": sum(1 for r in records for f in r.get("facts") or [] if f.get("tag") == "VERIFIED"),
+            # EVAL-16: a KIQ record a resumed run kept from before the counters existed counts 0.
+            **{name: sum(_record_stat_count(r, name) for r in records) for name in TOOL_CALL_COUNTERS},
         }
+        # ...and is counted, so that a zero sum over such records is not read as evidence.
+        counters_missing = sum(1 for r in records if _record_lacks_tool_counters(r))
+        if counters_missing:
+            self.meta["kiqs"]["tool_counters_missing"] = counters_missing
+        if self.evidence_headers:
+            # The profiles behind the digest's evidence lines, recounted from the records.
+            profiles = self._evidence_profiles()
+            self.meta["kiqs"]["evidence"] = profiles
+            self.meta["kiqs"]["sufficiency"] = {
+                label: sum(1 for profile in profiles.values() if profile["sufficiency"] == label)
+                for label in SUFFICIENCY_LABELS}
+        if self.derived_findings:
+            # RESEARCH-8: DERIVED facts count apart from VERIFIED ones (ADR-0002 I-11).
+            self.meta["derived"] = derived_summary(records)
+            self.meta["kiqs"]["derived"] = self.meta["derived"]["admitted"]
+        if self.evidence_mode != EVIDENCE_OFF:
+            self.meta["evidence"] = evidence_summary(records, self.evidence_mode)
+        if self.absence_discipline:
+            # Recounted from the facts, so KIQ records a resumed run kept count too.
+            counts = self._absence_cues("run", [fact for r in records for fact in r.get("facts") or []])
+            if counts is not None:
+                self.meta["absence_findings"] = {"total": sum(counts.values()), **counts}
         if self.analytics_errors:
             self.meta["analytics_errors"] = list(self.analytics_errors)
 
@@ -6065,17 +10858,88 @@ def normalize_events(value: Any) -> list[dict]:
     return rows
 
 
-def _source_for_ref(ref: Any, sources: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+def _forecast_input_rows(value: Any, fields: Sequence[tuple[str, int]], cap: int) -> list[dict]:
+    """Dict rows of text ``fields`` ((name, char cap), the first one required),
+    deduplicated on it, at most ``cap``; a string value is never split and
+    dates are kept exactly as written (never padded)."""
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        row = {name: _collapse(item.get(name), limit) if isinstance(item.get(name), (str, int, float))
+               and not isinstance(item.get(name), bool) else "" for name, limit in fields}
+        key = _norm_key(row[fields[0][0]])
+        if key and key not in seen:
+            seen.add(key)
+            rows.append(row)
+        if len(rows) >= cap:
+            break
+    return rows
+
+
+def normalize_forecast_drivers(value: Any) -> list[dict]:
+    """forecast_inputs drivers (the backend actor contract's shape)."""
+    return _forecast_input_rows(value, (("variable", 200), ("direction", 120), ("why_it_matters", 400)),
+                                MAX_FORECAST_DRIVERS)
+
+
+def normalize_forecast_indicators(value: Any) -> list[dict]:
+    """forecast_inputs indicators; ``date_or_trigger`` keeps the precision the
+    report gave (a date or the triggering event)."""
+    return _forecast_input_rows(value, (("indicator", 200), ("signals_what", 400), ("date_or_trigger", 160)),
+                                MAX_FORECAST_INDICATORS)
+
+
+def _ref_position(ref: Any, sources: Sequence[Mapping[str, Any]]) -> int | None:
+    """1-based position in ``sources`` a positional ref ("S3", "[S3]", 3) names."""
     match = re.search(r"\d+", str(ref or ""))
     if not match:
         return None
     position = int(match.group(0))
-    return sources[position - 1] if 1 <= position <= len(sources) else None
+    return position if 1 <= position <= len(sources) else None
 
 
-def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[dict]:
-    """Quantitative rows; ``source_ref`` (positional [S#]) resolves url and tier."""
+def _source_for_ref(ref: Any, sources: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    position = _ref_position(ref, sources)
+    return sources[position - 1] if position is not None else None
+
+
+def _merge_supports(entry: MutableMapping[str, Any], spans: Iterable[Any], cap: int) -> list[str]:
+    """The only writer of a sources.json row's ``supports`` evidence spans:
+    the row's own spans first, every one of them (the cap never drops what
+    an earlier writer merged), then ``spans`` in the given order while the
+    row holds fewer than ``cap``; each distinct non-empty text once.
+    Returns the spans it added."""
+    merged: list[str] = []
+    for span in entry.get("supports") or []:
+        text = str(span or "").strip()
+        if text and text not in merged:
+            merged.append(text)
+    kept = len(merged)
+    for span in spans:
+        text = str(span or "").strip()
+        if len(merged) >= cap:
+            break
+        if text and text not in merged:
+            merged.append(text)
+    entry["supports"] = merged
+    return merged[kept:]
+
+
+def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]], *, keep_ref: bool = False,
+                    with_items: bool = False) -> list:
+    """Quantitative rows; ``source_ref`` (positional [S#]) resolves url and tier.
+
+    With ``keep_ref`` (RESEARCH_VERIFIED_FACTS) a resolved ref is also kept as
+    ``source_ref`` in its normalised form ``"S<n>"``: the row's position in
+    sources.json, which the report's [S#] cite.
+
+    With ``with_items`` (RESEARCH_FORECASTER_ATTRIBUTION) the result is
+    ``(row, extracted item)`` pairs built in the same loop, so a caller reads
+    each row's own item (skipped items and the row cap never shift them)."""
     rows: list[dict] = []
+    items: list[dict] = []
     for item in value if isinstance(value, list) else []:
         if not isinstance(item, dict):
             continue
@@ -6092,15 +10956,744 @@ def normalize_quant(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[di
         value_type = str(item.get("value_type") or "").strip().lower()
         if value_type in _VALUE_TYPES:
             row["value_type"] = value_type
-        source = _source_for_ref(item.get("source_ref"), sources)
+        position = _ref_position(item.get("source_ref"), sources)
+        source = sources[position - 1] if position is not None else None
         if source is not None:
+            if keep_ref:
+                row["source_ref"] = f"S{position}"
             row["source_url"] = source.get("url")
             row["tier"] = source.get("tier")
             row.setdefault("source", _collapse(source.get("title"), 200))
         rows.append(row)
+        items.append(item)
         if len(rows) >= MAX_QUANT_ROWS:
             break
-    return rows
+    return list(zip(rows, items, strict=True)) if with_items else rows
+
+
+def data_source_block(data: Mapping[str, Any], url: str) -> dict:
+    """The ``data`` block of an official-data source in sources.json (TIME-13):
+    its vendor, the series and vintage (FRED) or the filer's CIK and latest
+    filing served (SEC EDGAR), and its URL; from the ledger row's ``data``."""
+    vendor = data.get("vendor")
+    keys = ("series_id", "vintage") if vendor == "fred" else ("cik", "filed")
+    return {"vendor": vendor, **{key: data.get(key) for key in keys}, "url": url}
+
+
+# A deterministic row's provenance: these keys of its data_tools fact, when set.
+_DATA_FACT_PROVENANCE_KEYS = ("series_id", "vintage", "cik", "tag", "form", "filed", "accn", "observation_date",
+                              "period_start", "period", "base_date", "basis")
+
+
+def data_quant_row(fact: Any, source: Mapping[str, Any], position: int) -> dict | None:
+    """The quantitative.json row of one structured value of a cited
+    official-data source (TIME-13; ``fact`` is one of its data_tools facts,
+    ``source`` its sources.json row at ``position``): the value and unit
+    copied exactly, ``as_of_date`` the vintage (FRED) or filing date (SEC
+    EDGAR), ``period_end`` the observation or period end, the filer named in
+    the metric, ``value_type`` actual, tier S1 and ``provenance`` (``kind``
+    ``structured`` for a vendor value, ``derived`` for a DRF computation, with
+    the vendor and the fact's identity).  None for a fact without a metric or
+    a value, or without one of those two provenance labels (an unlabelled
+    value is never published as the vendor's)."""
+    if not isinstance(fact, Mapping) or fact.get("provenance_kind") not in ("structured", "derived"):
+        return None
+    metric, value = _collapse(fact.get("metric"), 200), _collapse(fact.get("value"), 80)
+    if not metric or not value:
+        return None
+    company = _collapse(fact.get("company"), 120)
+    row: dict[str, Any] = {"metric": _collapse(f"{company}: {metric}", 200) if company else metric, "value": value}
+    for key, text in (("series", fact.get("series_id")), ("unit", fact.get("unit")),
+                      ("as_of_date", fact.get("vintage") or fact.get("filed")),
+                      ("period_end", fact.get("observation_date")), ("definition", fact.get("tag")),
+                      ("source", source.get("title"))):
+        text = _collapse(text, 200 if key == "source" else 400)
+        if text:
+            row[key] = text
+    data = source.get("data") if isinstance(source.get("data"), Mapping) else {}
+    row.update(value_type="actual", source_ref=f"S{position}", source_url=source.get("url"), tier="S1",
+               provenance={"kind": fact["provenance_kind"], "vendor": data.get("vendor"),
+                           **{key: fact[key] for key in _DATA_FACT_PROVENANCE_KEYS
+                              if fact.get(key) not in (None, "")}})
+    return row
+
+
+def is_data_quant_row(row: Mapping[str, Any]) -> bool:
+    """Whether a quantitative row is one :func:`data_quant_row` built (model
+    rows never carry ``provenance``)."""
+    provenance = row.get("provenance")
+    return isinstance(provenance, Mapping) and provenance.get("kind") in ("structured", "derived")
+
+
+# RESEARCH_FORECASTER_ATTRIBUTION (attribute_forecast_row): the keys only a
+# projected row may carry, the value types that are projections, and the
+# answers that state nothing (the facts rule asks for "" or 0).
+_CONSENSUS_KEYS = ("forecaster", "low", "high", "n_forecasters", "range_kind")
+_ATTRIBUTION_FIELDS = ("forecaster", "low", "high", "n_forecasters")
+_PROJECTED_VALUE_TYPES = frozenset({"estimate", "forecast", "target"})
+_UNSTATED_ANSWERS = frozenset({"", "0", "n/a", "na", "none", "null", "unknown", "not stated"})
+# A value written as a range, whole: "52-56", "52–56%", "$1.2 to 1.5".
+_STATED_RANGE_RE = re.compile(r"[~≈]?\s*[$€£¥]?\s*(?P<low>\d[\d,]*(?:\.\d+)?)\s*(?:-|–|—|to)\s*"
+                              r"[$€£¥]?\s*(?P<high>\d[\d,]*(?:\.\d+)?)\s*%?", re.I)
+# Two numbers of a value joined as a range (the bridge's value_num reads such
+# a value as their midpoint), and a value that opens with a minus sign.  The
+# first number starts a digit run: the leftmost match is the same, and a long
+# run is scanned once instead of once per digit (quadratic).
+_RANGE_PAIR_RE = re.compile(r"(?<!\d)(\d+(?:\.\d+)?)\s*(?:[-–—~]|to)\s*(\d+(?:\.\d+)?)")
+_NEGATIVE_LEAD_RE = re.compile(r"\s*[-−]\s*[$€£¥]?\s*\d")
+# The longest low/high text kept: the cap of a row's text value.
+_BOUND_TEXT_CHARS = 80
+# The count nouns that make a stated number a forecaster count.
+_FORECASTER_NOUNS = r"(?:forecasters|economists|analysts|respondents|experts|institutions)\b"
+_FORECASTER_NOUNS_ZH = r"(?:位|家|名)(?:经济学家|分析师|机构|专家|受访者)"
+
+
+def _unstated(value: Any) -> bool:
+    """True for an extraction answer that states nothing: missing, ``""``, 0
+    or a placeholder word ("n/a", "unknown")."""
+    if value is None:
+        return True
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 0
+    return isinstance(value, str) and _collapse(value).casefold() in _UNSTATED_ANSWERS
+
+
+def _magnitude(value: Any) -> float | None:
+    """A value read as one number at full scale, so a row's bounds compare with
+    its value whatever scale words each uses: a number as it is; text as the
+    bridge's value_num reads it (its first two numbers joined as a range give
+    their midpoint, else the first number, a leading minus kept) at the scale
+    its words give ("1.2 million" = 1,200,000, "$1.2T" = 1.2e12; in "1.2-1.5
+    trillion" the second number's scale also covers a smaller unscaled first
+    one); None without a number or for one beyond the float range (a JSON
+    integer like 10**400 overflows ``float``)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            number = float(value)
+        except OverflowError:  # an int beyond the float range
+            return None
+        return number if math.isfinite(number) else None
+    text = _join_digit_groups(_number_text(str(value or ""), strip_dates=False))
+    found = _number_values_at(text)
+    if not found:
+        return None
+    pair = _RANGE_PAIR_RE.search(re.sub(r"[,$€£¥]", "", text))
+    if pair and len(found) >= 2 and (_canonical_number(pair.group(1)), _canonical_number(pair.group(2))) \
+            == (found[0][1], found[1][1]):
+        (_, first_token, first_full), (_, second_token, second_full) = found[0], found[1]
+        first, second = Decimal(first_full[1:]), Decimal(second_full[1:])
+        if first == Decimal(first_token) and second != Decimal(second_token) \
+                and Decimal(first_token) <= Decimal(second_token):
+            first *= second / Decimal(second_token)
+        number = float((first + second) / 2)
+    else:
+        number = float(found[0][2][1:])
+        number = -number if _NEGATIVE_LEAD_RE.match(text) else number
+    return number if math.isfinite(number) else None
+
+
+def _stated_in_report(text: str, report_numbers: frozenset[str]) -> bool:
+    """True when ``text`` states a number and every number of it is a number of
+    the report (``report_numbers``: its :func:`page_number_set`), as written or
+    at the same full value (``1.2 trillion`` = ``1,200 billion``)."""
+    pairs = _number_values(_join_digit_groups(_number_text(text, strip_dates=True)))
+    return bool(pairs) and all(token in report_numbers or full in report_numbers for token, full in pairs)
+
+
+def _checked_bound(value: Any, report_numbers: frozenset[str]) -> tuple[Any, float] | None:
+    """``(kept value, its number)`` of a stated low/high whose numbers are all
+    the report's; None otherwise.  A number stays a number; text is kept as
+    written (collapsed), and text longer than a row's text value (80 chars)
+    is refused before any check, so the kept text is always the checked text
+    (a cut could end mid-number)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    if isinstance(value, str):
+        value = _collapse(value)
+        if len(value) > _BOUND_TEXT_CHARS:
+            return None
+    number = _magnitude(value)
+    if number is None:
+        return None
+    text = format(Decimal(repr(value)), "f") if isinstance(value, float) else str(value)
+    if not _stated_in_report(text, report_numbers):
+        return None
+    return value, number
+
+
+def _forecaster_count(value: Any) -> int | None:
+    """A stated forecaster count as an integer from 2 to 9,999,999 (a whole
+    number, or text of at most 7 digits); None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        value = int(value) if value.is_integer() else None
+    elif isinstance(value, str):
+        text = unicodedata.normalize("NFKC", value).strip().replace(",", "")
+        value = int(text) if re.fullmatch(r"\d{1,7}", text) else None
+    return value if isinstance(value, int) and 2 <= value <= 9_999_999 else None
+
+
+def _report_states_count(count: int, report_body: str) -> bool:
+    """True when the report states ``count`` as a number of forecasters: next
+    to a count noun ("40 economists", "1,200 respondents", "40位经济学家") or as
+    a sample size ("n = 40").  A bare number is never enough (a small count
+    is on almost any page)."""
+    text = unicodedata.normalize("NFKC", str(report_body or ""))
+    spellings = "|".join(re.escape(spelling) for spelling in sorted({str(count), f"{count:,}"}, key=len,
+                                                                    reverse=True))
+    number = rf"(?<![\d.,])(?:{spellings})"
+    patterns = (rf"{number}\s+{_FORECASTER_NOUNS}", rf"\bn\s*=\s*(?:{spellings})(?!\d|[.,]\d)",
+                rf"{number}\s*{_FORECASTER_NOUNS_ZH}")
+    return any(re.search(pattern, text, re.I) for pattern in patterns)
+
+
+def attribute_forecast_row(row: dict, raw_item: Any, report_body: str,
+                           report_numbers: frozenset[str]) -> list[str]:
+    """Forecaster attribution of one normalized quant row, in place, from the
+    extracted item it came from (RESEARCH_FORECASTER_ATTRIBUTION).  Returns the
+    names of the fields the extraction stated but the row does not keep.
+
+    A row whose value_type is not estimate, forecast or target never carries
+    the consensus keys (:data:`_CONSENSUS_KEYS`): they are removed, and every
+    field the extraction stated for it counts as dropped.  A projected row
+    keeps
+
+    * ``forecaster`` (<= 200 chars), also written to ``analyst`` so the
+      bridge's publisher fallback does not replace it (``source`` is kept);
+    * ``low`` and ``high`` only as a pair: each states a number, every number
+      of it is one of the report's (``report_numbers``, the
+      :func:`page_number_set` of ``report_body``), low <= high, and
+      low <= central value <= high when the value reads as a number;
+      otherwise both are dropped;
+    * ``n_forecasters`` only as an integer >= 2 that the report states with a
+      count noun (:func:`_report_states_count`);
+    * ``range_kind``: ``across_forecasters`` for kept bounds with a kept
+      count; ``stated_range`` when the extraction stated no bounds and the
+      value is a range ("52-56", "52–56", "52 to 56") whose two numbers pass
+      the same report and order checks: they become low and high as written.
+
+    Answers that state nothing (:func:`_unstated`: the facts rule's "" or 0)
+    are neither kept nor dropped.  Nothing is computed from other rows."""
+    for key in _CONSENSUS_KEYS:
+        row.pop(key, None)
+    raw = raw_item if isinstance(raw_item, Mapping) else {}
+    stated = [key for key in _ATTRIBUTION_FIELDS if not _unstated(raw.get(key))]
+    if str(row.get("value_type") or "") not in _PROJECTED_VALUE_TYPES:
+        return stated
+    dropped: list[str] = []
+    if "forecaster" in stated:
+        forecaster = _collapse(raw["forecaster"], 200) if isinstance(raw["forecaster"], str) else ""
+        if forecaster:
+            row["forecaster"] = row["analyst"] = forecaster
+        else:
+            dropped.append("forecaster")
+    bounds_stated = [key for key in ("low", "high") if key in stated]
+    if bounds_stated:
+        low, high = (_checked_bound(raw.get(key), report_numbers) for key in ("low", "high"))
+        central = _magnitude(row.get("value"))
+        if (low is not None and high is not None and low[1] <= high[1]
+                and (central is None or low[1] <= central <= high[1])):
+            row["low"], row["high"] = low[0], high[0]
+        else:
+            dropped.extend(bounds_stated)
+    elif isinstance(row.get("value"), str):
+        match = _STATED_RANGE_RE.fullmatch(row["value"].strip())
+        if match:
+            low_text, high_text = match.group("low"), match.group("high")
+            low_n, high_n = _magnitude(low_text), _magnitude(high_text)
+            if (low_n is not None and high_n is not None and low_n <= high_n
+                    and _stated_in_report(low_text, report_numbers)
+                    and _stated_in_report(high_text, report_numbers)):
+                row["low"], row["high"], row["range_kind"] = low_text, high_text, "stated_range"
+    if "n_forecasters" in stated:
+        count = _forecaster_count(raw["n_forecasters"])
+        if count is not None and _report_states_count(count, report_body):
+            row["n_forecasters"] = count
+        else:
+            dropped.append("n_forecasters")
+    if "low" in row and "n_forecasters" in row and "range_kind" not in row:
+        row["range_kind"] = "across_forecasters"
+    return dropped
+
+
+def _stamp_rows(rows: list[dict], stamps: Sequence[Mapping[str, Any]]) -> None:
+    """Merge each row's precomputed keys (``stamps``, one per row) in place."""
+    for row, keys in zip(rows, stamps, strict=True):
+        row.update(keys)
+
+
+# A stated date or period, matched whole: (pattern, precision).  "FY2025" is
+# taken as the calendar year; a day may carry an ISO time ("2029-12-31T00:00:00Z").
+_PERIOD_FORMS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?",
+                re.I), "day"),
+    (re.compile(r"(\d{4})-(\d{1,2})"), "month"),
+    (re.compile(r"(\d{4})[-\s]?Q([1-4])", re.I), "quarter"),
+    (re.compile(r"(\d{4})[-\s]?H([12])", re.I), "half"),
+    (re.compile(r"(?:FY\s?)?(\d{4})", re.I), "year"),
+)
+_MONTHS_PER = {"month": 1, "quarter": 3, "half": 6}
+# A year named inside free text ("2025-2035", "by 2030", "2030E"), optionally
+# closing a range with two digits ("2025/26", "FY2025-29").
+_PERIOD_YEAR_RE = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?:\s*[/-]\s*(\d{2})(?!\d))?(?!\d)")
+# Free-text spellings of a month, quarter or half ("Q4 2026", "2H 2026",
+# "2026-3Q", "Dec 2026", "2026年第三季度", "2026年上半年", "2026年3月"), matched
+# whole; a year's end ("end of 2026", "2026年底") is its December.  Named
+# groups: y (year) and q / h / m (quarter / half / month; none = December).
+_FREE_PERIOD_FORMS: tuple[re.Pattern[str], ...] = tuple(re.compile(pattern, re.I) for pattern in (
+    r"Q(?P<q>[1-4])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<q>[1-4])Q[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<q>[1-4])Q",
+    r"H(?P<h>[12])[\s,/-]*(?P<y>\d{4})",
+    r"(?P<h>[12])H[\s,/-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s/-]*(?P<h>[12])H",
+    r"(?P<m>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+    r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?[\s,]*(?P<y>\d{4})",
+    r"(?:(?:the\s+)?end(?:\s+of)?|year[\s-]?end)[\s,-]*(?P<y>\d{4})",
+    r"(?P<y>\d{4})[\s-]*year[\s-]?end",
+    r"(?P<y>\d{4})\s*年\s*(?:第\s*)?(?P<q>[1-4一二三四])\s*季度",
+    r"(?P<y>\d{4})\s*年\s*(?:Q(?P<q>[1-4])|H(?P<h>[12]))",
+    r"(?P<y>\d{4})\s*年\s*(?P<h>[上下])半年",
+    r"(?P<y>\d{4})\s*年\s*(?P<m>\d{1,2})\s*月份?",
+    r"(?P<y>\d{4})\s*年\s*年?[底末]",
+))
+_FREE_PERIOD_DIGITS = {"一": "1", "二": "2", "三": "3", "四": "4", "上": "1", "下": "2"}
+_MONTH_ABBREVIATIONS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+# period_end placeholders that state no period, like an empty field.
+_NO_PERIOD = frozenset({"n/a", "na", "none", "null", "unknown", "not applicable"})
+
+
+def _period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """``(first day, last day, precision)`` of a stated date or period;
+    ``(None, None, "none")`` for anything else (see :func:`_period_end_date`)."""
+    text = str(value or "").strip()
+    for pattern, precision in _PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        year = int(match.group(1))
+        try:
+            if precision == "day":
+                day = _dt.date(year, int(match.group(2)), int(match.group(3)))
+                return day, day, precision
+            if precision == "year":
+                return _dt.date(year, 1, 1), _dt.date(year, 12, 31), precision
+            months = _MONTHS_PER[precision]
+            last = months * int(match.group(2))
+            return (_dt.date(year, last - months + 1, 1),
+                    _dt.date(year, last, calendar.monthrange(year, last)[1]), precision)
+        except ValueError:  # month 13, Feb 30, year 0
+            return None, None, "none"
+    return None, None, "none"
+
+
+def _period_end_date(value: Any) -> _dt.date | None:
+    """The LAST day of a stated date or period, so a period never counts as
+    known before it ends: YYYY and FYyyyy → Dec 31, YYYY-MM → the month's last
+    day, YYYY-Qn / YYYY-Hn → the quarter's / half's last day, an ISO date (or
+    date-time) → itself; None for anything else."""
+    return _period_bounds(value)[1]
+
+
+def _free_period(text: str) -> str | None:
+    """The canonical spelling (YYYY-MM, YYYY-Qn or YYYY-Hn) of a whole
+    free-text month, quarter or half (:data:`_FREE_PERIOD_FORMS`), else None."""
+    for pattern in _FREE_PERIOD_FORMS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        parts = match.groupdict()
+        for kind in ("q", "h"):
+            if parts.get(kind):
+                return f"{parts['y']}-{kind.upper()}{_FREE_PERIOD_DIGITS.get(parts[kind], parts[kind])}"
+        month = parts.get("m") or "12"
+        number = int(month) if month.isdigit() else _MONTH_ABBREVIATIONS.index(month[:3].lower()) + 1
+        return f"{parts['y']}-{number:02d}"
+    return None
+
+
+def _loose_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """:func:`_period_bounds`, else a whole free-text month, quarter or half
+    at its own precision (:func:`_free_period`: "Q4 2026", "Dec 2026",
+    "2026年上半年"), else the years free text names — a range, "by 2030",
+    "2030E", "FY2025-29" — read as Jan 1 of the earliest to Dec 31 of the
+    latest (precision ``year``); ``(None, None, "none")`` without one."""
+    bounds = _period_bounds(value)
+    if bounds[1] is not None:
+        return bounds
+    free = _free_period(str(value or "").strip())
+    bounds = _period_bounds(free) if free else bounds
+    if bounds[1] is not None:
+        return bounds
+    years: list[int] = []
+    for match in _PERIOD_YEAR_RE.finditer(str(value or "")):
+        year = int(match.group(1))
+        years.append(year)
+        if match.group(2):
+            closing = year - year % 100 + int(match.group(2))
+            if closing > year:
+                years.append(closing)
+    if not years:
+        return None, None, "none"
+    return _dt.date(min(years), 1, 1), _dt.date(max(years), 12, 31), "year"
+
+
+def classify_quant_row(row: Mapping[str, Any], as_of: _dt.date) -> dict:
+    """Reported/projected typing of one quantitative row against the research
+    as-of date — the program's one classifier (report, forecasting and
+    hindcast consumers reuse it).  Returns only NEW keys; evidence fields are
+    never rewritten.  ``as_of`` is the last day a cited source can have
+    published on (the v3 engine passes the day after its plan date).
+
+    The reference date is the end of ``period_end``, else of ``as_of_date``
+    (:func:`_period_end_date`; free text is read as a whole month, quarter or
+    half, else by the years it names, :func:`_loose_period_bounds`).
+    ``forecast`` and ``target`` are projected, as is an ``estimate`` whose
+    reference date is after as-of.  Any other ``actual`` or ``estimate`` is
+    reported, except that it is unknown
+
+    * with flag ``future_dated_reported`` when its reference date, or the
+      first day of its ``as_of_date``, is after as-of (no source publishes
+      after as-of);
+    * with flag ``period_unparsed`` (set on a row of any type) when
+      ``period_end`` states a period whose end cannot be read — never the
+      publication date in its place, so a period never counts as known
+      before it ends.
+
+    A missing or other type is unknown.
+
+    No source publishes after the as-of date, so an ``as_of_date`` that lies
+    wholly after it (its FIRST day is later) is no publication date.  Target
+    repair: a projected row holds a target date there and is flagged
+    ``as_of_is_target``; when ``period_end`` gives no date, that
+    ``as_of_date`` becomes its ``target_date``.  Any other row is flagged
+    ``published_after_as_of`` (typed recency then counts both future-dated,
+    never fresh).  A coarse date of the current period ("2026" in 2026) may
+    be a publication date and is left alone.
+
+    Keys: ``epistemic_class`` (reported/projected/unknown), ``date_precision``
+    of the reference date (day/month/quarter/half/year/none), ``target_date``
+    (repair only) and ``epistemic_flags`` (only when non-empty).
+    """
+    if isinstance(as_of, _dt.datetime):
+        as_of = as_of.date()
+    period_text = str(row.get("period_end") or "").strip()
+    _, period, period_precision = _loose_period_bounds(period_text)
+    period_unparsed = (period is None and any(ch.isalnum() for ch in period_text)
+                       and period_text.casefold() not in _NO_PERIOD)
+    stated_start, stated_end, stated_precision = _loose_period_bounds(row.get("as_of_date"))
+    if period is not None:
+        reference, precision = period, period_precision
+    elif period_unparsed:
+        reference, precision = None, "none"
+    else:
+        reference, precision = stated_end, stated_precision
+    after_as_of = reference is not None and reference > as_of
+    stated_after_as_of = stated_start is not None and stated_start > as_of
+    value_type = str(row.get("value_type") or "").strip().lower()
+    flags: list[str] = []
+    if value_type in ("forecast", "target") or (value_type == "estimate" and after_as_of):
+        epistemic_class = "projected"
+    elif value_type in ("actual", "estimate"):
+        epistemic_class = "unknown" if after_as_of or stated_after_as_of or period_unparsed else "reported"
+        if after_as_of or stated_after_as_of:
+            flags.append("future_dated_reported")
+    else:
+        epistemic_class = "unknown"
+    if period_unparsed:
+        flags.append("period_unparsed")
+    out: dict[str, Any] = {"epistemic_class": epistemic_class, "date_precision": precision}
+    if stated_after_as_of and epistemic_class == "projected":
+        flags.append("as_of_is_target")
+        if period is None:
+            out["target_date"] = str(row.get("as_of_date")).strip()
+    elif stated_after_as_of:
+        flags.append("published_after_as_of")
+    if flags:
+        out["epistemic_flags"] = flags
+    return out
+
+
+def _claimed_actual(row: Mapping[str, Any]) -> bool:
+    """Whether a quantitative row presents its value as an actual — the rows
+    the future-dated checks (``flag_implausible_quant``,
+    :func:`_future_dated_flags`) apply to.  A row
+    :func:`classify_quant_row` typed (RESEARCH_QUANT_TYPING) is one when it is
+    ``reported`` or flagged ``future_dated_reported`` (an actual or estimate
+    dated after as-of, typed unknown); any other row when its ``value_type``
+    is ``actual`` or absent, so forecast, estimate and target rows are not."""
+    if "epistemic_class" in row:
+        return (row.get("epistemic_class") == "reported"
+                or "future_dated_reported" in (row.get("epistemic_flags") or ()))
+    return row.get("value_type") in (None, "actual")
+
+
+# flag_implausible_quant's future-date test (deerflow_research.py) as the bridge
+# runs it, so :func:`_future_dated_flags` adds an entry for exactly the rows it
+# leaves out (a parity test pins the two): the first YYYY-MM-DD, YYYY-MM or YYYY
+# prefix of as_of_date gives its date (the bridge's _parse_date; an invalid date
+# is none), and a projection word in the metric's first 60 characters, the
+# definition or the unit exempts the row.
+_HELPER_DATE_PREFIXES = (re.compile(r"\s*(\d{4})-(\d{1,2})-(\d{1,2})"), re.compile(r"\s*(\d{4})-(\d{1,2})(?!\d)"),
+                         re.compile(r"\s*(\d{4})(?!\d)"))
+_HELPER_PROJECTION_WORDS = ("projection", "projected", "forecast", "estimate", "estimated", "expected", "target",
+                            "outlook", "guidance", "by 20", "预测", "预计", "目标", "展望")
+
+
+def _helper_date(value: Any) -> _dt.date | None:
+    """The date ``flag_implausible_quant`` reads from an ``as_of_date``:
+    "2026-Q4" is 2026-01-01, and "Q4 2026", "FY2027" or "October 2026" none."""
+    text = str(value or "")
+    for pattern in _HELPER_DATE_PREFIXES:
+        match = pattern.match(text)
+        if match is not None:
+            parts = [int(part) for part in match.groups()] + [1, 1]
+            try:
+                return _dt.date(parts[0], parts[1], parts[2])
+            except ValueError:
+                return None
+    return None
+
+
+def _helper_exempts(row: Mapping[str, Any]) -> bool:
+    """Whether ``flag_implausible_quant`` takes ``row`` for a projection,
+    whose date it never flags."""
+    context = " ".join((str(row.get("metric") or "")[:60], str(row.get("definition") or ""),
+                        str(row.get("unit") or ""))).lower()
+    return any(word in context for word in _HELPER_PROJECTION_WORDS)
+
+
+def _helper_flags_date(row: Mapping[str, Any], as_of: _dt.date) -> bool:
+    """Whether ``flag_implausible_quant`` lists ``row`` as a claimed actual
+    dated after ``as_of``."""
+    stated = _helper_date(row.get("as_of_date"))
+    return stated is not None and stated > as_of and not _helper_exempts(row)
+
+
+# What free text read only by the years it names (:func:`_loose_period_bounds`)
+# may say besides them and still state whole years: a year qualifier ("fiscal
+# 2025", "CY2025", "2030E", "2024A", "by 2030", "2025年", "2025财年"), a range
+# word ("2025 to 2030", "2025至2030年") or punctuation.  Any other word or digit
+# ("Q4 FY2025", "2025 YTD", "first half of 2025", "9M 2025", "Jan-Sep 2025",
+# "week ending 2025-06-30", "mid-2025") names part of them.
+_WHOLE_YEAR_WORDS = frozenset({
+    "fy", "cy", "fiscal", "financial", "calendar", "full", "annual", "year", "by", "in", "the", "end", "of", "e",
+    "a", "est", "to", "through", "thru", "and", "from", "between", "until", "年", "财", "財", "度", "全", "至", "到",
+    "-", "–", "—", "/", "~", "～", ",", "，", ".", "(", ")", "（", "）", "'", "’"})
+_PERIOD_WORD_RE = re.compile(r"[a-z]+|\S", re.I)
+
+
+def _strict_period_bounds(value: Any) -> tuple[_dt.date | None, _dt.date | None, str]:
+    """:func:`_loose_period_bounds` for the quantitative sanity checks, which
+    must not read part of a year as the whole year: free text it reads only
+    by the years it names is precision ``part`` unless it says nothing else
+    (:data:`_WHOLE_YEAR_WORDS`); the bounds are still those years', within
+    which the period lies ("first half of 2026" lies in 2026)."""
+    text = str(value or "").strip()
+    start, end, precision = _loose_period_bounds(text)
+    if end is None or precision != "year" or _period_bounds(text)[1] is not None:
+        return start, end, precision
+    # The text without the years it was read by; a two-digit tail the reading
+    # does not take for a range's end ("-13" in "2025-13") stays in it.
+    pieces: list[str] = []
+    position = 0
+    for match in _PERIOD_YEAR_RE.finditer(text):
+        year, closing = int(match.group(1)), match.group(2)
+        pieces.append(text[position:match.start()])
+        position = match.end() if closing and year - year % 100 + int(closing) > year else match.end(1)
+    rest = " ".join([*pieces, text[position:]])
+    if any(ch.isdigit() for ch in rest) or any(word.casefold() not in _WHOLE_YEAR_WORDS
+                                               for word in _PERIOD_WORD_RE.findall(rest)):
+        return start, end, "part"
+    return start, end, precision
+
+
+def _future_dated_flags(rows: Sequence[Mapping[str, Any]], as_of: _dt.date, *, helper_ran: bool) -> list[str]:
+    """``meta.quant_implausible`` entries, in ``flag_implausible_quant``'s
+    style, for the claimed actuals among ``rows`` dated after ``as_of`` that
+    the helper's future-date test leaves out, at most one per row:
+
+    * an ``as_of_date`` whose first day is after ``as_of``, read as
+      :func:`classify_quant_row` reads it (which then flags the row
+      ``future_dated_reported``; the helper reads "2026-Q4" as its Jan 1,
+      and "Q4 2026", "FY2027", "October 2026" or "2026年10月" not at all),
+      unless a projection word exempts the row as it does in the helper;
+    * else a ``period_end`` that ends after ``as_of`` (the helper reads only
+      ``as_of_date``): an actual for a period that has not ended.  Part of a
+      year in free text (:func:`_strict_period_bounds`: "first half of
+      2026") is known to end after ``as_of`` only when its years start
+      after it.
+
+    While ``helper_ran`` (it returned its list) a row it lists itself
+    (:func:`_helper_flags_date`) gets no entry here; without that list any
+    such row does.  Pure: reads the rows, never changes one."""
+    flags: list[str] = []
+    for row in rows:
+        if not _claimed_actual(row) or (helper_ran and _helper_flags_date(row, as_of)):
+            continue
+        metric = str(row.get("metric") or "")[:60]
+        stated = _loose_period_bounds(row.get("as_of_date"))[0]
+        if stated is not None and stated > as_of and not _helper_exempts(row):
+            flags.append(f"{metric}: as_of {_collapse(row.get('as_of_date'), 80)} starts AFTER research cutoff "
+                         f"{as_of.isoformat()} (claimed-actual with future date)")
+            continue
+        start, end, precision = _strict_period_bounds(row.get("period_end"))
+        ends_by = start if precision == "part" else end
+        if ends_by is not None and ends_by > as_of:
+            flags.append(f"{metric}: period_end {_collapse(row.get('period_end'), 80)} ends AFTER research cutoff "
+                         f"{as_of.isoformat()} (claimed-actual for an unfinished period)")
+    return flags
+
+
+def _quant_scope(row: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
+    """``(key, label)`` of what a quantitative row measures beyond its
+    (metric, unit): two rows are readings of one quantity, so a gap between
+    them is a disagreement, only under one key (:func:`_quant_scopes`).
+
+    * Period: the end and the length of ``period_end``, read as
+      :func:`classify_quant_row` reads it (:func:`_loose_period_bounds`) — a
+      month, quarter or half by its precision, a span of several years
+      ("2025-2030", "FY2025-29") by its first day too, and a year or a day
+      as a point ("2030" is "2030-12-31" and "by 2030") — so a year never
+      meets its fourth quarter, second half or December, nor a multi-year
+      total its last year; by its own text a period that is unreadable or
+      part of a year in free text ("Q4 FY2025", "2025 YTD", "first half of
+      2025", :func:`_strict_period_bounds`).  Else the
+      year of ``as_of_date``, which without a period is when the number was
+      current, so two sources' readings of one figure published months apart
+      still meet (a sub-annual series states its periods in ``period_end``);
+      None when the row states neither.
+    * Geography: its canonical ``region`` (set from ``geography`` by the
+      bridge's ``enrich_quantitative_rows``) or ``geography``, ignoring case
+      and spacing; rows without one meet only each other.
+    * Reported or projected: ``epistemic_class`` when typed
+      (RESEARCH_QUANT_TYPING), else projected for a ``forecast`` or
+      ``target`` value_type and reported for any other.
+
+    ``series`` is no part of it.  v3's facts task gives it no meaning, and
+    its models mostly name the source, or the source's series, there; keyed
+    by it, two sources' readings of one quantity — the disagreements and
+    unit-scale errors this check is for — would never meet.  The price: a
+    model that names the entity measured there instead (often its own
+    source as well, so no series-versus-source test tells the two apart)
+    leaves two entities' readings of one generic metric in one scope
+    ("physical qubits": Quantinuum Helios 98, QuEra Gemini 260) to
+    reconcile as a disagreement.  The label names each
+    part a reader needs to tell scopes apart: the period as the row states
+    it ("as of 2025" for an ``as_of_date`` year), the geography as stated,
+    and the class unless reported ("projected", else "unclassified"); ""
+    for a reported row that states neither period nor geography."""
+    period_text = _collapse(row.get("period_end"), 80)
+    period: tuple[Any, ...] | None
+    if any(ch.isalnum() for ch in period_text) and period_text.casefold() not in _NO_PERIOD:
+        start, end, precision = _strict_period_bounds(period_text)
+        if start is None or end is None or precision == "part":
+            period = ("text", period_text.casefold())
+        elif start.year < end.year:
+            period = ("period", end.isoformat(), ("range", start.isoformat()))
+        else:
+            period = ("period", end.isoformat(), precision if precision in _MONTHS_PER else "point")
+        period_label = period_text
+    else:
+        end = _loose_period_bounds(row.get("as_of_date"))[1]
+        period = ("year", end.year) if end is not None else None
+        period_label = f"as of {end.year}" if end is not None else ""
+    geography = _collapse(row.get("geography"), 80)
+    region = " ".join(str(row.get("region") or geography).casefold().split())
+    if "epistemic_class" in row:
+        kind = str(row.get("epistemic_class"))
+    else:
+        kind = "projected" if row.get("value_type") in ("forecast", "target") else "reported"
+    kind_label = "" if kind == "reported" else "projected" if kind == "projected" else "unclassified"
+    return (period, region, kind), ", ".join(part for part in (period_label, geography, kind_label) if part)
+
+
+def _quant_scopes(rows: Sequence[Mapping[str, Any]]) -> list[tuple[str, list[dict]]]:
+    """Copies of the quantitative rows grouped by :func:`_quant_scope`, as
+    ``(label, rows)`` in first-seen order, the label from each scope's first
+    row."""
+    scopes: dict[tuple[Any, ...], tuple[str, list[dict]]] = {}
+    for row in rows:
+        key, label = _quant_scope(row)
+        scopes.setdefault(key, (label, []))[1].append(dict(row))
+    return list(scopes.values())
+
+
+# A number in exponent notation ("1.2E6"): the fact tokenizer reads its parts
+# as separate numbers.
+_EXPONENT_RE = re.compile(r"\d[eE][+-]?\d")
+
+
+def _quant_number_text(row: Mapping[str, Any]) -> str:
+    """``"{value} {unit}"`` of a quantitative row as its number checks read
+    it (a float value written out positionally: 1.2e-05 → 0.000012)."""
+    value = row.get("value")
+    if isinstance(value, float):
+        value = format(Decimal(repr(value)), "f")
+    return f"{value} {row.get('unit') or ''}"
+
+
+def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None,
+                     snippet: str) -> tuple[bool, str]:
+    """Whether a quantitative row's number is on its cited source, under the
+    rules of a VERIFIED finding (:func:`_number_on_pages`: a percentage as a
+    page percentage, a unit-bearing figure in its unit class, any scale).
+
+    Every number token of ``"{value} {unit}"`` on the fetched page
+    (``page_numbers``: its :func:`page_number_set`; None when never fetched
+    or unavailable) → ``(True, "page")``; else all in the search ``snippet``
+    → ``(False, "snippet_only")``; else ``(False, "none")``.  A value without a
+    checkable number (>= 2 digits or a decimal) → ``(False, "not_checkable")``,
+    as is one in exponent notation, whose mantissa alone would be matched (a
+    float value is written out positionally first: 1.2e-05 → 0.000012).
+    """
+    text = _quant_number_text(row)
+    tokens, found = _number_check(text)
+    if not tokens or _EXPONENT_RE.search(text):
+        return False, "not_checkable"
+    if page_numbers is not None and found(page_numbers):
+        return True, "page"
+    if snippet and found(page_number_set(snippet)):
+        return False, "snippet_only"
+    return False, "none"
+
+
+def derived_quant_match(row: Mapping[str, Any],
+                        derivations: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    """The first of ``derivations`` (DERIVED facts' ``derivation``, RESEARCH-8)
+    whose result a quantitative row's value states: ``"{value} {unit}"`` has
+    exactly one number that may state a result, as a finding's numbers may
+    (:func:`_number_occurrences`, :attr:`_NumberOccurrence.can_state`: a
+    checkable one, or a single digit written as a percentage or with a unit
+    class), no exponent notation, and that number states the result as a
+    finding's number would (:func:`_states_result` against
+    :func:`_result_form` of the derivation's formula and data operands:
+    display precision, the result's sign, a percentage result by a
+    percentage only, a unit class only in the unit class of every data
+    operand through a formula that keeps it, a ratio's percentage x 100 only
+    and any other number at its full value).  None when no derivation
+    matches."""
+    text = _quant_number_text(row)
+    numbers = [number for number in _number_occurrences(text) if number.can_state]
+    if len(numbers) != 1 or _EXPONENT_RE.search(text):
+        return None
+    for derivation in derivations:
+        try:
+            result = Decimal(str(derivation.get("result")))
+        except InvalidOperation:
+            continue
+        if not result.is_finite():
+            continue
+        operands = derivation.get("operands")
+        data_operands = {str(name): str(item.get("value"))
+                         for name, item in (operands.items() if isinstance(operands, dict) else ())
+                         if isinstance(item, dict) and item.get("sid") is not None}
+        if _states_result(numbers[0], result, _result_form(str(derivation.get("expr") or ""), data_operands)):
+            return derivation
+    return None
 
 
 def normalize_contested(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[dict]:
@@ -6252,6 +11845,35 @@ def _deerflow_app_config(args: Any) -> Any:
     return config
 
 
+def _resolved_model_id(args: Any) -> str | None:
+    """INFRA-8: the concrete model id (``model:`` field) of the ``--model`` stanza in the
+    DeerFlow config named by ``--config`` (DeerFlow's own resolution without one), or
+    None when it cannot be resolved (no deerflow package, unknown stanza, unreadable
+    config).
+
+    Not side-effect free: ``AppConfig.from_file`` applies the file's singleton configs
+    (title, summarization, memory, subagents, tool search, guardrails, checkpointer,
+    stream bridge, ACP; a changed checkpointer config resets the checkpointer and store),
+    and ``get_app_config`` caches the process-wide config.  Both are what the gateway
+    factory does right after with the same file (``_deerflow_app_config`` /
+    ``create_chat_model``), so the child ends in the same state; the cost is one extra
+    parse of the config file per run."""
+    try:
+        path = str(getattr(args, "config", None) or "").strip()
+        if path:
+            from deerflow.config.app_config import AppConfig  # lazy: the backend venv has no deerflow
+
+            config = AppConfig.from_file(path)
+        else:
+            from deerflow.config import get_app_config
+
+            config = get_app_config()
+        model_id = getattr(config.get_model_config(getattr(args, "model", None)), "model", None)
+    except Exception:  # noqa: BLE001 — identity then omits the id (compatible either way)
+        return None
+    return (model_id.strip() or None) if isinstance(model_id, str) else None
+
+
 def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) -> rg.ModelGateway:
     """Production gateway: DeerFlow model (+ optional fallback), bridge lease."""
     from deerflow.models import create_chat_model  # lazy: the backend venv has no deerflow
@@ -6273,10 +11895,172 @@ def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) 
                            reserve_share=RESERVE_SHARE)
 
 
+def _pit_policy(env: Mapping[str, Any] | None) -> rg.PitPolicy | None:
+    """The point-in-time gates of a gated hindcast (TIME-8), else None.
+
+    Only a hindcast (RESEARCH_AS_OF before today) whose parent set
+    RESEARCH_PIT_GATES gets gates; the parent writes the RESEARCH_PIT_* values
+    from the run's admission pin, never from its current config.  Unknown text
+    reads as the strict choice: same-day excluded, undated pages dropped, and
+    an overfetch outside 1..rg.PIT_OVERFETCH_MAX clamped (unparseable: 1)."""
+    as_of = _hindcast_as_of(env)
+    if as_of is None or not _env_flag(env, "RESEARCH_PIT_GATES", False):
+        return None
+    env = env or {}
+    same_day = str(env.get("RESEARCH_PIT_SAME_DAY", "") or "").strip().lower()
+    undated = str(env.get("RESEARCH_PIT_UNDATED", "") or "").strip().lower()
+    overfetch = _parse_knob(env.get("RESEARCH_PIT_OVERFETCH", ""), 1)
+    return rg.PitPolicy(as_of=_dt.date.fromisoformat(as_of),
+                        same_day="include" if same_day == "include" else "exclude",
+                        undated="flag" if undated == "flag" else "drop",
+                        provider_bounds=_env_flag(env, "RESEARCH_PIT_PROVIDER_BOUNDS", True),
+                        overfetch=max(1, min(rg.PIT_OVERFETCH_MAX, overfetch)) if overfetch is not None else 1)
+
+
+def data_tools_availability(env: Mapping[str, Any] | None) -> tuple[tuple[str, ...], dict[str, str], tuple[str, ...]]:
+    """``(enabled, disabled, unknown)`` of RESEARCH_DATA_TOOLS (TIME-13): the
+    requested vendors (a comma list of DATA_VENDORS names, or ``all``) that have
+    their credential, in DATA_VENDORS order; the requested ones that do not,
+    with why (``no_api_key``: FRED_API_KEY is empty; ``invalid_api_key``: it
+    is not the 32 lower-case letters or digits FRED issues, which data_tools
+    would never send; ``no_user_agent``: SEC_EDGAR_USER_AGENT names no contact
+    address, so SEC would refuse it);
+    and the names that are no vendor.  Empty or unset: nothing is requested."""
+    env = env or {}
+    requested: list[str] = []
+    unknown: list[str] = []
+    for token in str(env.get("RESEARCH_DATA_TOOLS", "") or "").strip().lower().split(","):
+        token = token.strip()
+        for name in (DATA_VENDORS if token == "all" else (token,) if token else ()):
+            if name in DATA_VENDORS:
+                if name not in requested:
+                    requested.append(name)
+            elif (shown := _collapse(name, 40)) not in unknown:
+                unknown.append(shown)
+    disabled: dict[str, str] = {}
+    fred_key = str(env.get("FRED_API_KEY", "") or "").strip()
+    if "fred" in requested and not _FRED_API_KEY_RE.fullmatch(fred_key):
+        disabled["fred"] = "invalid_api_key" if fred_key else "no_api_key"
+    if "sec_edgar" in requested and "@" not in str(env.get("SEC_EDGAR_USER_AGENT", "") or ""):
+        disabled["sec_edgar"] = "no_user_agent"
+    enabled = tuple(vendor for vendor in DATA_VENDORS if vendor in requested and vendor not in disabled)
+    return enabled, disabled, tuple(unknown)
+
+
+def kiq_data_guidance(tools: Sequence[str], calls: int) -> str:
+    """The sentence a data-kind KIQ task gains for the bound official-data
+    ``tools`` (TIME-13), ``calls`` being the KIQ's data-call allowance; ""
+    without a tool, so the task is then the template exactly."""
+    named = [_KIQ_DATA_TOOL_TEXT[tool] for tool in rg.DATA_TOOL_NAMES if tool in tools]
+    if not named:
+        return ""
+    return (f" Official data: {'; '.join(named)}. At most {calls} call{'' if calls == 1 else 's'}. Copy their "
+            "figures exactly, with the period and the result's [S<n>].")
+
+
+def unknown_tool_text(data_tools: Sequence[str]) -> str:
+    """What an agent's call of a tool it does not have answers: the web tools,
+    plus the bound official-data tools (TIME-13) when there are any."""
+    names = ["web_search", "web_fetch", *data_tools]
+    return f"UNKNOWN_TOOL: only {', '.join(names[:-1])} and {names[-1]} are available."
+
+
+def official_data_fns(env: Mapping[str, Any], enabled: Sequence[str],
+                      context: Callable[[], Mapping[str, Any] | None]) -> dict[str, Callable[..., Any]]:
+    """The data functions of the ``enabled`` vendors (TIME-13), by tool name,
+    for ResearchTools(data_fns=...).  Each call reads ``context()`` (the
+    engine's :meth:`_Engine._data_context`: the as-of cutoff, the run's FRED
+    vintage and the language, fixed only once a plan exists) and asks
+    data_tools with the credential ``env`` holds; without a context it answers
+    ``unavailable`` without any request.  ``{}`` when data_tools cannot be
+    imported (no tool is then bound)."""
+    try:
+        data_tools = importlib.import_module("data_tools")
+    except Exception:  # noqa: BLE001 — a missing vendor module binds no tool
+        return {}
+
+    def unpinned(source: str) -> Any:
+        detail = "the run's as-of date and vintage are not fixed yet"
+        return data_tools.DataResult(status=data_tools.STATUS_UNAVAILABLE, key="", url="", title="",
+                                     model_text=f"{source}: {detail}", page_text="", supports=(), date=None,
+                                     provenance={}, facts=(), detail=detail)
+
+    fns: dict[str, Callable[..., Any]] = {}
+    if "fred" in enabled:
+        key = str(env.get("FRED_API_KEY", "") or "").strip()
+
+        def macro_series(series: str) -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned("FRED")
+            return data_tools.fred_series(series, as_of=pinned["as_of"], pit=pinned["pit"], key=key,
+                                          language=pinned["language"])
+
+        fns["macro_series"] = macro_series
+    if "sec_edgar" in enabled:
+        agent = str(env.get("SEC_EDGAR_USER_AGENT", "") or "").strip()
+
+        def company_filings(company: str, freq: str = "annual") -> Any:
+            pinned = context()
+            if not pinned:
+                return unpinned(data_tools.EDGAR_SOURCE)
+            return data_tools.edgar_statements(company, as_of=pinned["as_of"], freq=freq, user_agent=agent,
+                                               language=pinned["language"])
+
+        fns["company_filings"] = company_filings
+    return fns
+
+
+def _pit_starvation_detail(pit: Any) -> str:
+    """The point-in-time part of an ``evidence_unavailable`` detail (TIME-8):
+    what the gates of a gated hindcast kept out (withheld pages are neither
+    fetches nor failures, so the failure counts alone read as healthy), and
+    the undated policy that would admit them when undated withholds dominate.
+    ``pit`` is the tools' ``stats()["pit"]``; "" without the gates."""
+    if not isinstance(pit, Mapping):
+        return ""
+
+    def count(name: str) -> int:
+        value = pit.get(name)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+    late, undated = count("fetch_late_withheld"), count("fetch_undated_withheld")
+    detail = (f"; point-in-time gates withheld {late} late and {undated} undated pages, refused "
+              f"{count('fetch_prefetch_refused')} fetches before fetching and dropped "
+              f"{count('search_late_dropped')} late search rows ({count('no_in_window_results')} searches "
+              "had no in-window result)")
+    if undated > late:
+        detail += ("; undated withholds dominate: a hindcast admitted with PIT_UNDATED_POLICY=flag stores "
+                   "undated pages labelled unverifiable")
+    return detail
+
+
 def _default_tools_factory(ledger: rg.SourceLedger, pages_dir: Path, bridge: Any, plog: Any,
                            limits: rg.ToolLimits) -> rg.ResearchTools:
-    """Production tools: real search (search_tools) and fetch (cached_fetch)."""
-    return rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits)
+    """Production tools: real search (search_tools) and fetch (cached_fetch).
+
+    A hindcast (RESEARCH_AS_OF before today) labels every fetched page as live
+    (``vintage_as_of``); a gated one (RESEARCH_PIT_GATES, TIME-8) also gets the
+    point-in-time gates (``pit``), which record source dates whatever
+    RESEARCH_SOURCE_DATES says.  With RESEARCH_DATA_TOOLS (TIME-13) the
+    official-data functions of the vendors that have their credential
+    (:func:`official_data_fns`) read the context the engine sets as
+    ``tools.data_context`` after construction."""
+    pit = _pit_policy(os.environ)
+    enabled = data_tools_availability(os.environ)[0]
+    tools: rg.ResearchTools | None = None
+
+    def data_context() -> Mapping[str, Any] | None:
+        # Set by the engine once it is built (the plan does not exist yet here).
+        getter = getattr(tools, "data_context", None)
+        return getter() if callable(getter) else None
+
+    data_fns = official_data_fns(os.environ, enabled, data_context) if enabled else None
+    tools = rg.ResearchTools(ledger, pages_dir, bridge=bridge, plog=plog, limits=limits,
+                             source_dates=_env_flag(os.environ, "RESEARCH_SOURCE_DATES", False) or pit is not None,
+                             date_text_fallback=_env_flag(os.environ, "RESEARCH_SOURCE_DATE_TEXT_FALLBACK", True),
+                             vintage_as_of=_hindcast_as_of(os.environ), pit=pit, data_fns=data_fns or None)
+    return tools
 
 
 # ===========================================================================

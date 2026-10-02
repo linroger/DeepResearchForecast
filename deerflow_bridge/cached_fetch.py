@@ -16,14 +16,26 @@ jina `web_fetch` 工具包成一层**磁盘缓存**：命中且未过期即秒�
 * **缓存语义**：
     - 目录  env RESEARCH_SOURCE_CACHE_DIR（默认 <module_dir>/.cache/source_cache）
     - 键    sha256(url) 的 hexdigest（→ ``<hash>.json``）
-    - 值    {url, content, fetched_at(epoch), content_len}
+    - 值    {url, content, fetched_at(epoch), content_len}（+ meta：来源日期元数据，非空时才写）
     - TTL   env RESEARCH_SOURCE_CACHE_TTL_H（默认 72h；0=关闭缓存，透明直连）
     - 上限  env RESEARCH_SOURCE_CACHE_MAX_MB（默认 500；<=0=不限；超限按 mtime LRU 淘汰）
 * **绝不放入正缓存的失败/哨兵/死抓取**：jina 失败返回以 "Error:" 起头的串；正文 <200 字符
   视作死抓取。LOOP-007 账本启用时，此类 exact 结果允许一次真抓重试，随后在负缓存 TTL 内
   稳定抑制；账本未启用时仍维持原来的每次真抓行为。
+* **抽取空壳（RESEARCH-1，RESEARCH_FETCH_SHELL_DETECTION 缺省开）**：reader 空壳、"page
+  unavailable" 页、bot wall、短付费墙预告由 ``extraction_failure_reason`` 判定——不落盘、
+  触发 provider 回退、缓存命中时视作未命中；全链只剩空壳时返回 "Error: fetch returned <reason>"。
 * **LOOP-007 —— 跨进程预算**：正缓存命中只计 attempt、不计 network；miss 后才原子占用
   fetch global/lane 额度。预算拒绝不调用 jina delegate；账本故障 fail-open 并输出 degraded 遥测。
+* **RESEARCH-2 —— 类型化来源结果**（RESEARCH_SOURCE_TAXONOMY，缺省关）：每次失败的 provider
+  物理尝试（即便回退成功）按 not_configured / unavailable / content 记入进程内
+  provider_events()；Firecrawl 401/402（凭据/额度拒绝）后本进程不再请求 Firecrawl，并经
+  research_budget 打开共享熔断（各 lane 同跳过）；传输故障与凭据/额度拒绝不进负缓存。
+  关 = 行为逐字节不变。
+* **TIME-2 —— 来源发布日期旁路**：Firecrawl scrape 的日期类 metadata、Exa published_date、
+  直连抓取（opt-in）的 HTML 日期候选（source_dates.from_html）写入 _FETCH_META；
+  ``cached_fetch_with_meta`` 返回 ``(text, meta)`` 供 v3 工具层定日期（RESEARCH_SOURCE_DATES），
+  ``cached_fetch`` / ``web_fetch`` 的 str 契约与返回内容不变。
 * **degrade-safe**：任何缓存读写/目录/淘汰异常都被吞掉并回退到「直接抓取并返回」，缓存层的
   故障绝不阻断研究主流程，也绝不改变抓取结果本身。
 """
@@ -32,12 +44,16 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import copy
 import hashlib
+import io
 import ipaddress
 import json
 import logging
 import os
+import re
 import socket
+import threading
 import time
 from html.parser import HTMLParser
 from typing import Any, Awaitable, Callable, Optional
@@ -49,6 +65,11 @@ try:  # copied beside this module by the bridge sync guard; absence is fail-open
     import research_budget as _research_budget
 except ImportError:  # pragma: no cover - exercised only by incomplete deployments
     _research_budget = None  # type: ignore[assignment]
+
+try:  # TIME-2: deployed beside this module; absence only skips direct-fetch HTML dates
+    import source_dates as _source_dates
+except ImportError:  # pragma: no cover - exercised only by incomplete deployments
+    _source_dates = None  # type: ignore[assignment]
 
 # 死抓取阈值：正文短于此长度（或以 "Error:" 起头）视作失败/空壳，不落盘。
 DEAD_FETCH_MIN_CHARS = 200
@@ -87,9 +108,148 @@ _CONTENT_FAILURE_MARKERS = (
     "enable javascript and cookies",
     "captcha",
 )
+# —— RESEARCH-1：抽取空壳分类器（extraction_failure_reason）——
+# Reader shells ("Markdown Content: undefined"), "page unavailable" pages, bot
+# walls and short paywall teasers used to count as successful reads: cached for
+# 72 h, marked fetched and published as fetched.  Every marker below is ASCII
+# lowercase or CJK and is matched only inside a length window, so a long real
+# article that merely mentions "captcha" or carries a subscribe footer passes.
+_SHELL_PREFIX_CHARS = 3000
+# Visible characters: blank lines, line breaks and the whitespace around each
+# line do not count, so boilerplate padded with blank lines is still a shell.
+_SHELL_MIN_CONTENT_CHARS = 200
+# Every reason extraction_failure_reason returns.  research_gateway keeps a
+# copy (it recognises "Error: fetch returned <reason>" without importing this
+# module); a test holds the two sets equal.
+SHELL_REASONS = ("empty_extraction", "unavailable_page", "bot_wall", "paywalled")
+_SHELL_READER_ENVELOPE = "markdown content:"
+_SHELL_METADATA_PREFIXES = (
+    "title:",
+    "url source:",
+    "published time:",
+    "warning:",
+    "markdown content:",
+)
+_UNAVAILABLE_PAGE_MAX_CHARS = 1500
+_UNAVAILABLE_PAGE_MARKERS = (
+    "page unavailable",
+    "this page is unavailable",
+    "no longer available",
+    "could not be found",
+    "has been removed",
+    "page not found",
+    "404 not found",
+)
+_BOT_WALL_MAX_CHARS = 1500
+_BOT_WALL_MARKERS = (
+    "just a moment",
+    "checking your browser",
+    "attention required",
+    "unusual traffic",
+    "are you a robot",
+    "request blocked",
+    "verify you are human",
+    "enable javascript and cookies",
+    "captcha",
+    "access denied",
+    "403 forbidden",
+)
+_PAYWALL_MAX_CHARS = 3000
+_PAYWALL_MARKERS = (
+    "subscribe to continue",
+    "to continue reading",
+    "already a subscriber",
+    "subscribers only",
+    "sign in to continue reading",
+    "register to continue reading",
+    "登录后查看",
+    "订阅后阅读",
+    "付费阅读",
+)
+_SHELL_FALSY = frozenset({"0", "false", "no", "off"})
+# ASCII-only lowercasing keeps every offset aligned with the original text (the
+# reader-envelope body is sliced from the original); all markers are ASCII or CJK.
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+# Direct-fallback PDF parsing: pdfplumber/pypdfium2 are not thread-safe, and a
+# pathological PDF must not hold the fetch past this bound.
+PDF_PARSE_TIMEOUT_S = 20.0
+_PDF_LOCK = threading.Lock()
 _FETCH_PROVIDER: contextvars.ContextVar[str] = contextvars.ContextVar(
     "research_fetch_provider", default=""
 )
+# —— TIME-2：来源发布日期旁路（RESEARCH_SOURCE_DATES 的数据面；抓取结果 str 契约不变）——
+# The provider that answered a fetch stores the page's date metadata here (Firecrawl
+# scrape metadata keys, Exa's published_date, the direct fetch's from_html()
+# candidates under source_dates.HTML_DATES_KEY); _resilient_fetch resets it per call
+# and per failed provider, and cached_fetch_with_meta reads it right after awaiting
+# the fetch in the same task (a ContextVar set there is visible to the awaiting
+# caller).  A copy is kept in the cache entry, so a cache hit returns it too.  The
+# stored dict is never mutated in place (always replaced with .set()).
+_FETCH_META: contextvars.ContextVar[dict] = contextvars.ContextVar(
+    "research_fetch_meta", default={}
+)
+# Firecrawl metadata keys kept (lower-cased name containing one of these), at most
+# _FETCH_META_MAX_KEYS keys, each value (or list element) cut to _FETCH_META_VALUE_CHARS.
+# Every source_dates PUBLISHED/MODIFIED_META_KEYS name contains one ("created":
+# dcterms.created / dcTermsCreated); a test pins that.
+_FETCH_META_KEY_MARKERS = ("date", "time", "publish", "modif", "updated", "created")
+_FETCH_META_MAX_KEYS = 12
+_FETCH_META_VALUE_CHARS = 80
+_FETCH_META_LIST_ITEMS = 4
+# —— RESEARCH-2：类型化来源结果（RESEARCH_SOURCE_TAXONOMY，缺省关）——
+# research_gateway._INFRA_FETCH_REASON_PREFIXES / _CONTENT_FETCH_REASON_PREFIXES /
+# _TRANSIENT_FETCH_REASON_RE / _FIRECRAWL_FAILED_PREFIX (kept as copies so
+# neither module imports the other; a test holds them equal): a failure-reason
+# slug matching either infra table, or naming a Firecrawl exception, is the
+# fetch service's failure, not the page's (a content prefix wins over both).
+# The provider events and the negative-cache decision use this table alone,
+# so both always carry the class the tool layer gives the same text.
+_FIRECRAWL_FAILED_PREFIX = "firecrawl_failed_"
+_CONTENT_FETCH_REASON_PREFIXES = ("research_negative_cache_suppressed",)
+_INFRA_FETCH_REASON_PREFIXES = (
+    "no_web_fetch_provider_was_available",
+    "firecrawl_failed_payment_required",
+    "firecrawl_failed_http_401",
+    "firecrawl_failed_http_402",
+    "firecrawl_failed_http_408",
+    "firecrawl_failed_http_5",
+    "firecrawl_failed_rate_limited",
+    "firecrawl_unavailable",
+    "firecrawl_per_run_call_ceiling",
+    "jina_primary_failed",
+    "request_to_jina_api_failed",
+    "jina_api_returned_status_5",
+    "jina_api_returned_status_401",
+    "jina_api_returned_status_402",
+    "jina_api_returned_status_408",
+    "exa_fallback_failed",
+    "exa_fallback_unavailable",
+    "direct_fallback_failed",
+    "direct_fallback_produced_no_response",
+    "already_available",
+    "research_",
+    "fetch_call_deadline",
+)
+_TRANSIENT_FETCH_REASON_RE = re.compile(r"timeout|timed_out|rate_limit|429|inflight|temporarily")
+# (provider, lower-cased text prefix, reason) of a provider's own
+# credential/quota refusal: _firecrawl_fetch's 402/401 texts and the deer-flow
+# Jina client's "Jina API returned status 402/401".  A prefix match, so a page
+# body that mentions "payment required" is never taken for one.
+_QUOTA_REFUSAL_TEXTS = (
+    ("firecrawl", "error: firecrawl failed: payment required", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 402", "http_402"),
+    ("firecrawl", "error: firecrawl failed: http 401", "http_401"),
+    ("jina", "error: jina api returned status 402", "http_402"),
+    ("jina", "error: jina api returned status 401", "http_401"),
+)
+# provider -> reason ("http_402"/"http_401"): a provider that refused this
+# process's credential or quota; later _resilient_fetch calls skip it
+# (Firecrawl only; a Jina refusal is recorded as not_configured, Jina is still asked).
+_DISABLED_FETCH_PROVIDERS: dict[str, str] = {}
+# provider -> outcome ("ok" | "not_configured" | "unavailable" | "content")
+# -> {"count": attempts, "reason": latest failure reason}; see provider_events().
+_PROVIDER_EVENTS: dict[str, dict[str, dict[str, Any]]] = {}
+_PROVIDER_EVENTS_LOCK = threading.Lock()
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -112,6 +272,239 @@ def _is_transport_failure(value: Any) -> bool:
     return any(marker in lowered for marker in _TRANSPORT_FAILURE_MARKERS)
 
 
+def _source_taxonomy_on() -> bool:
+    """RESEARCH_SOURCE_TAXONOMY (default off; the orchestrator forwards Config's value)."""
+    return _env_flag("RESEARCH_SOURCE_TAXONOMY", False)
+
+
+def _is_outage_result(value: Any) -> bool:
+    """The service failed, not the URL: the tool layer's infrastructure class
+    (_fetch_failure_class), which covers every provider's transport-failure
+    "Error:" (each starts with an infra prefix or names a timeout in its slug),
+    a credential/quota refusal, an unconfigured provider and an empty provider
+    chain.  A page body that merely mentions a timeout or an HTTP 401 is the
+    page's failure: it is negative-cached, as the tool layer remembers it."""
+    return _fetch_failure_class(value) == "unavailable"
+
+
+def _quota_refusal_reason(provider: str, value: Any) -> str:
+    """``http_402``/``http_401`` when ``value`` is ``provider``'s own
+    credential/quota refusal (_QUOTA_REFUSAL_TEXTS), else ""."""
+    lowered = str(value or "").strip().lower()
+    for name, prefix, reason in _QUOTA_REFUSAL_TEXTS:
+        if name == provider and lowered.startswith(prefix):
+            return reason
+    return ""
+
+
+def _failure_slug(value: Any) -> str:
+    """The failure reason research_gateway would show for this fetch text: the
+    slug of an "Error:" message or of a JSON envelope's error
+    (research_budget_exhausted...), else the shell reason or unusable_page."""
+    stripped = str(value or "").strip()
+    if not stripped:
+        return "empty"
+    message: Any = None
+    if stripped.startswith("Error:"):
+        message = stripped[len("Error:"):] or "error"
+    elif stripped.startswith("{"):
+        try:
+            envelope = json.loads(stripped)
+        except ValueError:
+            envelope = None
+        if isinstance(envelope, dict):
+            message = envelope.get("error") or (
+                "already_available" if envelope.get("status") == "already_available" else None)
+    if not message:
+        return extraction_failure_reason(stripped) or "unusable_page"
+    slug = re.sub(r"[^0-9a-z]+", "_", str(message).lower()).strip("_")
+    return slug[:48].rstrip("_") or "error"
+
+
+def _fetch_failure_class(value: Any) -> str:
+    """``unavailable`` (infrastructure) or ``content`` for one failed fetch
+    text: research_gateway._fetch_reason_is_infra applied to the same reason
+    slug, and nothing else.  The slug (at most 48 chars) is all the tool layer
+    sees, so a provider body that mentions a timeout further on (a Jina 422
+    "Navigation timeout" of the target site) is the page's failure here too."""
+    slug = _failure_slug(value)
+    if slug.startswith(_CONTENT_FETCH_REASON_PREFIXES):
+        return "content"
+    if (_TRANSIENT_FETCH_REASON_RE.search(slug)
+            or slug.startswith(_INFRA_FETCH_REASON_PREFIXES)
+            or (slug.startswith(_FIRECRAWL_FAILED_PREFIX)
+                and not slug.startswith(_FIRECRAWL_FAILED_PREFIX + "http_"))):
+        return "unavailable"
+    return "content"
+
+
+def _record_fetch_event(provider: str, outcome: str, reason: str = "") -> None:
+    with _PROVIDER_EVENTS_LOCK:
+        entry = _PROVIDER_EVENTS.setdefault(provider, {}).setdefault(
+            outcome, {"count": 0, "reason": ""})
+        entry["count"] += 1
+        if reason:
+            entry["reason"] = reason
+
+
+def _note_fetch_failure(provider: str, result: str) -> None:
+    """Record one failed provider attempt (a credential/quota refusal as
+    not_configured); a Firecrawl refusal also disables Firecrawl for this
+    process (one ERROR log) and opens its shared circuit so every lane skips it."""
+    refusal = _quota_refusal_reason(provider, result)
+    if not refusal:
+        _record_fetch_event(provider, _fetch_failure_class(result), _failure_slug(result))
+        return
+    _record_fetch_event(provider, "not_configured", refusal)
+    if provider != "firecrawl":
+        return
+    with _PROVIDER_EVENTS_LOCK:
+        first = provider not in _DISABLED_FETCH_PROVIDERS
+        _DISABLED_FETCH_PROVIDERS[provider] = refusal
+    if first:
+        logger.error(
+            "cached_fetch: %s refused this run's credential/quota (%s); "
+            "later fetches skip it and use the fallback providers", provider, refusal)
+    if _research_budget is not None and hasattr(
+            _research_budget, "record_provider_quota_failure"):
+        _research_budget.record_provider_quota_failure(provider, result)
+
+
+def provider_events() -> dict[str, dict[str, dict[str, Any]]]:
+    """Snapshot (deep copy) of this process's fetch provider outcomes."""
+    with _PROVIDER_EVENTS_LOCK:
+        return copy.deepcopy(_PROVIDER_EVENTS)
+
+
+def reset_provider_events() -> None:
+    """Forget this process's fetch provider outcomes and credential/quota
+    disables (a new process starts clean; tests reset between cases)."""
+    with _PROVIDER_EVENTS_LOCK:
+        _PROVIDER_EVENTS.clear()
+        _DISABLED_FETCH_PROVIDERS.clear()
+
+
+def _shell_detection_on() -> bool:
+    """RESEARCH_FETCH_SHELL_DETECTION（缺省开）。诚实性检查 fail-closed：只有显式假值
+    （0/false/no/off）才恢复旧行为（逐字节一致）。"""
+    raw = os.environ.get("RESEARCH_FETCH_SHELL_DETECTION", "").strip().lower()
+    return raw not in _SHELL_FALSY
+
+
+def _visible_chars(lines: list[str]) -> int:
+    """Characters on ``lines`` without the whitespace around each line."""
+    return sum(len(line.strip()) for line in lines)
+
+
+def extraction_failure_reason(text: Any) -> Optional[str]:
+    """Why a fetched text is an extraction shell rather than a page, else None.
+
+    Pure and stdlib-only: substring checks over an ASCII-lowercased prefix of at
+    most 3,000 chars (no regex).  Non-str, empty and "Error:" texts return None
+    (they are failures of their own kind).  Rules, first match wins:
+
+    * ``empty_extraction`` — a reader envelope ("Markdown Content:") whose body
+      is empty/undefined/null/none or under 200 visible chars; or fewer than 200
+      visible chars left after dropping the first line when it is a "#" title
+      and every Title:/URL Source:/Published Time:/Warning:/Markdown Content:
+      line (visible: blank lines, line breaks and the whitespace around each
+      line are not counted);
+    * ``unavailable_page`` — under 1,500 chars with a "page unavailable" marker;
+    * ``bot_wall`` — under 1,500 chars with a bot-check/interstitial marker;
+    * ``paywalled`` — under 3,000 chars with a paywall-teaser marker.
+    """
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    if not stripped or stripped.startswith("Error:"):
+        return None
+    prefix = stripped[:_SHELL_PREFIX_CHARS].translate(_ASCII_LOWER)
+    # Text beyond the scanned prefix counts as content (never a false shell).
+    unscanned = max(0, len(stripped) - _SHELL_PREFIX_CHARS)
+    envelope_at = prefix.find(_SHELL_READER_ENVELOPE)
+    if envelope_at >= 0:
+        # The length rule covers the empty/"undefined"/"null"/"none" bodies too.
+        body = prefix[envelope_at + len(_SHELL_READER_ENVELOPE):].split("\n")
+        if _visible_chars(body) + unscanned < _SHELL_MIN_CONTENT_CHARS:
+            return "empty_extraction"
+    lines = prefix.split("\n")
+    if lines[0].startswith("#"):
+        lines = lines[1:]
+    content = [line for line in lines if not line.strip().startswith(_SHELL_METADATA_PREFIXES)]
+    if _visible_chars(content) + unscanned < _SHELL_MIN_CONTENT_CHARS:
+        return "empty_extraction"
+    length = len(stripped)
+    if length < _UNAVAILABLE_PAGE_MAX_CHARS and any(
+            marker in prefix for marker in _UNAVAILABLE_PAGE_MARKERS):
+        return "unavailable_page"
+    if length < _BOT_WALL_MAX_CHARS and any(
+            marker in prefix for marker in _BOT_WALL_MARKERS):
+        return "bot_wall"
+    if length < _PAYWALL_MAX_CHARS and any(
+            marker in prefix for marker in _PAYWALL_MARKERS):
+        return "paywalled"
+    return None
+
+
+def _shell_error(text: Any) -> Optional[str]:
+    """``"Error: fetch returned <reason>"`` when the failover chain's last text is
+    a shell; None for real text, "Error:" strings and JSON object envelopes (an
+    envelope's own error, e.g. research_budget_exhausted, must reach the tool
+    layer unchanged)."""
+    if not isinstance(text, str):
+        return None
+    stripped = text.strip()
+    if stripped.startswith("{"):
+        try:
+            if isinstance(json.loads(stripped), dict):
+                return None
+        except (TypeError, ValueError):
+            pass
+    reason = extraction_failure_reason(stripped)
+    return f"Error: fetch returned {reason}" if reason else None
+
+
+def _pdf_text_pypdf(content: bytes, max_pages: int) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(content))
+    return "\n\n".join(str(page.extract_text() or "") for page in reader.pages[:max_pages])
+
+
+def _pdf_text_pdfplumber(content: bytes, max_pages: int) -> str:
+    import pdfplumber
+
+    # ``pages`` (1-based) keeps pdfplumber from building a Page for every page.
+    with pdfplumber.open(io.BytesIO(content), pages=list(range(1, max_pages + 1))) as pdf:
+        return "\n\n".join(str(page.extract_text() or "") for page in pdf.pages[:max_pages])
+
+
+def _extract_pdf_text(content: bytes, max_pages: int = 80) -> str:
+    """Text of the first ``max_pages`` pages: pypdf, else pdfplumber (the deer-flow
+    research venv ships only pdfplumber).  Serialized by ``_PDF_LOCK``; when
+    pdfplumber is missing too, pypdf's own failure is raised (a parse error says
+    more than a missing library).
+
+    A parse that outlived its caller's ``PDF_PARSE_TIMEOUT_S`` keeps running in
+    its thread and keeps the lock, so the lock is waited for at most that long:
+    a later parse raises TimeoutError instead of pinning another thread."""
+    if not _PDF_LOCK.acquire(timeout=PDF_PARSE_TIMEOUT_S):
+        raise TimeoutError("an earlier PDF parse still holds the parser lock")
+    try:
+        try:
+            return _pdf_text_pypdf(content, max_pages)
+        except Exception as exc:  # noqa: BLE001 — fall back to pdfplumber
+            pypdf_failure = exc
+        try:
+            return _pdf_text_pdfplumber(content, max_pages)
+        except ImportError:
+            if isinstance(pypdf_failure, ImportError):
+                raise
+            raise pypdf_failure from None
+    finally:
+        _PDF_LOCK.release()
+
+
 class _TextExtractor(HTMLParser):
     """Small dependency-free fallback when DeerFlow readability cannot parse."""
 
@@ -131,6 +524,49 @@ class _TextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         if not self._suppressed and data.strip():
             self.parts.append(data.strip())
+
+
+def _date_meta_value(value: Any) -> Any:
+    """A metadata value kept for dating: a non-empty str (numbers as text) or a
+    list of them, each cut to _FETCH_META_VALUE_CHARS; None otherwise."""
+    if isinstance(value, (list, tuple)):
+        items = [kept for kept in (_date_meta_value(item) for item in value[:_FETCH_META_LIST_ITEMS])
+                 if isinstance(kept, str)]
+        return items or None
+    if value is None or isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None
+    text = str(value).strip()[:_FETCH_META_VALUE_CHARS]
+    return text or None
+
+
+def _date_metadata(metadata: dict) -> dict:
+    """The date-bearing part of a Firecrawl scrape's metadata (TIME-2): at most
+    _FETCH_META_MAX_KEYS keys whose lower-cased name contains a date marker."""
+    kept: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if len(kept) >= _FETCH_META_MAX_KEYS:
+            break
+        name = str(key)
+        if not any(marker in name.lower() for marker in _FETCH_META_KEY_MARKERS):
+            continue
+        clean = _date_meta_value(value)
+        if clean is not None:
+            kept[name[:_FETCH_META_VALUE_CHARS]] = clean
+    return kept
+
+
+def _capture_html_dates(raw: str) -> None:
+    """Direct fetch (TIME-2): store the page's HTML date candidates in
+    _FETCH_META before readability drops the markup.  Degrade-safe: a missing
+    source_dates module or any extractor error stores nothing."""
+    if _source_dates is None:
+        return
+    try:
+        candidates = _source_dates.from_html(raw)
+    except Exception:  # noqa: BLE001 — dating never breaks a fetch
+        return
+    if candidates:
+        _FETCH_META.set({_source_dates.HTML_DATES_KEY: [list(item) for item in candidates[:_FETCH_META_MAX_KEYS]]})
 
 
 async def _host_is_public(host: str) -> bool:
@@ -198,21 +634,21 @@ async def _direct_http_fetch(url: str) -> str:
             content_type = response.headers.get("content-type", "").lower()
             if "pdf" in content_type or response.content.startswith(b"%PDF"):
                 try:
-                    import io
-                    from pypdf import PdfReader
-
-                    reader = PdfReader(io.BytesIO(response.content))
-                    text = "\n\n".join(
-                        str(page.extract_text() or "") for page in reader.pages[:80]
+                    text = await asyncio.wait_for(
+                        asyncio.to_thread(_extract_pdf_text, response.content),
+                        PDF_PARSE_TIMEOUT_S,
                     )
-                    return text[:12000] if len(text.strip()) >= 200 else (
-                        "Error: direct fallback PDF had no extractable text"
-                    )
+                except TimeoutError:
+                    return "Error: direct fallback PDF parse timed out"
                 except Exception as exc:  # noqa: BLE001
                     return f"Error: direct fallback PDF extraction failed: {type(exc).__name__}"
+                return text[:12000] if len(text.strip()) >= 200 else (
+                    "Error: direct fallback PDF had no extractable text"
+                )
             raw = response.text
             if "html" not in content_type and "<html" not in raw[:1000].lower():
                 return raw[:12000]
+            _capture_html_dates(raw)
             try:
                 from deerflow.utils.readability import ReadabilityExtractor
 
@@ -265,6 +701,9 @@ async def _exa_fetch(url: str) -> str:
         body = str(getattr(row, "text", None) or "").strip()
         if not body:
             return "Error: Exa fallback returned no page text"
+        published = str(getattr(row, "published_date", None) or "").strip()
+        if published:
+            _FETCH_META.set({"publishedDate": published[:_FETCH_META_VALUE_CHARS]})
         return f"# {title}\n\n{body[:max_chars]}"
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text: some clients echo request
@@ -379,6 +818,7 @@ async def _firecrawl_fetch(url: str) -> str:
         metadata = data.get("metadata")
         if not isinstance(metadata, dict):
             metadata = {}
+        _FETCH_META.set(_date_metadata(metadata))
         title = str(metadata.get("title") or "").strip()
         return (f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars])
     except Exception as exc:  # noqa: BLE001
@@ -395,10 +835,18 @@ def _provider_circuit_open(provider: str) -> bool:
 
 
 def _record_provider_failure(provider: str, result: str) -> None:
+    # The circuit counts transport failures (credential/quota refusals have their
+    # own latch).  With the source taxonomy on it also requires the shared table
+    # (tool layer, provider events) to call the text the fetch service's failure,
+    # so a Jina 4xx body that mentions the target site's timeout stays the page's
+    # failure and cannot open Jina's circuit for every lane.
+    is_outage = _is_transport_failure(result)
+    if is_outage and _source_taxonomy_on():
+        is_outage = _fetch_failure_class(result) == "unavailable"
     if (
         _research_budget is not None
         and hasattr(_research_budget, "record_provider_transport_failure")
-        and _is_transport_failure(result)
+        and is_outage
     ):
         _research_budget.record_provider_transport_failure(provider, result)
 
@@ -432,9 +880,16 @@ async def _resilient_fetch(url: str) -> str:
     Jina (53% ConnectTimeout in the 2026-07-14 humanoid run) becomes fallback.
     """
     _FETCH_PROVIDER.set("")
+    # TIME-2: date metadata belongs to the provider whose text is returned; a
+    # failed provider's metadata is dropped below before the next one is asked.
+    _FETCH_META.set({})
+    # RESEARCH-2 (taxonomy on): every physical attempt's outcome is recorded,
+    # and a provider that refused the credential/quota is not asked again.
+    taxonomy = _source_taxonomy_on()
     physical_attempts = 0
     firecrawl_result = ""
     if (os.environ.get("FIRECRAWL_API_KEY", "").strip()
+            and not (taxonomy and "firecrawl" in _DISABLED_FETCH_PROVIDERS)
             and not _provider_circuit_open("firecrawl")):
         ceiling_sentinel = _firecrawl_over_ceiling()
         if ceiling_sentinel is not None:
@@ -447,8 +902,13 @@ async def _resilient_fetch(url: str) -> str:
             if _is_cacheable(firecrawl_result):
                 _FETCH_PROVIDER.set("firecrawl")
                 _record_provider_success("firecrawl")
+                if taxonomy:
+                    _record_fetch_event("firecrawl", "ok")
                 return firecrawl_result
             _record_provider_failure("firecrawl", firecrawl_result)
+            _FETCH_META.set({})
+            if taxonomy:
+                _note_fetch_failure("firecrawl", firecrawl_result)
 
     primary_result = ""
     if not _provider_circuit_open("jina"):
@@ -467,8 +927,12 @@ async def _resilient_fetch(url: str) -> str:
         if _is_cacheable(primary_result):
             _FETCH_PROVIDER.set("jina")
             _record_provider_success("jina")
+            if taxonomy:
+                _record_fetch_event("jina", "ok")
             return primary_result
         _record_provider_failure("jina", primary_result)
+        if taxonomy:
+            _note_fetch_failure("jina", primary_result)
 
     exa_result = ""
     if os.environ.get("EXA_API_KEY", "").strip() and not _provider_circuit_open("exa"):
@@ -481,8 +945,13 @@ async def _resilient_fetch(url: str) -> str:
         if _is_cacheable(exa_result):
             _FETCH_PROVIDER.set("exa")
             _record_provider_success("exa")
+            if taxonomy:
+                _record_fetch_event("exa", "ok")
             return exa_result
         _record_provider_failure("exa", exa_result)
+        _FETCH_META.set({})
+        if taxonomy:
+            _note_fetch_failure("exa", exa_result)
 
     # Raw crawling has more variable robots/readability behavior than either
     # content provider, so it remains an explicit operator opt-in.
@@ -495,11 +964,21 @@ async def _resilient_fetch(url: str) -> str:
         direct_result = await _direct_http_fetch(url)
         if _is_cacheable(direct_result):
             _FETCH_PROVIDER.set("direct")
+            if taxonomy:
+                _record_fetch_event("direct", "ok")
             return direct_result
+        _FETCH_META.set({})
+        if taxonomy:
+            _note_fetch_failure("direct", direct_result)
 
-    return direct_result or exa_result or primary_result or firecrawl_result or (
+    final = direct_result or exa_result or primary_result or firecrawl_result or (
         "Error: no web-fetch provider was available"
     )
+    if _shell_detection_on():
+        # Every provider failed; a shell left as the last text is a failure too,
+        # so legacy agents and the v3 tool layer never read it as a page.
+        return _shell_error(final) or final
+    return final
 
 
 def _source_policy_rejection(url: str) -> Optional[str]:
@@ -587,15 +1066,23 @@ def _cache_path(root: str, url: str) -> str:
 
 
 def _is_cacheable(content: Any) -> bool:
-    """仅当是**成功的、非空壳**正文才可落盘：str、非空、非 "Error:" 起头、且 ≥200 字符。"""
+    """仅当是**成功的、非空壳**正文才可落盘：str、非空、非 "Error:" 起头、且 ≥200 字符。
+
+    RESEARCH_FETCH_SHELL_DETECTION 开（缺省）时空壳由 extraction_failure_reason 判定（带长度
+    窗口的标记，替代旧的无窗口前缀标记）；关时保持旧的 _CONTENT_FAILURE_MARKERS 前缀判定。
+    """
     if not isinstance(content, str):
         return False
     stripped = content.strip()
     if not stripped or stripped.startswith("Error:"):
         return False
-    prefix = stripped[:1200].lower()
-    if any(marker in prefix for marker in _CONTENT_FAILURE_MARKERS):
-        return False
+    if _shell_detection_on():
+        if extraction_failure_reason(stripped) is not None:
+            return False
+    else:
+        prefix = stripped[:1200].lower()
+        if any(marker in prefix for marker in _CONTENT_FAILURE_MARKERS):
+            return False
     if stripped.startswith("{"):
         try:
             envelope = json.loads(stripped)
@@ -608,11 +1095,12 @@ def _is_cacheable(content: Any) -> bool:
     return len(content) >= DEAD_FETCH_MIN_CHARS
 
 
-def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
-    """命中且未过期 → 返回 content（并 touch mtime 供 LRU 记「近用」）；否则 None。任何异常 → None。
+def _read_cache_entry(path: str, ttl_seconds: float) -> Optional[tuple[str, dict]]:
+    """命中且未过期 → ``(content, meta)``（并 touch mtime 供 LRU 记「近用」）；否则 None。任何异常 → None。
 
-    过期判定基于落盘时记录的 ``fetched_at``（真实抓取时刻），**不**用 mtime——因为命中会 touch
-    mtime 用作 LRU 近用标记，二者若混用会让被反复命中的条目永不过期。二者故意分离。
+    ``meta`` 是落盘时一并保存的来源日期元数据（TIME-2，缺省 {}）。过期判定基于落盘时记录的
+    ``fetched_at``（真实抓取时刻），**不**用 mtime——因为命中会 touch mtime 用作 LRU 近用标记，
+    二者若混用会让被反复命中的条目永不过期。二者故意分离。
     """
     try:
         if not os.path.exists(path):
@@ -625,17 +1113,34 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
             return None
         if (time.time() - fetched_at) > ttl_seconds:
             return None  # 过期 → 视作未命中（调用方将重抓覆盖）
+        if _shell_detection_on() and extraction_failure_reason(content) is not None:
+            # 修复前落盘的空壳：视作未命中并 best-effort 删除，让本次重抓走完整回退链。
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            return None
         try:
             os.utime(path, None)  # LRU：命中即刷新 mtime 为「最近使用」（best-effort）
         except OSError:
             pass
-        return content
+        meta = obj.get("meta")
+        return content, (dict(meta) if isinstance(meta, dict) else {})
     except Exception:  # noqa: BLE001 — 缓存读损坏/并发写中 → 当作未命中，degrade-safe
         return None
 
 
-def _write_cache(path: str, url: str, content: str) -> None:
-    """原子写缓存条目（temp+replace）。best-effort：任何失败静默跳过（不影响返回给 agent 的结果）。"""
+def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
+    """:func:`_read_cache_entry` 的正文部分（命中 → content；否则 None）。"""
+    entry = _read_cache_entry(path, ttl_seconds)
+    return entry[0] if entry is not None else None
+
+
+def _write_cache(path: str, url: str, content: str, meta: Optional[dict] = None) -> None:
+    """原子写缓存条目（temp+replace）。best-effort：任何失败静默跳过（不影响返回给 agent 的结果）。
+
+    ``meta``（TIME-2 来源日期元数据）非空时才写入 ``meta`` 键，空时条目与此前逐字节同形。
+    """
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         payload = {
@@ -644,6 +1149,8 @@ def _write_cache(path: str, url: str, content: str) -> None:
             "fetched_at": time.time(),
             "content_len": len(content),
         }
+        if meta:
+            payload["meta"] = meta
         tmp = f"{path}.{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
@@ -689,34 +1196,37 @@ def _enforce_size_cap(root: str, max_bytes: int) -> None:
         logger.warning("cached_fetch: 淘汰缓存失败（跳过）: %s", e)
 
 
-async def cached_fetch(
+async def _cached_fetch_core(
     url: str,
     fetch_fn: Callable[[str], Awaitable[str]],
     revisit_reason: str = "",
-) -> str:
-    """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）。返回类型与被包裹工具一致（str）。
+) -> tuple[str, dict]:
+    """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）→ ``(text, meta)``。
 
     TTL<=0 → 关闭正缓存（LOOP-007 预算仍独立生效）。否则：命中未过期即返回；否则真抓，成功且可缓存
     （非失败/非哨兵/≥200 字符）才落盘 + 触发 LRU 淘汰。缓存层任何异常都不改变返回结果。
+    ``meta``（TIME-2）：命中 → 缓存条目里保存的来源日期元数据；真抓 → 紧接 ``await fetch_fn`` 之后
+    读取的 _FETCH_META 副本（同一 task，内层 ContextVar 写入可见）；任何哨兵/拒绝路径 → {}。
     """
     exact_key = str(url or "").strip()
     policy_rejection = _source_policy_rejection(exact_key)
     if policy_rejection:
-        return _source_policy_result(exact_key, policy_rejection)
+        return _source_policy_result(exact_key, policy_rejection), {}
     if _research_budget is not None:
         attempt = _research_budget.admit_attempt("fetch")
         if not attempt.allowed:
-            return _research_budget.denial_result("web_fetch", attempt.reason, exact_key)
+            return _research_budget.denial_result("web_fetch", attempt.reason, exact_key), {}
 
     ttl = _ttl_seconds()
     root = _cache_root()
     path = _cache_path(root, url)
     if ttl > 0:
         try:
-            hit = _read_cache(path, ttl)
+            entry = _read_cache_entry(path, ttl)
         except Exception:  # noqa: BLE001 — 极端情况下路径计算/读取异常也不阻断抓取
-            hit = None
-        if hit is not None:
+            entry = None
+        if entry is not None:
+            hit, hit_meta = entry
             if _research_budget is not None:
                 if hasattr(_research_budget, "record_fetched_source"):
                     _research_budget.record_fetched_source(
@@ -727,13 +1237,13 @@ async def cached_fetch(
                         "fetch", exact_key)
                     if artifact_id:
                         return _research_budget.compact_positive_result(
-                            "web_fetch", artifact_id)
+                            "web_fetch", artifact_id), {}
                 _research_budget.record_positive("fetch", exact_key)
-            return hit
+            return hit, hit_meta
 
     if (_research_budget is not None
             and _research_budget.negative_suppressed("fetch", exact_key)):
-        return _research_budget.negative_result("web_fetch", exact_key)
+        return _research_budget.negative_result("web_fetch", exact_key), {}
 
     claim_token = ""
     waited_for_claim = False
@@ -751,8 +1261,9 @@ async def cached_fetch(
             while time.monotonic() < deadline:
                 await asyncio.sleep(delay)
                 delay = min(1.0, delay * 1.7)
-                hit = _read_cache(path, ttl)
-                if hit is not None:
+                entry = _read_cache_entry(path, ttl)
+                if entry is not None:
+                    hit, hit_meta = entry
                     # A singleflight follower may be an isolated subagent that
                     # cannot see the owner's model history. Share the fresh
                     # cache body in full; network dedupe must not become
@@ -762,7 +1273,7 @@ async def cached_fetch(
                         _research_budget.record_fetched_source(
                             exact_key, hit, provider="cache", cache_hit=True
                         )
-                    return hit
+                    return hit, hit_meta
                 claim_token = _research_budget.claim_request("fetch", exact_key)
                 if claim_token:
                     break
@@ -771,11 +1282,11 @@ async def cached_fetch(
                     "error": "research_inflight_timeout",
                     "tool": "web_fetch",
                     "message": "Timed out waiting for the identical in-flight fetch.",
-                }, ensure_ascii=False, sort_keys=True)
+                }, ensure_ascii=False, sort_keys=True), {}
     if (waited_for_claim and _research_budget is not None
             and _research_budget.negative_suppressed("fetch", exact_key)):
         _research_budget.release_request(claim_token)
-        return _research_budget.negative_result("web_fetch", exact_key)
+        return _research_budget.negative_result("web_fetch", exact_key), {}
 
     # This reservation is deliberately after the positive-cache/singleflight
     # lookup: hits never spend real fetch allowance.
@@ -783,8 +1294,9 @@ async def cached_fetch(
         network = _research_budget.admit_network("fetch")
         if not network.allowed:
             _research_budget.release_request(claim_token)
-            return _research_budget.denial_result("web_fetch", network.reason, exact_key)
+            return _research_budget.denial_result("web_fetch", network.reason, exact_key), {}
 
+    _FETCH_META.set({})
     try:
         content = await fetch_fn(url)
     except Exception:
@@ -794,6 +1306,8 @@ async def cached_fetch(
     finally:
         if "content" not in locals() and _research_budget is not None:
             _research_budget.release_request(claim_token)
+    # Read in the task that awaited fetch_fn: _resilient_fetch's provider set it.
+    fetch_meta = dict(_FETCH_META.get())
     try:
         if _research_budget is not None:
             if _is_cacheable(content):
@@ -806,15 +1320,35 @@ async def cached_fetch(
                         provider=_FETCH_PROVIDER.get(),
                         cache_hit=False,
                     )
-            else:
+            elif not (_source_taxonomy_on() and _is_outage_result(content)):
+                # RESEARCH-2 (taxonomy on): an outage or a credential/quota
+                # refusal is not the URL's failure, so it is never negative-cached.
                 _research_budget.record_negative("fetch", exact_key)
         if ttl > 0 and _is_cacheable(content):
-            _write_cache(path, url, content)
+            _write_cache(path, url, content, fetch_meta)
             _enforce_size_cap(root, _max_bytes())
-        return content
+        return content, fetch_meta
     finally:
         if _research_budget is not None:
             _research_budget.release_request(claim_token)
+
+
+async def cached_fetch(
+    url: str,
+    fetch_fn: Callable[[str], Awaitable[str]],
+    revisit_reason: str = "",
+) -> str:
+    """:func:`_cached_fetch_core` 的正文：返回类型与被包裹工具一致（str）。"""
+    return (await _cached_fetch_core(url, fetch_fn, revisit_reason))[0]
+
+
+async def cached_fetch_with_meta(
+    url: str,
+    fetch_fn: Callable[[str], Awaitable[str]],
+    revisit_reason: str = "",
+) -> tuple[str, dict]:
+    """TIME-2：:func:`cached_fetch` 的同一流程，另返回来源日期元数据 ``(text, meta)``。"""
+    return await _cached_fetch_core(url, fetch_fn, revisit_reason)
 
 
 async def _jina_delegate_fetch(url: str) -> str:

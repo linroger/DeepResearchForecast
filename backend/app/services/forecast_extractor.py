@@ -17,7 +17,22 @@ import hashlib
 import logging
 import math
 import re
+import unicodedata
+from datetime import datetime, timezone
+from decimal import ROUND_FLOOR, Decimal
 from typing import Any, Dict, List, Optional, Tuple
+
+from ..utils.numeric_guards import sanitize_latest_actual
+from ..utils.probability_parse import (
+    PROB_OK,
+    PROB_REVIEW,
+    ProbParse,
+    is_nullish,
+    parse_probability_field,
+    parse_scenario_partition,
+)
+from .narrative_sync import synchronize_forecast_narratives
+from .question_spec import render_resolution_disclosure
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +48,77 @@ def _cfg(name: str, default: Any) -> Any:
         return getattr(Config, name, default)
     except Exception:  # noqa: BLE001 — config import must never break extraction
         return default
+
+
+def _last_call_meta(llm: Any) -> Optional[Dict[str, Any]]:
+    """INFRA-3: ``llm``'s last call metadata on this thread: the value of the INFRA-1
+    ``last_call_meta`` method, or a plain dict on a fake. None when absent or unreadable."""
+    try:
+        fn = getattr(llm, "last_call_meta", None)
+        meta = fn() if callable(fn) else fn
+    except Exception:  # noqa: BLE001 — metadata is advisory; never break extraction
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _reply_truncated(llm: Any) -> bool:
+    """INFRA-3: True when ``llm``'s last reply on this thread was cut by the output cap.
+
+    Reads ``last_call_meta`` (the INFRA-1 method, or a plain dict on a fake): truncated means
+    finish_reason 'length', or chat_json accepted the reply only after closing its brackets
+    (json_truncation_repaired, INFRA-2). A client without call metadata, or any error, reads
+    as not truncated.
+    """
+    meta = _last_call_meta(llm)
+    return bool(meta and (meta.get("finish_reason") == "length" or meta.get("json_truncation_repaired")))
+
+
+def _drop_truncated_reply(llm: Any) -> bool:
+    """INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): whether the output cap cut ``llm``'s last
+    reply, so the caller must not take it (or, for a list, a cut item) as forecast content.
+
+    Such a reply also leaves LLMCache (LLMClient.discard_last_reply): otherwise an identical
+    retry, or the same call in a resumed run, would replay the reply just rejected.
+    """
+    if not (bool(_cfg("LLM_JSON_TRUNCATION_FAIL_CLOSED", True)) and _reply_truncated(llm)):
+        return False
+    try:
+        discard = getattr(llm, "discard_last_reply", None)
+        if callable(discard):
+            discard()
+    except Exception as exc:  # noqa: BLE001 — cache hygiene never breaks extraction
+        logger.debug(f"截断回复移出 LLMCache 失败（忽略）: {exc}")
+    return True
+
+
+def _trim_cut_item(llm: Any, items: Any) -> Tuple[Any, int]:
+    """INFRA-3: ``items``, parsed from ``llm``'s truncated last reply, without the item the cut
+    left incomplete, plus the number of items dropped (0 or 1).
+
+    When chat_json closed the reply's brackets itself, its metadata says whether that repair
+    closed a list element the cut left open (json_truncation_partial_item). False means every
+    item is complete as the model wrote it (the cut fell between items, or the parser already
+    left the cut item out), so all are kept. Otherwise the last item is dropped as the likely
+    cut one: also when the metadata cannot tell (finish_reason 'length' with no local repair,
+    or a client that does not report partial items). A non-list or empty ``items`` is returned
+    unchanged.
+    """
+    if not isinstance(items, list) or not items:
+        return items, 0
+    meta = _last_call_meta(llm) or {}
+    if meta.get("json_truncation_repaired") and meta.get("json_truncation_partial_item") is False:
+        return items, 0
+    return items[:-1], 1
+
+
+def _count_truncation(counts: Optional[Dict[str, int]], key: str, dropped: int) -> None:
+    """INFRA-3: tally one truncated reply of pass ``key``, and the ``dropped`` items cut from it
+    (under ``key + '_items_dropped'``), into the caller's sink (None: skip)."""
+    if counts is None:
+        return
+    counts[key] = counts.get(key, 0) + 1
+    if dropped:
+        counts[f"{key}_items_dropped"] = counts.get(f"{key}_items_dropped", 0) + dropped
 
 
 def forecast_language_rule(language: str) -> str:
@@ -95,18 +181,35 @@ def _coerce_float(v: Any) -> Optional[float]:
         return None
 
 
-def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
-    """Validate + normalize scenarios so probabilities are floats summing to ~1.0."""
+def _normalize_scenarios(scenarios: Any, *,
+                         review_out: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Validate + normalize scenarios so probabilities are floats summing to ~1.0.
+
+    REPORT-1（FORECAST_PROB_STRICT_PARSE，默认开）：整组概率先经类型化解析
+    （'45%' → 0.45、[3, 1] 仍按权重归一）。任一行不可读或量纲混杂 → 不归一、不加下限：
+    可读行保留规范值，不可读行 probability=None 并标 probability_status='needs_review'
+    （附原值与原因），``review_out``（若给出）被填入整组复核摘要；合同审计随之按
+    probability_not_numeric 失败。数值输入的输出与旧路径逐字节一致；旗标关闭复现旧行为。
+    """
     if not isinstance(scenarios, list):
         return []
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
+    dict_rows = [s for s in scenarios if isinstance(s, dict)]
+    parsed: Optional[List[ProbParse]] = None
+    partition_status, partition_reason = PROB_OK, ""
+    if strict:
+        parsed, partition_status, partition_reason = parse_scenario_partition(
+            [s.get("probability") for s in dict_rows])
     cleaned: List[Dict[str, Any]] = []
-    for s in scenarios:
-        if not isinstance(s, dict):
-            continue
-        prob = _coerce_float(s.get("probability"))
+    for index, s in enumerate(dict_rows):
+        if parsed is None:
+            prob = _coerce_float(s.get("probability"))
+            probability = prob if prob is not None else 0.0
+        else:
+            probability = parsed[index].value
         row = {
             "name": str(s.get("name") or "未命名情景"),
-            "probability": prob if prob is not None else 0.0,
+            "probability": probability,
             "summary": str(s.get("summary") or ""),
             "key_drivers": [str(x) for x in (s.get("key_drivers") or []) if x],
             "resolution_criteria": str(s.get("resolution_criteria") or ""),
@@ -117,7 +220,23 @@ def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
             row["base_rate_anchor"] = str(s.get("base_rate_anchor"))
         if s.get("adjustment_rationale"):
             row["adjustment_rationale"] = str(s.get("adjustment_rationale"))
+        if parsed is not None and parsed[index].status != PROB_OK:
+            row["probability_status"] = PROB_REVIEW
+            row["probability_raw"] = parsed[index].raw
+            row["probability_parse_reason"] = parsed[index].reason
         cleaned.append(row)
+    if partition_status == PROB_REVIEW:
+        if isinstance(review_out, dict):
+            review_out.update({
+                "status": PROB_REVIEW,
+                "reason": partition_reason,
+                "rows": [
+                    {"name": row["name"], "raw": row["probability_raw"],
+                     "reason": row["probability_parse_reason"]}
+                    for row in cleaned if row.get("probability_status") == PROB_REVIEW
+                ],
+            })
+        return cleaned
     total = sum(s["probability"] for s in cleaned)
     if total > 0:
         for s in cleaned:
@@ -249,23 +368,83 @@ _COLON_RANGE_RE = re.compile(
     re.I,
 )
 _CHINESE_RANGE_RE = re.compile(
-    rf"^\s*{_RANGE_METRIC}\s*(?:为|介于|在)?\s*"
+    # EVAL-14: one \s* around the optional verb (same language as "\s*(?:为|介于|在)?\s*"),
+    # which backtracked cubically on long whitespace runs.
+    rf"^\s*{_RANGE_METRIC}\s*(?:(?:为|介于|在)\s*)?"
     rf"{_range_value_pattern('lo')}\s*(?:至|到|-)\s*"
     rf"{_range_value_pattern('hi')}(?:\s*之间)?",
     re.I,
 )
 _COMPARATOR_RANGE_RE = re.compile(
     rf"^\s*{_RANGE_METRIC}\s+(?:(?:is|will\s+be|must\s+be|remains?|reaches?)\s+)?"
-    rf"(?P<operator>>=|<=|>|<|at\s+least|at\s+most|more\s+than|"
-    rf"less\s+than|above|below|exceeds?|under)\s+"
+    rf"(?P<operator>>=|<=|>|<|at\s+least|at\s+most|"
+    # EVAL-14 (RESEARCH-15 item c): negated comparators first, so the lazy metric never
+    # swallows "does not" / "no" and reads the bare comparator the wrong way round.
+    rf"(?:does|do|will|would|must|should|can)\s+not\s+exceed|(?:doesn't|won't|don't)\s+exceed|"
+    rf"not\s+exceed(?:ing)?|no\s+more\s+than|not\s+more\s+than|"
+    rf"no\s+higher\s+than|not\s+higher\s+than|not\s+above|"
+    rf"no\s+less\s+than|not\s+less\s+than|no\s+fewer\s+than|no\s+lower\s+than|"
+    rf"not\s+lower\s+than|not\s+below|not\s+under|"
+    rf"more\s+than|less\s+than|above|below|exceeds?|under)\s+"
     rf"{_range_value_pattern('bound')}",
     re.I,
 )
 _CHINESE_COMPARATOR_RANGE_RE = re.compile(
     rf"^\s*{_RANGE_METRIC}\s*(?P<operator>高于|超过|不低于|至少|"
+    # EVAL-14: negated forms, so the lazy metric never ends in 不 and reads 高于 / 少于.
+    rf"不少于|不小于|不高于|不大于|不多于|"
     rf"低于|少于|不超过|至多)\s*{_range_value_pattern('bound')}",
     re.I,
 )
+# EVAL-14 (RESEARCH-15 item c): a metric that swallowed a negation ("Revenue will not be"
+# above X, "Revenue never" exceeds X, "YES unless revenue" exceeds X, 失业率不会 超过 X,
+# 营收未曾 超过 X) would read the bare comparator or interval after it the wrong way round,
+# so such a clause is not parsed.  English negations are words (apostrophe-less
+# contractions included: "isn't" / "won't be" never reach here, the metric excludes
+# apostrophes); a Chinese one is positional: a negation character among the metric's last
+# three characters (未曾 / 无法 / 不可能 / 不至于), so 南非通胀率, 不良贷款率 and 非农就业
+# stay readable while 失业率并 + 不超过 still reads its own negated comparator.
+_RANGE_METRIC_NEGATION_RE = re.compile(
+    r"(?<![\w-])(?:not|no|never|cannot|neither|nor|unless|except|unlikely|hardly"
+    r"|doesnt|dont|didnt|isnt|arent|wasnt|werent|wont|cant|shouldnt|wouldnt|couldnt"
+    r"|(?:fail(?:s|ed|ing)?|unable)\s+to)(?![\w-])"
+    r"|[不未没沒無无非莫勿][\u4e00-\u9fff]{0,2}$|不会|未能|无法|没能|不太可能|不大可能",
+    re.I,
+)
+# EVAL-14: an outcome stated before the condition inverts the clause as surely as a negation
+# ("Fails if revenue exceeds X", "Resolves negatively if ...", "Also falsified if ..." resolve
+# YES only on the complement).  The verdict is the text before the first conditional word: it
+# may name no NO outcome, and a resolution verb there must name YES ("Resolves YES if" reads;
+# "Resolves as N if" / "Resolves to 0 if" do not).  Without a conditional a resolution verb
+# still needs YES ("This resolves negatively for revenue above X").
+_RANGE_CONDITIONAL_RE = re.compile(
+    r"(?<![\w-])(?:if|when|whenever|once|should|provided|in\s+case)(?![\w-])", re.I)
+_RANGE_NO_VERDICT_RE = re.compile(
+    r"(?<![\w-])(?:no|n|0|false|falsified|negative(?:ly)?|fail(?:s|ed|ure)?|loses?|lost|wrong"
+    r"|incorrect|refuted|disproved|invalid(?:ated)?|rejected|void)(?![\w-])", re.I)
+_RANGE_RESOLUTION_VERB_RE = re.compile(
+    r"(?<![\w-])(?:resolv(?:e|es|ed|ing)|settl(?:e|es|ed|ing))(?![\w-])", re.I)
+_RANGE_YES_VERDICT_RE = re.compile(
+    r"(?<![\w-])(?:yes|y|true|positive(?:ly)?|affirmative(?:ly)?|1)(?![\w-])", re.I)
+# EVAL-14: comparators that include their bound (">=" / "<=" readings); the rest are strict.
+_INCLUSIVE_RANGE_OPS = frozenset({
+    ">=", "<=", "at least", "at most", "no less than", "not less than", "no fewer than",
+    "no lower than", "not lower than", "not below", "not under", "no more than",
+    "not more than", "no higher than", "not higher than", "not above", "not exceed",
+    "not exceeding", "不低于", "至少", "不少于", "不小于", "不超过", "至多", "不高于", "不大于",
+    "不多于",
+})
+
+
+def _range_verdict_inverted(text: str) -> bool:
+    """Whether ``text`` states a NO outcome for the condition after it (see
+    :data:`_RANGE_NO_VERDICT_RE`)."""
+    conditional = _RANGE_CONDITIONAL_RE.search(text)
+    verdict = text[:conditional.start()] if conditional else text
+    if conditional and _RANGE_NO_VERDICT_RE.search(verdict):
+        return True
+    return bool(_RANGE_RESOLUTION_VERB_RE.search(verdict)
+                and not _RANGE_YES_VERDICT_RE.search(verdict))
 
 
 def _normalise_metric_label(value: str) -> str:
@@ -455,7 +634,11 @@ def _range_value(match: "re.Match[str]", prefix: str) -> Optional[tuple[float, s
 
 def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]:
     """Extract one explicit metric interval; ambiguous compound criteria are skipped."""
-    text = str(criteria or "").replace("–", "-").replace("—", "-")
+    # EVAL-14: horizontal whitespace runs collapse to one space first (newlines stay: they
+    # split clauses).  The patterns read any run as a single separator, and adjacent \s*
+    # backtrack super-linearly on a long run, so this keeps every caller (the binary target
+    # cross-check and the flag-independent scenario audit) linear.
+    text = re.sub(r"[^\S\n]+", " ", str(criteria or "").replace("–", "-").replace("—", "-"))
     clauses = [
         clause.strip()
         for clause in re.split(r"(?<!\d)[.;](?!\d)|\n+", text)
@@ -480,7 +663,9 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
             if not match:
                 continue
             metric = _normalise_metric_label(match.group("metric"))
-            if not metric:
+            raw_metric = match.group("metric").strip()
+            if (not metric or _RANGE_METRIC_NEGATION_RE.search(raw_metric)
+                    or _range_verdict_inverted(raw_metric)):
                 break
             trailing = match_clause[match.end():]
             if not _supported_range_trailing(trailing):
@@ -508,11 +693,20 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
                 lower_ops = {
                     ">", ">=", "at least", "more than", "above", "exceed",
                     "exceeds", "高于", "超过", "不低于", "至少",
+                    # EVAL-14: negated upper bounds read as lower bounds.
+                    "no less than", "not less than", "no fewer than", "no lower than",
+                    "not lower than", "not below", "not under", "不少于", "不小于",
                 }
                 upper_ops = {
                     "<", "<=", "at most", "less than", "below", "under",
                     "低于", "少于", "不超过", "至多",
+                    # EVAL-14: negated lower bounds read as upper bounds.
+                    "no more than", "not more than", "no higher than", "not higher than",
+                    "not above", "not exceed", "not exceeding", "不高于", "不大于", "不多于",
                 }
+                if re.fullmatch(r"(?:does|do|will|would|must|should|can) not exceed|"
+                                r"(?:doesn't|won't|don't) exceed", operator):
+                    operator = "not exceed"
                 if operator in lower_ops:
                     low, high = bound[0], math.inf
                 elif operator in upper_ops:
@@ -525,6 +719,9 @@ def _extract_comparable_numeric_range(criteria: Any) -> Optional[Dict[str, Any]]
                     "low": low,
                     "high": high,
                     "scope": scope,
+                    # EVAL-14: whether the bound itself satisfies the clause ("at least" vs
+                    # "more than"); binary_targets compares it with a target's comparator.
+                    "inclusive": operator in _INCLUSIVE_RANGE_OPS,
                 })
             break
     return candidates[0] if len(candidates) == 1 else None
@@ -599,6 +796,79 @@ def _synchronize_scenario_probability_narratives(
                     "explicit residual/status-quo bin; the original anchor-and-adjust "
                     f"reasoning is preserved in {detail_field}."
                 )
+
+
+def _sync_forecast_narratives(
+    out: Dict[str, Any],
+    *,
+    headline_before: Any,
+    rationale_before: Any,
+    summary_before_by_name: Any,
+    context_rows: Any = None,
+) -> None:
+    """REPORT-2：一次概率移动之后，把叙事字段里的旧概率数字同步成 ``out`` 的最终值。
+
+    每个移动概率的步骤只同步它自己的 before/after 一次（不在钉骨架处再补一遍：以原始
+    draw 为 before 会双重映射——B 的旧 35% 被改写到 A 的新 35% 上）。``context_rows`` 是
+    文本可能引用、但并非据以写成的情景行（红队评审看着输入预测写自己的行）。
+    REPORT_NARRATIVE_SYNC 关闭时直接返回（逐字节复现旧输出）；同步本身失败只告警，绝不
+    丢弃所在步骤的结果。
+    """
+    if not _cfg("REPORT_NARRATIVE_SYNC", True):
+        return
+    try:
+        synchronize_forecast_narratives(
+            out,
+            headline_before=headline_before,
+            rationale_before=rationale_before,
+            summary_before_by_name=summary_before_by_name,
+            context_rows=context_rows,
+        )
+    except Exception as exc:  # noqa: BLE001 — 增强项：失败保留原文、不影响概率
+        logger.warning(f"叙事概率同步失败（忽略，保留原文）: {exc}")
+
+
+_NARRATIVE_SYNC_QUALITY_KEYS = frozenset({
+    "narrative_sync", "narrative_sync_skipped", "narrative_sync_blocked", "narrative_sync_dropped",
+})
+# quality 里不交给评审 / 验尸的簿记键：叙事同步日志，以及 INFRA-3 的截断丢弃计数。
+_LLM_VIEW_DROPPED_QUALITY_KEYS = _NARRATIVE_SYNC_QUALITY_KEYS | {"llm_truncation"}
+
+
+def _llm_forecast_view(forecast: Dict[str, Any]) -> Dict[str, Any]:
+    """REPORT-2：交给红队评审 / 事前验尸提示词的预测对象，去掉叙事同步的簿记。
+
+    同步把改写前的原文存进 headline_detail / confidence_rationale_detail / 情景
+    summary_detail，并把编辑日志写进 quality.narrative_sync*——原样序列化进提示词会把
+    刚被同步掉的旧数字重新交给评审（它可能照抄进被采纳的 confidence_rationale），还白费
+    提示词 token。confidence_rationale_detail 只在不是兜底情景路径写下时才去掉（该路径
+    同时置 residual_scenario_added，且在旗标关闭时也存在）。旗标关闭时这些同步键都不存在，
+    副本与原对象键序、取值完全相同，提示词逐字节不变。INFRA-2 的 critique_attempted 簿记标记
+    同样去掉（旗标关闭时不存在），评审 / 验尸提示词不因单次评审旗标而改变。RESEARCH-13 的
+    context_pack 摘要（证据包簿记，仅在最终落盘前写入）同样去掉：它绝不进入评审输入。
+    INFRA-3 的 quality.llm_truncation（截断 draw 的丢弃计数，截断失败即关闭旗标关闭时不存在）
+    同理去掉。
+    """
+    dropped = {"headline_detail", "critique_attempted", "context_pack"}
+    if not forecast.get("residual_scenario_added"):
+        dropped.add("confidence_rationale_detail")
+    view = {key: value for key, value in forecast.items() if key not in dropped}
+    quality = view.get("quality")
+    if isinstance(quality, dict) and not _LLM_VIEW_DROPPED_QUALITY_KEYS.isdisjoint(quality):
+        kept = {key: value for key, value in quality.items()
+                if key not in _LLM_VIEW_DROPPED_QUALITY_KEYS}
+        if kept:
+            view["quality"] = kept
+        else:
+            del view["quality"]
+    scenarios = view.get("scenarios")
+    if isinstance(scenarios, list):
+        view["scenarios"] = [
+            {key: value for key, value in row.items() if key != "summary_detail"}
+            if isinstance(row, dict) else row
+            for row in scenarios
+        ]
+    return view
 
 
 def _bad_percentage_allocations(text: Any) -> List[Dict[str, Any]]:
@@ -996,6 +1266,60 @@ def slice_head_tail(text: str, budget: int, head_ratio: float = 0.6) -> str:
     return t[:head_n] + "\n…(中段略)…\n" + t[-tail_n:]
 
 
+# REPORT-10：研究桥（deerflow_research._collect_prediction_markets，v3 引擎经
+# linear_research.phase_finalize 同样调用）把机器抓取的 Polymarket 表以此 H2 节 upsert 到
+# research_report.md 末尾。标题匹配与节边界与桥的 _strip_markdown_h2_section 同口径。
+_MACHINE_MARKET_HEADING_RE = re.compile(r"^##[ \t]+Prediction Market Signals[ \t]*$")
+_MARKDOWN_H1_H2_BOUNDARY_RE = re.compile(r"^#{1,2}[ \t]")
+
+
+def strip_machine_market_table(text: str) -> Tuple[str, int]:
+    """REPORT-10：删除 dossier 里每个机器写入的 ``## Prediction Market Signals`` H2 节。
+
+    节从该标题行延伸到下一个 ``#``/``##`` 标题或文末（其下的 ``### …`` 子标题属于该节，
+    一并删除）。围栏感知（markdown_fence_transition）：围栏代码块内的 ``## `` 行既不开启
+    也不结束一个节。这是 DRF 自有的重实现，镜像研究桥 upsert 的契约（桥在追加新表前用
+    同一匹配删掉旧表）。返回 ``(text, n_removed)``；未命中 → 原文不变、0。纯函数、离线。
+
+    未闭合围栏兜底：正文里一个到文末都没闭合的围栏（孤立的 ``~~~``、四个反引号开启却只用
+    三个反引号关闭等）会把桥追加在文末的节吞进「代码块」。桥只按三个反引号切换围栏且总把
+    该节追加到文末，在它看来这张表在围栏之外——所以该未闭合围栏开启行之后的尾段按同样的
+    节规则、不看围栏再扫一遍，否则旗标开着过时表照样进入 _draw。
+    """
+    src = text or ""
+    lines = src.split("\n")
+    drop = [False] * len(lines)
+    removed = 0
+    skipping = False
+    fence_state: MarkdownFenceState = None
+    fence_opened_at = 0
+    for i, line in enumerate(lines):
+        was_in_fence = fence_state is not None
+        fence_state, is_fence_line = markdown_fence_transition(line, fence_state)
+        if fence_state is not None and not was_in_fence:
+            fence_opened_at = i
+        if not (is_fence_line or was_in_fence):
+            if _MACHINE_MARKET_HEADING_RE.match(line.rstrip()):
+                skipping = True
+                removed += 1
+            elif skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(line):
+                skipping = False
+        drop[i] = skipping
+    # 围栏到文末仍未闭合、且其开启行不在已删节内（在已删节内则节已延伸到文末）→ 尾段兜底。
+    if fence_state is not None and not drop[fence_opened_at]:
+        skipping = False
+        for i in range(fence_opened_at + 1, len(lines)):
+            if _MACHINE_MARKET_HEADING_RE.match(lines[i].rstrip()):
+                skipping = True
+                removed += 1
+            elif skipping and _MARKDOWN_H1_H2_BOUNDARY_RE.match(lines[i]):
+                skipping = False
+            drop[i] = skipping
+    if not removed:
+        return src, 0
+    return "\n".join(line for line, dropped in zip(lines, drop, strict=True) if not dropped), removed
+
+
 def extract_structured_forecast(report_markdown: str, llm,
                                 situation_brief: Optional[str] = None,
                                 language: str = "") -> Dict[str, Any]:
@@ -1024,9 +1348,18 @@ def extract_structured_forecast(report_markdown: str, llm,
         temperature=0.2,
         max_tokens=int(_cfg("FORECAST_EXTRACT_MAX_TOKENS", 4096)),
     )
+    truncated = _drop_truncated_reply(llm)
     if not isinstance(raw, dict):
         raw = {}
-    return _assemble_forecast(raw)
+    out = _assemble_forecast(raw)
+    if truncated:
+        # INFRA-3: the post-hoc extractor is the last resort after a failed spine, so a reply
+        # the output cap cut is kept but never silently: forecast.quality records it.
+        logger.warning("成稿后预测抽取回复被 max_tokens 截断，已在 quality.llm_truncation 标注")
+        quality = dict(out.get("quality") or {})
+        quality["llm_truncation"] = {"posthoc_reply_truncated": True}
+        out["quality"] = quality
+    return out
 
 
 def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -1036,7 +1369,8 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
     ``derive_forecast_spine`` (NEXTSTEPS P0-1, from signals) so both emit an
     identical shape regardless of where the probabilities came from.
     """
-    scenarios = _normalize_scenarios(raw.get("scenarios"))
+    review: Dict[str, Any] = {}
+    scenarios = _normalize_scenarios(raw.get("scenarios"), review_out=review)
     confidence = str(raw.get("confidence") or "medium").lower()
     if confidence not in ("low", "medium", "high"):
         confidence = "medium"
@@ -1049,6 +1383,13 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
         "confidence_rationale": str(raw.get("confidence_rationale") or ""),
         "schema_version": 1,
     }
+    # REPORT-1：情景概率不可读 → 顶层显式 needs_review（合同审计按 probability_not_numeric
+    # 失败，无需新门控）；全部可读时不加键（schema 不变）。
+    if review:
+        out["probability_status"] = PROB_REVIEW
+        out["probability_review"] = {
+            "stage": "assemble", "reason": review["reason"], "rows": review["rows"],
+        }
     # R2-CAL-7 / R2-CAL-12：仅当相应旗标开启时附加 quality 诊断块（默认不加 → schema 不变）。
     quality = _quality_from_scenarios(scenarios)
     if quality:
@@ -1063,6 +1404,11 @@ def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
 # to produce these (e.g. an F1..Fn table); the scenario-only finalizer discarded them. This
 # pathway extracts/derives >=min_count independent binaries and keeps them ALONGSIDE the
 # scenario spine, so both the calibratable scenario view and the brief's contract survive.
+# REPORT-4：source 行抽成 {source_rule} 槽。旧措辞（邀请具名模拟信号）只在模拟信号真的注入时
+# 使用（sim_sensitive）或 REPORT_ABSENCE_MARKERS 关闭时逐字节复现；见 _binary_source_rule。
+_BINARY_SOURCE_RULE_LEGACY = (
+    '"source": "provenance of the probability: name the simulation signal that moved it (e.g. \\"world-state outcome shares\\", \\"coalition map\\") or \\"research-prior\\" when only research evidence informs it"'
+)
 _BINARY_FORECAST_INSTRUCTIONS = (
     "You are a forecasting-calibration expert assembling the HEADLINE deliverable: a set of "
     "INDEPENDENT BINARY (yes/no) forecasts. From the research dossier below, FIRST extract "
@@ -1081,7 +1427,7 @@ _BINARY_FORECAST_INSTRUCTIONS = (
     '  "horizon_year": {horizon_year_hint},            // {horizon_year_rule}\n'
     '  "base_rate_anchor": "reference-class base rate / outside view",\n'
     '  "adjustment_rationale": "why this case differs from the base rate (anchor-and-adjust)",\n'
-    '  "source": "provenance of the probability: name the simulation signal that moved it (e.g. \\"world-state outcome shares\\", \\"coalition map\\") or \\"research-prior\\" when only research evidence informs it"\n'
+    '  {source_rule}\n'
     "}}\n\n"
     "Each object MUST also include proposition_id (a stable kebab-case identifier for the exact "
     "resolvable event) and a scenario_membership object with a derivable boolean and a "
@@ -1115,6 +1461,20 @@ _BINARY_LOW_P_RULE = (
     "(not negations of earlier statements)."
 )
 
+# REPORT-11（FORECAST_BINARY_SYMMETRIC_GUARD，默认关）：上面两条规则与基础 RULES（「不要挤在
+# 0.40-0.60」）只把模型推离 0.5，没有一句约束反方向的失败——为凑目标区间挪数字、为显得果断制造极端。
+# 开启时每轮都追加：紧跟当轮的逆向 / 低概率规则（两条规则逐字保留）；FORECAST_BINARY_CONTRARIAN 关时
+# 紧跟基础 RULES——旗标开即每条抽取提示词都带护栏，forecast_policy 记的就是实际生效的政策。
+# 刻意不含 '0.05-0.35 range' 与 'CONTRARIAN FRAMING' 字面量：test_audit_fixes_report 的假 LLM
+# 按它们路由回复。思路来源：TradingAgents（Apache-2.0）研究经理 / 组合经理提示词中的对称 Hold 规则
+# （tradingagents/agents/managers/research_manager.py、portfolio_manager.py：不为显得果断而强行
+# 给方向）；措辞为 DRF 自拟，未复制代码。
+_BINARY_SYMMETRIC_GUARD = (
+    "\nSYMMETRY GUARD: include a statement only if the evidence genuinely supports the "
+    "probability you give it; never shade a number toward a target range — drop the "
+    "candidate instead. Do not manufacture extremity to look decisive."
+)
+
 # 预测市场校准锚点（Polymarket 公开 Gamma API）：与所列市场重叠的预测须引用市场
 # 隐含概率，偏离 >10 个百分点须显式解释分歧；市场是校准锚点，不是真值。命中时模型给出
 # market_anchor 字段，_normalize_binaries 用我们自己的市场数据回填/校验隐含概率并计算
@@ -1129,6 +1489,54 @@ _BINARY_MARKET_RULE = (
     "extra field \"market_anchor\": {\"market_id\": \"<id from the table>\", "
     "\"implied_yes_prob\": 0.0-1.0}; OMIT market_anchor entirely when no listed market applies."
 )
+# PM-2：二元 _draw 提示词里市场包的字符上限（4000→8000，让相关性门控后的更多市场进入锚定视野）。
+_BINARY_MARKET_PACK_CHARS = 8000
+
+# TIME-5（NUMERIC_GUARD_MODE=shadow）：每条数值型二元顺带抄出同一指标在 dossier 里的最新**实际值**
+# （不加调用），供 utils.numeric_guards 做现状 / 量级一致性影子检查。追加在市场规则之后；
+# off（或未传）→ 提示词逐字节不变。该规则会改变模型的起草（二元与概率可能与 off 不同）。
+_BINARY_LATEST_ACTUAL_RULE = (
+    "\nLATEST ACTUAL: For each forecast whose resolution hinges on a numeric metric, also include "
+    "\"latest_actual\": {value, unit, as_of (YYYY-MM-DD), source_ref (S<n>)} — the most recent "
+    "ACTUAL (never a forecast, estimate or target) value of that same metric stated in the dossier, "
+    "copied exactly; use null when the dossier has none."
+)
+# EVAL-14（FORECAST_BINARY_STRUCTURED_TARGET，默认关）：数值阈值型二元顺带给出结构化 target，供
+# binary_targets 校验 / 同目标阈值阶梯审计 / 单值结算。追加在市场规则（及 TIME-5 规则）之后；关 →
+# 提示词逐字节不变。
+_BINARY_TARGET_RULE = (
+    "\nSTRUCTURED TARGET: For each forecast that resolves on a numeric threshold of one metric, also "
+    "include \"target\": {\"metric\": <the metric, <=120 chars>, \"unit\": <its unit, e.g. GW, %, pp, "
+    "bp, USD billion>, \"comparator\": \">\"|\">=\"|\"<\"|\"<=\"|\"==\", \"threshold\": <number in that "
+    "unit>, \"statistic\": \"value_on\"|\"period_value\"|\"max_over_window\"|\"min_over_window\"|"
+    "\"mean_over_window\"|\"sum_over_window\", \"target_date\": \"YYYY-MM-DD\", \"window_start\": "
+    "\"YYYY-MM-DD\" (window statistics only, else null), \"resolution_source\": <who publishes the "
+    "number>} matching resolution_criteria exactly; wording such as \"at any point\" or \"ever\" "
+    "needs max_over_window or min_over_window. OMIT target for forecasts that do not resolve on one "
+    "numeric threshold."
+)
+# EVAL-14：结构化 target 对象实测（cl100k）：典型 69 token（紧凑）/ 83（缩进）；长指标名 + 长
+# resolution_source 105 / 123。按最坏的缩进长对象，开启时每条放宽 128 token、至少 10 条（关 → 不变），
+# 免得数值密集的一轮被 INFRA-3 截断丢尾行、补抽改变已发布集合（TIME-5 的教训）。
+_BINARY_TARGET_TOKENS_PER_ROW = 128
+
+# 二元 _draw 的输出上限。shadow 的 latest_actual 对象实测每条约 50 个输出 token（cl100k），真实二元行
+# 每条约 290-480 token：沿用 4096 会让 10-12 条的首轮回复被截断（INFRA-2 补括号修复丢尾行 → 行数不足
+# 触发补抽，已发布的二元集合随之改变）。shadow 时按每条 64 token、至少 10 条放宽；off → 4096 不变。
+_BINARY_DRAW_MAX_TOKENS = 4096
+_BINARY_LATEST_ACTUAL_TOKENS_PER_ROW = 64
+_BINARY_LATEST_ACTUAL_MIN_ROWS = 10
+
+
+def _binary_draw_max_tokens(rows: int, latest_actual: bool, structured_target: bool = False) -> int:
+    """TIME-5：二元 _draw 的 max_tokens——off 为 4096；shadow 为 4096 + 64 × max(rows, 10)
+    （rows = 本轮索取条数 + 目标命题数）。EVAL-14：结构化 target 开启时再加 128 × max(rows, 10)。"""
+    tokens = _BINARY_DRAW_MAX_TOKENS
+    if latest_actual:
+        tokens += _BINARY_LATEST_ACTUAL_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS)
+    if structured_target:
+        tokens += _BINARY_TARGET_TOKENS_PER_ROW * max(int(rows), _BINARY_LATEST_ACTUAL_MIN_ROWS)
+    return tokens
 
 # ------------------------------------------------- source 溯源确定性校验（编造溯源修复）
 # 取证（report_9147b3f6a0a9 6/12、report_c83f21765b96 9/20、report_1b70ace5c9e8 8/13）：模型把
@@ -1137,11 +1545,17 @@ _BINARY_MARKET_RULE = (
 # 逐字节同源）确定性推导「允许的信号标签集」，抽取后把不能对账到该集合的 source 降级为
 # 'research-prior'（原话保留在 source_claimed 供审计），降级条数落 binary_quality.provenance_downgrades。
 # 每行 = (规范信号名, 信号包块标记——对注入切片匹配, source 标签识别——对模型自由文本匹配)；
-# 块标记逐字节取自各渲染器的标题行（report_agent._world_state_block / zep_tools.coalition_map 等），
-# 渲染器改头时此表须同步。
+# 块标记以各渲染器的标题行为唯一权威（report_agent._world_state_block / zep_tools.coalition_map 等），
+# 渲染器改头时此表须同步。SIM-3：世界态块标题自 Foglamp 1D 起为「【推演结果分布 P(outcome)」，
+# 旧标记只认「【预测结果分布」而漂移失配（legacy_prompt 下引用世界态份额的二元预测被误降级、
+# SIM-ADD-3 sim_adjustment 从不触发）；_WS_OUTCOME_HEADER_PATTERN 同时接受现行标题与旧 fixture 标题，
+# 由 test_world_state_marker_matches_renderer 对真实渲染输出钉住。带显式非 valid 有效性裁定的
+# 世界态块不算可引用信号（allowed_signal_labels 经 _usable_world_state_header 剔除）。
+_WS_OUTCOME_HEADER_PATTERN = r"【(?:推演|预测)结果分布\s*P\(outcome\)"
+_WS_SIGNAL_LABEL = "world-state outcome shares"
 _SIM_SIGNAL_TAXONOMY: List[Tuple[str, re.Pattern, re.Pattern]] = [
-    ("world-state outcome shares",
-     re.compile(r"【预测结果分布\s*P\(outcome\)"),
+    (_WS_SIGNAL_LABEL,
+     re.compile(_WS_OUTCOME_HEADER_PATTERN),
      re.compile(r"world[\s_-]*state|outcome\s*shares?|P\(outcome\)|世界态|结果分布|结果份额", re.I)),
     ("salience tiers",
      re.compile(r"议程设置力分层"),
@@ -1174,15 +1588,35 @@ _SOURCE_MARKET_RE = re.compile(
     r"polymarket|prediction[\s_-]*market|market[\s_-]*implied|预测市场|市场隐含", re.I)
 
 
+def _binary_source_rule(*, sim_sensitive: bool, market_aware: bool) -> str:
+    """REPORT-4：二元预测提示词的 source 行（填 _BINARY_FORECAST_INSTRUCTIONS 的 {source_rule}）。
+
+    模拟信号真的注入提示词（sim_sensitive）或 REPORT_ABSENCE_MARKERS 关闭 ⇒ 旧措辞逐字节不变；
+    否则不再邀请「具名模拟信号」（该信号不在本次概率输入里，具名即编造溯源，会被
+    _enforce_source_provenance 降级）——默认 research-prior，市场表注入时放行市场标签。
+    """
+    if sim_sensitive or not bool(_cfg("REPORT_ABSENCE_MARKERS", True)):
+        return _BINARY_SOURCE_RULE_LEGACY
+    rule = ('"source": "research-prior"   '
+            "// no simulation signal is among this run's probability inputs")
+    if market_aware:
+        rule += f' — or "{_SOURCE_MARKET_LABEL}" when a listed market informed the probability'
+    return rule
+
+
 def allowed_signal_labels(signal_pack: Optional[str]) -> set:
     """从**实际注入提示词**的 signal_pack 切片推导允许的规范信号名集合（确定性、离线）。
 
     只有块标记真实出现在切片里的信号才可被 source 引用；空/None → 空集（即所有模拟信号
-    标签都不被允许）。调用方必须传入与提示词完全相同的截断切片，保证「允许集」与模型
-    实际看到的内容逐字节对齐。
+    标签都不被允许）。世界态块带显式非 valid 有效性裁定（「本分布不可用作任何依据」）时
+    不计入（fail-closed：引用它的 source 照旧降级）。调用方必须传入与提示词完全相同的截断
+    切片，保证「允许集」与模型实际看到的内容逐字节对齐。
     """
     text = str(signal_pack or "")
-    return {canon for canon, marker, _label in _SIM_SIGNAL_TAXONOMY if marker.search(text)}
+    labels = {canon for canon, marker, _label in _SIM_SIGNAL_TAXONOMY if marker.search(text)}
+    if _WS_SIGNAL_LABEL in labels and _usable_world_state_header(text) is None:
+        labels.discard(_WS_SIGNAL_LABEL)
+    return labels
 
 
 def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> int:
@@ -1217,14 +1651,36 @@ def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> 
 # 取证（sim_05ab2bdebbd2 等）：即便决策通道真的产出了 world_state_trajectory.json，其收敛的
 # P(outcome) 份额此前只作为提示词里的一段文本影响 LLM，从不作为**可对账的显式先验**落进
 # forecast.json——sim 的贡献既不可审计、也无法量化「相对研究先验移动了多少」。下列解析器从
-# **实际注入提示词**的世界态块（report_agent._world_state_block 渲染，块标记逐字节同源）里
-# 抽出收敛结果份额与趋稳判定，供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
+# **实际注入提示词**的世界态块（report_agent._world_state_block 渲染；块标题以渲染器为唯一权威，
+# 与 _SIM_SIGNAL_TAXONOMY 共用 _WS_OUTCOME_HEADER_PATTERN）里抽出收敛结果份额与趋稳判定，
+# 供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
 # 份额来自渲染文本（整数百分比），故做一次归一并标注为先验（非精确观测），degrade-safe。
-_WS_OUTCOME_HEADER_RE = re.compile(r"【预测结果分布\s*P\(outcome\)")
+_WS_OUTCOME_HEADER_RE = re.compile(_WS_OUTCOME_HEADER_PATTERN)
 _WS_OUTCOME_SHARE_RE = re.compile(
     r"^·\s*(?P<name>.+?)\s*[:：]\s*(?P<pct>\d{1,3}(?:\.\d+)?)\s*%\s*$")
 # 世界态块内**份额行之后**的其它小节起始（碰到即停止份额收集，避免把日历航点/诊断行混入）。
 _WS_OUTCOME_SECTION_BREAK = ("【", "演化航点", "稳定性诊断", "截至", "于 ", "注", "预测期限")
+# SIM-3：显式非 valid 裁定时 report_agent._world_state_block 在标题下渲染
+# 「⚠️ 有效性裁定：<verdict>（…本分布不可用作任何依据；forecast_effect=no_update）」。这样的块
+# 既不是可引用的 source，也不能被解析成 sim 先验——REPORT_WORLDSTATE_HIDE_INVALID 关闭时块内
+# 仍列份额，同样不解析（fail-closed，与标记失配的 SIM-3 之前结果一致）。
+_WS_VERDICT_RE = re.compile(r"有效性裁定\s*[:：]\s*(?P<verdict>[^\s（(，,；;）)]*)")
+
+
+def _usable_world_state_header(text: str) -> Optional[re.Match]:
+    """世界态块标题的首个匹配；该块（到下一个以「【」或「##」起头的信号块为止）带显式
+    非 valid 有效性裁定 → None（无法读出裁定值也按非 valid 处理）。"""
+    m = _WS_OUTCOME_HEADER_RE.search(text)
+    if not m:
+        return None
+    for ln in text[m.end():].splitlines():
+        s = ln.strip()
+        if s.startswith(("【", "##")):
+            break  # 下一个信号块
+        verdict = _WS_VERDICT_RE.search(s)
+        if verdict and verdict.group("verdict").lower() != "valid":
+            return None
+    return m
 
 
 def world_state_outcome_from_signal_pack(
@@ -1232,13 +1688,15 @@ def world_state_outcome_from_signal_pack(
 ) -> Optional[Dict[str, Any]]:
     """从 signal_pack 的世界态结果分布块解析决策通道的收敛 P(outcome) 份额（纯离线、确定性）。
 
-    识别 ``【预测结果分布 P(outcome)…】`` 块及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
-    返回 ``{"scenario_shares": {name: frac}, "converged": bool|None,
-    "source": "world-state outcome shares"}``；块缺失/无份额行 → ``None``（调用方视同 sim
-    无收敛结果，degrade-safe）。``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
+    识别世界态块标题——以 report_agent._world_state_block 渲染的 ``【推演结果分布 P(outcome)…】``
+    为准，旧 fixture 的 ``【预测结果分布 P(outcome)…】`` 同样接受（SIM-3 标记重新同步）——及其下的
+    ``· <情景名>: <NN>%`` 份额行，归一后返回 ``{"scenario_shares": {name: frac},
+    "converged": bool|None, "source": "world-state outcome shares"}``；块缺失/无份额行/带显式
+    非 valid 有效性裁定 → ``None``（调用方视同 sim 无收敛结果，degrade-safe）。
+    ``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
     """
     text = str(signal_pack or "")
-    m = _WS_OUTCOME_HEADER_RE.search(text)
+    m = _usable_world_state_header(text)
     if not m:
         return None
     tail = text[m.end():]
@@ -1324,6 +1782,96 @@ def _record_sim_adjustment(
 
 def _binary_key(stmt: str) -> str:
     return re.sub(r"\W+", " ", str(stmt or "").lower()).strip()
+
+
+# ------------------------------------------- evaluation-run target propositions (EVAL-13)
+# An evaluation cell pins one target question. The extraction prompt then asks for its
+# statement VERBATIM as one binary, and after the F-renumbering the row whose statement
+# equals it under normalize_target_statement is bound (row['target_question_id']), so
+# golden_eval can score the cell without hand-editing ids. A target no draw produced
+# gets at most one bounded repair draw (EVAL_TARGET_REPAIR_DRAW); it is never fabricated.
+_TARGET_PROPOSITION_RULE = (
+    "\n\nREQUIRED TARGET PROPOSITIONS: include each statement below as the \"statement\" of "
+    "exactly one binary forecast, copied VERBATIM (same words in the same order; do not "
+    "rephrase, merge, split or negate it), with your own evidence-based probability."
+)
+_TARGET_REPAIR_RULE = (
+    "\n\nREQUIRED TARGET PROPOSITIONS: return ONLY forecasts for the statement(s) below, one "
+    "binary forecast per statement, its \"statement\" copied VERBATIM (same words in the same "
+    "order; do not rephrase, merge, split or negate it), with your own evidence-based probability."
+)
+TARGET_BINDING_METHOD = "normalized_equality"
+# _normalize_binaries keeps at most this many characters of a withheld row's statement.
+_REVIEW_STATEMENT_MAX_CHARS = 200
+
+
+def normalize_target_statement(text: Any) -> str:
+    """NFKC, casefold, collapsed whitespace, trailing '?' / '.' stripped (EVAL-13 binding key).
+
+    Linear in the input: model text is unbounded, so no backtracking regex runs on it
+    (whitespace is already collapsed to single spaces before the trailing strip).
+    """
+    folded = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    return " ".join(folded.split()).rstrip(" ?.")
+
+
+def _clean_target_propositions(targets: Any) -> List[Dict[str, Any]]:
+    """Usable target propositions (question_id + statement), first per question_id wins.
+
+    ``key`` is the statement's ``_binary_key``, the proposition identity every draw's
+    ``_merge`` deduplicates on.
+    """
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+    for t in targets or []:
+        if not isinstance(t, dict):
+            continue
+        qid = str(t.get("question_id") or "").strip()
+        statement = str(t.get("statement") or "").strip()
+        norm = normalize_target_statement(statement)
+        if not qid or not norm or qid in seen:
+            continue
+        seen.add(qid)
+        criteria = str(t.get("resolution_criteria") or "").strip()
+        out.append({"question_id": qid, "statement": statement,
+                    "resolution_criteria": criteria, "norm": norm,
+                    "key": _binary_key(statement)})
+    return out
+
+
+def _review_names_target(entry: Dict[str, Any], target: Dict[str, Any]) -> bool:
+    """Whether a withheld-row review entry (statement cut at 200 chars) is this target's."""
+    norm = normalize_target_statement(entry.get("statement"))
+    return bool(norm) and norm in (
+        target["norm"],
+        normalize_target_statement(target["statement"][:_REVIEW_STATEMENT_MAX_CHARS]))
+
+
+def _target_proposition_block(targets: List[Dict[str, Any]], *, repair: bool = False) -> str:
+    lines = [_TARGET_REPAIR_RULE if repair else _TARGET_PROPOSITION_RULE]
+    for t in targets:
+        lines.append(f"- {t['statement']}")
+        if t.get("resolution_criteria"):
+            lines.append(f"  Resolution criteria: {t['resolution_criteria']}")
+    return "\n".join(lines)
+
+
+def _bind_target_propositions(binaries: List[Dict[str, Any]],
+                              targets: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Stamp the first unbound row (F order) equal to each target; returns {question_id: id}."""
+    bound: Dict[str, str] = {}
+    for t in targets:
+        for b in binaries:
+            if b.get("target_question_id"):
+                continue
+            if normalize_target_statement(b.get("statement")) != t["norm"]:
+                continue
+            b["target_question_id"] = t["question_id"]
+            b["target_bind"] = ("verbatim" if str(b.get("statement") or "").strip() == t["statement"]
+                                else "normalized")
+            bound[t["question_id"]] = str(b.get("id") or "")
+            break
+    return bound
 
 
 _MARKET_ENTITY_EN_RE = re.compile(
@@ -1454,9 +2002,27 @@ def _is_circular_market_forecast(
     return False
 
 
+_HORIZON_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
+
+
+def _strict_horizon_year(value: Any) -> Optional[int]:
+    """REPORT-1：horizon_year 的类型化读取。字符串经 NFKC 后收集不同的 19xx/20xx 年份，
+    恰好一个才采用（'2030年'、'FY2030' → 2030；'2030-2031' → None）；数值输入沿用 int(float())。"""
+    if isinstance(value, str):
+        years = set(_HORIZON_YEAR_RE.findall(unicodedata.normalize("NFKC", value)))
+        return int(years.pop()) if len(years) == 1 else None
+    try:
+        return int(float(value)) if value is not None else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
-                        market_lookup: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+                        market_lookup: Optional[Dict[str, float]] = None,
+                        review_sink: Optional[list] = None,
+                        keep_latest_actual: bool = False,
+                        keep_target: bool = False) -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1468,17 +2034,41 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
     预测市场锚点：模型给出 market_anchor 时校验并保留 {market_id, implied_yes_prob,
     divergence}；``market_lookup``（market_id→隐含概率，来自我们抓取的快照）命中时
     以快照价回填 implied_yes_prob（不盲信模型转录），divergence 一律由本函数确定性
-    计算（本预测概率 − 市场隐含概率）。锚点非法/缺失时不加字段（degrade-safe）。"""
+    计算（本预测概率 − 市场隐含概率）。锚点非法/缺失时不加字段（degrade-safe）。
+    REPORT-1（FORECAST_PROB_STRICT_PARSE）：不可读概率的行扣下并追加
+    {statement, raw, reason} 到 ``review_sink``（若给出），绝不钳制。
+    TIME-5 ``keep_latest_actual``（仅 NUMERIC_GUARD_MODE=shadow 的抽取为真）：保留模型给出的
+    latest_actual 对象，只留 {value, unit, as_of, source_ref} 四个字符串字段（各截 80 字）；
+    非对象 / 无 value → 不加字段。缺省 False → 行逐字节不变。
+    EVAL-14 ``keep_target``（仅 FORECAST_BINARY_STRUCTURED_TARGET 的抽取为真）：模型给出的 target 经
+    binary_targets.validate_binary_target 校验——合格 → row['target']（规范化对象），不合格 →
+    row['target_rejected']（错误列表；校验本身异常 → ['target_validation_error']，行照常保留）；
+    模型未给或给空对象 / 空列表 / 空串 → 不加字段。缺省 False → 行逐字节不变。"""
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     out: List[Dict[str, Any]] = []
     seen: set = set()
     for it in (items or []):
         if not isinstance(it, dict):
             continue
         stmt = str(it.get("statement") or "").strip()
-        p = _coerce_float(it.get("probability"))
-        if not stmt or p is None or _is_circular_market_forecast(
-                stmt, it.get("resolution_criteria")):
-            continue
+        if strict:
+            # REPORT-1：概率类型化解析——不可读（30、True、'30-40%'、缺失）的行绝不钳制成
+            # 0.98/0.02，而是记入 review_sink 并扣下（'30%' 正常读作 0.30）。
+            if not stmt or _is_circular_market_forecast(
+                    stmt, it.get("resolution_criteria")):
+                continue
+            parsed_p = parse_probability_field(it.get("probability"))
+            if parsed_p.status != PROB_OK:
+                if review_sink is not None:
+                    review_sink.append({"statement": stmt[:_REVIEW_STATEMENT_MAX_CHARS],
+                                        "raw": parsed_p.raw, "reason": parsed_p.reason})
+                continue
+            p = parsed_p.value
+        else:
+            p = _coerce_float(it.get("probability"))
+            if not stmt or p is None or _is_circular_market_forecast(
+                    stmt, it.get("resolution_criteria")):
+                continue
         key = _binary_key(stmt)
         if not key or key in seen:
             continue
@@ -1486,10 +2076,16 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
         p = max(0.02, min(0.98, p))
         rc = str(it.get("resolution_criteria") or "")
         hy_raw = it.get("horizon_year")
-        try:
-            hy = int(float(hy_raw)) if hy_raw not in (None, "") else None
-        except (TypeError, ValueError):
-            hy = None
+        if strict:
+            hy = _strict_horizon_year(hy_raw)
+        else:
+            try:
+                hy = int(float(hy_raw)) if hy_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                hy = None
+        resolution_source = it.get("resolution_source")
+        if strict and is_nullish(resolution_source):
+            resolution_source = ""
         theme = str(it.get("theme") or "").strip().lower()
         if allowed_themes:
             if theme not in allowed_themes:
@@ -1501,7 +2097,7 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
             "statement": stmt,
             "probability": round(p, 2),
             "resolution_criteria": rc,
-            "resolution_source": str(it.get("resolution_source") or ""),
+            "resolution_source": str(resolution_source or ""),
             "theme": theme,
             "horizon_year": hy,
             "base_rate_anchor": str(it.get("base_rate_anchor") or ""),
@@ -1592,6 +2188,25 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
                     "implied_yes_prob": round(ip, 4),
                     "divergence": round(row["probability"] - ip, 4),
                 }
+        if keep_latest_actual:
+            latest_actual = sanitize_latest_actual(it.get("latest_actual"))
+            if latest_actual is not None:
+                row["latest_actual"] = latest_actual
+        raw_target = it.get("target")
+        # An empty object / list / string is the model's way of omitting the target.
+        if keep_target and raw_target is not None and (
+                not isinstance(raw_target, (dict, list, str)) or raw_target):
+            from .binary_targets import validate_binary_target
+            try:
+                clean_target, target_errors = validate_binary_target(
+                    raw_target, statement=stmt, criteria=rc)
+            except Exception as exc:  # noqa: BLE001 — enhancement: never drop the binary
+                logger.warning(f"二元预测结构化 target 校验异常（记为 target_rejected，行保留）: {exc!r}")
+                clean_target, target_errors = None, ["target_validation_error"]
+            if clean_target is not None:
+                row["target"] = clean_target
+            else:
+                row["target_rejected"] = target_errors
         out.append(row)
     return out
 
@@ -1651,6 +2266,30 @@ def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
     }
 
 
+def _withheld_binary_reviews(review_sink: List[Dict[str, Any]],
+                             binaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """REPORT-1：复核槽中真正被扣下的行——按陈述去重，并排除已被其他抽取轮以可读概率
+    收录的同一陈述（首轮不可读、补足轮可读的不算扣下）。复核槽只存陈述前 200 字，故两侧
+    按同一截断比较。"""
+    published = {_binary_key(str(b.get("statement") or "")[:_REVIEW_STATEMENT_MAX_CHARS])
+                 for b in binaries if isinstance(b, dict)}
+    withheld: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in review_sink:
+        key = _binary_key(row.get("statement"))
+        if key in published or key in seen:
+            continue
+        seen.add(key)
+        withheld.append(row)
+    return withheld
+
+
+def _binary_withheld_issue(count: int) -> str:
+    """REPORT-1：binary_quality.issues 里「概率不可读被扣下」的说明行（抽取与 ReportAgent
+    重算记分卡共用同一措辞）。"""
+    return f"{count} binary probabilities unreadable — withheld, not clamped"
+
+
 # --------------------------------------------- PM-2: deterministic market anchoring
 # 此前市场锚点走「模型自愿在 market_anchor 里给 market_id」的 opt-in 路径，取证 0/13 与
 # 0/11 条二元被锚定——模型几乎从不主动转录 id。PM-2 改为**确定性**：先跑一次批处理 LLM
@@ -1687,6 +2326,33 @@ _MARKET_DIVERGENCE_INSTRUCTIONS = (
     "\"adjustment_rationale\": \"...must mention the market and its implied probability...\"} , ... ] }"
 )
 
+# REPORT-12（FORECAST_MARKET_BLEND_ARITHMETIC，默认关）：同一 10pp 重述，但模型只给判断输入——
+# 有界的 market_weight + 引用市场的理由（二者全有或全无），修订概率由代码按 (1-w)·p + w·m
+# 计算（m 恒为我们的快照价），见 _apply_market_blend。思路来自 FinanceHarness「模型选输入、
+# 代码做算术」（措辞重写，未复制任何代码）。{weight_max} 在调用时填入 FORECAST_MARKET_BLEND_WEIGHT_MAX
+# （_market_blend_weight_max，0.01 网格）。
+_MARKET_BLEND_INSTRUCTIONS = (
+    "You are reconciling forecasts against live prediction-market prices. Each item below is a "
+    "binary forecast whose probability diverges from a matched market's implied probability by "
+    "MORE than 10 percentage points, and whose rationale does NOT yet address that market. For "
+    "EACH item decide deliberately how much weight the market deserves. market_weight is the "
+    "fraction of the gap to the market price you close: 0 keeps your probability (then explain "
+    "what the market is missing); the maximum is {weight_max}. In EVERY case rewrite "
+    "adjustment_rationale to explicitly cite the market and its implied probability and to "
+    "justify the weight you chose. Markets are calibration anchors, not ground truth. Do NOT "
+    "output a probability — code computes it from your weight.\n"
+    "Return JSON ONLY: {{\"revisions\": [ {{\"id\": \"F1\", \"market_weight\": 0.0-{weight_max}, "
+    "\"adjustment_rationale\": \"...must cite the market and its implied probability...\"}} , ... ] }}"
+)
+_MARKET_BLEND_FORMULA = "(1-w)*p + w*m"
+
+# TIME-3（PREDICTION_MARKETS_END_DATE_GATE）：给匹配器今天的日期，截止日与预测日期不一致的
+# 市场至多判 near——已过截止日的市场已在调用方剔除，此行约束剩余市场的时间窗对齐。
+_MARKET_MATCH_TODAY_RULE = (
+    "\n\nToday (UTC): {today}. A market can only match a forecast whose resolution window it "
+    "covers; a market whose end date differs from the forecast's date is at most near, never exact."
+)
+
 _MARKET_EQUIVALENCE_RANK = {"exact": 3, "near": 2, "loose": 1}
 # 理由「提及市场」的判据：命中关键词（market/Polymarket/市场/预测市场/implied）即算。
 _MARKET_MENTION_RE = re.compile(r"market|polymarket|市场|預測|预测市场|implied", re.I)
@@ -1715,10 +2381,20 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
                          equivalence: Optional[str] = None,
                          match_confidence: Optional[float] = None,
                          binary: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-    """确定性组装 rich market_anchor：隐含概率取我们的快照价，divergence 本地计算。
+    """确定性组装 rich market_anchor：隐含概率取锚定所用市场行的价，divergence 本地计算。
 
-    price_at_research 记研究时点的快照价（与 implied_yes_prob 同源，供日后与实时价对比）。
-    市场缺 id / 隐含概率非法 → None（不加锚点，degrade-safe）。"""
+    price_at_research 记锚定所用市场行的价（与 implied_yes_prob 同源，供日后与实时价对比；
+    字段名沿用历史叫法，未必是研究期价），取价时刻与来源见 price_time / price_time_basis。
+    市场缺 id / 隐含概率非法 → None（不加锚点，degrade-safe）。
+
+    EVAL-6（MARKET_ANCHOR_PRICE_TIME，默认开）：市场行能定出取价时刻时追加 price_time +
+    price_time_basis（见 prediction_markets.market_price_time）——行带 quoted_at → basis
+    'requote'，否则带 observed_at（FU-11：研究桥逐行记的该行价格抓取时刻）→ basis
+    'observed'，否则带 snapshot_as_of → basis 'snapshot'，都没有 → 两键都不写。basis 为
+    'requote' 时 price_at_research 实为报告期重报价，并非研究期价。basis 为 'snapshot' 时
+    price_time 是研究 handoff 快照的 as_of 或报告期现抓兜底的抓取时刻，二者都只是取价时刻的
+    上界（研究快照的 as_of 在落盘时才取，其中智能体工具检索到的行可能早数小时就已报价）。
+    旗标关 → 锚点逐字节复现旧形状。"""
     mid = str((market or {}).get("market_id") or "").strip()
     ip = _coerce_float((market or {}).get("implied_yes_prob"))
     p = _coerce_float(prob)
@@ -1731,6 +2407,11 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
         "price_at_research": round(ip, 4),
         "divergence": round((p if p is not None else 0.0) - ip, 4),
     }
+    from ..utils.prediction_markets import market_price_time, price_time_enabled
+    if price_time_enabled():
+        price_time = market_price_time(market)
+        if price_time is not None:
+            anchor["price_time"], anchor["price_time_basis"] = price_time
     url = str(market.get("url") or "").strip()
     if url:
         anchor["url"] = url
@@ -1764,12 +2445,20 @@ def _build_market_anchor(prob: Optional[float], market: Dict[str, Any], *,
 
 
 def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional[List[Dict[str, Any]]],
-                               llm, *, language: str = "English", max_markets: int = 24) -> int:
+                               llm, *, language: str = "English", max_markets: int = 24,
+                               now: Optional[datetime] = None,
+                               truncation_counts: Optional[Dict[str, int]] = None) -> int:
     """PM-2：一次批处理 LLM 匹配 + 确定性回填 market_anchor（就地改写 binaries）。返回锚定条数。
 
     只接受 resolution_equivalence 严格度 ≥ FORECAST_MARKET_ANCHOR_MIN_EQUIVALENCE（默认 near，
     即 exact/near 采纳、loose 丢弃）的匹配。旗标 FORECAST_MARKET_ANCHORING 关闭 / 无市场 /
-    无二元 / 匹配调用异常或非法 JSON → 不加锚点（今日行为，degrade-safe）。"""
+    无二元 / 匹配调用异常或非法 JSON → 不加锚点（今日行为，degrade-safe）。
+    TIME-3：给出 ``now``（仅 PREDICTION_MARKETS_END_DATE_GATE 开时由 extract_binary_forecasts
+    传入）→ MARKETS 表后追加「Today (UTC)」一行，要求截止日与预测日期不一致的市场至多判 near；
+    未给出 → 提示词逐字节不变。
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：匹配回复被 max_tokens 截断时丢弃被截在半途的那条
+    匹配（见 _trim_cut_item：本地补括号时只在补全合上了被截断的列表项时丢弃，无从判断时丢最后一条），
+    并在 ``truncation_counts['market_match']`` 计数（给出时；丢弃条数记 market_match_items_dropped）。"""
     if not _cfg("FORECAST_MARKET_ANCHORING", True):
         return 0
     bins = [b for b in (binaries or []) if isinstance(b, dict) and str(b.get("statement") or "").strip()]
@@ -1798,6 +2487,9 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
     user = (_MARKET_MATCH_INSTRUCTIONS + f"\n\nWrite any prose in {language}."
             + "\n\n[FORECASTS]\n" + "\n".join(flines)
             + "\n\n[MARKETS]\n" + "\n".join(mlines))
+    if now is not None:
+        today = (now if now.tzinfo is None else now.astimezone(timezone.utc)).date().isoformat()
+        user += _MARKET_MATCH_TODAY_RULE.format(today=today)
     try:
         raw = llm.chat_json(messages=[{"role": "user", "content": user}],
                             temperature=0.1, max_tokens=1500)
@@ -1805,6 +2497,11 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
         logger.warning(f"预测市场匹配调用失败（忽略，不加锚点）: {_me}")
         return 0
     matches = raw.get("matches") if isinstance(raw, dict) else None
+    if _drop_truncated_reply(llm):
+        # INFRA-3: the cap cut this reply; a match it cut mid-way is dropped (_trim_cut_item).
+        matches, _dropped = _trim_cut_item(llm, matches)
+        _count_truncation(truncation_counts, "market_match", _dropped)
+        logger.warning(f"预测市场匹配回复被 max_tokens 截断，丢弃被截断的匹配 {_dropped} 条")
     if not isinstance(matches, list):
         return 0
     bin_by_id = {str(b.get("id")): b for b in bins}
@@ -1832,14 +2529,20 @@ def anchor_binaries_to_markets(binaries: List[Dict[str, Any]], markets: Optional
 
 
 def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
-                            prior_p: float, revised_p: float) -> None:
+                            prior_p: float, revised_p: float,
+                            blend: Optional[Dict[str, Any]] = None) -> None:
     """LOOP-017 P0：把「市场把概率从 prior 移到 revised」盖成耐久的 market_influence 印章。
 
     与 market_anchor **分离**存放：对账（reconcile_forecast_contract）可依据命题/完整性
     弹出锚点，但影响印章必须存活——它是恢复被错误匹配移动的概率的唯一凭据，也是
     build_market_comparison ``influences`` 审计面的数据源。重复重述时保留最初的
-    prior_probability（真实的未受影响值），只滚动 revised/修订时市场价。任何后续 pass
-    都不得弹出此键（取证事故：锚点被弹出后，修订概率永久保留而市场溯源全部消失）。"""
+    prior_probability（分歧重述之前的值；起草时已参考市场价格，并非独立于市场的估计），
+    只滚动 revised/修订时市场价。任何后续 pass 都不得弹出此键（取证事故：锚点被弹出后，
+    修订概率永久保留而市场溯源全部消失）。
+
+    REPORT-12：``blend``（仅确定性市场混合传入）原样记为 record['blend']——本次修订的
+    {weight, prior, market, computed, formula}，其 prior 是本次混合前的概率；缺省 None →
+    印章形状逐字节不变。"""
     market_id = str(anchor.get("market_id") or "").strip()
     record: Dict[str, Any] = {
         "market_id": market_id,
@@ -1856,11 +2559,80 @@ def _stamp_market_influence(binary: Dict[str, Any], anchor: Dict[str, Any], *,
             and _coerce_float(existing.get("prior_probability")) is not None):
         record["prior_probability"] = round(
             float(_coerce_float(existing["prior_probability"])), 4)
+    if blend is not None:
+        record["blend"] = dict(blend)
     binary["market_influence"] = record
 
 
+def _market_blend_weight_max() -> float:
+    """REPORT-12：FORECAST_MARKET_BLEND_WEIGHT_MAX 钳到 [0, 1]（非法/非有限 → 0.8），
+    保证混合结果始终落在预测概率与市场价之间的线段上；再向下取整到 0.01 网格（绝不放宽
+    设定的上限）——与量化后的权重同一网格，且提示词里以 :g 写出的上限就是验收比较的上限
+    （0.123456789 → 0.12，而非提示 0.123457、验收却拒收 0.123457）。"""
+    w_max = _coerce_float(_cfg("FORECAST_MARKET_BLEND_WEIGHT_MAX", 0.8))
+    if w_max is None or not math.isfinite(w_max):
+        return 0.8
+    w_max = max(0.0, min(1.0, w_max))
+    return float(Decimal(repr(w_max)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
+
+
+def _apply_market_blend(binary: Dict[str, Any], anchor: Dict[str, Any], raw_weight: Any,
+                        rationale: str, *, weight_max: float) -> bool:
+    """REPORT-12：把一条「market_weight + 引用市场的理由」重述确定性地落到 binary 上（就地）。
+
+    调用方已确认 ``rationale`` 引用了市场；本函数只接受二者齐全的一组（全有或全无）：
+    权重经 parse_probability_field 解析（0.4 / '40%' 可读；缺失、bool、区间、>1 不可读），
+    量化到 0.01 网格（理由算式与 Market Cross-Check 都以两位小数印出权重，印出的就是参与计算
+    并记入 blend 的那个数），且模型给出的原值与量化值都须 <= ``weight_max``（调用方传入的
+    _market_blend_weight_max 已在同一网格上），否则整条重述作废（理由/概率/印章都不动），
+    返回 False。
+
+    w == 0（含量化后为 0 的 < 0.005）→ 仅改理由的「保留分歧」（不盖章）。否则 p（现概率）与
+    m（锚点上的快照价 implied_yes_prob，绝不取模型转录值）须是 [0, 1] 内的数（否则同样整条
+    作废），p2 = round(clamp((1-w)·p + w·m, 0.02, 0.98), 2)；钳位改变了结果（p2 不等于未钳位
+    算式的两位小数）或 p2 不在 p 与 m 之间的线段上（舍入出界）→ 整条作废，因此发布的 p2 总能由
+    记录的 formula 原样复算：写回概率、重算锚点 divergence、理由末尾追加确定性算式；概率确实
+    移动时盖 market_influence 印章并附 blend 记录（四舍五入后未动 → 与旧路径一致不盖章）。"""
+    parsed_w = parse_probability_field(raw_weight)
+    if parsed_w.status != PROB_OK or parsed_w.value is None:
+        return False
+    stated_w = float(parsed_w.value)
+    w = round(stated_w, 2)
+    if max(stated_w, w) > weight_max:
+        return False
+    if w == 0.0:
+        binary["adjustment_rationale"] = rationale
+        return True
+    p = _coerce_float(binary.get("probability"))
+    m = _coerce_float(anchor.get("implied_yes_prob"))
+    if p is None or m is None or not (0.0 <= p <= 1.0) or not (0.0 <= m <= 1.0):
+        return False
+    raw_p2 = (1.0 - w) * p + w * m
+    p2 = round(min(0.98, max(0.02, raw_p2)), 2)
+    if p2 != round(raw_p2, 2):
+        # [0.02, 0.98] 钳位改变了结果（上限调到 0.8 以上时 w·m 越界，或 p 本身在发布区间外）→
+        # 印出的算式 (1-w)·p + w·m 复算不出 p2，这是一条假算术：整条作废（fail closed）。
+        return False
+    if not (min(p, m) - 1e-9 <= p2 <= max(p, m) + 1e-9):
+        # 两位小数舍入把结果推出 p..m 线段（非网格的 p 配小 w → 背离市场；非网格的 m 配近 1
+        # 的 w → 越过市场，仅当上限调高到 0.8 以上时可能）→ 这一权重无法表示为合法混合，
+        # 整条作废（fail closed），绝不发布一个不在线段上的「市场驱动」修订。
+        return False
+    binary["probability"] = p2
+    anchor["divergence"] = round(p2 - m, 4)
+    binary["adjustment_rationale"] = (
+        rationale + f" [blend: (1-{w:.2f})x{p:.2f} + {w:.2f}x{m:.2f} = {p2:.2f}]")
+    if abs(p - p2) > 1e-9:
+        _stamp_market_influence(binary, anchor, prior_p=p, revised_p=p2, blend={
+            "weight": w, "prior": p, "market": m, "computed": p2,
+            "formula": _MARKET_BLEND_FORMULA,
+        })
+    return True
+
+
 def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
-                              language: str = "English") -> int:
+                              language: str = "English",
+                              truncation_counts: Optional[Dict[str, int]] = None) -> int:
     """PM-2 的 10pp 规则：锚定后 |divergence|>0.10 且理由未提及市场的预测做一次有界重述。
 
     重述须在理由中引用市场；否则不接受（绝不静默移动概率）。就地改写 binaries，重算
@@ -1870,9 +2642,21 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
     LOOP-017 P0（影响边界）：只有 ``match_confidence >=
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE``（默认 0.6；缺失/None 一律不合格）的锚点
     才有**移动概率**的资格——低置信匹配仍可作为校准展示锚点，但绝不拉动发布概率。
-    被采纳且确实移动了概率的重述会盖 ``market_influence`` 印章（见 _stamp_market_influence）。"""
+    被采纳且确实移动了概率的重述会盖 ``market_influence`` 印章（见 _stamp_market_influence）。
+
+    INFRA-3（LLM_JSON_TRUNCATION_FAIL_CLOSED）：重述回复被 max_tokens 截断时丢弃被截在半途的那条
+    重述（见 _trim_cut_item）——它多半停在理由半途，而截断前已完整的概率与引用市场的理由足以通过
+    下方检查。计数记在 ``truncation_counts['market_divergence']``（给出时；丢弃条数记
+    market_divergence_items_dropped）。
+
+    REPORT-12（FORECAST_MARKET_BLEND_ARITHMETIC，默认关）：候选选择不变；提示词换成
+    _MARKET_BLEND_INSTRUCTIONS，模型只给 market_weight（<= FORECAST_MARKET_BLEND_WEIGHT_MAX）
+    + 引用市场的理由，修订概率由代码按 (1-w)·p + w·m 计算（m 取锚点快照价），回复里的任何
+    probability / 市场价转录一律忽略（见 _apply_market_blend）。关 → 提示词与旧的自由概率
+    重述逐字节不变。"""
     if not _cfg("FORECAST_MARKET_DIVERGENCE_REVISION", True):
         return 0
+    blend_mode = bool(_cfg("FORECAST_MARKET_BLEND_ARITHMETIC", False))
     min_conf = _coerce_float(_cfg("FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE", 0.6))
     if min_conf is None:
         min_conf = 0.6
@@ -1903,7 +2687,10 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
             f"    your probability: {b.get('probability')}; market implied YES: {ip}; "
             f"market question: {str(anchor.get('question') or '')[:160]}\n"
             f"    current rationale: {str(b.get('adjustment_rationale') or '')[:200]}")
-    user = (_MARKET_DIVERGENCE_INSTRUCTIONS + f"\n\nWrite all text in {language}."
+    weight_max = _market_blend_weight_max() if blend_mode else 0.0
+    instructions = (_MARKET_BLEND_INSTRUCTIONS.format(weight_max=f"{weight_max:g}")
+                    if blend_mode else _MARKET_DIVERGENCE_INSTRUCTIONS)
+    user = (instructions + f"\n\nWrite all text in {language}."
             + "\n\n[Divergent forecasts]\n" + "\n".join(items))
     try:
         raw = llm.chat_json(messages=[{"role": "user", "content": user}],
@@ -1912,10 +2699,17 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         logger.warning(f"预测市场分歧重述调用失败（忽略，保留原概率/理由）: {_re}")
         return 0
     revs = raw.get("revisions") if isinstance(raw, dict) else None
+    if _drop_truncated_reply(llm):
+        # INFRA-3: the cap cut this reply; a revision it cut mid-way is dropped (_trim_cut_item).
+        revs, _dropped = _trim_cut_item(llm, revs)
+        _count_truncation(truncation_counts, "market_divergence", _dropped)
+        logger.warning(f"预测市场分歧重述回复被 max_tokens 截断，丢弃被截断的重述 {_dropped} 条")
     if not isinstance(revs, list):
         return 0
     by_id = {str(b.get("id")): b for b in candidates}
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
     revised = 0
+    blended: set[str] = set()
     for r in revs:
         if not isinstance(r, dict):
             continue
@@ -1928,8 +2722,28 @@ def enforce_market_divergence(binaries: List[Dict[str, Any]], llm, *,
         new_rat = str(r.get("adjustment_rationale") or "").strip()
         if not new_rat or not _rationale_cites_market(new_rat, anchor):
             continue  # 重述未引用市场 → 拒绝（绝不静默移动概率）
-        b["adjustment_rationale"] = new_rat
-        new_p = _coerce_float(r.get("probability"))
+        if blend_mode:
+            # REPORT-12：权重 + 理由全有或全无，概率由代码计算（见 _apply_market_blend）。
+            # 每条预测至多采纳一条重述——同 id 的第二条会在已混合的概率上再混合一次，
+            # 累计权重越过 FORECAST_MARKET_BLEND_WEIGHT_MAX。
+            if str(b.get("id")) in blended:
+                continue
+            if _apply_market_blend(b, anchor, r.get("market_weight"), new_rat,
+                                   weight_max=weight_max):
+                blended.add(str(b.get("id")))
+                revised += 1
+            continue
+        if strict:
+            # REPORT-1：先解析重述概率再动理由——不可读（30、'30-40%'）→ 整条重述作废
+            # （理由/概率/印章均不动，绝不钳成 0.98）；缺失 → 仅改理由的「保留分歧」。
+            parsed_p = parse_probability_field(r.get("probability"))
+            if parsed_p.status == PROB_REVIEW:
+                continue
+            b["adjustment_rationale"] = new_rat
+            new_p = parsed_p.value
+        else:
+            b["adjustment_rationale"] = new_rat
+            new_p = _coerce_float(r.get("probability"))
         if new_p is not None:
             new_p = round(max(0.02, min(0.98, new_p)), 2)
             prior_p = _coerce_float(b.get("probability"))
@@ -1992,7 +2806,7 @@ def build_market_comparison(binaries: List[Dict[str, Any]]) -> Dict[str, Any]:
         inf = b.get("market_influence")
         if not isinstance(inf, dict) or not str(inf.get("market_id") or "").strip():
             continue
-        influences.append({
+        row: Dict[str, Any] = {
             "forecast_id": b.get("id"),
             "statement": b.get("statement"),
             "market_id": inf.get("market_id"),
@@ -2005,7 +2819,11 @@ def build_market_comparison(binaries: List[Dict[str, Any]]) -> Dict[str, Any]:
             "resolution_equivalence": inf.get("resolution_equivalence"),
             "anchor_removed": bool(inf.get("anchor_removed", False)),
             "probability_restored": bool(inf.get("probability_restored", False)),
-        })
+        }
+        # REPORT-12：确定性市场混合的算式记录随行透传（无 blend 时行形状不变）。
+        if isinstance(inf.get("blend"), dict):
+            row["blend"] = dict(inf["blend"])
+        influences.append(row)
     out: Dict[str, Any] = {"anchored_count": len(comps), "comparisons": comps}
     if influences:
         out["influences"] = influences
@@ -2106,6 +2924,11 @@ def _market_proposition_key(question: Any) -> str:
     return ""
 
 
+# REPORT-1：显式情景归属指向一个含不可读（null）概率的分区时的命题键。此时既不对账也不
+# 算矛盾，proposition 审计把它记为「无法核验」（unverifiable），而不是静默放行。
+_UNREADABLE_PARTITION_KEY = "unreadable-scenario-partition"
+
+
 def _scenario_yes_membership(
     binary: Dict[str, Any], scenarios: List[Dict[str, Any]]
 ) -> Tuple[str, List[str], Optional[float], Optional[str]]:
@@ -2203,6 +3026,20 @@ def _scenario_yes_membership(
                 None,
                 "canonical scenario partition contains duplicate names",
             )
+        proposition_id = str(binary.get("proposition_id") or "").strip()
+        if (
+            _cfg("FORECAST_PROB_STRICT_PARSE", True)
+            and all(name in scenario_by_name for name in yes_names)
+            and any(p is None for p in scenario_by_name.values())
+        ):
+            # REPORT-1：分区含不可读（needs_review 的 null）概率 → 可读行未经归一，其部分和
+            # 不是规范概率；expected=None ⇒ 不对账（二元保留独立估计），审计记为无法核验。
+            return (
+                _UNREADABLE_PARTITION_KEY,
+                yes_names,
+                None,
+                "scenario partition probabilities need review",
+            )
         if (
             yes_names
             and all(name in scenario_by_name for name in yes_names)
@@ -2211,7 +3048,6 @@ def _scenario_yes_membership(
             expected = round(sum(
                 float(scenario_by_name[name]) for name in yes_names
             ), 4)
-            proposition_id = str(binary.get("proposition_id") or "").strip()
             return (
                 proposition_id or "explicit-scenario-membership",
                 yes_names,
@@ -2274,6 +3110,7 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
     ]
     checked: List[Dict[str, Any]] = []
     mismatches: List[Dict[str, Any]] = []
+    unverifiable: List[Dict[str, Any]] = []
     for binary in (forecast.get("binary_forecasts") or []):
         if not isinstance(binary, dict):
             continue
@@ -2281,6 +3118,14 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
             binary, scenarios
         )
         actual = _coerce_float(binary.get("probability"))
+        if key == _UNREADABLE_PARTITION_KEY:
+            unverifiable.append({
+                "forecast_id": str(binary.get("id") or ""),
+                "binary_probability": round(actual, 4) if actual is not None else None,
+                "yes_scenarios": names,
+                "reason": membership_error,
+            })
+            continue
         if key in {
             "invalid-scenario-membership",
             "conflicting-binary-contract",
@@ -2310,13 +3155,20 @@ def audit_proposition_consistency(forecast: Dict[str, Any]) -> Dict[str, Any]:
         checked.append(row)
         if abs(actual - expected) > 0.015:
             mismatches.append(row)
-    return {
+    result: Dict[str, Any] = {
         "checked": len(checked),
         "rows": checked,
         "mismatches": mismatches,
         "mismatch_count": len(mismatches),
         "passed": not mismatches,
     }
+    if unverifiable:
+        # REPORT-1：仅当确有无法核验的行时才出现这两个键（格式良好的分区输出逐字节不变）；
+        # 无法核验不是矛盾，但也不算通过。
+        result["unverifiable"] = unverifiable
+        result["unverifiable_count"] = len(unverifiable)
+        result["passed"] = False
+    return result
 
 
 def _market_anchor_complete(anchor: Dict[str, Any]) -> bool:
@@ -2598,9 +3450,14 @@ def _build_ensemble_client(provider: str) -> Any:
         直接 ``LLMClient(provider=p)``；
       - OpenAI 兼容提供方从 PROVIDER_META 取 default_base/default_model，Key 依次尝试
         ``<PROVIDER>_API_KEY`` → 该提供方的 key_env（如 DEEPSEEK_API_KEY）→ 当且仅当与主提供方
-        同名时的 Config.LLM_API_KEY；缺 Key 时 LLMClient 构造抛 ValueError。
-    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由
-    ``_run_ensemble_draws`` 捕获 → 跳过该模型并记 flag（绝不阻断主抽取）。"""
+        同名时的 Config.LLM_API_KEY；三者皆无时此处直接抛 ValueError——不能把 api_key=None 交给
+        LLMClient：其构造会回退到 Config.LLM_API_KEY，把主提供方的 Key 发往副提供方的 default_base。
+        与主提供方同名且所得 Key 就是主提供方的 Config.LLM_API_KEY（直接复用，或设置菜单镜像进
+        key_env 的同一把 Key）时，端点用主提供方的 Config.LLM_BASE_URL 而非 default_base：主 Key
+        只发往它本来的端点（例如主提供方走代理 LLM_BASE_URL 时，绝不把代理的 Key 发往官方端点）。
+    未知提供方（不在 PROVIDER_META）→ LLMClient 构造抛 ValueError。两类异常都由调用方捕获
+    （``_run_ensemble_draws`` 跳过该模型并记 flag；EVAL-11 骨架跨底座检查记
+    construct_failed 并试下一个候选），绝不阻断主流程。"""
     import os as _os
     from ..config import Config
     from ..utils.llm_client import LLMClient
@@ -2609,11 +3466,19 @@ def _build_ensemble_client(provider: str) -> Any:
     if not meta.get("openai_compat"):
         # CLI 订阅提供方 / 未知名：交给 LLMClient 构造决定（合法 CLI 通过，未知名抛 ValueError）。
         return LLMClient(provider=p)
+    is_primary = p == str(Config.LLM_PROVIDER or "").lower()
     key = (_os.environ.get(f"{p.upper()}_API_KEY")
            or (_os.environ.get(str(meta.get("key_env"))) if meta.get("key_env") else None)
-           or (Config.LLM_API_KEY if p == str(Config.LLM_PROVIDER or "").lower() else None))
+           or (Config.LLM_API_KEY if is_primary else None))
+    if not key:
+        key_envs = dict.fromkeys(e for e in (f"{p.upper()}_API_KEY", meta.get("key_env")) if e)
+        raise ValueError(f"提供方 {p} 未配置 API Key（{' / '.join(key_envs)}）；"
+                         "主提供方的 Key 不会发往其他提供方的端点")
+    base_url = meta.get("default_base")
+    if is_primary and key == Config.LLM_API_KEY:
+        base_url = Config.LLM_BASE_URL
     return LLMClient(provider=p, api_key=key,
-                     base_url=meta.get("default_base"),
+                     base_url=base_url,
                      model=meta.get("default_model"))
 
 
@@ -2658,7 +3523,13 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              markets: Optional[List[Dict[str, Any]]] = None,
                              scenarios: Optional[List[Dict[str, Any]]] = None,
                              ensemble_client_factory: Optional[Any] = None,
-                             horizon_date: Optional[str] = None) -> Dict[str, Any]:
+                             horizon_date: Optional[str] = None,
+                             now: Optional[datetime] = None,
+                             target_propositions: Optional[List[Dict[str, Any]]] = None,
+                             context_pack: Optional[str] = None,
+                             numeric_guard_mode: Optional[str] = None,
+                             withhold_market_anchors: bool = False,
+                             ) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -2675,13 +3546,83 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     PM-2：抽取后跑一次确定性市场匹配（anchor_binaries_to_markets）+ 10pp 分歧有界重述
     （enforce_market_divergence），并把对照负载放进返回值 ``market_comparison``（供落
     market_comparison.json）。RQ-2：dossier 切片改为 head+tail（结论在文末）。
+    TIME-3（PREDICTION_MARKETS_END_DATE_GATE，默认开）：截止日已过（``now`` 缺省
+    market_clock_now()）或已盖 window_ended 章的市场不进入锚点查找表与确定性匹配，
+    剔除数记 binary_quality.market_window_ended_excluded；旗标关 → 与旧路径逐字节一致。
+    EVAL-13 ``target_propositions``（仅评估运行，[{question_id, statement,
+    resolution_criteria?}]）：每轮抽取在 [Research dossier] 之前追加「逐字包含这些陈述」的
+    附言（仅列尚未捕获的目标）；F 重编号后按 normalize_target_statement 相等绑定
+    ``row['target_question_id']``。仍缺且 EVAL_TARGET_REPAIR_DRAW 开 → 恰好一次有界补抽，
+    附言只索取缺失陈述，仅在归一相等时保留（下一个 F 号，target_bind='repair_draw'），
+    绝不编造；与已有行 _binary_key 相同的近似逐字副本不补抽、不重复入列（记 near_match）。
+    返回值增 ``target_binding`` = {bound{qid: fid}, missing[qid], method, repair_draw
+    [, near_match{qid: fid}]}。None/空 → 提示词与输出逐字节不变。
+    REPORT-10（FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE，默认关）：market_aware 时切片前用
+    strip_machine_market_table 删掉 dossier 里的机器市场表，删除节数记
+    binary_quality.market_table_stripped（删表后市场包超出 _draw 切片上限另记
+    market_pack_truncated；标题行只剩在围栏代码块内、一节未删记 market_table_strip_skipped）；
+    旗标关或未注入市场包 → 提示词逐字节不变。
+    RESEARCH-13（FORECAST_CONTEXT_PACK_BINARY，默认关）：``context_pack``（调用方用
+    forecast_context_packer 建好的证据包：as_of 时间线通道 + 按节分类的 dossier 摘录）给出时，
+    [Research dossier] 之后放包文而非 head+tail 切片，且不再注入 [Situation brief]（包内的
+    时间线通道取代它）；指令文本与各块位置不变。None → 提示词逐字节不变。
+    TIME-5 ``numeric_guard_mode``（ReportAgent 传入钉住的 NUMERIC_GUARD_MODE）：'shadow' 时每轮
+    _draw 在市场规则之后追加 _BINARY_LATEST_ACTUAL_RULE、按条数放宽 max_tokens
+    （_binary_draw_max_tokens，免得多出的字段截断回复），_normalize_binaries 保留净化后的
+    latest_actual（供 utils.numeric_guards 影子检查）；该规则会改变起草（二元与概率可能与 off
+    不同）。None / 'off' → 提示词、max_tokens 与行逐字节不变。
+    FU-7 ``withhold_market_anchors``（ReportAgent 在市场被扣下——回测钉或钉查找失败——时传
+    True）：回测全程扣下市场数据，此时二元上的 market_anchor 只能是模型凭自身（可能晚于 as_of
+    的）知识自报的——全部弹出，条数记 binary_quality.hindcast_market_anchor_dropped（仅 >0 时
+    写）。函数内同样失败关闭：调用方误传的 market_pack / markets 一律忽略（不注入提示词、不回填
+    锚点、不做 PM-2 锚定与分歧重述、不放行市场来源标签）。False（实时运行）→ 行为逐字节不变。
     """
+    target_rows = _clean_target_propositions(target_propositions)
+    latest_actual_rule = str(numeric_guard_mode or "").strip().lower() == "shadow"
+    structured_target = bool(_cfg("FORECAST_BINARY_STRUCTURED_TARGET", False))
+    # FU-7：市场被扣下时入口处即置空市场输入（失败关闭）——即便调用方误传，市场价也不进
+    # _draw 提示词、不经 market_lookup 回填，PM-2 无市场可锚，市场来源标签不放行。
+    if withhold_market_anchors:
+        if str(market_pack or "").strip() or markets:
+            logger.warning("市场扣下（回测钉或钉查找失败）：忽略调用方传入的市场数据")
+        market_pack, markets = None, None
+    market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
+                    and bool((market_pack or "").strip()))
     content = (report_markdown or "")
-    _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
-    _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
-    content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
+    # REPORT-10（FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE，默认关）：注入实时市场包时，dossier
+    # 末尾那份研究期的机器市场表是同一批价格的第二份（可能过时）副本——在切片前删掉，市场价
+    # 只经 market_pack 一个入口进入 _draw，且该表不再占用 head+tail 的尾部预算。
+    market_table_stripped = 0
+    market_table_strip_skipped = 0
+    market_pack_truncated = False
+    if market_aware and bool(_cfg("FORECAST_DRAW_DOSSIER_STRIP_MARKET_TABLE", False)):
+        content, market_table_stripped = strip_machine_market_table(content)
+        if market_table_stripped:
+            logger.info("二元预测抽取：dossier 视图删除 %d 个机器市场表节（市场价仅经实时市场包注入）",
+                        market_table_stripped)
+            # 删表后实时市场包是唯一的市场视图：超出 _draw 切片上限的市场在提示词里再无处可见
+            # （market_lookup 回填仍会确定性锚定它们）——显式记下，供晋升前对比。
+            market_pack_truncated = len(str(market_pack)) > _BINARY_MARKET_PACK_CHARS
+            if market_pack_truncated:
+                logger.warning("二元预测抽取：市场包 %d 字超出 %d 字切片上限，dossier 市场表已删，"
+                               "上限之后的市场不再出现在提示词中", len(str(market_pack)),
+                               _BINARY_MARKET_PACK_CHARS)
+        elif any(_MACHINE_MARKET_HEADING_RE.match(line.rstrip()) for line in content.split("\n")):
+            # 标题行仍在却一节也没删（只剩已闭合围栏代码块内的引用）→ 不静默：记下供运维核对。
+            market_table_strip_skipped = 1
+            logger.warning("二元预测抽取：dossier 仍含「## Prediction Market Signals」标题行但位于"
+                           "围栏代码块内，未删除（其中的市场价仍会进入 _draw）")
+    if context_pack:
+        # RESEARCH-13：证据包已在预算内按节取舍（REPORT-10 删表开启时，调用方打包前已删机器
+        # 市场表），原样作为 dossier 视图——不再 head+tail 切片。
+        content = context_pack
+    else:
+        _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
+        _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
+        content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
     themes = [str(t).strip().lower() for t in (themes or []) if str(t).strip()] or None
     contrarian = bool(_cfg("FORECAST_BINARY_CONTRARIAN", True))
+    symmetric_guard = bool(_cfg("FORECAST_BINARY_SYMMETRIC_GUARD", False))
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
     # （特征化 fixture 专用）时才允许进入二元概率生成；默认 diagnostic_only 下模拟产出
     # 不得移动任何已发布概率（simulation adjustments 是未晋升的预测政策）。
@@ -2690,11 +3631,24 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     sim_sensitive = (_sim_effect == "legacy_prompt"
                      and bool(_cfg("FORECAST_SIM_SENSITIVITY", True))
                      and bool((signal_pack or "").strip()))
-    market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
-                    and bool((market_pack or "").strip()))
+    # TIME-3：锚定资格按截止日过滤（证据面不动——market_pack 仍含已标注的过期市场）。
+    anchor_markets = markets
+    window_ended_rows: List[Dict[str, Any]] = []
+    anchor_now: Optional[datetime] = None
+    from ..utils.prediction_markets import (
+        end_date_gate_settings, exclude_window_ended, market_clock_now)
+    _end_gate, _end_grace = end_date_gate_settings()
+    if _end_gate:
+        anchor_now = now or market_clock_now()
+        anchor_markets, window_ended_rows = exclude_window_ended(
+            markets or [], now=anchor_now, grace_hours=_end_grace)
+        if window_ended_rows:
+            logger.info("二元预测锚定：剔除 %d 个已过截止日的市场（PREDICTION_MARKETS_END_DATE_GATE）",
+                        len(window_ended_rows))
+    window_ended_ids = {str(m.get("market_id") or "").strip() for m in window_ended_rows} - {""}
     # market_id → 隐含概率查找表（用我们抓取的快照回填模型转录的锚点，不盲信模型数字）。
     market_lookup: Dict[str, float] = {}
-    for m in (markets or []):
+    for m in (anchor_markets or []):
         if not isinstance(m, dict):
             continue
         mid = str(m.get("market_id") or "").strip()
@@ -2714,19 +3668,43 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     _hz_hint = str(_hz_year) if _hz_year else "2027"
     _hz_rule = (f"resolution year, at or before the forecast horizon {_hz_year}"
                 if _hz_year else "resolution year, within 1-5 years of now")
+    # REPORT-1：主模型的各轮 _draw（首轮/补足/低概率重述）共用一个复核槽，收集因概率不可读
+    # 而扣下的行（仅 FORECAST_PROB_STRICT_PARSE 下由 _normalize_binaries 写入）。集成副模型的
+    # 行只用于池化已匹配的主模型行、本就不会单独发布，故另记一槽，不计入「扣下」条数。
+    review_sink: List[Dict[str, Any]] = []
+    secondary_review_sink: List[Dict[str, Any]] = []
+    # INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): draws whose reply the output cap cut, and the
+    # items dropped from them as cut mid-way (see _trim_cut_item).
+    truncated_draws = 0
+    truncated_items_dropped = 0
 
     def _draw(instr_min: int, exclude: List[str], *, low_p: bool = False,
-              client: Any = None) -> List[Dict[str, Any]]:
+              client: Any = None, targets: Optional[List[Dict[str, Any]]] = None,
+              repair: bool = False,
+              review_to: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+        nonlocal truncated_draws, truncated_items_dropped
         # ITEM 12：client 指定时用该（副模型）客户端抽取，否则用主 llm——集成各模型共用同一提示词。
         _llm = client if client is not None else llm
+        # EVAL-13：默认只索取 exclude 里尚未出现的目标陈述（无目标 → 空，提示词不变）。已按
+        # _binary_key 出现的近似逐字副本也算已捕获：_merge 会把逐字答案当重复行丢掉。低概率
+        # 重述轮不索取：其 0.05-0.35 区间要求会扭曲目标命题的概率。
+        if targets is None and target_rows and not low_p:
+            captured = {normalize_target_statement(x) for x in exclude}
+            captured_keys = {_binary_key(x) for x in exclude}
+            targets = [t for t in target_rows
+                       if t["norm"] not in captured and t["key"] not in captured_keys]
         user = _BINARY_FORECAST_INSTRUCTIONS.format(
             min_count=instr_min, language=language,
             theme_enum=("|".join(themes) if themes else _BINARY_DEFAULT_THEME_ENUM),
             tie_rule=(f"tied to {', '.join(themes)}" if themes else _BINARY_DEFAULT_TIE_RULE),
             horizon_year_hint=_hz_hint, horizon_year_rule=_hz_rule,
+            source_rule=_binary_source_rule(sim_sensitive=sim_sensitive,
+                                            market_aware=market_aware),
         )
         if contrarian:
             user += _BINARY_LOW_P_RULE if low_p else _BINARY_CONTRARIAN_RULE
+        if symmetric_guard:
+            user += _BINARY_SYMMETRIC_GUARD
         if sim_sensitive:
             user += (
                 "\nSIMULATION SENSITIVITY: each adjustment_rationale MUST state how far and in "
@@ -2736,16 +3714,19 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             )
         if market_aware:
             user += _BINARY_MARKET_RULE
+        if latest_actual_rule:
+            user += _BINARY_LATEST_ACTUAL_RULE
+        if structured_target:
+            user += _BINARY_TARGET_RULE
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
-        if situation_brief:
+        if situation_brief and not context_pack:
             user += f"\n\n[Situation brief]\n{situation_brief[:2000]}"
         if sim_sensitive:
             user += f"\n\n[Simulation quantitative signals]\n{str(signal_pack)[:4000]}"
         if market_aware:
-            # PM-2：市场表切片 4000→8000，让相关性门控后的更多市场进入锚定视野。
-            user += f"\n\n[Prediction market signals]\n{str(market_pack)[:8000]}"
+            user += f"\n\n[Prediction market signals]\n{str(market_pack)[:_BINARY_MARKET_PACK_CHARS]}"
         if scenarios:
             scenario_rows = [
                 {
@@ -2764,12 +3745,27 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     "scenario_membership.derivable=true and copy every YES scenario name "
                     "exactly. Otherwise set derivable=false and leave yes_scenarios empty."
                 )
+        if targets:
+            user += _target_proposition_block(targets, repair=repair)
         user += f"\n\n[Research dossier]\n{content}"
         raw = _llm.chat_json(messages=[{"role": "user", "content": user}],
-                             temperature=0.25, max_tokens=4096)
+                             temperature=0.25,
+                             max_tokens=_binary_draw_max_tokens(instr_min + len(targets or ()),
+                                                                latest_actual_rule, structured_target))
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
+        if _drop_truncated_reply(_llm):
+            # INFRA-3: the cap cut this reply; a forecast it cut mid-way is dropped.
+            items, _dropped = _trim_cut_item(_llm, items)
+            truncated_draws += 1
+            truncated_items_dropped += _dropped
+            logger.warning(f"二元预测抽取回复被 max_tokens 截断，丢弃被截断的预测 {_dropped} 条")
+        if review_to is None:
+            review_to = review_sink if client is None else secondary_review_sink
         return _normalize_binaries(items or [], allowed_themes=themes,
-                                   market_lookup=market_lookup or None)
+                                   market_lookup=market_lookup or None,
+                                   review_sink=review_to,
+                                   keep_latest_actual=latest_actual_rule,
+                                   keep_target=structured_target)
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
@@ -2798,6 +3794,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # renumber ids stably F1..Fn（锚定用稳定 id 匹配，故在此之后再跑市场锚定）
     for i, b in enumerate(binaries, start=1):
         b["id"] = f"F{i}"
+    target_binding: Optional[Dict[str, Any]] = None
+    if target_rows:
+        target_binding = _bind_evaluation_targets(binaries, target_rows, _draw, review_sink)
     # ITEM 12：多模型集成——主模型抽完后，对每个所列（非主）提供方各跑一次同提示词二元抽取，
     # 按 id/陈述匹配同一条预测，用与种子集成同一套 extremizing log-odds（ENSEMBLE_EXTREMIZE_A）
     # 把各模型概率池化为发布概率，记 binary['ensemble']={models,probs,pooled,spread}。置于市场锚定
@@ -2831,13 +3830,41 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     spread_threshold=_thr if _thr is not None else 0.15)
         except Exception as _ee:  # noqa: BLE001 — 集成为增强，绝不阻断二元抽取
             logger.warning(f"多模型预测集成失败（忽略，保留主模型结果）: {_ee}")
+    # TIME-3：模型自愿转录的锚点若指向已过截止日的市场（它仍在 market_pack 里、带标注），
+    # 在确定性锚定前弹出——过期市场绝不成为任何二元的 market_anchor。
+    if window_ended_ids:
+        _dropped = 0
+        for b in binaries:
+            _anchor = b.get("market_anchor")
+            if (isinstance(_anchor, dict)
+                    and str(_anchor.get("market_id") or "").strip() in window_ended_ids):
+                b.pop("market_anchor")
+                _dropped += 1
+        if _dropped:
+            logger.info("二元预测锚定：弹出 %d 条指向已过截止日市场的模型自报锚点", _dropped)
+    # FU-7（TIME-6 遗留）：回测钉下市场全程扣下，模型自报的锚点是参数化知识（可能晚于 as_of），
+    # 一律弹出（失败关闭）；市场输入已在入口置空，下方 PM-2 锚定与分歧重述不会运行。
+    # 钉查找失败（未确认是回测）同样扣下并计入 hindcast_market_anchor_dropped；
+    # 两者由 forecast['hindcast'] 是否存在区分。
+    hindcast_anchors_dropped = 0
+    if withhold_market_anchors:
+        for b in binaries:
+            if b.pop("market_anchor", None) is not None:
+                hindcast_anchors_dropped += 1
+        if hindcast_anchors_dropped:
+            logger.warning("市场扣下（回测钉或钉查找失败）：弹出 %d 条模型自报的市场锚点",
+                           hindcast_anchors_dropped)
     # PM-2：确定性市场锚定 + 10pp 分歧有界重述 + 对照负载。任何失败 → 保留无锚点结果
     # （_normalize_binaries 已回填的模型自愿锚点仍在），即今日行为（degrade-safe）。
     market_comparison: Optional[Dict[str, Any]] = None
-    if binaries and (markets or []):
+    # INFRA-3: truncated replies of the market passes, by pass (see _count_truncation).
+    market_truncation: Dict[str, int] = {}
+    if binaries and (anchor_markets or []):
         try:
-            anchor_binaries_to_markets(binaries, markets, llm, language=language)
-            enforce_market_divergence(binaries, llm, language=language)
+            anchor_binaries_to_markets(binaries, anchor_markets, llm, language=language,
+                                       now=anchor_now, truncation_counts=market_truncation)
+            enforce_market_divergence(binaries, llm, language=language,
+                                      truncation_counts=market_truncation)
             market_comparison = build_market_comparison(binaries)
         except Exception as _ae:  # noqa: BLE001 — 锚定为增强，绝不阻断二元抽取
             logger.warning(f"预测市场锚定失败（忽略，保留无锚点结果）: {_ae}")
@@ -2855,9 +3882,42 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         "binary_quality": _binary_quality(binaries, min_count=min_count,
                                           themes_expected=themes),
     }
+    if _cfg("FORECAST_PROB_STRICT_PARSE", True):
+        _bq_review = out["binary_quality"]
+        _withheld = _withheld_binary_reviews(review_sink, binaries)
+        if _withheld:
+            _reasons: Dict[str, int] = {}
+            for _row in _withheld:
+                _reasons[_row["reason"]] = _reasons.get(_row["reason"], 0) + 1
+            _bq_review["needs_review_count"] = len(_withheld)
+            _bq_review["needs_review_reasons"] = _reasons
+            # 根因排第一：发布门与编排器只展示 issues 的前两条。
+            _bq_review.setdefault("issues", []).insert(0, _binary_withheld_issue(len(_withheld)))
+            logger.warning("二元预测：%d 条概率不可读，已扣下（未钳制），原因 %s；可发布 %d 条",
+                           len(_withheld), _reasons, len(binaries))
+        if secondary_review_sink:
+            _bq_review["needs_review_secondary_count"] = len(secondary_review_sink)
+            logger.warning("集成副模型：%d 条二元概率不可读，未参与池化",
+                           len(secondary_review_sink))
     _bq_prov = out["binary_quality"]
     if isinstance(_bq_prov, dict):
         _bq_prov["provenance_downgrades"] = provenance_downgrades
+        if window_ended_rows:
+            _bq_prov["market_window_ended_excluded"] = len(window_ended_rows)
+        if hindcast_anchors_dropped:
+            _bq_prov["hindcast_market_anchor_dropped"] = hindcast_anchors_dropped
+        if market_table_stripped:
+            _bq_prov["market_table_stripped"] = market_table_stripped
+        if market_table_strip_skipped:
+            _bq_prov["market_table_strip_skipped"] = market_table_strip_skipped
+        if market_pack_truncated:
+            _bq_prov["market_pack_truncated"] = True
+        if truncated_draws:
+            _bq_prov["llm_truncation_trimmed"] = True
+            _bq_prov["llm_truncation_trimmed_draws"] = truncated_draws
+            _bq_prov["llm_truncation_items_dropped"] = truncated_items_dropped
+        if market_truncation:
+            _bq_prov["llm_truncation_market_trimmed"] = dict(market_truncation)
         if provenance_downgrades:
             _bq_prov.setdefault("issues", []).append(
                 f"{provenance_downgrades} forecast(s) claimed a simulation signal that was never "
@@ -2891,7 +3951,84 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                     f"(spread > {_ens_block['spread_threshold']}): {', '.join(ensemble_low_agreement)}")
     if market_comparison and market_comparison.get("comparisons"):
         out["market_comparison"] = market_comparison
+    if target_binding is not None:
+        out["target_binding"] = target_binding
     return out
+
+
+def _bind_evaluation_targets(binaries: List[Dict[str, Any]], targets: List[Dict[str, Any]],
+                             draw: Any, review_sink: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """EVAL-13: bind target propositions after the F-renumbering; at most one repair draw.
+
+    ``draw`` is extract_binary_forecasts' ``_draw`` closure. A repair row is kept
+    only when its statement normalizes to a missing target's (next F id,
+    ``target_bind='repair_draw'``); anything else it returns is discarded, and a
+    target still unmatched stays under ``missing``. ``repair_draw`` records
+    not_needed / near_duplicate / disabled / failed / unmatched / partial / bound.
+
+    No two rows ever share a ``_binary_key`` (the proposition identity ``_merge``
+    deduplicates every draw on): a missing target whose key equals an existing
+    row's (punctuation drift the binding key keeps apart, e.g. a curly apostrophe
+    or 'AI-liability') is not re-requested, since its verbatim copy would be a
+    second row for one proposition, and a repair row colliding with an existing
+    key is dropped. Such a target stays under ``missing`` with ``near_match``
+    ``{question_id: F id}`` naming that row for the grader (only present when
+    non-empty). The repair draw's withheld rows (unreadable probability) reach
+    ``review_sink`` only when they are a requested target's, so its discarded
+    extras never count as withheld.
+    """
+    bound = _bind_target_propositions(binaries, targets)
+    missing = [t for t in targets if t["question_id"] not in bound]
+    row_by_key: Dict[str, str] = {}
+    for b in binaries:
+        row_by_key.setdefault(_binary_key(b.get("statement")), str(b.get("id") or ""))
+    near_match = {t["question_id"]: row_by_key[t["key"]] for t in missing if t["key"] in row_by_key}
+    requested = [t for t in missing if t["question_id"] not in near_match]
+    repair_status = "not_needed"
+    if missing and not requested:
+        repair_status = "near_duplicate"
+    elif requested and not _cfg("EVAL_TARGET_REPAIR_DRAW", True):
+        repair_status = "disabled"
+    elif requested:
+        repair_reviews: List[Dict[str, Any]] = []
+        try:
+            drawn = draw(1, [b["statement"] for b in binaries], targets=requested, repair=True,
+                         review_to=repair_reviews)
+        except Exception as _te:  # noqa: BLE001 — 补抽失败如实记 missing，绝不编造
+            logger.warning(f"评估目标命题补抽失败（记为缺失）: {_te}")
+            drawn, repair_status = [], "failed"
+        repaired = 0
+        for t in requested:
+            row = next((b for b in drawn
+                        if normalize_target_statement(b.get("statement")) == t["norm"]), None)
+            if row is None:
+                continue
+            drawn.remove(row)
+            key = _binary_key(row.get("statement"))
+            if key in row_by_key:
+                near_match[t["question_id"]] = row_by_key[key]
+                continue
+            row["id"] = f"F{len(binaries) + 1}"
+            row["target_question_id"] = t["question_id"]
+            row["target_bind"] = "repair_draw"
+            binaries.append(row)
+            row_by_key[key] = row["id"]
+            bound[t["question_id"]] = row["id"]
+            repaired += 1
+        review_sink.extend(e for e in repair_reviews
+                           if any(_review_names_target(e, t) for t in requested))
+        if repair_status != "failed":
+            repair_status = ("bound" if repaired == len(requested)
+                             else "partial" if repaired else "unmatched")
+    binding: Dict[str, Any] = {
+        "bound": bound,
+        "missing": [t["question_id"] for t in targets if t["question_id"] not in bound],
+        "method": TARGET_BINDING_METHOD,
+        "repair_draw": repair_status,
+    }
+    if near_match:
+        binding["near_match"] = near_match
+    return binding
 
 
 # ------------------------------------------ requirement-horizon consistency (RQ-6)
@@ -3025,14 +4162,76 @@ _SPINE_INSTRUCTIONS = """你是预测校准专家。在撰写任何叙事之前�
 先给 base_rate_anchor（参考类基率/外部视角），再据案例特征调整得到最终 probability，并在
 adjustment_rationale 说明，以抵御基率忽视/内视过度自信。先确定数字与判定标准，再让叙事去捍卫它们。"""
 
+# REPORT-1：骨架重试时追加的提示。消息变化 ⇒ LLMCache 键变化（键含 messages），重试不再
+# 命中首轮的缓存回复；同时明确要求裸数值概率，避免再次出现不可读的百分数/区间。
+_SPINE_RETRY_NOTE = (
+    "\n\n[上一轮输出不可用：请重新输出完整 JSON；每个 probability 必须是 [0,1] 内的裸 JSON 数值"
+    "（如 0.35），不得为字符串、百分数、区间或上下限]"
+)
+
+# REPORT-4（REPORT_ABSENCE_MARKERS）：骨架提示词首句固定点名【研究输入】与【模拟量化信号】，而默认
+# diagnostic_only 下模拟信号从不注入——首句在邀请模型引用一个不存在的输入。拆出首句，按实际注入的
+# 块重建；_SPINE_LEAD_LEGACY + _SPINE_BODY 逐字节等于 _SPINE_INSTRUCTIONS（旗标关时照旧拼接）。
+_SPINE_LEAD_LEGACY, _SPINE_BODY_SEP, _SPINE_BODY_REST = _SPINE_INSTRUCTIONS.partition("\n只输出 JSON")
+_SPINE_BODY = _SPINE_BODY_SEP + _SPINE_BODY_REST
+_SPINE_LEAD_PREFIX = "你是预测校准专家。在撰写任何叙事之前，"
+_SPINE_LEAD_TAIL = "给出一个**机器可读**的结构化预测骨架。"
+_SPINE_RESEARCH_LABEL_LEGACY = "[研究输入：参考类基率 / 驱动因素 / 观察指标 / 候选情景]"
+# actors.forecast_inputs_block 的小节标题 → 研究输入标签里的名称（按渲染顺序）。
+_SPINE_RESEARCH_HEADINGS = (
+    ("### 外部视角基率", "参考类基率"),
+    ("### 关键驱动变量", "驱动因素"),
+    ("### 可观测指标", "观察指标"),
+    ("### 情景", "候选情景"),
+)
+# 研究未给参考类基率、且没有其他可引用的锚点块（S级量化事实 / 基准分布锚点）时：仍要求数值化的
+# 外部视角基率（anchor-and-adjust 不能丢），但须标明出处是模型判断而非研究——禁止给数字会伤校准，
+# 放任不标会把模型先验伪装成研究结论。有锚点块时不追加：那些块自带锚点出处要求，再叫模型把
+# 锚点标成「模型判断、非研究来源」会与之矛盾。
+_SPINE_NO_BASE_RATE_NOTE = (
+    "\n（研究输入未提供参考类基率：各情景 base_rate_anchor 仍须给出数值化的外部视角基率，"
+    "但须写明其为模型外部视角判断、非研究来源；不得虚构来源或出处。）"
+)
+
+
+def _spine_research_sections(forecast_inputs: str) -> List[str]:
+    """forecast_inputs 中实际出现的小节名（参考类基率 / 驱动因素 / 观察指标 / 候选情景）。"""
+    text = forecast_inputs or ""
+    return [name for heading, name in _SPINE_RESEARCH_HEADINGS
+            if re.search("^" + re.escape(heading), text, re.M)]
+
+
+def _spine_prompt_head(labels: List[str], *, base_rates_supplied: bool) -> str:
+    """REPORT-4：按实际注入的输入块名重建骨架首句 + 指令正文；无可引用锚点时追加出处要求。
+
+    base_rates_supplied：研究输入含参考类基率，或提示词另有 S级量化事实 / 基准分布锚点块。"""
+    if labels:
+        lead = (_SPINE_LEAD_PREFIX + "先基于下面提供的输入（" + "、".join(labels) + "），"
+                + _SPINE_LEAD_TAIL)
+    else:
+        lead = _SPINE_LEAD_PREFIX + _SPINE_LEAD_TAIL
+    head = lead + _SPINE_BODY
+    if not base_rates_supplied:
+        head += _SPINE_NO_BASE_RATE_NOTE
+    return head
+
 
 def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str, Any]:
-    """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies)."""
+    """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies).
+
+    INFRA-3 (LLM_JSON_TRUNCATION_FAIL_CLOSED): a reply the output cap cut yields an empty
+    draw marked ``_llm_truncated``; derive_forecast_spine pops the marker and discards it.
+    """
     raw = llm.chat_json(
         messages=[{"role": "user", "content": user}],
         temperature=temperature,
         max_tokens=max_tokens,
     )
+    if _drop_truncated_reply(llm):
+        logger.warning("预测骨架 draw 的回复被 max_tokens 截断，整份丢弃（不采纳截断 JSON）")
+        draw = _assemble_forecast({})
+        draw["_llm_truncated"] = True
+        return draw
     if not isinstance(raw, dict):
         raw = {}
     return _assemble_forecast(raw)
@@ -3177,12 +4376,112 @@ def apply_self_consistency_intervals(forecast: Any) -> Any:
     return forecast
 
 
+def build_spine_user_prompt(*, central_question: str = "", horizon: str = "",
+                            situation_brief: Optional[str] = None,
+                            forecast_inputs: str = "", signal_pack: str = "",
+                            base_distribution: Optional[Dict[str, float]] = None,
+                            quantitative_facts: str = "",
+                            market_block: str = "",
+                            context_pack: Optional[str] = None,
+                            language: str = "") -> Tuple[str, bool]:
+    """EVAL-11: the spine draw's user prompt, plus whether the WorldState anchor is active.
+
+    Extracted verbatim from ``derive_forecast_spine`` (same defaults, same input caps, same
+    REPORT-4 absence-marker head) so the shadow backbone check can rebuild the exact prompt
+    the published spine was drawn from. Later spine-prompt additions belong here.
+    Returns ``(user, anchor_ws)``; ``anchor_ws`` is true when REPORT_SPINE_ANCHOR_WORLDSTATE
+    is on and ``base_distribution`` is a dict (the caller echoes the anchor into its output).
+    RESEARCH-13 (FORECAST_CONTEXT_PACK_SPINE): a ``context_pack`` replaces the [态势简报]
+    slice with a [研究证据包（按时点标注）] block (not capped: the packer holds it within its
+    budget), and the REPORT-4 lead names 研究证据包. None keeps the prompt byte-identical.
+    """
+    # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
+    # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
+    cap_brief = int(_cfg("REPORT_SPINE_INPUT_CAP_BRIEF", 2000))
+    cap_inputs = int(_cfg("REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
+    cap_signal = int(_cfg("REPORT_SPINE_INPUT_CAP_SIGNAL", 6000))
+    cap_facts = int(_cfg("REPORT_SPINE_INPUT_CAP_FACTS", 3000))
+    # REPORT-4：先拼输入块并记下实际注入的块名，最后再前置指令（旗标开时首句据块名重建）。
+    absence_markers = bool(_cfg("REPORT_ABSENCE_MARKERS", True))
+    research_inputs = (forecast_inputs or "")[:cap_inputs]
+    research_sections = _spine_research_sections(research_inputs) if absence_markers else []
+    labels: List[str] = []
+    user = ""
+    if central_question:
+        labels.append("核心问题")
+        user += f"\n\n[核心问题]\n{central_question[:600]}"
+    if horizon:
+        labels.append("预测时间范围")
+        user += f"\n\n[预测时间范围]\n{horizon[:120]}"
+    if context_pack:
+        labels.append("研究证据包")
+        user += f"\n\n[研究证据包（按时点标注）]\n{context_pack}"
+    elif situation_brief:
+        labels.append("态势简报")
+        user += f"\n\n[态势简报]\n{situation_brief[:cap_brief]}"
+    if forecast_inputs:
+        labels.append("研究输入")
+        if not absence_markers:
+            research_label = _SPINE_RESEARCH_LABEL_LEGACY
+        elif research_sections:
+            research_label = f"[研究输入：{' / '.join(research_sections)}]"
+        else:
+            research_label = "[研究输入]"
+        user += f"\n\n{research_label}\n{research_inputs}"
+    if signal_pack:
+        labels.append("模拟量化信号")
+        user += f"\n\n[模拟量化信号]\n{signal_pack[:cap_signal]}"
+    # 预测市场校准锚点（Polymarket 公开 Gamma API）：市场隐含概率是外部视角的
+    # 聚合信念——与所列市场重叠的情景概率应对照之，偏离 >10 个百分点须在
+    # adjustment_rationale 说明依据（市场是校准锚点，不是真值）。空串时提示词不变。
+    if market_block:
+        labels.append("预测市场隐含概率")
+        # PM-2：市场块切片 2500→6000，让相关性门控后的更多市场进入骨架校准视野。
+        user += ("\n\n[预测市场隐含概率（Polymarket 实盘·校准锚点，非真值）]\n"
+                 + str(market_block)[:6000]
+                 + "\n与上述市场重叠的情景，其概率须对照市场隐含概率；偏离超过 10 个百分点时"
+                   "在 adjustment_rationale 中显式解释分歧（市场遗漏/错价了什么）。")
+    # R2-CAL-16：S 级量化事实数字底座，要求锚点引用 指标 + as_of 日期。
+    if quantitative_facts:
+        labels.append("S级量化事实")
+        user += ("\n\n[S级量化事实（数字底座，base_rate_anchor 须引用其中的 指标+as_of 日期）]\n"
+                 + str(quantitative_facts)[:cap_facts])
+    # R2-CAL-3：把模拟得到的 WorldState.shares 作为基准分布锚点，约束情景集合与概率带。
+    anchor_ws = bool(_cfg("REPORT_SPINE_ANCHOR_WORLDSTATE", False)) and isinstance(base_distribution, dict)
+    if anchor_ws and base_distribution:
+        shares_txt = "；".join(f"{k}={float(v):.2f}" for k, v in base_distribution.items()
+                              if _coerce_float(v) is not None)
+        if shares_txt:
+            labels.append("基准分布锚点")
+            user += ("\n\n[基准分布锚点（模拟 WorldState 份额，先验）]\n" + shares_txt
+                     + "\n请以此为外部视角先验：沿用相同情景集合，最终概率应落在各自份额的合理带内"
+                       "（偏离须在 adjustment_rationale 中给出具体证据）。")
+    if absence_markers:
+        anchors_supplied = ("参考类基率" in research_sections
+                            or "S级量化事实" in labels or "基准分布锚点" in labels)
+        user = _spine_prompt_head(labels, base_rates_supplied=anchors_supplied) + user
+    else:
+        user = _SPINE_INSTRUCTIONS + user
+    # Output-language rule last (after every block), exactly where derive_forecast_spine
+    # used to append it; "" leaves the prompt unchanged.
+    user += forecast_language_rule(language)
+    return user, anchor_ws
+
+
+def spine_follow_prompt(user: str, names: List[str]) -> str:
+    """EVAL-11: the fixed-scenario follow prompt (K>1 self-consistency draws and the shadow
+    backbone check): the spine prompt plus the pinned scenario names, re-estimate only."""
+    return user + ("\n\n[已确定情景集合：请沿用完全相同的情景名，仅独立重新估计各自概率"
+                   "（其和≈1），不要新增或重命名情景]\n" + "；".join(names))
+
+
 def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                           situation_brief: Optional[str] = None,
                           forecast_inputs: str = "", signal_pack: str = "",
                           base_distribution: Optional[Dict[str, float]] = None,
                           quantitative_facts: str = "",
                           market_block: str = "",
+                          context_pack: Optional[str] = None,
                           language: str = "") -> Dict[str, Any]:
     """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
     simulation SIGNALS — *before* any prose is written.
@@ -3202,48 +4501,14 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         cite a metric + as-of date.
       * ``REPORT_SPINE_SELFCONSISTENCY_K`` — K self-consistency draws pooled to
         mean + spread (R2-CAL-1 / R2-CAL-17).
+      * ``context_pack`` — RESEARCH-13 evidence pack replacing the situation-brief slice
+        (see ``build_spine_user_prompt``).
     """
-    # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
-    # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
-    cap_brief = int(_cfg("REPORT_SPINE_INPUT_CAP_BRIEF", 2000))
-    cap_inputs = int(_cfg("REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
-    cap_signal = int(_cfg("REPORT_SPINE_INPUT_CAP_SIGNAL", 6000))
-    cap_facts = int(_cfg("REPORT_SPINE_INPUT_CAP_FACTS", 3000))
-    user = _SPINE_INSTRUCTIONS
-    if central_question:
-        user += f"\n\n[核心问题]\n{central_question[:600]}"
-    if horizon:
-        user += f"\n\n[预测时间范围]\n{horizon[:120]}"
-    if situation_brief:
-        user += f"\n\n[态势简报]\n{situation_brief[:cap_brief]}"
-    if forecast_inputs:
-        user += f"\n\n[研究输入：参考类基率 / 驱动因素 / 观察指标 / 候选情景]\n{forecast_inputs[:cap_inputs]}"
-    if signal_pack:
-        user += f"\n\n[模拟量化信号]\n{signal_pack[:cap_signal]}"
-    # 预测市场校准锚点（Polymarket 公开 Gamma API）：市场隐含概率是外部视角的
-    # 聚合信念——与所列市场重叠的情景概率应对照之，偏离 >10 个百分点须在
-    # adjustment_rationale 说明依据（市场是校准锚点，不是真值）。空串时提示词不变。
-    if market_block:
-        # PM-2：市场块切片 2500→6000，让相关性门控后的更多市场进入骨架校准视野。
-        user += ("\n\n[预测市场隐含概率（Polymarket 实盘·校准锚点，非真值）]\n"
-                 + str(market_block)[:6000]
-                 + "\n与上述市场重叠的情景，其概率须对照市场隐含概率；偏离超过 10 个百分点时"
-                   "在 adjustment_rationale 中显式解释分歧（市场遗漏/错价了什么）。")
-    # R2-CAL-16：S 级量化事实数字底座，要求锚点引用 指标 + as_of 日期。
-    if quantitative_facts:
-        user += ("\n\n[S级量化事实（数字底座，base_rate_anchor 须引用其中的 指标+as_of 日期）]\n"
-                 + str(quantitative_facts)[:cap_facts])
-    # R2-CAL-3：把模拟得到的 WorldState.shares 作为基准分布锚点，约束情景集合与概率带。
-    anchor_ws = bool(_cfg("REPORT_SPINE_ANCHOR_WORLDSTATE", False)) and isinstance(base_distribution, dict)
-    if anchor_ws and base_distribution:
-        shares_txt = "；".join(f"{k}={float(v):.2f}" for k, v in base_distribution.items()
-                              if _coerce_float(v) is not None)
-        if shares_txt:
-            user += ("\n\n[基准分布锚点（模拟 WorldState 份额，先验）]\n" + shares_txt
-                     + "\n请以此为外部视角先验：沿用相同情景集合，最终概率应落在各自份额的合理带内"
-                       "（偏离须在 adjustment_rationale 中给出具体证据）。")
-
-    user += forecast_language_rule(language)
+    user, anchor_ws = build_spine_user_prompt(
+        central_question=central_question, horizon=horizon, situation_brief=situation_brief,
+        forecast_inputs=forecast_inputs, signal_pack=signal_pack,
+        base_distribution=base_distribution, quantitative_facts=quantitative_facts,
+        market_block=market_block, context_pack=context_pack, language=language)
 
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
@@ -3253,25 +4518,67 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         k = 1
     k = max(1, k)
 
-    first = _spine_draw(llm, user, 0.2, max_tokens)
-    if not first.get("scenarios"):
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
+    # INFRA-3: a draw whose reply the output cap cut comes back empty and marked; it is
+    # counted and handled like any empty draw (retried first, never pooled).
+    truncated_draws = 0
+
+    def _draw(prompt: str, temperature: float) -> Dict[str, Any]:
+        nonlocal truncated_draws
+        d = _spine_draw(llm, prompt, temperature, max_tokens)
+        if d.pop("_llm_truncated", False):
+            truncated_draws += 1
+        return d
+
+    first = _draw(user, 0.2)
+    if strict:
+        # REPORT-1：骨架为空或概率不可读 → 携重试提示重试一次（提示改变缓存键，重试不会
+        # 被首轮缓存回复原样应答）；仍不可读 → 情景置空但保留 probability_review，让上层
+        # 与今日空骨架一样回退成稿后抽取。
+        if not first.get("scenarios") or first.get("probability_status") == PROB_REVIEW:
+            logger.warning("预测骨架首轮无可用情景（为空或概率不可读），携重试提示重试一次")
+            first_review = first.get("probability_review")
+            first = _draw(user + _SPINE_RETRY_NOTE, 0.2)
+            if (first_review and not first.get("scenarios")
+                    and not first.get("probability_review")):
+                # 首轮不可读、重试为空：保留首轮的复核摘要，上层仍能记录骨架被弃的原因。
+                first["probability_status"] = PROB_REVIEW
+                first["probability_review"] = first_review
+        if first.get("probability_status") == PROB_REVIEW:
+            logger.warning(
+                "预测骨架重试后仍无可读概率（%s），回退成稿后抽取",
+                (first.get("probability_review") or {}).get("reason"))
+            first["scenarios"] = []
+    elif not first.get("scenarios"):
         # R2-CAL-11：骨架为空 → 告警并重试一次后再让上层回退成稿后抽取。
         logger.warning("预测骨架首轮无情景，重试一次")
-        first = _spine_draw(llm, user, 0.2, max_tokens)
+        first = _draw(user, 0.2)
 
     draws = [first]
     if k > 1 and first.get("scenarios"):
         names = [str(s.get("name")) for s in first["scenarios"] if isinstance(s, dict)]
-        follow = user + ("\n\n[已确定情景集合：请沿用完全相同的情景名，仅独立重新估计各自概率"
-                         "（其和≈1），不要新增或重命名情景]\n" + "；".join(names))
+        follow = spine_follow_prompt(user, names)
         for i in range(1, k):
             temp = min(0.9, 0.2 + 0.15 * i)  # varied temperature for diversity
-            d = _spine_draw(llm, follow, temp, max_tokens)
-            if d.get("scenarios"):
+            d = _draw(follow, temp)
+            if d.get("scenarios") and not (strict and d.get("probability_status") == PROB_REVIEW):
                 draws.append(d)
 
     out = _pool_spine_draws(draws, floor) if len(draws) > 1 else first
+    if len(draws) > 1:
+        # REPORT-2：池化沿用 draws[0] 的 headline/rationale/summary，概率却换成跨 draw 均值。
+        base_rows = draws[0].get("scenarios")
+        _sync_forecast_narratives(
+            out, headline_before=base_rows, rationale_before=base_rows,
+            summary_before_by_name=base_rows,
+        )
     out["derived_from"] = "spine"
+    if truncated_draws:
+        # INFRA-3: every discarded draw is on record; all discarded = no scenarios, so the
+        # caller falls back to the post-hoc extractor exactly as for any failed spine.
+        quality = dict(out.get("quality") or {})
+        quality["llm_truncation"] = {"spine_draws_discarded": truncated_draws}
+        out["quality"] = quality
 
     # R2-CAL-3 echo + R2-CAL-18 per-scenario model-vs-sim divergence.
     if anchor_ws and base_distribution and out.get("scenarios"):
@@ -3304,6 +4611,16 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     return apply_self_consistency_intervals(out)
 
 
+def _pct_or_review(p: Any, zh: bool) -> str:
+    """整数百分比渲染；null/布尔/非有限概率 → 显式「待复核 / needs review」（REPORT-1）。
+
+    数值输出与旧的 ``f"{float(p) * 100:.0f}%"`` 逐字节一致；不可转成数的字符串照旧抛
+    TypeError/ValueError，由调用方原有的「—」兜底处理。绝不把缺失概率渲染成 0%。"""
+    if p is None or isinstance(p, bool) or (isinstance(p, float) and not math.isfinite(p)):
+        return "待复核" if zh else "needs review"
+    return f"{float(p) * 100:.0f}%"
+
+
 def render_forecast_spine_block(forecast: Optional[Dict[str, Any]], max_scenarios: int = 6) -> str:
     """Render a compact, authoritative spine block to pin into each section prompt.
 
@@ -3326,7 +4643,7 @@ def render_forecast_spine_block(forecast: Optional[Dict[str, Any]], max_scenario
         if not isinstance(s, dict):
             continue
         try:
-            pct = f"{float(s.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(s.get("probability"), True)
         except (TypeError, ValueError):
             pct = "—"
         name = str(s.get("name") or "未命名情景")
@@ -3402,7 +4719,7 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
         if not isinstance(b, dict):
             continue
         try:
-            pct = f"{float(b.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(b.get("probability"), zh)
         except (TypeError, ValueError):
             pct = "—"
         _ens = b.get("ensemble")
@@ -3507,7 +4824,9 @@ def upsert_binary_forecasts_block(markdown: str, block: str) -> tuple[str, str]:
 
 def render_resolution_block(forecast: Optional[Dict[str, Any]],
                             indicators: Optional[List[Dict[str, Any]]] = None,
-                            language: str = "Chinese") -> str:
+                            language: str = "Chinese",
+                            question_spec: Optional[Dict[str, Any]] = None,
+                            question_spec_horizon_applied: bool = True) -> str:
     """NEXTSTEPS P2-2: 渲染一个**确定性**的「如何验证本预测」章节。
 
     逐情景列出可证伪的判定标准 + 来自 forecast_inputs 的带日期/触发型观察指标（并把指标绑定到
@@ -3516,6 +4835,14 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
 
     WAVE9：新增 language 参数（默认 "Chinese"，与历史输出逐字节一致）——此前标题/表头硬编码
     中文，英文报告末尾出现整段中文章节。调用方（report_agent）传入报告输出语言。
+
+    RESEARCH-12：传入 question_spec（已复核的研究问题规范）时，在导语之后、各情景判定标准之前
+    插入「操作化定义与默认假设」小节（question_spec.render_resolution_disclosure）；None 时输出
+    逐字节不变。question_spec_horizon_applied=False（规范判定日不是本次运行的判定日）时判定日
+    一行标注未采用。
+
+    REPORT-13：观察指标表由 resolution_indicator_table 渲染（反证审查触发器行的格式见该函数）；
+    无反证行时逐字节不变。
     """
     if not isinstance(forecast, dict):
         return ""
@@ -3528,7 +4855,6 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             "## 如何验证本预测（判定标准与观察指标）",
             "本节给出每个情景**可证伪、可追踪**的判定标准与到期/触发型观察指标，供日后核对与校准。",
             "",
-            "### 各情景判定标准",
         ]
     else:
         lines = [
@@ -3536,13 +4862,18 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             "This section lists **falsifiable, trackable** resolution criteria for each scenario, "
             "plus dated/triggered indicators for future scoring and calibration.",
             "",
-            "### Per-Scenario Resolution Criteria",
         ]
+    if question_spec is not None:
+        disclosure = render_resolution_disclosure(question_spec, language,
+                                                  horizon_applied=question_spec_horizon_applied)
+        if disclosure:
+            lines += [disclosure, ""]
+    lines.append("### 各情景判定标准" if zh else "### Per-Scenario Resolution Criteria")
     for s in scenarios:
         if not isinstance(s, dict):
             continue
         try:
-            pct = f"{float(s.get('probability') or 0.0) * 100:.0f}%"
+            pct = _pct_or_review(s.get("probability"), zh)
         except (TypeError, ValueError):
             pct = "—"
         name = str(s.get("name") or ("未命名情景" if zh else "Unnamed scenario"))
@@ -3551,22 +4882,75 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             else "(no explicit resolution criteria — needs completion)")
         sep = "：" if zh else ": "
         lines.append(f"- **[{pct}] {name}**{sep}{crit}")
-    inds = [i for i in (indicators or []) if isinstance(i, dict)]
-    if inds:
+    table = resolution_indicator_table(indicators, language)
+    if table:
         lines.append("")
-        if zh:
-            lines.append("### 观察指标（到期/触发即核对）")
-            lines.append("| 指标 | 到期/触发 | 关联情景 |")
+        lines.append("### 观察指标（到期/触发即核对）" if zh
+                     else "### Indicators to Watch (check at expiry/trigger)")
+        lines += table
+    return "\n".join(lines)
+
+
+_COUNTER_CASE_DIRECTION_LABELS = {
+    "raises": ("上调", "raises"),
+    "lowers": ("下调", "lowers"),
+}
+
+
+def _counter_case_indicator_cells(i: Dict[str, Any], zh: bool) -> Tuple[str, str]:
+    """REPORT-13：反证审查触发器行的（指标单元格, 到期/触发单元格）。
+
+    指标单元格 = 信号 + [S#] + 独立括注「（反证审查）」/「(counter-case review)」：记号不在括注里，
+    成稿引用收尾（_repair_semantic_citations / 集中度修复等）剥掉任一记号都不会留下
+    「(counter-case review )」式残片。到期/触发单元格同时给出日期、阈值与方向（上调/下调该情景），
+    例如「2027-12-31: above 25 million units (raises)」。
+    """
+    name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
+    tags = "".join(f"[{t}]" for t in (i.get("sources") or []) if re.fullmatch(r"S\d+", str(t)))
+    if zh:
+        name = f"{name}{tags}（反证审查）"
+    else:
+        name = f"{name} {tags} (counter-case review)" if tags else f"{name} (counter-case review)"
+    by = str(i.get("by") or "").strip()
+    threshold = str(i.get("threshold_or_event") or "").strip()
+    if by and threshold:
+        due = f"{by}{'：' if zh else ': '}{threshold}"
+    else:
+        due = by or threshold or str(i.get("date_or_trigger") or "").strip() or "—"
+    direction = _COUNTER_CASE_DIRECTION_LABELS.get(str(i.get("direction") or "").strip().lower())
+    if direction:
+        due = f"{due}（{direction[0]}）" if zh else f"{due} ({direction[1]})"
+    return name, _esc_cell(due)
+
+
+def resolution_indicator_table(indicators: Optional[List[Any]],
+                               language: str = "Chinese") -> List[str]:
+    """NEXTSTEPS P2-2：「如何验证本预测」观察指标表的 Markdown 行（表头、分隔行、指标行）；无指标 → []。
+
+    研究指标取前 20 行。REPORT-13：source=='counter_case' 的反证审查触发器（上游已限 ≤10 条）
+    全部排在研究指标之后，不占研究指标的 20 行额度，因此研究指标再多也不会把它们挤出表格；
+    其单元格格式见 _counter_case_indicator_cells。无反证行时与此前逐字节一致。ReportAgent 用
+    同一函数渲染单行，以复现成稿引用收尾对该行 [S#] 的判定。
+    """
+    zh = not str(language or "").strip().lower().startswith("en")
+    inds = [i for i in (indicators or []) if isinstance(i, dict)]
+    research = [i for i in inds if i.get("source") != "counter_case"]
+    counter = [i for i in inds if i.get("source") == "counter_case"]
+    rows = research[:20] + counter
+    if not rows:
+        return []
+    lines = (["| 指标 | 到期/触发 | 关联情景 |"] if zh
+             else ["| Indicator | Due / trigger | Discriminates scenario |"])
+    lines.append("|---|---|---|")
+    for i in rows:
+        if i.get("source") == "counter_case":
+            name, trig = _counter_case_indicator_cells(i, zh)
         else:
-            lines.append("### Indicators to Watch (check at expiry/trigger)")
-            lines.append("| Indicator | Due / trigger | Discriminates scenario |")
-        lines.append("|---|---|---|")
-        for i in inds[:20]:
             name = _esc_cell(i.get("indicator") or i.get("name") or i.get("metric") or "—")
             trig = _esc_cell(i.get("date_or_trigger") or i.get("date") or i.get("trigger") or "—")
-            disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
-            lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
-    return "\n".join(lines)
+        disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
+        lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
+    return lines
 
 
 _CRITIQUE_INSTRUCTIONS = """你是预测红队评审。下面是一个结构化预测对象（JSON）。请审查并修正它，重点检查：
@@ -3579,6 +4963,14 @@ key_uncertainties/confidence/confidence_rationale），并在每个情景加一�
 只输出 JSON。概率之和应≈1。"""
 
 
+def _critique_attempted(forecast: Dict[str, Any], single_pass: bool) -> Dict[str, Any]:
+    """INFRA-2: stamp ``critique_attempted`` on a forecast the critic LLM has seen (in place;
+    REPORT_CRITIQUE_SINGLE_PASS only). Returns the same object."""
+    if single_pass and isinstance(forecast, dict):
+        forecast["critique_attempted"] = True
+    return forecast
+
+
 def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dict[str, Any]:
     """Red-team + recalibrate a structured forecast (EXECPLAN2 I-3-5).
 
@@ -3586,31 +4978,79 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") ->
     neglect / unsupported leaps and may add a status-quo fallback scenario, then
     re-normalizes. Returns a new forecast dict tagged ``critiqued=True``; on any
     failure returns the input unchanged (degrade-safe).
+
+    INFRA-2 (REPORT_CRITIQUE_SINGLE_PASS, default on): the critic runs at most once per
+    report. Once the critic LLM has been called, the result carries
+    ``critique_attempted=True`` (a failure stamps the input dict in place, so the
+    report's pinned spine carries it to the post-hoc call). The stamp is written after the
+    call and _llm_forecast_view leaves it out, so critic and premortem prompts are
+    unchanged. A forecast already attempted but not ``critiqued`` makes no LLM call:
+    ``quality.critique_pre_prose='reverted_or_failed'`` is recorded and the input returned.
     """
     import json as _json
+    strict = bool(_cfg("FORECAST_PROB_STRICT_PARSE", True))
+    single_pass = bool(_cfg("REPORT_CRITIQUE_SINGLE_PASS", True))
+    if (single_pass and isinstance(forecast, dict)
+            and forecast.get("critique_attempted") is True and not forecast.get("critiqued")):
+        _q0 = forecast.get("quality")
+        quality = dict(_q0) if isinstance(_q0, dict) else {}
+        quality["critique_pre_prose"] = "reverted_or_failed"
+        forecast["quality"] = quality
+        logger.info("红队评审已在叙事前尝试且未成功（失败/被回退），不再二次评审")
+        return forecast
+    called = False
     try:
+        # REPORT-1：概率已是 needs_review 的预测不交给红队——评审只能对 null 概率凭空
+        # 补数，谦逊单调约束也失去原始峰值；保持待复核，让合同审计照常失败。
+        if strict and forecast.get("probability_status") == PROB_REVIEW:
+            return forecast
+        prompt = (_CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
+                  + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False))
+        called = True
         raw = llm.chat_json(
-            messages=[{"role": "user",
-                       "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
-                       + _json.dumps(forecast, ensure_ascii=False)
-                       + forecast_language_rule(language)}],
+            messages=[{"role": "user", "content": prompt + forecast_language_rule(language)}],
             temperature=0.2,
             max_tokens=2048,
         )
+        if _drop_truncated_reply(llm):
+            # INFRA-3: a critique the output cap cut is not applied; the input stands uncritiqued.
+            logger.warning("红队评审回复被 max_tokens 截断，丢弃评审、保留原预测")
+            return _critique_attempted(forecast, single_pass)
         if not isinstance(raw, dict):
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         critique_scenarios = raw.get("scenarios")
         if not isinstance(critique_scenarios, list) or not critique_scenarios:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
+        if strict and all(isinstance(row, dict) for row in critique_scenarios):
+            # REPORT-1：评审概率先做类型化解析。不可读 → 丢弃评审并在 quality 记录原因
+            # （返回原对象本身）；可读 → 仅把显式百分数字符串（'30%'）换成解析值，其余原值
+            # （含 "0.50" 这类数字字符串）照旧交给 _ensure_residual_critique_scenario 拒收。
+            parsed_rows, partition_status, partition_reason = parse_scenario_partition(
+                [row.get("probability") for row in critique_scenarios])
+            if partition_status == PROB_REVIEW:
+                _q0 = forecast.get("quality")
+                quality = dict(_q0) if isinstance(_q0, dict) else {}
+                quality["critique_discarded"] = {
+                    "reason": "unreadable_probabilities", "detail": partition_reason,
+                }
+                forecast["quality"] = quality
+                logger.warning(f"红队评审概率不可读（{partition_reason}），丢弃评审结果")
+                return _critique_attempted(forecast, single_pass)
+            critique_scenarios = [
+                {**row, "probability": parsed.value}
+                if isinstance(row.get("probability"), str) and parsed.unit == "percent"
+                else row
+                for row, parsed in zip(critique_scenarios, parsed_rows, strict=True)
+            ]
         out = dict(forecast)
         raw_scenarios, residual_added = _ensure_residual_critique_scenario(
             critique_scenarios, forecast,
         )
         if raw_scenarios is None:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         out["scenarios"] = _normalize_scenarios(raw_scenarios)
         if not out["scenarios"]:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         # preserve critique_note per scenario if the model supplied it
         for new_s, raw_s in zip(out["scenarios"], raw_scenarios or [], strict=True):
             if isinstance(raw_s, dict) and raw_s.get("critique_note"):
@@ -3637,14 +5077,33 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") ->
                 "remaining uncertainty reflects evidence quality, forecast-horizon length, "
                 "and unresolved policy and technology branches."
             )
+        # REPORT-2：headline 沿用输入（对照输入情景）；采纳的评审 rationale 对照评审原始行
+        # （兜底情景补入后、归一前），未采纳则对照输入行，被兜底模板替换时不动；summary 出自
+        # 评审行，对照同名评审行本身写下的概率。评审是看着输入预测写的，其文本可能引用输入值
+        # （"Bear's 30%"），故输入行作 context：某旧值若在输入里属于另一情景即视为歧义不改写
+        # （headline / 未采纳 rationale 本就对照输入行，context 对它们不增加任何跳过）。
+        if residual_added:
+            rationale_before = None
+        elif raw.get("confidence_rationale"):
+            rationale_before = raw_scenarios
+        else:
+            rationale_before = forecast.get("scenarios")
+        _sync_forecast_narratives(
+            out,
+            headline_before=forecast.get("scenarios"),
+            rationale_before=rationale_before,
+            summary_before_by_name=critique_scenarios,
+            context_rows=forecast.get("scenarios"),
+        )
         if audit_scenario_contract(out).get("valid") is not True:
-            return forecast
+            return _critique_attempted(forecast, single_pass)
         out["critiqued"] = True
+        _critique_attempted(out, single_pass)
         # VIZ-GAP1(a)：_normalize_scenarios 剥掉了池化的 p_low/p_high——发布前从顶层
         # self_consistency 数据确定性重建区间（K<2/缺 spread 时 no-op，绝不编造）。
         return apply_self_consistency_intervals(out)
     except Exception:
-        return forecast
+        return _critique_attempted(forecast, single_pass and called)
 
 
 def _close_probability_rounding(
@@ -3718,6 +5177,11 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dic
     """
     if not _cfg("REPORT_PREMORTEM", False):
         return forecast
+    # REPORT-1：null 概率不参与有界转移（否则 None 会被当作 0.0 写回）。
+    if (_cfg("FORECAST_PROB_STRICT_PARSE", True)
+            and isinstance(forecast, dict)
+            and forecast.get("probability_status") == PROB_REVIEW):
+        return forecast
     import json as _json
     try:
         scenarios = [s for s in (forecast.get("scenarios") or []) if isinstance(s, dict)]
@@ -3726,11 +5190,15 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dic
         raw = llm.chat_json(
             messages=[{"role": "user",
                        "content": _PREMORTEM_INSTRUCTIONS + "\n\n[预测对象]\n"
-                       + _json.dumps(forecast, ensure_ascii=False)
+                       + _json.dumps(_llm_forecast_view(forecast), ensure_ascii=False)
                        + forecast_language_rule(language)}],
             temperature=0.3,
             max_tokens=1024,
         )
+        if _drop_truncated_reply(llm):
+            # INFRA-3: a pre-mortem the output cap cut moves no probability.
+            logger.warning("事前验尸回复被 max_tokens 截断，丢弃、保留原预测")
+            return forecast
         if not isinstance(raw, dict):
             return forecast
         out = dict(forecast)
@@ -3756,6 +5224,10 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dic
                 src["probability"] = round(p_src - shift, 4)
                 dst["probability"] = round((_coerce_float(dst.get("probability")) or 0.0) + shift, 4)
         _synchronize_scenario_probability_narratives(out["scenarios"])
+        _sync_forecast_narratives(
+            out, headline_before=scenarios, rationale_before=scenarios,
+            summary_before_by_name=scenarios,
+        )
         out["premortem"] = {"underweighted_scenario": str(raw.get("underweighted_scenario") or ""),
                             "missed_signals": missed[:8]}
         # VIZ-GAP1(a)：概率被谦逊转移后旧区间可能不再包住 p——先作废再按 ±spread 重建。

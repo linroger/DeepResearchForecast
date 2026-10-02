@@ -22,6 +22,7 @@ from .graphiti_client import Zep
 from .graphiti_client import ApiError, InternalServerError
 
 from ..config import Config
+from ..utils.ctxpool import submit_with_context
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
@@ -31,6 +32,26 @@ from ..utils.zep_rate_limit import is_zep_rate_limit_error, zep_retry_delay_seco
 from ..utils.dates import parse_as_of
 
 logger = get_logger('mirofish.zep_tools')
+
+
+def _interview_feedback_allowed(simulation_id: Optional[str],
+                                feedback_allowed: Optional[bool] = None) -> bool:
+    """FU-8: whether interview answers of ``simulation_id`` may be written to the graph.
+
+    ``feedback_allowed`` is the run's pinned value the orchestrator hands over (main and
+    seed reports of a pinned run, through ReportAgent) and wins; only True allows.
+    Without it (None: an unpinned run's reports, /api/report regenerate and chat) the
+    pinned value of the pipeline that ran the simulation decides
+    (pipeline_orchestrator.interview_graph_feedback_for_simulation, imported lazily: the
+    orchestrator imports this module). An import failure fails closed."""
+    if feedback_allowed is not None:
+        return feedback_allowed is True
+    try:
+        from .pipeline_orchestrator import interview_graph_feedback_for_simulation
+    except Exception as exc:  # noqa: BLE001 — fail closed: no graph write without the pin
+        logger.warning(f"安全政策钉不可读，采访事实不写入图谱（失败关闭）: {exc}")
+        return False
+    return interview_graph_feedback_for_simulation(simulation_id)
 
 
 def compact_graph_query(text: str, max_chars: int = 350) -> str:
@@ -463,6 +484,18 @@ class InterviewResult:
         return "\n".join(text_parts)
 
 
+def _roster_actor_for(name: Any, roster: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """INFRA-11: the one research-roster actor a name exactly denotes, else None.
+
+    Its canonical name first, then an alias no other actor claims: an alias two actors list
+    (or one equal to another actor's canonical name, where the canonical wins) denotes no
+    single actor, so neither of them receives it.
+    """
+    from ..utils.actors import actor_match_candidates
+    rows = actor_match_candidates(name, roster, exact_only=True)
+    return rows[0] if len(rows) == 1 else None
+
+
 class ZepToolsService:
     """
     Zep检索工具服务
@@ -514,6 +547,9 @@ class ZepToolsService:
         self._fact_embed_cache: Dict[str, List[float]] = {}
         self._embedder = None  # 懒构建的本地句向量嵌入器（与图谱检索同源）
         self._embedder_unavailable = False  # 嵌入器不可用时置位，避免反复尝试
+        # INFRA-11: 研究 actors.json 顶层对象（ReportAgent 构造时注入）。ACTOR_NAME_MATCH_STRICT 下
+        # opinion_shift / _resolve_entity_name 先按名册（含别名）解析名字；None = 只按图谱/动作日志名匹配。
+        self.actor_roster: Optional[Dict[str, Any]] = None
         logger.info("ZepToolsService 初始化完成")
 
     # I-6-1: 集中读取性能开关，默认 False/串行，缺少 Config 字段时回退到当前行为。
@@ -1565,9 +1601,10 @@ class ZepToolsService:
             workers = min(self._retrieval_parallel_workers(), len(search_specs))
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 # EXECPLAN2 I-1-1/I-1-6: 透传 recipe（MMR）与 as-of 时态过滤到每次检索。
+                # INFRA-9：每个检索任务带一份提交线程的 contextvars 副本（run/stage/report 归属）。
                 future_to_idx = {
-                    ex.submit(
-                        self.search_graph, graph_id, spec_q, spec_limit, "edges",
+                    submit_with_context(
+                        ex, self.search_graph, graph_id, spec_q, spec_limit, "edges",
                         recipe, as_of_filter,
                     ): idx
                     for idx, (spec_q, spec_limit) in enumerate(search_specs)
@@ -1962,6 +1999,7 @@ class ZepToolsService:
         max_agents: int = 5,
         custom_questions: List[str] = None,
         graph_id: Optional[str] = None,
+        feedback_allowed: Optional[bool] = None,
     ) -> InterviewResult:
         """
         【InterviewAgents - 深度采访】
@@ -1986,6 +2024,10 @@ class ZepToolsService:
             simulation_requirement: 模拟需求背景（可选）
             max_agents: 最多采访的Agent数量
             custom_questions: 自定义采访问题（可选，若不提供则自动生成）
+            graph_id: 采访回答写入的图谱（可选；门允许时才写，见下）
+            feedback_allowed: FU-8 编排器交来的该运行钉值（有钉值运行的主/种子报告，ReportAgent 转交；
+                只有 True 放行）；None（无钉值的运行、API 重生成 / 对话）→ 按模拟 id 查所属管线的钉
+                （无钉 → 环境值；查找失败 → 不写）
 
         Returns:
             InterviewResult: 采访结果
@@ -2152,14 +2194,17 @@ class ZepToolsService:
             # 让最丰富的收尾反思可被后续检索；key-free 走本地 shim。best-effort，失败不影响采访结果。
             # Foglamp WP1 (1A, I-11)：采访是模拟产物，默认不得写入观察图（门默认 false）；
             # 采访全文仍完整保留在 result.interviews（run 产物）。
+            # FU-8：门由该运行钉住的安全政策决定——编排器传入的 feedback_allowed 优先；未传入时按模拟 id
+            # 查所属管线的钉（无钉 → 环境值；查找失败 → 不写）。
             if (graph_id and result.interviews
-                    and getattr(Config, "SIM_INTERVIEW_GRAPH_FEEDBACK", False)):
+                    and _interview_feedback_allowed(simulation_id, feedback_allowed)):
                 try:
                     from .zep_graph_memory_updater import ZepGraphMemoryUpdater
                     _updater = ZepGraphMemoryUpdater(graph_id)
                     _written = 0
                     for itv in result.interviews:
-                        if _updater.write_interview_fact(itv.agent_name, itv.response):
+                        if _updater.write_interview_fact(itv.agent_name, itv.response,
+                                                         feedback_allowed=True):
                             _written += 1
                     logger.info(f"采访事实已写入图谱 {graph_id}: {_written}/{len(result.interviews)} 条")
                     # I-6-1: 采访写入了新事实，使该图谱的检索/洞察缓存失效，避免后续返回陈旧检索结果。
@@ -2465,16 +2510,50 @@ class ZepToolsService:
         if not stats and not timeline:
             return "（该模拟暂无可用的结构化结果数据）"
 
-        stats_sorted = sorted(stats, key=lambda s: s.get("total_actions", 0), reverse=True)
-        lines = ["## 模拟量化结果（结构化，可直接引用）", "", f"### 最活跃 Agent（Top {top_n}，按总动作数）"]
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：按 agent 自发动作排名、只列自发动作 >0 者，
+        # 计数与类型都取 organic_* 字段——时间线事件回放挂在名字匹配/最高影响力回退的行为者
+        # 名下，不得抬高其议程设置分层（report_agent._OUTCOME_ACTOR_LINE_RE 行格式不变）。
+        # 开关关 → 旧输出逐字节不变。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        if provenance_on:
+            def _count(s):
+                return int(s.get("organic_actions", s.get("total_actions", 0)) or 0)
+
+            def _types(s):
+                return s.get("organic_action_types", s.get("action_types")) or {}
+
+            ranked = [s for s in stats if _count(s) > 0]
+            if stats and not ranked:
+                # 全部动作都是注入：以「（」开头的无数据句，报告信号包据此整块自抑制，
+                # 不把逐轮动作量等机制数字回退进章节提示（WAVE9/LOOP-015）。
+                total = sum(int(s.get("total_actions", 0) or 0) for s in stats)
+                return ("（本次模拟没有行为者自发动作"
+                        + (f"：{total} 次动作均为注入——种子/时间线事件回放/采样点赞" if total else "")
+                        + "）")
+            header = f"### 最活跃 Agent（Top {top_n}，按自发动作数）"
+        else:
+            def _count(s):
+                return s.get("total_actions", 0)
+
+            def _types(s):
+                return s.get("action_types") or {}
+
+            ranked = stats
+            header = f"### 最活跃 Agent（Top {top_n}，按总动作数）"
+        stats_sorted = sorted(ranked, key=_count, reverse=True)
+        lines = ["## 模拟量化结果（结构化，可直接引用）", "", header]
         for s in stats_sorted[:top_n]:
-            at = s.get("action_types") or {}
+            at = _types(s)
             at_str = "、".join(f"{k}×{v}" for k, v in sorted(at.items(), key=lambda x: -x[1])[:5])
-            lines.append(f"- {s.get('agent_name','?')}(id={s.get('agent_id')}): 共 {s.get('total_actions',0)} 次动作 [{at_str}]")
+            lines.append(f"- {s.get('agent_name','?')}(id={s.get('agent_id')}): 共 {_count(s)} 次动作 [{at_str}]")
+        if provenance_on:
+            injected = sum(int(s.get("injected_actions", 0) or 0) for s in stats)
+            if injected > 0:
+                lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
 
         breakdown: Dict[str, int] = {}
         for s in stats:
-            for atype, c in (s.get("action_types") or {}).items():
+            for atype, c in _types(s).items():
                 breakdown[atype] = breakdown.get(atype, 0) + int(c)
         if breakdown:
             lines.append("")
@@ -2503,15 +2582,41 @@ class ZepToolsService:
         # 把 target_user_name 纳入候选键。
         target_keys = ("post_author_name", "original_author_name", "comment_author_name",
                        "quoted_author_name", "target_user_name", "followee_name", "target_name")
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：对定时事件帖的回应是对新闻的反应，不是与发帖
+        # 账号（名字匹配/最高影响力回退的行为者）的结盟证据——不把其作者名计为互动对象；
+        # 事件回放行与采样点赞（随机采样，非 agent 选择）整行跳过。开关关 → 旧聚类不变。
+        # 事件帖按 (正文, 发帖账号) 识别而非只比正文：OASIS 引用帖把被引根帖正文复制进
+        # post.content，对「另一行为者引用事件」的互动带着事件正文、作者却是引用者——那是
+        # 真实的行为者间互动，必须保留。
+        provenance_on = bool(getattr(Config, "SIM_EVENT_PROVENANCE", True))
+        event_posts: set = set()
+        if provenance_on:
+            event_posts = {
+                (str((a.action_args or {}).get("content", "") or "").strip(),
+                 str(a.agent_name or "").strip())
+                for a in actions if (a.action_args or {}).get("is_scheduled_event")
+            }
+            event_posts = {key for key in event_posts if key[0]}
+        # 作者键 → 该作者所写帖子的正文键（用于识别「该目标就是事件帖本身」）
+        author_content_keys = {"post_author_name": "post_content",
+                               "original_author_name": "original_content",
+                               "quoted_author_name": "original_content"}
         agent_targets: Dict[int, set] = {}
         agent_name: Dict[int, str] = {}
         for a in actions:
             agent_name[a.agent_id] = a.agent_name
             args = a.action_args or {}
+            if provenance_on and (args.get("is_scheduled_event") or args.get("is_engagement_sample")):
+                continue
             for k in target_keys:
                 v = str(args.get(k, "") or "").strip()
-                if v:
-                    agent_targets.setdefault(a.agent_id, set()).add(v)
+                if not v:
+                    continue
+                content_key = author_content_keys.get(k)
+                if (event_posts and content_key
+                        and (str(args.get(content_key, "") or "").strip(), v) in event_posts):
+                    continue
+                agent_targets.setdefault(a.agent_id, set()).add(v)
         if not agent_targets:
             return "（本次模拟没有可用于聚类的定向互动，无法形成派系图）"
 
@@ -2670,7 +2775,9 @@ class ZepToolsService:
         trace_cascade 的精确 `a.name = $src` Cypher 匹配使用（否则大小写/空格/公司后缀
         的细微差异会让多跳查询无谓地返回空）。解析顺序对齐 actors.match_actor 语义：
         标准化精确匹配 → 双向包含（取较长名，避免「AI」类短名误配）。无命中或读取失败 →
-        原样返回（degrade-safe，绝不因解析失败而阻断遍历）。"""
+        原样返回（degrade-safe，绝不因解析失败而阻断遍历）。
+        INFRA-11（ACTOR_NAME_MATCH_STRICT，默认开）：见 _resolve_entity_name_strict——先查名册
+        别名，包含匹配下限 4 字符且要求唯一命中；关闭 = 上面的旧解析（2 字符包含、取较长名）。"""
         raw = (name or "").strip()
         if not raw:
             return raw
@@ -2683,23 +2790,73 @@ class ZepToolsService:
         target = normalize_name(raw)
         if not target:
             return raw
-        exact: Optional[str] = None
-        best: Optional[str] = None
-        best_len = 0
-        for node in nodes:
-            cand = normalize_name(node.name)
-            if not cand:
-                continue
-            if cand == target:
-                exact = node.name
-                break
-            if len(cand) >= 2 and (cand in target or target in cand) and len(cand) > best_len:
-                best, best_len = node.name, len(cand)
-        resolved = exact or best
+        if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
+            resolved = self._resolve_entity_name_strict(raw, target, nodes)
+        else:
+            exact: Optional[str] = None
+            best: Optional[str] = None
+            best_len = 0
+            for node in nodes:
+                cand = normalize_name(node.name)
+                if not cand:
+                    continue
+                if cand == target:
+                    exact = node.name
+                    break
+                if len(cand) >= 2 and (cand in target or target in cand) and len(cand) > best_len:
+                    best, best_len = node.name, len(cand)
+            resolved = exact or best
         if resolved and resolved != raw:
             logger.info(f"trace_cascade 名称解析: {raw!r} → 规范节点 {resolved!r}")
             return resolved
         return raw
+
+    def _resolve_entity_name_strict(self, raw: str, target: str, nodes: List[Any]) -> Optional[str]:
+        """INFRA-11: fail-closed node-name resolution for trace_cascade.
+
+        1. Exact normalized node name: the name itself, then (when it is exactly the name or
+           an alias of one roster actor) that actor's canonical name and the aliases that
+           denote only it, so an exact alias such as 'EU' reaches the 'European Union' node
+           while a contested alias ('China' listed by the Chinese Communist Party beside a
+           China actor) never steers the pick to another actor's node.
+        2. Containment only when both sides have at least 4 normalized characters (a CJK name
+           counts per character) and exactly one distinct node name qualifies.
+        Anything else returns None and the caller keeps the raw name.
+        """
+        from ..utils.actors import normalize_name
+        roster = getattr(self, "actor_roster", None)
+        surfaces = [target]
+        row = _roster_actor_for(raw, roster)
+        if row is not None:
+            canonical = normalize_name(row.get("name"))
+            aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+            for surface in (row.get("name"), *aliases):
+                norm = normalize_name(surface) if isinstance(surface, str) else ""
+                if not norm or norm in surfaces:
+                    continue
+                owner = _roster_actor_for(surface, roster)
+                if owner is not None and normalize_name(owner.get("name")) == canonical:
+                    surfaces.append(norm)
+        by_norm: Dict[str, str] = {}
+        for node in nodes:
+            cand = normalize_name(node.name)
+            if cand:
+                by_norm.setdefault(cand, node.name)
+        for surface in surfaces:
+            if surface in by_norm:
+                return by_norm[surface]
+        contained = [
+            cand for cand in by_norm
+            if min(len(cand), len(target)) >= 4 and (cand in target or target in cand)
+        ]
+        if len(contained) == 1:
+            return by_norm[contained[0]]
+        if contained:
+            logger.info(
+                f"trace_cascade 名称解析: {raw!r} 包含匹配到 {len(contained)} 个节点，歧义不解析"
+                f"（{', '.join(by_norm[c] for c in contained[:6])}）"
+            )
+        return None
 
     @staticmethod
     def _fmt_edge_label(edge: Any) -> str:
@@ -2779,19 +2936,127 @@ class ZepToolsService:
         # RPT-13：空 target 时 str.find('') 恒为 0，会把全体动作日志误标成单一 actor 的轨迹。
         if not target:
             return "（opinion_shift 需要 actor_name 参数：请提供要追踪的 Agent/角色名）"
-        mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
+        shown = f"「{actor_name}」"
+        if getattr(Config, "ACTOR_NAME_MATCH_STRICT", True):
+            agents, note, ambiguity = self._opinion_shift_agents(actor_name, actions)
+            if ambiguity:
+                return ambiguity
+            # INFRA-11：解析到的行为者与并入的 agent 都在输出里点名，绝不把替换/合并后的轨迹挂在原始名下。
+            shown += note
+            mine = [a for a in actions if a.agent_name and str(a.agent_name) in agents]
+        else:
+            mine = [a for a in actions if normalize_name(a.agent_name) == target or normalize_name(a.agent_name).find(target) >= 0]
         if not mine:
-            return f"（未找到名为「{actor_name}」的 agent 的动作记录）"
+            return f"（未找到名为{shown}的 agent 的动作记录）"
+        # SIM-5（SIM_EVENT_PROVENANCE，默认开）：挂在该行为者名下的种子/时间线事件回放/采样
+        # 点赞不是它的行为轨迹——剔除并注明条数。开关关 → 旧输出逐字节不变。
+        injected = 0
+        if getattr(Config, "SIM_EVENT_PROVENANCE", True):
+            from .sim_event_provenance import is_injected_row
+            organic = [a for a in mine
+                       if not is_injected_row(getattr(a, "action_args", None), a.round_num)]
+            injected = len(mine) - len(organic)
+            if not organic:
+                return (f"（{shown}名下没有自发动作：{injected} 次均为注入动作——"
+                        "种子/时间线事件回放/采样点赞）")
+            mine = organic
         by_round: Dict[int, Dict[str, int]] = {}
         for a in mine:
             r = by_round.setdefault(a.round_num, {})
             r[a.action_type] = r.get(a.action_type, 0) + 1
-        lines = [f"## 「{actor_name}」逐轮行为轨迹（参与度/立场演变线索）"]
+        lines = [f"## {shown}逐轮行为轨迹（参与度/立场演变线索）"]
         for rn in sorted(by_round):
             at = by_round[rn]
             lines.append(f"- round {rn}: " + "、".join(f"{k}×{v}" for k, v in sorted(at.items(), key=lambda x: -x[1])))
         lines.append(f"合计 {len(mine)} 次动作，跨 {len(by_round)} 轮。")
+        if injected:
+            lines.append(f"（已剔除注入动作 {injected} 次：种子/时间线事件回放/采样点赞——非行为者自发）")
         return "\n".join(lines)
+
+    def _opinion_shift_agents(self, actor_name: str, actions: List[Any]) -> tuple[set, str, str]:
+        """INFRA-11: (agent names opinion_shift tracks, header note, ambiguity message).
+
+        The legacy filter kept every agent whose normalized name merely contained the
+        target, so 'US' also swept in Russia, Australia and Business Roundtable.  Here an
+        exact name decides first: the research roster's canonical name or an alias (the
+        canonical wins over another actor's alias), then an agent name from the action log.
+        An alias two roster actors share belongs to neither of them, so an agent carrying
+        exactly that name is tracked on its own (the note says whose alias the name also is)
+        instead of leaving its trajectory unreachable; without such an agent the shared alias
+        stays ambiguous.  Otherwise containment of at least 4 characters is weighed across
+        both pools at once: every roster actor sharing such a containment with the target,
+        plus every agent name that does and that none of those roster actors already tracks
+        ('Japan' against the roster actor Bank of Japan and the unrostered agent Government
+        of Japan is two candidates).  A roster actor tracks the agents whose name denotes it
+        exactly or that ``match_actor`` resolves to it.  One candidate resolves, and the note
+        names the actor the target resolved to and every tracked agent under another name;
+        several return an explanatory message naming them instead of merging their
+        trajectories; none returns empty values.
+        """
+        from ..utils.actors import actor_match_candidates, match_actor, normalize_name
+        target = normalize_name(actor_name)
+        agent_names = sorted({str(a.agent_name) for a in actions if a.agent_name})
+        roster = getattr(self, "actor_roster", None)
+        agent_pool = {"actors": [{"name": name} for name in agent_names]}
+        owners: Optional[Dict[str, str]] = None  # agent name -> normalized roster canonical
+
+        def _roster_agents(row: Dict[str, Any]) -> set:
+            nonlocal owners
+            if owners is None:
+                owners = {}
+                for name in agent_names:
+                    exact = actor_match_candidates(name, roster, exact_only=True)
+                    if exact:  # an alias two actors share names neither of them
+                        owner = exact[0] if len(exact) == 1 else None
+                    else:
+                        owner = match_actor(name, roster)
+                    owners[name] = normalize_name(owner.get("name")) if owner else ""
+            canonical = normalize_name(row.get("name"))
+            return {name for name in agent_names if owners[name] == canonical}
+
+        def _named_agents(row: Dict[str, Any]) -> set:
+            norm = normalize_name(row.get("name"))
+            return {name for name in agent_names if normalize_name(name) == norm}
+
+        def _listing(labels: List[str]) -> str:
+            more = f" 等 {len(labels)} 个" if len(labels) > 12 else ""
+            return "、".join(labels[:12]) + more
+
+        note = ""
+        candidates = [(str(row.get("name")), _roster_agents(row))
+                      for row in actor_match_candidates(actor_name, roster, exact_only=True)]
+        same_name = [(str(row.get("name")), _named_agents(row))
+                     for row in actor_match_candidates(actor_name, agent_pool, exact_only=True)]
+        if len(candidates) > 1 and same_name:
+            # The agent named exactly after the shared alias is owned by none of the actors
+            # sharing it (see owners), so its own trajectory is the one to show.
+            note = (f"（同名 agent；「{actor_name}」也是 {_listing([label for label, _ in candidates])}"
+                    " 共用的别名，未并入它们的轨迹）")
+            candidates = same_name
+        if not candidates:
+            candidates = same_name
+        if not candidates:
+            candidates = [(str(row.get("name")), _roster_agents(row))
+                          for row in actor_match_candidates(actor_name, roster)]
+            tracked = set().union(*(agents for _, agents in candidates))
+            for row in actor_match_candidates(actor_name, agent_pool):
+                untracked = _named_agents(row) - tracked
+                if untracked:
+                    candidates.append((str(row.get("name")), untracked))
+        if len(candidates) == 1:
+            label, agents = candidates[0]
+            resolved = normalize_name(label)
+            if resolved != target:
+                note += f"（解析为「{label}」）"
+            if any(normalize_name(name) not in (resolved, target) for name in agents):
+                note += f"（合并 agent：{_listing(sorted(agents))}）"
+            return agents, note, ""
+        if not candidates:
+            return set(), "", ""
+        return set(), "", (
+            f"（「{actor_name}」可对应多个行为者：{_listing([label for label, _ in candidates])}"
+            "——为避免把不同行为者的轨迹混在一起，请用其中一个的完整名称重新调用 opinion_shift）"
+        )
 
     def scenario_diff(self, base_sim_id: str, scenario_sim_id: str) -> str:
         """T4.7: 反事实对比 base vs 情景两次模拟的结构化差异（确定性，无 LLM）。
@@ -2838,9 +3103,14 @@ class ZepToolsService:
                 f"{rn}:{bvol.get(rn,0)}→{svol.get(rn,0)}" for rn in rounds[:48]
             ))
 
-        # Top-actor 活跃度 delta
-        b_by = {s.get("agent_name"): s.get("total_actions", 0) for s in base_stats}
-        s_by = {s.get("agent_name"): s.get("total_actions", 0) for s in scen_stats}
+        # Top-actor 活跃度 delta。SIM-5（SIM_EVENT_PROVENANCE，默认开）：只比自发动作——情景注入
+        # 事件挂在发帖行为者名下，按总动作数会把注入本身读成该行为者的活跃度变化。
+        if getattr(Config, "SIM_EVENT_PROVENANCE", True):
+            count_key, delta_header = "organic_actions", "### Top-actor 活跃度 delta（按变化幅度，仅自发动作）"
+        else:
+            count_key, delta_header = "total_actions", "### Top-actor 活跃度 delta（按变化幅度）"
+        b_by = {s.get("agent_name"): s.get(count_key, s.get("total_actions", 0)) for s in base_stats}
+        s_by = {s.get("agent_name"): s.get(count_key, s.get("total_actions", 0)) for s in scen_stats}
         names = set(b_by) | set(s_by)
         deltas = sorted(
             ((n, s_by.get(n, 0) - b_by.get(n, 0)) for n in names if n),
@@ -2848,7 +3118,7 @@ class ZepToolsService:
         )[:10]
         if deltas:
             lines.append("")
-            lines.append("### Top-actor 活跃度 delta（按变化幅度）")
+            lines.append(delta_header)
             for n, d in deltas:
                 lines.append(f"- {n}: {b_by.get(n,0)} → {s_by.get(n,0)}（Δ {d:+d}）")
         return "\n".join(lines)
