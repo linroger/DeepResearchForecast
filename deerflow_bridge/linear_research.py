@@ -4133,8 +4133,8 @@ def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
     multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
     or every data operand value is a percentage and the formula only adds and
     subtracts them (:func:`derived_numbers.is_additive`: percentage points).
-    Otherwise the result is a ratio, which a percentage states x 100; so is a
-    ratio or product of percentages (68% / 42% is "162%", never "1.6%")."""
+    A ratio or product of percentages is no percentage as it is (68% / 42%
+    is "162%", never "1.6%": :func:`_result_form` reads it as a ratio)."""
     return dn.scales_to_percent(expr) or (bool(data_values) and dn.is_additive(expr)
                                           and all(fact_percent_tokens(value) for value in data_values))
 
@@ -4145,25 +4145,28 @@ class _ResultForm:
 
     percent: bool            # a percentage already (:func:`_result_is_percent`)
     units: frozenset[str]    # the unit classes a number stating it may be written with
-    quantity: bool           # in the data operands' unit, whatever it is: no ratio, never a percentage
+    ratio: bool              # a quotient of data operands: the one result a percentage states x 100
 
 
 def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
     """The form of the result of formula ``expr`` over its data operands
     (``data_operands``, name → value as the clause writes it): a percentage
-    (:func:`_result_is_percent`), and, when the formula keeps their unit
+    (:func:`_result_is_percent`); when the formula keeps their unit
     (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
     or a sum scaled by literals), the unit classes every data operand is
-    written in (:func:`_operand_units`) and that the result is a quantity in
-    their unit, whether or not that unit is a unit class ("107 units", a
-    bare count).  A ratio, product or power of operands, a rate per
-    ``years()`` period and a clause without data operands keep no unit."""
+    written in (:func:`_operand_units`); and whether it is a ratio, a
+    quotient of data operands (:func:`derived_numbers.is_quotient`: "a/b",
+    "(a-b)/b").  A ratio, product or power of operands, a rate per
+    ``years()`` period and a clause without data operands keep no unit; a
+    result that keeps the unit is never a ratio, whether or not that unit is
+    a unit class ("107 units", a bare count), and neither is a product,
+    power or call of operands ("a*b", "a**1", "sqrt(a)")."""
     values = list(data_operands.values())
     keeps = bool(values) and dn.keeps_unit(expr, data_operands)
     units = [_operand_units(value) for value in values] if keeps else []
     return _ResultForm(percent=_result_is_percent(expr, values),
                        units=frozenset.intersection(*units) if units else frozenset(),
-                       quantity=keeps)
+                       ratio=dn.is_quotient(expr, data_operands))
 
 
 def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm) -> bool:
@@ -4182,11 +4185,11 @@ def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm
       in a unit class of every data operand through a formula that keeps it
       (``form.units``: "24 TWh" and "€24" state no difference of GW figures,
       "2.85 GW" no ratio of them, "24 GW" no difference of bare numbers);
-    * a ratio is stated by a percentage at result x 100 only, a result in
-      the operands' unit (``form.quantity``) never by a percentage ("2,400%"
-      is no 24 GW difference, "700%" no difference of 107 and 100 units),
-      and any other number states the result at its full value only ("2.85
-      trillion" is 2850000000000, never 2.85)."""
+    * a ratio (``form.ratio``) is stated by a percentage at result x 100
+      only, any other result never by a percentage ("2,400%" is no 24 GW
+      difference, "700%" no difference of 107 and 100 units, "48,100%" no
+      product of GW figures), and any other number states the result at its
+      full value only ("2.85 trillion" is 2850000000000, never 2.85)."""
     result = -result if number.signed else result
     if form.percent:
         return (number.percent and not number.scaled and not number.units
@@ -4194,7 +4197,7 @@ def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm
     if not number.units <= form.units:
         return False
     if number.percent:
-        return not form.quantity and not number.scaled and dn.token_matches(number.token, result, percent=True)
+        return form.ratio and not number.scaled and dn.token_matches(number.token, result, percent=True)
     if not number.scaled:
         return dn.token_matches(number.token, result)
     stated, value = Decimal(number.token), Decimal(number.full[1:])

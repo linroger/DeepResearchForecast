@@ -26,8 +26,9 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
   at its own display precision (one reading: the result as it is, or a ratio
   as a percentage; :func:`scales_to_percent` tells whether a formula yields
   a percentage already, :func:`is_additive` whether it only adds and
-  subtracts, so percentages give percentage points, and :func:`keeps_unit`
-  whether its result is in the unit of its data operands);
+  subtracts, so percentages give percentage points, :func:`keeps_unit`
+  whether its result is in the unit of its data operands and
+  :func:`is_quotient` whether it is a ratio of them);
   :func:`format_exact` writes a result with 12 significant digits and no
   exponent notation.
 
@@ -55,6 +56,7 @@ __all__ = [
     "evaluate",
     "format_exact",
     "is_additive",
+    "is_quotient",
     "keeps_unit",
     "parse_derivation",
     "period_value",
@@ -414,6 +416,28 @@ def _dimension(node: ast.AST, data_names: frozenset[str]) -> str | None:
     if isinstance(node.op, ast.Div):
         return left if right == _LITERAL else None
     return None
+
+
+def is_quotient(expr: str, data_names: Collection[str]) -> bool:
+    """Whether formula ``expr`` is a quotient of data operands
+    (``data_names``): its top operation divides a term holding a data operand
+    by another term holding one ("a/b", "(a-b)/b", "a/(b+c)").  Only such a
+    result is a ratio, which a percentage states x 100.  A product, power or
+    call of operands ("a*b", "a**1", "sqrt(a)", "((a/b)**(1/n)-1)"), a
+    quotient by a literal or by a name that is no data operand ("(a-b)/1000",
+    "(a-b)/n" over a ``years()`` period) and a formula whose top operation
+    is no division are not.  Never raises: an unreadable formula is no
+    quotient."""
+    if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
+        return False
+    try:
+        node = ast.parse(expr.strip(), mode="eval").body
+        names = frozenset(data_names)
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
+        return False
+    return (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+            and all(any(isinstance(sub, ast.Name) and sub.id in names for sub in ast.walk(side))
+                    for side in (node.left, node.right)))
 
 
 def _is_hundred(node: ast.AST) -> bool:

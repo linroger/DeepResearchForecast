@@ -271,6 +271,14 @@ FAILURE_CASES = [
     ("Capacity totals about 5,000% [S12] (DERIVED: a+b; a=37 [S12], b=13 [S12])", "result_mismatch"),
     ("Capacity is about 3,700,000% [S12] (DERIVED: a*1000; a=37 [S12])", "result_mismatch"),
     ("Renewables reached about 6,800,000% [S15] (DERIVED: a*1000; a=68% [S15])", "result_mismatch"),
+    # Only a quotient of data operands is a ratio a percentage states x 100: no product,
+    # power or call of operands, and a compound rate only with its "*100".
+    ("Capacity is about 48,100% [S12] (DERIVED: a*b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    ("Capacity is about 3,700% [S12] (DERIVED: a**1; a=37 GW [S12])", "result_mismatch"),
+    ("Capacity is about 608% [S12] (DERIVED: sqrt(a); a=37 GW [S12])", "result_mismatch"),
+    ("Capacity is about 361% [S12] (DERIVED: ln(a); a=37 GW [S12])", "result_mismatch"),
+    ("Capacity grew about 23.3% a year from 2019 to 2024 [S12] (DERIVED: (a/b)**(1/n)-1; a=37 GW [S12], "
+     "b=13 GW [S12], n=years(2019,2024))", "result_mismatch"),
     # A single digit states a result only as a percentage or with a unit, at its precision.
     ("Sales grew 8% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])", "result_mismatch"),
     ("Sales grew by 7 [S16] (DERIVED: a-b; a=107 units [S16], b=100 units [S16])", "no_result_token"),
@@ -440,7 +448,7 @@ PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARI
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "e8cd679e8ff55b08c2583194912160c79ac5198ed9cb57a18a92003950d6c8bb"
+FLAG_OFF_SHA256 = "fc9ae589d13a5b79d2772e0b94bd4f184f2e775f3f3c398bd61106e7381ea706"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -809,8 +817,14 @@ def test_derived_quant_match_reads_one_number_at_its_precision_and_scale():
     product = {"sid": 1, "expr": "a*b", "result": "1200000000000",
                "operands": {"a": {"value": "$1.2 million", "sid": 1}, "b": {"value": "$1 million", "sid": 1}}}
     assert lr.derived_quant_match({"value": "1.2", "unit": "trillion USD"}, [product]) is None
-    assert lr.derived_quant_match({"value": "185", "unit": "%"}, [{"result": "bogus"}, {"result": "1.846"}]) == {
-        "result": "1.846"}
+    ratio = {"expr": "a/b", "result": "1.846", "operands": {"a": {"value": "37 GW", "sid": 1},
+                                                            "b": {"value": "13 GW", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "185", "unit": "%"}, [{"result": "bogus"}, ratio]) is ratio
+    # A percentage states no product, power or call of operands, nor a result without a formula.
+    for expr, result, stated in (("a*b", "4.81", "481"), ("a**1", "37", "3,700"), ("sqrt(a)", "6.0827625303", "608"),
+                                 ("", "1.846", "185")):
+        row = {"value": stated, "unit": "%"}
+        assert lr.derived_quant_match(row, [{**ratio, "expr": expr, "result": result}]) is None, (expr, row)
 
 
 # ================================================================== report spans

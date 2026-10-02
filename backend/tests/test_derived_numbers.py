@@ -255,6 +255,17 @@ def test_keeps_unit_reads_sums_of_data_operands_scaled_by_literals():
     assert not dn.keeps_unit("a-b", set()) and not dn.keeps_unit("a-b", {"a"})
 
 
+def test_is_quotient_reads_a_top_division_of_data_operands_only():
+    names = {"a", "b", "c"}
+    for expr in ("a/b", "(a-b)/b", "(b-a)/a", "a/(b+c)", "100*a/b", "abs(a-b)/b", "-a/b", "a/b/c", " a / b "):
+        assert dn.is_quotient(expr, names), expr
+    for expr in ("a/b*100", "a/b-1", "((a/b)**(1/n)-1)", "a*b", "a**1", "sqrt(a)", "ln(a)", "abs(a/b)", "-(a/b)",
+                 "a-b", "a", "(a-b)/1000", "(a-b)/n", "1000/a", "a/1000", "100/1000", "n/a", "a/n",
+                 "", "a +* b", None, "a" * 400):
+        assert not dn.is_quotient(expr, names), expr
+    assert not dn.is_quotient("a/b", set()) and not dn.is_quotient("a/b", {"a"}) and not dn.is_quotient("a/b", None)
+
+
 def test_format_exact_has_twelve_significant_digits_and_no_exponent():
     assert dn.format_exact(Decimal(24) / Decimal(13) * 100) == "184.615384615"
     assert dn.format_exact(Decimal("1.2e12")) == "1200000000000"
