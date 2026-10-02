@@ -1955,6 +1955,10 @@ class ReportAgent:
         self._spine_probability_review: Optional[Dict[str, Any]] = None
         # INFRA-3：骨架因截断 draw 全部被丢弃而弃用时的计数（并入 forecast.quality.llm_truncation）。
         self._spine_llm_truncation: Optional[Dict[str, Any]] = None
+        # REPORT-13：反证审查结果（forecast_counter_case）与 counter_case.json 的 sha256。旗标关 / 未运行 /
+        # 工件写入失败时为 None，指标、判定章节与 Part 2 提示词逐字节不变（__new__ 构造时读取一律走 getattr）。
+        self._counter_case: Optional[Dict[str, Any]] = None
+        self._counter_case_sha256: Optional[str] = None
         # XRUN-5/RPT-8: 报告级紧凑检索查询（懒派生一次后缓存）；None=未派生。
         self._retrieval_query: Optional[str] = None
         # RQ-1(4): 报告形状（章节数区间 / 每章字数 / 每章工具预算），从需求书 page_budget 懒派生
@@ -4237,6 +4241,106 @@ class ReportAgent:
         finally:
             set_stage(prev_stage)
 
+    def _run_counter_case(self, report_id: str) -> None:
+        """REPORT-13 (REPORT_COUNTER_CASE, default off): one evidence-cited counter-case call
+        over the pinned spine (forecast_counter_case), right after the spine is pinned.
+
+        The packet is the report's [S#] source index, the dossier paragraphs citing an
+        admissible indexed source, the contested-claims table and the market pack (never the
+        simulation signal pack). Validated output lands in reports/<id>/counter_case.json
+        (canonical JSON) and in ``self._counter_case`` / ``self._counter_case_sha256``, which
+        feed forecast.indicators, forecast.counter_case, the How-to-Verify table and the Part-2
+        prompt. A trigger keeps only the markers the support check does not reject, both for
+        its signal and for the claim the publish-time citation finalizer reads in its
+        How-to-Verify row (_counter_case_published_claim), so the finalizer never strips its
+        last marker; a ``by`` date before the run's as-of counts as no date. Probabilities
+        are never touched. Off, or no spine: no call, nothing set. Any
+        failure (including the artifact write) leaves both attributes None and the report
+        unchanged; PipelineCancelled / ProviderOutageHalt (BaseException) propagate.
+        """
+        self._counter_case = None
+        self._counter_case_sha256 = None
+        if not getattr(Config, "REPORT_COUNTER_CASE", False):
+            return
+        spine = getattr(self, "_forecast_spine", None)
+        if not (isinstance(spine, dict) and spine.get("scenarios")):
+            return
+        try:
+            from . import forecast_counter_case as _cc
+            tag_map = {str(tag): source
+                       for tag, source in (getattr(self, "_citation_index", None) or {}).items()
+                       if _citation_source_admissible(source)}
+            question = getattr(self, "simulation_requirement", "") or ""
+            try:
+                cap = int(getattr(Config, "REPORT_COUNTER_CASE_EVIDENCE_CHARS", 12000))
+            except (TypeError, ValueError):
+                cap = 12000
+            packet = _cc.build_evidence_packet(
+                sources_index=getattr(self, "_sources_index", "") or "",
+                tag_map=tag_map,
+                research_report=getattr(self, "research_report", "") or "",
+                contested_block=getattr(self, "_contested_table_block", "") or "",
+                market_pack=getattr(self, "_market_pack", "") or "",
+                spine=spine, question=question, cap=cap,
+                numbers_fn=self._semantic_numbers,
+            )
+            # 触发器的 by 早于本次运行的 as-of（回测钉 > actors.as_of_date > 今天）视为无日期。
+            from ..utils.dates import parse_as_of
+            _as_of = parse_as_of(self._context_pack_as_of()[0])
+            result = _cc.run_counter_case(
+                spine, llm=self.llm, packet=packet, tag_map=tag_map,
+                support_fn=self._semantic_citation_support, numbers_fn=self._semantic_numbers,
+                question=question, lang=getattr(self, "output_language", None) or "English",
+                published_claim_fn=self._counter_case_published_claim,
+                as_of=(_as_of or datetime.now(timezone.utc)).date(),
+            )
+            text = _cc.artifact_text(result)
+            write_text_atomic(
+                os.path.join(ReportManager._get_report_folder(report_id), _cc.ARTIFACT_NAME), text)
+        except Exception as _cce:  # noqa: BLE001 — 反证审查为可选增强，失败绝不阻断报告
+            logger.warning(f"反证审查失败（忽略，不影响骨架与报告）: {_cce}")
+            return
+        self._counter_case = result
+        self._counter_case_sha256 = _cc.artifact_sha256(text)
+        logger.info(
+            f"反证审查 {result.get('status')}: {report_id}（证据包 {packet['sha256'][:12]}，"
+            f"丢弃论据 {sum((result.get('dropped') or {}).values())} 条）")
+
+    def _counter_case_published_claim(self, indicator: Dict[str, Any]) -> str:
+        """REPORT-13: the claim the publish-time citation check reads for the [S#] markers of
+        this counter-case indicator's How-to-Verify row.
+
+        The row is rendered by the same helper as the section (forecast_extractor.
+        resolution_indicator_table, in the section's language) and the claim is built exactly
+        as _repair_semantic_citations / _audit_semantic_citations build it (marker clause plus
+        the row label and header numbers). Every marker of the row sits in the same clause, so
+        one claim serves them all. Without a marker in the row: the indicator text.
+        """
+        from .forecast_extractor import markdown_table_cells, resolution_indicator_table
+        header, _delimiter, row = resolution_indicator_table(
+            [dict(indicator)], getattr(self, "output_language", None) or "Chinese")[:3]
+        match = self._S_CITATION_RE.search(row)
+        if match is None:
+            return str(indicator.get("indicator") or "")
+        clause = self._citation_claim_clause(row, match.start(), match.end())
+        return self._citation_semantic_claim(
+            row, match.start(), clause, markdown_table_cells(header))
+
+    def _with_counter_case_indicators(self, indicators: List[Any]) -> List[Any]:
+        """REPORT-13: research indicators followed by the counter-case triggers (source
+        'counter_case'; forecast_counter_case.merge_indicators: a trigger repeating a research
+        indicator's text or an earlier trigger row is left out and logged). Without a
+        counter-case result (flag off, not run, failed) the given list is returned unchanged."""
+        result = getattr(self, "_counter_case", None)
+        if not result:
+            return indicators
+        try:
+            from . import forecast_counter_case as _cc
+            return _cc.merge_indicators(indicators, _cc.triggers_to_indicators(result))
+        except Exception as _cie:  # noqa: BLE001 — 增强失败退回研究指标
+            logger.warning(f"并入反证审查触发器失败（忽略，仅保留研究指标）: {_cie}")
+            return indicators
+
     def _resolve_evaluation_context(self) -> Optional[Dict[str, Any]]:
         """EVAL-13: this report's evaluation-run context, or None for a production report.
 
@@ -4860,13 +4964,27 @@ class ReportAgent:
         except Exception as _bhe:  # noqa: BLE001 — 观测性记录，绝不影响产物
             logger.debug(f"记录 baseline_signal_pack_health 失败（忽略）: {_bhe}")
         # P2-2: 把观察指标随 forecast.json 落盘（供解析调度器对照判别情景）。
+        # REPORT-13：反证审查的已校验触发器（source='counter_case'）排在研究指标之后并入（与研究指标按指标
+        # 文本去重，触发器之间仅去完全重复），forecast.counter_case 记工件 sha256 与计数（含实际发布数
+        # triggers_published）；无反证结果时两者皆不变（逐字节一致）。
         try:
             from ..utils import actors as _actors
             _inds = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
-            if _inds:
-                forecast["indicators"] = _inds
         except Exception:  # noqa: BLE001
-            pass
+            _inds = []
+        _research_inds = _inds
+        _inds = self._with_counter_case_indicators(_inds)
+        if _inds:
+            forecast["indicators"] = _inds
+        _cc_result = getattr(self, "_counter_case", None)
+        _cc_sha = getattr(self, "_counter_case_sha256", None)
+        if _cc_result and _cc_sha:
+            try:
+                from . import forecast_counter_case as _cc
+                forecast["counter_case"] = _cc.forecast_summary(
+                    _cc_result, _cc_sha, research_indicators=_research_inds)
+            except Exception as _ccs:  # noqa: BLE001 — 观测性记录，绝不影响产物
+                logger.warning(f"记录 forecast.counter_case 失败（忽略）: {_ccs}")
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
         # EVAL-13：评估运行绝不读生产校准（生产 track record 不得影响评估样本的信心）。
@@ -6644,6 +6762,9 @@ class ReportAgent:
             indicators = _actors.extract_forecast_inputs(self.actors).get("indicators") or []
         except Exception:  # noqa: BLE001
             indicators = []
+        # REPORT-13：与 forecast.indicators 同一份合并（研究指标 + 反证审查触发器）；反证行在表中为
+        # 「信号 [S#]（反证审查）」+「日期: 阈值（上调/下调）」。无反证结果时原样返回，章节逐字节不变。
+        indicators = self._with_counter_case_indicators(indicators)
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
         # RESEARCH-12（QUESTION_SPEC_DOWNSTREAM）：有已复核的研究问题规范时披露操作化定义与每条
         # 默认假设（判定日不是本次运行的判定日时标注未采用）；无规范 / 旗标关 → question_spec=None，
@@ -11018,6 +11139,21 @@ class ReportAgent:
             figures_rule = (
                 " When stating an exact figure, use the verified-figures table and keep its [S#]; "
                 "if sources conflict, present both with their sources and never a reconciled number.")
+        # REPORT-13：反证审查完成时注入每个主要情景两侧最强的已校验引用论据（只含 valid / unverifiable），
+        # 并要求正面回应；无反证结果 / 旗标关 → 块为空，提示词逐字节不变。块不构成综合输入（判空在前）。
+        counter_rule = ""
+        counter_case = getattr(self, "_counter_case", None)
+        if counter_case:
+            try:
+                from .forecast_counter_case import render_counter_case_block
+                counter_block = render_counter_case_block(counter_case, lang)
+            except Exception as _cbe:  # noqa: BLE001 — 增强失败不影响 Part 2
+                logger.warning(f"渲染反证审查块失败（忽略）: {_cbe}")
+                counter_block = ""
+            if counter_block:
+                parts.append("[Counter-case: strongest cited arguments against the leading scenarios]\n"
+                             + counter_block)
+                counter_rule = " Address the strongest counter-case explicitly and keep its [S#] markers."
         prompt = (
             "You are the lead forecaster assembling 'Part 2 — Framework & Synthesis' of a "
             "three-part forecast submission (Part 1 = the binary-forecast table, Part 3 = the "
@@ -11031,7 +11167,7 @@ class ReportAgent:
             "NEVER mention the simulation, agents, rounds, action counts, factions, causal graphs, "
             "or this report's own drafting process; attribute analytical viewpoints to our "
             "scenario analysis instead — the subject is always the real world."
-            + figures_rule + "\n\n"
+            + figures_rule + counter_rule + "\n\n"
             + "\n\n".join(parts)
         )
         text = self.llm.chat(
@@ -14092,6 +14228,9 @@ class ReportAgent:
             if (getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                     and getattr(Config, "REPORT_FORECAST_SPINE_FIRST", True)):
                 self._derive_and_pin_forecast_spine(report_id)
+                # REPORT-13（REPORT_COUNTER_CASE，默认关）：骨架钉定后一次证据引用的反证审查（绝不改概率）；
+                # 旗标关 / 无骨架时立即返回、不发调用，内部失败只记日志。
+                self._run_counter_case(report_id)
 
             _spine_ready = bool(self._forecast_spine and self._forecast_spine.get("scenarios"))
             outline = self.plan_outline(

@@ -635,6 +635,16 @@ class Config:
     REPORT_VERIFIED_FACTS_BLOCK = os.environ.get('REPORT_VERIFIED_FACTS_BLOCK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FACTS_MAX_ROWS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_ROWS', '40') or '40')  # 已核验指标块行数上限（超限先丢预期、再丢陈旧、再丢最旧）
     REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
+    # REPORT-13：证据引用的反证审查（forecast_counter_case）。骨架钉定后对概率最高的三个非兜底情景做**一次**
+    # 强档 LLM 调用：读字节稳定的 [S#] 证据包（来源索引 + 引用了索引来源的 dossier 段落 + 争议声明表 + 市场
+    # 锚点；绝不含模拟信号包），逐情景给出「概率应更高 / 更低」的引用论据与带日期或阈值的触发器。论据过确定性
+    # 闸门（未知来源 / 无引用 / 含百分比或赔率（含文字形式）或证据包外的数字 / 来源不支撑；被来源否定的 [S#]
+    # 一律剔除）后：触发器（其 [S#] 同样过来源支撑检查，成稿引用收尾不会剥光）并入 forecast.indicators 与
+    # 「如何验证本预测」表，最强论据注入 Part 2 综合提示词，reports/<id>/counter_case.json 落盘并在
+    # forecast.counter_case 记 sha256。绝不改任何已发布概率。默认关且安全：关闭 = 零额外调用、产物逐字节不变；
+    # 开启后每份报告多一次强档调用（约 15-20k 输入 token），失败只记 status=failed、绝不阻断报告。
+    REPORT_COUNTER_CASE = os.environ.get('REPORT_COUNTER_CASE', 'false').strip().lower() == 'true'
+    REPORT_COUNTER_CASE_EVIDENCE_CHARS = int(os.environ.get('REPORT_COUNTER_CASE_EVIDENCE_CHARS', '12000') or '12000')  # 反证证据包中 dossier 引用段落的字符预算（来源索引另取前 6000 字）
     # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
     # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
     # market_conflict / threshold_or_probability / unmatched），计数记入 forecast.quality.verified_figures
