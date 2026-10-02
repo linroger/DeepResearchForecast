@@ -1548,7 +1548,13 @@ def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
         prior = _coerce_float(influence.get("prior_probability"))
     cites: Optional[bool] = None
     if isinstance(binary, dict) and "adjustment_rationale" in binary:
-        cites = _extractor._rationale_cites_market(binary.get("adjustment_rationale"), anchor)
+        # An implied_yes_prob that is no probability (a corrupt or hand-edited forecast.json,
+        # e.g. inf) is left out, as the extractor skips an unparseable one: the check then
+        # rests on the keywords alone and never raises out of the ledger-wide block.
+        price = _settlement._finite(anchor.get("implied_yes_prob"))
+        cited = (anchor if price is not None and 0.0 <= price <= 1.0
+                 else {k: v for k, v in anchor.items() if k != "implied_yes_prob"})
+        cites = _extractor._rationale_cites_market(binary.get("adjustment_rationale"), cited)
     equivalence = str(anchor.get("resolution_equivalence") or "").strip().lower()
     return {
         "report_id": key[0],
@@ -1564,6 +1570,21 @@ def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
         "price_time_basis": basis,
         "gate_reason": gate,
     }
+
+
+# EVAL-5: the gate reason of a folded item whose skill row could not be built (a target or
+# anchor the row builder raised on): counted in unscored, never scored, and never allowed
+# to blank the ledger-wide block.
+UNREADABLE_SKILL_ROW = "row_unreadable"
+
+
+def _unreadable_skill_row(key: Tuple[str, str], publishable: bool) -> Dict[str, Any]:
+    """The ``backtest.market_skill_report`` row of an item ``_market_skill_row`` raised on."""
+    return {"report_id": key[0], "forecast_id": key[1], "y": None, "model_p": None,
+            "market_p": None, "equivalence": None, "match_confidence": None,
+            "publishable_at_issue": publishable, "rationale_cites_market": None,
+            "prior_probability": None, "price_time_basis": None,
+            "gate_reason": UNREADABLE_SKILL_ROW}
 
 
 def _primary_report_ids(targets: Optional[List[Dict[str, Any]]]) -> Set[str]:
@@ -1618,8 +1639,9 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
     ``target_meta_for`` reads it; without ``origin_fn`` every date the binary names counts).
     ``publishable_at_issue`` is the item's events' ``report_publishable_at_issue`` stamps
     (EVAL-2: all must be True), else a strict ``publishable_fn(report_id)`` proof, once per
-    report. Rows are sorted by key; neither the inputs nor resolutions.jsonl are ever
-    modified.
+    report. An item whose target lookup or row raises is logged and kept as an
+    ``UNREADABLE_SKILL_ROW`` row (unscored), so one corrupt target never fails the others.
+    Rows are sorted by key; neither the inputs nor resolutions.jsonl are ever modified.
     """
     events = [row for row in resolution_rows or [] if isinstance(row, dict)]
     stamps: Dict[Tuple[str, str], List[Any]] = {}
@@ -1647,9 +1669,14 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
             if key[0] not in report_origins:
                 report_origins[key[0]] = origin_fn(key[0])
             origin = report_origins[key[0]]
-        binary = target_lookup(key[0], key[1])
-        rows.append(_market_skill_row(key, items[key], binary if isinstance(binary, dict)
-                                      else None, publishable, origin, now))
+        try:
+            binary = target_lookup(key[0], key[1])
+            row = _market_skill_row(key, items[key], binary if isinstance(binary, dict)
+                                    else None, publishable, origin, now)
+        except Exception as e:  # noqa: BLE001 — 一行读不出只记这一行为未计分，不拖垮整块评分
+            logger.warning(f"市场技能评分行读取失败（计为 {UNREADABLE_SKILL_ROW}）: {key}: {e}")
+            row = _unreadable_skill_row(key, publishable)
+        rows.append(row)
     return rows
 
 

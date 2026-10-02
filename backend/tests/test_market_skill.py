@@ -593,6 +593,53 @@ def test_publishability_from_event_stamps_else_publishable_fn():
         "publishable_at_issue"] is False
 
 
+@pytest.mark.parametrize("corrupt", [float("inf"), float("-inf"), "inf", 1e308])
+def test_a_corrupt_anchor_never_blanks_the_ledger_wide_block(tmp_path, corrupt):
+    """Review round 2: an implied_yes_prob that is no probability (a hand-edited
+    forecast.json) used to raise OverflowError out of the citation check and blank the whole
+    market_skill block; that row is now skipped (its anchor fails market_eligibility) and the
+    other rows stay scored."""
+    led = str(tmp_path / "ledger")
+    good = _binary("F1", probability=0.30)
+    bad = _binary("F2", market_id="m-2", probability=0.30)
+    bad["market_anchor"]["implied_yes_prob"] = corrupt
+    events = [_event("F1"), _event("F2", market_id="m-2")]
+    rows = _enrich(events, good, bad)
+    assert rows["F2"]["gate_reason"] == "anchor_incomplete"
+    assert rows["F2"]["rationale_cites_market"] is False
+    # Keyword evidence still counts when the price is left out of the check.
+    bad["adjustment_rationale"] = "The market prices this lower."
+    assert _enrich(events, good, bad)["F2"]["rationale_cites_market"] is True
+    for event in events:
+        assert fl.append_settlement_event(event, d=led) is not None
+    skill = mon.market_skill_summary(led, as_of_day="2026-09-29",
+                                     publishable_fn=lambda rid: True,
+                                     forecasts={"r1": {"binary_forecasts": [good, bad]}},
+                                     origins={"r1": META["created_at"]})
+    assert "error" not in skill
+    assert skill["strata"]["headline"]["n_scored"] == 1
+    assert skill["unscored"] == {"anchor_incomplete": 1} and skill["n_rows"] == 2
+
+
+def test_a_row_that_raises_is_unscored_not_fatal():
+    """Any item whose target lookup or row raises is kept as row_unreadable (unscored);
+    the other items are still scored."""
+    good = _binary("F1", probability=0.30)
+
+    def lookup(report_id, forecast_id):
+        if forecast_id == "F2":
+            raise RuntimeError("corrupt target")
+        return good
+
+    rows = {row["forecast_id"]: row for row in mon.enrich_market_rows(
+        [_event("F1"), _event("F2", market_id="m-2")], target_lookup=lookup)}
+    assert rows["F2"]["gate_reason"] == mon.UNREADABLE_SKILL_ROW == "row_unreadable"
+    assert rows["F2"]["publishable_at_issue"] is True and rows["F1"]["gate_reason"] is None
+    report = bt.market_skill_report(list(rows.values()))
+    assert _strata(report)["headline"]["n_scored"] == 1
+    assert report["unscored"] == {"row_unreadable": 1} and report["n_rows"] == 2
+
+
 def test_enrichment_never_modifies_resolutions(tmp_path):
     led = str(tmp_path / "ledger")
     binary = _binary("F1")
