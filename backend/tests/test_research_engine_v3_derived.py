@@ -427,7 +427,7 @@ def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
 # Every clause form of this section, pinned flag off by FLAG_OFF_SHA256: the
 # _flag_off_snapshot of linear_research.py at 30ab072 (feat/finharness-transplants,
 # the base of wp/RESEARCH-8), the engine before this package; the bases merged
-# later (9b65135, 13d0bbe) give the same snapshot.
+# later (9b65135, 13d0bbe, a64d798) give the same snapshot.
 PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARITY_LINES,
                 "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)",
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
