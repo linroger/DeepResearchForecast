@@ -640,6 +640,20 @@ def test_a_row_that_raises_is_unscored_not_fatal():
     assert report["unscored"] == {"row_unreadable": 1} and report["n_rows"] == 2
 
 
+def test_an_admitted_item_without_its_target_is_target_missing():
+    """A vanished target binary is unscored as target_missing, never as an anchor without a
+    price (missing_market_price), so the monitor can tell the two apart."""
+    good = _binary("F1", probability=0.30)
+    rows = {row["forecast_id"]: row for row in mon.enrich_market_rows(
+        [_event("F1"), _event("F2", market_id="m-2")],
+        target_lookup=lambda report_id, forecast_id: good if forecast_id == "F1" else None)}
+    assert rows["F2"]["gate_reason"] == mon.TARGET_MISSING == "target_missing"
+    assert rows["F1"]["gate_reason"] is None
+    report = bt.market_skill_report(list(rows.values()))
+    assert _strata(report)["headline"]["n_scored"] == 1
+    assert report["unscored"] == {"target_missing": 1}
+
+
 def test_enrichment_never_modifies_resolutions(tmp_path):
     led = str(tmp_path / "ledger")
     binary = _binary("F1")

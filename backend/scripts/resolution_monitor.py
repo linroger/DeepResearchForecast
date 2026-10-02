@@ -1549,6 +1549,11 @@ def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
         gate: Optional[str] = "no_market_anchor"
     else:
         gate = _skill_gate_reason(item, binary, origin, now)
+        if gate is None and not isinstance(binary, dict):
+            # An admitted item whose target binary is gone (report folder removed or
+            # unsealed with no commit row, or an ambiguous id): unscored under its own
+            # reason, never 'missing_market_price'.
+            gate = TARGET_MISSING
     outcome = str(item.get("outcome") or "").strip().upper()
     market_p = _settlement._market_price_at_research(anchor)
     basis: Optional[str] = None
@@ -1590,6 +1595,8 @@ def _market_skill_row(key: Tuple[str, str], item: Dict[str, Any],
 # anchor the row builder raised on): counted in unscored, never scored, and never allowed
 # to blank the ledger-wide block.
 UNREADABLE_SKILL_ROW = "row_unreadable"
+# An admitted item whose target binary cannot be found (see _market_skill_row).
+TARGET_MISSING = "target_missing"
 
 
 def _unreadable_skill_row(key: Tuple[str, str], publishable: bool) -> Dict[str, Any]:
