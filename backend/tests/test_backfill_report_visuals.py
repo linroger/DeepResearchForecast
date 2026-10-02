@@ -268,6 +268,8 @@ def test_backfill_quarantines_invalid_legacy_translation_without_deleting_backup
     (report_dir / "full_report.md").write_text(primary, encoding="utf-8")
     (report_dir / "full_report.zh.md").write_text(legacy, encoding="utf-8")
     (report_dir / "full_report.zh.pdf").write_bytes(b"%PDF-1.4 stale")
+    stale_provenance = '{"schema": "drf.figure_provenance/v1", "block_sha256": "old"}'
+    (report_dir / "figure_provenance.json").write_text(stale_provenance, encoding="utf-8")
     (report_dir / "meta.json").write_text(json.dumps({
         "report_id": report_id,
         "translations": [{
@@ -325,6 +327,10 @@ def test_backfill_quarantines_invalid_legacy_translation_without_deleting_backup
     backup = Path(result["backup"])
     assert (backup / "full_report.zh.md").read_text(encoding="utf-8") == legacy
     assert (backup / "full_report.zh.pdf").read_bytes() == b"%PDF-1.4 stale"
+    # REPORT-9: the re-audit measured no verified-figures block, so the old sidecar,
+    # which describes the pre-replay bytes, is gone (and kept in the backup).
+    assert (backup / "figure_provenance.json").read_text(encoding="utf-8") == stale_provenance
+    assert not (report_dir / "figure_provenance.json").exists()
     assert not (report_dir / "full_report.zh.md").exists()
     assert not (report_dir / "full_report.zh.pdf").exists()
     assert len(calls) == 1 and calls[0][1] == "English"  # primary only
@@ -357,6 +363,8 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     (report_dir / "full_report.md").write_text(original_md, encoding="utf-8")
     (report_dir / "meta.json").write_text(json.dumps(original_meta), encoding="utf-8")
     (charts / "original.png").write_bytes(b"original-chart")
+    original_provenance = '{"schema": "drf.figure_provenance/v1", "block_sha256": "original"}'
+    (report_dir / "figure_provenance.json").write_text(original_provenance, encoding="utf-8")
 
     monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines), raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports))
@@ -386,12 +394,133 @@ def test_backfill_failure_restores_entire_pre_replay_bundle(tmp_path, monkeypatc
     assert (report_dir / "full_report.md").read_text(encoding="utf-8") == original_md
     assert json.loads((report_dir / "meta.json").read_text(encoding="utf-8")) == original_meta
     assert (charts / "original.png").read_bytes() == b"original-chart"
+    assert (report_dir / "figure_provenance.json").read_text(encoding="utf-8") == original_provenance
     assert not (charts / "new.png").exists()
     assert not (report_dir / "viz_manifest.json").exists()
     backups = list(report_dir.glob(".codex-backup-*"))
     assert len(backups) == 1
     failure = json.loads((backups[0] / "replay_failure.json").read_text(encoding="utf-8"))
     assert failure["restored"] is True and failure["error"] == "quality gate failed"
+
+
+_SHADOW_STATE = ("quantitative", "actors", "_prediction_markets", "_verified_figures")
+
+
+def _shadow_replay(tmp_path, monkeypatch, *, knob):
+    """REPORT-9: replay a report whose live run measured its verified figures; returns
+    the report directory and what the (stubbed) final audit saw: the figure check, the
+    RESEARCH-5 projection attribution and which shadow inputs the agent carried."""
+    pipelines = tmp_path / "pipelines"
+    reports = tmp_path / "reports"
+    pipeline_id, report_id = "pipe_shadow_replay", "report_shadow_replay"
+    handoff = pipelines / pipeline_id / "handoff"
+    report_dir = reports / report_id
+    handoff.mkdir(parents=True)
+    report_dir.mkdir(parents=True)
+    (pipelines / pipeline_id / "pipeline_state.json").write_text(json.dumps({
+        "report_id": report_id, "simulation_id": "sim_shadow_replay", "handoff_dir": str(handoff),
+    }), encoding="utf-8")
+    source = {"title": "Energy agency annual review", "url": "https://agency.example/review", "tier": "S1",
+              "content": "The data-centre electricity share was 24.6% in 2025."}
+    (handoff / "sources.json").write_text(json.dumps([source]), encoding="utf-8")
+    (handoff / "actors.json").write_text(json.dumps({"as_of_date": "2026-06-30"}), encoding="utf-8")
+    (handoff / "quantitative.json").write_text(json.dumps([{
+        "metric": "Data-centre electricity share", "value": "24.6", "unit": "%", "as_of_date": "2025-12-31",
+        "value_type": "actual", "tier": "S1", "source": "Energy agency annual review", "source_ref": "S1",
+        "source_url": "https://agency.example/review", "verification": "verified"}]), encoding="utf-8")
+    question = "Will the data-centre electricity share exceed 30% in 2026?"
+    (handoff / "prediction_markets.json").write_text(json.dumps({"markets": [
+        {"market_id": "m1", "question": question, "implied_yes_prob": 0.30},
+        {"market_id": "m2", "question": "A market the report never had?", "implied_yes_prob": 0.5}]}),
+        encoding="utf-8")
+    md = ("# Forecast\n\n## Outcome\n\nThe data-centre electricity share was 24.6% in 2025 [S1].\n\n"
+          "Polymarket prices a 45% chance the data-centre electricity share exceeds 30% in 2026.\n")
+    (report_dir / "full_report.md").write_text(md, encoding="utf-8")
+    (report_dir / "meta.json").write_text(json.dumps({"report_id": report_id}), encoding="utf-8")
+    # The live run re-quoted m1 at 45% (research price 30%); the handoff only knows 30%.
+    (report_dir / "figure_provenance.json").write_text(json.dumps({
+        "schema": "drf.figure_provenance/v1", "block_sha256": "old", "market_rows": [{
+            "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
+            "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00"}]}), encoding="utf-8")
+
+    for name, value in (("REPORT_VERIFIED_FIGURES_CHECK", knob), ("REPORT_VERIFIED_FACTS_BLOCK", True),
+                        ("REPORT_PROJECTION_LINT", True), ("MARKET_ANCHOR_PRICE_TIME", False)):
+        monkeypatch.setattr(Config, name, value, raising=False)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines), raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports))
+    monkeypatch.setattr(ReportVisualizer, "build_all", lambda self, *args: [])
+    monkeypatch.setattr(ReportAgent, "_repair_quote_grounding", lambda self, md: (md, 0))
+    monkeypatch.setattr(ReportAgent, "_stabilize_publish_markdown",
+                        lambda self, rid, report: {"stable": True, "lint": {"changed": False}})
+    measured = []
+
+    def _primary_audit(self, rid, report):
+        measured.append({"check": self._verified_figures_check(report.markdown_content),
+                         "projection": self._projection_attribution_audit(report.markdown_content),
+                         "state": [name for name in _SHADOW_STATE if hasattr(self, name)]})
+        sha = hashlib.sha256(report.markdown_content.encode("utf-8")).hexdigest()
+        return {"hard_passed": True, "markdown_sha256": sha, "publish_gate": {"passed": True}}
+
+    def _export_pdf(cls, rid, force=False, lang=None):
+        path = Path(cls._get_report_pdf_path(rid))
+        path.write_bytes(b"%PDF-1.4 primary")
+        return str(path)
+
+    monkeypatch.setattr(ReportAgent, "_enforce_final_publish_audit", _primary_audit)
+    monkeypatch.setattr(ReportManager, "export_pdf", classmethod(_export_pdf))
+
+    backfill_one(pipeline_id, report_id, apply=True)
+    (seen,) = measured
+    return report_dir, seen
+
+
+def test_backfill_reaudit_keeps_measuring_the_verified_figures(tmp_path, monkeypatch):
+    """REPORT-9: the re-audit rebuilds the verified-figures block from the handoff and
+    reads the markets at the prices the previous figure_provenance.json recorded, so the
+    replay re-measures the run instead of deleting its shadow record."""
+    report_dir, seen = _shadow_replay(tmp_path, monkeypatch, knob=True)
+    check = seen["check"]
+    assert seen["state"] == list(_SHADOW_STATE) and seen["projection"] is not None
+    # The level matches its block row; the quoted price agrees with the recorded re-quote.
+    assert check["counts"]["matched"] == 1 and check["counts"]["market_conflict"] == 0
+    final_md = (report_dir / "full_report.md").read_text(encoding="utf-8")
+    provenance = json.loads((report_dir / "figure_provenance.json").read_text(encoding="utf-8"))
+    assert provenance["markdown_sha256"] == hashlib.sha256(final_md.encode("utf-8")).hexdigest()
+    assert provenance["block_sha256"] == check["block_sha256"] != "old"
+    (row,) = provenance["rows"]
+    assert (row["source_ref"], row["used_in_count"]) == ("S1", 1) and "24.6%" in row["used_in"][0]["excerpt"]
+    assert provenance["market_rows"] == [{
+        "market_id": "m1", "implied_yes_prob": 0.45, "quoted_at": "2026-06-29T10:00:00+00:00",
+        "price_at_research": 0.30, "snapshot_as_of": "2026-06-29T09:00:00+00:00", "price_time": None,
+        "price_time_basis": None}]
+
+
+def test_backfill_with_the_check_off_rebuilds_no_shadow_inputs(tmp_path, monkeypatch):
+    """REPORT-9 off: the replayed agent carries none of the check's inputs, so the
+    re-audit is the one the backfill made before REPORT-9 rebuilt them (no figure check
+    and no RESEARCH-5 projection attribution, whose rows it would otherwise gain)."""
+    import scripts.backfill_report_visuals as backfill
+
+    _report_dir, off = _shadow_replay(tmp_path / "off", monkeypatch, knob=False)
+    assert off == {"check": None, "projection": None, "state": []}
+    # The same replay without the REPORT-9 input step (the backfill before it).
+    monkeypatch.setattr(backfill, "_attach_verified_figure_inputs", lambda *args: None)
+    _report_dir, before = _shadow_replay(tmp_path / "before", monkeypatch, knob=False)
+    assert off == before
+
+
+def test_recorded_market_rows_need_a_previous_record():
+    from scripts.backfill_report_visuals import _recorded_market_rows
+
+    snapshot = [{"market_id": "m1", "question": "Q?", "implied_yes_prob": 0.3}, "junk"]
+    # Without a previous record the report-time prices are unknown: no market is compared.
+    for previous in (None, {}, {"market_rows": "junk"}, {"market_rows": [{"market_id": ""}]}):
+        assert _recorded_market_rows(snapshot, previous) == []
+    previous = {"market_rows": [{"market_id": "m1", "implied_yes_prob": 0.45, "price_at_research": 0.3}]}
+    assert _recorded_market_rows({"markets": snapshot}, previous) == [{
+        "market_id": "m1", "question": "Q?", "implied_yes_prob": 0.45, "price_at_research": 0.3,
+        "quoted_at": None, "snapshot_as_of": None}]
+    assert _recorded_market_rows("junk", previous) == []
 
 
 # --------------------------------------------- FU-1: binary_quality keys survive a re-run
