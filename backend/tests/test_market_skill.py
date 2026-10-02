@@ -804,8 +804,57 @@ def test_monitor_counts_an_expired_binary_of_a_report_without_commit_row(tmp_pat
                                        "commit_id": None, "production_primary": None})
     assert [(n["forecast_id"], n["has_anchor"]) for n in res["needs_manual"]] == [("F1", True)]
     assert res["market_skill"]["expired_unresolved"] == 1
-    assert "Expired unresolved (anchored, past resolution date, no settlement yet): **1**" in \
+    assert res["market_skill"]["expired_unresolved_scope"] == mon.EXPIRED_UNRESOLVED_SCOPE_RUN
+    assert ("Expired unresolved (anchored, past resolution date, no settlement yet; over the "
+            "reports in the ledger plus those this monitor run covers): **1**") in \
         res["monitor_report_md"]
+
+
+LEGACY_META = {"as_of": None, "created_at": "2026-05-02T08:00:00+00:00", "commit_id": None,
+               "production_primary": None}
+
+
+def test_every_page_of_a_batch_counts_the_same_reports(tmp_path, monkeypatch):
+    """Review round 2: expired_unresolved covers the reports in the ledger plus the reports
+    the monitor run covers, so each page of one batch counts the same reports, even two
+    pre-EVAL-1 reports without any ledger row or settlement event; summary covers the
+    ledger's reports only and says so."""
+    forecasts = {rid: {"binary_forecasts": [_binary("F1", probability=0.30)]}
+                 for rid in ("r-a", "r-b")}
+    monkeypatch.setattr(mon, "_load_sealed_forecast",
+                        lambda rid: copy.deepcopy(forecasts.get(rid)))
+    monkeypatch.setattr(mon, "_report_meta_origin", lambda rid: LEGACY_META["created_at"])
+    led = str(tmp_path / "led")
+
+    def page(report_id, reads):
+        return mon.run_monitor(report_id, forecast=forecasts[report_id],
+                               report_folder=str(tmp_path / report_id), client=_Client({}),
+                               ledger_dir=led, as_of=PROCESSED, publishable_fn=lambda rid: True,
+                               target_meta=LEGACY_META, skill_reads=reads)
+
+    reads = mon.MarketSkillReads(["r-b", "r-a", "r-a", " "])
+    assert reads.run_report_ids == ("r-a", "r-b")
+    for res in (page("r-a", reads), page("r-b", reads)):
+        assert res["market_skill"]["expired_unresolved"] == 2
+        assert res["market_skill"]["expired_unresolved_scope"] == "ledger_and_run_reports"
+        assert ("plus those this monitor run covers): **2**") in res["monitor_report_md"]
+    # A page outside a batch covers the ledger's reports and its own.
+    assert page("r-a", mon.MarketSkillReads())["market_skill"]["expired_unresolved"] == 1
+    skill = mon.market_skill_summary(led, as_of_day="2026-09-29",
+                                     publishable_fn=lambda rid: True)
+    assert skill["expired_unresolved"] == 0 and skill["expired_unresolved_scope"] == "ledger_reports"
+    assert "over the reports in the ledger): **0**" in "\n".join(mon._render_market_skill(skill))
+
+
+def test_cmd_run_shares_the_batch_report_ids(monkeypatch):
+    seen = []
+    monkeypatch.setattr(mon, "recent_report_ids", lambda n, **kwargs: ["r-a", "r-b"])
+    monkeypatch.setattr(mon, "settle_ledger_enabled", lambda: False)
+    monkeypatch.setattr(mon, "run_monitor", lambda rid, **kwargs: seen.append(
+        (rid, kwargs["skill_reads"])) or {"report_id": rid, "skipped": "probe"})
+    assert mon.main(["run", "--all-recent", "2", "--dry-run"]) == 0
+    assert [rid for rid, _ in seen] == ["r-a", "r-b"] and seen[0][1] is seen[1][1]
+    assert seen[0][1].run_report_ids == ("r-a", "r-b")
 
 
 def test_batch_reads_each_report_once(monkeypatch):
@@ -843,6 +892,7 @@ def test_summary_prints_market_skill_on_an_empty_ledger(capsys, monkeypatch):
         assert skill["strata"][name]["n_scored"] == 0
         _assert_no_metrics(skill["strata"][name])
     assert skill["n_rows"] == 0 and skill["unscored"] == {} and skill["expired_unresolved"] == 0
+    assert skill["expired_unresolved_scope"] == mon.EXPIRED_UNRESOLVED_SCOPE_LEDGER
     assert skill["min_n"] == Config.FORECAST_SKILL_MIN_N == 10
     assert skill["min_match_confidence"] == Config.FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE
     assert skill["caveats"] == list(bt.MARKET_SKILL_CAVEATS)

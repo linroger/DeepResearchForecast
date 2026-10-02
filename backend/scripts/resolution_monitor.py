@@ -563,6 +563,15 @@ def _interval(ci: Any, fmt: Callable[[Any], str]) -> str:
     return f"{fmt(ci[0])}–{fmt(ci[1])}" if isinstance(ci, list) and len(ci) == 2 else "—"
 
 
+def _expired_scope_text(scope: Any) -> str:
+    """The md wording of ``market_skill.expired_unresolved_scope``."""
+    if scope == EXPIRED_UNRESOLVED_SCOPE_RUN:
+        return "the reports in the ledger plus those this monitor run covers"
+    if scope == EXPIRED_UNRESOLVED_SCOPE_LEDGER:
+        return "the reports in the ledger"
+    return "an unstated set of reports"
+
+
 def _render_market_skill(skill: Dict[str, Any]) -> List[str]:
     """EVAL-5 「## Skill vs the market it saw」段：分层计数、未计分原因、模型 vs 市场 Brier、
     技能、Δ 置信区间、命中率 vs 市场隐含零假设、无边际计数、expired_unresolved；
@@ -602,7 +611,8 @@ def _render_market_skill(skill: Dict[str, Any]) -> List[str]:
     lines += [
         "",
         f"- Unscored by reason: {_reason_counts(skill.get('unscored'))}",
-        "- Expired unresolved (anchored, past resolution date, no settlement yet): "
+        "- Expired unresolved (anchored, past resolution date, no settlement yet; over "
+        f"{_expired_scope_text(skill.get('expired_unresolved_scope'))}): "
         f"**{skill.get('expired_unresolved', '—')}**",
         "- Headline edges revised toward the market / retained divergence: "
         f"**{(headline_div.get('revised_toward_market') or {}).get('n', 0)}** / "
@@ -1363,9 +1373,13 @@ class MarketSkillReads:
     report-fallback target) do not change while a batch runs (run_monitor appends settlement
     events only), so ``_cmd_run`` shares one instance across the batch. One instance serves
     calls with the same ``publishable_fn``; a report whose forecast a call supplies itself
-    (run_monitor's own) never goes through it."""
+    (run_monitor's own) never goes through it. ``report_ids`` are the reports the batch
+    covers: each of its pages counts their binaries in ``expired_unresolved``, so every
+    page of one batch counts the same set of reports."""
 
-    def __init__(self) -> None:
+    def __init__(self, report_ids: Optional[List[str]] = None) -> None:
+        self.run_report_ids: Tuple[str, ...] = tuple(sorted(
+            {str(report_id or "").strip() for report_id in report_ids or []} - {""}))
         self._forecasts: Dict[str, Optional[Dict[str, Any]]] = {}
         self._proofs: Dict[str, bool] = {}
         self._origins: Dict[str, Optional[str]] = {}
@@ -1680,6 +1694,13 @@ def enrich_market_rows(resolution_rows: Optional[List[Dict[str, Any]]], *,
     return rows
 
 
+# EVAL-5: the reports ``expired_unresolved`` covers. ``summary`` reads the ledger only (the
+# reports named in ledger.jsonl or resolutions.jsonl); a monitor run adds the reports it
+# covers (run_monitor's own, and every report of a ``run --all-recent`` batch).
+EXPIRED_UNRESOLVED_SCOPE_LEDGER = "ledger_reports"
+EXPIRED_UNRESOLVED_SCOPE_RUN = "ledger_and_run_reports"
+
+
 def expired_unresolved_count(entries: Optional[List[Dict[str, Any]]],
                              settled_keys: Set[Tuple[str, str]], as_of_day: str, *,
                              report_binaries: Optional[Dict[str, Any]] = None) -> int:
@@ -1724,7 +1745,11 @@ def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optiona
     ``backtest.market_skill_report`` over the ledger's folded binary settlements
     (``enrich_market_rows``), at FORECAST_SKILL_MIN_N and the 10pp rule's
     FORECAST_MARKET_DIVERGENCE_MIN_CONFIDENCE, plus ``expired_unresolved`` as of
-    ``as_of_day`` (default the UTC day of ``now``).
+    ``as_of_day`` (default the UTC day of ``now``) over the reports
+    ``expired_unresolved_scope`` names: those in ledger.jsonl or resolutions.jsonl
+    (``EXPIRED_UNRESOLVED_SCOPE_LEDGER``, the ``summary`` subcommand), plus the reports the
+    monitor run covers, ``forecasts`` and ``reads.run_report_ids``
+    (``EXPIRED_UNRESOLVED_SCOPE_RUN``).
 
     ``now`` (offset-aware; default the current time) is the point-in-time clock of the
     ``admissible`` gate: run_monitor passes its processed_at, so a backdated run scores only
@@ -1733,7 +1758,8 @@ def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optiona
     with; any other report without a production primary commit row (pre-EVAL-1) is read
     from its sealed forecast.json and meta.json, and counts in ``expired_unresolved`` when
     the monitor settles it against the report itself (``_report_fallback_binaries``).
-    ``reads`` (default a fresh ``MarketSkillReads``) memoizes those per-report reads.
+    ``reads`` (default a fresh ``MarketSkillReads``) memoizes those per-report reads and
+    carries the batch's report ids.
     Reads resolutions.jsonl, ledger.jsonl and report files only; never writes."""
     reads = reads if reads is not None else MarketSkillReads()
     overrides = {str(rid).strip(): forecast for rid, forecast in (forecasts or {}).items()}
@@ -1759,8 +1785,9 @@ def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optiona
     committed = _primary_report_ids(entries)
     legacy_ids = {str(row.get("report_id") or "").strip()
                   for row in events + entries if isinstance(row, dict)}
+    run_ids = (set(overrides) | set(reads.run_report_ids)) - {""}
     report_binaries: Dict[str, List[Dict[str, Any]]] = {}
-    for report_id in sorted((legacy_ids | set(overrides)) - committed - {""}):
+    for report_id in sorted((legacy_ids | run_ids) - committed - {""}):
         if report_id in overrides:
             report_binaries[report_id] = _report_fallback_binaries(
                 report_id, ledger_dir=ledger_dir, publishable_fn=proves_publishable,
@@ -1772,6 +1799,8 @@ def market_skill_summary(ledger_dir: Optional[str] = None, *, as_of_day: Optiona
     report["expired_unresolved"] = expired_unresolved_count(
         entries, {(row["report_id"], row["forecast_id"]) for row in rows}, day,
         report_binaries=report_binaries)
+    report["expired_unresolved_scope"] = (EXPIRED_UNRESOLVED_SCOPE_RUN if run_ids
+                                          else EXPIRED_UNRESOLVED_SCOPE_LEDGER)
     return report
 
 
@@ -1860,8 +1889,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 2
 
     results: List[Dict[str, Any]] = []
-    # EVAL-5：一批报告共享逐报告读取（封印预测 / 发布证明 / meta 原点），每份报告只读一次。
-    skill_reads = MarketSkillReads()
+    # EVAL-5：一批报告共享逐报告读取（封印预测 / 发布证明 / meta 原点），每份报告只读一次；
+    # 并带上整批报告 id，使每页的 expired_unresolved 覆盖同一组报告。
+    skill_reads = MarketSkillReads(report_ids)
     for rid in report_ids:
         try:
             res = run_monitor(rid, dry_run=dry, skill_reads=skill_reads)
