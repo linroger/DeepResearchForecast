@@ -5804,9 +5804,37 @@ class ReportAgent:
             for match in cls._SEMANTIC_NUMBER_RE.finditer(str(text or ""))
         }
 
+    # RESEARCH-8: the calculation a derived_supports statement ends with
+    # (" [calculated: <expr>; a=…, b=…]", possibly cut short with no closing
+    # bracket), from its first opener on.
+    _DERIVED_CALCULATION_RE = re.compile(r"\s*\[calculated:.*\Z", re.S)
+
+    @classmethod
+    def _derived_support_spans(cls, source: Dict[str, Any]) -> List[str]:
+        """RESEARCH-8: the calculated statements of v3 DERIVED findings a
+        source carries (``derived_supports``, written only by flag-on
+        research), each without its trailing calculation: the formula's
+        literals (100, 1) and the operands are no evidence of their own (the
+        operands are page figures the other spans carry), so only the finding
+        text, which states the result, can support a claim."""
+        derived = source.get("derived_supports")
+        if not isinstance(derived, list):
+            return []
+        spans = (cls._DERIVED_CALCULATION_RE.sub("", str(value)).strip() for value in derived)
+        return [span for span in spans if span]
+
     @staticmethod
-    def _citation_evidence_spans(source: Dict[str, Any]) -> List[str]:
-        """Return only persisted evidence-bearing source fields."""
+    def _citation_evidence_spans(
+        source: Dict[str, Any], include_derived: bool = True
+    ) -> List[str]:
+        """Return only persisted evidence-bearing source fields.
+
+        RESEARCH-8: ``derived_supports`` (:meth:`_derived_support_spans`,
+        without their calculation) join after ``supports`` unless
+        ``include_derived`` is false;
+        :meth:`_semantic_citation_support` weighs them apart, so they can only
+        add support to a claim, never remove it.
+        """
         spans: List[str] = []
         title = str(source.get("title") or "").strip()
         if title:
@@ -5818,6 +5846,8 @@ class ReportAgent:
             )
         elif isinstance(supports, str) and supports.strip():
             spans.append(supports.strip())
+        if include_derived:
+            spans.extend(ReportAgent._derived_support_spans(source))
         for key in (
             "excerpt", "snippet", "quote", "summary", "description", "content", "text"
         ):
@@ -5852,7 +5882,31 @@ class ReportAgent:
         create lexical coincidences but cannot support a claim.  ``None`` means
         the pair is not deterministically auditable (for example cross-language
         prose); callers preserve but report it rather than guessing.
+
+        RESEARCH-8: ``derived_supports`` are purely additive (market_supported-
+        style keep-never-remove).  The verdict on the other spans stands unless
+        the derived statements, weighed alone, support the claim (then True);
+        they never turn a verdict into False or None.
         """
+        verdict = cls._semantic_span_support(
+            line,
+            cls._citation_evidence_spans(source, include_derived=False),
+            str(source.get("title") or "").strip(),
+        )
+        if verdict is True:
+            return True
+        derived = cls._derived_support_spans(source)
+        if derived and cls._semantic_span_support(line, derived, "") is True:
+            return True
+        return verdict
+
+    @classmethod
+    def _semantic_span_support(
+        cls, line: str, spans: List[str], title: str
+    ) -> Optional[bool]:
+        """The lexical verdict of :meth:`_semantic_citation_support` on one
+        list of evidence ``spans``; ``title`` is non-empty when ``spans[0]`` is
+        the source title, which needs fewer anchors."""
         bare = cls._FULL_S_TAG_RE.sub(" ", str(line or ""))
 
         def _tokens(text: str) -> set[str]:
@@ -5865,11 +5919,9 @@ class ReportAgent:
                 out.add(token)
             return out
 
-        spans = cls._citation_evidence_spans(source)
         if not spans:
             return None
 
-        title = str(source.get("title") or "").strip()
         line_tokens = _tokens(bare)
         line_numbers = cls._semantic_numbers(bare)
         discriminative_numbers = {

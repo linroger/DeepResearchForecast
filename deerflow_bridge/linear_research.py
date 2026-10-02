@@ -81,6 +81,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping, MutableMapping, Sequence
 
+import derived_numbers as dn
 import evidence_spans as es
 import research_gateway as rg
 
@@ -254,6 +255,22 @@ EVIDENCE_MIN_LOCATED_SHARE = 0.5
 # never have been stored).  An unchecked quote is never a demotion.
 EVIDENCE_UNCHECKED_LENGTH = "length"
 EVIDENCE_UNCHECKED_SNIPPETS_CAPPED = "snippets_capped"
+# Derived findings (RESEARCH-8, RESEARCH_DERIVED_FINDINGS; default false).  On,
+# the KIQ task asks for a "(DERIVED: <formula>; a=<value> [S<n>], …)" clause on
+# every figure the agent calculated, and postprocess_notes recomputes it
+# (derived_numbers): every data operand from the one fetched, shown source the
+# finding cites, each operand's value exactly as the formula uses it on that
+# page, a number of the finding that is no operand's equal to the (signed)
+# result at its display precision, and every other number of the finding on
+# that page make the fact DERIVED — never VERIFIED (ADR-0002 I-11); anything
+# else makes it UNVERIFIED with a derivation_error, one of DERIVED_ERRORS.
+DERIVED_TAG = "DERIVED"
+DERIVED_ERRORS = ("operand_not_on_page", "unshown_source", "cross_source", "eval_error", "result_mismatch",
+                  "no_result_token")
+# sources.json ``derived_supports`` (a field of its own, never merged into
+# ``supports``): up to this many calculated statements per source, each at
+# most EVIDENCE_SUPPORT_CHARS long.
+DERIVED_SUPPORTS_PER_SOURCE = 3
 # Upper bounds of each phase's wall clock, as a fraction of the run time left
 # when the phase starts.  Gathering can never consume the time synthesis needs.
 PHASE_TIME_SHARE: Mapping[str, float] = {
@@ -660,6 +677,15 @@ _KIQ_ABSENCE_RULE = ("Absence: an empty or failed search is not evidence that so
                      "says so, and cite it; otherwise record it under Open questions.")
 _SECTION_ABSENCE_RULE = ("- Never state that something did not happen, was not reported or does not exist unless "
                          "a cited source says so; otherwise say the sources reviewed do not establish it.")
+# The lines RESEARCH_DERIVED_FINDINGS appends to the KIQ task (``_Engine._kiq_task_addenda``)
+# and to the section rules (``_Engine._section_rule_addenda``): a figure the agent
+# calculated carries its formula and page operands, which postprocess_notes recomputes.
+_KIQ_DERIVED_RULE = ("Derived figures: when a finding states a growth rate, ratio, share or other figure you "
+                     "calculated, write it as a calculation and end the finding with (DERIVED: <formula>; "
+                     "a=<value> [S<n>], b=<value> [S<n>]) using values exactly as on one fetched page; use names, "
+                     "not numbers, in the formula.")
+_SECTION_DERIVED_RULE = ("- (DERIVED) findings are calculations from the cited figures: state them as calculations "
+                         "(implying about X, calculated from [S<n>]), never as reported values.")
 # The line RESEARCH_EVIDENCE_HEADERS appends to the section rules (last of
 # ``_Engine._section_rule_addenda``): the digest's evidence lines label each KIQ.
 _SECTION_THIN_EVIDENCE_RULE = ("- Where a primary KIQ's evidence line says thin or insufficient, state the conclusions "
@@ -3937,10 +3963,408 @@ def _gap_counts_verified(fact: Mapping[str, Any], *, enforce: bool) -> bool:
     return tag == "VERIFIED"
 
 
+# Derivation clauses (RESEARCH-8): a pattern of their own, so _TAG_RE never
+# reads a "(DERIVED: …)" clause as a tag.
+_DERIVED_CLAUSE_RE = dn.CLAUSE_OPEN_RE
+
+
+def _split_derivation_clause(text: str) -> tuple[str, str | None]:
+    """``(finding, clause)``: ``text`` without its LAST derivation clause
+    (:data:`_DERIVED_CLAUSE_RE` up to its matching closing bracket, found by
+    one linear depth scan; an unclosed clause runs to the end) and that
+    clause, or ``(text, None)``.  The finding keeps what followed the clause
+    (a marker, a tag) and loses the separators it ended with before it
+    (:func:`_finding_before_clause`)."""
+    matches = list(_DERIVED_CLAUSE_RE.finditer(text))
+    if not matches:
+        return text, None
+    start = matches[-1].start()
+    depth, end = 0, len(text)
+    for index in range(start, len(text)):
+        if text[index] in "(（":
+            depth += 1
+        elif text[index] in ")）":
+            depth -= 1
+            if depth == 0:
+                end = index + 1
+                break
+    return _collapse(f"{_finding_before_clause(text[:start])} {text[end:]}"), text[start:end]
+
+
+def _clause_tail_derivation(clause: str) -> tuple[str, str | None]:
+    """A derivation clause written after the quotes of an evidence clause
+    ('EVIDENCE: "…" (DERIVED: …)'): ``(the evidence clause without it, the
+    derivation clause)``, else ``(clause, None)``."""
+    tail = 0
+    for _, close in _quote_pairs(clause):
+        tail = close + 1
+    rest, derivation = _split_derivation_clause(clause[tail:])
+    return (f"{clause[:tail]} {rest}", derivation) if derivation is not None else (clause, None)
+
+
+# A minus sign or dash before an operand's number: page numbers are unsigned
+# (page_number_set), so a sign written into an operand is never on its page.
+_OPERAND_MINUS_RE = re.compile(r"[-−–—‐‑]")
+
+
+def _value_on_page(token: str, full: str, percent: bool, units: Iterable[str],
+                   available: frozenset[str] | set[str]) -> bool:
+    """Whether a number written as ``token`` with the full value ``full``
+    (``"=" + value``, :func:`_number_values_at`) is on a page (``available``,
+    :func:`page_number_set`) at that value, not merely as the same digits: a
+    percentage (``percent``) as a page percentage and never scaled, a figure
+    written with a unit (``units``) as a page number of one of those unit
+    classes at the same full value, any other number as a page number of the
+    same full value ("37 billion" is no page "37 GW")."""
+    if percent:
+        return full == "=" + token and "%" + token in available
+    if units:
+        return any(f"{unit}:{full}" in available for unit in units)
+    return full in available
+
+
+def _operand_reading(value: str, available: frozenset[str] | None) -> tuple[Decimal, str, bool] | None:
+    """A derivation operand's value exactly as the evaluator uses it, ``(value,
+    number token, written as a percentage)``, when its page (``available``,
+    :func:`page_number_set`) shows that value; None otherwise (fail closed).
+
+    The value must hold exactly one number (:func:`_number_values_at`, dates
+    and year ranges out: "5 plants out of 13 GW" is no operand), with no minus
+    sign or dash before it (:data:`_OPERAND_MINUS_RE`), whose token is
+    checkable (>= 2 digits, a decimal, a percentage or a unit-class figure:
+    a bare "5" is not) and whose FULL value is on the page, not merely its
+    digits: a percentage as a page percentage (and never scaled), a figure
+    written with a unit as a page number of that unit class at the same full
+    value, any other number as a page number of the same full value.  Scale
+    words count: "37 billion" needs 37000000000 on the page, a page "37 GW"
+    is not it.  The Decimal is that full value ("1.2 trillion" →
+    1200000000000)."""
+    if available is None:
+        return None
+    text = _join_digit_groups(_number_text(value, strip_dates=True))
+    found = _number_values_at(text)
+    if len(found) != 1:
+        return None
+    offset, token, full = found[0]
+    if _OPERAND_MINUS_RE.search(text[:offset]):
+        return None
+    percent = token in fact_percent_tokens(value)
+    units = fact_unit_tokens(value).get(token, frozenset())
+    if not (sum(ch.isdigit() for ch in token) >= 2 or "." in token or percent or units):
+        return None
+    return (Decimal(full[1:]), token, percent) if _value_on_page(token, full, percent, units, available) else None
+
+
+# A minus sign or dash right before a finding's number, through a currency
+# sign ("-185%", "−$5 billion", "CNY -8.3 billion"): the finding writes it as
+# negative, so it states a negative result only.  A range's upper bound
+# ("180-185%") reads as signed too, which fails closed.
+_SIGNED_LEAD_RE = re.compile(r"[-−–—‐‑][^\S\n]*(?:[A-Za-z]{0,2}\$|[€£¥₹₩])?[^\S\n]*\Z")
+_SIGNED_LEAD_CHARS = 16  # how far before a number its sign is looked for
+# A percentage written in percentage points (the point words of _PERCENT_WORD):
+# "26 percentage points", "a 26-percentage-point gap", "26 pp", "1.5 pts", "3个百分点".
+_POINTS_NUMBER_RE = re.compile(r"(?<![\d.,])(\d++(?:[.,]\d++)*+)(?:[^\S\n]*+(?:\n[^\S\n]*+)?+|-)"
+                               r"(?:percentage[\s-]+points?\b|pp\b|ppts?\b|pts\b|p\.p\.|个?百分点)", re.I)
+
+
+@dataclass(frozen=True)
+class _NumberOccurrence:
+    """One number of a finding as it is written there (:func:`_number_occurrences`)."""
+
+    token: str               # its canonical digits: "185", "2.85"
+    full: str                # "=" + its full value: "=2850000000000" for "2.85 trillion"
+    percent: bool            # written as a percentage: "185%", "26 percentage points"
+    points: bool             # a percentage written in points (:data:`_POINTS_NUMBER_RE`): "26 pp"
+    units: frozenset[str]    # its unit classes (:data:`_UNIT_WORDS`): {"power"} for "185 GW"
+    signed: bool             # a minus sign or dash right before it (:data:`_SIGNED_LEAD_RE`)
+
+    @property
+    def scaled(self) -> bool:
+        """Written with a scale word: "$185 billion", "1.2万亿"."""
+        return self.full != "=" + self.token
+
+    @property
+    def checkable(self) -> bool:
+        """A number the number rules read (:func:`fact_number_tokens`: >= 2 digits or a decimal)."""
+        return sum(ch.isdigit() for ch in self.token) >= 2 or "." in self.token
+
+    @property
+    def can_state(self) -> bool:
+        """A number that may state a derivation's result: a checkable one, or a
+        single digit written as a percentage or with a unit class ("7%", "5 GW";
+        a bare "7" never)."""
+        return self.checkable or self.percent or bool(self.units)
+
+
+def _number_occurrences(text: str) -> list[_NumberOccurrence]:
+    """Every number of a finding ``text`` in order (dates and year ranges out,
+    grouped digits joined: :func:`_number_values_at`), each read where it is
+    written: unlike the per-token :func:`fact_percent_tokens`,
+    :func:`fact_unit_tokens` and :func:`fact_number_values`, the "185" of
+    "185%" and the "185" of "$185 billion" stay two numbers."""
+    value = _join_digit_groups(_number_text(text, strip_dates=True))
+    percents = {match.start(1) for match in _PERCENT_NUMBER_RE.finditer(value)}
+    points = percents.intersection(match.start(1) for match in _POINTS_NUMBER_RE.finditer(value))
+    units: dict[int, set[str]] = {}
+    for unit, pattern in _UNIT_SUFFIX_RES.items():
+        for match in pattern.finditer(value):
+            units.setdefault(match.start(1), set()).add(unit)
+    for match in _UNIT_PREFIX_RE.finditer(value):
+        units.setdefault(match.start(1), set()).add("currency")
+    return [_NumberOccurrence(token, full, offset in percents, offset in points, frozenset(units.get(offset, ())),
+                              _SIGNED_LEAD_RE.search(value, max(0, offset - _SIGNED_LEAD_CHARS), offset) is not None)
+            for offset, token, full in _number_values_at(value)]
+
+
+def _numbers_off_page(numbers: Iterable[_NumberOccurrence], available: frozenset[str]) -> list[str]:
+    """The tokens of the ``numbers`` (:func:`_number_occurrences`) that are not
+    on a page (``available``) at the value each is written with
+    (:func:`_value_on_page`): stricter than a VERIFIED finding's
+    :func:`_missing_numbers`, which accepts the same digits at another scale."""
+    return list(dict.fromkeys(number.token for number in numbers
+                              if not _value_on_page(number.token, number.full, number.percent, number.units,
+                                                    available)))
+
+
+def _operand_units(value: str) -> frozenset[str]:
+    """The unit classes a derivation operand's value is written in: those of
+    its one number, as :func:`_operand_reading` reads it (none when the value
+    holds no single number)."""
+    found = _number_values_at(_join_digit_groups(_number_text(value, strip_dates=True)))
+    return fact_unit_tokens(value).get(found[0][1], frozenset()) if len(found) == 1 else frozenset()
+
+
+def _result_is_points(expr: str, data_operands: Mapping[str, str]) -> bool:
+    """Whether a derivation's result is in percentage points: every data
+    operand value (``data_operands``, name → value) is a percentage and the
+    formula only adds and subtracts them, the literal 0 aside, or takes them
+    from 100 (:func:`derived_numbers.gives_points`: "a-b", "100-a"; "a+100"
+    gives no points).  68% - 42% is 26 percentage points; "26%" would
+    misstate it as a relative change, which is 61.9%."""
+    return (bool(data_operands) and dn.gives_points(expr, data_operands)
+            and all(fact_percent_tokens(value) for value in data_operands.values()))
+
+
+def _result_is_percent(expr: str, data_operands: Mapping[str, str]) -> bool:
+    """Whether a derivation's result is a percentage as it is: its formula
+    multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
+    or it is in percentage points (:func:`_result_is_points`).  A ratio or
+    product of percentages is no percentage as it is (68% / 42% is "162%",
+    never "1.6%": :func:`_result_form` reads it as a ratio)."""
+    return dn.scales_to_percent(expr) or _result_is_points(expr, data_operands)
+
+
+@dataclass(frozen=True)
+class _ResultForm:
+    """How a derivation's result may be written (:func:`_result_form`)."""
+
+    percent: bool            # a percentage already (:func:`_result_is_percent`)
+    points: bool             # in percentage points (:func:`_result_is_points`): stated in points only
+    units: frozenset[str]    # the unit classes a number stating it may be written with
+    ratio: bool              # a unitless quotient of data operands: the one result a percentage states x 100
+
+
+def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
+    """The form of the result of formula ``expr`` over its data operands
+    (``data_operands``, name → value as the clause writes it): a percentage
+    (:func:`_result_is_percent`) and whether in percentage points
+    (:func:`_result_is_points`); when the formula keeps their unit
+    (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
+    or a sum scaled by literals), the unit classes every data operand is
+    written in (:func:`_operand_units`); and whether it is a ratio, a
+    quotient of two terms in the data operands' unit
+    (:func:`derived_numbers.is_quotient`: "a/b", "(a-b)/b"; "a*b/b" is
+    none).  A ratio, product or power of operands, a rate per
+    ``years()`` period and a clause without data operands keep no unit; a
+    result that keeps the unit is never a ratio, whether or not that unit is
+    a unit class ("107 units", a bare count), and neither is a product,
+    power or call of operands ("a*b", "a**1", "sqrt(a)")."""
+    values = list(data_operands.values())
+    keeps = bool(values) and dn.keeps_unit(expr, data_operands)
+    units = [_operand_units(value) for value in values] if keeps else []
+    return _ResultForm(percent=_result_is_percent(expr, data_operands),
+                       points=_result_is_points(expr, data_operands),
+                       units=frozenset.intersection(*units) if units else frozenset(),
+                       ratio=dn.is_quotient(expr, data_operands))
+
+
+def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm) -> bool:
+    """Whether one number of a finding, as it is written there
+    (:func:`_number_occurrences`), states a derivation ``result`` of the form
+    ``form`` (:func:`_result_form`) at its display precision
+    (:func:`derived_numbers.token_matches`).  One reading:
+
+    * its sign is the result's: a number with a minus sign or dash right
+      before it states a negative result only, any other a non-negative one;
+    * a result that is a percentage already is stated by a percentage only
+      ("185%", "185 percent"), never by a bare number ("185 workers", "185
+      times"), one written with a unit class or a scale word ("185 GW",
+      "$185 billion"), and in percentage points exactly when it is in points
+      (``form.points``: 68% - 42% is "26 percentage points", "26 pp" or
+      "26个百分点", never "26%"; (a-b)/b*100 over them is "62%", never "62
+      percentage points");
+    * any other result is stated by a number written with a unit class only
+      in a unit class of every data operand through a formula that keeps it
+      (``form.units``: "24 TWh" and "€24" state no difference of GW figures,
+      "2.85 GW" no ratio of them, "24 GW" no difference of bare numbers);
+    * a ratio (``form.ratio``) is stated by a percentage at result x 100
+      only, never in points ("162%" for 68% / 42%, never "162 percentage
+      points"), any other result never by a percentage ("2,400%" is no 24 GW
+      difference, "700%" no difference of 107 and 100 units, "48,100%" no
+      product of GW figures), and any other number states the result at its
+      full value only ("2.85 trillion" is 2850000000000, never 2.85)."""
+    result = -result if number.signed else result
+    if form.percent:
+        return (number.percent and number.points == form.points and not number.scaled and not number.units
+                and dn.token_matches(number.token, result))
+    if not number.units <= form.units:
+        return False
+    if number.percent:
+        return (form.ratio and not number.points and not number.scaled
+                and dn.token_matches(number.token, result, percent=True))
+    if not number.scaled:
+        return dn.token_matches(number.token, result)
+    stated, value = Decimal(number.token), Decimal(number.full[1:])
+    shift = value.adjusted() - stated.adjusted()
+    return (not stated.is_zero() and stated.scaleb(shift) == value
+            and dn.token_matches(number.token, result.scaleb(-shift)))
+
+
+def _derived_rules(text: str, cited: Sequence[int], clause: str,
+                   ledger_get: Callable[[int], Mapping[str, Any] | None],
+                   page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What the derivation rules (RESEARCH-8) make of a finding ``text`` whose
+    own markers cite ``cited`` and whose derivation clause is ``clause``.
+
+    ``tag`` DERIVED with ``derivation`` (``expr``, ``operands`` {name:
+    {value, sid}}, ``result`` as :func:`derived_numbers.format_exact` writes
+    it, ``sid``) when all of these hold, else ``tag`` UNVERIFIED with
+    ``derivation_error`` (in this order):
+
+    * the clause parses (:func:`derived_numbers.parse_derivation`) — else
+      eval_error;
+    * it has a data operand and every data operand cites a source the agent
+      was shown (``ledger_get`` is shown-scoped) and fetched — else
+      unshown_source;
+    * they all cite one source and the finding cites it too — else
+      cross_source;
+    * every data operand's value, exactly as the formula uses it, is on that
+      source's page (:func:`_operand_reading`: one checkable, unsigned
+      number at its full value), and so are both years of a period operand
+      ``years(Y1,Y2)`` — else operand_not_on_page;
+    * the formula evaluates over those values (``years(Y1,Y2)`` is Y2 - Y1)
+      — else eval_error;
+    * one of the finding's numbers that may state a result (checkable ones,
+      :func:`fact_number_tokens`, and single digits written as a percentage
+      or with a unit class: :attr:`_NumberOccurrence.can_state`) whose token
+      is no operand's states the result as it is written there
+      (:func:`_states_result`: its sign, percent form, unit class and scale
+      word count, against the result's form, :func:`_result_form`) — else
+      no_result_token when the finding has no such number, result_mismatch
+      when none states it;
+    * every other checkable occurrence of a number in the finding (operands'
+      numbers and other occurrences of the stating digits included) is on
+      the derivation source's page at the value the finding writes it with
+      (:func:`_numbers_off_page`), so a clause never carries an unchecked
+      figure into a DERIVED fact — else result_mismatch with
+      ``missing_numbers``."""
+    def rejected(code: str) -> dict:
+        return {"tag": "UNVERIFIED", "derivation_error": code}
+
+    try:
+        expr, operands = dn.parse_derivation(clause)
+    except dn.CalcError:
+        return rejected("eval_error")
+    data = [sid for _, _, sid, kind in operands if kind == dn.KIND_DATA]
+    if not data or any(sid is None or not (ledger_get(sid) or {}).get("fetched") for sid in data):
+        return rejected("unshown_source")
+    sid = data[0]
+    if any(other != sid for other in data) or sid not in cited:
+        return rejected("cross_source")
+    available = page_numbers(sid)
+    values: dict[str, Decimal] = {}
+    operand_tokens: set[str] = set()
+    for name, value, _, kind in operands:
+        if kind == dn.KIND_DATA:
+            reading = _operand_reading(value, available)
+            if reading is None:
+                return rejected("operand_not_on_page")
+            values[name], token, _ = reading
+            operand_tokens.add(token)
+        else:
+            # parse_derivation read the period already, so period_years cannot raise.
+            first, last = dn.period_years(value)
+            if available is None or f"={first}" not in available or f"={last}" not in available:
+                return rejected("operand_not_on_page")
+            operand_tokens.update(fact_number_tokens(value))
+    try:
+        values.update((name, dn.period_value(value)) for name, value, _, kind in operands
+                      if kind == dn.KIND_PERIOD)
+        result = dn.evaluate(expr, values)
+    except dn.CalcError:
+        return rejected("eval_error")
+    numbers = _number_occurrences(text)
+    candidates = [index for index, number in enumerate(numbers)
+                  if number.can_state and number.token not in operand_tokens]
+    if not candidates:
+        return rejected("no_result_token")
+    form = _result_form(expr, {name: value for name, value, _, kind in operands if kind == dn.KIND_DATA})
+    stating = {index for index in candidates if _states_result(numbers[index], result, form)}
+    if not stating:
+        return rejected("result_mismatch")
+    missing = _numbers_off_page((number for index, number in enumerate(numbers)
+                                 if number.checkable and index not in stating), available)
+    if missing:
+        return {**rejected("result_mismatch"), "missing_numbers": missing}
+    return {"tag": DERIVED_TAG, "derivation": {
+        "expr": expr,
+        "operands": {name: {"value": value, "sid": operand_sid} for name, value, operand_sid, _ in operands},
+        "result": dn.format_exact(result), "sid": sid}}
+
+
+def _off_reading_rules(whole: str, tag: str, known: Callable[[int], bool],
+                       ledger_get: Callable[[int], Mapping[str, Any] | None],
+                       page_numbers: Callable[[int], frozenset[str] | None]) -> dict:
+    """What evidence-off postprocessing with derivations on makes of a
+    bullet's ``whole`` text (its tag ``tag`` split off): the derivation rules
+    on the text without its LAST derivation clause (the clause's sources
+    when the rest cites none), else the VERIFIED rules on the whole text.
+    Audit gives a fact exactly these keys, so it changes no tag."""
+    finding, derivation = _split_derivation_clause(whole)
+    finding, sids = strip_unknown_citations(finding, known)
+    finding = _collapse(finding)
+    if derivation is None:
+        return _verified_rules(tag, finding, sids, ledger_get, page_numbers)
+    if not sids:
+        sids = strip_unknown_citations(derivation, known)[1]
+    return _derived_rules(finding, sids, derivation, ledger_get, page_numbers)
+
+
+def derived_summary(records: Iterable[Mapping[str, Any]]) -> dict:
+    """meta.derived (RESEARCH-8): ``facts`` the findings of ``records`` that
+    carried a derivation clause, ``admitted`` the DERIVED ones and
+    ``rejected`` the UNVERIFIED ones by ``derivation_error`` (every
+    DERIVED_ERRORS key, zero when none).  A DERIVED fact the evidence rules
+    demoted afterwards counts in ``facts`` only."""
+    rejected = dict.fromkeys(DERIVED_ERRORS, 0)
+    total = admitted = 0
+    for record in records:
+        for fact in record.get("facts") or []:
+            if not isinstance(fact, dict) or not ("derivation" in fact or "derivation_error" in fact):
+                continue
+            total += 1
+            admitted += fact.get("tag") == DERIVED_TAG
+            code = fact.get("derivation_error")
+            if isinstance(code, str) and code in rejected:
+                rejected[code] += 1
+    return {"facts": total, "admitted": admitted, "rejected": rejected}
+
+
 def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mapping[str, Any] | None],
                       page_numbers: Callable[[int], frozenset[str] | None], *, evidence_mode: str = EVIDENCE_OFF,
                       page_text: Callable[[int], str | None] | None = None,
-                      row_text: Callable[[int], Sequence[str]] | None = None) -> tuple[str, dict]:
+                      row_text: Callable[[int], Sequence[str]] | None = None,
+                      derivations: bool = False) -> tuple[str, dict]:
     """Parse agent notes into facts; enforce citation and verification rules.
 
     * markers to sources the ledger does not know are removed;
@@ -3958,13 +4382,26 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     (:func:`_claimed_tag`); its last EVIDENCE clause is split off
     (:func:`_split_evidence_clause`; the fact text excludes it and gets the
     markers only the clause carried; a label that leaves no finding before it
-    splits nothing).  Enforce applies the rules above to the claimed tag and
+    splits nothing, nor, with ``derivations``, one that leaves only a
+    derivation clause).  Enforce applies the rules above to the claimed tag and
     the fact text; audit changes no tag: the tag, verification,
     verified_numbers and missing_numbers are what off makes of the whole
     bullet.  :func:`_apply_evidence` locates the
     clause's quotes in ``page_text(sid)`` of the cited fetched sources and in
     the search text of the cited sources (``row_text(sid)``, by default
     :func:`_row_search_texts` of the ledger row).
+
+    ``derivations`` (RESEARCH-8, RESEARCH_DERIVED_FINDINGS; False changes
+    nothing): after any evidence clause is split off, a finding's LAST
+    derivation clause (:func:`_split_derivation_clause`; else one written
+    after its evidence quotes, :func:`_clause_tail_derivation`) is split off
+    too: the fact text excludes it, a finding citing no source outside it
+    cites the clause's sources, and the clause replaces the tag the agent
+    wrote (``claimed_tag`` DERIVED): :func:`_derived_rules` makes the fact
+    DERIVED with its ``derivation`` or UNVERIFIED with a
+    ``derivation_error``, never VERIFIED.  Audit still changes no tag: a
+    fact whose evidence clause was split off gets what off makes of the
+    whole bullet (:func:`_off_reading_rules`).
     Returns ``(cleaned_notes_markdown, parts)`` with facts, unsourced
     findings, conflicts, open questions and discovered leads.
     """
@@ -3981,28 +4418,46 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
     unsourced: list[str] = []
     for bullet in sections["findings"]:
         text, tag = _split_tag(bullet)
-        claimed, clause, off_reading = tag, None, None
+        claimed, clause, off_reading, off_rules = tag, None, None, None
         if evidence:
             body, clause = _split_evidence_clause(bullet)
             if clause is not None:
                 finding = _split_tag(body)[0]
-                if len(_finding_before_clause(_collapse(strip_unknown_citations(finding, known)[0]))) < 3:
+                # With derivations on, a derivation clause is no finding of its own: a bullet that
+                # is only that clause and an evidence clause is read whole, as evidence off reads it.
+                measured = _split_derivation_clause(finding)[0] if derivations else finding
+                if len(_finding_before_clause(_collapse(strip_unknown_citations(measured, known)[0]))) < 3:
                     body, clause = bullet, None
                 else:
                     if evidence_mode == EVIDENCE_AUDIT:
                         off_text, off_sids = strip_unknown_citations(text, known)
                         off_reading = (_collapse(off_text), off_sids)
+                        if derivations:
+                            off_rules = _off_reading_rules(text, tag, known, ledger_get, page_numbers)
                     text = finding
             claimed = _claimed_tag(bullet, body, clause)
             if evidence_mode == EVIDENCE_ENFORCE:
                 tag = claimed
             all_sids = strip_unknown_citations(bullet, known)[1]
+        derivation = None
+        if derivations:
+            text, derivation = _split_derivation_clause(text)
+            if derivation is None and clause is not None:
+                clause, derivation = _clause_tail_derivation(clause)
+            if derivation is not None:
+                claimed = DERIVED_TAG
         text, sids = strip_unknown_citations(text, known)
         text = _collapse(text)
         if clause is not None:
             text = _finding_before_clause(text)
         if len(text) < 3:
             continue
+        if derivation is not None and not sids:
+            adopted = strip_unknown_citations(derivation, known)[1]
+            if adopted:
+                text = f"{text} {''.join(f'[S{sid}]' for sid in adopted)}"
+                sids = adopted
+        cited = list(sids)
         if evidence:
             extra = [sid for sid in all_sids if sid not in sids]
             if extra:
@@ -4013,13 +4468,21 @@ def postprocess_notes(kiq_id: str, notes: str, ledger_get: Callable[[int], Mappi
             continue
         fact: dict[str, Any] = {"kiq": kiq_id, "text": text, "sids": sids, "tag": tag,
                                 "verified_numbers": None}
-        # Audit weighs the whole bullet as off does (``off_reading``, set when
-        # a clause was split off), so it changes no tag.
-        fact.update(_verified_rules(tag, *(off_reading or (text, sids)), ledger_get, page_numbers))
+        derived = (_derived_rules(text, cited, derivation, ledger_get, page_numbers) if derivation is not None
+                   else None)
+        # Audit weighs the whole bullet as off does (``off_reading`` / ``off_rules``,
+        # set when a clause was split off; derivation clause and all with
+        # derivations on), so it changes no tag.
+        if off_rules is not None:
+            fact.update(off_rules)
+        elif derived is not None:
+            fact.update(derived)
+        else:
+            fact.update(_verified_rules(tag, *(off_reading or (text, sids)), ledger_get, page_numbers))
         if checker is not None:
             enforced = fact["tag"]
             if evidence_mode == EVIDENCE_AUDIT:
-                enforced = _verified_rules(claimed, text, sids, ledger_get, page_numbers)["tag"]
+                enforced = (derived or _verified_rules(claimed, text, sids, ledger_get, page_numbers))["tag"]
             _apply_evidence(fact, claimed, clause, evidence_mode, checker, enforced)
         facts.append(fact)
 
@@ -4104,8 +4567,8 @@ def absence_cue(text: Any) -> str | None:
 def absence_cue_counts(facts: Iterable[Any]) -> dict[str, int]:
     """``{tag: n}``: the sourced facts whose text carries an absence cue, by
     evidence tag: exactly the :data:`_FACT_TAGS` keys, zero when none (a fact
-    with any other or no tag is not counted; postprocess_notes always assigns
-    one of them)."""
+    with any other or no tag is not counted; postprocess_notes assigns one of
+    them, or DERIVED to a recomputed calculation with RESEARCH-8 on)."""
     counts = dict.fromkeys(_FACT_TAGS, 0)
     for fact in facts or ():
         tag = fact.get("tag") if isinstance(fact, Mapping) else None
@@ -4422,15 +4885,66 @@ def select_source_windows(candidates: Iterable[tuple[int, int, int, str]], exist
 # Evidence digest (V3_SPEC §3.2.4) — built once, byte-stable across writers
 # ===========================================================================
 
-_TAG_ORDER = {"VERIFIED": 0, "REPORTED": 1, "UNVERIFIED": 2}
+# DERIVED (RESEARCH-8) sorts after VERIFIED and is dropped after conflicts;
+# both entries are inert while no fact is DERIVED.
+_TAG_ORDER = {"VERIFIED": 0, DERIVED_TAG: 0.5, "REPORTED": 1, "UNVERIFIED": 2}
 # Drop priority when a KIQ block is over its cap (lowest dropped first).
-_LINE_PRIORITY = {"open": 1, "UNVERIFIED": 2, "REPORTED": 3, "conflict": 4, "VERIFIED": 5}
+_LINE_PRIORITY = {"open": 1, "UNVERIFIED": 2, "REPORTED": 3, "conflict": 4, DERIVED_TAG: 4.5, "VERIFIED": 5}
 
 
 def _is_sourced(fact: Any) -> bool:
     """A fact that cites a source; records persisted before unsourced findings
     were split out can still carry marker-less ones."""
     return isinstance(fact, dict) and bool(_CITE_RE.search(str(fact.get("text") or "")))
+
+
+def _derivation_operands(derivation: Mapping[str, Any]) -> str:
+    """``a=37 GW, b=13 GW`` of a DERIVED fact's ``derivation``."""
+    operands = derivation.get("operands")
+    return ", ".join(f"{name}={_collapse(item.get('value'))}"
+                     for name, item in (operands.items() if isinstance(operands, dict) else ())
+                     if isinstance(item, dict))
+
+
+def _cited_derivation_sid(fact: Mapping[str, Any]) -> int | None:
+    """A DERIVED fact's derivation source while the fact text cites it; None
+    when its derivation is unreadable or the text no longer cites that source
+    (a hindcast's per-claim citation wall stripped the marker:
+    :func:`pit_wall_record`)."""
+    derivation = fact.get("derivation")
+    sid = derivation.get("sid") if isinstance(derivation, dict) else None
+    return sid if isinstance(sid, int) and f"[S{sid}]" in str(fact.get("text") or "") else None
+
+
+def _derived_label(fact: Mapping[str, Any]) -> str:
+    """A DERIVED fact's digest tag: ``DERIVED from [S12]: (a-b)/b*100; a=37
+    GW, b=13 GW``, or bare ``DERIVED`` without a cited derivation source
+    (:func:`_cited_derivation_sid`)."""
+    sid = _cited_derivation_sid(fact)
+    if sid is None:
+        return DERIVED_TAG
+    derivation = fact["derivation"]
+    return f"{DERIVED_TAG} from [S{sid}]: {derivation.get('expr')}; {_derivation_operands(derivation)}"
+
+
+# What a fallback bullet appends to a DERIVED fact (RESEARCH-8), so it reads as a
+# calculation and never as a reported value: with its cited derivation source,
+# and without one (the marker a citation wall stripped is never brought back).
+_DERIVED_QUALIFIERS: Mapping[str, tuple[str, str]] = {
+    ENGLISH: (" (calculated from [S{sid}])", " (calculated)"),
+    CHINESE: ("（根据[S{sid}]推算）", "（推算）"),
+}
+
+
+def _derived_qualifier(fact: Mapping[str, Any], language: str) -> str:
+    """``" (calculated from [S12])"`` (``"（根据[S12]推算）"`` in Chinese) for a
+    DERIVED fact, ``" (calculated)"`` without a cited derivation source
+    (:func:`_cited_derivation_sid`), ``""`` for any other fact."""
+    if fact.get("tag") != DERIVED_TAG:
+        return ""
+    sid = _cited_derivation_sid(fact)
+    cited, bare = _DERIVED_QUALIFIERS[_lang_key(language)]
+    return bare if sid is None else cited.format(sid=sid)
 
 
 # RESEARCH_EVIDENCE_HEADERS (RESEARCH-10, default off): each KIQ block of the
@@ -4447,8 +4961,9 @@ SUFFICIENCY_MIN_FETCHED = 2    # no fetched source: insufficient; fewer: thin
 SUFFICIENCY_MIN_DOMAINS = 2    # fewer distinct source domains: thin
 SUFFICIENCY_LABELS = ("insufficient", "thin", "adequate")
 # The evidence-count tags; any other tag counts as REPORTED, the tag the
-# digest groups an untagged finding under.  DERIVED is shown only when present.
-_PROFILE_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED", "DERIVED")
+# digest groups an untagged finding under.  DERIVED (RESEARCH-8) is shown only
+# when present and never counts toward the VERIFIED thresholds.
+_PROFILE_TAGS = ("VERIFIED", "REPORTED", "UNVERIFIED", DERIVED_TAG)
 # The digest's opening paragraph with the headers on.
 EVIDENCE_HEADER_LEGEND = ("Each KIQ block opens with an engine count of its evidence and a sufficiency label; "
                           "the listed lines may be a sample.")
@@ -4496,8 +5011,8 @@ def evidence_profile(record: Mapping[str, Any], ledger_get: Callable[[int], Mapp
     fallback = (stats.get("fallback") if isinstance(stats, Mapping) else None) or None
     profile: dict[str, Any] = {"sourced_findings": len(facts), "verified": tags["VERIFIED"],
                                "reported": tags["REPORTED"], "unverified": tags["UNVERIFIED"]}
-    if tags["DERIVED"]:
-        profile["derived"] = tags["DERIVED"]
+    if tags[DERIVED_TAG]:
+        profile["derived"] = tags[DERIVED_TAG]
 
     def count(key: str) -> int:
         value = record.get(key)
@@ -4538,8 +5053,8 @@ def evidence_header_line(profile: Mapping[str, Any], omitted: int = 0) -> str:
     length, how many.  It carries no [S<n>] marker, so the SOURCE INDEX is
     the same with or without it.  A profile with DERIVED findings adds
     ", {d} DERIVED" to the tag counts, so they still sum to the sourced
-    findings; no digest finding is DERIVED today (_TAG_RE reads VERIFIED,
-    REPORTED and UNVERIFIED only), so the line is exactly the pinned format."""
+    findings; a finding is DERIVED only with RESEARCH_DERIVED_FINDINGS on
+    (RESEARCH-8), so without it the line is exactly the pinned format."""
     tags = (f"{profile['verified']} VERIFIED, {profile['reported']} REPORTED, "
             f"{profile['unverified']} UNVERIFIED")
     if profile.get("derived"):
@@ -4579,7 +5094,8 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
     among lines of equal priority is the one sharing the fewest query terms
     with the KIQ question (then the later one); without it, the later one.  The
     header is the KIQ id and its question, or the id alone when the citation
-    wall withheld the question (``question_withheld``, :func:`pit_wall_record`)."""
+    wall withheld the question (``question_withheld``, :func:`pit_wall_record`).
+    A DERIVED fact (RESEARCH-8) shows its calculation (:func:`_derived_label`)."""
     if headers and ledger_get is None:
         raise ValueError("evidence headers need the source ledger (ledger_get)")
     if record.get("question_withheld"):
@@ -4590,7 +5106,8 @@ def _kiq_digest_block(record: Mapping[str, Any], cap: int, language: str, *,
                    key=lambda f: _TAG_ORDER.get(str(f.get("tag")), 3))
     entries: list[tuple[str, str]] = []  # (group, line)
     for fact in facts:
-        entries.append((str(fact.get("tag") or "REPORTED"), f"- {fact.get('text')} ({fact.get('tag')})"))
+        label = _derived_label(fact) if fact.get("tag") == DERIVED_TAG else fact.get("tag")
+        entries.append((str(fact.get("tag") or "REPORTED"), f"- {fact.get('text')} ({label})"))
     entries += [("conflict", f"- {c}") for c in record.get("conflicts") or []]
     entries += [("open", f"- {q}") for q in record.get("open_questions") or []]
     kept = list(range(len(entries)))
@@ -6369,9 +6886,11 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     place): sections sharing a KIQ would otherwise get identical lists, which
     cross-section deduplication deletes, leaving bare headings.  Findings are
     handed out greedily: the best title/focus term overlap first, ties to the
-    section holding fewer findings, then VERIFIED before REPORTED, then outline
-    and evidence order.  UNVERIFIED findings (figures not found on their cited
-    page) are never published: a plain bullet would state them as fact.  A
+    section holding fewer findings, then VERIFIED before REPORTED (DERIVED,
+    RESEARCH-8, between them), then outline and evidence order.  UNVERIFIED
+    findings (figures not found on their cited page) are never published: a
+    plain bullet would state them as fact.  A DERIVED finding's bullet says
+    it is a calculation (:func:`_derived_qualifier`).  A
     section left without a finding gets the no-evidence line (``""`` with
     ``empty_when_none``).
     """
@@ -6416,7 +6935,8 @@ def fallback_section_bodies(sections: Sequence[OutlineSection], records: Mapping
     bodies: dict[int, str] = {}
     for section in sections:
         keys = sorted(chosen[section.index], key=lambda key: (catalogue[key][2], catalogue[key][0]))
-        lines = [f"- {catalogue[key][1].get('text')}" for key in keys]
+        lines = [f"- {catalogue[key][1].get('text')}{_derived_qualifier(catalogue[key][1], language)}"
+                 for key in keys]
         bodies[section.index] = "\n".join(lines) or ("" if empty_when_none
                                                      else f"- {_text(language, 'no_evidence')}")
     return bodies
@@ -6578,6 +7098,13 @@ class _Engine:
         self.absence_discipline = _env_flag(self.env, "RESEARCH_ABSENCE_DISCIPLINE", False)
         if hasattr(self.tools, "absence_discipline"):
             self.tools.absence_discipline = self.absence_discipline
+        # RESEARCH_DERIVED_FINDINGS (default off): the KIQ task asks for a
+        # (DERIVED: …) clause on calculated figures and the section rules say how
+        # to state them; postprocess_notes recomputes each clause (DERIVED or
+        # UNVERIFIED facts), sources.json gains derived_supports, an unverified
+        # quant row stating a DERIVED result gains derived_from, and meta gains
+        # kiqs.derived and derived.
+        self.derived_findings = _env_flag(self.env, "RESEARCH_DERIVED_FINDINGS", False)
         # RESEARCH_SOURCE_DATES (default off until a precision check on real
         # pages; TIME-2): sources get publication dates from provider metadata
         # (and, with RESEARCH_SOURCE_DATE_TEXT_FALLBACK, default on, page-head
@@ -6900,11 +7427,20 @@ class _Engine:
 
     def _demote_shell_facts(self, record: dict) -> None:
         """A reloaded fact VERIFIED only by pages :meth:`_unmark_stored_shells`
-        found to be shells becomes REPORTED (``no_fetched_source``), the tag
-        :func:`postprocess_notes` gives such a fact now."""
+        found to be shells becomes REPORTED (``no_fetched_source``), and a
+        DERIVED one (RESEARCH-8) whose derivation source is such a page
+        UNVERIFIED (``unshown_source``, no derivation): the tags
+        :func:`postprocess_notes` gives such facts now."""
         if not self.stored_shells:
             return
         for fact in record["facts"]:
+            if isinstance(fact, dict) and fact.get("tag") == DERIVED_TAG:
+                derivation = fact.get("derivation")
+                sid = derivation.get("sid") if isinstance(derivation, dict) else None
+                if sid in self.stored_shells and not (self.ledger.get(sid) or {}).get("fetched"):
+                    fact.pop("derivation", None)
+                    fact.update(tag="UNVERIFIED", derivation_error="unshown_source")
+                continue
             if not isinstance(fact, dict) or fact.get("tag") != "VERIFIED":
                 continue
             sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
@@ -7488,6 +8024,10 @@ class _Engine:
 
         With absence discipline on, the record carries ``absence_cues``: its
         facts that state an absence, by tag (observe only: no tag changes).
+
+        With derived findings on, derivation clauses are recomputed
+        (``postprocess_notes(derivations=True)``), also when the evidence check
+        degrades.
         """
         shown = set(outcome.seen) | set(outcome.fetched)
 
@@ -7498,14 +8038,16 @@ class _Engine:
         evidence_error = None
         try:
             notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers,
-                                                evidence_mode=self.evidence_mode, page_text=self.tools.page_text)
+                                                evidence_mode=self.evidence_mode, page_text=self.tools.page_text,
+                                                derivations=self.derived_findings)
         except Exception as exc:  # noqa: BLE001 — the evidence check never breaks a run
             if contract is None:
                 raise
             error = f"{type(exc).__name__}: {exc}"
             self.analytics_errors.append({"helper": "evidence_quotes", "kiq": kiq.id, "error": error[:300]})
             self.log("warn", f"v3: {kiq.id} evidence check failed ({error}); notes kept without it")
-            notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers)
+            notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers,
+                                                derivations=self.derived_findings)
             contract, evidence_error = None, error[:300]
         facts = parts["facts"]
         verified = sum(1 for fact in facts if fact["tag"] == "VERIFIED")
@@ -7632,6 +8174,8 @@ class _Engine:
             addenda.append(_KIQ_ABSENCE_RULE)
         if self.evidence_mode != EVIDENCE_OFF:
             addenda.append(_KIQ_EVIDENCE_RULE)
+        if getattr(self, "derived_findings", False):
+            addenda.append(_KIQ_DERIVED_RULE)
         return addenda
 
     # ================================================================== gap
@@ -7979,6 +8523,8 @@ class _Engine:
         addenda: list[str] = []
         if getattr(self, "absence_discipline", False):  # engines built without __init__ lack the knob
             addenda.append(_SECTION_ABSENCE_RULE)
+        if getattr(self, "derived_findings", False):
+            addenda.append(_SECTION_DERIVED_RULE)
         if getattr(self, "evidence_headers", False):
             addenda.append(_SECTION_THIN_EVIDENCE_RULE)
         return addenda
@@ -8354,9 +8900,9 @@ class _Engine:
         ``snippet_marker_share`` is the share of the body's markers that point
         at a snippet source, and ``unused_fetched_sids`` reads fetched the same
         way (:meth:`_unused_fetched_sids`).  A sentence of the body counts in
-        ``untraced_prose_numbers`` when one of its numbers is in no VERIFIED
-        or REPORTED finding, on no cited fetched page and in no cited snippet
-        row's search text (:meth:`_traced_numbers`).
+        ``untraced_prose_numbers`` when one of its numbers is in no VERIFIED,
+        DERIVED or REPORTED finding, on no cited fetched page and in no cited
+        snippet row's search text (:meth:`_traced_numbers`).
         """
         fetched = {sid for sid in order if self._published_page(sid, self.ledger.get(sid) or {})[0]}
         markers = [int(position) for position in _CITE_RE.findall(body)]
@@ -8398,15 +8944,15 @@ class _Engine:
 
     def _traced_numbers(self, order: Sequence[int], fetched: set[int]) -> frozenset[str]:
         """The numbers a published sentence may trace to (a union of
-        :func:`page_number_set`): the VERIFIED and REPORTED findings' texts,
-        the pages of the cited fetched sources, the search text of the cited
-        snippet sources (:func:`_row_search_texts`) and the scenario frame's
-        weights as percentages only (the plan's forecast, which the report
+        :func:`page_number_set`): the VERIFIED, DERIVED (RESEARCH-8) and
+        REPORTED findings' texts, the pages of the cited fetched sources, the
+        search text of the cited snippet sources (:func:`_row_search_texts`)
+        and the scenario frame's weights as percentages only (the plan's forecast, which the report
         restates by design; a bare number equal to a weight stays untraced)."""
         traced: set[str] = set()
         for record in self.records.values():
             for fact in record.get("facts") or []:
-                if isinstance(fact, dict) and fact.get("tag") in ("VERIFIED", "REPORTED"):
+                if isinstance(fact, dict) and fact.get("tag") in ("VERIFIED", DERIVED_TAG, "REPORTED"):
                     traced |= page_number_set(str(fact.get("text") or ""))
         for sid in order:
             if sid in fetched:
@@ -8899,6 +9445,10 @@ class _Engine:
         ``supports``, through :func:`_merge_supports`; REPORT-7's evidence
         windows join after them.  Otherwise ``supports`` is ``[]``.
 
+        With RESEARCH_DERIVED_FINDINGS every row also carries
+        ``derived_supports`` (:meth:`_derived_supports`; ``[]`` for a shell),
+        a field of its own that is never merged into ``supports``.
+
         With RESEARCH_SOURCE_DATES a dated ledger row (TIME-2) publishes its
         ``date`` and, right after it, ``date_precision``, ``date_source`` and,
         when present, ``modified_at`` / ``modified_source`` /
@@ -8914,6 +9464,7 @@ class _Engine:
         rows: list[dict] = []
         demoted = 0
         quotes = self._evidence_support_quotes() if self.evidence_supports else {}
+        derived = self._derived_supports() if getattr(self, "derived_findings", False) else None
         for sid in order:
             row = self.ledger.get(sid)
             if not row:
@@ -8949,6 +9500,8 @@ class _Engine:
                 entry["data"] = data_source_block(data, row["url"])
             elif shell is None and quotes.get(sid):
                 _merge_supports(entry, quotes[sid], EVIDENCE_QUOTES_PER_SOURCE)
+            if derived is not None:
+                entry["derived_supports"] = list(derived.get(sid, ())) if shell is None else []
             entry["independent"] = None
             rows.append(entry)
         self.shell_sources_demoted = demoted
@@ -8978,6 +9531,38 @@ class _Engine:
                     ranked.setdefault(entry["sid"], []).append((rank, sequence, text))
                     sequence += 1
         return {sid: [text for _, _, text in sorted(items)] for sid, items in ranked.items()}
+
+    def _derived_facts(self) -> list[dict]:
+        """The DERIVED facts (RESEARCH-8) of this run with a readable
+        derivation (an int ``sid``, ``expr`` and ``result``), KIQs in natural
+        order, facts in order."""
+        found: list[dict] = []
+        for record in sorted(self.records.values(), key=lambda r: _natural_key(str(r.get("id")))):
+            for fact in record.get("facts") or []:
+                if not isinstance(fact, dict) or fact.get("tag") != DERIVED_TAG:
+                    continue
+                derivation = fact.get("derivation")
+                if (isinstance(derivation, dict) and isinstance(derivation.get("sid"), int)
+                        and derivation.get("expr") and derivation.get("result")):
+                    found.append(fact)
+        return found
+
+    def _derived_supports(self) -> dict[int, list[str]]:
+        """sid -> up to DERIVED_SUPPORTS_PER_SOURCE distinct calculated
+        statements of the DERIVED facts whose derivation draws on it:
+        ``{fact text} [calculated: {expr}; a=…, b=…]`` without markers, at most
+        EVIDENCE_SUPPORT_CHARS long (the fact text is shortened first)."""
+        supports: dict[int, list[str]] = {}
+        for fact in self._derived_facts():
+            derivation = fact["derivation"]
+            suffix = f" [calculated: {derivation['expr']}; {_derivation_operands(derivation)}]"
+            text = _collapse(_tidy_spaces(_CITE_RE.sub("", str(fact.get("text") or ""))),
+                             max(40, EVIDENCE_SUPPORT_CHARS - len(suffix)))
+            statement = _collapse(f"{text}{suffix}", EVIDENCE_SUPPORT_CHARS)
+            items = supports.setdefault(derivation["sid"], [])
+            if statement not in items and len(items) < DERIVED_SUPPORTS_PER_SOURCE:
+                items.append(statement)
+        return supports
 
     def _facts_task_addenda(self) -> list[str]:
         """Field rules the enabled knobs append to the facts task, in canonical
@@ -9500,17 +10085,20 @@ class _Engine:
         when none is); typing (:func:`classify_quant_row` against ``as_of``)
         adds ``class_hist`` and the ``future_dated_reported`` /
         ``period_unparsed`` / ``as_of_is_target`` / ``published_after_as_of``
-        flag counts.
+        flag counts.  With RESEARCH_DERIVED_FINDINGS too, verification is
+        followed by :meth:`_derive_quant_rows` and adds ``derived_from``, the
+        number of rows it gave one.
 
         Degrades safe, part by part: a failed part is recorded in
-        ``analytics_errors`` (``quant_provenance:verify`` / ``:typing``) and
-        left out of the summary, stamps no row (each part computes every row's
-        keys before it stamps any; a row without ``verification`` counts as
-        unchecked, never as verified), and the other part and the run go on.
+        ``analytics_errors`` (``quant_provenance:verify`` / ``:derived`` /
+        ``:typing``) and left out of the summary, stamps no row (each part
+        computes every row's keys before it stamps any; a row without
+        ``verification`` counts as unchecked, never as verified), and the
+        other parts and the run go on.
 
         ``drop`` (TIME-13, official-data tools bound) removes rows from
-        ``quant`` in place right after verification, so typing and the summary
-        describe only the rows quantitative.json keeps."""
+        ``quant`` in place right after verification, so derivation, typing
+        and the summary describe only the rows quantitative.json keeps."""
         def part(name: str, step: Callable[[], None]) -> bool:
             try:
                 step()
@@ -9531,6 +10119,8 @@ class _Engine:
             checked = len(quant) - labels["unchecked"]
             summary["verification_hist"] = dict(sorted(labels.items()))
             summary["verified_ratio"] = round(labels["verified"] / checked, 3) if checked else None
+            if getattr(self, "derived_findings", False) and part("derived", lambda: self._derive_quant_rows(quant)):
+                summary["derived_from"] = sum(1 for row in quant if "derived_from" in row)
         if typing and part("typing", lambda: _stamp_rows(quant, [classify_quant_row(row, as_of) for row in quant])):
             summary["class_hist"] = dict(sorted(Counter(row["epistemic_class"] for row in quant).items()))
             for flag in ("future_dated_reported", "period_unparsed", "as_of_is_target", "published_after_as_of"):
@@ -9569,6 +10159,28 @@ class _Engine:
                     continue
                 verification = "verified" if ok else "unverified"
             stamps.append({"verification": verification, "verified": verification == "verified"})
+        _stamp_rows(quant, stamps)
+
+    def _derive_quant_rows(self, quant: list[dict]) -> None:
+        """RESEARCH-8: a quant row labelled ``unverified`` (its number is not on
+        its fetched page) whose source is the derivation source of a DERIVED
+        fact stating it (:func:`derived_quant_match`) keeps its label and
+        gains ``derived_from`` {sid, expr, result} of the first such fact
+        (KIQs in natural order).  Every row's key is decided before any row
+        is stamped."""
+        by_sid: dict[int, list[Mapping[str, Any]]] = {}
+        for fact in self._derived_facts():
+            by_sid.setdefault(fact["derivation"]["sid"], []).append(fact["derivation"])
+        stamps: list[dict] = []
+        for row in quant:
+            stamp: dict[str, Any] = {}
+            url = row.get("source_url")
+            source = self.ledger.find(url) if url and row.get("verification") == "unverified" else None
+            derivation = derived_quant_match(row, by_sid.get(source["sid"], ())) if source else None
+            if derivation is not None:
+                stamp["derived_from"] = {"sid": derivation["sid"], "expr": derivation["expr"],
+                                         "result": derivation["result"]}
+            stamps.append(stamp)
         _stamp_rows(quant, stamps)
 
     def _evidence_step(self, quant: list[dict], sources: list[dict], order: Sequence[int],
@@ -10070,6 +10682,10 @@ class _Engine:
             self.meta["kiqs"]["sufficiency"] = {
                 label: sum(1 for profile in profiles.values() if profile["sufficiency"] == label)
                 for label in SUFFICIENCY_LABELS}
+        if self.derived_findings:
+            # RESEARCH-8: DERIVED facts count apart from VERIFIED ones (ADR-0002 I-11).
+            self.meta["derived"] = derived_summary(records)
+            self.meta["kiqs"]["derived"] = self.meta["derived"]["admitted"]
         if self.evidence_mode != EVIDENCE_OFF:
             self.meta["evidence"] = evidence_summary(records, self.evidence_mode)
         if self.absence_discipline:
@@ -11043,6 +11659,41 @@ def verify_quant_row(row: Mapping[str, Any], page_numbers: frozenset[str] | None
     if snippet and found(page_number_set(snippet)):
         return False, "snippet_only"
     return False, "none"
+
+
+def derived_quant_match(row: Mapping[str, Any],
+                        derivations: Iterable[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    """The first of ``derivations`` (DERIVED facts' ``derivation``, RESEARCH-8)
+    whose result a quantitative row's value states: ``"{value} {unit}"`` has
+    exactly one number that may state a result, as a finding's numbers may
+    (:func:`_number_occurrences`, :attr:`_NumberOccurrence.can_state`: a
+    checkable one, or a single digit written as a percentage or with a unit
+    class), no exponent notation, and that number states the result as a
+    finding's number would (:func:`_states_result` against
+    :func:`_result_form` of the derivation's formula and data operands:
+    display precision, the result's sign, a percentage result by a
+    percentage only, a unit class only in the unit class of every data
+    operand through a formula that keeps it, a ratio's percentage x 100 only
+    and any other number at its full value).  None when no derivation
+    matches."""
+    text = _quant_number_text(row)
+    numbers = [number for number in _number_occurrences(text) if number.can_state]
+    if len(numbers) != 1 or _EXPONENT_RE.search(text):
+        return None
+    for derivation in derivations:
+        try:
+            result = Decimal(str(derivation.get("result")))
+        except InvalidOperation:
+            continue
+        if not result.is_finite():
+            continue
+        operands = derivation.get("operands")
+        data_operands = {str(name): str(item.get("value"))
+                         for name, item in (operands.items() if isinstance(operands, dict) else ())
+                         if isinstance(item, dict) and item.get("sid") is not None}
+        if _states_result(numbers[0], result, _result_form(str(derivation.get("expr") or ""), data_operands)):
+            return derivation
+    return None
 
 
 def normalize_contested(value: Any, sources: Sequence[Mapping[str, Any]]) -> list[dict]:

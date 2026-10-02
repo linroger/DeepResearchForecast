@@ -2043,6 +2043,24 @@ class Config:
     # is measured in an audit run first; off = supports exactly as before.  Forwarded to
     # the v3 child.
     RESEARCH_EVIDENCE_SUPPORTS = os.environ.get('RESEARCH_EVIDENCE_SUPPORTS', 'false').strip().lower() == 'true'
+    # RESEARCH-8: declarative derived findings in v3.  On, the KIQ task asks a finding
+    # that states a figure the agent calculated (growth rate, ratio, share) to end with
+    # "(DERIVED: <formula>; a=<value> [S<n>], ...)", and the notes postprocessor
+    # recomputes it with zero model calls (hardened Decimal evaluator, operands and the
+    # years of a years(Y1,Y2) period checked at their full value on the one fetched page
+    # they cite, a stated result read as written - sign, scale word, a percentage result
+    # as a percentage only, a unit class only that of every operand through a formula
+    # that keeps it (sums, differences, literal scaling) - within display precision,
+    # every other figure of the finding on that page too): a passing finding is tagged
+    # DERIVED (never VERIFIED), a failing one UNVERIFIED with a derivation_error.  The
+    # digest shows the calculation, the section rules say how to state it, sources.json
+    # gains a separate derived_supports field (the report's citation evidence spans read
+    # it without its calculation, whose formula literals are no evidence), unverified
+    # quant rows matching a DERIVED result gain derived_from, and meta gains
+    # kiqs.derived and derived.  Default false: model compliance with the clause format
+    # is unmeasured; off = KIQ task, section rules, facts, digest, sources.json and meta
+    # byte-identical.  Forwarded to the v3 child.
+    RESEARCH_DERIVED_FINDINGS = os.environ.get('RESEARCH_DERIVED_FINDINGS', 'false').strip().lower() == 'true'
     # TIME-2 source publication dates (v3): each searched/fetched source is dated from
     # its provider metadata (Firecrawl scrape metadata and search row dates, Exa
     # published_date, the opt-in direct fetch's JSON-LD/<meta>/<time>), converted to the
