@@ -30,15 +30,16 @@ deterministic walls before anything is published:
 * ``source_mismatch``: the report's own lexical support check
   (``ReportAgent._semantic_citation_support``) rejects it against every cited source.
 
-The probability wall is a lexicon rule read one sentence (or semicolon clause) at a time: it
-closes the forms it lists and is not a proof that no worded probability can pass. Out of
+The probability wall is a lexicon rule read one sentence (or semicolon clause) at a time; an
+abbreviation's period ("U.S.", "e.g.") or a decimal point does not end a sentence. It closes
+the forms it lists and is not a proof that no worded probability can pass. Out of
 scope: a probability split across sentences ("Recession odds have risen. Analysts now put
 them at a third."), a hedge whose quantity sits elsewhere in its sentence ("approval is
 unlikely, the market puts it at a third"), and chance words or counts outside the lexicon
 ("a prospect", "nine cases of ten"). When such a form is written with a decimal or a number
 of two or more digits, that number still has to appear in the evidence (the number wall).
-The pass is off by default (REPORT_COUNTER_CASE) and only ever publishes non-probability
-text.
+The pass is off by default (REPORT_COUNTER_CASE); it is meant to publish only
+non-probability text, as far as the walls above reach.
 
 A source the support check rejects is removed from the claim even when another source
 supports it, so a published claim never carries a contradicted marker. A claim the check
@@ -52,7 +53,8 @@ hold a chance noun and a quantity ("rate-cut odds | above 1 in 3"), or a hedge w
 quantity of its own, is dropped: its row would publish a probability. So is a trigger whose
 signal or threshold is over 300 characters (dropped, never cut).
 
-The pass never moves a probability. Its outputs are non-probability text: validated triggers
+The pass never moves a probability. Its outputs are meant to be non-probability text (within
+the limits of the walls above): validated triggers
 become forecast indicators (and rows of the How-to-Verify table) and the strongest cited
 claim per side feeds the Part-2 synthesis prompt. The simulation signal pack is never part
 of the packet (diagnostic_only: feeding it back would count one opinion twice).
@@ -141,6 +143,11 @@ _PERCENT_RE = re.compile(
     r"(?:概率|几率|机率|可能|机会|把握|胜算|希望)"
     r"|(?<![一二两三四五六七八九十百千万几])(?<![统唯单同第逐划专])"
     r"(?:[一二两三四五六七八九十几]|(?<![\d.])(?:10|\d)(?:\.\d+)?)\s*成"
+    r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群|年人|都市场|像|效|色|套"
+    r"|份(?!额)|批(?!发))"
+    # A tenths range written with two numerals ("七八成", "六七成", "三四成"), with the
+    # same tail exclusions ("三一成立于1989年" is no proportion).
+    r"|(?<![一二两三四五六七八九十百千万几])[一二两三四五六七八九][一二三四五六七八九]\s*成"
     r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群|年人|都市场|像|效|色|套"
     r"|份(?!额)|批(?!发))",
     re.I)
@@ -263,6 +270,7 @@ _QUANTITY_RE = re.compile(
     rf"|of{_SEP}every{_SEP})(?:{_NUMBER_WORD}|\d+)\b"
     rf"|{_VULGAR_FRACTION}|{_SUPER_SUB_FRACTION}"
     r"|(?:为|是|等于|接近|趋近|趋于|近乎|几乎)[零〇]|[零〇](?=概率|几率|机率|可能|胜算|胜率|把握)"
+    r"|[零〇]点[零〇一二三四五六七八九]+"
     rf"|一半|过半|大半|小半|半数|各半|近半|逾半|{_ZH_COUNT}"
     rf"|{_ZH_NUM_START}{_ZH_NUM}\s*[比赔]\s*{_ZH_NUM}"
     r"|(?<![一二两三四五六七八九十百千万几])[一二两三四五六七八九十百千万几]+\s*倍",
@@ -285,7 +293,11 @@ _APPROX = (r"(?:about|around|roughly|approximately|nearly|almost|only|just|some|
 _ZH_HOPE = r"(?:机会|希望|把握)"
 _ZH_HALF = r"(?:一半|过半|大半|小半|半数|各半)"
 _ZH_RATIO = rf"{_ZH_NUM_START}(?:{_ZH_NUM}\s*[比赔]\s*{_ZH_NUM}|{_ZH_NUM}(?:\.\d+)?\s*倍)"
-_ZH_GAP = r"[^。；！？.;!?\n]{0,4}?"
+# Only linking and comparison words may sit between a hope word and its quantity, so the
+# quantity is that word's predicate ("机会只有一半", "希望不到一半", "机会大两倍"), never another
+# verb's ("车企希望产能提升一倍", "出口机会增加两倍"). Whitespace may sit around the linking word
+# (a trigger is read as "signal threshold": "增长的机会 超过一半").
+_ZH_GAP = (r"\s*(?:只有|仅有|不到|不足|超过|高于|低于|约为|大约|约|仅|有|为|是|达|近|逾|大|小)?\s*")
 _HEDGE_QUANTITY_RE = re.compile(
     rf"(?:\b(?:{_NUMBER_WORD}|\d+(?:\.\d+)?)(?:(?:{_SEP})?(?:times|fold)\b|\s*[x×])"
     rf"|\b(?:twice|thrice|half)\b){_SEP}(?:(?:as|more|less){_SEP}{_HEDGE_WORD}|likelier)\b"
@@ -303,8 +315,11 @@ _DATE_DIGITS_RE = re.compile(
     r"\d{4}-\d{1,2}-\d{1,2}|\d{4}\s*年(?:\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*[日号])?)?"
     r"|\d{1,2}\s*月\s*\d{1,2}\s*[日号]|\b[QH][1-4]\b|\b\d+(?:st|nd|rd|th)\b|第\s*\d+",
     re.I)
-# Sentence and clause ends for the chance-word rule (a decimal point is not one).
-_CLAUSE_SPLIT_RE = re.compile(r"[;；。!?！？\n]|\.(?!\d)")
+# Sentence and clause ends for the chance-word rule. A period ends a sentence only before
+# whitespace that is not followed by a lower-case word, or at the end: a decimal point, an
+# abbreviation's period after a single letter ("U.S.", "U.K.", "e.g.") and a period before a
+# lower-case word ("approx. a third") are not sentence ends.
+_CLAUSE_SPLIT_RE = re.compile(r"[;；。!?！？\n]|(?<!\b[A-Za-z])\.(?=\s+(?![a-z])|\s*$)")
 _URL_RE = re.compile(r"https?://[^\s)\]）>]+|www\.[^\s)\]）>]+", re.I)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _LATIN_WORD_RE = re.compile(r"[a-z]{4,}")
@@ -814,7 +829,7 @@ Rules:
 2. Every claim cites at least one source marker from the SOURCE INDEX in its "sources" list (for example ["S3"]). Never invent or renumber a marker.
 3. Never write a percentage, a share or odds in any form (no "%", no "percent", no percentage points, no "one in three", no "1/3", no "七成"), not even for an evidence value, and never state or imply a probability. Never put a chance noun (chance, odds, probability, likelihood, possibility, risk; 概率, 几率, 可能性, 胜率, 胜算) in a sentence that has any number, and never attach a number to a hedge word ("three times as likely", "likely at 0.4", "a two-thirds bet", "机会只有一半", "三比一的把握"), in claims and in triggers. Any other number you write must appear verbatim in the evidence (market anchors do not count). Describe magnitudes in words when in doubt.
 4. A claim is one or two sentences (at most 400 characters), written in the language of the source text it cites and staying close to that source's wording, so it can be checked against it.
-5. A trigger names an observable signal, worded close to the source that motivates it so it can be checked against it, whether it "raises" or "lowers" that scenario's probability, a concrete threshold (with a number) or event, a future deadline "by" written YYYY-MM-DD when one applies (otherwise ""), and the markers of the sources that motivate it.
+5. A trigger names an observable signal, worded close to the source that motivates it so it can be checked against it, whether it "raises" or "lowers" that scenario's probability, a concrete threshold (with a number) or event, a future deadline "by" written YYYY-MM-DD when one applies (otherwise ""), and the markers of the sources that motivate it. The signal and the threshold are at most 300 characters each.
 6. Reply with one JSON object and nothing else."""
 
 

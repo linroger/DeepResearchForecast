@@ -159,6 +159,23 @@ def test_probabilities_in_words_are_unverified_numbers():
         "Upside has a 1/3 chance.",
         "Only 1/3 of buyers charge at home.",
         "增长的胜率不到一半",
+        # Round 5: an abbreviation's period never ends the sentence, two-numeral tenths
+        # ranges are percentages and Chinese decimals are quantities.
+        "The probability of a U.S. recession is about half.",
+        "The odds of a U.S. recession are two to one.",
+        "The chance of a U.S. rate cut is roughly a third.",
+        "The likelihood of a U.K. default is three quarters.",
+        "The chance (approx. a third) is too low.",
+        "e.g. the probability is about half",
+        "七八成概率",
+        "上涨的概率有七八成。",
+        "有六七成的可能会降息。",
+        "市场份额约三四成。",
+        "概率约零点七",
+        "胜率约零点四",
+        # Deliberately kept blocked: 一半的机会 also reads "a 50% chance", so the reverse
+        # half-then-hope rule stays even though this sentence names opportunities.
+        "超过一半的机会来自海外市场。",
         "增长是三七开的可能",
         "增长与否是四六开",
         "每三辆新车中就有一辆是电动车",
@@ -240,6 +257,11 @@ def test_probabilities_in_words_are_unverified_numbers():
         "The chances are slim that prices fall",
         "Sales rose by 25 in 12 months",
         "2025成都车展",
+        # Round 5: a hope word's quantity must be its predicate; abbreviations alone are fine.
+        "车企希望产能提升一倍。",
+        "出口机会增加两倍。",
+        "三一成立于1989年",
+        "Sales hit 17 million in the U.S. last year",
         "The odds against growth are rising",
         "The odds on a recession are lengthening",
         "Chances of a recession in 2026 are rising",
@@ -298,6 +320,7 @@ def test_probabilities_in_words_are_unverified_numbers():
     "a one-in-three chance", "one chance in three", "nine times out of ten",
     "more probable than not", "likelier than not", "two-to-one against", "a 1/3 chance",
     "a ⅓ chance of growth", "the possibility of growth at about a third",
+    "the odds of a U.S. slump are two to one",
     "the risk of a slump at roughly a third", "nine cases out of ten",
     "three of every four years", "growth three times as likely"])
 def test_worded_odds_never_reach_part2_with_the_report_support_check(probability):
@@ -327,7 +350,8 @@ def test_zh_hope_words_with_a_half_never_reach_part2():
     probes = [evidence[:-1] + "，成功的机会超过一半。",
               evidence[:-1] + "，增长的机会只有一半的判断过于悲观。",
               evidence[:-1] + "，实现增长的希望不到一半。",
-              evidence[:-1] + "，成功的机会是三比一。"]
+              evidence[:-1] + "，成功的机会是三比一。",
+              evidence[:-1] + "，有六七成的可能继续增长。"]
     for probe in probes:                       # each would be supported without the wall
         assert support(probe, tags["S2"]) is True, probe
     kept, dropped = _claims([{"text": t, "sources": ["S2"]} for t in probes + [evidence]],
@@ -790,6 +814,8 @@ def test_triggers_that_state_a_probability_are_dropped():
         _trigger(signal="Rate-cut odds", threshold_or_event="above ⅓", by="2027-06-30"),
         _trigger(signal="Approval likely", threshold_or_event="at 0.4"),
         _trigger(signal="增长的机会", threshold_or_event="超过一半", by="2027-06-30"),
+        # Round 5: a two-numeral tenths range.
+        _trigger(signal="全球电动车销量增长概率", threshold_or_event="升至七八成", by="2027-01-01"),
         _trigger(),
         _trigger(signal="Odds of a rate cut", threshold_or_event="a policy shift",
                  by="2027-06-30"),
