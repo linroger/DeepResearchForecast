@@ -624,11 +624,12 @@ class Config:
     REPORT_VERIFIED_FACTS_MAX_CHARS = int(os.environ.get('REPORT_VERIFIED_FACTS_MAX_CHARS', '6000') or '6000')  # 已核验指标块字符上限（表头与规则段不截断）；Part 2 注入同一块，故也是 Part 2 注入的上限
     # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
     # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
-    # market_conflict / unmatched），计数记入 forecast.quality.verified_figures 与 final_audit.json 的
-    # verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验数字的来源与引用行）。
-    # 默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升 REPORT_FINAL_AUDIT_POLICY_VERSION；
-    # 已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段或文件。REL_TOL 为判为冲突所需的
-    # 最小相对差（低于它视为同一数字）。
+    # market_conflict / threshold_or_probability / unmatched），计数记入 forecast.quality.verified_figures
+    # 与 final_audit.json 的 verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验
+    # 数字的来源与引用行、比对样例）。默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升
+    # REPORT_FINAL_AUDIT_POLICY_VERSION；已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段
+    # 或文件（并去掉上一轮留下的旧值与旧文件）。REL_TOL：与已核验值的相对差超过它才判为冲突；相差不超过它、
+    # 又未按数字自身精度对上的数字既不算匹配也不算冲突（计入 unmatched，不进 used_in）。
     REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的
@@ -2048,6 +2049,51 @@ class Config:
     # Forwarded to the v3 child.
     RESEARCH_SOURCE_DATE_TEXT_FALLBACK = os.environ.get(
         'RESEARCH_SOURCE_DATE_TEXT_FALLBACK', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    # TIME-13 official-data tools of the v3 research agents (deerflow_bridge/data_tools.py):
+    # a comma list of fred (macro_series: FRED/ALFRED series as published on the run's
+    # vintage date), sec_edgar (company_filings: a US SEC filer's statements as filed on
+    # or before the as-of date) or all.  A tool is bound only with its credential:
+    # FRED_API_KEY for fred, an SEC_EDGAR_USER_AGENT naming a contact address for
+    # sec_edgar.  Default empty: no tool is bound and the agents' tools object, prompts,
+    # sources.json, quantitative.json and meta are byte-identical to before.  Forwarded to
+    # the v3 child.
+    RESEARCH_DATA_TOOLS = os.environ.get('RESEARCH_DATA_TOOLS', '').strip().lower()
+    # TIME-13: the FRED API key (a secret: never forwarded explicitly, the research child
+    # inherits it from the environment; data_tools keeps it out of every result, cache file
+    # and log line).  Empty: macro_series is never bound.
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '').strip()
+    # TIME-13: the User-Agent SEC requires ('Name contact@domain'; inherited by the research
+    # child like the key).  Without an '@' company_filings is never bound.
+    SEC_EDGAR_USER_AGENT = os.environ.get('SEC_EDGAR_USER_AGENT', '').strip()
+    # TIME-13: at most this many deterministic rows (the structured values of the cited
+    # official-data sources, copied exactly) head quantitative.json, within its 60-row cap.
+    # Only read when data tools are bound, so the default changes nothing by itself; 0 adds
+    # none.  Forwarded to the v3 child.
+    try:
+        DATA_QUANT_ROWS_MAX = max(0, int(os.environ.get('DATA_QUANT_ROWS_MAX', '12') or '12'))
+    except ValueError:
+        DATA_QUANT_ROWS_MAX = 12
+    # TIME-10/11 vendor knobs (read by data_tools on every call, clamped there; empty =
+    # the module default), declared here so the parent forwards its own values to the v3
+    # child instead of whatever the child's environment holds.  They only matter once
+    # RESEARCH_DATA_TOOLS binds a tool.
+    try:
+        DATA_FRED_WINDOW_YEARS = int(os.environ.get('DATA_FRED_WINDOW_YEARS', '10') or '10')
+    except ValueError:
+        DATA_FRED_WINDOW_YEARS = 10
+    DATA_TOOLS_CACHE_DIR = os.environ.get('DATA_TOOLS_CACHE_DIR', '').strip()
+    try:
+        DATA_FRED_CACHE_TTL_H = float(os.environ.get('DATA_FRED_CACHE_TTL_H', '6') or '6')
+    except ValueError:
+        DATA_FRED_CACHE_TTL_H = 6.0
+    try:
+        DATA_EDGAR_CACHE_TTL_H = float(os.environ.get('DATA_EDGAR_CACHE_TTL_H', '24') or '24')
+    except ValueError:
+        DATA_EDGAR_CACHE_TTL_H = 24.0
+    try:
+        DATA_TOOL_TIMEOUT_S = float(os.environ.get('DATA_TOOL_TIMEOUT_S', '20') or '20')
+    except ValueError:
+        DATA_TOOL_TIMEOUT_S = 20.0
     # PAR-2：编排器级「多角度并行研究轨」。>1 时研究阶段并行跑 K 个 DeerFlowResearchRunner
     # 子进程，每个带角度特化前缀（轨1=基线证据扫描，即原始 brief 逐字；轨2=基率/参照类/历史
     # 类比；轨3=行为者激励+反面证伪+市场定价），各写入 handoff/track_<k>/，随后确定性合并回
