@@ -4145,7 +4145,7 @@ class _ResultForm:
 
     percent: bool            # a percentage already (:func:`_result_is_percent`)
     units: frozenset[str]    # the unit classes a number stating it may be written with
-    quantity: bool           # in a unit a data operand is written with: no ratio, never a percentage
+    quantity: bool           # in the data operands' unit, whatever it is: no ratio, never a percentage
 
 
 def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
@@ -4154,15 +4154,16 @@ def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
     (:func:`_result_is_percent`), and, when the formula keeps their unit
     (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
     or a sum scaled by literals), the unit classes every data operand is
-    written in (:func:`_operand_units`) and whether one is written with a
-    unit class at all.  A ratio, product or power of operands, a rate per
+    written in (:func:`_operand_units`) and that the result is a quantity in
+    their unit, whether or not that unit is a unit class ("107 units", a
+    bare count).  A ratio, product or power of operands, a rate per
     ``years()`` period and a clause without data operands keep no unit."""
     values = list(data_operands.values())
     keeps = bool(values) and dn.keeps_unit(expr, data_operands)
     units = [_operand_units(value) for value in values] if keeps else []
     return _ResultForm(percent=_result_is_percent(expr, values),
                        units=frozenset.intersection(*units) if units else frozenset(),
-                       quantity=any(units))
+                       quantity=keeps)
 
 
 def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm) -> bool:
@@ -4181,10 +4182,11 @@ def _states_result(number: _NumberOccurrence, result: Decimal, form: _ResultForm
       in a unit class of every data operand through a formula that keeps it
       (``form.units``: "24 TWh" and "€24" state no difference of GW figures,
       "2.85 GW" no ratio of them, "24 GW" no difference of bare numbers);
-    * a ratio is stated by a percentage at result x 100 only, a result in an
-      operand's unit (``form.quantity``) never by a percentage ("2,400%" is
-      no 24 GW difference), and any other number states the result at its
-      full value only ("2.85 trillion" is 2850000000000, never 2.85)."""
+    * a ratio is stated by a percentage at result x 100 only, a result in
+      the operands' unit (``form.quantity``) never by a percentage ("2,400%"
+      is no 24 GW difference, "700%" no difference of 107 and 100 units),
+      and any other number states the result at its full value only ("2.85
+      trillion" is 2850000000000, never 2.85)."""
     result = -result if number.signed else result
     if form.percent:
         return (number.percent and not number.scaled and not number.units

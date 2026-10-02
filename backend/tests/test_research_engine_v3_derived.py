@@ -264,6 +264,13 @@ FAILURE_CASES = [
      "result_mismatch"),
     ("Capacity rose about 2,400% [S12] (DERIVED: a-b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("Storage grew by 5 GWh [S16] (DERIVED: a-b; a=7.5 GW [S16], b=2.5 GW [S16])", "result_mismatch"),
+    # A result in the operands' unit is never a percentage, whether or not that unit is a
+    # unit class: a count, a bare number or a percentage scaled by a literal.
+    ("Sales grew about 700% [S16] (DERIVED: a-b; a=107 units [S16], b=100 units [S16])", "result_mismatch"),
+    ("Capacity rose by 2,400% [S12] (DERIVED: a-b; a=37 [S12], b=13 [S12])", "result_mismatch"),
+    ("Capacity totals about 5,000% [S12] (DERIVED: a+b; a=37 [S12], b=13 [S12])", "result_mismatch"),
+    ("Capacity is about 3,700,000% [S12] (DERIVED: a*1000; a=37 [S12])", "result_mismatch"),
+    ("Renewables reached about 6,800,000% [S15] (DERIVED: a*1000; a=68% [S15])", "result_mismatch"),
     # A single digit states a result only as a percentage or with a unit, at its precision.
     ("Sales grew 8% [S16] (DERIVED: (a-b)/b*100; a=107 units [S16], b=100 units [S16])", "result_mismatch"),
     ("Sales grew by 7 [S16] (DERIVED: a-b; a=107 units [S16], b=100 units [S16])", "no_result_token"),
@@ -427,13 +434,13 @@ def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
 # Every clause form of this section, pinned flag off by FLAG_OFF_SHA256: the
 # _flag_off_snapshot of linear_research.py at 30ab072 (feat/finharness-transplants,
 # the base of wp/RESEARCH-8), the engine before this package; the bases merged
-# later (9b65135, 13d0bbe, a64d798, 7fdaa0c) give the same snapshot.
+# later (9b65135, 13d0bbe, a64d798, 7fdaa0c, dc89859) give the same snapshot.
 PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARITY_LINES,
                 "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)",
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "1086a98eaf090a547a4f0ce2131d06465a6bcc038b0816a37299affcba0ed7b9"
+FLAG_OFF_SHA256 = "e8cd679e8ff55b08c2583194912160c79ac5198ed9cb57a18a92003950d6c8bb"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -778,7 +785,14 @@ def test_derived_quant_match_reads_a_unit_figure_in_the_unit_of_its_operands_onl
     bare = {"sid": 1, "expr": "a-b", "result": "24",
             "operands": {"a": {"value": "37", "sid": 1}, "b": {"value": "13", "sid": 1}}}
     assert lr.derived_quant_match({"value": "24", "unit": "GW"}, [bare]) is None
-    period = {"sid": 1, "expr": "(a-b)/n", "result": "4.8",
+    # A result in the operands' unit is never a percentage, whether or not that unit is a unit class.
+    counts = {"sid": 1, "expr": "a-b", "result": "7",
+              "operands": {"a": {"value": "107 units", "sid": 1}, "b": {"value": "100 units", "sid": 1}}}
+    for row, derivation in (({"value": "700", "unit": "%"}, counts), ({"value": 700, "unit": "percent"}, counts),
+                            ({"value": "2,400", "unit": "%"}, bare), ({"value": 2400.0, "unit": "%"}, bare)):
+        assert lr.derived_quant_match(row, [derivation]) is None, row
+    assert lr.derived_quant_match({"value": "24", "unit": ""}, [bare]) is bare
+    period ={"sid": 1, "expr": "(a-b)/n", "result": "4.8",
               "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1},
                            "n": {"value": "years(2019,2024)", "sid": None}}}
     assert lr.derived_quant_match({"value": "4.8", "unit": "GW"}, [period]) is None
