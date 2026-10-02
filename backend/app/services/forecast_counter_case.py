@@ -35,9 +35,10 @@ closes the forms it lists and is not a proof that no worded probability can pass
 scope: a probability split across sentences ("Recession odds have risen. Analysts now put
 them at a third."), a hedge whose quantity sits elsewhere in its sentence ("approval is
 unlikely, the market puts it at a third"), and chance words or counts outside the lexicon
-("a prospect", "nine cases of ten"). A decimal or a number of two or more digits written that
-way still has to appear in the evidence (the number wall). The pass is off by default
-(REPORT_COUNTER_CASE) and only ever publishes non-probability text.
+("a prospect", "nine cases of ten"). When such a form is written with a decimal or a number
+of two or more digits, that number still has to appear in the evidence (the number wall).
+The pass is off by default (REPORT_COUNTER_CASE) and only ever publishes non-probability
+text.
 
 A source the support check rejects is removed from the claim even when another source
 supports it, so a published claim never carries a contradicted marker. A claim the check
@@ -193,12 +194,12 @@ _TIME_SPAN = (r"(?:(?:calendar|fiscal|trading|business)\s+)?"
 # slash U+2215; the Unicode vulgar fractions ("¼", "⅓", "↉"); superscript digits over subscript
 # digits ("¹⁄₃"). Each run starts where no run of the same kind precedes it, so a long run of
 # digits is scanned once.
-_SLASHES = "/／⁄∕"
+_SLASHES = "/\uff0f\u2044\u2215"
 _FRACTION_SLASH = f"[{_SLASHES}]"
-_VULGAR_FRACTION = "[¼-¾⅐-⅟↉]"
-_SUPERSCRIPTS = "¹²³⁰⁴-⁹"
+_VULGAR_FRACTION = "[\u00bc-\u00be\u2150-\u215f\u2189]"
+_SUPERSCRIPTS = "\u00b9\u00b2\u00b3\u2070\u2074-\u2079"
 _SUPER_SUB_FRACTION = (rf"(?<![{_SUPERSCRIPTS}])[{_SUPERSCRIPTS}]+\s*{_FRACTION_SLASH}\s*"
-                       "[₀-₉]+")
+                       "[\u2080-\u2089]+")
 _ODDS_RE = re.compile(
     rf"\b{_NUMBER_WORD}(?:{_SEP}(?:chances?|times?|shots?|occasions?|cases?))?{_SEP}in{_SEP}"
     rf"(?:(?:an?|every){_SEP}{_NUMBER_WORD}\b|{_NUMBER_WORD}\b(?!\s+{_TIME_SPAN}))"
@@ -283,7 +284,7 @@ _APPROX = (r"(?:about|around|roughly|approximately|nearly|almost|only|just|some|
            r"|below|above|near)")
 _ZH_HOPE = r"(?:机会|希望|把握)"
 _ZH_HALF = r"(?:一半|过半|大半|小半|半数|各半)"
-_ZH_RATIO = rf"{_ZH_NUM_START}(?:{_ZH_NUM}\s*[比赔]\s*{_ZH_NUM}|{_ZH_NUM}\s*倍)"
+_ZH_RATIO = rf"{_ZH_NUM_START}(?:{_ZH_NUM}\s*[比赔]\s*{_ZH_NUM}|{_ZH_NUM}(?:\.\d+)?\s*倍)"
 _ZH_GAP = r"[^。；！？.;!?\n]{0,4}?"
 _HEDGE_QUANTITY_RE = re.compile(
     rf"(?:\b(?:{_NUMBER_WORD}|\d+(?:\.\d+)?)(?:(?:{_SEP})?(?:times|fold)\b|\s*[x×])"

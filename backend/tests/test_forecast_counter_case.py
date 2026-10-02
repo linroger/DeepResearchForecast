@@ -201,6 +201,7 @@ def test_probabilities_in_words_are_unverified_numbers():
         "成功的机会是三比一",
         "三比一的把握",
         "成功的机会大两倍",
+        "成功的机会是1.5倍",
         "有七分把握能增长",
         # Hedge words with a quantity attached to them.
         "Growth is 2.5 times more likely.",
