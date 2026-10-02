@@ -26,9 +26,10 @@ and no agent tool is involved.  This module is the pure, stdlib-only part:
   at its own display precision (one reading: the result as it is, or a ratio
   as a percentage; :func:`scales_to_percent` tells whether a formula yields
   a percentage already, :func:`is_additive` whether it only adds and
-  subtracts, so percentages give percentage points, :func:`keeps_unit`
-  whether its result is in the unit of its data operands and
-  :func:`is_quotient` whether it is a ratio of them);
+  subtracts, :func:`gives_points` whether over percentages it gives
+  percentage points, :func:`keeps_unit` whether its result is in the unit
+  of its data operands and :func:`is_quotient` whether it is a ratio of
+  them);
   :func:`format_exact` writes a result with 12 significant digits and no
   exponent notation.
 
@@ -46,7 +47,7 @@ import re
 import unicodedata
 from decimal import (ROUND_HALF_EVEN, Context, Decimal, DecimalException, DivisionByZero, InvalidOperation,
                      Overflow, localcontext)
-from typing import Callable, Collection, Mapping, Sequence
+from typing import Callable, Collection, Iterator, Mapping, Sequence
 
 __all__ = [
     "CLAUSE_OPEN_RE",
@@ -55,6 +56,7 @@ __all__ = [
     "CalcError",
     "evaluate",
     "format_exact",
+    "gives_points",
     "is_additive",
     "is_quotient",
     "keeps_unit",
@@ -438,24 +440,61 @@ def _is_zero(node: ast.AST) -> bool:
 
 def is_quotient(expr: str, data_names: Collection[str]) -> bool:
     """Whether formula ``expr`` is a quotient of data operands
-    (``data_names``): its top operation divides a term holding a data operand
-    by another term holding one ("a/b", "(a-b)/b", "a/(b+c)").  Only such a
-    result is a ratio, which a percentage states x 100.  A product, power or
-    call of operands ("a*b", "a**1", "sqrt(a)", "((a/b)**(1/n)-1)"), a
-    quotient by a literal or by a name that is no data operand ("(a-b)/1000",
-    "(a-b)/n" over a ``years()`` period) and a formula whose top operation
-    is no division are not.  Never raises: an unreadable formula is no
-    quotient."""
+    (``data_names``): its top operation divides a term in the data operands'
+    unit by another term in that unit (each side as :func:`keeps_unit` reads
+    it: "a/b", "(a-b)/b", "a/(b+c)", "100*a/b"), so the result has no unit.
+    Only such a result is a ratio, which a percentage states x 100.  A
+    product, power or call of operands ("a*b", "a**1", "sqrt(a)",
+    "((a/b)**(1/n)-1)"), a quotient whose sides differ in unit ("a*b/b" is
+    in the operands' unit, "a/b/c" per unit), a quotient by a literal or by
+    a name that is no data operand ("(a-b)/1000", "(a-b)/n" over a
+    ``years()`` period) and a formula whose top operation is no division are
+    not.  Never raises: an unreadable formula is no quotient."""
     if not isinstance(expr, str) or len(expr) > MAX_EXPR_CHARS:
         return False
     try:
         node = ast.parse(expr.strip(), mode="eval").body
         names = frozenset(data_names)
+        return (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+                and _dimension(node.left, names) == _dimension(node.right, names) == _UNIT)
     except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
         return False
-    return (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
-            and all(any(isinstance(sub, ast.Name) and sub.id in names for sub in ast.walk(side))
-                    for side in (node.left, node.right)))
+
+
+def gives_points(expr: str, data_names: Collection[str]) -> bool:
+    """Whether formula ``expr`` gives percentage points when its data
+    operands (``data_names``) are percentages: it only adds and subtracts
+    (:func:`is_additive`) terms in their unit, the literal 0 aside
+    (:func:`keeps_unit`: "a-b", "abs(b-a)", "max(a,b)-c"), or it is a
+    complement, the literal 100 minus such terms ("100-a", "100-a-b",
+    "100-(a+b)").  Any other literal offset gives no points ("a+100" over
+    68% is no "168 percentage points"; "a-1", "1000-a", "100-a+b").  Never
+    raises: an unreadable formula gives none."""
+    if not is_additive(expr):
+        return False
+    if keeps_unit(expr, data_names):
+        return True
+    try:
+        names = frozenset(data_names)
+        terms = list(_signed_terms(ast.parse(expr.strip(), mode="eval").body, 1))
+        literals = [(sign, node) for sign, node in terms if isinstance(node, ast.Constant) and not _is_zero(node)]
+        others = [(sign, node) for sign, node in terms if not isinstance(node, ast.Constant)]
+        return (len(literals) == 1 and literals[0][0] == 1 and _is_hundred(literals[0][1]) and bool(others)
+                and all(sign == -1 and _dimension(node, names) == _UNIT for sign, node in others))
+    except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
+        return False
+
+
+def _signed_terms(node: ast.AST, sign: int) -> Iterator[tuple[int, ast.AST]]:
+    """The terms of a sum or difference, each with its sign: "100-(a+b)" is
+    (+1, 100), (-1, a), (-1, b).  Calls, products and names are one term."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        yield from _signed_terms(node.left, sign)
+        yield from _signed_terms(node.right, sign if isinstance(node.op, ast.Add) else -sign)
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        yield from _signed_terms(node.operand, -sign)
+    else:
+        yield sign, node
 
 
 def _is_hundred(node: ast.AST) -> bool:

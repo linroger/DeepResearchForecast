@@ -261,6 +261,9 @@ FAILURE_CASES = [
     ("Renewables supplied about 162 pp of their 2019 share [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])",
      "result_mismatch"),
     ("Capacity grew about 185 pp [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
+    # A literal offset other than a complement's 100 gives no points.
+    ("Renewables stand about 168 percentage points [S15] (DERIVED: a+100; a=68% [S15])", "result_mismatch"),
+    ("Renewables stand about 1,068 pp [S15] (DERIVED: a+1000; a=68% [S15])", "result_mismatch"),
     # A figure written with a unit class states a result only in the unit class of every
     # data operand, through a formula that keeps it: no other class, no ratio or product
     # of unit figures, no unit the operands do not state, and never as a percentage.
@@ -293,6 +296,7 @@ FAILURE_CASES = [
     ("Capacity is about 3,700% [S12] (DERIVED: a**1; a=37 GW [S12])", "result_mismatch"),
     ("Capacity is about 608% [S12] (DERIVED: sqrt(a); a=37 GW [S12])", "result_mismatch"),
     ("Capacity is about 361% [S12] (DERIVED: ln(a); a=37 GW [S12])", "result_mismatch"),
+    ("The ratio is about 3,700% [S12] (DERIVED: a*b/b; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("Capacity grew about 23.3% a year from 2019 to 2024 [S12] (DERIVED: (a/b)**(1/n)-1; a=37 GW [S12], "
      "b=13 GW [S12], n=years(2019,2024))", "result_mismatch"),
     # A single digit states a result only as a percentage or with a unit, at its precision.
@@ -463,13 +467,13 @@ def test_audit_keeps_the_tag_evidence_off_gives_a_derivation_bullet():
 # Every clause form of this section, pinned flag off by FLAG_OFF_SHA256: the
 # _flag_off_snapshot of linear_research.py at 30ab072 (feat/finharness-transplants,
 # the base of wp/RESEARCH-8), the engine before this package; the bases merged
-# later (9b65135, 13d0bbe, a64d798, 7fdaa0c, dc89859) give the same snapshot.
+# later (9b65135, 13d0bbe, a64d798, 7fdaa0c, dc89859, 44a4561) give the same snapshot.
 PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARITY_LINES,
                 "Revenue (derived: from licensing) reached 37 GW [S12] (VERIFIED)",
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "f4696309d0bccda3761514903155ecae70153640b3e8daa26250d35736fa974f"
+FLAG_OFF_SHA256 = "40a82f2efb2fe891b51a792ecc3ebf4b5e9a9830237c99eb6dc8080dadf22de3"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():

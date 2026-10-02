@@ -262,13 +262,34 @@ def test_keeps_unit_reads_sums_of_data_operands_scaled_by_literals():
 
 def test_is_quotient_reads_a_top_division_of_data_operands_only():
     names = {"a", "b", "c"}
-    for expr in ("a/b", "(a-b)/b", "(b-a)/a", "a/(b+c)", "100*a/b", "abs(a-b)/b", "-a/b", "a/b/c", " a / b "):
+    for expr in ("a/b", "(a-b)/b", "(b-a)/a", "a/(b+c)", "100*a/b", "a*1000/b", "abs(a-b)/b", "-a/b",
+                 "max(a, 0)/(b-0)", " a / b "):
         assert dn.is_quotient(expr, names), expr
     for expr in ("a/b*100", "a/b-1", "((a/b)**(1/n)-1)", "a*b", "a**1", "sqrt(a)", "ln(a)", "abs(a/b)", "-(a/b)",
                  "a-b", "a", "(a-b)/1000", "(a-b)/n", "1000/a", "a/1000", "100/1000", "n/a", "a/n",
                  "", "a +* b", None, "a" * 400):
         assert not dn.is_quotient(expr, names), expr
+    # Both sides of the division are in the operands' unit: a quotient whose sides differ in unit is no ratio.
+    for expr in ("a*b/b", "a/b/c", "a/(b*c)", "(a+100)/b", "sqrt(a)/b", "a/(b*n)", "(a*b)/(c*a)"):
+        assert not dn.is_quotient(expr, names), expr
     assert not dn.is_quotient("a/b", set()) and not dn.is_quotient("a/b", {"a"}) and not dn.is_quotient("a/b", None)
+
+
+def test_gives_points_reads_sums_differences_and_complements_of_operands_only():
+    names = {"a", "b", "c"}
+    for expr in ("a-b", "a+b-c", "abs(b-a)", "max(a,b)-c", "min(a, b)", "a", "-a", "a+0", "a-b-0",
+                 "100-a", "100-a-b", "100-(a+b)", "100.0-a", "100-max(a, b)", "100-abs(a-b)", "-(a-100)", "100-a+0"):
+        assert dn.gives_points(expr, names), expr
+    # A literal other than 0 offsets percentages into no points, save the 100 a complement takes them from.
+    for expr in ("a+100", "100+a", "a-1", "a+1000", "1000-a", "100-a+b", "100-(a-b)", "100 - -a", "100-a-100",
+                 "100-a-1", "max(a, 100)", "100", "100-n", "100-1000", "a+'x'", "True-a"):
+        assert not dn.gives_points(expr, names), expr
+    # Only sums and differences: no product, quotient, power or other call.
+    for expr in ("a*1000", "a/1000", "a/b", "(a-b)/b*100", "a**1", "sqrt(a)", "100-a*1", "", "a +* b", None,
+                 "a" * 400):
+        assert not dn.gives_points(expr, names), expr
+    assert not dn.gives_points("a-b", set()) and not dn.gives_points("100-a", {"b"})
+    assert not dn.gives_points("a-b", None) and not dn.gives_points("100-a", None)
 
 
 def test_format_exact_has_twelve_significant_digits_and_no_exponent():

@@ -4134,21 +4134,24 @@ def _operand_units(value: str) -> frozenset[str]:
     return fact_unit_tokens(value).get(found[0][1], frozenset()) if len(found) == 1 else frozenset()
 
 
-def _result_is_points(expr: str, data_values: Sequence[str]) -> bool:
+def _result_is_points(expr: str, data_operands: Mapping[str, str]) -> bool:
     """Whether a derivation's result is in percentage points: every data
-    operand value is a percentage and the formula only adds and subtracts
-    them (:func:`derived_numbers.is_additive`).  68% - 42% is 26 percentage
-    points; "26%" would misstate it as a relative change, which is 61.9%."""
-    return bool(data_values) and dn.is_additive(expr) and all(fact_percent_tokens(value) for value in data_values)
+    operand value (``data_operands``, name → value) is a percentage and the
+    formula only adds and subtracts them, the literal 0 aside, or takes them
+    from 100 (:func:`derived_numbers.gives_points`: "a-b", "100-a"; "a+100"
+    gives no points).  68% - 42% is 26 percentage points; "26%" would
+    misstate it as a relative change, which is 61.9%."""
+    return (bool(data_operands) and dn.gives_points(expr, data_operands)
+            and all(fact_percent_tokens(value) for value in data_operands.values()))
 
 
-def _result_is_percent(expr: str, data_values: Sequence[str]) -> bool:
+def _result_is_percent(expr: str, data_operands: Mapping[str, str]) -> bool:
     """Whether a derivation's result is a percentage as it is: its formula
     multiplies by the literal 100 (:func:`derived_numbers.scales_to_percent`),
     or it is in percentage points (:func:`_result_is_points`).  A ratio or
     product of percentages is no percentage as it is (68% / 42% is "162%",
     never "1.6%": :func:`_result_form` reads it as a ratio)."""
-    return dn.scales_to_percent(expr) or _result_is_points(expr, data_values)
+    return dn.scales_to_percent(expr) or _result_is_points(expr, data_operands)
 
 
 @dataclass(frozen=True)
@@ -4158,7 +4161,7 @@ class _ResultForm:
     percent: bool            # a percentage already (:func:`_result_is_percent`)
     points: bool             # in percentage points (:func:`_result_is_points`): stated in points only
     units: frozenset[str]    # the unit classes a number stating it may be written with
-    ratio: bool              # a quotient of data operands: the one result a percentage states x 100
+    ratio: bool              # a unitless quotient of data operands: the one result a percentage states x 100
 
 
 def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
@@ -4169,8 +4172,9 @@ def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
     (:func:`derived_numbers.keeps_unit`: sums and differences, one operand
     or a sum scaled by literals), the unit classes every data operand is
     written in (:func:`_operand_units`); and whether it is a ratio, a
-    quotient of data operands (:func:`derived_numbers.is_quotient`: "a/b",
-    "(a-b)/b").  A ratio, product or power of operands, a rate per
+    quotient of two terms in the data operands' unit
+    (:func:`derived_numbers.is_quotient`: "a/b", "(a-b)/b"; "a*b/b" is
+    none).  A ratio, product or power of operands, a rate per
     ``years()`` period and a clause without data operands keep no unit; a
     result that keeps the unit is never a ratio, whether or not that unit is
     a unit class ("107 units", a bare count), and neither is a product,
@@ -4178,7 +4182,8 @@ def _result_form(expr: str, data_operands: Mapping[str, str]) -> _ResultForm:
     values = list(data_operands.values())
     keeps = bool(values) and dn.keeps_unit(expr, data_operands)
     units = [_operand_units(value) for value in values] if keeps else []
-    return _ResultForm(percent=_result_is_percent(expr, values), points=_result_is_points(expr, values),
+    return _ResultForm(percent=_result_is_percent(expr, data_operands),
+                       points=_result_is_points(expr, data_operands),
                        units=frozenset.intersection(*units) if units else frozenset(),
                        ratio=dn.is_quotient(expr, data_operands))
 
