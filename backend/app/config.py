@@ -469,6 +469,19 @@ class Config:
     # past their grace period need no network and are always settled; rows with nothing
     # actionable (every binary recorded, or unanchored and still inside grace) never count.
     RESOLUTION_SETTLE_MAX_TARGETS = int(os.environ.get('RESOLUTION_SETTLE_MAX_TARGETS', '200') or '200')
+    # EVAL-5 market-relative skill (read only by scripts/resolution_monitor.py): the
+    # run_monitor result of each `run` and the `summary` payload add market_skill
+    # (backtest.market_skill_report: Brier skill vs the anchor price each settled binary saw,
+    # divergence hit rate vs a market-implied null) and monitor_report.md gains '## Skill vs
+    # the market it saw' (the `run` CLI's per-report rows do not carry it). Safe on by default: it only
+    # reads resolutions.jsonl / ledger.jsonl and sealed forecast.json files (never writes
+    # them), is deterministic with no LLM or network call, changes no report or forecast,
+    # and is inert unless the monitor runs; false = the monitor's output is byte-identical
+    # to before.
+    FORECAST_SKILL_SCORING = os.environ.get('FORECAST_SKILL_SCORING', 'true').strip().lower() == 'true'
+    # Scored rows a market-skill stratum needs before it stops being flagged insufficient_data
+    # ('indicative' in the monitor report); it flags thin strata and never suppresses them.
+    FORECAST_SKILL_MIN_N = int(os.environ.get('FORECAST_SKILL_MIN_N', '10') or '10')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉
     # 分析（contingent 纽带=支点）。**模型先验非证据**，块内显式标注。默认关（保守，避免被当成证据）。
@@ -589,6 +602,10 @@ class Config:
     # 提示；未识别的非 ok 值同样附提示并告警（偏向关闭）。结果记入 forecast.json
     # quality.signal_pack_health（summary 存在却不可读时另记 summary_unreadable 并告警）。
     # ok / 无 summary / 读取失败 → 信号包逐字节不变；false → 旧行为（不读 summary、不记 quality）。
+    # FU-3：同一规则还管大纲预取（simulation_outcomes / scenario_diff）、ReACT 工具（simulation_outcomes、
+    # coalition_map 含 faction_brief 的降级、opinion_shift、scenario_diff）与情景报告的基线（信号包差异块、
+    # 对比表、scenario_diff 工具、大纲差异预取）：hollow / errored 一侧只给说明行，基线裁定另记
+    # quality.baseline_signal_pack_health；summary 不可读与无 summary 一样按旧行为（只标记、不挡）。
     REPORT_SIGNAL_PACK_HEALTH_GATE = os.environ.get(
         'REPORT_SIGNAL_PACK_HEALTH_GATE', 'true').strip().lower() == 'true'
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
@@ -630,11 +647,12 @@ class Config:
     REPORT_COUNTER_CASE_EVIDENCE_CHARS = int(os.environ.get('REPORT_COUNTER_CASE_EVIDENCE_CHARS', '12000') or '12000')  # 反证证据包中 dossier 引用段落的字符预算（来源索引另取前 6000 字）
     # REPORT-9（C11 第 2 阶段，只检测）：报告正文的数字与 REPORT-8「已核验指标」块逐一比对
     # （verified_facts.check_verified_figures：matched / conflict / ambiguous / states_unverified /
-    # market_conflict / unmatched），计数记入 forecast.quality.verified_figures 与 final_audit.json 的
-    # verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验数字的来源与引用行）。
-    # 默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升 REPORT_FINAL_AUDIT_POLICY_VERSION；
-    # 已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段或文件。REL_TOL 为判为冲突所需的
-    # 最小相对差（低于它视为同一数字）。
+    # market_conflict / threshold_or_probability / unmatched），计数记入 forecast.quality.verified_figures
+    # 与 final_audit.json 的 verified_figures，终审之后写 reports/<id>/figure_provenance.json（每条已核验
+    # 数字的来源与引用行、比对样例）。默认开且安全：从不改成稿字节、从不加硬性或认识论问题、不提升
+    # REPORT_FINAL_AUDIT_POLICY_VERSION；已核验指标块为空（旧引擎 / 复用研究 / 未核验）时不写任何字段
+    # 或文件（并去掉上一轮留下的旧值与旧文件）。REL_TOL：与已核验值的相对差超过它才判为冲突；相差不超过它、
+    # 又未按数字自身精度对上的数字既不算匹配也不算冲突（计入 unmatched，不进 used_in）。
     REPORT_VERIFIED_FIGURES_CHECK = os.environ.get('REPORT_VERIFIED_FIGURES_CHECK', 'true').strip().lower() == 'true'
     REPORT_VERIFIED_FIGURE_REL_TOL = float(os.environ.get('REPORT_VERIFIED_FIGURE_REL_TOL', '0.02') or '0.02')
     # W9-8：KG 结构先验进报告——因果骨架的 chokepoint 支点优先取 graph_priors_structural.json 的

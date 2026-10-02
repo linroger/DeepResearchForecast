@@ -451,6 +451,56 @@ def _offline_report_agent(
     return agent
 
 
+def _recorded_market_rows(snapshot: Any, previous: Any) -> List[Dict[str, Any]]:
+    """The markets the run's previous figure_provenance.json recorded, as handoff snapshot
+    rows (their question anchors the check) carrying the recorded prices and stamps."""
+    recorded: Dict[str, Dict[str, Any]] = {}
+    for row in (previous.get("market_rows") or []) if isinstance(previous, dict) else []:
+        if isinstance(row, dict) and str(row.get("market_id") or "").strip():
+            recorded.setdefault(str(row["market_id"]).strip(), row)
+    markets = snapshot.get("markets") if isinstance(snapshot, dict) else snapshot
+    rows: List[Dict[str, Any]] = []
+    for market in markets if isinstance(markets, list) else []:
+        prior = recorded.get(str(market.get("market_id") or "").strip()) if isinstance(market, dict) else None
+        if prior is not None:
+            rows.append(dict(market, **{key: prior.get(key) for key in
+                                        ("implied_yes_prob", "price_at_research", "quoted_at", "snapshot_as_of")}))
+    return rows
+
+
+def _attach_verified_figure_inputs(agent: ReportAgent, artifacts: Dict[str, Any], report_dir: Path) -> None:
+    """REPORT-9: the live run's inputs of the shadow verified-figure check, so the re-audit
+    measures the replayed bytes instead of dropping the run's quality.verified_figures and
+    figure_provenance.json (the shadow data an enforcement decision needs).
+
+    The verified-figures block and its excluded rows are rebuilt from the handoff as the
+    report built them (research quantitative rows, sources, research report, the actors'
+    as-of date; RESEARCH-5's observe-only projection-attribution audit reads the same
+    rows).  The report re-quoted its markets live, which an offline replay cannot redo:
+    the market rows are the handoff snapshot's markets that the previous
+    figure_provenance.json recorded, with the prices it recorded, and none without such a
+    record (a research-time price would read a re-quoted one as a market conflict).  Call
+    it only after every Markdown repair: market rows change what the stabilizer's
+    quantitative grounding keeps.  Never raises; with no block the re-audit records
+    nothing and the sidecar is removed, as before.  With REPORT_VERIFIED_FIGURES_CHECK
+    off it rebuilds nothing: the agent keeps the state the replay gave it, so the
+    re-audit (RESEARCH-5's projection attribution included) is the one it was before
+    REPORT-9."""
+    if not getattr(Config, "REPORT_VERIFIED_FIGURES_CHECK", True):
+        return
+    try:
+        quantitative = artifacts.get("quantitative")
+        actors = artifacts.get("actors")
+        agent.quantitative = quantitative if isinstance(quantitative, list) and quantitative else None
+        agent.actors = actors if isinstance(actors, dict) else None
+        agent._prediction_markets = _recorded_market_rows(
+            artifacts.get("prediction_markets"), _read_json(report_dir / "figure_provenance.json"))
+        if getattr(Config, "REPORT_VERIFIED_FACTS_BLOCK", True):
+            agent._build_verified_figures_block()
+    except Exception as exc:  # noqa: BLE001 — shadow inputs only; the audit runs regardless
+        logger.warning(f"verified-figure check inputs not rebuilt (shadow record dropped): {exc}")
+
+
 def _backup(report_dir: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = report_dir / f".codex-backup-{stamp}"
@@ -461,7 +511,7 @@ def _backup(report_dir: Path) -> Path:
         shutil.copy2(path, backup / path.name)
     for name in (
             "meta.json", "forecast.json", "market_comparison.json",
-            "viz_manifest.json", "pdf_export.json"):
+            "viz_manifest.json", "pdf_export.json", "figure_provenance.json"):
         path = report_dir / name
         if path.exists():
             shutil.copy2(path, backup / name)
@@ -485,7 +535,7 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
                 path.unlink()
     for name in (
         "meta.json", "forecast.json", "market_comparison.json",
-        "viz_manifest.json", "pdf_export.json",
+        "viz_manifest.json", "pdf_export.json", "figure_provenance.json",
     ):
         path = report_dir / name
         if path.exists() or path.is_symlink():
@@ -731,8 +781,12 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if main_markdown and main_agent is not None:
         main_agent._forecast_spine = (
             forecast if isinstance(forecast, dict) else forecast_obj)
+        _attach_verified_figure_inputs(main_agent, artifacts, report_dir)
         final_audit = main_agent._enforce_final_publish_audit(
             report_id, _Report(main_markdown))
+        # REPORT-9: the shadow figure_provenance.json describes the re-audited bytes,
+        # or is removed when this agent measured nothing (no verified-figures block).
+        main_agent._write_figure_provenance(report_id, _Report(main_markdown))
 
     primary_citations = _read_json(report_dir / "citations.json")
     primary_citations = primary_citations if isinstance(primary_citations, dict) else {}

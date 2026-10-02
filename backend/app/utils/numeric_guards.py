@@ -880,6 +880,28 @@ def _pairs(clause: str) -> List[Dict[str, Any]]:
     return pairs
 
 
+def threshold_spans(text: Any) -> List[Tuple[int, int]]:
+    """``(start, end)`` of every figure a comparator governs in ``text`` ("exceeds 30%",
+    "below $100", "5% or more", "between 28% and 38%"), in :func:`scan_quantities`'
+    offsets and reading order: the thresholds a sentence names, never a level it
+    states.  [] for anything unreadable; never raises (REPORT-9 reads report prose
+    with it)."""
+    return [(start, end) for start, end, _comparator in threshold_comparators(text)]
+
+
+def threshold_comparators(text: Any) -> List[Tuple[int, int, str]]:
+    """:func:`threshold_spans` with each figure's comparator: ``>``, ``>=``, ``<``,
+    ``<=`` or ``between`` (a negated event's inverted one: "does not exceed 30%" is
+    ``<=``).  [] for anything unreadable; never raises."""
+    source = _readable(text)
+    if source is None:
+        return []
+    try:
+        return sorted((pair["hit"]["start"], pair["hit"]["end"], pair["comparator"]) for pair in _pairs(source))
+    except Exception:  # noqa: BLE001 — pure reader: never raises
+        return []
+
+
 def _clauses(criteria: str) -> List[str]:
     return [part for part in _CLAUSE_SPLIT_RE.split(criteria) if part.strip()]
 
