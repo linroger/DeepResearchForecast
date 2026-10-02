@@ -31,7 +31,9 @@ deterministic walls before anything is published:
   (``ReportAgent._semantic_citation_support``) rejects it against every cited source.
 
 The probability wall is a lexicon rule read one sentence (or semicolon clause) at a time; an
-abbreviation's period ("U.S.", "e.g.") or a decimal point does not end a sentence. It closes
+abbreviation's period ("U.S.", "e.g.") or a decimal point does not end a sentence, so a
+sentence that ends in a single-letter token ("... in the U.S. The risk ...") is read together
+with the next one (fail-closed). It closes
 the forms it lists and is not a proof that no worded probability can pass. Out of
 scope: a probability split across sentences ("Recession odds have risen. Analysts now put
 them at a third."), a hedge whose quantity sits elsewhere in its sentence ("approval is
@@ -145,9 +147,10 @@ _PERCENT_RE = re.compile(
     r"(?:[一二两三四五六七八九十几]|(?<![\d.])(?:10|\d)(?:\.\d+)?)\s*成"
     r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群|年人|都市场|像|效|色|套"
     r"|份(?!额)|批(?!发))"
-    # A tenths range written with two numerals ("七八成", "六七成", "三四成"), with the
-    # same tail exclusions ("三一成立于1989年" is no proportion).
-    r"|(?<![一二两三四五六七八九十百千万几])[一二两三四五六七八九][一二三四五六七八九]\s*成"
+    # A tenths range written with two numerals ("七八成", "六七成", "三四成", "一两成"), with
+    # the same tail exclusions ("三一成立于1989年", "三两成群" are no proportions); a year in
+    # Chinese numerals ("二〇二五成都车展") is not one.
+    r"|(?<![一二两三四五六七八九十百千万几〇零])[一二两三四五六七八九][一二两三四五六七八九]\s*成"
     r"(?!本|员|为|立|功|长|交|果|品|型|就|绩|分|熟|不变|群|年人|都市场|像|效|色|套"
     r"|份(?!额)|批(?!发))",
     re.I)
@@ -295,9 +298,13 @@ _ZH_HALF = r"(?:一半|过半|大半|小半|半数|各半)"
 _ZH_RATIO = rf"{_ZH_NUM_START}(?:{_ZH_NUM}\s*[比赔]\s*{_ZH_NUM}|{_ZH_NUM}(?:\.\d+)?\s*倍)"
 # Only linking and comparison words may sit between a hope word and its quantity, so the
 # quantity is that word's predicate ("机会只有一半", "希望不到一半", "机会大两倍"), never another
-# verb's ("车企希望产能提升一倍", "出口机会增加两倍"). Whitespace may sit around the linking word
-# (a trigger is read as "signal threshold": "增长的机会 超过一半").
-_ZH_GAP = (r"\s*(?:只有|仅有|不到|不足|超过|高于|低于|约为|大约|约|仅|有|为|是|达|近|逾|大|小)?\s*")
+# verb's ("车企希望产能提升一倍", "出口机会增加两倍"). An adverb may precede the linking word
+# ("还不到一半", "已超过一半", "约有一半"), and single spaces may sit around them (a trigger is
+# read as "signal threshold": "增长的机会 超过一半"); \s? keeps the pattern linear.
+_ZH_ADV = r"(?:还|仍|也|都|已|将|却|才|约|恐怕|或许|可能|大概|大约|依然|仍然|已经|仅仅|甚至)"
+_ZH_LINK = (r"(?:只有|仅有|仅为|只是|不过|只剩|仅剩|还有|约为|约有|不到|不足|超过|高于|低于|大约|接近"
+            r"|约|仅|只|有|为|是|达|近|逾|大|小)")
+_ZH_GAP = rf"\s?{_ZH_ADV}?\s?{_ZH_LINK}?\s?"
 _HEDGE_QUANTITY_RE = re.compile(
     rf"(?:\b(?:{_NUMBER_WORD}|\d+(?:\.\d+)?)(?:(?:{_SEP})?(?:times|fold)\b|\s*[x×])"
     rf"|\b(?:twice|thrice|half)\b){_SEP}(?:(?:as|more|less){_SEP}{_HEDGE_WORD}|likelier)\b"

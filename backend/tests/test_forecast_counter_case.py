@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections import Counter
 from datetime import date, datetime
 
@@ -173,6 +174,14 @@ def test_probabilities_in_words_are_unverified_numbers():
         "市场份额约三四成。",
         "概率约零点七",
         "胜率约零点四",
+        # Round 6: an adverb before the linking word, compound linking words, and 一两成.
+        "成功的机会还不到一半",
+        "机会已超过一半",
+        "机会都不到一半",
+        "机会仅为一半",
+        "机会约有一半",
+        "把握还是三比一",
+        "只有一两成的可能继续增长",
         # Deliberately kept blocked: 一半的机会 also reads "a 50% chance", so the reverse
         # half-then-hope rule stays even though this sentence names opportunities.
         "超过一半的机会来自海外市场。",
@@ -262,6 +271,10 @@ def test_probabilities_in_words_are_unverified_numbers():
         "出口机会增加两倍。",
         "三一成立于1989年",
         "Sales hit 17 million in the U.S. last year",
+        # Round 6: tenths-like characters that are words or a year in Chinese numerals.
+        "一两成本",
+        "三两成群",
+        "二〇二五成都车展",
         "The odds against growth are rising",
         "The odds on a recession are lengthening",
         "Chances of a recession in 2026 are rising",
@@ -798,6 +811,14 @@ def test_triggers_dated_before_as_of_lose_the_date():
         "2026-08-31", "2026-09-01", "2025-01-01"]
 
 
+def test_hope_word_gap_stays_linear_on_long_whitespace():
+    """Round 6: the hope-word gap uses single optional spaces, so a long run of whitespace
+    after 机会 is read in linear time (the \\s* form was quadratic)."""
+    started = time.perf_counter()
+    assert not fc._HEDGE_QUANTITY_RE.search("机会" + " " * 20000 + "x")
+    assert time.perf_counter() - started < 2.0
+
+
 def test_triggers_that_state_a_probability_are_dropped():
     """A trigger is published as one row, so its signal and threshold are read together: a
     chance noun and a quantity there, or a hedge word with a quantity attached, state a
@@ -816,6 +837,9 @@ def test_triggers_that_state_a_probability_are_dropped():
         _trigger(signal="增长的机会", threshold_or_event="超过一半", by="2027-06-30"),
         # Round 5: a two-numeral tenths range.
         _trigger(signal="全球电动车销量增长概率", threshold_or_event="升至七八成", by="2027-01-01"),
+        # Round 6: an adverb before the linking word; 一两成.
+        _trigger(signal="继续增长的机会", threshold_or_event="还不到一半", by="2027-01-01"),
+        _trigger(signal="增长概率", threshold_or_event="升至一两成", by="2027-01-01"),
         _trigger(),
         _trigger(signal="Odds of a rate cut", threshold_or_event="a policy shift",
                  by="2027-06-30"),
