@@ -251,6 +251,16 @@ FAILURE_CASES = [
     ("The plant employs 185 workers [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("Capacity grew 185 times [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     ("The gap is about 26 [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])", "result_mismatch"),
+    # A sum or difference of percentages is in percentage points, stated in points only;
+    # any other percentage and a ratio's percentage never in points.
+    ("The gap is about 26% [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])", "result_mismatch"),
+    ("The gap is about 26 percent [S15] (DERIVED: abs(b-a); a=68% [S15], b=42% [S15])", "result_mismatch"),
+    ("The rest is about 32% [S15] (DERIVED: 100-a; a=68% [S15])", "result_mismatch"),
+    ("Renewables rose about 62 percentage points [S15] (DERIVED: (a-b)/b*100; a=68% [S15], b=42% [S15])",
+     "result_mismatch"),
+    ("Renewables supplied about 162 pp of their 2019 share [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])",
+     "result_mismatch"),
+    ("Capacity grew about 185 pp [S12] (DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])", "result_mismatch"),
     # A figure written with a unit class states a result only in the unit class of every
     # data operand, through a formula that keeps it: no other class, no ratio or product
     # of unit figures, no unit the operands do not state, and never as a percentage.
@@ -315,6 +325,11 @@ def test_each_number_is_read_where_it_is_written():
                     ("2.85", "=2850000000000", False, [], False, True),
                     ("12500", "=12500", False, ["power"], False, False)]
     assert [n.checkable for n in lr._number_occurrences("5 GW, 37 GW, 2.5 GW")] == [False, True, True]
+    # A percentage written in percentage points.
+    points = ("26 percentage points, a 26-percentage-point gap, 26 pp, 1.5 pts, 3个百分点, 26 p.p., "
+              "26%, 26 percent, 26 points")
+    assert [(n.percent, n.points) for n in lr._number_occurrences(points)] == [(True, True)] * 6 + [
+        (True, False), (True, False), (False, False)]
 
 
 # A clause must not launder figures: every number but the result is on the
@@ -454,7 +469,7 @@ PINNED_LINES = [*CORPUS, *(line for line, _ in FAILURE_CASES), LAUNDERING, *PARI
                 "Capacity grew about 185% [S12] while renewables supplied 68% of demand [S15] "
                 "(DERIVED: (a-b)/b*100; a=37 GW [S12], b=13 GW [S12])",
                 "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])"]
-FLAG_OFF_SHA256 = "2595935f6884b1ade4925c0bffffe262940260de6778c27b9c3e223ad6c278d8"
+FLAG_OFF_SHA256 = "f4696309d0bccda3761514903155ecae70153640b3e8daa26250d35736fa974f"
 
 
 def test_the_clause_replaces_the_tag_the_agent_wrote():
@@ -486,6 +501,10 @@ def test_the_derivation_forms_the_engine_reads():
         "Capacity grew about 185% [S12] (DERIVED: (a-b)/b; a=37 GW [S12], b=13 GW [S12])": "1.84615384615",
         "The gap is about 26 percentage points [S15] (DERIVED: a-b; a=68% [S15], b=42% [S15])": "26",
         "The gap is about 26 pp [S15] (DERIVED: abs(b-a); a=68% [S15], b=42% [S15])": "26",
+        "差距约26个百分点 [S15]（推算：a-b；a=68% [S15]，b=42% [S15]）": "26",
+        "The rest is about 32 percentage points [S15] (DERIVED: 100-a; a=68% [S15])": "32",
+        # A relative change of percentages is a percentage, not points.
+        "Renewables rose about 62% [S15] (DERIVED: (a-b)/b*100; a=68% [S15], b=42% [S15])": "61.9047619048",
         # A ratio of percentages is a ratio, and a decline written with its minus sign.
         "Renewables supplied about 162% of their 2019 share [S15] (DERIVED: a/b; a=68% [S15], b=42% [S15])":
             "1.61904761905",
@@ -761,7 +780,14 @@ def test_derived_quant_match_keeps_the_sign_and_one_percentage_scale():
     points = {"sid": 1, "expr": "a-b", "result": "26",
               "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
     assert lr.derived_quant_match({"value": "26", "unit": "percentage points"}, [points]) is points
-    assert lr.derived_quant_match({"value": "2600", "unit": "%"}, [points]) is None
+    assert lr.derived_quant_match({"value": 26, "unit": "pp"}, [points]) is points
+    assert lr.derived_quant_match({"value": "26", "unit": "个百分点"}, [points]) is points
+    for row in ({"value": "2600", "unit": "%"}, {"value": "26", "unit": "%"}, {"value": "26", "unit": "percent"}):
+        assert lr.derived_quant_match(row, [points]) is None, row
+    relative = {"sid": 1, "expr": "(a-b)/b*100", "result": "61.9047619048",
+                "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
+    assert lr.derived_quant_match({"value": "62", "unit": "%"}, [relative]) is relative
+    assert lr.derived_quant_match({"value": "62", "unit": "percentage points"}, [relative]) is None
     # A percentage result is stated by a percentage only: never a bare number, a unit class
     # or a scale word.
     growth = {"sid": 1, "expr": "(a-b)/b*100", "result": "184.615384615",
@@ -770,13 +796,14 @@ def test_derived_quant_match_keeps_the_sign_and_one_percentage_scale():
     assert lr.derived_quant_match({"value": "185", "unit": "percent"}, [growth]) is growth
     for row in ({"value": "185", "unit": "billion USD"}, {"value": "185", "unit": "GW"},
                 {"value": "-185", "unit": "%"}, {"value": "$185", "unit": ""}, {"value": "185", "unit": ""},
-                {"value": "185", "unit": "workers"}):
+                {"value": "185", "unit": "workers"}, {"value": "185", "unit": "pp"}):
         assert lr.derived_quant_match(row, [growth]) is None, row
     # A ratio of percentages is a ratio: x 100 as a percentage.
     share_ratio = {"sid": 1, "expr": "a/b", "result": "1.61904761905",
                    "operands": {"a": {"value": "68%", "sid": 1}, "b": {"value": "42%", "sid": 1}}}
     assert lr.derived_quant_match({"value": "162", "unit": "%"}, [share_ratio]) is share_ratio
     assert lr.derived_quant_match({"value": "1.6", "unit": "%"}, [share_ratio]) is None
+    assert lr.derived_quant_match({"value": "162", "unit": "pp"}, [share_ratio]) is None
 
 
 def test_derived_quant_match_reads_a_unit_figure_in_the_unit_of_its_operands_only():
@@ -808,7 +835,7 @@ def test_derived_quant_match_reads_a_unit_figure_in_the_unit_of_its_operands_onl
                             ({"value": "2,400", "unit": "%"}, bare), ({"value": 2400.0, "unit": "%"}, bare)):
         assert lr.derived_quant_match(row, [derivation]) is None, row
     assert lr.derived_quant_match({"value": "24", "unit": ""}, [bare]) is bare
-    period ={"sid": 1, "expr": "(a-b)/n", "result": "4.8",
+    period = {"sid": 1, "expr": "(a-b)/n", "result": "4.8",
               "operands": {"a": {"value": "37 GW", "sid": 1}, "b": {"value": "13 GW", "sid": 1},
                            "n": {"value": "years(2019,2024)", "sid": None}}}
     assert lr.derived_quant_match({"value": "4.8", "unit": "GW"}, [period]) is None
