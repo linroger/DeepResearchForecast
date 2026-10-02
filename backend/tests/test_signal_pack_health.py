@@ -19,19 +19,35 @@ orchestrator's health gate reads) and:
 
 The verdict is kept on the agent and written to forecast.json as
 quality.signal_pack_health. Offline: tmp run-state dir, stub tools, no LLM.
+
+FU-3 extends the same rule to the outline prompt's simulation sweeps, the ReACT
+tools (simulation_outcomes, coalition_map incl. faction_brief's fallback,
+opinion_shift, scenario_diff) and every consumer of a what-if report's baseline
+(signal-pack diff block, comparison table, scenario_diff tool, outline diff
+sweep); the baseline verdict is written as quality.baseline_signal_pack_health.
+The summary is read once per simulation per report. A comparison chapter whose
+table is suppressed carries a reader-facing line (no health field, no method
+words, clean under the report's leak linter), and the gated tools are neither
+listed in the prompts / native schemas nor nudged by the ReACT loop.
 """
 
 import json
 import logging
 import os
 import re
+from pathlib import Path
 
 import pytest
 
 import app.config as cfgmod
+import app.services.graphiti_client.runtime as rt_mod
 from app.config import Config
-from app.services.report_agent import ReportAgent, ReportManager, salience_tiers_from_outcomes
+from app.services import report_lint
+from app.services.report_agent import (
+    PLAN_USER_PROMPT_TEMPLATE, ReportAgent, ReportManager, ReportOutline, ReportSection,
+    salience_tiers_from_outcomes)
 from app.services.simulation_runner import SimulationRunner
+from app.services.zep_tools import ZepToolsService
 
 SIM_ID = "sim_report5"
 BASE_SIM_ID = "sim_report5_base"
@@ -64,6 +80,7 @@ _COALITIONS = "## 派系/联盟图（关注聚类）\n- 派系 1（3 人）：Or
 _SPINE = "【因果骨架（图谱派生）】\n- 出口管制 → 晶圆产能 → 终端价格"
 _DIFF = "## 情景对比 / 反事实差异\n- 基线 vs 情景：派系数 2 → 3"
 _EDGES = "【关系演化投影（模型先验，非证据）】\n- Orion Foundry ↔ Vega Semis：contingent"
+_SHIFT = "## Orion Foundry 逐轮行为轨迹\n- 第 1 轮：3 次动作"
 
 _NO_BEHAVIOUR = ("⚠️ 本次模拟未产出可用的行为数据（simulation_health={health}）——这不是「行为者无反应」"
                  "的发现；正文不得引用任何基于模拟行为量或派系聚类的推演结论。")
@@ -101,6 +118,10 @@ class _StubZep:
     def scenario_diff(self, base_simulation_id, simulation_id):
         self.calls.append("scenario_diff")
         return _DIFF
+
+    def opinion_shift(self, simulation_id, actor_name):
+        self.calls.append("opinion_shift")
+        return _SHIFT
 
 
 @pytest.fixture
@@ -455,3 +476,697 @@ def test_knob_defaults_on_and_is_documented():
         os.path.abspath(cfgmod.__file__)))), ".env.example")
     with open(env_example, encoding="utf-8") as fh:
         assert re.search(r"^# REPORT_SIGNAL_PACK_HEALTH_GATE=true\s+# REPORT-5", fh.read(), re.M)
+
+
+# ─────────────── FU-3: tools, outline and what-if baselines (REPORT-5 follow-up) ───────────────
+_BASE_NOTE = ("⚠️ 基线模拟未产出可用的行为数据（simulation_health={health}）——本报告不做基线与情景的"
+              "行为对比；正文不得引用任何基线 vs 情景的行为差值。")
+_UNUSABLE = ["hollow", "errored"]
+# Baseline summaries the gate leaves alone: healthy, partial, unrecognised, absent, unreadable.
+_USABLE_BASELINES = ["ok", "truncated", "llm_degraded", "stalled", None, "{not json"]
+
+# The outline sweep and what-if strings as rendered before FU-3 (copied from plan_outline):
+# the golden legacy outline prompt is built from them, independently of the gate code path.
+_LEGACY_OUTCOMES_SWEEP = (
+    "【内部方法学材料——情景推演量化产出（仅供规划参考）】\n"
+    "使用规则：仅据此判断哪些现实世界行为者/议题值得设立章节深挖；"
+    "不得为推演本身单设章节，任何章节标题不得含"
+    "『模拟/Agent/智能体/行为轨迹/Simulation/Behavior』等方法学词汇。\n")
+_LEGACY_DIFF_HEAD = "【基线 vs 情景 结构化对比（必须据此撰写对比章节）】\n"
+_LEGACY_DIFF_MANDATE = (
+    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+    "「情景对比」或「反事实」的章节，对比基线与本情景的关键差异（引用上面对比数据中的具体差值）。")
+_NO_DIFF_MANDATE = (
+    "\n\n**强制要求**：本报告为情景（What-If）预测，大纲必须包含一节标题含"
+    "「情景对比」或「反事实」的章节，说明基线与本情景之间没有可用的行为对比数据，"
+    "只依据研究材料讨论两者的差异。")
+_TABLE_HEAD = "**基线 vs 情景 结构化对比（确定性聚合，权威）**"
+
+
+def _write_summary(simulation_id, health):
+    """Baseline (or any) run summary: a health value, None = no summary, '{…' = raw text."""
+    sim_dir = Path(SimulationRunner.RUN_STATE_DIR) / simulation_id
+    sim_dir.mkdir(exist_ok=True)
+    path = sim_dir / "run_summary.json"
+    if health is None:
+        if path.exists():
+            path.unlink()
+        return
+    text = health if health.startswith("{") else json.dumps(
+        {"simulation_id": simulation_id, "simulation_health": health})
+    path.write_text(text, encoding="utf-8")
+
+
+# ───────────── signal pack: the baseline's diff block ─────────────
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_unusable_baseline_never_reaches_the_signal_pack(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    agent = _agent()
+
+    pack = agent._build_signal_pack()
+
+    assert pack == _pack(_WORLD_STATE, _TIERS, _COALITIONS, _SPINE, _BASE_NOTE.format(health=base_health))
+    assert _DIFF not in pack
+    assert agent.zep_tools.calls == ["simulation_outcomes", "coalition_map"]
+    # the run's own verdict is untouched; the baseline's verdict is its own record
+    assert agent._signal_pack_health == {"health": "ok", "suppressed": []}
+    assert agent._baseline_health_record()["health"] == base_health
+
+
+def test_usable_baseline_keeps_the_legacy_pack(run_state, monkeypatch):
+    run_state("ok")
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        assert (Path(SimulationRunner.RUN_STATE_DIR) / BASE_SIM_ID / "run_summary.json").exists() \
+            is (base_health is not None)
+        agent = _agent()
+        assert agent._build_signal_pack() == _LEGACY_FULL, base_health
+        assert agent._signal_pack_health == {"health": "ok", "suppressed": []}, base_health
+        assert agent.zep_tools.calls == ["simulation_outcomes", "coalition_map", "scenario_diff"]
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    assert _agent()._build_signal_pack() == _LEGACY_FULL
+
+
+# ───────────────────────────── ReACT tools ─────────────────────────────
+class _FactionZep(_StubZep):
+    """Runs the real ZepToolsService.faction_brief (its coalition_map fallback included)."""
+
+    faction_brief = ZepToolsService.faction_brief
+
+    def _inter_community_tension(self, graph_id, communities):
+        return []
+
+
+class _FakeRuntime:
+    def __init__(self, communities):
+        self._communities = communities
+
+    def list_communities(self, graph_id):
+        return list(self._communities)
+
+
+_COMMUNITY = {"name": "晶圆联盟", "summary": "图谱社区摘要", "members": ["Orion Foundry"]}
+
+
+def _tool_agent(**kw):
+    agent = _agent(**kw)
+    agent.simulation_requirement = "q"
+    return agent
+
+
+_ACTIVITY_TOOLS = ["simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"]
+_LEGACY_TOOL_OUTPUT = {"simulation_outcomes": _OUTCOMES, "coalition_map": _COALITIONS,
+                       "opinion_shift": _SHIFT, "scenario_diff": _DIFF}
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+@pytest.mark.parametrize("tool", _ACTIVITY_TOOLS)
+def test_tools_return_the_no_behaviour_line_on_an_unusable_run(run_state, tool, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "hollow")      # the run's own line wins over the baseline's
+    agent = _tool_agent()
+    assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _NO_BEHAVIOUR.format(health=health)
+    assert agent.zep_tools.calls == []
+
+
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "stalled", "{not json"])
+def test_tools_byte_identical_on_a_usable_run_and_with_the_knob_off(run_state, monkeypatch, own_health):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    for tool in _ACTIVITY_TOOLS:
+        agent = _tool_agent()
+        assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _LEGACY_TOOL_OUTPUT[tool]
+        assert agent.zep_tools.calls == [tool]
+    # knob off: legacy even on a hollow run with an errored baseline
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    for tool in _ACTIVITY_TOOLS:
+        agent = _tool_agent()
+        assert agent._execute_tool(tool, {"actor_name": "Orion Foundry"}) == _LEGACY_TOOL_OUTPUT[tool]
+        assert agent.zep_tools.calls == [tool]
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_scenario_diff_tool_gives_the_baseline_line_for_an_unusable_baseline(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    agent = _tool_agent()
+    assert agent._execute_tool("scenario_diff", {}) == _BASE_NOTE.format(health=base_health)
+    assert agent.zep_tools.calls == []
+    # the run's own behaviour tools do not depend on the baseline
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
+
+
+def test_scenario_diff_tool_unchanged_for_a_usable_baseline(run_state):
+    run_state("ok")
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        agent = _tool_agent()
+        assert agent._execute_tool("scenario_diff", {}) == _DIFF, base_health
+    assert _tool_agent(base=None)._execute_tool("scenario_diff", {}) == "（本报告非情景对比报告，无基线模拟可对比）"
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_faction_brief_cannot_fall_back_to_coalition_map_on_an_unusable_run(run_state, monkeypatch, health):
+    run_state(health)
+    # retrieval off, or on with no community nodes: the fallback would be coalition_map
+    for retrieval, communities in ((False, []), (True, [])):
+        monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", retrieval, raising=False)
+        monkeypatch.setattr(rt_mod, "get_runtime", lambda c=communities: _FakeRuntime(c))
+        agent = _tool_agent()
+        agent.zep_tools = _FactionZep()
+        assert agent._execute_tool("faction_brief", {}) == _NO_BEHAVIOUR.format(health=health)
+        assert agent.zep_tools.calls == []
+    # graph-native communities do not depend on simulation behaviour: still given
+    monkeypatch.setattr(rt_mod, "get_runtime", lambda: _FakeRuntime([_COMMUNITY]))
+    agent = _tool_agent()
+    agent.zep_tools = _FactionZep()
+    brief = agent._execute_tool("faction_brief", {})
+    assert "晶圆联盟" in brief and "图谱社区摘要" in brief and _COALITIONS not in brief
+    assert agent.zep_tools.calls == []
+
+
+def test_faction_brief_unchanged_on_a_usable_run_and_with_the_knob_off(run_state, monkeypatch):
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", False, raising=False)
+    run_state("ok")
+    agent = _tool_agent()
+    agent.zep_tools = _FactionZep()
+    assert agent._execute_tool("faction_brief", {}) == _COALITIONS
+    assert agent.zep_tools.calls == ["coalition_map"]
+    run_state("hollow")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    agent = _tool_agent()
+    agent.zep_tools = _FactionZep()
+    assert agent._execute_tool("faction_brief", {}) == _COALITIONS
+
+
+# ───────────────────── one health verdict per simulation ─────────────────────
+def test_each_summary_is_read_once_per_report(run_state, monkeypatch, warnings_log):
+    run_state(raw="{not json")
+    _write_summary(BASE_SIM_ID, "{not json")
+    reads = []
+    real_read = ReportAgent._read_run_summary_health
+    monkeypatch.setattr(ReportAgent, "_read_run_summary_health",
+                        lambda self, sid: reads.append(sid) or real_read(self, sid))
+    agent = _tool_agent()
+
+    agent._build_signal_pack()
+    for _ in range(2):
+        for tool in _ACTIVITY_TOOLS:
+            agent._execute_tool(tool, {"actor_name": "Orion Foundry"})
+    agent._scenario_diff_structured()
+    agent._baseline_health_record()
+
+    assert sorted(reads) == sorted([SIM_ID, BASE_SIM_ID])
+    # one WARNING per unreadable summary, not one per consumer
+    warned = _gate_warnings(warnings_log)
+    assert len(warned) == 2 and all("run_summary.json 存在但不可读" in w for w in warned)
+    # every consumer shares the first verdict for the rest of the report
+    run_state("hollow")
+    assert agent._execute_tool("simulation_outcomes", {}) == _OUTCOMES
+
+
+# ───────────────────────────── plan_outline ─────────────────────────────
+class _OutlineLLM:
+    def __init__(self):
+        self.user_prompt = None
+
+    def chat_json(self, messages=None, temperature=0.3, **kw):
+        self.user_prompt = messages[-1]["content"]
+        return {"title": "T", "summary": "S",
+                "sections": [{"title": f"章节{i}", "description": ""} for i in range(5)]}
+
+
+class _OutlineZep(_StubZep):
+    def get_simulation_context(self, graph_id=None, simulation_requirement=None, **kw):
+        return {"graph_statistics": {}, "total_entities": 0, "related_facts": []}
+
+    def insight_forge(self, **kw):
+        raise RuntimeError("no forge in test")
+
+
+def _outline_agent(base=BASE_SIM_ID, *, with_pack=False):
+    agent = _agent(base=base)
+    agent.simulation_requirement = "q"
+    agent.actors = None
+    agent.sources = []
+    agent._background_block = agent._sources_index = agent._forecast_spine_block = ""
+    agent.zep_tools = _OutlineZep()
+    agent._signal_pack = agent._build_signal_pack() if with_pack else ""
+    agent.zep_tools.calls.clear()
+    agent.llm = _OutlineLLM()
+    return agent
+
+
+def _outline_prompt(base=BASE_SIM_ID, *, with_pack=False):
+    agent = _outline_agent(base, with_pack=with_pack)
+    agent.plan_outline()
+    return agent.llm.user_prompt, agent.zep_tools.calls, agent
+
+
+def _outline_head(agent):
+    """The outline prompt up to the simulation sweeps (code FU-3 does not touch)."""
+    return agent._prepend_research_background(PLAN_USER_PROMPT_TEMPLATE.format(
+        simulation_requirement="q", total_nodes=0, total_edges=0, entity_types=[],
+        total_entities=0, related_facts_json=json.dumps([], ensure_ascii=False, indent=2)))
+
+
+def _legacy_outline(agent):
+    """Golden outline prompt as plan_outline built it before FU-3."""
+    prompt = _outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+    if agent.base_simulation_id:
+        prompt += "\n\n" + _LEGACY_DIFF_HEAD + _DIFF + _LEGACY_DIFF_MANDATE
+    return prompt
+
+
+@pytest.mark.parametrize("base", [BASE_SIM_ID, None])
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "llm_degraded", "stalled", "{not json"])
+def test_outline_byte_identical_for_a_usable_run(run_state, own_health, base):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    _write_summary(BASE_SIM_ID, "ok")
+    prompt, calls, agent = _outline_prompt(base)
+    assert prompt == _legacy_outline(agent)
+    assert calls == (["simulation_outcomes", "scenario_diff"] if base else ["simulation_outcomes"])
+
+
+@pytest.mark.parametrize("base_health", _USABLE_BASELINES)
+def test_outline_byte_identical_for_a_usable_baseline(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == _legacy_outline(agent)
+    assert calls == ["simulation_outcomes", "scenario_diff"]
+
+
+@pytest.mark.parametrize("with_pack", [False, True])
+def test_outline_byte_identical_with_the_knob_off(run_state, monkeypatch, with_pack):
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    prompt, calls, agent = _outline_prompt(with_pack=with_pack)
+    assert prompt == _legacy_outline(agent)
+    assert calls == ["simulation_outcomes", "scenario_diff"]
+    assert agent._baseline_health_record() is None
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_outline_gets_no_seed_echo_data_from_an_unusable_run(run_state, health):
+    run_state(health)
+    note = _NO_BEHAVIOUR.format(health=health)
+    # what-if report: the line once, then the comparison mandate without cited deltas
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == _outline_head(agent) + "\n\n" + note + _NO_DIFF_MANDATE
+    assert calls == []
+    # plain report: just the line
+    prompt, calls, agent = _outline_prompt(base=None)
+    assert prompt == _outline_head(agent) + "\n\n" + note
+    assert calls == []
+    # the pinned signal pack already carries the line: it is not repeated
+    _write_summary(BASE_SIM_ID, "hollow")
+    prompt, calls, agent = _outline_prompt(with_pack=True)
+    assert note in agent._signal_pack
+    assert prompt == _outline_head(agent) + _NO_DIFF_MANDATE
+    assert prompt.count(note) == 1 and _BASE_NOTE.format(health="hollow") not in prompt
+    assert "Orion Foundry" not in prompt.replace(agent._signal_pack, "") and _DIFF not in prompt
+    assert calls == []
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_outline_gated_on_an_unusable_baseline(run_state, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    note = _BASE_NOTE.format(health=base_health)
+    prompt, calls, agent = _outline_prompt()
+    assert prompt == (_outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+                      + "\n\n" + note + _NO_DIFF_MANDATE)
+    assert calls == ["simulation_outcomes"]
+    # with the pinned signal pack (which carries the baseline line) the line is not repeated
+    prompt, calls, agent = _outline_prompt(with_pack=True)
+    assert note in agent._signal_pack
+    assert prompt == (_outline_head(agent) + "\n\n" + _LEGACY_OUTCOMES_SWEEP + _OUTCOMES
+                      + _NO_DIFF_MANDATE)
+    assert prompt.count(note) == 1 and _DIFF not in prompt
+    assert calls == ["simulation_outcomes"]
+
+
+# ───────────────────────────── comparison table ─────────────────────────────
+@pytest.fixture
+def table_data(run_state, monkeypatch, tmp_path):
+    """Valid world-state trajectories on both sides and a tmp reports dir."""
+    data = tmp_path / "sims"
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(data), raising=False)
+    monkeypatch.setattr(Config, "REPORT_WORLDSTATE_HIDE_INVALID", True, raising=False)
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"), raising=False)
+    for sid, share in ((SIM_ID, 0.6), (BASE_SIM_ID, 0.4)):
+        (data / sid).mkdir(parents=True)
+        (data / sid / "world_state_trajectory.json").write_text(json.dumps(
+            {"outcome": {"shares": {"A": share, "B": 1 - share}}, "validity": "valid"}), encoding="utf-8")
+    return tmp_path / "reports"
+
+
+def _table_agent():
+    agent = _agent()
+    agent.scenario_label = "what-if"
+    return agent
+
+
+@pytest.mark.parametrize("own_health,base_health", [(h, "ok") for h in _UNUSABLE]
+                         + [("ok", h) for h in _UNUSABLE])
+def test_no_comparison_table_when_either_side_is_unusable(run_state, table_data, own_health, base_health):
+    run_state(own_health)
+    _write_summary(BASE_SIM_ID, base_health)
+    assert _table_agent()._scenario_diff_structured() is None
+
+
+def test_comparison_table_unchanged_for_usable_runs_and_with_the_knob_off(run_state, table_data,
+                                                                           monkeypatch):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    healthy = _table_agent()._scenario_diff_structured()
+    assert healthy and [d["name"] for d in healthy["dimensions"]]
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        assert _table_agent()._scenario_diff_structured() == healthy, base_health
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    assert _table_agent()._scenario_diff_structured() == healthy
+
+
+# The reader-facing lines the comparison chapter carries in the table's place (copied, not
+# imported). Unlike the prompt-side lines above they ship in the published body, so they carry
+# no health field, no method words and no instruction to the writer.
+_BODY_NO_SCENARIO = {
+    "Chinese": "> 本情景没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "English": ("> No usable comparison data is available for this scenario, so this chapter compares it "
+                "with the baseline using the research sources only."),
+}
+_BODY_NO_BASELINE = {
+    "Chinese": "> 基线没有可用的对比数据，本章仅依据研究材料讨论本情景与基线的差异。",
+    "English": ("> No usable comparison data is available for the baseline, so this chapter compares this "
+                "scenario with it using the research sources only."),
+}
+_CHAPTER_BODY = "正文：两种情景的差异只依据研究材料讨论。"
+
+
+def _comparison_chapter(report_id, language):
+    agent = _table_agent()
+    agent.output_language = language
+    return agent._prepend_comparison_table(report_id, _CHAPTER_BODY)
+
+
+@pytest.mark.parametrize("language", ["Chinese", "English"])
+def test_comparison_chapter_gets_a_reader_line_instead_of_the_table(run_state, table_data, language):
+    body = _CHAPTER_BODY
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    out = _comparison_chapter("r_fu3_ok", language)
+    assert out.startswith(_TABLE_HEAD) and out.endswith("\n\n" + body)
+    assert (table_data / "r_fu3_ok" / "comparison.json").exists()
+
+    # unusable baseline + healthy fork: the baseline reader line in the table's place, no comparison.json
+    for base_health in _UNUSABLE:
+        _write_summary(BASE_SIM_ID, base_health)
+        report_id = f"r_fu3_base_{base_health}"
+        assert _comparison_chapter(report_id, language) == _BODY_NO_BASELINE[language] + "\n\n" + body
+        assert not (table_data / report_id).exists()
+
+    # the run itself unusable: the scenario reader line (it wins over the baseline's)
+    for own_health in _UNUSABLE:
+        run_state(own_health)
+        report_id = f"r_fu3_own_{own_health}"
+        assert _comparison_chapter(report_id, language) == _BODY_NO_SCENARIO[language] + "\n\n" + body
+        assert not (table_data / report_id).exists()
+
+    # no table for another reason (missing trajectory): the chapter stays as it was
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    os.remove(os.path.join(Config.OASIS_SIMULATION_DATA_DIR, BASE_SIM_ID, "world_state_trajectory.json"))
+    assert _comparison_chapter("r_fu3_missing", language) == body
+
+
+# Words a published body must never carry for these lines: the health field and its values,
+# the banned method vocabulary (SECTION_SYSTEM_PROMPT_TEMPLATE's 硬性禁令) and writer instructions.
+_NOT_FOR_READERS = ("simulation_health", "hollow", "errored", "模拟", "推演", "派系", "智能体",
+                    "simulation", "simulated", "agent", "正文不得", "不得", "⚠️")
+
+
+@pytest.mark.parametrize("language", ["Chinese", "English"])
+def test_comparison_reader_lines_pass_the_report_leak_linter(run_state, table_data, language):
+    for line in (_BODY_NO_SCENARIO[language], _BODY_NO_BASELINE[language]):
+        assert report_lint.leakage_hits(line) == []
+        assert report_lint.strip_leakage_sentences(line)[1] == 0
+        assert not [w for w in _NOT_FOR_READERS if w.lower() in line.lower()]
+    # the chapter as published: own run errored, and a hollow baseline under a healthy fork
+    run_state("errored")
+    _write_summary(BASE_SIM_ID, "ok")
+    own = _comparison_chapter("r_fu3_lint_own", language)
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "hollow")
+    base = _comparison_chapter("r_fu3_lint_base", language)
+    for chapter, line in ((own, _BODY_NO_SCENARIO[language]), (base, _BODY_NO_BASELINE[language])):
+        assert chapter.startswith(line)
+        assert report_lint.leakage_hits(chapter) == []
+        assert report_lint.strip_leakage_sentences(chapter)[1] == 0
+    # what this guards against: the prompt-side line is flagged by the linter (it would be
+    # rewritten or deleted at publication), the baseline one ships an internal field
+    assert report_lint.leakage_hits(_NO_BEHAVIOUR.format(health="errored"))
+    assert "simulation_health" in _BASE_NOTE
+
+
+# ───────────────────── baseline verdict in forecast.json quality ─────────────────────
+def _finalize_quality(tmp_path, monkeypatch, report_id, *, base=BASE_SIM_ID):
+    agent = _finalize_agent(tmp_path, monkeypatch)
+    agent.base_simulation_id = base
+    agent._signal_pack = agent._build_signal_pack()      # as generate_report does
+    return _finalize(agent, tmp_path, report_id).get("quality") or {}
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_baseline_verdict_is_persisted_next_to_signal_pack_health(run_state, monkeypatch, tmp_path,
+                                                                  base_health):
+    monkeypatch.setattr(Config, "REPORT_COMPARISON_TABLE", True, raising=False)
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_{base_health}")
+    assert quality["signal_pack_health"] == {"health": "ok", "suppressed": []}
+    assert quality["baseline_signal_pack_health"] == {
+        "health": base_health, "suppressed": ["scenario_diff", "comparison_table"]}
+
+    # recorded whatever the run's own health (both sides unusable)
+    run_state("hollow")
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_both_{base_health}")
+    assert quality["signal_pack_health"] == {"health": "hollow", "suppressed": _ACTIVITY_SUPPRESSED}
+    assert quality["baseline_signal_pack_health"]["health"] == base_health
+
+    # the comparison table off: only the diff consumers are listed
+    monkeypatch.setattr(Config, "REPORT_COMPARISON_TABLE", False, raising=False)
+    quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_notable_{base_health}")
+    assert quality["baseline_signal_pack_health"] == {"health": base_health, "suppressed": ["scenario_diff"]}
+
+
+def test_unreadable_baseline_summary_is_flagged(run_state, monkeypatch, tmp_path):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "{not json")
+    quality = _finalize_quality(tmp_path, monkeypatch, "r_fu3_unreadable")
+    assert quality["baseline_signal_pack_health"] == {
+        "health": None, "suppressed": [], "summary_unreadable": True}
+
+
+def test_no_baseline_verdict_for_usable_baselines_plain_reports_or_the_knob_off(run_state, monkeypatch,
+                                                                                tmp_path):
+    run_state("ok")
+    for base_health in ("ok", "truncated", "llm_degraded", "stalled", None):
+        _write_summary(BASE_SIM_ID, base_health)
+        quality = _finalize_quality(tmp_path, monkeypatch, f"r_fu3_usable_{base_health}")
+        assert "baseline_signal_pack_health" not in quality, base_health
+        assert quality["signal_pack_health"] == {"health": "ok", "suppressed": []}
+    _write_summary(BASE_SIM_ID, "hollow")
+    assert "baseline_signal_pack_health" not in _finalize_quality(
+        tmp_path, monkeypatch, "r_fu3_plain", base=None)
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    quality = _finalize_quality(tmp_path, monkeypatch, "r_fu3_off")
+    assert "baseline_signal_pack_health" not in quality and "signal_pack_health" not in quality
+
+
+# ───────────────── advertised tools: gated tools are neither listed nor nudged ─────────────────
+_ALL_GATED = frozenset({"simulation_outcomes", "opinion_shift", "coalition_map", "scenario_diff"})
+
+
+def _listing_agent(monkeypatch, *, base=BASE_SIM_ID):
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", False, raising=False)
+    agent = _tool_agent(base=base)
+    agent.tools = agent._define_tools()
+    return agent
+
+
+# The three renderers as they were before FU-3 (copied): the golden listings are built from them.
+def _legacy_tools_description(tools):
+    parts = ["可用工具："]
+    for name, tool in tools.items():
+        params = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
+        parts.append(f"- {name}: {tool['description']}")
+        if params:
+            parts.append(f"  参数: {params}")
+    return "\n".join(parts)
+
+
+def _legacy_usage_hints(tools):
+    lines = [f"- {name}: {ReportAgent._TOOL_HINT_SUMMARIES[name]}"
+             for name in tools if name in ReportAgent._TOOL_HINT_SUMMARIES]
+    return "\n".join(lines) if lines else "（按上方工具描述使用）"
+
+
+def _legacy_schemas(tools):
+    return [{"type": "function", "function": {
+        "name": name, "description": tools[name].get("description", name),
+        "parameters": {"type": "object", "properties": {
+            p: {"type": "string", "description": str(d)} for p, d in tools[name]["parameters"].items()}}}}
+        for name in sorted(tools)]
+
+
+def _assert_listings(agent, hidden):
+    shown = {name: tool for name, tool in agent.tools.items() if name not in hidden}
+    assert agent._get_tools_description() == _legacy_tools_description(shown)
+    assert agent._tool_usage_hints() == _legacy_usage_hints(shown)
+    assert agent._to_openai_tool_schemas() == _legacy_schemas(shown)
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_gated_tools_are_not_advertised_on_an_unusable_run(run_state, monkeypatch, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "ok")
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == _ALL_GATED
+    _assert_listings(agent, _ALL_GATED)
+    # still defined: a model that calls one anyway gets the line, not "unknown tool"
+    assert _ALL_GATED <= set(agent.tools)
+    assert agent._execute_tool("scenario_diff", {}) == _NO_BEHAVIOUR.format(health=health)
+    # a plain report has no scenario_diff to hide
+    plain = _listing_agent(monkeypatch, base=None)
+    assert plain._gated_behaviour_tools() == _ALL_GATED - {"scenario_diff"}
+    _assert_listings(plain, _ALL_GATED)
+
+
+@pytest.mark.parametrize("base_health", _UNUSABLE)
+def test_an_unusable_baseline_hides_only_scenario_diff(run_state, monkeypatch, base_health):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, base_health)
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == {"scenario_diff"}
+    _assert_listings(agent, {"scenario_diff"})
+
+
+@pytest.mark.parametrize("own_health", [None, "ok", "truncated", "stalled", "{not json"])
+def test_tool_listings_byte_identical_on_usable_runs_and_with_the_knob_off(run_state, monkeypatch,
+                                                                           own_health):
+    if own_health is None:
+        os.makedirs(os.path.join(SimulationRunner.RUN_STATE_DIR, SIM_ID), exist_ok=True)
+    elif own_health.startswith("{"):
+        run_state(raw=own_health)
+    else:
+        run_state(own_health)
+    for base_health in _USABLE_BASELINES:
+        _write_summary(BASE_SIM_ID, base_health)
+        agent = _listing_agent(monkeypatch)
+        assert agent._gated_behaviour_tools() == frozenset(), base_health
+        _assert_listings(agent, set())
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    agent = _listing_agent(monkeypatch)
+    assert agent._gated_behaviour_tools() == frozenset()
+    _assert_listings(agent, set())
+
+
+_REACT_BODY = "这是一段足够长的中文正文内容。" * 60
+
+
+class _ScriptLLM:
+    """chat() replays scripted replies and records every message list it was sent."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def supports_native_tools(self):
+        return False
+
+    def chat(self, messages=None, temperature=0.3, max_tokens=4096, **kw):
+        self.calls.append([dict(m) for m in messages])
+        return self.replies.pop(0) if self.replies else "Final Answer: " + _REACT_BODY
+
+
+def _react_nudges(monkeypatch):
+    """Runs one ReACT section (an early answer, one quick_search, the answer) and returns the
+    tool sets named by the insufficient-tools nudge and by the observation's unused-tools hint."""
+    agent = _listing_agent(monkeypatch)
+    for name, value in (("situation_brief", ""), ("sources", []), ("research_report", ""),
+                        ("output_language", "Chinese"), ("_background_block", ""),
+                        ("_sources_index", ""), ("_signal_pack", ""), ("_forecast_spine", None),
+                        ("_forecast_spine_block", ""), ("_retrieval_query", None),
+                        ("_outline_degraded", False), ("_outline_summary", ""),
+                        ("_section_tool_calls", 0), ("report_logger", None), ("console_logger", None),
+                        ("MIN_TOOL_CALLS_PER_SECTION", 1), ("MAX_TOOL_CALLS_PER_SECTION", 12)):
+        setattr(agent, name, value)
+    agent._execute_tool = lambda name, params, report_context="": f"RESULT[{name}]"
+    agent.llm = _ScriptLLM([
+        "Final Answer: " + _REACT_BODY,
+        '<tool_call>\n{"name": "quick_search", "parameters": {"query": "q"}}\n</tool_call>',
+        "Final Answer: " + _REACT_BODY,
+    ])
+    section = ReportSection(title="正文1")
+    result = agent._generate_section_react(section, ReportOutline(title="T", summary="S", sections=[section]),
+                                           previous_sections=[])
+    assert _REACT_BODY in result
+    users = [m["content"] for m in agent.llm.calls[-1] if m.get("role") == "user"]  # the full history
+    early = [set(m.group(1).split(", ")) for t in users for m in re.finditer(r"推荐用一下他们: ([^）]*)）", t)]
+    later = [set(m.group(1).split("、")) for t in users for m in re.finditer(r"可补充视角的未用工具: ([^）]*)）", t)]
+    assert len(early) == 1 and len(later) == 1
+    system = agent.llm.calls[-1][0]["content"]
+    return early[0], later[0], system
+
+
+_RETRIEVAL_TOOLS = {"insight_forge", "panorama_search", "quick_search"}
+
+
+@pytest.mark.parametrize("health", _UNUSABLE)
+def test_react_loop_never_nudges_gated_tools(run_state, monkeypatch, health):
+    run_state(health)
+    _write_summary(BASE_SIM_ID, "ok")
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS and later == _RETRIEVAL_TOOLS - {"quick_search"}
+    assert not [name for name in _ALL_GATED if f"- {name}:" in system]
+    # an unusable baseline under a healthy fork: only scenario_diff drops out
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, health)
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | (_ALL_GATED - {"scenario_diff"})
+    assert "- scenario_diff:" not in system and "- simulation_outcomes:" in system
+
+
+def test_react_loop_nudges_every_tool_on_usable_runs_and_with_the_knob_off(run_state, monkeypatch):
+    run_state("ok")
+    _write_summary(BASE_SIM_ID, "ok")
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | _ALL_GATED
+    assert later == (_RETRIEVAL_TOOLS | _ALL_GATED) - {"quick_search"}
+    assert all(f"- {name}:" in system for name in _ALL_GATED)
+    run_state("hollow")
+    _write_summary(BASE_SIM_ID, "errored")
+    monkeypatch.setattr(Config, "REPORT_SIGNAL_PACK_HEALTH_GATE", False, raising=False)
+    early, later, system = _react_nudges(monkeypatch)
+    assert early == _RETRIEVAL_TOOLS | _ALL_GATED
+    assert all(f"- {name}:" in system for name in _ALL_GATED)

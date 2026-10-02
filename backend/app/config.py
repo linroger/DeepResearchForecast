@@ -589,6 +589,10 @@ class Config:
     # 提示；未识别的非 ok 值同样附提示并告警（偏向关闭）。结果记入 forecast.json
     # quality.signal_pack_health（summary 存在却不可读时另记 summary_unreadable 并告警）。
     # ok / 无 summary / 读取失败 → 信号包逐字节不变；false → 旧行为（不读 summary、不记 quality）。
+    # FU-3：同一规则还管大纲预取（simulation_outcomes / scenario_diff）、ReACT 工具（simulation_outcomes、
+    # coalition_map 含 faction_brief 的降级、opinion_shift、scenario_diff）与情景报告的基线（信号包差异块、
+    # 对比表、scenario_diff 工具、大纲差异预取）：hollow / errored 一侧只给说明行，基线裁定另记
+    # quality.baseline_signal_pack_health；summary 不可读与无 summary 一样按旧行为（只标记、不挡）。
     REPORT_SIGNAL_PACK_HEALTH_GATE = os.environ.get(
         'REPORT_SIGNAL_PACK_HEALTH_GATE', 'true').strip().lower() == 'true'
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
