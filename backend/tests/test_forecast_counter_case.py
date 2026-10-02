@@ -178,6 +178,40 @@ def test_probabilities_in_words_are_unverified_numbers():
         "The odds are long.",
         "The chances are even.",
         "The odds are stacked against growth.",
+        # Round-4 review probes: Unicode fractions (vulgar, fraction slash U+2044, superscript
+        # over subscript), possibility / risk as chance nouns, generalised counts.
+        "There is a ⅓ chance of a recession.",
+        "The odds are ¾ that sales rise.",
+        "A ½ probability of approval.",
+        "Upside is a 1⁄3 chance.",
+        "Upside is a ¹⁄₃ chance.",
+        "The possibility of a recession is about a third.",
+        "The risk of a recession is roughly a third.",
+        "Recession risk is about two-thirds.",
+        "Nine cases out of ten end in approval.",
+        "Three of every four such bills pass.",
+        "Approval comes through in about three of every four cases.",
+        "Upside has nine cases in ten.",
+        "Growth happens one in every four years.",
+        # 机会 / 希望 / 把握 with a half, a ratio or a multiple attached, either order.
+        "实现目标的机会只有一半。",
+        "成功的机会超过一半。",
+        "实现目标的希望不到一半",
+        "一半的希望",
+        "成功的机会是三比一",
+        "三比一的把握",
+        "成功的机会大两倍",
+        "有七分把握能增长",
+        # Hedge words with a quantity attached to them.
+        "Growth is 2.5 times more likely.",
+        "Growth is twice as probable.",
+        "Growth is threefold likelier.",
+        "Growth is 3x more likely.",
+        "Approval is likely at 0.4.",
+        "Approval is probable: a third.",
+        "Approval is 0.33 likely.",
+        "A two-thirds bet on growth.",
+        "Growth is a ⅓ shot.",
     ]
     known = set().union(*(fc.discriminative_numbers(t, NUMBERS) for t in texts))
     kept, dropped = _claims([{"text": t, "sources": ["S1"]} for t in texts], numbers=known)
@@ -220,11 +254,38 @@ def test_probabilities_in_words_are_unverified_numbers():
         "每100公里有15个充电桩",
         "这是导致需求进一步回落的可能性之一",
         "2026年3月1日起补贴退坡，提高了需求回落的可能性",
+        # Round-4 review probes: a hedge word (likely, probably, bet, 把握) whose sentence has
+        # a number that is not attached to it is ordinary evidence.
+        "BNEF expects EV sales are likely to exceed 30 million units by 2030.",
+        "China will probably add 200 GW of solar capacity in 2025.",
+        "The Fed is likely to cut rates twice this year.",
+        "Two new plants are likely to open in Texas.",
+        "CATL is likely to keep its lead with 37 GWh of new capacity.",
+        "Tesla's bet on 4680 cells has slipped behind schedule.",
+        "比亚迪把握住了海外市场机遇，2024年出口41.7万辆。",
+        "The 2.5 GW plant is likely to open in 2026.",
+        "Sales are likely at 2024 levels.",
+        "希望在2025年实现3倍增长",
+        # Ordinals and "N of M" without "out" or "every" are not counts.
+        "A third possibility is a recession.",
+        "One of three makers expanded capacity.",
     ]
     for text in allowed:                       # one call each: a side keeps at most three claims
         kept, dropped = _claims([{"text": text, "sources": ["S1"]}],
                                 numbers=fc.discriminative_numbers(text, NUMBERS))
         assert [c["text"] for c in kept] == [text] and not dropped, text
+    # 可能性 is a chance noun (possibility), not a hedge, and the Chinese comma joins clauses as
+    # the English one does ("The probability, about a third, is too low."), so this stays
+    # rejected by the noun rule.
+    assert fc._states_proportion("该政策可能性较大，预计2025年补贴总额达到300亿元。")
+    # Out of scope, as the module docstring states (pinned so it stays true): a probability
+    # split across sentences, a hedge whose quantity sits elsewhere in its sentence, and
+    # words outside the lexicon.
+    for text in ("Recession odds have risen. Analysts now put them at a third.",
+                 "Approval is unlikely, the market puts it at a third.",
+                 "A recession is a real prospect: roughly a third, per forecasters.",
+                 "Approval is a sure thing in nine cases of ten."):
+        assert not fc._states_proportion(text), text
     # Tenths proportions next to those word tails still count.
     tenths = ["七成都来自中国", "四成年轻人选择电动车", "占据七成份额", "七成批发商看好",
               "七成对此表示乐观"]
@@ -234,7 +295,10 @@ def test_probabilities_in_words_are_unverified_numbers():
 
 @pytest.mark.parametrize("probability", [
     "a one-in-three chance", "one chance in three", "nine times out of ten",
-    "more probable than not", "likelier than not", "two-to-one against", "a 1/3 chance"])
+    "more probable than not", "likelier than not", "two-to-one against", "a 1/3 chance",
+    "a ⅓ chance of growth", "the possibility of growth at about a third",
+    "the risk of a slump at roughly a third", "nine cases out of ten",
+    "three of every four years", "growth three times as likely"])
 def test_worded_odds_never_reach_part2_with_the_report_support_check(probability):
     """The review probes: a supported evidence sentence with a worded probability appended is
     rejected, so it can never become the strongest Part-2 claim."""
@@ -250,6 +314,29 @@ def test_worded_odds_never_reach_part2_with_the_report_support_check(probability
     result = {"status": "complete", "targets": [{"target_id": "T1", "scenario": "Upside path",
                                                  "claims": {"higher": kept, "lower": []}}]}
     assert fc.render_counter_case_block(result, "English") == ""
+
+
+def test_zh_hope_words_with_a_half_never_reach_part2():
+    """The round-4 probe: a supported Chinese evidence sentence with 机会 / 希望 and a half or a
+    ratio appended is rejected, so only the clean evidence claim reaches the Part-2 block."""
+    support = ReportAgent._semantic_citation_support
+    tags = {"S2": {"title": "中国电动车市场", "url": "https://x.example/zh",
+                   "supports": ["2024年全球电动车销量达到1700万辆，中国占据主导。"]}}
+    evidence = "2024年全球电动车销量达到1700万辆，中国占据主导。"
+    probes = [evidence[:-1] + "，成功的机会超过一半。",
+              evidence[:-1] + "，增长的机会只有一半的判断过于悲观。",
+              evidence[:-1] + "，实现增长的希望不到一半。",
+              evidence[:-1] + "，成功的机会是三比一。"]
+    for probe in probes:                       # each would be supported without the wall
+        assert support(probe, tags["S2"]) is True, probe
+    kept, dropped = _claims([{"text": t, "sources": ["S2"]} for t in probes + [evidence]],
+                            tags=tags, numbers=("1700",), support=support)
+    assert dropped == Counter({"unverified_number": len(probes)})
+    assert [(c["text"], c["verdict"]) for c in kept] == [(evidence, "valid")]
+    result = {"status": "complete", "targets": [{"target_id": "T1", "scenario": "上行",
+                                                 "claims": {"higher": kept, "lower": []}}]}
+    assert fc.render_counter_case_block(result, "中文") == (
+        "- T1 「上行」\n  - 上调理由：2024年全球电动车销量达到1700万辆，中国占据主导。 [S2]")
 
 
 def test_worded_odds_are_rejected_when_support_is_undecidable():
@@ -688,8 +775,8 @@ def test_triggers_dated_before_as_of_lose_the_date():
 
 def test_triggers_that_state_a_probability_are_dropped():
     """A trigger is published as one row, so its signal and threshold are read together: a
-    chance word and a quantity there state a probability and drop the trigger. A chance word
-    without a quantity is direction only."""
+    chance noun and a quantity there, or a hedge word with a quantity attached, state a
+    probability and drop the trigger. A chance noun without a quantity is direction only."""
     kept = fc.validate_triggers([
         _trigger(signal="Fed rate-cut probability", threshold_or_event="above 50%"),
         _trigger(signal="Rate-cut odds", threshold_or_event="above 1 in 3"),
@@ -697,13 +784,21 @@ def test_triggers_that_state_a_probability_are_dropped():
         _trigger(signal="Market-implied probability of a 2027 recession",
                  threshold_or_event="above 0.4"),
         _trigger(signal="全球电动车销量增长的概率", threshold_or_event="超过2500万辆"),
+        # Round 4: a vulgar fraction is a quantity; a hedge word with a quantity attached and
+        # 机会 with a half state a probability across the row.
+        _trigger(signal="Rate-cut odds", threshold_or_event="above ⅓", by="2027-06-30"),
+        _trigger(signal="Approval likely", threshold_or_event="at 0.4"),
+        _trigger(signal="增长的机会", threshold_or_event="超过一半", by="2027-06-30"),
         _trigger(),
         _trigger(signal="Odds of a rate cut", threshold_or_event="a policy shift",
                  by="2027-06-30"),
+        # A hedge word whose number is not attached to it is an ordinary signal.
+        _trigger(signal="Fed likely to cut rates", threshold_or_event="2 cuts by year end"),
     ], REAL_TAGS)
     assert [(t["signal"], t["threshold_or_event"]) for t in kept] == [
         ("Global electric car sales", "above 25 million"),
-        ("Odds of a rate cut", "a policy shift")]
+        ("Odds of a rate cut", "a policy shift"),
+        ("Fed likely to cut rates", "2 cuts by year end")]
 
 
 # ---------------------------------------------------------------- failure
