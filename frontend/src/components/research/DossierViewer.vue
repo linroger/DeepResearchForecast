@@ -525,7 +525,8 @@ async function loadResearchTranslation(lang, { trigger = false } = {}) {
   try {
     const res = await getResearchTranslation(props.pipelineId, lang)
     if (version !== researchLangVersion) return   // report changed mid-flight
-    const data = (res && res.data && res.data.data) || {}
+    // The shared Axios interceptor already returns the backend JSON body.
+    const data = (res && res.data) || {}
     translationStatus.value = data.status || 'unavailable'
     translationIssues.value = Array.isArray(data.issues) ? data.issues : []
     if (data.available && typeof data.report === 'string' && data.report.trim()) {
@@ -553,11 +554,13 @@ function scheduleTranslationPoll(lang) {
 
 async function generateResearchTranslation() {
   if (!props.pipelineId || translationBusy.value) return
+  const version = researchLangVersion
   const lang = targetLang.value
   translationBusy.value = true
   try {
     const res = await requestResearchTranslation(props.pipelineId, lang)
-    const data = (res && res.data && res.data.data) || {}
+    if (version !== researchLangVersion) return   // report changed mid-flight
+    const data = (res && res.data) || {}
     translationStatus.value = data.status || 'generating'
     if (data.available) {
       await loadResearchTranslation(lang)
@@ -565,9 +568,9 @@ async function generateResearchTranslation() {
       scheduleTranslationPoll(lang)
     }
   } catch (e) {
-    translationStatus.value = 'failed'
+    if (version === researchLangVersion) translationStatus.value = 'failed'
   } finally {
-    translationBusy.value = false
+    if (version === researchLangVersion) translationBusy.value = false
   }
 }
 
