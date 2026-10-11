@@ -417,6 +417,7 @@ stateDiagram-v2
 | `handoff/sources.json` | Stage 1 | Prepare (the source-bound public world) · Report (`[S#]` citations) |
 | `handoff/timeline.json` | Stage 1 extraction | Prepare (dated events) · Report (chronology, timeline chart) |
 | `handoff/quantitative.json` · `contested.json` | Stage 1 extraction | Report (metric trajectories, contested claims) |
+| `handoff/data/datasets.json` · `data/` | Official-data retrieval, then citation finalization | Research baseline/charts · report snapshot/charts · optional exact-period forecast anchors |
 | `handoff/prediction_markets.json` · `market_price_history.json` | Stage 1 | Report (market pack, anchoring, price-history charts) |
 | `handoff/ontology.json` | Stage 2 | Graph |
 | Graph `mirofish_<id>` · `handoff/graph_priors.json` | Stage 3 | Prepare (entity matching, principal ordering) · Report (retrieval tools) |
@@ -525,6 +526,33 @@ v3 plans its wall clock at the smaller of the preset's time plan and 0.85 × the
 | quick | 9 min | 40 | 222k / 78k | 78% | 4 | 48 (22) | 25 | 0.64 |
 | standard | 31 min | 94 | 693k / 123k | 81% | 10 | 116 (69) | 34 | 0.69 |
 | deep | 39 min | 155 | 1.45M / 244k | 81% | 17 | 194 (106) | 65 | 0.73 |
+
+#### Official quantitative data (v3 and legacy)
+
+Optional statistical retrieval complements web research through six separately launched stdio MCP providers under `datamcps/`. Series use canonical `provider:native-id` identifiers; supported `#yoy` and `#pct` transforms have distinct dataset identities and changed units. The [data-source skill](deerflow_bridge/skills/data-sources/SKILL.md) and [series catalog](deerflow_bridge/skills/data-sources/references/series-catalog.md) guide selection; catalog membership does not guarantee current availability.
+
+| Provider | Retrieval coverage | Limits to retain |
+|---|---|---|
+| `fred` | US macro, rates, labor and prices | Without `FRED_API_KEY`, catalog discovery and bounded `fredgraph.csv` retrieval remain available; upstream FRED search needs a key. Keyless CSV supplies no vintage history. |
+| `bls` | US labor and prices via catalog-selected series | Optional `BLS_API_KEY`; the local keyless guard stops at 20 requests per day. Quarterly and native annual (`A01`) observations retain their period meaning; annual-summary rows (`M13`, `Q05`, `S03`) are excluded. |
+| `bis` | Supported SDMX flows for policy rates, credit, property and exchange rates | Flow dimensions, geography, units and frequency must match; incompatible observations are rejected. |
+| `imf` | Supported SDMX flows, including commodities, CPI and explicit WEO vintages | Slow calls; missing actual/estimate/projection labels remain unknown. No cutoff is inferred from the current year. |
+| `wb` | World Bank Data360 indicators and supported cross-country/outlook datasets | Bounded windows and pagination; all Data360 observations currently retain unknown status, including WDI and WEO/GEP. They can support explicitly unclassified quantitative evidence, but cannot establish observed outcomes for automatic resolution. |
+| `usgov` | Curated Treasury fiscal recipes and a limited spending recipe | This adapter does not expose the server's entire API catalog. SEC concept time series are unavailable; spending missingness is not certified for automatic resolution. |
+
+Native daily series are delivered as monthly arithmetic means of available daily observations, potentially covering partial months, with frequency `M` and automatic resolution disabled for those aggregates. Requested growth transforms are applied afterward; these are not native daily observations.
+
+**Planning and tools.** v3 adds up to three `data_needs` per key question, performs bounded prefetch before gathering, and seeds each question with its retrieved evidence. Enabled agents can use `data_search(query, provider?)` and `data_get(series, start?, end?, transform?)` alongside web tools. The legacy engine adds data guidance and registers these tools in the loaded native configuration for the lead/scoped researcher, respecting explicit tool/skill denials and existing settings. Both paths enforce call budgets, deduplicate requests, and capture one successful generation per series/transform; repeated use does not silently refresh revised observations. Search results are discovery metadata, not fetched quantitative evidence.
+
+**Persistence and citations.** Successful retrieval stores an exact evidence page and source-ledger identity, then publishes content-hashed JSON/CSV generations through `handoff/data/datasets.json`. The manifest retains units, frequency, adjustment, geography, retrieval time, known vintage/status, source URLs, hashes and final positional `[S#]` references. Transform identities stay separate. Finalization remaps citations and captions from captured evidence without provider refresh; prefetch alone does not manufacture a VERIFIED claim. Loaders reject corrupt, mismatched or unsafe files rather than substitute fresh data.
+
+**Simulation generation and older manual reports.** Primary and extra-seed simulations bind their research generation before preparation. Later report, chat and context lookups use that association only while the original research and dataset fingerprints still match. Replacing research at the same handoff location makes enrichment unavailable rather than substituting the newer generation. Older unbound simulations retain the legacy dossier lookup, but omit official data because its generation cannot be established. Lookup does not fetch replacement data or automatically rebind a simulation.
+
+**Both reports use the captured data.** The research dossier includes an Official Data Baseline table and deterministic `charts/data_*.png` figures, with HTML twins when available, indexed in `charts.json`. The forecast writer reads the validated stored carrier without fetching, receives a bounded official-data snapshot as context (a visible snapshot table in the finished report is not guaranteed), and renders an `official_indicators` dashboard plus selected `official_series_*` history/threshold figures in `viz_manifest.json`. Gaps remain gaps; publisher projections, estimates and unclassified values retain separate labels/styles. Model thresholds/probabilities and eligible annual scenario bands are annotations, never extra observations. The research dossier retains its deterministic baseline table when figures are unavailable; failed forecast figures are omitted with diagnostics rather than broken links. See the [data-visuals guidance](deerflow_bridge/skills/data-visuals/SKILL.md).
+
+**Exact-period forecast anchors.** An optional `binary_forecasts[].data_anchor` binds a known series, exact native observation period, finite threshold and comparator (`>`, `>=`, `<`, `<=`) to canonical units/transform. The statement and resolution criteria must express the same simple, affirmative comparison and period; ambiguous, negated or compound propositions remain unanchored. The existing resolution monitor can query only that bounded period and returns `resolved`, `pending` or `manual`. Resolution requires the full period to have ended and a nonmissing historical observation captured after period completion and no later than the cutoff. Date-only cutoffs include the whole UTC day; timestamps retain their instant. A retrieval timestamp proves capture, not publication time: later retrieval, free-form vintage/`available_at`, projections, estimates or unknown status cannot prove historical availability. Dry-run monitoring makes no official-data fetch.
+
+**Disabled and unavailable modes.** On fresh runs, `DATA_SOURCES_ENABLED=false` omits data planning/guidance and tools; status remains visible in metadata. v3 resumes reuse frozen captured data in `stored_only` mode without prewarming or refreshing providers. An unbuilt server, missing capability/key, timeout, quota or crash leaves an explicit evidence gap; other sources and web research can continue. Invalid captured evidence is rejected, and v3 can stop publication when required evidence fails validation. `SETUP_DATAMCPS=0` skips builds only; it does not disable retrieval. `DATA_SOURCES_CHARTS_MAX=0` disables research data charts, while `REPORT_DATA_CHARTS=false` skips forecast official-data figures; neither disables stored-data writing context. The renderer's zero-cap path runs before dataset loading and its matplotlib requirement, returns exit code 2 (no data charts), and removes only renderer-owned manifest rows. See [configuration](#configuration-env).
 
 #### Legacy engine (`RESEARCH_ENGINE=legacy`)
 
@@ -688,6 +716,7 @@ A cell with no support becomes a **typed gap**, not an invented fact.
 | `timeline.json` · `quantitative.json` · `contested.json` | Dated events · numeric claims and trajectories · contested claims |
 | `prediction_markets.json` · `market_price_history.json` | Polymarket snapshot · daily price series for the last 90 days |
 | `charts.json` · `charts/` | Research charts |
+| `data/datasets.json` · `data/*.json` · `data/*.csv` | When data was captured: source-bound statistical series, content hashes, provenance and final citation IDs; supported by v3 and legacy |
 | `evidence_synthesis_manifest.json` · `research_contract_manifest.json` | Sealed index of the lanes · the final contract (written last) |
 | `track_<k>/` | Each lane's evidence pack, sources, checkpoint and log |
 | `research_progress.log` · `meta.json` · `research_budget.json` | Live log · status and metadata · budget telemetry |
@@ -1037,14 +1066,14 @@ Visual Annex (charts no section claimed) · How to Verify · References
 **`forecast.json`** contains:
 - the headline, horizon, confidence and key uncertainties;
 - `scenarios[]`, each with a name, probability, drivers, resolution criteria, base-rate anchor and adjustment rationale;
-- `binary_forecasts[]`, each with a statement, probability (0.02–0.98), resolution criteria and source, scenario membership, `market_anchor` and `market_influence`;
+- `binary_forecasts[]`, each with a statement, probability (0.02–0.98), resolution criteria and source, scenario membership, `market_anchor` and `market_influence`, plus an optional validated `data_anchor` for an exact official observation period;
 - quality blocks, including the citation audit, the binary-quality scorecard and the final gate result.
 
-**Charts.** Charts are rendered without any LLM involvement into `reports/<id>/charts/`, with a `viz_manifest.json` index. Each is an interactive Plotly HTML file paired with a PNG, with a matplotlib fallback. Charts are served in a sandbox (CSP) and placed under the section they illustrate.
+**Charts.** Charts are rendered without any LLM involvement into `reports/<id>/charts/`, with a `viz_manifest.json` index. The standard path produces interactive Plotly HTML with a PNG and a matplotlib fallback. For official-data figures, pairing is best effort: PNG-only fallback, an HTML-only interactive link, or omission with diagnostics when neither format can be produced. Charts are served in a sandbox (CSP) and placed under the section they illustrate.
 
 | Rendered by default (when the data exists) | Opt-in or conditional |
 |---|---|
-| Scenario probabilities · binary-forecast dot plot · model vs. market · event timeline · metric trajectories · technology shares · regional comparison · comparable forecast benchmarks · forecast revisions · world-state trajectory · market price history (anchored markets only) | `REPORT_META_CHARTS=1`: actor network and source-mix sunburst · what-if reports: base-vs-scenario comparison |
+| Scenario probabilities · binary-forecast dot plot · model vs. market · event timeline · metric trajectories · technology shares · regional comparison · comparable forecast benchmarks · forecast revisions · world-state trajectory · market price history (anchored markets only) · official-indicator dashboard and selected history/threshold figures (valid stored data required) | `REPORT_META_CHARTS=1`: actor network and source-mix sunburst · what-if reports: base-vs-scenario comparison |
 
 **Exports.**
 - Markdown download.
@@ -1232,6 +1261,7 @@ The steps are: **install → configure → run**.
    - it builds DeerFlow's own Python 3.12 venv.
 
    A re-run keeps the existing base and `config.yaml` and refreshes only the tracked overlay.
+7. **Builds the six vendored data-MCP servers.** Already-current builds are skipped. Individual failures warn and setup continues. Missing or unusable builds are unavailable; a failed rebuild can leave an older build usable. The overlay also includes `data_mcp.py`, `data_catalog.py`, `data_sources.py`, `data_tools.py` and the `data-sources` / `data-visuals` skills.
 
 These shell variables change setup behaviour. They are not `.env` keys.
 
@@ -1241,6 +1271,18 @@ These shell variables change setup behaviour. They are not `.env` keys.
 | `DEERFLOW_REPO` / `DEERFLOW_REF` | Upstream URL and commit, e.g. `DEERFLOW_REF=main ./setup.sh` to track the upstream HEAD |
 | `SETUP_NONINTERACTIVE=1` | Skips the picker and auto-detects. CI and piped runs do this automatically. |
 | `SETUP_DRF2=1` | Also installs the optional [DRF2](#deerflow-2-integration-and-the-drf2-target) preview dependencies |
+| `SETUP_DATAMCPS=0` | Skip data-server builds; use `DATA_SOURCES_ENABLED=false` in `.env` to disable retrieval |
+
+Data-server maintenance from the repository root:
+
+```bash
+npm run setup:datamcps                  # idempotent build/install; no statistics query
+npm run setup:datamcps -- --check        # readiness/freshness check; builds nothing
+bash scripts/setup_datamcps.sh fred bls  # build only selected providers
+npm run setup:datamcps -- --force        # force selected/default builds
+```
+
+Use Node ≥ 22 for all six providers (`usgov` requires it), plus uv/Python 3.12 for the Python servers. The helper creates provider-local environments; its IMF recipe pins `mcp[cli]>=1.9.1,<2` rather than using the stale upstream lock. `--check` returns 0 when every selected server is ready, 1 otherwise; it does not certify live provider availability. For changed bridge code/skills, rerun `./setup.sh` to refresh the overlay. See [`scripts/setup_datamcps.sh`](scripts/setup_datamcps.sh) for recipes and path overrides.
 
 To package a custom environment by hand, treat [`setup.sh`](setup.sh) as the specification. The integration is more than copying one driver file.
 
@@ -1370,6 +1412,23 @@ Research models (`DEERFLOW_MODEL`), as defined by the stanzas in `deerflow_bridg
 | `RESEARCH_MCP_KG` | `true` | Give fork/continue/resume research runs access to an existing graph |
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | Search and fetch backends (Firecrawl is recommended) |
 | `PREDICTION_MARKETS_ENABLED` | `true` | Keyless Polymarket lookups during research and the report |
+
+**Official data (research and report)**
+
+| Setting | Default | Current behavior |
+|---|---|---|
+| `DATA_SOURCES_ENABLED` | `true` | Enable optional retrieval on fresh runs; v3 resumes keep frozen captured evidence |
+| `DATA_SOURCES` | `fred,bls,bis,imf,wb,usgov` | Case-insensitive comma-separated allowlist; empty selects all six |
+| `DATA_SOURCES_DIR` | `<repo>/datamcps` | Vendored server root; relative paths resolve against the repository |
+| `DATA_SOURCES_NODE` | auto | Node executable; PATH then `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`; an explicit invalid path does not fall back |
+| `DATA_SOURCES_CACHE_DIR` | `backend/uploads/.data_cache` | Disk cache, keyless BLS quota records and MCP working/log directories |
+| `DATA_SOURCES_CALL_TIMEOUT` | `60` seconds | Config minimum 5; configured transport default capped at 900; IMF default uses `max(timeout, 120)`; explicit caller timeouts replace that default and can be shorter or longer |
+| `DATA_SOURCES_PREFETCH_MAX` | `12` | v3 prefetch cap (at most 12); 0 skips prefetch while agent tools remain enabled; legacy retrieval is tool-driven |
+| `RESEARCH_LINEAR_MAX_DATA_CALLS_TOTAL` · `RESEARCH_LINEAR_DATA_CALLS_PER_KIQ` | v3: `24/3`, `50/4`, `90/5` | Total/per-KIQ calls for quick/standard/deep; legacy defaults `50/4`; cached reuse consumes no call quota; read by bridge code |
+| `DATA_SOURCES_CHARTS_MAX` | `8` | Research single-series cap, plus up to two compatible comparison figures; 0 disables data charts and removes only stale `data_` manifest rows, preserving files and sibling rows; v3 embeds at most 8 figures |
+| `REPORT_DATA_CHARTS` | `true` | `false` skips official-data figures, retains other chart families and stored-data writer context, and records `report_data_charts_disabled`; a fresh manifest generation drops old official rows |
+
+Provider credentials are optional environment inputs, passed only to the relevant child process. `FRED_API_KEY` enables upstream FRED search/API retrieval; `BLS_API_KEY` enables registered BLS access. `EIA_API_KEY`, `BEA_API_KEY` and `CENSUS_API_KEY` enable corresponding modules in the US Gov server; they do not expand this adapter's curated recipes. `DATA_GOV_API_KEY` is forwarded when present. `SEC_CONTACT_EMAIL` supplies SEC contact information, not a key, and does not restore the missing period/filing semantics. No key is needed for BIS, IMF or Data360.
 
 **Knowledge graph (Stages 2–3)**
 

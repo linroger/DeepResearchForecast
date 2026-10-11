@@ -25,6 +25,9 @@
 #     deep-research skill, and a ready-to-use config.yaml with claude / minimax /
 #     deepseek / qwen / glm / codex / kimi stanzas) and builds its isolated
 #     Python 3.12 venv.
+#   * Builds the vendored official-data MCP servers in ./datamcps (FRED, BLS,
+#     BIS, IMF, World Bank Data360, US Gov Open Data) via
+#     scripts/setup_datamcps.sh (idempotent; SETUP_DATAMCPS=0 skips it).
 #
 # Safe to run multiple times. Optional steps are guarded so a missing piece
 # (e.g. no vendored build AND no network for the clone fallback) never aborts the
@@ -592,9 +595,13 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #   - linear_research.py + research_gateway.py are the deep-research engine v3
   #     (RESEARCH_ENGINE=v3, the default). deerflow_research.py imports them by
   #     bare name, so they must be colocated too or the v3 dispatch hits ImportError.
+  #   - data_mcp.py (stdio MCP hub), data_catalog.py (curated series catalog),
+  #     data_sources.py (unified official-data API) and data_tools.py (the
+  #     legacy engine's data_search/data_get tools) are imported by bare name by
+  #     both engines and by config.yaml (`use: data_tools:...`).
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -602,6 +609,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed runtime_skill_sync.py (runtime bundle verifier)" ;;
         linear_research.py|research_gateway.py)
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
+        data_mcp.py|data_catalog.py|data_sources.py|data_tools.py)
+          ok "Installed $_tool_mod (official-data sources)" ;;
         *)
           ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
       esac
@@ -733,6 +742,24 @@ else
   warn "deer-flow not available at: $DEERFLOW_DIR"
   warn "Deep research (pipeline stage 1) needs it. Re-run ./setup.sh once you have"
   warn "network access, or set DEERFLOW_DIR to an existing checkout."
+fi
+
+# --- Official-data MCP servers (datamcps/: FRED, BLS, BIS, IMF, World Bank
+#     Data360, US Gov Open Data). Deep research and the forecast report query
+#     them for official statistics. An unbuilt server is simply unavailable at
+#     run time (never a failed run), so this step warns and continues. The
+#     helper is idempotent (already-built servers are skipped in under a
+#     second); SETUP_DATAMCPS=0 skips it. ---
+step "Building official-data MCP servers (datamcps/)"
+if [ "${SETUP_DATAMCPS:-1}" = "0" ]; then
+  info "SETUP_DATAMCPS=0 — skipping the data-source MCP server builds."
+elif [ ! -f "$ROOT_DIR/scripts/setup_datamcps.sh" ]; then
+  warn "scripts/setup_datamcps.sh not found — skipping the data-source MCP servers."
+elif bash "$ROOT_DIR/scripts/setup_datamcps.sh"; then
+  ok "Data-source MCP servers ready (datamcps/)"
+else
+  warn "Some data-source MCP servers are not ready (see the summary above). Research"
+  warn "runs continue without them; retry any time with: npm run setup:datamcps"
 fi
 
 # ---------------------------------------------------------------------------

@@ -1309,6 +1309,8 @@ def _fanout_worker_budget() -> int:
 
 
 def _reset_fetched_sources() -> None:
+    global _LEGACY_DATA_RUNTIME_READY
+    _LEGACY_DATA_RUNTIME_READY = None
     _FETCHED_SOURCES.clear()
     _RESEARCH_FLAGS.clear()
     _set_market_pricing_block("")   # PM-4: 每 run 重置注入的市场定价块
@@ -1928,6 +1930,64 @@ def _merge_pending_fetches(pending: list) -> None:
         pass
 
 
+def _data_tools_module():
+    import importlib
+    return (importlib.import_module(".data_tools", __package__) if __package__
+            else importlib.import_module("data_tools"))
+
+
+def _copy_official_source_fields(source: dict, target: dict) -> None:
+    if source.get("source_origin") != "official_data":
+        return
+    try:
+        tools = _data_tools_module()
+        if tools.validated_source(source):
+            for key in (*tools.SOURCE_FIELDS, "content_sha256", "content_chars", "receipt_id", "provider"):
+                if key in source:
+                    target[key] = source[key]
+            target["title"] = source["dataset"]["snapshot"]["title"]
+            for key in ("receipt_scopes", "thread_id", "lane", "purpose"):
+                target.pop(key, None)
+    except Exception:
+        logging.getLogger(__name__).warning("official data: source snapshot unavailable")
+
+
+def _legacy_data_sources() -> list[dict]:
+    rows = [dict(r) for r in _FETCHED_SOURCES
+            if r.get("source_origin") == "official_data"]
+    root = os.environ.get("DEERFLOW_RUN_ARTIFACT_DIR", "").strip()
+    try:
+        tools = _data_tools_module()
+        if root:
+            rows.extend(tools.candidate_sources(Path(root)))
+        by_url = {r["url"]: r for r in rows if tools.validated_source(r)}
+        return list(by_url.values())
+    except Exception:
+        return []
+
+
+def _remap_data_citations(text: str, sources: list[dict], entries: list[dict]) -> str:
+    """Single-pass remapping prevents a replacement from being remapped twice."""
+    by_url = {_norm_url(e.get("url")): e.get("n") for e in entries}
+    mapping: dict[int, int | None] = {}
+    for row in sources:
+        number = row.get("provisional_source_number")
+        if not isinstance(number, int):
+            continue
+        target = by_url.get(_norm_url(row.get("url")))
+        if number in mapping and mapping[number] != target:
+            raise ValueError("official-data provisional reference collision")
+        mapping[number] = target
+    def replace(match):
+        number = int(match.group(1))
+        if number not in mapping:
+            return match.group(0)
+        target = mapping[number]
+        return f"[S{target}]" if target else ""
+
+    return _CITATION_MARKER_RE.sub(replace, text)
+
+
 def _merge_shared_fetched_sources() -> int:
     """Import successful fetches performed by isolated subagent processes.
 
@@ -1937,14 +1997,31 @@ def _merge_shared_fetched_sources() -> int:
     merging it here makes lane source exports complete without replaying tool
     history or asking the model to reconstruct URLs from prose.
     """
-    if _research_budget is None or not hasattr(
-        _research_budget, "list_fetched_sources"
-    ):
-        return 0
-    try:
-        shared = _research_budget.list_fetched_sources()
-    except Exception:  # noqa: BLE001
-        return 0
+    shared = []
+    if _research_budget is not None and hasattr(_research_budget, "list_fetched_sources"):
+        try:
+            shared = _research_budget.list_fetched_sources()
+        except Exception:  # optional shared web provenance
+            pass
+    # Exact dataset pages are separate from web/Track-B receipts. Preserve the
+    # data snapshot through outer lane merges, without granting receipt scopes.
+    data_rows = _legacy_data_sources()
+    if data_rows and not shared:
+        shared = [dict(r) for r in _FETCHED_SOURCES if r.get("source_origin") != "official_data"]
+    # Do not conflate a human-page web receipt with the deterministic data
+    # page merely because a worker opened the same advertised identity URL.
+    prior_data = {_norm_url(r["url"]): r for r in data_rows
+                  if any(_norm_url(old.get("url")) == _norm_url(r["url"])
+                         and old.get("source_origin") == "official_data" for old in _FETCHED_SOURCES)}
+    shared = [prior_data.get(_norm_url(r.get("url")), r) for r in shared or []]
+    web_by_url = {_norm_url(r.get("url")): r for r in shared or []}
+    data_rows = [r for r in data_rows if _norm_url(r["url"]) not in web_by_url
+                 or web_by_url[_norm_url(r["url"])].get("source_origin") == "official_data"
+                 or not web_by_url[_norm_url(r["url"])].get("content_sha256")]
+    shared = list(shared or []) + data_rows
+    if data_rows:
+        prior_order = {_norm_url(r.get("url")): i for i, r in enumerate(_FETCHED_SOURCES)}
+        shared.sort(key=lambda r: prior_order.get(_norm_url(r.get("url")), len(prior_order)))
     admitted: list[dict[str, Any]] = []
     for item in shared or []:
         if not isinstance(item, dict):
@@ -1969,6 +2046,7 @@ def _merge_shared_fetched_sources() -> int:
         ):
             if item.get(key) not in (None, ""):
                 row[key] = item[key]
+        _copy_official_source_fields(item, row)
         admitted.append(row)
     if not admitted:
         return 0
@@ -1994,13 +2072,15 @@ def _merge_shared_fetched_sources() -> int:
             for row in admitted:
                 url = str(row["url"])
                 canonical = deduped.setdefault(url, row)
+                _copy_official_source_fields(row, canonical)
                 local = local_by_url.get(url) or {}
                 scopes = [
                     dict(scope)
                     for scope in _as_items(canonical.get("receipt_scopes"))
                     if isinstance(scope, dict)
                 ]
-                for scope in _as_items(local.get("receipt_scopes")):
+                for scope in ([] if canonical.get("source_origin") == "official_data"
+                              else _as_items(local.get("receipt_scopes"))):
                     if not isinstance(scope, dict):
                         continue
                     bound = dict(scope)
@@ -2049,6 +2129,7 @@ def _merge_shared_fetched_sources() -> int:
             ):
                 if item.get(key) not in (None, "") and not existing.get(key):
                     existing[key] = item[key]
+            _copy_official_source_fields(item, existing)
     return added
 
 
@@ -2203,6 +2284,7 @@ def merge_fetched_into_sources(extracted: Any) -> "tuple[list[dict], int]":
         for k in ("tier", "date", "independent", "supports", "jurisdiction", "lang"):
             if m.get(k) not in (None, ""):
                 row[k] = m[k]
+        _copy_official_source_fields(f, row)
         if not _finalize_tier(row):
             s4_dropped += 1
             seen.discard(u)
@@ -4799,6 +4881,28 @@ def render_references_section(entries: "list[dict]", cited: "set[int] | list[int
     return "## References\n\n" + "\n".join(rows)
 
 
+def _report_reference_entries(report: str) -> list[dict]:
+    entries = []
+    for number, text in parse_references_section(report).items():
+        urls = re.findall(r"https?://[^\s<>]+", text)
+        url = urls[-1].rstrip(")") if urls else ""
+        title = text.split(url, 1)[0].rstrip(" —-") if url else text
+        entries.append({"n": number, "url": url, "title": title or "Source"})
+    return entries
+
+
+def _replace_report_references(report: str, entries: list[dict], numbers) -> str:
+    """Normalize all accepted ordinal formats to the same final URL namespace."""
+    lines = report.splitlines()
+    start = next((i for i, line in enumerate(lines) if _REFERENCES_HEADING_RE.match(line.strip())), None)
+    section = render_references_section(entries, numbers)
+    if start is None:
+        return report.rstrip() + ("\n\n" + section + "\n" if section else "")
+    stop = next((i for i in range(start + 1, len(lines)) if re.match(r"^#{1,3}\s+\S", lines[i])), len(lines))
+    lines[start:stop] = section.splitlines() + ([""] if stop < len(lines) else [])
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def finalize_report_citations(report: str, plog: "ProgressLog") -> str:
     """WAVE9-RQ2: 落盘前的确定性引注校验/修复（合成后跑，幂等）。
 
@@ -4810,6 +4914,21 @@ def finalize_report_citations(report: str, plog: "ProgressLog") -> str:
     """
     if not _inline_citations_enabled() or not (report or "").strip():
         return report
+    data_rows = _legacy_data_sources()
+    if data_rows:
+        report_entries = _report_reference_entries(report)
+        if report_entries:
+            by_url = {_norm_url(e["url"]): e["n"] for e in report_entries}
+            next_number = max(e["n"] for e in report_entries) + 1
+            for row in data_rows:
+                if _norm_url(row["url"]) not in by_url:
+                    report_entries.append({"n": next_number, "url": row["url"], "title": row["title"]})
+                    by_url[_norm_url(row["url"])] = next_number
+                    next_number += 1
+            report = _remap_data_citations(report, data_rows, report_entries)
+            report = _replace_report_references(report, report_entries, [e["n"] for e in report_entries])
+        elif _PINNED_CITATION_INDEX:
+            report = _remap_data_citations(report, data_rows, _PINNED_CITATION_INDEX)
     markers = [int(n) for n in _CITATION_MARKER_RE.findall(report)]
     if not markers:
         plog.write("stage", "citations: no inline [S<n>] markers in the report; nothing to validate")
@@ -4839,6 +4958,133 @@ def finalize_report_citations(report: str, plog: "ProgressLog") -> str:
     return out
 
 
+_LEGACY_DATA_RUNTIME_READY: bool | None = None
+
+
+def _register_legacy_data_tools(client, *, plog=None) -> dict[str, Any]:
+    """Augment the already-loaded native config before lazy agent creation.
+
+    DeerFlowClient and get_app_config initially share this same object. Mutate
+    only the tool/skill permission lists in memory: never reload config, write
+    provider settings, reset a live agent, or widen explicit deny/empty lists.
+    Task subagents receive this exact AppConfig via the native runtime context.
+    """
+    global _LEGACY_DATA_RUNTIME_READY
+    names = ("data_search", "data_get")
+
+    def result(status, code, **details):
+        global _LEGACY_DATA_RUNTIME_READY
+        _LEGACY_DATA_RUNTIME_READY = status in {"ready", "partial"}
+        record = {"schema": "legacy-data-registration/v1", "status": status,
+                  "code": code, **details}
+        if plog is not None and status in {"unavailable", "partial"}:
+            plog.write("warn", f"official data runtime registration: {code}")
+        return record
+
+    if not _env_flag("DATA_SOURCES_ENABLED", True):
+        return result("disabled", "feature_disabled")
+    if getattr(client, "_agent", None) is not None:
+        return result("unavailable", "agent_already_created")
+    app = getattr(client, "_app_config", None)
+    configs = getattr(app, "tools", None)
+    subagents = getattr(app, "subagents", None)
+    if not isinstance(configs, list) or not hasattr(subagents, "custom_agents"):
+        return result("unavailable", "unsupported_config_schema")
+    try:
+        disabled = dict(getattr(app, "_drf_disabled_data_tools", {}))
+        disabled.update({row.name: row for row in configs
+                         if row.name in names and row.use == f"data_tools:{row.name}_tool"
+                         and getattr(row, "enabled", True) is False})
+        if disabled:
+            # Enforce this before conflict returns: a custom definition of one
+            # name must not leave another explicitly disabled bridge tool live.
+            # Native ToolConfig accepts enabled as an extra but ignores it in
+            # its loader. Keep the untouched definitions on the cached config
+            # as run-local policy so other clients cannot re-add them.
+            setattr(app, "_drf_disabled_data_tools", disabled)
+            configs[:] = [row for row in configs
+                          if not (row.name in disabled and row.use == f"data_tools:{row.name}_tool")]
+        existing = {}
+        for name in names:
+            matches = [row for row in configs if row.name == name]
+            if len(matches) > 1 or any(row.use != f"data_tools:{name}_tool" for row in matches):
+                return result("unavailable", "tool_name_conflict", tool=name, disabled_tools=sorted(disabled))
+            if matches:
+                existing[name] = matches[0]
+        if disabled:
+            return result("unavailable", "tool_explicitly_disabled", tools=sorted(disabled))
+
+        guardrails = getattr(app, "guardrails", None)
+        if getattr(guardrails, "enabled", False):
+            provider = getattr(guardrails, "provider", None)
+            if getattr(provider, "use", "") != "deerflow.guardrails.builtin:AllowlistProvider":
+                return result("unavailable", "guardrail_policy_unavailable")
+            policy = provider.config
+            allowed, denied = policy.get("allowed_tools"), policy.get("denied_tools")
+            blocked = [name for name in names if name in (denied or []) or (allowed and name not in allowed)]
+            if blocked:
+                return result("unavailable", "guardrail_tool_denial", tools=blocked)
+
+        tools_module = _data_tools_module()
+        if any(getattr(getattr(tools_module, name + "_tool", None), "name", None) != name for name in names):
+            return result("unavailable", "tool_implementation_unavailable")
+        from deerflow.config.tool_config import ToolConfig
+        additions = [ToolConfig(name=name, group="web", use=f"data_tools:{name}_tool")
+                     for name in names if name not in existing]
+
+        scoped = subagents.custom_agents.get("scoped-researcher")
+        scoped_updates = []
+        scoped_status = {"status": "unavailable", "code": "scoped_researcher_missing", "tools": []}
+        if scoped is not None:
+            denied = set(scoped.disallowed_tools or [])
+            allowed_names = [name for name in names if name not in denied and scoped.tools != []]
+            scoped_status = {"status": "ready" if len(allowed_names) == 2 else "partial",
+                             "code": "registered" if len(allowed_names) == 2 else "scoped_tool_denial",
+                             "tools": allowed_names,
+                             "denied_tools": [name for name in names if name not in allowed_names]}
+            if scoped.tools is not None and allowed_names:
+                scoped_updates.append((scoped, "tools", list(scoped.tools) + [n for n in allowed_names if n not in scoped.tools]))
+            # Native registry applies agents[name].skills after custom skills.
+            override = subagents.agents.get("scoped-researcher")
+            skill_owner = override if override is not None and override.skills is not None else scoped
+            skill_permission = skill_owner.skills
+            if allowed_names:
+                if skill_permission == []:
+                    scoped_status.update(status="partial", code="scoped_skills_disabled")
+                elif skill_permission is not None and "data-sources" not in skill_permission:
+                    scoped_updates.append((skill_owner, "skills", list(skill_permission) + ["data-sources"]))
+                marker = "OFFICIAL DATA TOOLS (runtime):"
+                if marker not in scoped.system_prompt:
+                    guidance = ("\n\n" + marker + " Permitted here: " + ", ".join(allowed_names)
+                                + ". Preserve exact stored values, units, periods, dataset URLs and source references. "
+                                "Search metadata is discovery only; retain publisher projection labels. "
+                                "Respect the configured tool and skill restrictions.")
+                    scoped_updates.append((scoped, "system_prompt", scoped.system_prompt + guidance))
+        # All schema/policy checks finish before this bounded mutation. Existing
+        # provider objects, custom tools and unrelated agent settings stay intact.
+        configs.extend(additions)
+        for owner, field, value in scoped_updates:
+            setattr(owner, field, value)
+        status = "ready" if scoped_status["status"] == "ready" else "partial"
+        return result(status, "registered" if status == "ready" else scoped_status["code"],
+                      added_tools=[row.name for row in additions], available_tools=list(names), scoped=scoped_status)
+    except Exception:
+        return result("unavailable", "registration_failed")
+
+
+def _official_data_prompt_block() -> str:
+    if not _env_flag("DATA_SOURCES_ENABLED", True) or _LEGACY_DATA_RUNTIME_READY is False:
+        return ""
+    return (
+        "OFFICIAL DATA: use data_search to discover series and data_get to retrieve "
+        "bounded observations. Read /mnt/skills/public/data-sources/SKILL.md with "
+        "read_file for provider selection. Keep exact values, units, periods, "
+        "source references and dataset URLs in notes; distinguish publisher "
+        "projections from observed history. Search metadata is not evidence. "
+        "Deterministic downstream tooling owns charts.\n\n"
+    )
+
+
 def build_research_prompt(
         question: str, depth: str, target_language: str | None, *,
         evidence_only: bool = False) -> str:
@@ -4859,6 +5105,7 @@ def build_research_prompt(
             "sources in full, and test opposing explanations.\n\n"
             f"RESEARCH BRIEF:\n{question}\n\n"
             f"{_market_pricing_prompt_block()}"
+            f"{_official_data_prompt_block()}"
             f"{evidence_guidance}\n\n"
             "Return dense, structured WORKING EVIDENCE NOTES, not an executive "
             "summary and not a client-facing report. Preserve concrete figures "
@@ -4887,6 +5134,7 @@ def build_research_prompt(
             "Your evidence comes from pages and markets you actually fetch.\n\n"
             f"RESEARCH BRIEF:\n{question}\n\n"
             f"{_market_pricing_prompt_block()}"
+            f"{_official_data_prompt_block()}"
             f"{_agentic_delegation_block()}"
             f"{preset['guidance']}\n\n"
             "For this first pass, search broadly enough to understand the terrain and "
@@ -4924,6 +5172,7 @@ def build_research_prompt(
         "views, and current developments.\n\n"
         f"RESEARCH BRIEF:\n{question}\n\n"
         f"{_market_pricing_prompt_block()}"
+        f"{_official_data_prompt_block()}"
         f"{preset['guidance']}\n\n"
         "Then produce a single comprehensive Markdown report (your final message) that a "
         "downstream forecasting workflow will use as its evidence dossier. The report MUST "
@@ -5004,6 +5253,7 @@ def build_deep_phase_prompt(question: str, phase: dict[str, Any], index: int, to
         f"{gap_block}"
         f"PASS OBJECTIVE:\n{phase['focus']}\n\n"
         f"{quantitative_line}"
+        f"{_official_data_prompt_block()}"
         f"{delegation}"
         "Use web search and full-text fetching as needed. Prefer primary sources and "
         "high-authority sources. Capture concrete numbers, dates, organizations, named "
@@ -7260,6 +7510,14 @@ def remap_lane_citations(
         for entry in local_entries
     }
 
+    for source in lane_sources:
+        provisional = source.get("provisional_source_number")
+        if isinstance(provisional, int):
+            target = global_by_url.get(_norm_url(source.get("url")).casefold())
+            if provisional in local_to_global and local_to_global[provisional] != target:
+                raise ValueError("official-data provisional reference collision")
+            local_to_global[provisional] = target
+
     def _replace(match: "re.Match[str]") -> str:
         try:
             global_number = local_to_global.get(int(match.group(1)))
@@ -7912,6 +8170,12 @@ def seed_manifest_sources(sources: list[dict]) -> int:
         if (not _is_valid_http_url(url) or url in seen
                 or _source_domain_denied(url)):
             continue
+        if source.get("source_origin") == "official_data":
+            try:
+                if not _data_tools_module().validated_source(source):
+                    continue
+            except Exception:
+                continue
         seen.add(url)
         seeded_row: dict[str, Any] = {
             "url": url,
@@ -7927,6 +8191,7 @@ def seed_manifest_sources(sources: list[dict]) -> int:
         ):
             if source.get(key) not in (None, ""):
                 seeded_row[key] = source[key]
+        _copy_official_source_fields(source, seeded_row)
         seeded.append(seeded_row)
     with _FETCHED_LOCK:
         _FETCHED_SOURCES[:] = seeded
@@ -7962,6 +8227,7 @@ def export_fetched_sources_for_manifest() -> list[dict]:
         ):
             if source.get(key) not in (None, ""):
                 exported_row[key] = source[key]
+        _copy_official_source_fields(source, exported_row)
         exported.append(exported_row)
     return exported
 
@@ -15833,9 +16099,11 @@ def _visual_contract_audit(question: str, charts: Any) -> dict[str, Any]:
         for row in rows
         if str(row.get("id") or "").strip()
     }
-    decision_ids = sorted(ids & _DECISION_VISUAL_IDS)
+    data_ids = {cid for cid in ids if cid.startswith("data_")}
+    decision_ids = sorted((ids & _DECISION_VISUAL_IDS) | data_ids)
     minimum = _research_charts_min() if explicit else 0
-    missing = sorted(required - ids)
+    satisfied = ids | ({"quant_metrics", "metric_trajectories"} if data_ids else set())
+    missing = sorted(required - satisfied)
     shortfall = max(0, minimum - len(decision_ids))
     enabled = _research_charts_min() > 0
     return {
@@ -15843,7 +16111,7 @@ def _visual_contract_audit(question: str, charts: Any) -> dict[str, Any]:
         "explicitly_requested": explicit,
         "required_ids": sorted(required),
         "rendered_decision_ids": decision_ids,
-        "rendered_diagnostic_ids": sorted(ids - _DECISION_VISUAL_IDS),
+        "rendered_diagnostic_ids": sorted(ids - set(decision_ids)),
         "minimum_decision_charts": minimum,
         "missing_required_ids": missing,
         "decision_chart_shortfall": shortfall,
@@ -15926,6 +16194,203 @@ def embed_chart_refs(report_text: str, charts: "list[dict]") -> str:
             lines.append(f"_{caption}_")
         lines.append("")
     return (report_text or "").rstrip() + "\n\n" + "\n".join(lines).rstrip() + "\n"
+
+
+def _data_diagnostic(plog, message: str) -> None:
+    message = "official data: " + message[:240]
+    if plog is not None:
+        plog.write("warn", message)
+    else:
+        logging.getLogger(__name__).warning(message)
+
+
+def _finalize_data_series(out_dir: Path, *, plog=None) -> list[dict]:
+    """Publish only stored retrieval generations before citation/actor sealing."""
+    try:
+        tools = _data_tools_module()
+        out_dir = Path(out_dir)
+        source_path = tools.safe_path(out_dir, SOURCES_FILENAME)
+        sources = json.loads(source_path.read_text(encoding="utf-8")) if source_path.exists() else []
+        if not isinstance(sources, list) or any(not isinstance(r, dict) for r in sources):
+            raise ValueError("invalid source ledger")
+        # Transported snapshots cross the same scope-free publication boundary
+        # as local captures. Their page/hash cannot confer actor receipt scope.
+        for row in sources:
+            _copy_official_source_fields(row, row)
+        captured = tools.candidate_sources(out_dir)
+        transported = [r for r in sources if tools.validated_source(r)]
+        if not captured and not transported:
+            return []
+        by_url = {_norm_url(r.get("url")): i for i, r in enumerate(sources)}
+        for row in captured:
+            url = _norm_url(row["url"])
+            if url in by_url:
+                existing = sources[by_url[url]]
+                if (existing.get("content_sha256") and existing["content_sha256"] != row["content_sha256"]
+                        or any(existing.get(k) for k in ("receipt_scopes", "thread_id", "lane", "purpose"))):
+                    raise ValueError("dataset/web receipt identity collision")
+                existing.update(row)
+            else:
+                by_url[url] = len(sources)
+                sources.append(dict(row))
+        selected, citations = {}, {}
+        for position, row in enumerate(sources, 1):
+            if not tools.validated_source(row):
+                continue
+            value = tools._api().Series.from_dict(row["dataset"]["snapshot"])
+            row.update(source_id=stable_source_id(row["url"]), reachable=True, tier="S1")
+            # A source remains exact even if another lane captured a different
+            # window/vintage of the same series. First ledger generation charts.
+            if value.series not in selected:
+                selected[value.series] = value
+                citations[value.series] = position
+        if not selected:
+            return []
+        # Establish positional source identities before publishing their dataset
+        # manifest. A later write failure cannot leave a manifest referring to
+        # source rows that were never committed.
+        entries = [{"n": i, "url": row.get("url"), "title": row.get("title")}
+                   for i, row in enumerate(sources, 1)]
+        _remap_data_citations("", [r for r in sources if tools.validated_source(r)], entries)
+        _atomic_write_text(source_path, json.dumps(sources, ensure_ascii=False, indent=2))
+        manifest = tools._api().write_dataset_files(list(selected.values()), out_dir, citations=citations)
+        files = {r["series"]: r["file"] for r in manifest["series"]}
+        for position, row in enumerate(sources, 1):
+            if tools.validated_source(row) and citations.get(row["dataset"]["series"]) == position:
+                row["dataset"]["file"] = files[row["dataset"]["series"]]
+        _atomic_write_text(source_path, json.dumps(sources, ensure_ascii=False, indent=2))
+        entries = [{"n": i, "url": row.get("url"), "title": row.get("title")}
+                   for i, row in enumerate(sources, 1)]
+        report_path = tools.safe_path(out_dir, REPORT_FILENAME)
+        if report_path.is_file():
+            report = report_path.read_text(encoding="utf-8")
+            # Old pinned/References ordinals are resolved by URL in one pass,
+            # together with provisional IDs; never remap a newly written number.
+            remap_sources = [r for r in sources if tools.validated_source(r)]
+            old_entries = _report_reference_entries(report) or list(_PINNED_CITATION_INDEX)
+            for old in old_entries:
+                if old.get("n"):
+                    remap_sources.append({"provisional_source_number": old["n"], "url": old.get("url", "")})
+            report = _remap_data_citations(report, remap_sources, entries)
+            cited = {int(n) for n in _CITATION_MARKER_RE.findall(report)} | set(citations.values())
+            report = _replace_report_references(report, entries, cited)
+            _atomic_write_text(report_path, report)
+        return manifest["series"]
+    except Exception as exc:
+        _data_diagnostic(plog, f"finalization unavailable ({type(exc).__name__}); no provider refresh")
+        return []
+
+
+def _render_data_charts(out_dir: Path, *, plog=None, question="", lang="en") -> list[dict]:
+    """Both engines use the existing renderer; only real flat data images escape."""
+    try:
+        import subprocess
+        tools = _data_tools_module()
+        datasets = tools._api().load_datasets(out_dir)
+        if not datasets:
+            return []
+        base = Path(__file__).resolve().parent
+        renderer = next((p for p in (
+            base / "skills/data-visuals/scripts/render_data.py",
+            base / "skills/public/data-visuals/scripts/render_data.py",
+        ) if p.is_file()), None)
+        if renderer is None:
+            _data_diagnostic(plog, "bundled chart renderer unavailable")
+            return []
+        proc = subprocess.run([_charts_python(), str(renderer), "--dir", str(out_dir),
+                               "--lang", "zh" if str(lang).lower().startswith("zh") else "en"],
+                              capture_output=True, text=True, timeout=_charts_timeout())
+        if proc.returncode != 0:
+            _data_diagnostic(plog, f"chart renderer exited {proc.returncode}; use the stored dataset table")
+            return []
+        manifest_path = tools.safe_path(out_dir, CHARTS_MANIFEST_FILENAME)
+        # Use the renderer's lock convention; retain other chart producers.
+        import fcntl
+        lock_path = tools.safe_path(out_dir, CHARTS_MANIFEST_FILENAME + ".lock")
+        with lock_path.open("a") as lock:
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("chart manifest busy")
+                    time.sleep(0.02)
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if not isinstance(manifest, list):
+                    raise ValueError("invalid chart manifest")
+                citations = {r["series"]: str(r.get("source_id") or "") for r in datasets}
+                rows = []
+                for original in manifest:
+                    if not isinstance(original, dict) or not str(original.get("id") or "").startswith("data_"):
+                        continue
+                    row = dict(original)
+                    path = str(row.get("path") or "")
+                    if not re.fullmatch(r"charts/data_[A-Za-z0-9._-]+\.png", path):
+                        continue
+                    if not tools.safe_path(out_dir, path).is_file():
+                        continue
+                    series = row.get("series")
+                    if not isinstance(series, list) or not series or any(s not in citations for s in series):
+                        continue
+                    html = str(row.get("html_path") or "")
+                    if html and (not re.fullmatch(r"charts/data_[A-Za-z0-9._-]+\.html", html)
+                                 or not tools.safe_path(out_dir, html).is_file()):
+                        row.pop("html_path", None)
+                    refs = list(dict.fromkeys(citations[s] for s in series if re.fullmatch(r"S[1-9][0-9]*", citations[s])))
+                    caption = re.sub(r"\s*\[S\d+\]", "", str(row.get("caption") or "")).rstrip()
+                    row["caption"] = caption + (" " + " ".join(f"[{sid}]" for sid in refs) if refs else "")
+                    rows.append(row)
+                kept = [r for r in manifest if not (isinstance(r, dict) and str(r.get("id") or "").startswith("data_"))]
+                _atomic_write_text(manifest_path, json.dumps(kept + rows, ensure_ascii=False, indent=2))
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        return rows
+    except Exception as exc:
+        _data_diagnostic(plog, f"chart rendering unavailable ({type(exc).__name__})")
+        return []
+
+
+def _prepare_legacy_data(out_dir: Path, meta: dict, plog, question="", lang="en") -> list[dict]:
+    rows = _finalize_data_series(out_dir, plog=plog)
+    if not rows:
+        return []
+    meta["data_sources"] = {"series_count": len(rows), "status": "stored"}
+    sources = json.loads((Path(out_dir) / SOURCES_FILENAME).read_text(encoding="utf-8"))
+    meta["sources_count"] = len(sources)
+    meta["source_tiers"] = source_tier_histogram(sources)
+    charts = _render_data_charts(out_dir, plog=plog, question=question, lang=lang)
+    path = Path(out_dir) / REPORT_FILENAME
+    if path.is_file():
+        report = path.read_text(encoding="utf-8")
+        tools = _data_tools_module()
+        heading = "## 官方数据基线" if str(lang).lower().startswith("zh") else "## Official Data Baseline"
+        if heading not in report:
+            table = [heading, "", "| Series | Latest stored value | Period | Status | Source |",
+                     "|---|---|---|---|---|"]
+            for row in tools._api().load_datasets(out_dir):
+                observations = [o for o in row.get("observations", []) if o.get("value") is not None]
+                if not observations:
+                    continue
+                latest = observations[-1]
+                flag = str(latest.get("flag") or "").strip()
+                projection = (flag.lower() in {"p", "projection", "forecast"}
+                              or bool(row.get("projection_from") and latest["date"] >= row["projection_from"]))
+                status = "Publisher projection" if projection else (flag or "Status not supplied")
+                value = tools._api().format_value(latest["value"], row["units"])
+                def cell(value):
+                    return str(value).replace("|", "\\|").replace("\n", " ")
+                table.append(f"| {cell(row['title'])} ({cell(row['units'])}) | {cell(value)} | {latest['date']} | {cell(status)} | [{row['source_id']}] |")
+            block = "\n".join(table) + "\n\n"
+            match = re.search(r"^## (?:References|参考来源|参考文献)\s*$", report, re.M)
+            report = (report[:match.start()] + block + report[match.start():]
+                      if match else report.rstrip() + "\n\n" + block)
+        report = embed_chart_refs(report, charts)
+        _atomic_write_text(path, report)
+        meta["report_chars"] = len(report)
+    return charts
 
 
 def _render_research_charts(
@@ -16296,6 +16761,7 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
     # WAVE9-RQ4: 打捞路径同样补渲染研究图表（结构化工件刚补出来；与正常 Stage 4 一致，
     # degrade-safe——渲染失败绝不令打捞失败）。
     try:
+        _prepare_legacy_data(out_dir, meta, plog, question, args.target_language or "en")
         _render_research_charts(out_dir, meta, plog, question)
         write_meta()
     except Exception as _ch_err:  # noqa: BLE001 — 图表为可选增强
@@ -16925,8 +17391,12 @@ def main() -> int:
                 "actor-ontology-research",
                 "prediction-markets",
                 "forecast-visuals",
+                "data-sources",
+                "data-visuals",
             },
         )
+        meta["data_tool_registration"] = _register_legacy_data_tools(client, plog=plog)
+        write_meta()
         plog.write("init", "client ready; available skills will load on demand (deep-research)")
 
         # The checkpoint sidecar is only a skip plan; it is not proof that the
@@ -17292,6 +17762,8 @@ def main() -> int:
                 return 2
             _atomic_write_text(out_dir / EVIDENCE_PACK_FILENAME, evidence_pack)
             persist_evidence_sources(out_dir, source_rows)
+            _finalize_data_series(out_dir, plog=plog)
+            source_rows = json.loads((out_dir / SOURCES_FILENAME).read_text(encoding="utf-8"))
             actor_track_required = _env_flag("DEERFLOW_DUAL_TRACK", True)
             dossier_coverage = (
                 actor_dossier_coverage_audit(
@@ -17884,8 +18356,13 @@ def main() -> int:
         # 渲染失败 → 一行日志跳过，绝不影响已产出的研究契约。
         _chart_audit: dict[str, Any] = _visual_contract_audit(question, [])
         try:
+            _data_charts = _prepare_legacy_data(out_dir, meta, plog, question, args.target_language or "en")
             _chart_audit = _render_research_charts(
                 out_dir, meta, plog, question)
+            if _data_charts:
+                _all_charts = json.loads((out_dir / CHARTS_MANIFEST_FILENAME).read_text(encoding="utf-8"))
+                _chart_audit = _visual_contract_audit(question, _all_charts)
+                meta["chart_quality_gate"] = _chart_audit
         except Exception as _ch_err:  # noqa: BLE001 — 图表为可选增强
             plog.write("warn", f"research charts skipped (non-fatal): {_ch_err}")
         finally:

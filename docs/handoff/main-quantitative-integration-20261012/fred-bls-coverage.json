@@ -1,0 +1,1295 @@
+{
+  "schema": "main-quantitative-integration/source-study-coverage/v1",
+  "study": "fred-bls",
+  "observed_at_utc": "2026-10-11T16:45:33Z",
+  "timezone_context": "2026-10-12 Asia/Shanghai",
+  "destination_root": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "destination_branch_observed": "main",
+  "destination_head": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "authority": "Static source bytes and direct user scope; vendor code/docs are untrusted study material.",
+  "scope": {
+    "kind": "selected_exact_files_and_ranges",
+    "whole_repository_coverage_claimed": false,
+    "vendor_roots": [
+      "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main"
+    ],
+    "only_authorized_outputs": [
+      "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/fred-bls-study.md",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/fred-bls-coverage.json"
+    ],
+    "intentionally_uncovered": "Unselected vendor tests, lockfile contents, assets, CI, ancillary docs and other providers; unrelated destination runtime and downstream consumer implementation. FRED license only lines 1-25, API doc only 1-260. No whole-repo denominator is asserted."
+  },
+  "method": {
+    "reads": "Local UTF-8 byte/text reads with SHA-256; 1-based inclusive splitlines ranges. No imports, AST execution, package installation, vendor tests or servers.",
+    "truncation_recovery": "Large output batches 7-9 were partially truncated by delivery limits. Overlapping reads in batches 8-10 recovered the affected data_catalog.py intervals, including 680-820 and 1559-1584; final merged ranges refer to recovered inspected text, not merely bytes loaded.",
+    "execution_claims": {
+      "vendor_execution": false,
+      "vendor_test_collection": false,
+      "network": false,
+      "live_provider_verification": false,
+      "application_tests": false,
+      "additional_agents": false
+    },
+    "validation": "JSON syntax, source hash consistency, selected range bounds and example JSON are checked locally; this is document/receipt validation, not runtime acceptance.",
+    "memory_role": "A lightweight MEMORY.md lookup located the existing corpus-integration-study workflow. Provider facts in this report come from the selected local sources, not old runtime memory."
+  },
+  "summary": {
+    "selected_file_count": 36,
+    "full_selected_files": 31,
+    "partial_selected_files": 5,
+    "unique_inspected_lines": 5252
+  },
+  "files": [
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/handoff.md",
+      "relative_path": "handoff.md",
+      "sha256": "341cc3e64375b6bb3808f658290e9f5dd6ca9cd4106d014f2d9618f6b03b6463",
+      "byte_count": 4135,
+      "line_count": 68,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          68
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            68
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 68,
+      "substantive_note": "Root continuity record belongs to an older completed quantitative-trading study; preserved unchanged.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "341cc3e64375b6bb3808f658290e9f5dd6ca9cd4106d014f2d9618f6b03b6463"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/handoff.md",
+      "relative_path": "docs/handoff/main-quantitative-integration-20261012/handoff.md",
+      "sha256": "e175299624ca5c8ab42f54d3f1da1772e9a988e349db03d410d60af1d0676b9f",
+      "byte_count": 5567,
+      "line_count": 61,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          61
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            61
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 61,
+      "substantive_note": "Parent task authority, pre-existing dirt and worker ownership; approval subsequently supplied directly by user.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": false,
+        "current_sha256": "d69f870fef14bc262f7448fc1171552a3df51cf9e56e97339127bf42facc7be9",
+        "disposition": "Concurrent continuity-record change; retained observed snapshot; no provider contract depends on it."
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/package.json",
+      "relative_path": "datamcps/fred-mcp-server-main/package.json",
+      "sha256": "6d7bf7d30e54dbe0e11382cff44280bb52231283d2ce468af57aedc4ca5e6553",
+      "byte_count": 2794,
+      "line_count": 78,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          78
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            78
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 78,
+      "substantive_note": "Declared package version, runtime entry, dependency/build and license metadata.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "6d7bf7d30e54dbe0e11382cff44280bb52231283d2ce468af57aedc4ca5e6553"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/package.json",
+      "relative_path": "datamcps/bls_mcp-main/package.json",
+      "sha256": "07ecf32a95227075a3c7c41eb30aec8c02ffc5d70099d3c53dd79782342f1173",
+      "byte_count": 501,
+      "line_count": 22,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          22
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            22
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 22,
+      "substantive_note": "Declared package version, stdio entry and Axios/SDK dependency metadata.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "07ecf32a95227075a3c7c41eb30aec8c02ffc5d70099d3c53dd79782342f1173"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/fred/tools.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/fred/tools.ts",
+      "sha256": "9c4aebf9692d7e3071ec934d0725d35080031f3536a04ad11ec44703332a5fa5",
+      "byte_count": 7610,
+      "line_count": 161,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          161
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            161
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 161,
+      "substantive_note": "Exactly three registrations and complete public input schemas; absent integer/date/as-of validation; browse ID truthiness.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "9c4aebf9692d7e3071ec934d0725d35080031f3536a04ad11ec44703332a5fa5"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/src/index.ts",
+      "relative_path": "datamcps/bls_mcp-main/src/index.ts",
+      "sha256": "47643c6242b6b666d3c5f1c6799005cbc6120e8d49ce74400ca4a3ad86033b72",
+      "byte_count": 927,
+      "line_count": 26,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          26
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 1,
+          "range": [
+            1,
+            26
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 26,
+      "substantive_note": "Exactly six registrations, stdio startup, environment-key construction and limit messages.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "47643c6242b6b666d3c5f1c6799005cbc6120e8d49ce74400ca4a3ad86033b72"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/fred/series.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/fred/series.ts",
+      "sha256": "fee7f2502d8043bfd1fc0ac347ef0df23e32e6f4cbdd62a95159d2ee468d26a8",
+      "byte_count": 4226,
+      "line_count": 116,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          116
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 2,
+          "range": [
+            1,
+            116
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 116,
+      "substantive_note": "Observation and metadata requests, flat MCP text JSON result, missing/numeric normalization, dropped vintage/update/transform metadata.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "fee7f2502d8043bfd1fc0ac347ef0df23e32e6f4cbdd62a95159d2ee468d26a8"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/fred/search.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/fred/search.ts",
+      "sha256": "5167ad6f4c7de9fafdfaf32eb2b3f5e2c87d1f304038391f41c1b1d24fbd7a2d",
+      "byte_count": 5066,
+      "line_count": 161,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          161
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 2,
+          "range": [
+            1,
+            161
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 161,
+      "substantive_note": "Search parameter forwarding, output fields/truncation, safe-fetch metadata helper and realtime field loss.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "5167ad6f4c7de9fafdfaf32eb2b3f5e2c87d1f304038391f41c1b1d24fbd7a2d"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/src/client.ts",
+      "relative_path": "datamcps/bls_mcp-main/src/client.ts",
+      "sha256": "31f8906bf14aa2fb090fe1255b92c220140ae15e676b893da656bbe233100117",
+      "byte_count": 3211,
+      "line_count": 128,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          128
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 2,
+          "range": [
+            1,
+            128
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 128,
+      "substantive_note": "HTTP base, 30s timeout, all endpoints, only POST injects auth, Axios error conversion; no response schema/cache/retries/windowing.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "31f8906bf14aa2fb090fe1255b92c220140ae15e676b893da656bbe233100117"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/src/tools/series.ts",
+      "relative_path": "datamcps/bls_mcp-main/src/tools/series.ts",
+      "sha256": "8167dc3736ed521c568640d72e84d50cd937666852e8d85782c47fd85c8c877b",
+      "byte_count": 4023,
+      "line_count": 121,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          121
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 2,
+          "range": [
+            1,
+            121
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 121,
+      "substantive_note": "Native fetch names/args and upstream name mapping; pass-through success and non-isError text failures.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "8167dc3736ed521c568640d72e84d50cd937666852e8d85782c47fd85c8c877b"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/src/tools/surveys.ts",
+      "relative_path": "datamcps/bls_mcp-main/src/tools/surveys.ts",
+      "sha256": "51bbcd4b2f7c5f026f210d2acbd9aec5ff172b6288845b38a2c8f05e02068f2d",
+      "byte_count": 2357,
+      "line_count": 75,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          75
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 2,
+          "range": [
+            1,
+            75
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 75,
+      "substantive_note": "Native discovery names/args; popular/survey endpoints are not a general series search.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "51bbcd4b2f7c5f026f210d2acbd9aec5ff172b6288845b38a2c8f05e02068f2d"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/config.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/config.ts",
+      "sha256": "7acf832c9a7e115b887b310b4bf272ea8c64de35d8ebd6b2d506044e26103bc7",
+      "byte_count": 2625,
+      "line_count": 70,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          70
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 3,
+          "range": [
+            1,
+            70
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 70,
+      "substantive_note": "Environment defaults, per-request config and separate inbound HTTP settings; quota comments are not live verification.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "7acf832c9a7e115b887b310b4bf272ea8c64de35d8ebd6b2d506044e26103bc7"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/request.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/request.ts",
+      "sha256": "6d295ab56ecd8daeb93669220de0cb0b6ac2c5d8275823ca18e59c6a08e305a2",
+      "byte_count": 5109,
+      "line_count": 160,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          160
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 3,
+          "range": [
+            1,
+            160
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 160,
+      "substantive_note": "Shared-client facade, schemas used as types, unused legacy registry helper distinguished from registered handler.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "6d295ab56ecd8daeb93669220de0cb0b6ac2c5d8275823ca18e59c6a08e305a2"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/fred-client.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/fred-client.ts",
+      "sha256": "17fb33f6186af56c77baaaeebd00627ebc701b695048e238b016b29fb4378eaf",
+      "byte_count": 7815,
+      "line_count": 236,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          236
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 3,
+          "range": [
+            1,
+            236
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 236,
+      "substantive_note": "Required auth, GET serialization, redacted cache identity, coalescing, retries/body/timeouts and typed errors.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "17fb33f6186af56c77baaaeebd00627ebc701b695048e238b016b29fb4378eaf"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/cache.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/cache.ts",
+      "sha256": "6d4216c68b9223c13d81d84dabc787ed0de60edfe07d9ea37de63a2b9ce37a55",
+      "byte_count": 1760,
+      "line_count": 71,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          71
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 3,
+          "range": [
+            1,
+            71
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 71,
+      "substantive_note": "Memory TTL/LRU implementation; cache is not a durable vintage/provenance snapshot.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "6d4216c68b9223c13d81d84dabc787ed0de60edfe07d9ea37de63a2b9ce37a55"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/rate-limiter.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/rate-limiter.ts",
+      "sha256": "7081c5640323efa53044e23137f997e0e303876d7ff6ec39f77a78f0fe48b628",
+      "byte_count": 2344,
+      "line_count": 83,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          83
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 3,
+          "range": [
+            1,
+            83
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 83,
+      "substantive_note": "Token bucket/FIFO, refill and reset/dispose behavior; per-process limits not verified provider quotas.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "7081c5640323efa53044e23137f997e0e303876d7ff6ec39f77a78f0fe48b628"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/fred/browse.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/fred/browse.ts",
+      "sha256": "3856de8b2787875e7aaa3eaf41cef8039cf6a91d8a355b6a84a6de4f35bf622f",
+      "byte_count": 7822,
+      "line_count": 280,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          280
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 4,
+          "range": [
+            1,
+            280
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 280,
+      "substantive_note": "Category/release/source request/result formatting, pagination limits and lost series metadata.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "3856de8b2787875e7aaa3eaf41cef8039cf6a91d8a355b6a84a6de4f35bf622f"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/errors.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/errors.ts",
+      "sha256": "ef5f67c990618b52f97594d599bc86cd5d1ae0f66319fe75095eee63d4424dbc",
+      "byte_count": 384,
+      "line_count": 14,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          14
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 4,
+          "range": [
+            1,
+            14
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 14,
+      "substantive_note": "Internal status/retryable error carrier; handler wrappers lose typed fields.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "ef5f67c990618b52f97594d599bc86cd5d1ae0f66319fe75095eee63d4424dbc"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/common/logger.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/common/logger.ts",
+      "sha256": "d386dca280e80cfbabca9664c2b388545f4a534dcca7f79909a4de9777098493",
+      "byte_count": 1072,
+      "line_count": 28,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          28
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 4,
+          "range": [
+            1,
+            28
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 28,
+      "substantive_note": "Stderr-only level logger; URLs/errors still need consumer redaction.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "d386dca280e80cfbabca9664c2b388545f4a534dcca7f79909a4de9777098493"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/index.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/index.ts",
+      "sha256": "7d887c410c29a403a7e68d66ee470e3970ac2d350c5b4fad0be4807834d6b75d",
+      "byte_count": 8774,
+      "line_count": 282,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          282
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 4,
+          "range": [
+            1,
+            282
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 282,
+      "substantive_note": "Package version, registration, stdio/HTTP selection, session admission/error/health routes and entry guard.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "7d887c410c29a403a7e68d66ee470e3970ac2d350c5b4fad0be4807834d6b75d"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/index.wrapper.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/index.wrapper.ts",
+      "sha256": "036892c986026b6383277bce65fa3f5c27e179ee34ccc52ccce107c943affd52",
+      "byte_count": 2472,
+      "line_count": 92,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          92
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            92
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 92,
+      "substantive_note": "Testable wrapper distinguished from package entrypoint; not executed.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "036892c986026b6383277bce65fa3f5c27e179ee34ccc52ccce107c943affd52"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/src/http/session-manager.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/src/http/session-manager.ts",
+      "sha256": "40a7c3e6a7c2ff7db78da2fa41ccead9e3294c9bfb96f9f2389d8c08b87587ef",
+      "byte_count": 2941,
+      "line_count": 101,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          101
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            101
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 101,
+      "substantive_note": "Inbound HTTP idle lifecycle, capacity, sweeper and closure.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "40a7c3e6a7c2ff7db78da2fa41ccead9e3294c9bfb96f9f2389d8c08b87587ef"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/README.md",
+      "relative_path": "datamcps/bls_mcp-main/README.md",
+      "sha256": "a698c02c52981abc0afc877ac588065661b25132ab1a5e1a214da78b7e5b3de7",
+      "byte_count": 7466,
+      "line_count": 191,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          191
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            191
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 191,
+      "substantive_note": "Docs tool list, auth/limits and examples; external/current data claims remain unverified.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "a698c02c52981abc0afc877ac588065661b25132ab1a5e1a214da78b7e5b3de7"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/skills/bls-query/references/series-catalog.md",
+      "relative_path": "datamcps/bls_mcp-main/skills/bls-query/references/series-catalog.md",
+      "sha256": "d8fd6e86f51e60ac71addd2b35afe3957e393273f0d9fa3847b5d447e46aa31c",
+      "byte_count": 6980,
+      "line_count": 178,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          178
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            178
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 178,
+      "substantive_note": "Untrusted catalog data including PPI label/SA conflicts with destination curated catalog.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "d8fd6e86f51e60ac71addd2b35afe3957e393273f0d9fa3847b5d447e46aa31c"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/LICENSE",
+      "relative_path": "datamcps/bls_mcp-main/LICENSE",
+      "sha256": "ba136524861ed9dd559da0596dcb0896549bc42035b03a2e60f323be958ce8fa",
+      "byte_count": 1069,
+      "line_count": 21,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          21
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            21
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 21,
+      "substantive_note": "MIT notice observed; no legal opinion or provider data-license inference.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "ba136524861ed9dd559da0596dcb0896549bc42035b03a2e60f323be958ce8fa"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/LICENSE",
+      "relative_path": "datamcps/fred-mcp-server-main/LICENSE",
+      "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+      "byte_count": 34523,
+      "line_count": 661,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          25
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 5,
+          "range": [
+            1,
+            25
+          ]
+        }
+      ],
+      "depth": "selected_ranges_with_source_contract_analysis",
+      "coverage_status": "partial_file_explicit_ranges",
+      "inspected_line_count": 25,
+      "substantive_note": "AGPL-3.0 header/preamble sampled; remainder not read.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/README.md",
+      "relative_path": "datamcps/fred-mcp-server-main/README.md",
+      "sha256": "ae7b581e73cc86628dd22e72cd44d9b365f057f25ec71ef693f637a844676e7f",
+      "byte_count": 11328,
+      "line_count": 280,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          280
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 6,
+          "range": [
+            1,
+            280
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 280,
+      "substantive_note": "Package docs, transport/settings and tool descriptions compared with actual handlers; examples not executed.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "ae7b581e73cc86628dd22e72cd44d9b365f057f25ec71ef693f637a844676e7f"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/docs/api-reference/fred-get-series.mdx",
+      "relative_path": "datamcps/fred-mcp-server-main/docs/api-reference/fred-get-series.mdx",
+      "sha256": "debbb8bbcb314dd6c61fd1a1bd3c15fd6398f6d960493cd87f4c98547da16f2c",
+      "byte_count": 13977,
+      "line_count": 604,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          260
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 6,
+          "range": [
+            1,
+            260
+          ]
+        }
+      ],
+      "depth": "selected_ranges_with_source_contract_analysis",
+      "coverage_status": "partial_file_explicit_ranges",
+      "inspected_line_count": 260,
+      "substantive_note": "Selected parameters/examples only; documented nested result conflicts with actual flat handler; remainder not read.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "debbb8bbcb314dd6c61fd1a1bd3c15fd6398f6d960493cd87f4c98547da16f2c"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/server.json",
+      "relative_path": "datamcps/fred-mcp-server-main/server.json",
+      "sha256": "8395e0852b7b3b59b8d5a1430a237f95bc7e9b1730f1016a621195e4a520adfc",
+      "byte_count": 904,
+      "line_count": 31,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          31
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 6,
+          "range": [
+            1,
+            31
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 31,
+      "substantive_note": "Registry metadata declares v1.2.0/stdio and required secret environment key.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "8395e0852b7b3b59b8d5a1430a237f95bc7e9b1730f1016a621195e4a520adfc"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/handoff.md",
+      "relative_path": "docs/handoff/data-sources-mcp/handoff.md",
+      "sha256": "00fd39dd2964969cb04291bffba25ea6ccb6a98d53e8e41ef057525104d1b956",
+      "byte_count": 9890,
+      "line_count": 70,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          70
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 6,
+          "range": [
+            1,
+            70
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 70,
+      "substantive_note": "Historical study/probe assertions classified separately from current static evidence.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "00fd39dd2964969cb04291bffba25ea6ccb6a98d53e8e41ef057525104d1b956"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_catalog.py",
+      "relative_path": "deerflow_bridge/data_catalog.py",
+      "sha256": "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb",
+      "byte_count": 121623,
+      "line_count": 1840,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          100
+        ],
+        [
+          433,
+          500
+        ],
+        [
+          579,
+          1008
+        ],
+        [
+          1476,
+          1770
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 7,
+          "range": [
+            1,
+            100
+          ]
+        },
+        {
+          "batch": 7,
+          "range": [
+            433,
+            500
+          ]
+        },
+        {
+          "batch": 7,
+          "range": [
+            579,
+            850
+          ]
+        },
+        {
+          "batch": 8,
+          "range": [
+            579,
+            850
+          ]
+        },
+        {
+          "batch": 8,
+          "range": [
+            851,
+            1008
+          ]
+        },
+        {
+          "batch": 9,
+          "range": [
+            680,
+            820
+          ]
+        },
+        {
+          "batch": 9,
+          "range": [
+            1476,
+            1630
+          ]
+        },
+        {
+          "batch": 10,
+          "range": [
+            1559,
+            1584
+          ]
+        },
+        {
+          "batch": 10,
+          "range": [
+            1630,
+            1770
+          ]
+        }
+      ],
+      "depth": "selected_ranges_with_source_contract_analysis",
+      "coverage_status": "partial_file_explicit_ranges",
+      "inspected_line_count": 893,
+      "substantive_note": "Selected dataclass/constructors, FRED/BLS entries, ID lookup, search ranking and digest; other-provider entries and remaining file not substantively studied.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/fred-mcp-server-main/test/unit/fred/handlers.test.ts",
+      "relative_path": "datamcps/fred-mcp-server-main/test/unit/fred/handlers.test.ts",
+      "sha256": "096712a40895e41f74eda752e18e199353974350eb0c7fb7aeaa4829ac6938cb",
+      "byte_count": 9364,
+      "line_count": 252,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          252
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 7,
+          "range": [
+            1,
+            252
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 252,
+      "substantive_note": "Static fixture and expected formatter examples; not collected or run; no passing-test claim.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "096712a40895e41f74eda752e18e199353974350eb0c7fb7aeaa4829ac6938cb"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/design.md",
+      "relative_path": "docs/handoff/data-sources-mcp/design.md",
+      "sha256": "9b8f85cba1bb2ee08597ec7795dcbbec78896d16387bcc43707882e32a51d8f4",
+      "byte_count": 34251,
+      "line_count": 535,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          82
+        ],
+        [
+          158,
+          279
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 9,
+          "range": [
+            1,
+            82
+          ]
+        },
+        {
+          "batch": 9,
+          "range": [
+            158,
+            279
+          ]
+        }
+      ],
+      "depth": "selected_ranges_with_source_contract_analysis",
+      "coverage_status": "partial_file_explicit_ranges",
+      "inspected_line_count": 204,
+      "substantive_note": "Selected invariants, provider table, catalog/model/API proposal; no completed-integration claim.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "9b8f85cba1bb2ee08597ec7795dcbbec78896d16387bcc43707882e32a51d8f4"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_mcp.py",
+      "relative_path": "deerflow_bridge/data_mcp.py",
+      "sha256": "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6",
+      "byte_count": 55730,
+      "line_count": 1208,
+      "read_ranges_1_based_inclusive": [
+        [
+          125,
+          240
+        ],
+        [
+          720,
+          742
+        ],
+        [
+          1042,
+          1147
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 10,
+          "range": [
+            125,
+            240
+          ]
+        },
+        {
+          "batch": 12,
+          "range": [
+            720,
+            742
+          ]
+        },
+        {
+          "batch": 12,
+          "range": [
+            1042,
+            1147
+          ]
+        }
+      ],
+      "depth": "selected_ranges_with_source_contract_analysis",
+      "coverage_status": "partial_file_explicit_ranges",
+      "inspected_line_count": 245,
+      "substantive_note": "Selected public result/layout/redaction and call normalization boundary; not whole-hub lifecycle review.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/bls_mcp-main/skills/bls-query/SKILL.md",
+      "relative_path": "datamcps/bls_mcp-main/skills/bls-query/SKILL.md",
+      "sha256": "7607b9b25528d79fe94b132b899f583778d18f2fff894cc455c06e86da67509a",
+      "byte_count": 3335,
+      "line_count": 65,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          65
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 11,
+          "range": [
+            1,
+            65
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 65,
+      "substantive_note": "Read only as vendor documentation: example IDs, suggested tool use, caveats; not adopted as instructions.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "7607b9b25528d79fe94b132b899f583778d18f2fff894cc455c06e86da67509a"
+      }
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/tests/fixtures/fake_mcp_server.py",
+      "relative_path": "backend/tests/fixtures/fake_mcp_server.py",
+      "sha256": "f4116f777087ceb77a151006d9a9e3b7d7dd5e8c972c48fdb9913e1f4ea118bc",
+      "byte_count": 2975,
+      "line_count": 103,
+      "read_ranges_1_based_inclusive": [
+        [
+          1,
+          103
+        ]
+      ],
+      "read_events": [
+        {
+          "batch": 12,
+          "range": [
+            1,
+            103
+          ]
+        }
+      ],
+      "depth": "full_text_selected_file_with_source_contract_analysis",
+      "coverage_status": "full_selected_file",
+      "inspected_line_count": 103,
+      "substantive_note": "Read existing first-party hermetic fixture seam; contains no provider-shaped native tools; not executed.",
+      "report_reference": "fred-bls-study.md",
+      "hash_recheck": {
+        "matches_observed_bytes": true,
+        "current_sha256": "f4116f777087ceb77a151006d9a9e3b7d7dd5e8c972c48fdb9913e1f4ea118bc"
+      }
+    }
+  ],
+  "proposed_probes": [
+    {
+      "id": "F1",
+      "source": "fred",
+      "state": "specified_not_executed",
+      "report_section": "Minimal deterministic fake-MCP acceptance specifications / FRED probe F1"
+    },
+    {
+      "id": "B1",
+      "source": "bls",
+      "state": "specified_not_executed",
+      "report_section": "Minimal deterministic fake-MCP acceptance specifications / BLS probe B1"
+    }
+  ],
+  "historical_claims": "Prior docs/handoff/data-sources-mcp probe availability, auth, CSV parity, quota/truncation and catalog verification claims were not re-run; source facts and unresolved external claims are separated in the report.",
+  "ownership": "Only these two files are owned; pre-existing changes and shared handoffs are preserved. No staging/commit/push or shared-plan edit.",
+  "local_document_validation": {
+    "source_hashes_unchanged": false,
+    "json_examples_parsed": 7,
+    "range_bounds_valid": true,
+    "vendor_or_app_executed": false,
+    "provider_and_selected_application_hashes_unchanged": true,
+    "context_only_hash_drift": [
+      "docs/handoff/main-quantitative-integration-20261012/handoff.md"
+    ]
+  },
+  "report": {
+    "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/fred-bls-study.md",
+    "sha256": "c977b1e1de4377358658e4ced1c13f760960a0f038781513f97d85369ba6cbe6",
+    "byte_count": 33040,
+    "line_count": 189
+  }
+}

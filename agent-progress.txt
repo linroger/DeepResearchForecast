@@ -307,3 +307,20 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Live translations (GLM-5.3, new engine):** quantum report en→zh and dossier en→zh, grid-storage en→zh (amounts 38/38 and 18/18 value-equal to the source; RMB 250 billion now 2500亿元), datacenter zh→en (third attempt: attempt 1 exposed the year-range misread "in 2024 to $200 billion", attempt 2 lost one H2 in post-processing, cause not found — rejected text is now kept for the next occurrence; whole-document facts identical, 101 amounts). All audits hard_passed with 0 residual lines.
 - **Verification:** backend 4,406 passed / 0 failed / 11 xfailed; headless Chrome on a local copy of docs/: both languages of report and dossier, all images load, site-language toggle, single-language runs unchanged, no console errors, no sideways scroll at 390 px.
 - **Follow-ups:** residual-line repair partially translates English reference titles inside Chinese variants (References should be exempt); chart images keep English labels (and quantum-2040's scenario chart shows the Chinese scenario names its forecast.json was sealed with); datacenter-2030's dossier contains a "[S42](K6 口径…)" pseudo-link that the strict exporter rejects, so its dossier is not re-exportable as-is; the H2 lost in datacenter attempt 2 is undiagnosed.
+
+
+### 2026-10-11T18:10:57.471490+00:00 — branch `main`
+
+- Scope: user-approved actor roster and dossier translation fixes plus six-provider quantitative research integration. Finharness excluded; unrelated baseline preserved.
+- Completed local slices: actor169; frontend92 plus isolated build; legacy116; report292 before status/fiscal extension; v3 core749 with five fixture restrictions being separately repaired; promotion53; guarded monitor/snapshot65 after CR1–CR11 review fixes. These are separate receipts, not a single frozen final count.
+- Current work: provider completeness/status/fiscal review corrections; real MCP-to-research-to-report acceptance; isolated deployment fixture acceptance; bilingual docs; combined final source freeze and review. Quantitative feature remains false until these acceptance gaps close.
+- Evidence and exact commands: docs/handoff/main-quantitative-integration-20261012/handoff.md and owned slice reports. Guarded offline proof is not live provider/deployment proof.
+
+
+### 2026-10-11T19:50:18.391621+00:00 — main quantitative integration acceptance
+
+- Implemented the approved six-provider quantitative workflow and both requested bug fixes. Actor and dossier fixes committed as d48552c and6372005.
+- Final combined gate2025 passed; real MCP→research→published report→API/export passed without admission bypass. Full original MCP transport23, deadline19, deployment9 and native workflow4 verified in their documented partitions; frontend92/build passed. Final source/guard/independent-review receipts are in docs/handoff/main-quantitative-integration-20261012/final-verification.md.
+- All substantive provider/status/fiscal, promotion, replay/cutoff, generation, actor-denial and caption-publication findings closed. No live model/provider/deployment proof claimed.
+- Preserved unrelated64 deletions/root handoff/.zcodeignore/other work. Two demo-corpus checks still fail solely on those absent assets; no test weakened. Remote publication not retried with previously rejected credentials.
+- Next: scoped integration commit and closing handoff.

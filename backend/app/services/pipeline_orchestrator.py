@@ -1353,13 +1353,76 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # Bridge modules imported by BARE name from the deployed deer-flow/ directory
 # (deerflow_research.py runs with sys.path[0]==deer-flow/): the config-reflected
 # tools (`use: market_tools:...` / `search_tools:...` / `cached_fetch:...`), the
-# LOOP-007 budget control plane they share, and the deep-research engine v3
-# (linear_research.py phases + research_gateway.py LLM gateway/research tools).
+# LOOP-007 budget control plane they share, the deep-research engine v3
+# (linear_research.py phases + research_gateway.py LLM gateway/research tools),
+# and the official-data layer both engines import (data_mcp.py stdio MCP hub,
+# data_catalog.py curated series catalog, data_sources.py unified API,
+# data_tools.py legacy-engine data_search/data_get tools).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py",
+    "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
 )
+
+
+# 官方数据源（deerflow_bridge/data_*.py）的研究子进程 env：Config 为单一真源（ORCH-1(3) 约定）。
+# 路径类旋钮在父进程解析为绝对路径再下发——子进程 cwd 是 deer-flow/，经 launchd / IDE 启动的后端
+# PATH 也可能不含 node，若由子进程自行解析，会与 setup_datamcps.sh / doctor.sh 看到的结果不一致。
+# 留空即文档化默认值：服务根 <repo>/datamcps、缓存 <UPLOAD_FOLDER>/.data_cache、node = PATH 上的
+# node，再退常见安装位置（顺序与 scripts/setup_datamcps.sh 一致）。
+_DATA_SOURCES_NODE_FALLBACKS: tuple[str, ...] = (
+    "~/.local/bin/node", "/opt/homebrew/bin/node", "/usr/local/bin/node",
+)
+
+
+def _resolve_data_sources_node(setting: str, repo_root: str) -> str:
+    """DATA_SOURCES_NODE → 绝对路径；找不到 node 时返回 ''（data_mcp 据此把 node 系服务标为不可用）。
+
+    显式设置原样尊重（裸命令名经 PATH 解析、相对路径按仓库根解析，不做可执行性替换）：配置错误应在
+    provider 状态里显形，而不是被静默换成另一个 node。
+    """
+    value = os.path.expanduser((setting or "").strip())
+    if value:
+        if os.sep not in value:
+            found = shutil.which(value)
+            return os.path.abspath(found) if found else value
+        return value if os.path.isabs(value) else os.path.normpath(os.path.join(repo_root, value))
+    found = shutil.which("node")
+    if found:
+        return os.path.abspath(found)
+    for candidate in _DATA_SOURCES_NODE_FALLBACKS:
+        path = os.path.expanduser(candidate)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return ""
+
+
+def _data_sources_subprocess_env() -> dict[str, str]:
+    """研究子进程的 DATA_SOURCES_* env（值全为 str，目录与 node 均为绝对路径）。"""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+
+    def _abs_dir(setting: Any, default: str) -> str:
+        value = os.path.expanduser(str(setting or "").strip())
+        if not value:
+            return default
+        return value if os.path.isabs(value) else os.path.normpath(os.path.join(repo_root, value))
+
+    return {
+        "DATA_SOURCES_ENABLED": (
+            "true" if getattr(Config, "DATA_SOURCES_ENABLED", True) else "false"),
+        "DATA_SOURCES": str(getattr(Config, "DATA_SOURCES", "fred,bls,bis,imf,wb,usgov")),
+        "DATA_SOURCES_DIR": _abs_dir(
+            getattr(Config, "DATA_SOURCES_DIR", ""), os.path.join(repo_root, "datamcps")),
+        "DATA_SOURCES_NODE": _resolve_data_sources_node(
+            getattr(Config, "DATA_SOURCES_NODE", ""), repo_root),
+        "DATA_SOURCES_CACHE_DIR": _abs_dir(
+            getattr(Config, "DATA_SOURCES_CACHE_DIR", ""),
+            os.path.join(os.path.abspath(Config.UPLOAD_FOLDER), ".data_cache")),
+        "DATA_SOURCES_CALL_TIMEOUT": str(getattr(Config, "DATA_SOURCES_CALL_TIMEOUT", 60)),
+        "DATA_SOURCES_PREFETCH_MAX": str(getattr(Config, "DATA_SOURCES_PREFETCH_MAX", 12)),
+        "DATA_SOURCES_CHARTS_MAX": str(getattr(Config, "DATA_SOURCES_CHARTS_MAX", 8)),
+    }
 
 
 # deerflow_bridge/extensions_config.json 是模板：MCP server 的 command / PYTHONPATH 依赖本机
@@ -1725,7 +1788,8 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
             logger.warning(
                 "deer-flow/config.yaml 与 deerflow_bridge/config.yaml 内容不一致（按 setup.sh "
                 "约定不自动覆盖——部署副本可能包含本地 provider 改动）。请手工 diff 两份文件"
-                "以拾取新的 provider stanza。")
+                "以拾取新的 provider stanza；官方数据工具 data_search/data_get 的运行时注册"
+                "由研究桥接器补齐，显式禁用或同名自定义工具保持不变。")
         if synced:
             logger.warning(
                 "DeerFlow 部署副本与 deerflow_bridge/ 源不同步，已自动重新同步（%s）——"
@@ -2363,6 +2427,10 @@ class DeerFlowResearchRunner:
         env["PREDICTION_MARKETS_PER_QUERY"] = str(getattr(Config, "PREDICTION_MARKETS_PER_QUERY", 15))
         env["PREDICTION_MARKETS_MIN_RELEVANCE"] = str(
             getattr(Config, "PREDICTION_MARKETS_MIN_RELEVANCE", 5.0))
+        # 官方数据源（data_mcp / data_sources / data_tools）：DATA_SOURCES_* 同样从 Config 单一真源
+        # 下发，目录与 node 解析为绝对路径（见 _data_sources_subprocess_env）。数据源 API key 不是
+        # Config 属性，随 env=dict(os.environ) 原样透传，再由 data_mcp 按每个服务的 env 白名单下发。
+        env.update(_data_sources_subprocess_env())
         if max_concurrent_subagents is not None:
             env["DEER_FLOW_MAX_CONCURRENT_SUBAGENTS"] = str(
                 max(1, min(8, int(max_concurrent_subagents))))
@@ -3322,8 +3390,235 @@ def _research_contract_path(handoff_dir: str) -> str:
     return os.path.join(handoff_dir, _RESEARCH_CONTRACT_FILENAME)
 
 
+_RESEARCH_DATA_FILE_LIMIT = 2 * 1024 * 1024
+_RESEARCH_DATA_TOTAL_LIMIT = 64 * 1024 * 1024
+_RESEARCH_DATA_MAX_SERIES = 200
+
+
+def _research_data_directory(path: str, *, create: bool = False) -> int:
+    """Pin a directory without resolving away symlink components."""
+    if ".." in os.fspath(path).split(os.sep):
+        raise ValueError("research root must not contain parent traversal")
+    path = os.path.abspath(path)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_NOFOLLOW_ANY"):
+        try:
+            return os.open(path, (flags & ~os.O_NOFOLLOW) | os.O_NOFOLLOW_ANY)
+        except FileNotFoundError:
+            if not create:
+                raise
+        parent = _research_data_directory(os.path.dirname(path), create=True)
+        try:
+            try:
+                os.mkdir(os.path.basename(path), dir_fd=parent)
+            except FileExistsError:
+                pass
+            return os.open(os.path.basename(path), flags, dir_fd=parent)
+        finally:
+            os.close(parent)
+    directory = os.open(os.sep, flags)
+    try:
+        for part in path.split(os.sep)[1:]:
+            if create:
+                try:
+                    os.mkdir(part, dir_fd=directory)
+                except FileExistsError:
+                    pass
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        return directory
+    except BaseException:
+        os.close(directory)
+        raise
+
+
+def _research_data_read(root: str, relative: str, limit: int) -> bytes:
+    """Read bounded regular bytes through pinned, no-symlink directories."""
+    import stat
+
+    if (not isinstance(relative, str) or not relative or "\x00" in relative
+            or os.path.isabs(relative)
+            or any(part in {"", ".", ".."} for part in relative.split("/"))):
+        raise ValueError("invalid research data path")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = _research_data_directory(root)
+    parts = relative.split("/")
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=directory)
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                raise ValueError("research data artifact is not a bounded regular file")
+            raw = handle.read(limit + 1)
+            if len(raw) > limit:
+                raise ValueError("research data artifact exceeds byte limit")
+            return raw
+    finally:
+        os.close(directory)
+
+
+def _research_data_artifacts(root: str) -> dict[str, bytes]:
+    """Select only the complete current dataset generation and cited pages.
+
+    The public loader deliberately tolerates individual unavailable rows. A
+    research seal cannot: every manifest row must pass its validation. Keep
+    the original bytes, including provenance, instead of regenerating files.
+    """
+    data_dir = os.path.join(root, "data")
+    sources_path = os.path.join(root, "sources.json")
+    sources = []
+    if os.path.lexists(sources_path):
+        sources = json.loads(_research_data_read(root, "sources.json", 8 * 1024 * 1024))
+        if not isinstance(sources, list):
+            raise ValueError("invalid research sources for dataset references")
+    if not os.path.lexists(data_dir):
+        for source in sources:
+            dataset = source.get("dataset") if isinstance(source, dict) else None
+            if isinstance(dataset, dict) and (dataset.get("file") or dataset.get("page")):
+                raise ValueError("research dataset source references missing data")
+        return {}
+    artifacts: dict[str, bytes] = {}
+    total = 0
+
+    def read(relative: str, limit: int = _RESEARCH_DATA_FILE_LIMIT) -> bytes:
+        nonlocal total
+        if not isinstance(relative, str) or not relative.startswith("data/"):
+            raise ValueError("research data reference must be inside data/")
+        if relative not in artifacts:
+            raw = _research_data_read(root, relative, limit)
+            total += len(raw)
+            if total > _RESEARCH_DATA_TOTAL_LIMIT or len(artifacts) >= 801:
+                raise ValueError("research data generation exceeds limit")
+            artifacts[relative] = raw
+        if len(artifacts[relative]) > limit:
+            raise ValueError("research data artifact exceeds byte limit")
+        return artifacts[relative]
+
+    manifest_raw = read("data/datasets.json")
+    manifest = json.loads(manifest_raw)
+    if (not isinstance(manifest, dict) or manifest.get("schema_version") != 1
+            or not isinstance(manifest.get("series"), list)
+            or len(manifest["series"]) > _RESEARCH_DATA_MAX_SERIES):
+        raise ValueError("invalid research dataset manifest")
+    identities: set[str] = set()
+    for row in manifest["series"]:
+        if (not isinstance(row, dict) or not isinstance(row.get("series"), str)
+                or not row["series"] or row["series"] in identities):
+            raise ValueError("invalid or duplicate research dataset row")
+        identities.add(row["series"])
+        for key, digest_key in (("file", "sha256"), ("csv", "csv_sha256")):
+            raw = read(row.get(key))
+            if hashlib.sha256(raw).hexdigest() != row.get(digest_key):
+                raise ValueError("research dataset hash mismatch")
+
+    from .official_data import data_api
+    api = data_api()
+    if api is None:
+        raise ValueError("research dataset validator unavailable")
+    loaded = api.load_datasets(root)
+    if (len(loaded) != len(manifest["series"])
+            or {row["series"] for row in loaded} != identities):
+        raise ValueError("research dataset manifest contains unavailable rows")
+
+    if sources:
+        page_count = 0
+        for source in sources:
+            dataset = source.get("dataset") if isinstance(source, dict) else None
+            if not isinstance(dataset, dict):
+                continue
+            if dataset.get("file"):
+                raw = read(dataset["file"])
+                # Legacy source ledgers retain their original candidate JSON.
+                # It is required provenance, not an unrelated old generation.
+                snapshot = dataset.get("snapshot")
+                if snapshot is not None and json.loads(raw) != snapshot:
+                    raise ValueError("research dataset source snapshot mismatch")
+            if dataset.get("page"):
+                page_count += 1
+                if page_count > _RESEARCH_DATA_MAX_SERIES:
+                    raise ValueError("too many research dataset pages")
+                page = read(dataset["page"], 48000)
+                if hashlib.sha256(page).hexdigest() != source.get("content_sha256"):
+                    raise ValueError("research dataset page hash mismatch")
+                if (source.get("content") is not None
+                        and page.decode("utf-8") != source["content"]):
+                    raise ValueError("research dataset page content mismatch")
+    # Refuse a manifest switched underneath the reads; staging revalidates the
+    # copied generation through the same public consumer before publication.
+    if _research_data_read(root, "data/datasets.json", _RESEARCH_DATA_FILE_LIMIT) != manifest_raw:
+        raise ValueError("research dataset generation changed during read")
+    return artifacts
+
+
+def _copy_research_data(source: str, destination: str) -> None:
+    for relative, raw in _research_data_artifacts(source).items():
+        path = os.path.join(destination, relative)
+        directory = _research_data_directory(os.path.dirname(path), create=True)
+        try:
+            fd = os.open(os.path.basename(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(raw)
+        finally:
+            os.close(directory)
+
+
+def _research_data_file_set(root: str) -> set[str]:
+    """Bound enumeration of a published data tree and reject extra symlinks."""
+    data = os.path.join(root, "data")
+    if not os.path.lexists(data):
+        return set()
+    paths: set[str] = set()
+    count = 0
+    directory = _research_data_directory(data)
+    stack = []
+    try:
+        stack.append(("data", directory, os.scandir(directory)))
+    except BaseException:
+        os.close(directory)
+        raise
+    try:
+        while stack:
+            relative, directory, iterator = stack[-1]
+            entry = next(iterator, None)
+            if entry is None:
+                iterator.close()
+                os.close(directory)
+                stack.pop()
+                continue
+            count += 1
+            if count > 1000:
+                raise ValueError("research data tree exceeds entry limit")
+            if entry.is_symlink():
+                raise ValueError("research data symlink rejected")
+            name = relative + "/" + entry.name
+            if entry.is_dir(follow_symlinks=False):
+                child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=directory)
+                try:
+                    stack.append((name, child, os.scandir(child)))
+                except BaseException:
+                    os.close(child)
+                    raise
+            elif entry.is_file(follow_symlinks=False):
+                paths.add(name)
+            else:
+                raise ValueError("research data artifact is not a regular file")
+        return paths
+    finally:
+        for _, directory, iterator in reversed(stack):
+            iterator.close()
+            os.close(directory)
+
+
 def _research_contract_entries(root: str) -> dict[str, dict[str, Any]]:
-    """Fingerprint the exact staged/root research contract, including charts."""
+    """Fingerprint the exact contract, including charts and current data."""
     entries: dict[str, dict[str, Any]] = {}
     candidates: list[tuple[str, str]] = []
     for name in _RESEARCH_CONTRACT_FILES:
@@ -3347,11 +3642,17 @@ def _research_contract_entries(root: str) -> dict[str, dict[str, Any]]:
             "bytes": os.path.getsize(path),
             "sha256": digest,
         }
+    for relative, raw in _research_data_artifacts(root).items():
+        entries[relative] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
     return entries
 
 
 def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
     """Return actionable manifest, artifact, and judge-binding violations."""
+    try:
+        os.close(_research_data_directory(handoff_dir))
+    except (OSError, ValueError) as exc:
+        return [f"research_root_invalid:{type(exc).__name__}:{exc}"]
     manifest = _read_json(_research_contract_path(handoff_dir))
     if not isinstance(manifest, dict) or manifest.get("version") != 1:
         return ["manifest_missing_or_version_invalid"]
@@ -3365,6 +3666,12 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
             if (not isinstance(relative, str) or not isinstance(expected, dict)
                     or os.path.isabs(relative)):
                 errors.append(f"manifest_entry_invalid:{relative!r}")
+                continue
+            if relative.startswith("data/"):
+                raw = _research_data_read(root, relative, _RESEARCH_DATA_FILE_LIMIT)
+                if (len(raw) != expected.get("bytes")
+                        or hashlib.sha256(raw).hexdigest() != expected.get("sha256")):
+                    errors.append(f"data_artifact_hash_mismatch:{relative}")
                 continue
             path = os.path.realpath(os.path.join(root, relative))
             if os.path.commonpath([root, path]) != root:
@@ -3395,6 +3702,10 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
         for name in _RESEARCH_CONTRACT_FILES:
             if os.path.exists(os.path.join(root, name)) and name not in entries:
                 errors.append(f"unmanifested_optional_artifact:{name}")
+        data_files = set(_research_data_artifacts(root))
+        expected_data_files = {rel for rel in entries if rel.startswith("data/")}
+        if data_files != expected_data_files or _research_data_file_set(root) != data_files:
+            errors.append("data_artifact_set_mismatch")
         if os.path.isdir(os.path.join(root, "charts")):
             actual_chart_files = {
                 rel for rel in _research_contract_entries(root)
@@ -3502,6 +3813,8 @@ def _promote_research_contract(
     directory.  Any exception restores the previous generation.  The checksum
     manifest is written last; resume never trusts an unmanifested mixed root.
     """
+    os.close(_research_data_directory(source_dir))
+    os.close(_research_data_directory(handoff_dir, create=True))
     source_root = os.path.realpath(source_dir)
     root = os.path.realpath(handoff_dir)
     os.makedirs(root, exist_ok=True)
@@ -3514,6 +3827,10 @@ def _promote_research_contract(
     charts_installed = False
     old_charts_moved = False
     old_contract_moved = False
+    data_installed = False
+    old_data_moved = False
+    promotion_started = False
+    rollback_failed = False
     try:
         for name in _RESEARCH_CONTRACT_FILES:
             source = os.path.join(source_root, name)
@@ -3522,6 +3839,7 @@ def _promote_research_contract(
         source_charts = os.path.join(source_root, "charts")
         if os.path.isdir(source_charts):
             shutil.copytree(source_charts, os.path.join(stage, "charts"))
+        _copy_research_data(source_dir, stage)
 
         if meta_patch:
             staged_meta_path = os.path.join(stage, "meta.json")
@@ -3546,6 +3864,7 @@ def _promote_research_contract(
         if os.path.exists(contract_path):
             os.replace(contract_path, os.path.join(rollback, _RESEARCH_CONTRACT_FILENAME))
             old_contract_moved = True
+        promotion_started = True
         for name in _RESEARCH_CONTRACT_FILES:
             destination = os.path.join(root, name)
             if os.path.exists(destination):
@@ -3555,6 +3874,10 @@ def _promote_research_contract(
         if os.path.lexists(root_charts):
             os.replace(root_charts, os.path.join(rollback, "charts"))
             old_charts_moved = True
+        root_data = os.path.join(root, "data")
+        if os.path.lexists(root_data):
+            os.replace(root_data, os.path.join(rollback, "data"))
+            old_data_moved = True
 
         for name in _RESEARCH_CONTRACT_FILES:
             staged = os.path.join(stage, name)
@@ -3565,6 +3888,10 @@ def _promote_research_contract(
         if os.path.isdir(staged_charts):
             os.replace(staged_charts, root_charts)
             charts_installed = True
+        staged_data = os.path.join(stage, "data")
+        if os.path.isdir(staged_data):
+            os.replace(staged_data, root_data)
+            data_installed = True
 
         from ..utils.atomic import write_json_atomic
         write_json_atomic(contract_path, manifest)
@@ -3577,7 +3904,7 @@ def _promote_research_contract(
         return manifest
     except Exception:
         try:
-            if os.path.exists(contract_path):
+            if promotion_started and os.path.exists(contract_path):
                 os.unlink(contract_path)
             for name in installed_new:
                 path = os.path.join(root, name)
@@ -3585,23 +3912,32 @@ def _promote_research_contract(
                     os.unlink(path)
             if charts_installed and os.path.lexists(os.path.join(root, "charts")):
                 shutil.rmtree(os.path.join(root, "charts"), ignore_errors=True)
+            if data_installed and os.path.lexists(os.path.join(root, "data")):
+                shutil.rmtree(os.path.join(root, "data"), ignore_errors=True)
             for name in moved_old:
                 prior = os.path.join(rollback, name)
                 if os.path.exists(prior):
                     os.replace(prior, os.path.join(root, name))
             if old_charts_moved and os.path.lexists(os.path.join(rollback, "charts")):
                 os.replace(os.path.join(rollback, "charts"), os.path.join(root, "charts"))
+            if old_data_moved and os.path.lexists(os.path.join(rollback, "data")):
+                os.replace(os.path.join(rollback, "data"), os.path.join(root, "data"))
             if old_contract_moved:
                 prior_contract = os.path.join(rollback, _RESEARCH_CONTRACT_FILENAME)
                 if os.path.exists(prior_contract):
                     os.replace(prior_contract, contract_path)
+        except Exception as exc:
+            rollback_failed = True
+            raise RuntimeError(
+                f"research promotion rollback failed; recovery artifacts retained at {rollback}"
+            ) from exc
         finally:
             shutil.rmtree(stage, ignore_errors=True)
-            shutil.rmtree(rollback, ignore_errors=True)
         raise
     finally:
         shutil.rmtree(stage, ignore_errors=True)
-        shutil.rmtree(rollback, ignore_errors=True)
+        if not rollback_failed:
+            shutil.rmtree(rollback, ignore_errors=True)
 
 
 def _finalize_research_contract(
@@ -3625,6 +3961,7 @@ def _finalize_research_contract(
     bless a mixed root.  Legacy research paths without a contract keep their
     existing behavior and return ``None``.
     """
+    os.close(_research_data_directory(handoff_dir))
     root = os.path.realpath(handoff_dir)
     contract_path = _research_contract_path(root)
     if not os.path.exists(contract_path):
@@ -3686,6 +4023,7 @@ def _finalize_research_contract(
         source_charts = os.path.join(root, "charts")
         if os.path.isdir(source_charts):
             shutil.copytree(source_charts, os.path.join(final_source, "charts"))
+        _copy_research_data(root, final_source)
 
         from ..utils.atomic import write_json_atomic, write_text_atomic
         staged_report_path = os.path.join(final_source, "research_report.md")
@@ -6750,15 +7088,24 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     out: dict[str, Any] = {
         "situation_brief": None, "actors": None, "sources": None, "research_report": None,
         "actor_dossier": None,  # 双轨 Track B：角色本体档案，供手动报告路径作背景上下文（缺失为 None）
+        "official_data": None,
     }
     if not simulation_id:
         return out
     try:
-        for entry in PipelineManager.list_pipelines():
+        from .official_data import load_official_data, simulation_research_binding
+        binding = simulation_research_binding(simulation_id)
+        if binding["status"] == "invalid":
+            return out
+        bound = binding["status"] == "valid"
+        entries = ([{"pipeline_id": binding["pipeline_id"]}] if bound
+                   else PipelineManager.list_pipelines())
+        for entry in entries:
             pid = entry.get("pipeline_id")
             if not pid:
                 continue
-            data = PipelineManager.load(pid)
+            data = ({"simulation_id": simulation_id, "handoff_dir": binding["handoff_dir"]} if bound
+                    else PipelineManager.load(pid))
             if not data or data.get("simulation_id") != simulation_id:
                 continue
             hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
@@ -6770,6 +7117,9 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
             out["research_report"] = report or None
             out["actor_dossier"] = dossier or None
             out["situation_brief"] = situation_brief(actors) if actors else None
+            out["official_data"] = load_official_data(hd) if bound else None
+            if bound and simulation_research_binding(simulation_id)["status"] != "valid":
+                return dict.fromkeys(out)
             break
     except Exception:  # best-effort enrichment must never break manual report generation
         pass
@@ -8769,11 +9119,20 @@ class PipelineOrchestrator:
         W9-5 ``scenario_spine``：主跑的情景脊柱（名+判定标准），钉给种子的 ReportAgent 使
         种子对同一组命名情景打分（概率自由）；报告链尚未支持该参数时回退旧签名。
         """
+        from .official_data import bind_simulation_research, simulation_research_binding
+        parent_binding = simulation_research_binding(getattr(state, "simulation_id", None))
+        if parent_binding["status"] == "invalid":
+            raise ValueError("Parent research generation changed before seed preparation")
         sim_manager = SimulationManager()
         _is_http = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
         sim_state = sim_manager.create_simulation(
             project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
         sim_id = sim_state.simulation_id
+        if parent_binding["status"] == "valid":
+            bind_simulation_research(
+                sim_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                pipeline_id=state.pipeline_id, expected_generation=parent_binding,
+                report=report_md, sources=research.get("sources"))
         # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
         # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
         # CLI providers stay capped at 3 (local CLI throughput bound).
@@ -8874,6 +9233,8 @@ class PipelineOrchestrator:
             "sources": research.get("sources"),
             "research_report": report_md,
         }
+        from .official_data import load_for_simulation
+        _agent_kwargs["official_data"] = load_for_simulation(sim_id)
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -12284,6 +12645,9 @@ class PipelineOrchestrator:
                     sources=research.get("sources"),
                     handoff_dir=handoff_dir,
                 )
+                from .official_data import capture_research_generation
+                _consumed_research_generation = capture_research_generation(
+                    handoff_dir, report=report_md, sources=research.get("sources"))
             self._complete_stage(
                 state,
                 STAGE_RESEARCH,
@@ -12492,6 +12856,18 @@ class PipelineOrchestrator:
                 elif _have_dossier:
                     chunks = dossier_chunks + chunks
                     state.options["graph_chunk_source"] = "both"
+                # Even dossier-only graph ingestion can use the stored public
+                # statistical baseline. This remains modeler evidence; actor
+                # knowledge is still admitted through its context-pack policy.
+                from .official_data import historical_snapshot, load_official_data
+                _official_snapshot = historical_snapshot(
+                    load_official_data(handoff_dir),
+                    as_of=actors.get("as_of_date") if isinstance(actors, dict) else None,
+                )
+                if _official_snapshot:
+                    chunks = chunks + _graph_research_chunks(
+                        _official_snapshot, "Official statistical observations",
+                    )
                 self._recompute_dynamic_bands(state, chunk_count=len(chunks))  # T6.7: 已知 chunk 数→重排区间
                 graph_id = builder.create_graph(name=project.name)
                 # EXECPLAN2 F-3-1（跨文件兜底）：set_ontology 已对无名条目逐项跳过；这里再包一层
@@ -12775,6 +13151,11 @@ class PipelineOrchestrator:
                 upd(5, "创建模拟…")
                 sim_state = sim_manager.create_simulation(project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
                 state.simulation_id = sim_state.simulation_id
+                from .official_data import bind_simulation_research
+                bind_simulation_research(
+                    sim_state.simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                    pipeline_id=state.pipeline_id, expected_generation=_consumed_research_generation,
+                    report=report_md, sources=research.get("sources"))
                 # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的
                 # *_partial 临时产物指针（扫描器会为新 attempt 重新登记）。
                 for _pk in [k for k in list(state.artifacts) if k.endswith("_partial")]:
@@ -13307,6 +13688,8 @@ class PipelineOrchestrator:
                     "graph_priors_structural": _read_json(
                         os.path.join(_hd_ra, "graph_priors_structural.json")),
                 }
+                from .official_data import load_for_simulation
+                _ra_artifacts["official_data"] = load_for_simulation(sim_state.simulation_id)
                 try:
                     agent = ReportAgent(**_ra_kwargs, **_ra_artifacts)
                 except TypeError:

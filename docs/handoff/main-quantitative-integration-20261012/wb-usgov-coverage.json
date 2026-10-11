@@ -1,0 +1,1162 @@
+{
+  "schema_version": "selected-source-study/v1",
+  "status": "complete_static_study",
+  "created_date_local": "2026-10-12",
+  "timezone": "Asia/Shanghai",
+  "root": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "branch_observed": "main",
+  "scope": "Selected World Bank Data360 and US government MCP quantitative contracts plus relevant existing catalog/hub boundaries; not whole-repository or whole-provider coverage.",
+  "ownership": {
+    "written_paths": [
+      "docs/handoff/main-quantitative-integration-20261012/wb-usgov-study.md",
+      "docs/handoff/main-quantitative-integration-20261012/wb-usgov-coverage.json"
+    ],
+    "concurrent_work_preserved": true,
+    "application_vendor_config_skills_modified": false,
+    "git_mutations": false,
+    "new_agents": false
+  },
+  "method": {
+    "vendor_material": "untrusted source text only",
+    "vendor_execution": false,
+    "vendor_imports": false,
+    "vendor_installation": false,
+    "vendor_tests": false,
+    "mcp_servers_started": false,
+    "network_used": false,
+    "source_hash_algorithm": "sha256 raw file bytes",
+    "line_ranges": "1-based inclusive; over-EOF requests clamped; overlapping reads merged",
+    "static_reads": "text readers, rg and stdlib pathlib/hashlib/json only",
+    "coverage_depth": "full_file_static_read refers to individual file text, never whole repository or runtime behavior"
+  },
+  "selected_sources": {
+    "wb": {
+      "vendor_root": "datamcps/data360-mcp-dev",
+      "families": [
+        "WB_WDI",
+        "IMF_WEO",
+        "WB_GEP"
+      ],
+      "native_tools": [
+        "data360_search_datasets",
+        "data360_search_indicators",
+        "data360_get_metadata",
+        "data360_get_disaggregation",
+        "data360_get_data",
+        "data360_find_codelist_value",
+        "data360_list_indicators",
+        "data360_get_data_api_url"
+      ],
+      "result_model": "IndicatorDataResponse and related Pydantic logical models; actual installed FastMCP outer wire framing unverified",
+      "critical_limits": [
+        "one page, default50 max100, offset/has_more/next_offset",
+        "default5 calendar years; explicit future end required",
+        "row field allowlist removes FREQ/OBS_STATUS/vintage",
+        "separate metadata stale/error may be lost by get_data composition",
+        "filter warning can mean dropped constraint; conflicting disaggregation REF_AREA can override country_code",
+        "no native vintage/as_of selector",
+        "internal aggregation pagination can silently return partial data"
+      ]
+    },
+    "usgov": {
+      "vendor_root": "datamcps/us-gov-open-data-mcp-main",
+      "modules_selected": [
+        "treasury",
+        "usaspending",
+        "sec"
+      ],
+      "native_tools": [
+        "find_tools",
+        "call_tool",
+        "treasury_list_datasets",
+        "treasury_search_datasets",
+        "treasury_get_endpoint_fields",
+        "treasury_query_fiscal_data",
+        "usa_spending_over_time",
+        "sec_company_concept"
+      ],
+      "result_model": "JSON text; columnar table/timeseries or record; meta.sources attached before byte budget",
+      "critical_limits": [
+        "native filter singular; recipe filters plural must be mapped",
+        "Treasury paging caller-owned; no raw links/field metadata in query result",
+        "data.truncated false does not imply all pages read",
+        "truncatedToFit may remove rows/columns/metadata after stats/totals computed",
+        "USAspending no completeness cursor; missing amount coerced zero; fiscal periods",
+        "SEC annual/quarterly capped last20/12 filing-form rows; no duration/start/accession/frame in tool result",
+        "cached fetchedAt is original upstream fetch time, not source release/vintage",
+        "POST source URL omits request body"
+      ]
+    }
+  },
+  "history_boundary": {
+    "files": [
+      "docs/handoff/data-sources-mcp/handoff.md",
+      "docs/handoff/data-sources-mcp/design.md"
+    ],
+    "catalog_verified_on_string": "2026-10-11",
+    "prior_live_probe_receipts_inspected": false,
+    "claims_not_revalidated": [
+      "provider latency/availability",
+      "WEO horizon through2031/countries-only",
+      "WEO NGDPD whole-dollar scaling and LUR denominator override",
+      "Treasury upstream aggregation and MTS line-code stability",
+      "Treasury FX amendment selection semantics"
+    ]
+  },
+  "probe_specs": {
+    "execution_status": "specified_not_executed",
+    "ids": [
+      "WB-1",
+      "US-T1",
+      "US-A1",
+      "US-S1"
+    ],
+    "purpose": "deterministic fake-MCP adapter acceptance using native names/args and synthetic source-shaped payloads; not provider validation",
+    "critical_outcomes": [
+      "explicit metadata and paging receipts",
+      "missing remains missing",
+      "byte-shortened page refetched before advancing",
+      "fiscal periods retained",
+      "unsupported SEC annual/as-of completeness rejected"
+    ]
+  },
+  "verification": {
+    "initial_vs_final_hashes_match": true,
+    "source_hash_verified_at_utc": "2026-10-11T16:55:39.617096+00:00",
+    "json_examples_parsed": 11,
+    "documentation_format_only": true,
+    "runtime_or_live_acceptance_claimed": false
+  },
+  "summary": {
+    "selected_file_count": 40,
+    "selected_lines_read": 9295,
+    "individual_full_text_files": 18,
+    "repository_coverage_claim": false
+  },
+  "excluded": [
+    "other US government modules",
+    "World Bank visualization implementation/UI packages and agent packages",
+    "generated dist and installed dependency implementation",
+    "vendor tests (not run or studied as acceptance evidence)",
+    "original live-probe scratchpad artifacts",
+    "application quantitative adapter/report implementation beyond selected catalog/hub reads",
+    "whole-repository completeness"
+  ],
+  "files": [
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/mcp_server/__main__.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/mcp_server/__main__.py",
+      "sha256": "8416375b172b9f17fdcea2a7aac98580148e5b40cb9aba3661bf899613af8a4b",
+      "total_lines": 32,
+      "read_ranges": [
+        [
+          1,
+          32
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "8416375b172b9f17fdcea2a7aac98580148e5b40cb9aba3661bf899613af8a4b"
+      ],
+      "read_line_count": 32,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/mcp_server/_server_definition.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/mcp_server/_server_definition.py",
+      "sha256": "00681a94bd7d5a970255cd5caab14f4450c96bb4fde6eea824a463cc8ee16b7e",
+      "total_lines": 16,
+      "read_ranges": [
+        [
+          1,
+          16
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "00681a94bd7d5a970255cd5caab14f4450c96bb4fde6eea824a463cc8ee16b7e"
+      ],
+      "read_line_count": 16,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/mcp_server/__init__.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/mcp_server/__init__.py",
+      "sha256": "339803ffca0ae1ce49a7bd0e4b8082aefe8cb83e37ef0ace31e569296755fa77",
+      "total_lines": 13,
+      "read_ranges": [
+        [
+          1,
+          13
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "339803ffca0ae1ce49a7bd0e4b8082aefe8cb83e37ef0ace31e569296755fa77"
+      ],
+      "read_line_count": 13,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/mcp_server/tools.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/mcp_server/tools.py",
+      "sha256": "45d78864c588e4e8ee1954c93f1ab0ad07e90ca7dc0143b137dcf32e7e6f3403",
+      "total_lines": 990,
+      "read_ranges": [
+        [
+          1,
+          318
+        ],
+        [
+          796,
+          911
+        ]
+      ],
+      "inspection_depth": [
+        "selected handlers and registrations",
+        "registration reread"
+      ],
+      "hashes_seen": [
+        "45d78864c588e4e8ee1954c93f1ab0ad07e90ca7dc0143b137dcf32e7e6f3403"
+      ],
+      "read_line_count": 434,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/pyproject.toml",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/pyproject.toml",
+      "sha256": "3eee581940f21430d74c0d69952b3bbf094783628b6ce2b891c89aafb568b293",
+      "total_lines": 105,
+      "read_ranges": [
+        [
+          1,
+          105
+        ]
+      ],
+      "inspection_depth": [
+        "entry points and dependencies",
+        "reread package entry points and runtime deps",
+        "full reread to remove truncation uncertainty"
+      ],
+      "hashes_seen": [
+        "3eee581940f21430d74c0d69952b3bbf094783628b6ce2b891c89aafb568b293"
+      ],
+      "read_line_count": 105,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "docs/handoff/data-sources-mcp/handoff.md",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/handoff.md",
+      "sha256": "00fd39dd2964969cb04291bffba25ea6ccb6a98d53e8e41ef057525104d1b956",
+      "total_lines": 70,
+      "read_ranges": [
+        [
+          1,
+          70
+        ]
+      ],
+      "inspection_depth": [
+        "historical claims only"
+      ],
+      "hashes_seen": [
+        "00fd39dd2964969cb04291bffba25ea6ccb6a98d53e8e41ef057525104d1b956"
+      ],
+      "read_line_count": 70,
+      "depth": "full_file_static_read",
+      "evidence_class": "historical_context_not_revalidated"
+    },
+    {
+      "path": "docs/handoff/data-sources-mcp/design.md",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/design.md",
+      "sha256": "9b8f85cba1bb2ee08597ec7795dcbbec78896d16387bcc43707882e32a51d8f4",
+      "total_lines": 535,
+      "read_ranges": [
+        [
+          1,
+          150
+        ]
+      ],
+      "inspection_depth": [
+        "historical design context"
+      ],
+      "hashes_seen": [
+        "9b8f85cba1bb2ee08597ec7795dcbbec78896d16387bcc43707882e32a51d8f4"
+      ],
+      "read_line_count": 150,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "historical_context_not_revalidated"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/models.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/models.py",
+      "sha256": "42eae177684e4661101ead575b0abc4323bd341bd6cc8e357d9f53e6288ae071",
+      "total_lines": 950,
+      "read_ranges": [
+        [
+          1,
+          310
+        ],
+        [
+          330,
+          590
+        ],
+        [
+          909,
+          950
+        ]
+      ],
+      "inspection_depth": [
+        "search metadata observation response models",
+        "metadata and fetch response schemas",
+        "metadata stale schema",
+        "dataset search result schema"
+      ],
+      "hashes_seen": [
+        "42eae177684e4661101ead575b0abc4323bd341bd6cc8e357d9f53e6288ae071"
+      ],
+      "read_line_count": 613,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/api.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/api.py",
+      "sha256": "55da7bf8659fe3101e0d6d70c15e29951d680f88a05a25c93a26a4dd9e525400",
+      "total_lines": 3902,
+      "read_ranges": [
+        [
+          1,
+          245
+        ],
+        [
+          291,
+          440
+        ],
+        [
+          456,
+          786
+        ],
+        [
+          818,
+          993
+        ],
+        [
+          1062,
+          1165
+        ],
+        [
+          1360,
+          1495
+        ],
+        [
+          1672,
+          1750
+        ],
+        [
+          1752,
+          2005
+        ],
+        [
+          2064,
+          2429
+        ],
+        [
+          2480,
+          2598
+        ],
+        [
+          2600,
+          2705
+        ]
+      ],
+      "inspection_depth": [
+        "fetch normalization/time-window/pagination",
+        "metadata cache / units / missing / stripped fields",
+        "search / metadata normalization/degraded cache",
+        "filter validation/defaulting behavior",
+        "search redirect / disaggregation / list / data citation URL",
+        "dimensions boundary/search source redirect/internal page cap",
+        "dataset discovery search actual HTTP/result normalization",
+        "reread previously truncated sections / raw search shape"
+      ],
+      "hashes_seen": [
+        "55da7bf8659fe3101e0d6d70c15e29951d680f88a05a25c93a26a4dd9e525400"
+      ],
+      "read_line_count": 2066,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/http_client.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/http_client.py",
+      "sha256": "fccff57eec71c2c6485d4a4e4dec0ebbc4ccf43bd63d716de612cf82012abdf9",
+      "total_lines": 286,
+      "read_ranges": [
+        [
+          1,
+          286
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "fccff57eec71c2c6485d4a4e4dec0ebbc4ccf43bd63d716de612cf82012abdf9"
+      ],
+      "read_line_count": 286,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/config.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/config.py",
+      "sha256": "8d2961e2da652a71c6c813bc76f53cee950cfcd710e55399ac1042651d83b13c",
+      "total_lines": 347,
+      "read_ranges": [
+        [
+          1,
+          274
+        ]
+      ],
+      "inspection_depth": [
+        "URL/timeouts/retries/cache/env configuration",
+        "background retry defaults and URL composition"
+      ],
+      "hashes_seen": [
+        "8d2961e2da652a71c6c813bc76f53cee950cfcd710e55399ac1042651d83b13c"
+      ],
+      "read_line_count": 274,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/errors.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/errors.py",
+      "sha256": "e3d055e6a10c81557dc20521c9365ed6c66e7b49dac7cf586f80567d29b52e06",
+      "total_lines": 367,
+      "read_ranges": [
+        [
+          1,
+          367
+        ]
+      ],
+      "inspection_depth": [
+        "error classes and classification",
+        "error sanitizer/status/transient classification",
+        "exception classes reread"
+      ],
+      "hashes_seen": [
+        "e3d055e6a10c81557dc20521c9365ed6c66e7b49dac7cf586f80567d29b52e06"
+      ],
+      "read_line_count": 367,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server.ts",
+      "sha256": "cb323f6bfcef67ebcaf12250dbbead12809e8da614503d91dd662d458867f46f",
+      "total_lines": 528,
+      "read_ranges": [
+        [
+          1,
+          115
+        ],
+        [
+          135,
+          290
+        ],
+        [
+          320,
+          385
+        ],
+        [
+          440,
+          528
+        ]
+      ],
+      "inspection_depth": [
+        "CLI entry/module selection/tool registration/transport",
+        "final transport startup"
+      ],
+      "hashes_seen": [
+        "cb323f6bfcef67ebcaf12250dbbead12809e8da614503d91dd662d458867f46f"
+      ],
+      "read_line_count": 426,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/tool-registry.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/tool-registry.ts",
+      "sha256": "74fb98ece51e4a69553e6b9abd05e2dad6052bb07e72f21baa40b7a637c5d734",
+      "total_lines": 220,
+      "read_ranges": [
+        [
+          1,
+          205
+        ]
+      ],
+      "inspection_depth": [
+        "registry validation and execution"
+      ],
+      "hashes_seen": [
+        "74fb98ece51e4a69553e6b9abd05e2dad6052bb07e72f21baa40b7a637c5d734"
+      ],
+      "read_line_count": 205,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/treasury/tools.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/treasury/tools.ts",
+      "sha256": "0f881c223592ada6939153cf79949004a400d7b6d2025c8b31bf41b2e1765b6b",
+      "total_lines": 149,
+      "read_ranges": [
+        [
+          1,
+          149
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "0f881c223592ada6939153cf79949004a400d7b6d2025c8b31bf41b2e1765b6b"
+      ],
+      "read_line_count": 149,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "deerflow_bridge/data_catalog.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_catalog.py",
+      "sha256": "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb",
+      "total_lines": 1840,
+      "read_ranges": [
+        [
+          1,
+          65
+        ],
+        [
+          215,
+          580
+        ],
+        [
+          1323,
+          1491
+        ],
+        [
+          1513,
+          1557
+        ]
+      ],
+      "inspection_depth": [
+        "selected identifiers/recipe contracts/metadata and canonical resolution",
+        "remaining usgov entries and exact lookup resolution"
+      ],
+      "hashes_seen": [
+        "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb"
+      ],
+      "read_line_count": 645,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "current_application_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/treasury/sdk.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/treasury/sdk.ts",
+      "sha256": "a2d8cf610329826f1beb39c61187868703c0ef5ac8c2c4da062baf4b364de1de",
+      "total_lines": 1501,
+      "read_ranges": [
+        [
+          1,
+          66
+        ],
+        [
+          1440,
+          1501
+        ]
+      ],
+      "inspection_depth": [
+        "HTTP config and all query helper implementations"
+      ],
+      "hashes_seen": [
+        "a2d8cf610329826f1beb39c61187868703c0ef5ac8c2c4da062baf4b364de1de"
+      ],
+      "read_line_count": 128,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/shared/response.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/shared/response.ts",
+      "sha256": "b3a16b469f0f98a55b8dca667c661bae6416f3e257d9cb845662ee49ee8bcd33",
+      "total_lines": 499,
+      "read_ranges": [
+        [
+          1,
+          280
+        ],
+        [
+          300,
+          499
+        ]
+      ],
+      "inspection_depth": [
+        "shared JSON envelope builders",
+        "actual builder outputs"
+      ],
+      "hashes_seen": [
+        "b3a16b469f0f98a55b8dca667c661bae6416f3e257d9cb845662ee49ee8bcd33"
+      ],
+      "read_line_count": 480,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/serve-tool.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/serve-tool.ts",
+      "sha256": "095e86528cce0a7bb384f703bda33aa9b3b097517371cfa2bccfa442d7350918",
+      "total_lines": 21,
+      "read_ranges": [
+        [
+          1,
+          21
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "095e86528cce0a7bb384f703bda33aa9b3b097517371cfa2bccfa442d7350918"
+      ],
+      "read_line_count": 21,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/response-budget.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/response-budget.ts",
+      "sha256": "a90197addba21be5c4b38a500f331f3e0f110701770daaa9560f284ae2e7c67b",
+      "total_lines": 143,
+      "read_ranges": [
+        [
+          1,
+          143
+        ]
+      ],
+      "inspection_depth": [
+        "budget truncation implementation"
+      ],
+      "hashes_seen": [
+        "a90197addba21be5c4b38a500f331f3e0f110701770daaa9560f284ae2e7c67b"
+      ],
+      "read_line_count": 143,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/sources.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/sources.ts",
+      "sha256": "e1a4f73839d2fe8f238a4f4b0395a10497b27579b5865fc56621e12b43b05780",
+      "total_lines": 47,
+      "read_ranges": [
+        [
+          1,
+          47
+        ]
+      ],
+      "inspection_depth": [
+        "full"
+      ],
+      "hashes_seen": [
+        "e1a4f73839d2fe8f238a4f4b0395a10497b27579b5865fc56621e12b43b05780"
+      ],
+      "read_line_count": 47,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/shared/client.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/shared/client.ts",
+      "sha256": "a7d28126da2054e453187e831b86b154c6fe54e379b7cbda4bb4495a9329bd40",
+      "total_lines": 543,
+      "read_ranges": [
+        [
+          1,
+          112
+        ],
+        [
+          123,
+          192
+        ],
+        [
+          221,
+          330
+        ],
+        [
+          338,
+          543
+        ]
+      ],
+      "inspection_depth": [
+        "shared client rate/retry/deadline/auth/cache/request handling",
+        "POST identity excludes auth but retains body"
+      ],
+      "hashes_seen": [
+        "a7d28126da2054e453187e831b86b154c6fe54e379b7cbda4bb4495a9329bd40"
+      ],
+      "read_line_count": 498,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/tools.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/tools.ts",
+      "sha256": "8c9e230661499f30c8d24bde228f12d9d330559f80ac143af621bf15c1e23734",
+      "total_lines": 213,
+      "read_ranges": [
+        [
+          1,
+          19
+        ],
+        [
+          153,
+          191
+        ]
+      ],
+      "inspection_depth": [
+        "selected time-series tool schema/handler"
+      ],
+      "hashes_seen": [
+        "8c9e230661499f30c8d24bde228f12d9d330559f80ac143af621bf15c1e23734"
+      ],
+      "read_line_count": 58,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/sdk.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/sdk.ts",
+      "sha256": "111c9285fb4ce4fad968772a79cc4134c660eca243db77c21004ece7ab946be1",
+      "total_lines": 559,
+      "read_ranges": [
+        [
+          1,
+          28
+        ],
+        [
+          110,
+          146
+        ],
+        [
+          208,
+          224
+        ],
+        [
+          471,
+          517
+        ]
+      ],
+      "inspection_depth": [
+        "time-series POST normalization/fiscal periods"
+      ],
+      "hashes_seen": [
+        "111c9285fb4ce4fad968772a79cc4134c660eca243db77c21004ece7ab946be1"
+      ],
+      "read_line_count": 129,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/sec/tools.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/sec/tools.ts",
+      "sha256": "4a8851dd96dd2bdb01f6a14c6a43a46c9b844aa050b9f2711cae8c1b897032bc",
+      "total_lines": 286,
+      "read_ranges": [
+        [
+          1,
+          22
+        ],
+        [
+          201,
+          239
+        ]
+      ],
+      "inspection_depth": [
+        "company concept native schema/result"
+      ],
+      "hashes_seen": [
+        "4a8851dd96dd2bdb01f6a14c6a43a46c9b844aa050b9f2711cae8c1b897032bc"
+      ],
+      "read_line_count": 61,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/sec/sdk.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/sec/sdk.ts",
+      "sha256": "c0ea91f805e20f77a9d9a09fc4536d75ea9e59dca0746708e7c09f351985b351",
+      "total_lines": 475,
+      "read_ranges": [
+        [
+          1,
+          155
+        ],
+        [
+          300,
+          365
+        ],
+        [
+          370,
+          475
+        ]
+      ],
+      "inspection_depth": [
+        "SEC client setup / selected financial normalization",
+        "companyconcept classification and unit selection"
+      ],
+      "hashes_seen": [
+        "c0ea91f805e20f77a9d9a09fc4536d75ea9e59dca0746708e7c09f351985b351"
+      ],
+      "read_line_count": 327,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/treasury/meta.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/treasury/meta.ts",
+      "sha256": "eeb0dda6f22e448ab6785dea78dee8bce757b27aba1530b7bd50e95cbc044398",
+      "total_lines": 37,
+      "read_ranges": [
+        [
+          1,
+          37
+        ]
+      ],
+      "inspection_depth": [
+        "full source-local metadata/tips, not verified upstream truth"
+      ],
+      "hashes_seen": [
+        "eeb0dda6f22e448ab6785dea78dee8bce757b27aba1530b7bd50e95cbc044398"
+      ],
+      "read_line_count": 37,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/treasury/index.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/treasury/index.ts",
+      "sha256": "727130b5a91e123b5a1b2f7ac1eebf4a3c4cc70bee26bfd346a5276192a0c18c",
+      "total_lines": 11,
+      "read_ranges": [
+        [
+          1,
+          11
+        ]
+      ],
+      "inspection_depth": [
+        "module export registration"
+      ],
+      "hashes_seen": [
+        "727130b5a91e123b5a1b2f7ac1eebf4a3c4cc70bee26bfd346a5276192a0c18c"
+      ],
+      "read_line_count": 11,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/index.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/usaspending/index.ts",
+      "sha256": "a1ba73769d0efa34b220853ad2798910e354743ad28b4c8553eae915d4e59b02",
+      "total_lines": 11,
+      "read_ranges": [
+        [
+          1,
+          11
+        ]
+      ],
+      "inspection_depth": [
+        "module export registration"
+      ],
+      "hashes_seen": [
+        "a1ba73769d0efa34b220853ad2798910e354743ad28b4c8553eae915d4e59b02"
+      ],
+      "read_line_count": 11,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/apis/sec/index.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/apis/sec/index.ts",
+      "sha256": "d542dac9308a89b45855ac4190be4cbf5c2b9d4b6401672ebcd61f1c2ec64373",
+      "total_lines": 11,
+      "read_ranges": [
+        [
+          1,
+          11
+        ]
+      ],
+      "inspection_depth": [
+        "module export registration"
+      ],
+      "hashes_seen": [
+        "d542dac9308a89b45855ac4190be4cbf5c2b9d4b6401672ebcd61f1c2ec64373"
+      ],
+      "read_line_count": 11,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/discovery.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/discovery.ts",
+      "sha256": "a7f99c8c31a0840990d8ac8b4ff9e8a7f8e2969b02239a6e67918ecbc1cf95d0",
+      "total_lines": 162,
+      "read_ranges": [
+        [
+          1,
+          162
+        ]
+      ],
+      "inspection_depth": [
+        "native discover/call schemas/results",
+        "exact discovery result-item shape"
+      ],
+      "hashes_seen": [
+        "a7f99c8c31a0840990d8ac8b4ff9e8a7f8e2969b02239a6e67918ecbc1cf95d0"
+      ],
+      "read_line_count": 162,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/shared/request-context.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/shared/request-context.ts",
+      "sha256": "f5e306af81dcf023b733b60f9578bc657cefcf2a23d248f75e28fa24a8fed7b1",
+      "total_lines": 36,
+      "read_ranges": [
+        [
+          1,
+          36
+        ]
+      ],
+      "inspection_depth": [
+        "full source tracking semantics"
+      ],
+      "hashes_seen": [
+        "f5e306af81dcf023b733b60f9578bc657cefcf2a23d248f75e28fa24a8fed7b1"
+      ],
+      "read_line_count": 36,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/shared/disk-cache.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/shared/disk-cache.ts",
+      "sha256": "e35b2115f6189041449e65ca01a3b87a7bbdc9c7a691dd47e98762f803f51031",
+      "total_lines": 281,
+      "read_ranges": [
+        [
+          1,
+          166
+        ],
+        [
+          235,
+          281
+        ]
+      ],
+      "inspection_depth": [
+        "TTL disk root/permissions/fetchedAt semantics"
+      ],
+      "hashes_seen": [
+        "e35b2115f6189041449e65ca01a3b87a7bbdc9c7a691dd47e98762f803f51031"
+      ],
+      "read_line_count": 213,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/README.md",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/README.md",
+      "sha256": "e3b0df77794a5cba3c0a46c9fc7149ade3d7e431c5c0d9465303e628649c2600",
+      "total_lines": 196,
+      "read_ranges": [
+        [
+          1,
+          161
+        ]
+      ],
+      "inspection_depth": [
+        "vendor docs contrasted with code"
+      ],
+      "hashes_seen": [
+        "e3b0df77794a5cba3c0a46c9fc7149ade3d7e431c5c0d9465303e628649c2600"
+      ],
+      "read_line_count": 161,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_documentation_not_execution"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/mcp_server/resources.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/mcp_server/resources.py",
+      "sha256": "f590b13300a5466fbbd9bad4df2380f5b132e311c77739536ff24f671030a7e8",
+      "total_lines": 490,
+      "read_ranges": [
+        [
+          1,
+          174
+        ]
+      ],
+      "inspection_depth": [
+        "documented metadata/data filters and response fields"
+      ],
+      "hashes_seen": [
+        "f590b13300a5466fbbd9bad4df2380f5b132e311c77739536ff24f671030a7e8"
+      ],
+      "read_line_count": 174,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "deerflow_bridge/data_mcp.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_mcp.py",
+      "sha256": "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6",
+      "total_lines": 1208,
+      "read_ranges": [
+        [
+          72,
+          116
+        ],
+        [
+          150,
+          162
+        ],
+        [
+          187,
+          240
+        ],
+        [
+          366,
+          496
+        ],
+        [
+          1094,
+          1146
+        ]
+      ],
+      "inspection_depth": [
+        "current provider launch/env and CallResult extraction only",
+        "selected module/budget/auth constants and result schema"
+      ],
+      "hashes_seen": [
+        "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6"
+      ],
+      "read_line_count": 296,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "current_application_source_static"
+    },
+    {
+      "path": "datamcps/data360-mcp-dev/src/data360/providers.py",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/data360-mcp-dev/src/data360/providers.py",
+      "sha256": "2024fac2fdebebe26b3884dd41a0549bb83ab410d21a8a6d964a255c7a387e7f",
+      "total_lines": 1543,
+      "read_ranges": [
+        [
+          34,
+          73
+        ],
+        [
+          716,
+          737
+        ],
+        [
+          883,
+          987
+        ]
+      ],
+      "inspection_depth": [
+        "database labels and codelist background fetch/failure fallback"
+      ],
+      "hashes_seen": [
+        "2024fac2fdebebe26b3884dd41a0549bb83ab410d21a8a6d964a255c7a387e7f"
+      ],
+      "read_line_count": 167,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/README.md",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/README.md",
+      "sha256": "99bc7b4b4160a87d47baf33dbbd10955abe345e057051d3714f2df326a2d4722",
+      "total_lines": 146,
+      "read_ranges": [
+        [
+          1,
+          144
+        ]
+      ],
+      "inspection_depth": [
+        "vendor docs and version/runtime guidance"
+      ],
+      "hashes_seen": [
+        "99bc7b4b4160a87d47baf33dbbd10955abe345e057051d3714f2df326a2d4722"
+      ],
+      "read_line_count": 144,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_documentation_not_execution"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/src/server/http-auth.ts",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/src/server/http-auth.ts",
+      "sha256": "2e76c17b9a90c0cc83bcae2768d8bbe7d2d95d3de1558cfc63cbd209265062d5",
+      "total_lines": 79,
+      "read_ranges": [
+        [
+          1,
+          79
+        ]
+      ],
+      "inspection_depth": [
+        "full optional HTTP boundary"
+      ],
+      "hashes_seen": [
+        "2e76c17b9a90c0cc83bcae2768d8bbe7d2d95d3de1558cfc63cbd209265062d5"
+      ],
+      "read_line_count": 79,
+      "depth": "full_file_static_read",
+      "evidence_class": "vendor_source_static"
+    },
+    {
+      "path": "datamcps/us-gov-open-data-mcp-main/package.json",
+      "absolute_path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/us-gov-open-data-mcp-main/package.json",
+      "sha256": "247f27c4e610af888034f7655512f6fe1d3d81bc7bba91453a8a211d97d34d32",
+      "total_lines": 139,
+      "read_ranges": [
+        [
+          1,
+          50
+        ]
+      ],
+      "inspection_depth": [
+        "package version/bin/engines/source entry"
+      ],
+      "hashes_seen": [
+        "247f27c4e610af888034f7655512f6fe1d3d81bc7bba91453a8a211d97d34d32"
+      ],
+      "read_line_count": 50,
+      "depth": "selected_ranges_static_trace",
+      "evidence_class": "vendor_source_static"
+    }
+  ]
+}

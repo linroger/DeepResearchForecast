@@ -3,8 +3,9 @@
 # doctor.sh — DeepAgentForecast environment health check
 # ---------------------------------------------------------------------------
 # Verifies, in seconds, everything a full "one prompt -> forecast" run needs:
-# tool versions, both Python venvs, the DeerFlow checkout + bridge overlay,
-# and the .env credentials for the providers you have selected.
+# tool versions, both Python venvs, the DeerFlow checkout + bridge overlay, the
+# official-data MCP servers (datamcps/), and the .env credentials for the
+# providers you have selected.
 #
 #   npm run doctor        (or: bash scripts/doctor.sh)
 #
@@ -43,9 +44,9 @@ for arg in "$@"; do
     --deep)        DEEP=1 ;;
     --pull)        PULL=1 ;;
     -h|--help)
-      # Print the header doc block (lines 3-30, between the rule lines) verbatim,
+      # Print the header doc block (lines 3-31, between the rule lines) verbatim,
       # stripping the leading "# " so it reads as plain help text.
-      sed -n '3,30p' "$SCRIPT_SOURCE" | sed 's/^# \{0,1\}//'
+      sed -n '3,31p' "$SCRIPT_SOURCE" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) printf 'doctor.sh: unknown option %s (try --deep, --pull, --help)\n' "$arg" >&2; exit 64 ;;
   esac
@@ -157,6 +158,93 @@ if [ -d "$DEERFLOW_DIR/backend" ]; then
   fi
 else
   bad "deer-flow not found at $DEERFLOW_DIR — run ./setup.sh (auto-clones it) or set DEERFLOW_DIR"
+fi
+
+# Official-data MCP servers (datamcps/: FRED, BLS, BIS, IMF, World Bank Data360,
+# US Gov Open Data). Optional by design — an unbuilt or keyless server only drops
+# that source from research, it never fails a run — so problems here are
+# warnings, never blocking. Only key NAMES are reported, never their values.
+sect "Data-source MCP servers"
+# cfgval KEY -> an exported KEY wins, else the repo .env (same precedence as
+# DEERFLOW_DIR / DEERFLOW_PYTHON above and scripts/setup_datamcps.sh).
+cfgval() {
+  local value="${!1:-}"
+  [ -n "$value" ] || value="$(envval "$1")"
+  printf '%s\n' "$value"
+}
+DS_ENABLED="$(cfgval DATA_SOURCES_ENABLED | tr '[:upper:]' '[:lower:]')"
+DS_ENABLED="${DS_ENABLED:-true}"
+if [ "$DS_ENABLED" != "true" ]; then
+  ok "official data sources disabled (DATA_SOURCES_ENABLED=$DS_ENABLED) — nothing to check"
+else
+  DS_DIR="$(cfgval DATA_SOURCES_DIR)"; DS_DIR="${DS_DIR:-$ROOT_DIR/datamcps}"
+  case "$DS_DIR" in /*) ;; *) DS_DIR="$ROOT_DIR/$DS_DIR" ;; esac
+  DS_ALLOW="$(cfgval DATA_SOURCES | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  DS_ALLOW="${DS_ALLOW:-fred,bls,bis,imf,wb,usgov}"
+
+  # node: same resolution as the runtime and scripts/setup_datamcps.sh.
+  DS_NODE_SETTING="$(cfgval DATA_SOURCES_NODE)"
+  DS_NODE=""
+  if [ -n "$DS_NODE_SETTING" ]; then
+    if [ -x "$DS_NODE_SETTING" ] && [ ! -d "$DS_NODE_SETTING" ]; then
+      DS_NODE="$DS_NODE_SETTING"
+    else
+      warn "DATA_SOURCES_NODE=$DS_NODE_SETTING is not an executable file — the node-based data servers will be unavailable"
+    fi
+  else
+    for _cand in "$(command -v node 2>/dev/null || true)" \
+                 "$HOME/.local/bin/node" /opt/homebrew/bin/node /usr/local/bin/node; do
+      if [ -n "$_cand" ] && [ -x "$_cand" ] && [ ! -d "$_cand" ]; then DS_NODE="$_cand"; break; fi
+    done
+    [ -n "$DS_NODE" ] || warn "node not found for the data servers (fred/bls/bis/usgov) — install Node.js >= 22 or set DATA_SOURCES_NODE"
+  fi
+  DS_NODE_MAJOR=0
+  if [ -n "$DS_NODE" ]; then
+    DS_NODE_VER="$("$DS_NODE" -v 2>/dev/null | sed 's/^v//')"
+    DS_NODE_MAJOR="${DS_NODE_VER%%.*}"
+    case "$DS_NODE_MAJOR" in ''|*[!0-9]*) DS_NODE_MAJOR=0 ;; esac
+    if [ "$DS_NODE_MAJOR" -ge 22 ]; then
+      ok "data-server node $DS_NODE_VER ($DS_NODE)"
+    elif [ "$DS_NODE_MAJOR" -ge 18 ]; then
+      warn "data-server node $DS_NODE_VER ($DS_NODE) — usgov needs >= 22 (set DATA_SOURCES_NODE to a newer node)"
+    else
+      warn "data-server node ${DS_NODE_VER:-unknown} ($DS_NODE) is too old (fred/bls/bis need >= 18, usgov >= 22)"
+    fi
+  fi
+
+  if [ ! -d "$DS_DIR" ]; then
+    warn "datamcps not found at $DS_DIR — set DATA_SOURCES_DIR (research runs without official data)"
+  else
+    DS_MISSING=""
+    # name | runtime entry relative to the servers root (what data_mcp launches)
+    for _row in "fred|fred-mcp-server-main/build/index.js" \
+                "bls|bls_mcp-main/dist/index.js" \
+                "bis|mcp-bis-main/node_modules/tsx/package.json" \
+                "imf|imf-data-mcp-main/.venv/bin/imf-data-mcp" \
+                "wb|data360-mcp-dev/.venv/bin/python" \
+                "usgov|us-gov-open-data-mcp-main/dist/server.js"; do
+      _name="${_row%%|*}"; _entry="${_row#*|}"
+      case ",$DS_ALLOW," in
+        *",$_name,"*) ;;
+        *) ok "$_name: disabled by DATA_SOURCES"; continue ;;
+      esac
+      if [ ! -e "$DS_DIR/$_entry" ]; then
+        DS_MISSING="$DS_MISSING $_name"
+      elif [ "$_name" = "usgov" ] && [ "$DS_NODE_MAJOR" -lt 22 ]; then
+        warn "usgov: built, but unavailable until node >= 22 is configured"
+      else
+        ok "$_name: built ($_entry)"
+      fi
+    done
+    [ -z "$DS_MISSING" ] || warn "not built:${DS_MISSING} — run: npm run setup:datamcps"
+  fi
+
+  DS_KEYS_SET=""; DS_KEYS_UNSET=""
+  for _key in FRED_API_KEY BLS_API_KEY EIA_API_KEY BEA_API_KEY CENSUS_API_KEY DATA_GOV_API_KEY SEC_CONTACT_EMAIL; do
+    if [ -n "$(cfgval "$_key")" ]; then DS_KEYS_SET="$DS_KEYS_SET $_key"
+    else DS_KEYS_UNSET="$DS_KEYS_UNSET $_key"; fi
+  done
+  ok "data-source keys set:${DS_KEYS_SET:- none}${DS_KEYS_UNSET:+ (optional, not set:$DS_KEYS_UNSET)}"
 fi
 
 sect "Configuration (.env)"

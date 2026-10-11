@@ -384,6 +384,7 @@ def generate_report():
                     actors=_dossier.get("actors"),
                     sources=_dossier.get("sources"),
                     research_report=_dossier.get("research_report"),
+                    official_data=_dossier.get("official_data"),
                 )
                 
                 # 进度回调
@@ -1557,6 +1558,7 @@ def chat_with_report_agent():
             actors=_dossier.get("actors"),
             sources=_dossier.get("sources"),
             research_report=_dossier.get("research_report"),
+            official_data=_dossier.get("official_data"),
         )
 
         result = agent.chat(message=message, chat_history=chat_history)

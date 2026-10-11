@@ -1,0 +1,139 @@
+{
+  "name": "us-gov-open-data-mcp",
+  "version": "2026.10.8",
+  "mcpName": "io.github.lzinga/us-gov-open-data-mcp",
+  "description": "MCP server + standalone TypeScript SDK for 40+ U.S. government and international data APIs. 300+ tools with WASM-sandboxed code mode for context reduction. Covers Treasury, FRED, BLS, BEA, EIA, Census, FEC, Congress, Federal Register, USAspending, SEC, FBI, GovInfo, NOAA, USDA, World Bank, CDC, NAEP, College Scorecard, NREL, FDA (25 endpoints), EPA, EPA-AQS, Senate Lobbying, Regulations.gov, USDA FoodData, FEMA, NHTSA, CMS, HUD, USPTO, CFPB, FDIC, DOL, USGS, ClinicalTrials.gov, BTS, Open Payments, NIH RePORTER, DOJ News, GSA CALC+, NWS.",
+  "main": "dist/apis/index.js",
+  "types": "dist/apis/index.d.ts",
+  "bin": {
+    "us-gov-open-data-mcp": "dist/server.js"
+  },
+  "exports": {
+    ".": "./dist/apis/index.js",
+    "./sdk": "./dist/apis/index.js",
+    "./sdk/*": "./dist/apis/*/sdk.js",
+    "./client": "./dist/shared/client.js",
+    "./server": "./dist/server.js",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "dist/shared/client.d.ts"
+      ],
+      "sdk": [
+        "dist/apis/index.d.ts"
+      ],
+      "sdk/*": [
+        "dist/apis/*/sdk.d.ts"
+      ],
+      "server": [
+        "dist/server.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prebuild": "npm run clean",
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "biome lint --error-on-warnings",
+    "start": "node dist/server.js",
+    "start:http": "node dist/server.js --transport httpStream --port 8080",
+    "dev": "tsc --watch",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:package": "node scripts/package-smoke.mjs",
+    "docs:typedoc": "npm run typedoc --prefix docs",
+    "docs:generate": "npm run generate --prefix docs",
+    "docs:dev": "npm run dev --prefix docs",
+    "docs:build": "npm run build --prefix docs",
+    "docs:preview": "npm run preview --prefix docs",
+    "prepare": "npm run build",
+    "docs:install": "npm ci --prefix docs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "treasury",
+    "fiscal-data",
+    "fec",
+    "census",
+    "fred",
+    "economic-data",
+    "usaspending",
+    "congress",
+    "federal-register",
+    "bls",
+    "bea",
+    "eia",
+    "noaa",
+    "usda",
+    "world-bank",
+    "cdc",
+    "naep",
+    "college-scorecard",
+    "nrel",
+    "fda",
+    "epa",
+    "lobbying",
+    "sec",
+    "fbi",
+    "fema",
+    "nhtsa",
+    "cms",
+    "hud",
+    "uspto",
+    "cfpb",
+    "fdic",
+    "dol",
+    "osha",
+    "regulations",
+    "usgs",
+    "earthquake",
+    "clinical-trials",
+    "bts",
+    "transportation",
+    "government",
+    "open-data",
+    "api",
+    "sdk",
+    "typescript"
+  ],
+  "author": "lzinga",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lzinga/us-gov-open-data-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lzinga/us-gov-open-data-mcp/issues"
+  },
+  "homepage": "https://github.com/lzinga/us-gov-open-data-mcp#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "fast-xml-parser": "^5.5.11",
+    "fastmcp": "^3.35.0",
+    "he": "^1.2.0",
+    "quickjs-emscripten": "^0.32.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/he": "^1.2.3",
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "readme": "./README.md"
+}

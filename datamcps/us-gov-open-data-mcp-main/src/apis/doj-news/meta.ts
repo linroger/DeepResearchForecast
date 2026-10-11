@@ -1,0 +1,40 @@
+/**
+ * doj-news module metadata.
+ */
+
+import { COMPONENTS, TOPICS } from "./sdk.js";
+import type { ModuleMeta } from "../../shared/types.js";
+
+export default {
+  name: "doj-news",
+  displayName: "DOJ News",
+  category: "Justice",
+  description:
+    "Department of Justice press releases (262K+) and blog entries (3,200+). Search by title keyword, date, and DOJ component. Covers enforcement actions, indictments, settlements, policy announcements across all DOJ divisions including FBI, DEA, ATF, USAO, and Civil Rights.",
+  toolPrefix: "doj_",
+  workflow:
+    "doj_press_releases to search/browse press releases → doj_press_release_detail for full text → doj_blog_entries to search blog posts → doj_blog_detail for full text.",
+  tips:
+    "Sort: 'date' or 'created'. Direction: 'DESC' (newest first), 'ASC' (oldest). Max 50 results per page. Filter by title keyword: title='cybercrime'. Date is a Unix timestamp in the response — the tool auto-converts to readable dates. Components include: FBI, DEA, ATF, Civil Rights Division, Antitrust Division, USAO (U.S. Attorneys). Topics include: Drug Trafficking, Cybercrime, National Security, Civil Rights, Financial Fraud, Public Corruption.",
+  domains: ["justice"],
+  crossRef: [
+    { question: "legislation", route: "doj_press_releases (enforcement outcomes of legislation)" },
+    { question: "banking", route: "doj_press_releases (financial fraud enforcement actions)" },
+    { question: "consumer complaints", route: "doj_press_releases (consumer protection enforcement)" },
+    { question: "drug investigation", route: "doj_press_releases (drug trafficking indictments, pharmaceutical fraud enforcement)" },
+    { question: "workplace safety", route: "doj_press_releases (criminal workplace safety enforcement)" },
+    { question: "energy/climate", route: "doj_press_releases (environmental enforcement actions under CAA/CWA)" },
+    { question: "tobacco/vaping", route: "doj_press_releases (tobacco/vaping enforcement actions)" },
+    { question: "animal/vet drugs", route: "doj_press_releases (animal cruelty and illegal vet drug enforcement)" },
+    { question: "patents", route: "doj_press_releases (IP theft and patent fraud prosecutions)" },
+    { question: "elections/campaign finance", route: "doj_press_releases (campaign finance violations, election fraud prosecutions)" },
+  ],
+  reference: {
+  components: COMPONENTS,
+  topics: TOPICS,
+  docs: {
+    "API Documentation": "https://www.justice.gov/developer/api-documentation/api_v1",
+    "DOJ Newsroom": "https://www.justice.gov/news",
+  },
+},
+} satisfies ModuleMeta;

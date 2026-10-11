@@ -1,0 +1,896 @@
+{
+  "schema_version": "bis-imf-selected-source-study/v1",
+  "status": "complete_for_selected_provider_contract_scope_with_shared_context_drift",
+  "root": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "branch_observed": "main",
+  "head_observed": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "local_task_date": "2026-10-12 Asia/Shanghai",
+  "source_identity_observed_at_utc": "2026-10-11T16:45:35.939258+00:00",
+  "ownership": {
+    "allowed_writes": [
+      "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-coverage.json"
+    ],
+    "shared_plan_approval": "User explicitly approved plan after interruption; this worker remains source-study-only.",
+    "agents_spawned": 0
+  },
+  "evidence_kind": "Static source reading, bytes hashing and lock TOML metadata parsing only; no provider/runtime evidence.",
+  "report": {
+    "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md",
+    "sha256": "c917f34d1e957bd6e796de15f17845d6fec2ba98217988de2dd9561b3820c374",
+    "bytes": 32040,
+    "line_count": 171
+  },
+  "denominator": {
+    "kind": "explicit_selected_files_only",
+    "selected_files": 21,
+    "selected_vendor_files": 15,
+    "selected_destination_or_context_files": 6,
+    "whole_selected_files_text_inspected": 16,
+    "partially_inspected_files": 5,
+    "inspected_lines": 4025,
+    "missing_selected_paths": [],
+    "whole_repository_coverage_claimed": false,
+    "selected_scope_coverage_is_not_dependency_coverage": true
+  },
+  "files": [
+    {
+      "relative_path": "datamcps/mcp-bis-main/src/index.ts",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/src/index.ts",
+      "sha256": "72e397a9629de558fcb758f4b1dafde4cbe5185e775dbe97f63a40ddbdc272d8",
+      "bytes": 70737,
+      "line_count": 1507,
+      "symlink": false,
+      "source_id": "B1",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          1507
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          260
+        ],
+        [
+          261,
+          490
+        ],
+        [
+          491,
+          735
+        ],
+        [
+          736,
+          1018
+        ],
+        [
+          1019,
+          1280
+        ],
+        [
+          1281,
+          1507
+        ]
+      ],
+      "inspected_line_count": 1507,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Deep static tracing of all four schemas/dispatchers, HTTP helpers, data URL, diagnostics, CSV normalization, numeric convenience path and bounds. Source comments about prior live probes are claims.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/src/server.ts",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/src/server.ts",
+      "sha256": "7d151a9e75a6746a7531308abc045ef11403a980339673abd772221bf7376c07",
+      "bytes": 1481,
+      "line_count": 45,
+      "symlink": false,
+      "source_id": "B2",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          45
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          45
+        ]
+      ],
+      "inspected_line_count": 45,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Stdio tools/list and tools/call registrations; text-only JSON success and text isError exception envelopes.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/bin/cli.js",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/bin/cli.js",
+      "sha256": "ef69185f5096d0257860a48b05141f9b999c53406defc7e945fbfedd6cf6df4c",
+      "bytes": 668,
+      "line_count": 17,
+      "symlink": false,
+      "source_id": "B3",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          17
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          17
+        ]
+      ],
+      "inspected_line_count": 17,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "tsx ESM loader and server entry; not executed.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/package.json",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/package.json",
+      "sha256": "6be2956b9b0080b0ef500c935afa3c9a249a68306a6f6472793320eeec356725",
+      "bytes": 885,
+      "line_count": 32,
+      "symlink": false,
+      "source_id": "B4",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          32
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          32
+        ]
+      ],
+      "inspected_line_count": 32,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Package 0.1.2, dependency declarations, declared upstream sourceCommit/sourceHash; those declarations are not verified Git provenance.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/server.json",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/server.json",
+      "sha256": "7fc8fbe380fb3bda37981899cef9ba5aaa3174027f8f2e8330592fdef8d4b467",
+      "bytes": 527,
+      "line_count": 18,
+      "symlink": false,
+      "source_id": "B5",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          18
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          18
+        ]
+      ],
+      "inspected_line_count": 18,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Remote gateway registration differs from local stdio surface; no remote contacted.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/README.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/README.md",
+      "sha256": "44ca2234c2d8729d3f712c466c87a2b4e44ccad3302060689b0f8369753d8550",
+      "bytes": 5286,
+      "line_count": 153,
+      "symlink": false,
+      "source_id": "B6",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          153
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          153
+        ]
+      ],
+      "inspected_line_count": 153,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Tool/auth/API/local-vs-gateway documentation; quota, coverage and live gateway claims not verified.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/mcp-bis-main/LICENSE",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/LICENSE",
+      "sha256": "42501667035eb49f364b1f5f8c2cc25a52b780aa9d0a3d09040e610a2bd85378",
+      "bytes": 1070,
+      "line_count": 21,
+      "symlink": false,
+      "source_id": "B7",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          21
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          21
+        ]
+      ],
+      "inspected_line_count": 21,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "MIT license identity and copyright notice read. Software terms do not establish provider-data rights.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/imf_data_mcp/__init__.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/imf_data_mcp/__init__.py",
+      "sha256": "a71c26d447639c303fd633f3bf578aefc7173866acd90e0c01d3766deb2e33ca",
+      "bytes": 15645,
+      "line_count": 452,
+      "symlink": false,
+      "source_id": "I1",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          452
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          230
+        ],
+        [
+          231,
+          452
+        ]
+      ],
+      "inspected_line_count": 452,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Deep static trace of FastMCP registration, Pydantic params models, all five handlers, imfp delegation, DataFrame serialization, error strings, caps and missing boundary checks.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/imf_data_mcp/__main__.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/imf_data_mcp/__main__.py",
+      "sha256": "e448b67c128d088fcb8b45bf31319b2a6d5e7e7066a473e3bf042ca44bd90c79",
+      "bytes": 38,
+      "line_count": 3,
+      "symlink": false,
+      "source_id": "I3",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          3
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          3
+        ]
+      ],
+      "inspected_line_count": 3,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Module entry delegates to main; not imported/executed.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/pyproject.toml",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/pyproject.toml",
+      "sha256": "7794a27f712dcfec5f1caffa5c207fd28b8be87f764a1089f814ad314a37ddcc",
+      "bytes": 551,
+      "line_count": 29,
+      "symlink": false,
+      "source_id": "I4",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          29
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          29
+        ]
+      ],
+      "inspected_line_count": 29,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "0.2.0 package/runtime/dependency declarations and console entry; no dependency resolution performed.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/README.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/README.md",
+      "sha256": "baae7257ea9f102e80ce6a45be4b72248e293b9721031c9451035476c8289595",
+      "bytes": 2678,
+      "line_count": 127,
+      "symlink": false,
+      "source_id": "I5",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          127
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          127
+        ]
+      ],
+      "inspected_line_count": 127,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Workflow/code-name examples and claimed current endpoint/rate/retry behavior; claims not independently verified.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/tests/test_tools.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/tests/test_tools.py",
+      "sha256": "8dac5bbe423916e6cec6a6742768bbbf4dbbebc0153d84703d577e15045ec533",
+      "bytes": 6624,
+      "line_count": 151,
+      "symlink": false,
+      "source_id": "I2",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          151
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          151
+        ]
+      ],
+      "inspected_line_count": 151,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Read mocked database/dimension/CPI fixtures and test assertions as example source; no test collection/execution and no live proof.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/tests/test_utils.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/tests/test_utils.py",
+      "sha256": "8abae2428b12e414151f4fffa6fe783c437e4956afca33e5267c5abaf5b49786",
+      "bytes": 259,
+      "line_count": 7,
+      "symlink": false,
+      "source_id": "I6",
+      "depth": "full_selected_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          7
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          7
+        ]
+      ],
+      "inspected_line_count": 7,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Documentation-only test file states old CompactData utility removed; no runtime normalization established.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/uv.lock",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/uv.lock",
+      "sha256": "4d754fe55beb6b2aaa2f25c0b7690f40955d630ab659321710bdff41768ccb87",
+      "bytes": 44572,
+      "line_count": 486,
+      "symlink": false,
+      "source_id": "I7",
+      "depth": "selected_ranges_plus_static_toml_metadata_parse",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          10
+        ],
+        [
+          140,
+          178
+        ],
+        [
+          372,
+          390
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          10
+        ],
+        [
+          140,
+          178
+        ],
+        [
+          372,
+          390
+        ]
+      ],
+      "inspected_line_count": 68,
+      "whole_file_text_inspected": false,
+      "execution": "none",
+      "substantive_note": "Old lock project identity 0.1.0 and requests dependency conflict with pyproject. Whole-file TOML parsing found zero imfp/pandas entries; parsing is not whole-file semantic reading.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "datamcps/imf-data-mcp-main/LICENSE",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "bytes": 11357,
+      "line_count": 201,
+      "symlink": false,
+      "source_id": "I8",
+      "depth": "selected_ranges",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          35
+        ],
+        [
+          172,
+          201
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          35
+        ],
+        [
+          172,
+          201
+        ]
+      ],
+      "inspected_line_count": 65,
+      "whole_file_text_inspected": false,
+      "execution": "none",
+      "substantive_note": "Apache 2.0 license header and appendix read; intervening terms not fully inspected and placeholder copyright remains unresolved.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "deerflow_bridge/data_catalog.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_catalog.py",
+      "sha256": "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb",
+      "bytes": 121623,
+      "line_count": 1840,
+      "symlink": false,
+      "source_id": "C",
+      "depth": "selected_ranges_deep_contract_trace",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          214
+        ],
+        [
+          442,
+          570
+        ],
+        [
+          1012,
+          1324
+        ],
+        [
+          1506,
+          1558
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          214
+        ],
+        [
+          442,
+          570
+        ],
+        [
+          1012,
+          1324
+        ],
+        [
+          1506,
+          1558
+        ]
+      ],
+      "inspected_line_count": 709,
+      "whole_file_text_inspected": false,
+      "execution": "none",
+      "substantive_note": "Provider/flow dimension metadata, constructors, dynamic WEO vintage metadata, BIS/IMF entries, canonicalization and lookup. Other providers and most search/render helpers excluded.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "deerflow_bridge/data_mcp.py",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/deerflow_bridge/data_mcp.py",
+      "sha256": "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6",
+      "bytes": 55730,
+      "line_count": 1208,
+      "symlink": false,
+      "source_id": "H",
+      "depth": "selected_ranges_boundary_trace",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          74,
+          120
+        ],
+        [
+          136,
+          160
+        ],
+        [
+          220,
+          250
+        ],
+        [
+          366,
+          390
+        ],
+        [
+          440,
+          487
+        ],
+        [
+          1105,
+          1155
+        ]
+      ],
+      "read_chunks": [
+        [
+          74,
+          120
+        ],
+        [
+          136,
+          160
+        ],
+        [
+          220,
+          250
+        ],
+        [
+          366,
+          390
+        ],
+        [
+          440,
+          487
+        ],
+        [
+          1105,
+          1155
+        ]
+      ],
+      "inspected_line_count": 227,
+      "whole_file_text_inspected": false,
+      "execution": "none",
+      "substantive_note": "Local launch layout, IMF call deadline/concurrency/env, CallResult and MCP-result conversion; does not audit whole hub transport/process implementation.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "handoff.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/handoff.md",
+      "sha256": "341cc3e64375b6bb3808f658290e9f5dd6ca9cd4106d014f2d9618f6b03b6463",
+      "bytes": 4135,
+      "line_count": 68,
+      "symlink": false,
+      "source_id": "R",
+      "depth": "full_selected_context_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          68
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          68
+        ]
+      ],
+      "inspected_line_count": 68,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Root handoff belongs to separate quantitative-trading report; read for continuity and preserved.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "docs/handoff/data-sources-mcp/handoff.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/handoff.md",
+      "sha256": "00fd39dd2964969cb04291bffba25ea6ccb6a98d53e8e41ef057525104d1b956",
+      "bytes": 9890,
+      "line_count": 70,
+      "symlink": false,
+      "source_id": "P",
+      "depth": "full_selected_context_file",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          70
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          70
+        ]
+      ],
+      "inspected_line_count": 70,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Historical 2026-10-11 data-source progress/live-probe assertions separated from code-defined contracts; referenced scratchpad not read.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "docs/handoff/data-sources-mcp/design.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/data-sources-mcp/design.md",
+      "sha256": "9b8f85cba1bb2ee08597ec7795dcbbec78896d16387bcc43707882e32a51d8f4",
+      "bytes": 34251,
+      "line_count": 535,
+      "symlink": false,
+      "source_id": "D",
+      "depth": "selected_ranges_design_context",
+      "status": "inspected_and_substantively_analyzed",
+      "inspected_line_ranges": [
+        [
+          1,
+          32
+        ],
+        [
+          66,
+          84
+        ],
+        [
+          200,
+          318
+        ],
+        [
+          390,
+          410
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          32
+        ],
+        [
+          66,
+          84
+        ],
+        [
+          200,
+          318
+        ],
+        [
+          390,
+          410
+        ]
+      ],
+      "inspected_line_count": 191,
+      "whole_file_text_inspected": false,
+      "execution": "none",
+      "substantive_note": "Prior goals/provider registry/ID grammar/Series and DataSources interfaces/dataset artifacts/chart requirements. This is design evidence, not implementation proof.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md"
+    },
+    {
+      "relative_path": "docs/handoff/main-quantitative-integration-20261012/handoff.md",
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/handoff.md",
+      "sha256": "92ba9287f595cbd0267b7642d117de3ebc57cfb35ce77adbbc93443ab9be13e3",
+      "bytes": 6031,
+      "line_count": 65,
+      "symlink": false,
+      "source_id": "Q",
+      "depth": "full_selected_context_file",
+      "status": "inspected_prior_revision_shared_context_changed",
+      "inspected_line_ranges": [
+        [
+          1,
+          65
+        ]
+      ],
+      "read_chunks": [
+        [
+          1,
+          65
+        ]
+      ],
+      "inspected_line_count": 65,
+      "whole_file_text_inspected": true,
+      "execution": "none",
+      "substantive_note": "Shared main integration handoff refreshed after interruption to include external approval update; not modified by this worker.",
+      "analysis_artifact": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/bis-imf-study.md",
+      "current_revision_semantically_inspected": false,
+      "post_read_observation": {
+        "sha256": "d69f870fef14bc262f7448fc1171552a3df51cf9e56e97339127bf42facc7be9",
+        "bytes": 6289,
+        "line_count": 67,
+        "depth": "hash_and_size_only",
+        "reason": "Concurrent shared handoff update; original read receipt retained, no reassociation or overwrite."
+      }
+    }
+  ],
+  "uninspected_enumerated_vendor_files": [
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/.DS_Store",
+      "reason": "OS metadata excluded"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/.github/workflows/publish.yml",
+      "reason": "Publishing workflow outside runtime contract scope"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/.npmignore",
+      "reason": "Packaging exclusion file outside selected contract scope"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/package-lock.json",
+      "reason": "Dependency lock not semantically read; package declarations only were reviewed"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/mcp-bis-main/tsconfig.json",
+      "reason": "Compiler settings outside selected read-only contract scope"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/.DS_Store",
+      "reason": "OS metadata excluded"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/.gitignore",
+      "reason": "Ignore rules excluded"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/.python-version",
+      "reason": "Not read; runtime declaration taken from pyproject and separately identified lock conflict"
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/datamcps/imf-data-mcp-main/tests/__init__.py",
+      "reason": "Empty initializer enumerated as 0 bytes, not imported or counted as inspected text"
+    }
+  ],
+  "exclusions_and_gaps": [
+    "No imfp, pandas or MCP SDK dependency source was inspected; HTTP/auth/cache/rate/retry/cancellation boundaries delegated to imfp remain unresolved.",
+    "No vendor code/tests were run, collected, imported or installed. No servers or network were used.",
+    "No current tools/list wire schema, upstream series/metadata, projection cutoffs, release dates, quotas, response ordering, latency or mirror parity was verified.",
+    "Referenced prior scratchpad probes were not read or replayed; their handoff summaries remain historical assertions.",
+    "No app consumer/renderer end-to-end implementation audit, other vendor expansion, branch changes, feature implementation or generic assets.",
+    "BIS index.ts vendor comments about live incidents are source claims, not observed runtime evidence.",
+    "Static fixture examples derive from handler shapes and mocked test source; synthetic BIS values are explicitly labeled."
+  ],
+  "deterministic_probe_specs": [
+    {
+      "id": "bis-exact-key-truncation-missingness",
+      "status": "specified_not_executed",
+      "native_tool": "fetch_dataset",
+      "key_args": {
+        "flow_ref": "BIS,WS_CBPOL,1.0",
+        "key": "M.US",
+        "start_period": "2024-01",
+        "end_period": "2024-03"
+      },
+      "checks": [
+        "dynamic CSV-code/string row envelope",
+        "sorted exact M/US period identity",
+        "blank OBS_VALUE remains null",
+        "truncated prefix requires subdivision or partial/error",
+        "wrong geography/nonfinite/malformed payload rejected",
+        "credit gap uses exact generic key, not convenience rounding/blank-zero path"
+      ]
+    },
+    {
+      "id": "imf-nested-params-dimension-window-payload-error",
+      "status": "specified_not_executed",
+      "native_tools": [
+        "imf_get_parameter_defs",
+        "imf_get_parameter_codes",
+        "imf_fetch_data"
+      ],
+      "key_args": {
+        "params": {
+          "database_id": "CPI",
+          "start_year": 2022,
+          "end_year": 2023,
+          "filters": {
+            "country": [
+              "AUT"
+            ],
+            "frequency": [
+              "A"
+            ]
+          },
+          "max_rows": 5000
+        }
+      },
+      "checks": [
+        "nested params argument receipt",
+        "source mocked fixtures normalize correctly",
+        "post-filter periods, reject wrong country/duplicate identity",
+        "successful transport carrying JSON error becomes DataError",
+        "truncated prefix cannot establish requested interval",
+        "null/nonfinite separation",
+        "WEO vintage identity and unknown projection status preserved"
+      ]
+    }
+  ],
+  "validation": {
+    "status": "passed_contract_source_and_receipt_checks_with_shared_context_drift",
+    "validated_at_utc": "2026-10-11T16:53:35.191005+00:00",
+    "scope": "JSON, ranges, selected provider/destination source hashes, report hash, local links and explicit citation ranges. No runtime validation.",
+    "selected_source_files_checked": 21,
+    "unchanged_source_files": 20,
+    "all_selected_vendor_catalog_hub_prior_design_hashes_match": true,
+    "changed_context_files": [
+      {
+        "source_id": "Q",
+        "path": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-quantitative-integration-20261012/handoff.md",
+        "read_sha256": "92ba9287f595cbd0267b7642d117de3ebc57cfb35ce77adbbc93443ab9be13e3",
+        "current_sha256": "d69f870fef14bc262f7448fc1171552a3df51cf9e56e97339127bf42facc7be9",
+        "affects_provider_contracts": false
+      }
+    ],
+    "original_read_receipts_retained": true,
+    "local_file_links_checked": 8,
+    "explicit_citation_ranges_checked": 37,
+    "range_union_lines": 4025,
+    "report_sha256": "c917f34d1e957bd6e796de15f17845d6fec2ba98217988de2dd9561b3820c374",
+    "runtime_tests_executed": 0,
+    "live_probes_executed": 0
+  }
+}

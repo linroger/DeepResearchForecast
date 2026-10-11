@@ -33,6 +33,8 @@ def _write(path, content):
     if path.name == "deerflow_research.py" and path.parent.name == "deerflow_bridge":
         for skill in (
             "actor-ontology-research",
+            "data-sources",
+            "data-visuals",
             "deep-research",
             "forecast-visuals",
             "prediction-markets",

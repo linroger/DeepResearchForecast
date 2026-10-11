@@ -65,6 +65,8 @@ logger = logging.getLogger(__name__)
 # the figure caption.  frontend/src/utils/vizManifest.js keeps the same table for
 # the gallery; tests/test_report_zh_presentation.py pins the two in sync.
 CHART_TITLES_ZH: Dict[str, str] = {
+    "Official Indicators": "官方指标",
+    "Official Series History and Forecast Thresholds": "官方序列历史与预测阈值",
     "Scenario Probabilities": "情景概率",
     "Binary Forecasts — P(yes)": "二元预测 — P(是)",
     "Model vs Market (binary forecasts)": "模型与市场对比（二元预测）",
@@ -4310,6 +4312,325 @@ class ReportVisualizer:
 
     # ============================ 编排入口 ============================
 
+    @staticmethod
+    def _official_chart_panels(official_data: Any, forecast: Any) -> List[Dict[str, Any]]:
+        from .forecast_extractor import official_series_rows, official_observation_kind, _data_anchor_matches_binary
+        from .official_data import validate_data_anchor
+
+        rows = official_series_rows(official_data)
+        binaries = forecast.get("binary_forecasts", []) if isinstance(forecast, dict) else []
+        panels = []
+        for row in rows:
+            points = row["observations"]
+            kinds = [official_observation_kind(row, p) for p in points]
+            thresholds = []
+            for binary in binaries if isinstance(binaries, list) else []:
+                if not isinstance(binary, dict):
+                    continue
+                anchor = validate_data_anchor(binary.get("data_anchor"), official_data)
+                if (anchor and anchor["series"] == row["series"]
+                        and _data_anchor_matches_binary(anchor, binary, official_data)):
+                    probability = _to_float(binary.get("probability"))
+                    thresholds.append({**anchor, "probability": probability})
+            panels.append({"row": row, "x": [p["date"] for p in points],
+                           "values": {kind: [p["value"] if k == kind else None
+                                             for p, k in zip(points, kinds, strict=True)]
+                                      for kind in dict.fromkeys(kinds)},
+                           "thresholds": thresholds[:6]})
+        return panels
+
+    @staticmethod
+    def _official_horizon(forecast: Any) -> Optional[str]:
+        raw = str(forecast.get("horizon_date") or forecast.get("horizon") or "") if isinstance(forecast, dict) else ""
+        if re.fullmatch(r"\d{4}", raw):
+            raw += "-12-31"
+        try:
+            return dt.date.fromisoformat(raw).isoformat()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _official_scenario_bands(row: Dict[str, Any], forecast: Any) -> List[Dict[str, Any]]:
+        from .forecast_extractor import _extract_comparable_numeric_range, _normalise_metric_label
+        # The existing range parser resolves whole years, not monthly/quarterly
+        # periods or adjustment conventions. Only annual series can match it.
+        if not isinstance(forecast, dict) or row.get("transform") or row.get("frequency") != "A":
+            return []
+        horizon = ReportVisualizer._official_horizon(forecast)
+        if not horizon:
+            return []
+        scenarios = forecast.get("scenarios")
+        if not isinstance(scenarios, list):
+            return []
+        units = str(row["units"]).lower()
+        unit = "%" if units in {"percent", "%", "percentage"} else units
+        bands = []
+        for scenario in scenarios[:6]:
+            if not isinstance(scenario, dict):
+                continue
+            interval = _extract_comparable_numeric_range(scenario.get("resolution_criteria"))
+            if (interval and interval["metric"] == _normalise_metric_label(row.get("title", ""))
+                    and interval["unit"] == unit and interval.get("scope") == horizon[:4]
+                    and math.isfinite(interval["low"]) and math.isfinite(interval["high"])):
+                bands.append({**interval, "name": str(scenario.get("name") or "Scenario")})
+        return bands
+
+    _OFFICIAL_STYLES = {
+        "historical observation": ("Historical observations", "#2563eb", "solid"),
+        "publisher projection": ("Publisher projections", "#d97706", "dash"),
+        "publisher estimate": ("Publisher estimates", "#9333ea", "dot"),
+        "publisher preliminary": ("Publisher preliminary values", "#b45309", "dot"),
+        "unclassified publisher value": ("Publisher values — status unknown", "#64748b", "dot"),
+    }
+
+    @staticmethod
+    def _official_projection_bounds(panel: Dict[str, Any]) -> Optional[Tuple[str, str]]:
+        projected = [x for x, y in zip(panel["x"], panel["values"].get("publisher projection", []), strict=False)
+                     if y is not None]
+        if not projected:
+            return None
+        last = dt.date.fromisoformat(projected[-1])
+        frequency = panel["row"]["frequency"]
+        if frequency in {"D", "W"}:
+            end = last + dt.timedelta(days=1 if frequency == "D" else 7)
+        else:
+            months = {"M": 1, "Q": 3, "A": 12}[frequency]
+            total = last.year * 12 + last.month - 1 + months
+            year, month = divmod(total, 12)
+            end = dt.date(year, month + 1, 1)
+        return projected[0], end.isoformat()
+
+    @staticmethod
+    def _official_band_bounds(band: Dict[str, Any]) -> Tuple[str, str]:
+        year = int(band["scope"])
+        return f"{year:04d}-01-01", f"{year + 1:04d}-01-01"
+
+    @staticmethod
+    def _official_fiscal_periods(row: Dict[str, Any]) -> Dict[str, Any]:
+        """Retain validated date-keyed labels without changing plot coordinates."""
+        provenance = row.get("provenance")
+        periods = provenance.get("periods") if isinstance(provenance, dict) else None
+        if row.get("frequency") != "A" or not isinstance(periods, dict):
+            return {}
+        result = {}
+        for point in row.get("observations") or []:
+            record = periods.get(point.get("date")) if isinstance(point, dict) else None
+            if not isinstance(record, dict) or record.get("calendar") != "us_federal_fiscal_year":
+                continue
+            try:
+                start, end, low, high = (dt.date.fromisoformat(record[k]) for k in
+                                         ("start", "end", "covered_start", "covered_end"))
+                if (record["start"] != point["date"] or start.month != 10 or start.day != 1
+                        or end != dt.date(start.year + 1, 9, 30) or not start <= low <= high <= end
+                        or record.get("label") != f"FY{end.year}" or type(record.get("complete")) is not bool
+                        or record["complete"] != (low == start and high == end)):
+                    continue
+            except (TypeError, ValueError, KeyError):
+                continue
+            result[point["date"]] = dict(record)
+        return result
+
+    @classmethod
+    def _official_fiscal_labels(cls, row: Dict[str, Any]) -> Dict[str, str]:
+        return {day: record["label"] + (" (partial)" if not record["complete"] else "")
+                for day, record in cls._official_fiscal_periods(row).items()}
+
+    def _build_official_plotly(self, panels: List[Dict[str, Any]], charts_dir: str,
+                               stem: str, title: str, forecast: Any, *, detail: bool) -> Optional[str]:
+        from plotly.subplots import make_subplots
+        fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=False,
+                            subplot_titles=[html_lib.escape(str(p["row"].get("title") or p["row"]["series"]))
+                                            for p in panels],
+                            vertical_spacing=min(0.12, 0.35 / len(panels)))
+        horizon = self._official_horizon(forecast) if detail else None
+        for index, panel in enumerate(panels, 1):
+            row = panel["row"]
+            fiscal_labels = self._official_fiscal_labels(row)
+            for kind, values in panel["values"].items():
+                name, color, dash = self._OFFICIAL_STYLES[kind]
+                fig.add_trace(go.Scatter(x=panel["x"], y=values, name=name,
+                                        mode="lines+markers", connectgaps=False,
+                                        legendgroup=kind, showlegend=index == 1,
+                                        line={"color": color, "dash": dash},
+                                        customdata=[fiscal_labels.get(day, day) for day in panel["x"]],
+                                        hovertemplate="%{customdata}<br>%{y}<extra>" + name + "</extra>"), row=index, col=1)
+            historical = panel["values"].get("historical observation", [])
+            actual = [(x, y) for x, y in zip(panel["x"], historical, strict=False) if y is not None]
+            if actual:
+                fig.add_trace(go.Scatter(x=[actual[-1][0]], y=[actual[-1][1]], mode="markers",
+                                        name="Latest historical observation", showlegend=index == 1,
+                                        customdata=[fiscal_labels.get(actual[-1][0], actual[-1][0])],
+                                        hovertemplate="%{customdata}<br>%{y}<extra>Latest historical observation</extra>",
+                                        marker={"color": "#1e40af", "size": 10, "symbol": "diamond"}), row=index, col=1)
+            projection_bounds = self._official_projection_bounds(panel)
+            if projection_bounds:
+                fig.add_vrect(x0=projection_bounds[0], x1=projection_bounds[1], fillcolor="#f59e0b", opacity=0.08,
+                              line_width=0, row=index, col=1)
+            if detail:
+                for anchor in panel["thresholds"]:
+                    p = anchor["probability"]
+                    label = f"Model threshold {anchor['comparator']} {anchor['threshold']:g} ({anchor['observation']})"
+                    if p is not None and math.isfinite(p) and 0 <= p <= 1:
+                        label += f"; P(yes)={p:.0%}"
+                    fig.add_hline(y=anchor["threshold"], line_dash="dash", line_color="#dc2626",
+                                  annotation_text=label, row=index, col=1)
+                if horizon:
+                    fig.add_shape(type="line", x0=horizon, x1=horizon, y0=0, y1=1,
+                                  yref="y domain", line={"dash": "dot", "color": "#64748b"}, row=index, col=1)
+                    fig.add_annotation(x=horizon, y=1, yref="y domain", text="Forecast horizon",
+                                       showarrow=False, xanchor="right", row=index, col=1)
+                if actual and horizon and horizon > actual[-1][0]:
+                    for band in self._official_scenario_bands(row, forecast):
+                        start, end = self._official_band_bounds(band)
+                        fig.add_shape(type="rect", x0=start, x1=end,
+                                      y0=band["low"], y1=band["high"], fillcolor="#22c55e",
+                                      opacity=0.08, line_width=0, row=index, col=1)
+                        fig.add_annotation(x=horizon, y=band["high"],
+                                           text="Model scenario: " + html_lib.escape(band["name"]),
+                                           showarrow=False, xanchor="right", row=index, col=1)
+            fig.update_xaxes(type="date", title_text=f"Period ({row['frequency']}; {row.get('seasonal_adjustment') or 'adjustment unknown'})", row=index, col=1)
+            if fiscal_labels:
+                days = list(fiscal_labels)
+                ticks = sorted(set(days[::max(1, math.ceil(len(days) / 8))] + days[-1:]))
+                fig.update_xaxes(tickmode="array", tickvals=ticks,
+                                 ticktext=[fiscal_labels[day] for day in ticks], row=index, col=1)
+            fig.update_yaxes(title_text=html_lib.escape(str(row["units"])), row=index, col=1)
+        _apply_layout(fig, title, height=max(520, len(panels) * 310))
+        fig.update_layout(legend={"orientation": "h", "y": -0.18, "x": 0}, margin={"b": 130})
+        return self._save_pair(fig, charts_dir, stem)
+
+    def _build_official_matplotlib(self, panels: List[Dict[str, Any]], charts_dir: str,
+                                   stem: str, title: str, forecast: Any, *, detail: bool) -> Optional[str]:
+        fig = None
+        try:
+            fig, axes = plt.subplots(len(panels), 1, figsize=(11, max(4.8, 3.5 * len(panels))), squeeze=False)
+            horizon = self._official_horizon(forecast) if detail else None
+            for panel, ax in zip(panels, axes[:, 0], strict=True):
+                row = panel["row"]
+                dates = [dt.date.fromisoformat(x) for x in panel["x"]]
+                for kind, values in panel["values"].items():
+                    name, color, dash = self._OFFICIAL_STYLES[kind]
+                    ax.plot(dates, [v if v is not None else math.nan for v in values],
+                            marker="o", markersize=4, color=color,
+                            linestyle={"solid": "-", "dash": "--", "dot": ":"}[dash], label=name)
+                historical = panel["values"].get("historical observation", [])
+                actual = [(x, y) for x, y in zip(dates, historical, strict=False) if y is not None]
+                if actual:
+                    ax.scatter([actual[-1][0]], [actual[-1][1]], marker="D", color="#1e40af",
+                               label="Latest historical observation")
+                projection_bounds = self._official_projection_bounds(panel)
+                if projection_bounds:
+                    ax.axvspan(*(dt.date.fromisoformat(x) for x in projection_bounds), color="#f59e0b", alpha=0.08)
+                if detail:
+                    for anchor in panel["thresholds"]:
+                        p = anchor["probability"]
+                        label = f"Model threshold {anchor['comparator']} {anchor['threshold']:g} ({anchor['observation']})"
+                        if p is not None and math.isfinite(p) and 0 <= p <= 1:
+                            label += f"; P(yes)={p:.0%}"
+                        ax.axhline(anchor["threshold"], color="#dc2626", linestyle="--", label=label)
+                    if horizon:
+                        end = dt.date.fromisoformat(horizon)
+                        ax.axvline(end, color="#64748b", linestyle=":", label="Forecast horizon")
+                        if actual and end > actual[-1][0]:
+                            for band in self._official_scenario_bands(row, forecast):
+                                band_dates = [dt.date.fromisoformat(x) for x in self._official_band_bounds(band)]
+                                ax.fill_between(band_dates, band["low"], band["high"],
+                                                color="#22c55e", alpha=0.08,
+                                                label="Model scenario: " + _mpl_text(band["name"]))
+                ax.set_title(_mpl_text(row.get("title") or row["series"]))
+                ax.set_ylabel(_mpl_text(row["units"]))
+                ax.set_xlabel(_mpl_text(f"Period ({row['frequency']}; {row.get('seasonal_adjustment') or 'adjustment unknown'})"))
+                fiscal_labels = self._official_fiscal_labels(row)
+                if fiscal_labels:
+                    days = list(fiscal_labels)
+                    ticks = sorted(set(days[::max(1, math.ceil(len(days) / 8))] + days[-1:]))
+                    ax.set_xticks([dt.date.fromisoformat(day) for day in ticks],
+                                  [fiscal_labels[day] for day in ticks])
+                ax.grid(alpha=0.2)
+                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), fontsize=8, ncol=2)
+            fig.suptitle(title)
+            fig.tight_layout(rect=(0, 0, 1, 0.94))
+            return self._save(fig, charts_dir, stem + ".png")
+        finally:
+            if fig is not None:
+                _close_matplotlib_figure(fig)
+
+    def _run_official_data(self, charts_dir: str, artifacts: Dict[str, Any],
+                            items: List[Dict[str, Any]], skipped: List[Dict[str, str]]) -> None:
+        carrier = artifacts.get("official_data")
+        if not carrier:
+            return
+        if not bool(_cfg("REPORT_DATA_CHARTS", True)):
+            skipped.append({"builder": "official_indicators", "reason": "report_data_charts_disabled"})
+            return
+        forecast = artifacts.get("forecast")
+        panels = self._official_chart_panels(carrier, forecast)
+        if not panels:
+            skipped.append({"builder": "official_indicators", "reason": "no_valid_stored_observations"})
+            return
+        jobs = [("official_indicators", "Official Indicators", panels[:6], False)]
+        sources = artifacts.get("sources")
+        source_index = ({f"S{i}": source for i, source in enumerate(sources, 1)}
+                        if isinstance(sources, list) else {})
+        if sources is not None and not isinstance(sources, list):
+            skipped.append({"builder": "official_source_captions", "reason": "malformed_source_metadata"})
+        ranked = sorted(panels, key=lambda p: (
+            -bool(p["thresholds"]),
+            -len(p["row"]["kiqs"]) if isinstance(p["row"].get("kiqs"), list) else 0))
+        for panel in ranked[:4]:
+            # Letters only: chart filenames cannot add numeral tokens during
+            # translation. The deterministic suffix also prevents slug collisions.
+            digest = hashlib.sha256(panel["row"]["series"].encode()).hexdigest()[:16].translate(str.maketrans("0123456789", "klmnopqrst"))
+            jobs.append(("official_series_" + digest, "Official Series History and Forecast Thresholds", [panel], True))
+        for stem, title, group, detail in jobs:
+            rel = png = None
+            if self._interactive_ok():
+                try:
+                    rel = self._build_official_plotly(group, charts_dir, stem, title, forecast, detail=detail)
+                except Exception as exc:
+                    logger.info("Official chart %s: %s", stem, type(exc).__name__)
+            png = self._png_done.get(stem)
+            if png and not os.path.isfile(os.path.join(os.path.dirname(charts_dir), png)):
+                png = None
+            if not png and self._chart_ok():
+                try:
+                    png = self._build_official_matplotlib(group, charts_dir, stem, title, forecast, detail=detail)
+                except Exception as exc:
+                    logger.info("Official static chart %s: %s", stem, type(exc).__name__)
+            if not rel and not png:
+                skipped.append({"builder": stem, "reason": "render_unavailable_or_failed"})
+                continue
+            provenance = []
+            captions = []
+            from .forecast_extractor import official_source_tag
+            for panel in group:
+                row = panel["row"]
+                source_id = str(row.get("source_id") or "")
+                if sources is not None:
+                    source_id = official_source_tag(row, source_index)
+                source_id = source_id if re.fullmatch(r"S[1-9]\d*", source_id) else ""
+                provenance.append({k: row.get(k, "") for k in (
+                    "series", "provider", "units", "frequency", "seasonal_adjustment", "geography",
+                    "transform", "source_url", "retrieved_at", "last_updated", "vintage", "projection_from",
+                    "sha256", "csv_sha256")})
+                provenance[-1]["source_id"] = source_id
+                fiscal_periods = self._official_fiscal_periods(row)
+                if fiscal_periods:
+                    provenance[-1]["periods"] = fiscal_periods
+                provider = _md_cell(row.get("provider_name") or row.get("provider") or "Publisher")
+                captions.append(f"[{provider}](<{row['source_url']}>)" + (f" [{source_id}]" if source_id else "")
+                                + f"; {_md_cell(row['units'])}; {_md_cell(row['frequency'])}; "
+                                + _md_cell(row.get("seasonal_adjustment") or "adjustment unknown"))
+                labels = list(self._official_fiscal_labels(row).values())
+                if labels:
+                    captions[-1] += "; " + " – ".join(dict.fromkeys([labels[0], labels[-1]]))
+            item = {"id": stem, "path": rel or png, "type": "html" if rel else "png",
+                    "title": title, "caption": title, "source": "official_data", "placement_hint": "official_data",
+                    "source_caption": "Source: " + " · ".join(captions), "provenance": provenance}
+            if rel and png:
+                item["png_path"] = png
+            items.append(item)
+
     def build_all(self, report_id: str, report_dir: str,
                   artifacts: Dict[str, Any]) -> List[Dict[str, str]]:
         """WAVE9 plotly-first 编排：把所有可用工件渲染成 HTML+PNG 图表对，落盘 charts/，
@@ -4533,6 +4854,7 @@ class ReportVisualizer:
         # 始终由 matplotlib 生成。----
         self._run_matplotlib_family(report_dir, charts_dir, artifacts, forecast,
                                     ensemble, items, skipped)
+        self._run_official_data(charts_dir, artifacts, items, skipped)
 
         # ---- 落盘 manifest（原子写；失败不影响已生成的图表）+ INFO 汇总（不再沉默跳过）----
         self._persist_manifest(report_dir, items, skipped,

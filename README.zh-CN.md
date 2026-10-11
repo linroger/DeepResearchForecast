@@ -417,6 +417,7 @@ stateDiagram-v2
 | `handoff/sources.json` | 阶段 1 | 准备（与来源绑定的公共世界）· 报告（`[S#]` 引用） |
 | `handoff/timeline.json` | 阶段 1 抽取 | 准备（带日期的事件）· 报告（大事记、时间线图） |
 | `handoff/quantitative.json` · `contested.json` | 阶段 1 抽取 | 报告（指标轨迹、争议主张） |
+| `handoff/data/datasets.json` · `data/` | 官方数据检索，随后完成引用映射 | 研究基线／图表 · 预测报告快照／图表 · 可选的精确观察期预测锚点 |
 | `handoff/prediction_markets.json` · `market_price_history.json` | 阶段 1 | 报告（市场信息包、锚定、价格历史图） |
 | `handoff/ontology.json` | 阶段 2 | 图谱 |
 | 图谱 `mirofish_<id>` · `handoff/graph_priors.json` | 阶段 3 | 准备（实体匹配、核心智能体排序）· 报告（检索工具） |
@@ -525,6 +526,33 @@ v3 的时间规划取预设时间与看门狗预算 × 0.85 中较小的一个�
 | quick | 9 分钟 | 40 | 22.2 万 / 7.8 万 | 78% | 4 | 48（22） | 25 | 0.64 |
 | standard | 31 分钟 | 94 | 69.3 万 / 12.3 万 | 81% | 10 | 116（69） | 34 | 0.69 |
 | deep | 39 分钟 | 155 | 145 万 / 24.4 万 | 81% | 17 | 194（106） | 65 | 0.73 |
+
+#### 官方定量数据（v3 与旧版）
+
+可选的统计数据检索通过 `datamcps/` 下六个独立启动的 stdio MCP 提供方补充网页研究。序列使用规范的 `provider:native-id` 标识；支持的 `#yoy`、`#pct` 变换具有独立的数据集身份，单位也随变换改变。[数据源技能](deerflow_bridge/skills/data-sources/SKILL.md)与[序列目录](deerflow_bridge/skills/data-sources/references/series-catalog.md)用于选择指标；列入目录并不保证当前可取数。
+
+| 提供方 | 检索范围 | 必须保留的限制 |
+|---|---|---|
+| `fred` | 美国宏观、利率、劳工与价格 | 未设置 `FRED_API_KEY` 时仍可检索本地目录并有界抓取 `fredgraph.csv`；上游 FRED 搜索需要 Key。免 Key CSV 不提供历史版本。 |
+| `bls` | 按目录选择的美国劳工与价格序列 | `BLS_API_KEY` 可选；本地免 Key 护栏每天达到 20 次请求即停止。季度及原生年度（`A01`）观测保留观察期含义；年度汇总行（`M13`、`Q05`、`S03`）被排除。 |
+| `bis` | 受支持的政策利率、信贷、房地产与汇率 SDMX 数据流 | 数据流维度、地区、单位与频率必须匹配；不兼容的观测会被拒绝。 |
+| `imf` | 受支持的 SDMX 数据流，包括商品价格、CPI 与明确版本的 WEO | 调用较慢；缺失的实际值／估计／预测标签保持未知，不按当前年份推断分界。 |
+| `wb` | 世界银行 Data360 指标及受支持的跨国／展望数据集 | 窗口与分页有界；包括 WDI、WEO/GEP 在内的全部 Data360 观测当前都保留未知状态。可作为明确标注为未分类的定量证据，但不能确立自动结算所需的已观测结果。 |
+| `usgov` | 精选的美国财政部数据配方与有限的支出配方 | 本适配器并未开放该服务的全部 API 目录。SEC 概念时间序列不可用；支出数据的缺失语义无法认证，不能用于自动结算。 |
+
+原生日频序列按可用日观测的算术平均值交付为月度序列，可能只覆盖部分月份；频率变为 `M`，这些聚合值不能用于自动结算。请求的增长变换在此之后应用；交付值不是原生日观测。
+
+**规划与工具。** v3 每个关键问题最多增加三项 `data_needs`，在收集前有界预取，并把取得的证据分发给对应问题。启用后，智能体可在网页工具之外调用 `data_search(query, provider?)` 与 `data_get(series, start?, end?, transform?)`。旧版引擎增加数据使用指引，并在已加载的原生配置中为主智能体／限定范围研究者注册这些工具，尊重明确的工具／技能禁用及既有设置。两条路径均限制调用预算、去重请求，并为每个序列／变换捕获一个成功版本；重复使用不会悄悄刷新修订后的观测。搜索结果是发现元数据，不是已抓取的定量证据。
+
+**持久化与引用。** 成功检索会保存精确的证据页及来源账本身份，再通过 `handoff/data/datasets.json` 发布带内容哈希的 JSON/CSV 版本。清单保留单位、频率、季调、地区、检索时间、已知版本／状态、来源 URL、哈希及最终按位置对应的 `[S#]` 引用。不同变换保持独立身份。定稿仅从已捕获证据映射引用与图注，不刷新提供方；预取本身不会凭空产生 VERIFIED 主张。加载器拒绝损坏、身份不匹配或不安全的文件，不以新抓取的数据代替。
+
+**模拟世代与旧运行的手动报告。** 主模拟与额外种子模拟会在准备前绑定研究世代。后续报告、对话与上下文查询仅在原研究及数据集指纹仍匹配时使用该关联。同一交接位置的研究被替换后，补充材料会变为不可用，不会改用新世代。旧的未绑定模拟仍沿用既有档案查找，但因无法确认数据所属世代而省略官方数据。查询不会重新取数，也不会自动重新绑定模拟。
+
+**两份报告均使用已捕获数据。** 研究档案包含「官方数据基线」表及确定性 `charts/data_*.png` 图，有条件时附 HTML 交互版，由 `charts.json` 索引。预测报告写作只读取已验证的落盘载荷，不再取数；写作者接收有界的官方数据快照上下文（不保证成稿含可见的快照表），并在 `viz_manifest.json` 中登记 `official_indicators` 指标看板及选定的 `official_series_*` 历史／阈值图。缺口保持缺口；发布方的预测、估计与未分类值保持独立标签／样式。模型阈值／概率及符合条件的年度情景区间只是标注，不是新增观测。研究图缺失时保留确定性的基线表；预测图失败时省略并记录诊断，不插入失效图片链接。见[数据可视化指引](deerflow_bridge/skills/data-visuals/SKILL.md)。
+
+**精确观察期的预测锚点。** 可选的 `binary_forecasts[].data_anchor` 把已知序列、精确的原生观察期、有限阈值及比较符（`>`、`>=`、`<`、`<=`）绑定到规范单位／变换。预测陈述与结算标准必须表达同一个简单、肯定的比较与观察期；含糊、否定或复合命题保持无锚点。既有结算监测器只查询该有界观察期，返回 `resolved`、`pending` 或 `manual`。结算要求整个观察期已经结束，且存在非缺失的历史观测，其捕获时间在观察期结束之后、截止时刻之前或当时。只有日期的截止值包含整个 UTC 日；时间戳保留精确时刻。检索时间只能证明捕获，不能证明发布时间：晚于截止时刻的检索、自由填写的版本／`available_at`、预测、估计或未知状态都不能证明历史可用性。dry-run 监测不会抓取官方数据。
+
+**关闭与不可用模式。** 新运行设置 `DATA_SOURCES_ENABLED=false` 后不加入数据规划／指引与工具，元数据仍记录状态。v3 续跑在 `stored_only` 模式下复用冻结的已捕获数据，不预热或刷新提供方。服务未构建、能力／Key 缺失、超时、配额耗尽或崩溃会留下明确的证据缺口；其他来源与网页研究可继续。无效的已捕获证据会被拒绝，必需证据验证失败时 v3 可停止发布。`SETUP_DATAMCPS=0` 只跳过构建，不关闭检索。`DATA_SOURCES_CHARTS_MAX=0` 关闭研究数据图，`REPORT_DATA_CHARTS=false` 跳过预测报告官方数据图；两者均不关闭落盘数据的写作上下文。渲染器的零上限路径在加载数据及检查 matplotlib 依赖之前执行，返回退出码 2（无数据图），只清理该渲染器拥有的清单行。见[配置](#配置env)。
 
 #### 旧版引擎 (`RESEARCH_ENGINE=legacy`)
 
@@ -688,6 +716,7 @@ flowchart LR
 | `timeline.json` · `quantitative.json` · `contested.json` | 带日期的事件 · 数值主张与轨迹 · 争议主张 |
 | `prediction_markets.json` · `market_price_history.json` | Polymarket 快照 · 近 90 天的日度价格序列 |
 | `charts.json` · `charts/` | 研究图表 |
+| `data/datasets.json` · `data/*.json` · `data/*.csv` | 捕获数据时写出：绑定来源的统计序列、内容哈希、溯源与最终引用 ID；v3 与旧版均支持 |
 | `evidence_synthesis_manifest.json` · `research_contract_manifest.json` | 各证据轨的封存索引 · 最终契约（最后写入） |
 | `track_<k>/` | 每条证据轨的证据包、来源、检查点与日志 |
 | `research_progress.log` · `meta.json` · `research_budget.json` | 实时日志 · 状态与元数据 · 预算遥测 |
@@ -1037,14 +1066,14 @@ flowchart LR
 **`forecast.json`** 包含：
 - 标题结论、判定日、置信度与关键不确定性；
 - `scenarios[]`：每项含名称、概率、驱动因素、判定标准、基率锚点与调整理由；
-- `binary_forecasts[]`：每项含命题、概率（0.02–0.98）、判定标准与判定来源、所属情景、`market_anchor` 与 `market_influence`；
+- `binary_forecasts[]`：每项含命题、概率（0.02–0.98）、判定标准与判定来源、所属情景、`market_anchor` 与 `market_influence`，以及可选、已验证的精确官方观察期 `data_anchor`；
 - 质量相关的各块，包括引用审计、二元预测质量评分表与最终门控结果。
 
-**图表。** 图表的渲染完全不调用 LLM，输出到 `reports/<id>/charts/`，并附 `viz_manifest.json` 索引。每张图都是一个可交互的 Plotly HTML 文件，外加一张 PNG，并以 matplotlib 兜底。图表在沙箱（CSP）中提供，并放在它所说明的章节下方。
+**图表。** 图表的渲染完全不调用 LLM，输出到 `reports/<id>/charts/`，并附 `viz_manifest.json` 索引。标准路径生成可交互的 Plotly HTML 及 PNG，并以 matplotlib 兜底。官方数据图的配对尽力而为：可仅输出 PNG 兜底图、仅输出 HTML 交互链接，或两种格式均失败时省略并记录诊断。图表在沙箱（CSP）中提供，并放在它所说明的章节下方。
 
 | 默认渲染（有数据时） | 可选或按条件渲染 |
 |---|---|
-| 情景概率 · 二元预测点图 · 模型 vs 市场 · 事件时间线 · 指标轨迹 · 技术份额 · 区域对比 · 可比预测基准 · 预测修订 · 世界态轨迹 · 市场价格历史（仅限已锚定的市场） | `REPORT_META_CHARTS=1`：行动者网络、来源构成旭日图 · 假设推演报告：基线 vs 情景对比 |
+| 情景概率 · 二元预测点图 · 模型 vs 市场 · 事件时间线 · 指标轨迹 · 技术份额 · 区域对比 · 可比预测基准 · 预测修订 · 世界态轨迹 · 市场价格历史（仅限已锚定的市场） · 官方指标看板及选定的历史／阈值图（须有有效落盘数据） | `REPORT_META_CHARTS=1`：行动者网络、来源构成旭日图 · 假设推演报告：基线 vs 情景对比 |
 
 **导出。**
 - Markdown 下载。
@@ -1232,6 +1261,7 @@ flowchart TB
    - 构建 DeerFlow 自己的 Python 3.12 venv。
 
    重新运行时会保留已有的底座与 `config.yaml`，只刷新受版本控制的覆盖层。
+7. **构建六个随仓库提供的数据 MCP 服务。** 已是最新状态的构建会跳过。单个失败发出警告，其余安装继续。缺失或不可用的构建会使提供方不可用；重建失败可能仍留下可用的旧构建。覆盖层还包含 `data_mcp.py`、`data_catalog.py`、`data_sources.py`、`data_tools.py` 及 `data-sources`／`data-visuals` 技能。
 
 以下 shell 变量可以改变安装行为。它们不是 `.env` 的配置项。
 
@@ -1241,6 +1271,18 @@ flowchart TB
 | `DEERFLOW_REPO` / `DEERFLOW_REF` | 上游仓库地址与提交，例如 `DEERFLOW_REF=main ./setup.sh` 跟踪上游最新版本 |
 | `SETUP_NONINTERACTIVE=1` | 跳过选择器，自动检测。CI 与管道运行会自动这样做。 |
 | `SETUP_DRF2=1` | 同时安装可选的 [DRF2](#deerflow-2-集成与-drf2-目标) 预览依赖 |
+| `SETUP_DATAMCPS=0` | 跳过数据服务构建；关闭检索请在 `.env` 中设置 `DATA_SOURCES_ENABLED=false` |
+
+在仓库根目录维护数据服务：
+
+```bash
+npm run setup:datamcps                  # 幂等构建／安装；不查询统计数据
+npm run setup:datamcps -- --check        # 检查就绪与新旧状态；不构建
+bash scripts/setup_datamcps.sh fred bls  # 仅构建指定提供方
+npm run setup:datamcps -- --force        # 强制构建指定／默认服务
+```
+
+六个提供方全部可用需 Node ≥ 22（`usgov` 的要求），Python 服务还需 uv／Python 3.12。辅助脚本创建提供方独立环境；IMF 安装配方固定 `mcp[cli]>=1.9.1,<2`，不使用已过期的上游锁文件。全部指定服务就绪时 `--check` 返回 0，否则返回 1；它并不认证在线提供方可用性。覆盖层代码／技能变更后，重新运行 `./setup.sh` 以刷新。配方与路径覆盖项见 [`scripts/setup_datamcps.sh`](scripts/setup_datamcps.sh)。
 
 如需手工打包自定义环境，请把 [`setup.sh`](setup.sh) 当作规范来看：这套集成不只是复制一个驱动文件那么简单。
 
@@ -1370,6 +1412,23 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 | `RESEARCH_MCP_KG` | `true` | 让分叉/继续/恢复的研究可以访问已有的图谱 |
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | 搜索与抓取后端（推荐 Firecrawl） |
 | `PREDICTION_MARKETS_ENABLED` | `true` | 在研究与报告阶段免 Key 查询 Polymarket |
+
+**官方数据（研究与预测报告）**
+
+| 设置 | 默认值 | 当前行为 |
+|---|---|---|
+| `DATA_SOURCES_ENABLED` | `true` | 为新运行启用可选检索；v3 续跑保留冻结的已捕获证据 |
+| `DATA_SOURCES` | `fred,bls,bis,imf,wb,usgov` | 逗号分隔的白名单，不区分大小写；留空选择全部六个 |
+| `DATA_SOURCES_DIR` | `<repo>/datamcps` | 随仓库提供的服务根目录；相对路径按仓库根解析 |
+| `DATA_SOURCES_NODE` | 自动 | Node 可执行文件；依次查找 PATH、`~/.local/bin`、`/opt/homebrew/bin`、`/usr/local/bin`；显式指定无效路径时不回退 |
+| `DATA_SOURCES_CACHE_DIR` | `backend/uploads/.data_cache` | 磁盘缓存、BLS 免 Key 配额记录及 MCP 工作／日志目录 |
+| `DATA_SOURCES_CALL_TIMEOUT` | `60` 秒 | Config 下限 5；配置的传输默认值上限 900；IMF 默认取 `max(timeout, 120)`；显式调用超时替代默认值，可更短或更长 |
+| `DATA_SOURCES_PREFETCH_MAX` | `12` | v3 预取上限（最多 12）；0 跳过预取，智能体工具仍启用；旧版按工具调用取数 |
+| `RESEARCH_LINEAR_MAX_DATA_CALLS_TOTAL` · `RESEARCH_LINEAR_DATA_CALLS_PER_KIQ` | v3：`24/3`、`50/4`、`90/5` | quick/standard/deep 的总调用数／每个关键问题调用数；旧版默认 `50/4`；缓存复用不消耗调用额度；由覆盖层代码读取 |
+| `DATA_SOURCES_CHARTS_MAX` | `8` | 研究单序列图上限，另可生成最多两张兼容的对比图；0 关闭数据图，仅清理过期的 `data_` 清单行，保留文件及其他生产者的行；v3 最多嵌入 8 张 |
+| `REPORT_DATA_CHARTS` | `true` | `false` 跳过官方数据图，保留其他图族及落盘数据的写作上下文，并记录 `report_data_charts_disabled`；新生成的清单不再包含旧官方图行 |
+
+提供方凭据都是可选的环境输入，只传给对应子进程。`FRED_API_KEY` 启用上游 FRED 搜索／API 取数；`BLS_API_KEY` 启用注册后的 BLS 访问。`EIA_API_KEY`、`BEA_API_KEY`、`CENSUS_API_KEY` 启用 US Gov 服务中的对应模块，并不会扩展本适配器的精选配方。`DATA_GOV_API_KEY` 存在时会透传。`SEC_CONTACT_EMAIL` 提供 SEC 联系信息，不是 Key，也不能补回缺失的观察期／申报语义。BIS、IMF 与 Data360 无需 Key。
 
 **知识图谱（阶段 2–3）**
 

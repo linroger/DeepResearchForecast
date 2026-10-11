@@ -1,0 +1,297 @@
+/**
+ * usgs MCP tools.
+ */
+
+import { z } from "zod";
+import type { Tool } from "fastmcp";
+import {
+  searchEarthquakes,
+  countEarthquakes,
+  getSignificantEarthquakes,
+  getWaterData,
+  getDailyWaterData,
+  searchWaterSites,
+  getWaterStatistics,
+  WATER_PARAMS,
+  WATER_SITES_DEFAULT_LIMIT,
+  WATER_SITES_MAX_LIMIT,
+  ALERT_LEVELS,
+  type EarthquakeFeature,
+} from "./sdk.js";
+import { tableResponse, listResponse, recordResponse, emptyResponse } from "../../shared/response.js";
+import { keysEnum, describeEnum } from "../../shared/enum-utils.js";
+
+function earthquakeToRecord(f: EarthquakeFeature): Record<string, unknown> {
+  const p = f.properties;
+  const [lon, lat, depth] = f.geometry.coordinates;
+  const record: Record<string, unknown> = {
+    magnitude: p.mag ?? null,
+    place: p.place ?? null,
+    time: p.time ? new Date(p.time).toISOString() : null,
+    depth: depth ?? null,
+    latitude: lat ?? null,
+    longitude: lon ?? null,
+  };
+  if (p.alert) record.alert = p.alert;
+  if (p.tsunami === 1) record.tsunami = true;
+  if (p.felt) record.felt = p.felt;
+  if (p.url) record.url = p.url;
+  return record;
+}
+
+export const tools: Tool<any, any>[] = [
+  {
+    name: "usgs_earthquakes",
+    description:
+      "Search for earthquakes by magnitude, location, date range, and more.\n" +
+      "Returns magnitude, location, depth, time, alert level, tsunami risk, and felt reports.\n" +
+      "Magnitude scale: 2.5+ felt by people, 4.0+ moderate, 5.0+ significant, 7.0+ major.",
+    annotations: { title: "USGS: Earthquake Search", readOnlyHint: true },
+    parameters: z.object({
+      starttime: z.string().optional().describe("Start date ISO format: '2024-01-01'"),
+      endtime: z.string().optional().describe("End date ISO format: '2024-12-31'"),
+      minmagnitude: z.number().optional().describe("Minimum magnitude (e.g. 4.0, 5.0, 6.0)"),
+      maxmagnitude: z.number().optional().describe("Maximum magnitude"),
+      latitude: z.number().optional().describe("Center latitude for radius search"),
+      longitude: z.number().optional().describe("Center longitude for radius search"),
+      maxradiuskm: z.number().optional().describe("Search radius in km (requires lat/lon)"),
+      alertlevel: z.enum(keysEnum(ALERT_LEVELS)).optional().describe(`PAGER alert level: ${describeEnum(ALERT_LEVELS)}`),
+      limit: z.number().int().max(200).default(20).describe("Max results (default 20, max 200)"),
+      orderby: z.enum(["time", "time-asc", "magnitude", "magnitude-asc"]).optional().describe("Sort order (default: time)"),
+    }),
+    execute: async (args) => {
+      const data = await searchEarthquakes(args);
+      if (!data.features.length) return emptyResponse("No earthquakes found matching the criteria.");
+      const items = data.features.map(earthquakeToRecord);
+      return listResponse(
+        `${data.metadata?.count ?? data.features.length} earthquake(s) found`,
+        { items, total: data.metadata?.count ?? data.features.length },
+      );
+    },
+  },
+
+  {
+    name: "usgs_significant",
+    description:
+      "Get significant earthquakes from the past 30 days (typically M4.5+ or felt/damaging events).\n" +
+      "Quick way to see the latest notable seismic activity worldwide.",
+    annotations: { title: "USGS: Significant Earthquakes", readOnlyHint: true },
+    parameters: z.object({}),
+    execute: async () => {
+      const data = await getSignificantEarthquakes();
+      if (!data.features.length) return emptyResponse("No significant earthquakes in the past 30 days.");
+      const items = data.features.map(earthquakeToRecord);
+      return listResponse(
+        `${data.features.length} significant earthquake(s) (past 30 days)`,
+        { items, total: data.features.length },
+      );
+    },
+  },
+
+  {
+    name: "usgs_earthquake_count",
+    description:
+      "Count earthquakes matching criteria without fetching full details.\n" +
+      "Useful for statistics: 'How many M5+ earthquakes occurred in 2024?'",
+    annotations: { title: "USGS: Earthquake Count", readOnlyHint: true },
+    parameters: z.object({
+      starttime: z.string().optional().describe("Start date: '2024-01-01'"),
+      endtime: z.string().optional().describe("End date: '2024-12-31'"),
+      minmagnitude: z.number().optional().describe("Minimum magnitude"),
+      maxmagnitude: z.number().optional().describe("Maximum magnitude"),
+      latitude: z.number().optional().describe("Center latitude for radius search"),
+      longitude: z.number().optional().describe("Center longitude for radius search"),
+      maxradiuskm: z.number().optional().describe("Search radius in km"),
+    }),
+    execute: async (args) => {
+      const data = await countEarthquakes(args);
+      return recordResponse(`Earthquake count: ${data.count}`, { count: data.count });
+    },
+  },
+
+  {
+    name: "usgs_water_data",
+    description:
+      "Get real-time water data (streamflow, gage height, temperature) from USGS monitoring sites.\n" +
+      "13,000+ stations nationwide. Parameter codes: 00060=discharge (cfs), 00065=gage height (ft), 00010=water temp (°C).\n" +
+      "With sites: every reading in the time window (default last day; up to 3 years per request).\n" +
+      "With only state_cd: the latest reading at each reporting site in the state (current conditions).",
+    annotations: { title: "USGS: Water Data", readOnlyHint: true },
+    parameters: z.object({
+      sites: z.string().optional().describe("USGS site number(s), comma-separated: '01646500' or '01646500,01647000'"),
+      state_cd: z.string().optional().describe("State (code, name, or FIPS) — returns the latest reading per site when sites is omitted"),
+      parameter_cd: z.string().optional().describe("Parameter code: '00060' (discharge), '00065' (gage height), '00010' (temp). Default: 00060"),
+      period: z.string().optional().describe("ISO 8601 duration: 'P1D' (1 day, default), 'P7D' (7 days), 'P30D' (30 days)"),
+      start_dt: z.string().optional().describe("Start date: '2024-01-01' (overrides period)"),
+      end_dt: z.string().optional().describe("End date: '2024-01-31'"),
+    }),
+    execute: async (args) => {
+      const { series, truncated, mode } = await getWaterData({
+        sites: args.sites,
+        stateCd: args.state_cd,
+        parameterCd: args.parameter_cd,
+        period: args.period,
+        startDT: args.start_dt,
+        endDT: args.end_dt,
+      });
+      if (!series.length) return emptyResponse("No water data found for the specified criteria.");
+
+      const items = series.map(s => ({
+        siteName: s.siteName,
+        siteCode: s.siteNo,
+        parameterCode: s.parameterCode,
+        variable: (WATER_PARAMS as Record<string, string>)[s.parameterCode] ?? null,
+        unit: s.unit,
+        latestValue: s.latest?.value ?? null,
+        latestDateTime: s.latest?.time ?? null,
+        readingCount: s.count,
+        min: mode === "window" ? s.min : undefined,
+        max: mode === "window" ? s.max : undefined,
+      }));
+      return listResponse(
+        mode === "latest"
+          ? `Latest readings at ${series.length} reporting site(s)${truncated ? " (limit reached)" : ""}`
+          : `${series.length} water time series found${truncated ? " (observation limit reached; narrow the time window)" : ""}`,
+        { items, total: series.length, meta: { source: `USGS Water Data APIs (${mode === "latest" ? "latest-continuous" : "continuous"})` } },
+      );
+    },
+  },
+
+  {
+    name: "usgs_water_sites",
+    description:
+      "Search for USGS water monitoring sites by state or county.\n" +
+      "Site types: ST=stream (default), GW=groundwater, LK=lake, SP=spring.\n" +
+      "Includes inactive and historical sites; for sites currently reporting data, use usgs_water_data with state_cd.",
+    annotations: { title: "USGS: Water Sites", readOnlyHint: true },
+    parameters: z.object({
+      state_cd: z.string().optional().describe("State: two-letter code ('CA', 'TX'), name, or FIPS code"),
+      county_cd: z.string().optional().describe("County FIPS: 5 digits ('24031') or 3 digits together with state_cd"),
+      site_type: z.enum(["ST", "GW", "LK", "SP"]).optional().describe("Site type: ST (stream, default), GW (groundwater), LK (lake), SP (spring)"),
+      limit: z.number().int().min(1).max(WATER_SITES_MAX_LIMIT).default(WATER_SITES_DEFAULT_LIMIT)
+        .describe(`Max sites to return (default ${WATER_SITES_DEFAULT_LIMIT}, max ${WATER_SITES_MAX_LIMIT})`),
+    }),
+    execute: async (args) => {
+      const { sites, truncated } = await searchWaterSites({
+        stateCd: args.state_cd,
+        countyCd: args.county_cd,
+        siteType: args.site_type,
+        limit: args.limit,
+      });
+      if (!sites.length) return emptyResponse("No water monitoring sites found.");
+      return tableResponse(
+        `Water monitoring sites: ${sites.length} returned${truncated ? " (limit reached; more may exist)" : ""}`,
+        {
+          rows: sites.map(s => ({
+            site_no: s.siteNo,
+            station_nm: s.name,
+            site_tp_cd: s.siteTypeCode,
+            dec_lat_va: s.latitude,
+            dec_long_va: s.longitude,
+            county: s.county,
+            huc_cd: s.hucCode,
+            drain_area_va: s.drainageArea,
+            monitoring_location_id: s.monitoringLocationId,
+          })),
+          total: truncated ? undefined : sites.length,
+          meta: { source: "USGS Water Data APIs (monitoring-locations)", truncated },
+        },
+      );
+    },
+  },
+
+  {
+    name: "usgs_daily_water_data",
+    description:
+      "Get USGS daily values (daily means of the continuous record) for trend analysis.\n" +
+      "Unlike real-time readings, these are one value per day — better for multi-month or multi-year trends.\n" +
+      "Parameter codes: 00060=discharge (cfs), 00065=gage height (ft), 00010=water temp (°C).\n" +
+      "With only state_cd, returns every site in the state (keep the window short).",
+    annotations: { title: "USGS: Daily Water Data", readOnlyHint: true },
+    parameters: z.object({
+      sites: z.string().optional().describe("USGS site number(s): '01646500'"),
+      state_cd: z.string().optional().describe("State (code, name, or FIPS) — all sites in the state when sites is omitted"),
+      parameter_cd: z.string().optional().describe("Parameter code: '00060' (discharge), '00065' (gage height). Default: 00060"),
+      period: z.string().optional().describe("ISO 8601 duration: 'P30D' (default), 'P90D', 'P365D'"),
+      start_dt: z.string().optional().describe("Start date: '2024-01-01' (overrides period)"),
+      end_dt: z.string().optional().describe("End date: '2024-12-31'"),
+    }),
+    execute: async (args) => {
+      const { series, truncated } = await getDailyWaterData({
+        sites: args.sites,
+        stateCd: args.state_cd,
+        parameterCd: args.parameter_cd,
+        period: args.period,
+        startDT: args.start_dt,
+        endDT: args.end_dt,
+      });
+      if (!series.length) return emptyResponse("No daily water data found.");
+
+      const items = series.map(s => ({
+        siteName: s.siteName,
+        siteCode: s.siteNo,
+        parameterCode: s.parameterCode,
+        variable: (WATER_PARAMS as Record<string, string>)[s.parameterCode] ?? null,
+        unit: s.unit,
+        dailyValueCount: s.count,
+        latestValue: s.latest?.value ?? null,
+        latestDate: s.latest?.time?.split("T")[0] ?? null,
+        earliestValue: s.earliest?.value ?? null,
+        earliestDate: s.earliest?.time?.split("T")[0] ?? null,
+        min: s.min,
+        max: s.max,
+        mean: s.mean,
+      }));
+      return listResponse(
+        `${series.length} daily water time series found${truncated ? " (observation limit reached; narrow the window or sites)" : ""}`,
+        { items, total: series.length, meta: { source: "USGS Water Data APIs (daily)", statistic: "00003 (daily mean)" } },
+      );
+    },
+  },
+
+  {
+    name: "usgs_water_statistics",
+    description:
+      "Get period-of-record streamflow statistics for USGS sites — for each day of the year (daily) or month (monthly), the min/mean/max and p05–p95 percentiles of daily means across ALL years on record; 'annual' gives mean/min/max/median per calendar year.\n" +
+      "Answers 'is the current flow historically high or low for this date?' — far more analytically useful than raw readings for drought/flood context.\n" +
+      "Parameter codes: 00060=discharge (cfs, default), 00065=gage height (ft). Optionally filter to a specific month/day.",
+    annotations: { title: "USGS: Water Statistics", readOnlyHint: true },
+    parameters: z.object({
+      sites: z.string().describe("USGS site number(s), comma-separated: '01646500'"),
+      parameter_cd: z.string().optional().describe("Parameter code: '00060' (discharge, default), '00065' (gage height)"),
+      stat_report_type: z.enum(["daily", "monthly", "annual"]).default("daily").describe("Statistic granularity: daily = per day-of-year (default), monthly = per month-of-year, annual = per calendar year"),
+      month: z.number().int().min(1).max(12).optional().describe("Filter to a specific month (1-12; daily/monthly)"),
+      day: z.number().int().min(1).max(31).optional().describe("Filter to a specific day of month (requires month; daily report only)"),
+    }),
+    execute: async ({ sites, parameter_cd, stat_report_type, month, day }) => {
+      const reportType = stat_report_type ?? "daily";
+      const { rows } = await getWaterStatistics({
+        sites,
+        parameterCd: parameter_cd,
+        statReportType: reportType,
+        month: reportType === "annual" ? undefined : month,
+        day: reportType === "daily" ? day : undefined,
+      });
+      if (!rows.length) return emptyResponse(`No statistics found for site ${sites}${month ? ` (month ${month}${day ? `, day ${day}` : ""})` : ""}.`);
+      const multiSite = new Set(rows.map(r => r.site)).size > 1;
+      const table = (rows as unknown as Record<string, unknown>[]).map(({ site, ...rest }) => {
+        const row = multiSite ? { site, ...rest } : rest;
+        if (reportType === "monthly") delete (row as Record<string, unknown>).day;
+        return row;
+      });
+      return tableResponse(
+        `${reportType} streamflow statistics for site ${sites}: ${rows.length} row(s)`,
+        {
+          rows: table,
+          total: rows.length,
+          meta: {
+            site: sites,
+            parameter: parameter_cd ?? "00060",
+            basis: "statistics of daily mean values over the period of record",
+            source: "USGS Water Data APIs (statistics)",
+          },
+        },
+      );
+    },
+  },
+];

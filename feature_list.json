@@ -171,5 +171,40 @@
       "Owner-gated: one live GLM-5.3 run confirming cache hits and provider acceptance of the thinking/reasoning_effort/max_tokens parameters."
     ],
     "passes": true
+  },
+  {
+    "id": "fix_actor_roster_digest_consumer",
+    "category": "regression",
+    "description": "Use the producer roster multiplicity digest in actor-context admission while preserving identity and tamper rejection.",
+    "steps": [
+      "Pass a real producer contract through parent admission and context compilation.",
+      "Reject changed and duplicate identities with the existing fail-closed contracts.",
+      "Run actor producer, parent and context regression suites under the main offline guard."
+    ],
+    "passes": true
+  },
+  {
+    "id": "fix_dossier_translation_envelope",
+    "category": "regression-ui",
+    "description": "Display dossier translation from the actual backend response envelope and keep asynchronous results bound to the selected report.",
+    "steps": [
+      "Load and generate translations through the compiled component methods using the backend envelope.",
+      "Exercise available, generating, interrupted, failed and stale-report responses.",
+      "Run the frontend regression suite and isolated production build."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_official_quantitative_research",
+    "category": "cross-stage",
+    "description": "Integrate the six bundled official data MCPs into v3 and legacy research, citable persisted observations, research and forecast visualizations, bounded public context and exact-evidence forecast resolution.",
+    "steps": [
+      "Retrieve source-shaped data through bounded MCP adapters, retaining missing values, observation status, units, time and provenance.",
+      "Use agent data tools and quantitative planning in both research engines and bind snapshots to citations before sealing.",
+      "Promote the same data generation and render accurate charts in research and forecast reports, including fiscal periods and bilingual captions.",
+      "Admit only eligible historical context and exact-period anchors, preserving actor authority and immutable resolution outcomes.",
+      "Verify disabled/unavailable behavior, deployment wiring, reviewed source hashes, end-to-end transport and report artifact delivery without live model or saved-run mutations."
+    ],
+    "passes": true
   }
 ]

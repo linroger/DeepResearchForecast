@@ -1465,6 +1465,37 @@ class Config:
     # 图表渲染子进程超时（秒）与解释器显式覆盖（缺省自动探测 backend/.venv → sys.executable）。
     RESEARCH_CHARTS_TIMEOUT = int(os.environ.get('RESEARCH_CHARTS_TIMEOUT', '180') or '180')
     RESEARCH_CHARTS_PYTHON = os.environ.get('RESEARCH_CHARTS_PYTHON', '').strip()
+    # 官方数据源（datamcps/ 下六个第三方 MCP 服务：FRED / BLS / BIS / IMF / World Bank Data360(wb) /
+    # US Gov Open Data(usgov)，均以独立子进程原样运行）：研究阶段规划数据需求并预取官方时间序列
+    # （tier-1 可引用 [S#]、数值以落盘观测为准核验、卷宗内出图），报告阶段注入官方数据快照与
+    # 「历史 + 预测」叠加图，二元预测可锚定序列并自动结算。服务未构建 / 无 key / 超时 / 崩溃一律
+    # 降级为「该源不可用」，绝不使运行失败（degrade-safe）。主开关；关闭 = 提示词、工具列表与产物
+    # 与接入前逐字节一致（仅 meta 多一条 data_sources 状态）。构建：npm run setup:datamcps。
+    # API key（FRED_API_KEY / BLS_API_KEY / EIA_API_KEY / BEA_API_KEY / CENSUS_API_KEY /
+    # DATA_GOV_API_KEY / SEC_CONTACT_EMAIL）不做 Config 属性（同 SERPER 先例）：经 os.environ 透传给
+    # 研究子进程，再由 data_mcp 按每个服务的 env 白名单下发，绝不写日志。
+    DATA_SOURCES_ENABLED = os.environ.get('DATA_SOURCES_ENABLED', 'true').strip().lower() == 'true'
+    # 数据源白名单（逗号分隔，大小写 / 空白不敏感；留空 = 全部六个）。
+    DATA_SOURCES = ','.join(
+        p for p in (s.strip().lower()
+                    for s in os.environ.get('DATA_SOURCES', 'fred,bls,bis,imf,wb,usgov').split(','))
+        if p) or 'fred,bls,bis,imf,wb,usgov'
+    # 第三方服务根目录（留空 = <repo>/datamcps；相对路径按仓库根解析）与 node 可执行文件（留空 =
+    # PATH 上的 node，再退 ~/.local/bin、/opt/homebrew/bin、/usr/local/bin；usgov 需 node >= 22）。
+    # 编排器把二者解析为绝对路径后下发研究子进程（子进程 cwd / PATH 可能与后端不同）。
+    DATA_SOURCES_DIR = os.environ.get('DATA_SOURCES_DIR', '').strip()
+    DATA_SOURCES_NODE = os.environ.get('DATA_SOURCES_NODE', '').strip()
+    # 磁盘缓存 + BLS 免 key 日配额计数文件所在目录（留空 = backend/uploads/.data_cache）。
+    DATA_SOURCES_CACHE_DIR = os.environ.get('DATA_SOURCES_CACHE_DIR', '').strip()
+    # 单次数据工具调用超时（秒，下限 5；imf 取 max(此值, 120)——IMF 单次调用常需 30~50 s）。
+    DATA_SOURCES_CALL_TIMEOUT = max(5, int(os.environ.get('DATA_SOURCES_CALL_TIMEOUT', '60') or '60'))
+    # 研究 data 阶段最多预取的序列数（0 = 不预取，仅留代理按需调用）。
+    DATA_SOURCES_PREFETCH_MAX = max(0, int(os.environ.get('DATA_SOURCES_PREFETCH_MAX', '12') or '12'))
+    # 研究卷宗内官方数据图（Figure + 官方数据基线节）上限（0 = 不出图，仅保留指标表）。
+    DATA_SOURCES_CHARTS_MAX = max(0, int(os.environ.get('DATA_SOURCES_CHARTS_MAX', '8') or '8'))
+    # 预测报告的官方数据图族（official_indicators 指标看板 + official_series_* 历史/阈值/情景叠加图）。
+    # 关闭 = 报告不出这类图（数据快照表照常）；无官方数据时该族自然为空。
+    REPORT_DATA_CHARTS = os.environ.get('REPORT_DATA_CHARTS', 'true').strip().lower() == 'true'
     # B2 三部结构：按 Bridgewater 简报把成稿组织为 Part 1（二元预测表）/ Part 2（框架综合，
     # 单次 LLM 调用、字数按 requirement_spec 的 page_budget 收敛）/ Part 3（附录 = 原详细章节）。
     # 无 Part 1 或综合产出过短 → 跳过不改文档（degrade-safe，幂等）。

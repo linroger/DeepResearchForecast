@@ -1,0 +1,344 @@
+/**
+ * eia MCP tools.
+ */
+
+import { z } from "zod";
+import { UserError, type Tool } from "fastmcp";
+import {
+  getPetroleum,
+  getElectricity,
+  getNaturalGas,
+  getStateEnergy,
+  getTotalEnergy,
+  getRouteInfo,
+  getFacetValues,
+  queryRoute,
+  normalizeRoute,
+  type EiaObservation,
+} from "./sdk.js";
+import { timeseriesResponse, emptyResponse, recordResponse, tableResponse } from "../../shared/response.js";
+import { stateAs } from "../../shared/geo.js";
+
+function formatObservations(data: EiaObservation[], limit?: number) {
+  const rows = limit ? data.slice(0, limit) : data;
+  return rows.map(row => ({
+    period: row.period || null,
+    value: row.value != null ? Number(row.value) : null,
+    units: String(row.units || row.unit || ""),
+    series: String(row["series-description"] || row.seriesDescription || row.series || ""),
+    state: String(row.stateDescription || row.stateid || row.stateId || ""),
+    sector: String(row.sectorName || row.sectorid || ""),
+  }));
+}
+
+export const tools: Tool<any, any>[] = [
+  {
+    name: "eia_petroleum",
+    description:
+      "Get petroleum/oil prices — crude oil spot prices (WTI, Brent), " +
+      "retail gasoline prices, diesel, heating oil.\n\n" +
+      "Product codes:\n" +
+      "- EPCBRENT: Brent crude oil spot price\n" +
+      "- EPCWTI: WTI crude oil spot price\n" +
+      "- EMM_EPMRU_PTE_NUS_DPG: US regular gasoline retail\n" +
+      "- EMM_EPMPU_PTE_NUS_DPG: US premium gasoline retail\n" +
+      "- EMD_EPD2D_PTE_NUS_DPG: US diesel retail\n" +
+      "- EER_EPJK_PF4_RGC_DPG: US jet fuel spot price",
+    annotations: { title: "EIA: Petroleum Prices", readOnlyHint: true },
+    parameters: z.object({
+      product: z.string().optional().describe(
+        "Product type: 'crude' (default — WTI), 'gasoline', 'diesel', 'all'. " +
+        "Or a specific series ID like 'EPCWTI'",
+      ),
+      frequency: z.enum(["daily", "weekly", "monthly", "annual"]).optional().describe("Frequency (default: monthly)"),
+      start: z.string().optional().describe("Start date (YYYY-MM or YYYY-MM-DD). Default: 2 years ago"),
+      end: z.string().optional().describe("End date (YYYY-MM or YYYY-MM-DD). Default: latest available"),
+      length: z.number().int().max(5000).optional().describe("Max rows to return (API max: 5000). Omit to let date range control volume."),
+      offset: z.number().int().optional().describe("Row offset for pagination (use with length)"),
+    }),
+    execute: async ({ product, frequency, start, end, length, offset }) => {
+      const res = await getPetroleum({ product, frequency, start, end, length, offset });
+      const data = res.response?.data || [];
+      const total = res.response?.total || data.length;
+
+      if (!data.length) return emptyResponse("No petroleum data found.");
+
+      const observations = formatObservations(data);
+      return timeseriesResponse(
+        `EIA petroleum prices (${product || "crude"}): ${total} total, showing ${observations.length}`,
+        {
+          rows: observations,
+          dateKey: "period",
+          valueKey: "value",
+          extraFields: ["units", "series", "state", "sector"],
+          seriesKeys: ["series", "state", "sector"],
+          total,
+          meta: { product: product || "crude", frequency: frequency || "monthly" },
+        },
+      );
+    },
+  },
+
+  {
+    name: "eia_electricity",
+    description:
+      "Get electricity retail prices, generation, or consumption by state and sector.\n\n" +
+      "Sectors: residential (RES), commercial (COM), industrial (IND), transportation (TRA), all (ALL).\n" +
+      "Data types: 'price' (cents/kWh), 'revenue' (M$), 'sales' (MWh), 'customers'",
+    annotations: { title: "EIA: Electricity Prices & Generation", readOnlyHint: true },
+    parameters: z.object({
+      state: z.string().optional().describe("State name, two-letter code or FIPS code (e.g. 'California', 'CA', '06'). Omit for national."),
+      sector: z.enum(["RES", "COM", "IND", "ALL"]).optional().describe("Sector: RES=residential, COM=commercial, IND=industrial, ALL=default"),
+      data_type: z.enum(["price", "revenue", "sales", "customers"]).optional().describe("Data type (default: price in cents/kWh)"),
+      frequency: z.enum(["monthly", "annual"]).optional().describe("Frequency (default: monthly)"),
+      start: z.string().optional().describe("Start date (YYYY-MM or YYYY). Default: 2 years ago"),
+      end: z.string().optional().describe("End date (YYYY-MM or YYYY). Default: latest available"),
+      length: z.number().int().max(5000).optional().describe("Max rows (API max: 5000). Omit to let date range control volume."),
+      offset: z.number().int().optional().describe("Row offset for pagination"),
+    }),
+    execute: async ({ state, sector, data_type, frequency, start, end, length, offset }) => {
+      const res = await getElectricity({ state, sector, dataType: data_type, frequency, start, end, length, offset });
+      const data = res.response?.data || [];
+
+      if (!data.length) return emptyResponse("No electricity data found.");
+
+      const observations = data.map(row => ({
+        period: row.period || null,
+        state: String(row.stateDescription || row.stateid || "US"),
+        sector: String(row.sectorName || row.sectorid || "All"),
+        value: row[data_type || "price"] != null ? Number(row[data_type || "price"]) : (row.value != null ? Number(row.value) : null),
+        units: String(row[`${data_type || "price"}-units`] || row.units || ""),
+      }));
+
+      return timeseriesResponse(
+        `EIA electricity ${data_type || "price"}${state ? ` (${stateAs(state, "usps").toUpperCase()})` : ""}: ${observations.length} observations`,
+        {
+          rows: observations,
+          dateKey: "period",
+          valueKey: "value",
+          extraFields: ["state", "sector", "units"],
+          seriesKeys: ["series", "state", "sector"],
+          meta: { dataType: data_type || "price", state: state ? stateAs(state, "usps").toUpperCase() : null },
+        },
+      );
+    },
+  },
+
+  {
+    name: "eia_natural_gas",
+    description:
+      "Get natural gas prices — Henry Hub spot price, citygate, residential, commercial, industrial, electric power.\n\n" +
+      "Process codes: PRS (citygate), PRP (electric power), PRC (commercial), " +
+      "PRI (industrial), PRR (residential), PNG (Henry Hub spot)",
+    annotations: { title: "EIA: Natural Gas Prices", readOnlyHint: true },
+    parameters: z.object({
+      process: z.string().optional().describe(
+        "Price type: 'PRS' (citygate), 'PRP' (electric power), 'PRC' (commercial), " +
+        "'PRI' (industrial), 'PRR' (residential). Default shows all.",
+      ),
+      frequency: z.enum(["monthly", "annual"]).optional().describe("Frequency (default: monthly)"),
+      start: z.string().optional().describe("Start date (YYYY-MM). Default: 2 years ago"),
+      end: z.string().optional().describe("End date (YYYY-MM). Default: latest available"),
+      length: z.number().int().max(5000).optional().describe("Max rows (API max: 5000). Omit to let date range control volume."),
+      offset: z.number().int().optional().describe("Row offset for pagination"),
+    }),
+    execute: async ({ process, frequency, start, end, length, offset }) => {
+      const res = await getNaturalGas({ process, frequency, start, end, length, offset });
+      const data = res.response?.data || [];
+
+      if (!data.length) return emptyResponse("No natural gas data found.");
+
+      const observations = formatObservations(data);
+      return timeseriesResponse(
+        `EIA natural gas prices: ${observations.length} observations`,
+        {
+          rows: observations,
+          dateKey: "period",
+          valueKey: "value",
+          extraFields: ["units", "series", "state", "sector"],
+          seriesKeys: ["series", "state", "sector"],
+        },
+      );
+    },
+  },
+
+  {
+    name: "eia_state_energy",
+    description:
+      "Get state-level energy data from the State Energy Data System (SEDS). " +
+      "Covers production, consumption, expenditures, and prices by energy source for all 50 states.\n\n" +
+      "MSN codes (energy data codes):\n" +
+      "- TETCB: Total energy consumption (trillion BTU)\n" +
+      "- TETCD: Total energy consumption per capita\n" +
+      "- TEPRB: Total energy production (trillion BTU)\n" +
+      "- ESTCB: Electricity total consumption\n" +
+      "- CLTCB: Coal consumption\n" +
+      "- NNTCB: Natural gas consumption\n" +
+      "- PATCB: Petroleum consumption\n" +
+      "- RETCB: Renewable energy consumption\n" +
+      "- NUETB: Nuclear energy consumption",
+    annotations: { title: "EIA: State Energy Profile", readOnlyHint: true },
+    parameters: z.object({
+      state: z.string().optional().describe("State name, two-letter code or FIPS code (e.g. 'California', 'CA', '06'). Omit for all states."),
+      msn: z.string().optional().describe(
+        "MSN energy data code. 'TETCB' (total consumption, default), 'TETCD' (per capita), " +
+        "'TEPRB' (production), 'RETCB' (renewables), 'PATCB' (petroleum)",
+      ),
+      start: z.string().optional().describe("Start year (YYYY). Default: 5 years ago"),
+      end: z.string().optional().describe("End year (YYYY). Default: latest available"),
+      length: z.number().int().max(5000).optional().describe("Max rows (API max: 5000). Omit to let date range control volume."),
+      offset: z.number().int().optional().describe("Row offset for pagination"),
+    }),
+    execute: async ({ state, msn, start, end, length, offset }) => {
+      const res = await getStateEnergy({ state, msn, start, end, length, offset });
+      const data = res.response?.data || [];
+
+      if (!data.length) return emptyResponse("No state energy data found.");
+
+      const observations = data.map(row => ({
+        period: row.period || null,
+        state: String(row.stateDescription || row.stateId || row.stateid || ""),
+        value: row.value != null ? Number(row.value) : null,
+        units: String(row.unit || row.units || ""),
+        series: String(row.seriesDescription || row.msn || ""),
+      }));
+
+      return timeseriesResponse(
+        `EIA state energy (${msn || "TETCB"})${state ? ` for ${stateAs(state, "usps").toUpperCase()}` : ""}: ${observations.length} observations`,
+        {
+          rows: observations,
+          dateKey: "period",
+          valueKey: "value",
+          extraFields: ["state", "units", "series"],
+          seriesKeys: ["series", "state", "sector"],
+          meta: { msn: msn || "TETCB", state: state ? stateAs(state, "usps").toUpperCase() : null },
+        },
+      );
+    },
+  },
+
+  {
+    name: "eia_total_energy",
+    description:
+      "Get the monthly/annual U.S. energy overview — total production, consumption, imports, exports, " +
+      "and prices across all energy sources.\n\n" +
+      "MSN codes:\n" +
+      "- ELETPUS: Electricity net generation\n" +
+      "- ELNIPUS: Electricity net imports\n" +
+      "- CLTCPUS: Coal consumption\n" +
+      "- NNTCPUS: Natural gas consumption\n" +
+      "- PATCPUS: All petroleum consumption\n" +
+      "- RETCPUS: Renewable energy consumption\n" +
+      "- NUETPUS: Nuclear electric power",
+    annotations: { title: "EIA: Total Energy Overview", readOnlyHint: true },
+    parameters: z.object({
+      msn: z.string().optional().describe("MSN code to filter by. Omit for overview of major categories."),
+      frequency: z.enum(["monthly", "annual"]).optional().describe("Frequency (default: monthly)"),
+      start: z.string().optional().describe("Start date (YYYY-MM or YYYY). Default: 2 years ago"),
+      end: z.string().optional().describe("End date (YYYY-MM or YYYY). Default: latest available"),
+      length: z.number().int().max(5000).optional().describe("Max rows (API max: 5000). Omit to let date range control volume."),
+      offset: z.number().int().optional().describe("Row offset for pagination"),
+    }),
+    execute: async ({ msn, frequency, start, end, length, offset }) => {
+      const res = await getTotalEnergy({ msn, frequency, start, end, length, offset });
+      const data = res.response?.data || [];
+
+      if (!data.length) return emptyResponse("No total energy data found.");
+
+      const observations = data.map(row => ({
+        period: row.period || null,
+        value: row.value != null ? Number(row.value) : null,
+        units: String(row.unit || row.units || ""),
+        series: String(row.seriesDescription || row.msn || ""),
+      }));
+
+      return timeseriesResponse(
+        `EIA total energy overview (${frequency || "monthly"}): ${observations.length} observations`,
+        {
+          rows: observations,
+          dateKey: "period",
+          valueKey: "value",
+          extraFields: ["units", "series"],
+          seriesKeys: ["series", "state", "sector"],
+          meta: { frequency: frequency || "monthly" },
+        },
+      );
+    },
+  },
+
+  {
+    name: "eia_browse",
+    description:
+      "Explore the full EIA API v2 catalog (beyond the shortcut tools). Without a route, lists the top-level datasets " +
+      "(electricity, petroleum, natural-gas, coal, seds, steo, international, co2-emissions, …). With a route, lists its " +
+      "sub-routes, or for a data route its facets, data columns, frequencies and date range. With route + facet, lists the " +
+      "facet's values (e.g. every stateid). Then fetch data with eia_query.",
+    annotations: { title: "EIA: Browse Datasets", readOnlyHint: true },
+    parameters: z.object({
+      route: z.string().optional().describe("Route path, e.g. 'electricity' or 'electricity/retail-sales'"),
+      facet: z.string().optional().describe("Facet id to list values for, e.g. 'sectorid' (needs route)"),
+    }),
+    execute: async ({ route, facet }) => {
+      if (facet) {
+        if (!route) throw new UserError("facet needs a route.");
+        const values = await getFacetValues(route, facet);
+        if (!values.length) return emptyResponse(`No values for facet "${facet}" on ${normalizeRoute(route)}.`);
+        return tableResponse(`${values.length} value(s) for facet ${facet} on ${normalizeRoute(route)}`, { rows: values.slice(0, 1000), total: values.length });
+      }
+      const info = await getRouteInfo(route);
+      const what = info.routes?.length
+        ? `${info.routes.length} sub-route(s)`
+        : `data route: ${info.data?.length ?? 0} data column(s), ${info.facets?.length ?? 0} facet(s), ${info.startPeriod ?? "?"} to ${info.endPeriod ?? "?"}`;
+      return recordResponse(`EIA ${info.route || "(root)"}: ${what}`, info as unknown as Record<string, unknown>);
+    },
+  },
+
+  {
+    name: "eia_query",
+    description:
+      "Fetch data from any EIA API v2 data route (find routes, facets and columns with eia_browse). Newest first.\n" +
+      "facets narrow the series: 'stateid=CA,TX; sectorid=RES'. data picks value columns, e.g. 'price' or 'sales,revenue'.",
+    annotations: { title: "EIA: Query Any Route", readOnlyHint: true },
+    parameters: z.object({
+      route: z.string().describe("Data route, e.g. 'electricity/retail-sales' or 'petroleum/pri/spt'"),
+      data: z.string().optional().describe("Data columns, comma-separated (default 'value'); see eia_browse"),
+      facets: z.string().optional().describe("Facet filters: 'stateid=CA,TX; sectorid=RES'"),
+      frequency: z.string().optional().describe("e.g. 'monthly', 'annual', 'weekly' (see eia_browse)"),
+      start: z.string().optional().describe("Start period, in the route's format: '2024-01', '2024'"),
+      end: z.string().optional().describe("End period"),
+      length: z.number().int().min(1).max(5000).default(100).describe("Max rows (default 100, max 5000)"),
+      offset: z.number().int().min(0).optional().describe("Rows to skip (paging)"),
+    }),
+    execute: async ({ route, data, facets, frequency, start, end, length, offset }) => {
+      const columns: string[] = String(data ?? "value").split(",").map((s: string) => s.trim()).filter(Boolean);
+      const facetFilters: Record<string, string[]> = {};
+      for (const part of String(facets ?? "").split(";").map((s: string) => s.trim()).filter(Boolean)) {
+        const [id, values] = part.split("=").map((s: string) => s?.trim());
+        if (!id || !values) throw new UserError(`Bad facet filter "${part}": use 'facet=value1,value2', e.g. 'stateid=CA,TX'.`);
+        facetFilters[id] = values.split(",").map((v: string) => v.trim()).filter(Boolean);
+      }
+      const res = await queryRoute(route, { data: columns, facets: facetFilters, frequency, start, end, length, offset });
+      const rows = res.response?.data ?? [];
+      if (!rows.length) return emptyResponse(`No EIA data for ${normalizeRoute(route)} with these filters.`);
+      // Values arrive as strings; make the data columns numeric.
+      const numeric = rows.map(r => {
+        const out: Record<string, unknown> = { ...r };
+        for (const c of columns) if (out[c] !== undefined && out[c] !== null && out[c] !== "") out[c] = Number(out[c]);
+        return out;
+      });
+      const facetColumns = Object.keys(numeric[0]).filter(k => k !== "period" && !columns.includes(k) && !/-units$|units$/i.test(k) && !/(Description|Name|name)$/.test(k));
+      return timeseriesResponse(
+        `EIA ${normalizeRoute(route)}: ${rows.length} of ${res.response.total} rows${frequency ? ` (${frequency})` : ""}`,
+        {
+          rows: numeric,
+          dateKey: "period",
+          valueKey: columns[0],
+          extraFields: [...columns.slice(1), ...Object.keys(numeric[0]).filter(k => k !== "period" && !columns.includes(k))],
+          seriesKeys: facetColumns,
+          total: Number(res.response.total) || rows.length,
+          meta: { route: normalizeRoute(route), data: columns, facets: facetFilters },
+        },
+      );
+    },
+  },
+];

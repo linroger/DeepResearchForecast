@@ -31,7 +31,10 @@ def _isolated_repo(tmp_path, monkeypatch, ext_config_text):
     (bridge / "deerflow_research.py").write_text("same\n", encoding="utf-8")
     (deployed / "deerflow_research.py").write_text("same\n", encoding="utf-8")
     (deployed / "skills").mkdir()
-    for skill in ("actor-ontology-research", "deep-research", "forecast-visuals", "prediction-markets"):
+    for skill in (
+        "actor-ontology-research", "data-sources", "data-visuals",
+        "deep-research", "forecast-visuals", "prediction-markets",
+    ):
         f = bridge / "skills" / skill / "SKILL.md"
         f.parent.mkdir(parents=True)
         f.write_text(f"---\nname: {skill}\n---\n", encoding="utf-8")

@@ -1,0 +1,291 @@
+{
+  "fred": {
+    "series_id": "UNRATE",
+    "title": "Unemployment Rate",
+    "units": "Percent",
+    "frequency": "Monthly",
+    "seasonal_adjustment": "Seasonally Adjusted",
+    "total_observations": 3,
+    "data_offset": 0,
+    "data_limit": 5000,
+    "data": [
+      {
+        "date": "2024-03-01",
+        "value": 4.2
+      },
+      {
+        "date": "2024-02-01",
+        "value": null
+      },
+      {
+        "date": "2024-01-01",
+        "value": 4.0
+      }
+    ]
+  },
+  "bls": {
+    "status": "REQUEST_SUCCEEDED",
+    "message": [],
+    "Results": {
+      "series": [
+        {
+          "seriesID": "LNS14000000",
+          "data": [
+            {
+              "year": "2024",
+              "period": "M03",
+              "value": "4.2",
+              "footnotes": [
+                {
+                  "code": "P",
+                  "text": "Preliminary"
+                }
+              ]
+            },
+            {
+              "year": "2024",
+              "period": "M02",
+              "value": "-",
+              "footnotes": [
+                {}
+              ]
+            },
+            {
+              "year": "2024",
+              "period": "M01",
+              "value": "4.0",
+              "footnotes": [
+                {}
+              ]
+            },
+            {
+              "year": "2024",
+              "period": "M13",
+              "value": "4.1",
+              "footnotes": [
+                {}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "bis": {
+    "flow_ref": "BIS,WS_CBPOL,1.0",
+    "columns": [
+      "FREQ",
+      "REF_AREA",
+      "TIME_PERIOD",
+      "OBS_VALUE"
+    ],
+    "truncated": false,
+    "count": 3,
+    "rows": [
+      {
+        "FREQ": "M",
+        "REF_AREA": "US",
+        "TIME_PERIOD": "2024-03",
+        "OBS_VALUE": "4.2"
+      },
+      {
+        "FREQ": "M",
+        "REF_AREA": "US",
+        "TIME_PERIOD": "2024-02",
+        "OBS_VALUE": ""
+      },
+      {
+        "FREQ": "M",
+        "REF_AREA": "US",
+        "TIME_PERIOD": "2024-01",
+        "OBS_VALUE": "4.0"
+      }
+    ]
+  },
+  "imf_defs": [
+    {
+      "parameter": "country",
+      "description": "Country"
+    },
+    {
+      "parameter": "indicator",
+      "description": "Indicator"
+    },
+    {
+      "parameter": "data_transformation",
+      "description": "Data transformation"
+    },
+    {
+      "parameter": "frequency",
+      "description": "Frequency"
+    }
+  ],
+  "imf": {
+    "database_id": "PCPS",
+    "columns": [
+      "country",
+      "indicator",
+      "data_transformation",
+      "frequency",
+      "time_period",
+      "obs_value"
+    ],
+    "row_count": 3,
+    "total_rows_before_cap": 3,
+    "truncated": false,
+    "rows": [
+      {
+        "country": "G001",
+        "indicator": "POILBRE",
+        "data_transformation": "USD",
+        "frequency": "M",
+        "time_period": "2024-M03",
+        "obs_value": 84.2
+      },
+      {
+        "country": "G001",
+        "indicator": "POILBRE",
+        "data_transformation": "USD",
+        "frequency": "M",
+        "time_period": "2024-M02",
+        "obs_value": null
+      },
+      {
+        "country": "G001",
+        "indicator": "POILBRE",
+        "data_transformation": "USD",
+        "frequency": "M",
+        "time_period": "2024-M01",
+        "obs_value": 80.0
+      }
+    ]
+  },
+  "wb": {
+    "data": [
+      {
+        "REF_AREA": "USA",
+        "TIME_PERIOD": "2024",
+        "OBS_VALUE": 2.5,
+        "UNIT_MEASURE": "PT",
+        "UNIT_MEASURE_NAME": "Percent"
+      },
+      {
+        "REF_AREA": "USA",
+        "TIME_PERIOD": "2023",
+        "OBS_VALUE": null,
+        "UNIT_MEASURE": "PT",
+        "UNIT_MEASURE_NAME": "Percent"
+      },
+      {
+        "REF_AREA": "USA",
+        "TIME_PERIOD": "2022",
+        "OBS_VALUE": 2.1,
+        "UNIT_MEASURE": "PT",
+        "UNIT_MEASURE_NAME": "Percent"
+      }
+    ],
+    "metadata": {
+      "indicator_name": "GDP growth (annual %)",
+      "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+      "database_id": "WB_WDI",
+      "periodicity": "Annual",
+      "measurement_unit": "Percent"
+    },
+    "count": 3,
+    "offset": 0,
+    "has_more": false,
+    "next_offset": null,
+    "error": null,
+    "total_count": 3
+  },
+  "treasury": {
+    "summary": "Synthetic selected MTS rows",
+    "dataType": "table",
+    "data": {
+      "columns": [
+        "record_date",
+        "line_code_nbr",
+        "src_line_nbr",
+        "classification_desc",
+        "current_month_rcpt_outly_amt"
+      ],
+      "rows": [
+        [
+          "2024-03-31",
+          "520",
+          "37",
+          "Surplus or Deficit",
+          "-300.2"
+        ],
+        [
+          "2024-02-29",
+          "520",
+          "37",
+          "Surplus or Deficit",
+          null
+        ],
+        [
+          "2024-01-31",
+          "520",
+          "37",
+          "Surplus or Deficit",
+          "-200.1"
+        ]
+      ],
+      "total": 3,
+      "truncated": false
+    },
+    "meta": {
+      "endpoint": "/v1/accounting/mts/mts_table_3",
+      "recordsReturned": 3,
+      "totalPages": 1
+    }
+  },
+  "spending": {
+    "summary": "Synthetic fiscal spending",
+    "dataType": "timeseries",
+    "data": {
+      "columns": [
+        "periodStart",
+        "amount",
+        "fiscalPeriod"
+      ],
+      "rows": [
+        [
+          "2023-10",
+          123.4,
+          "FY2024"
+        ],
+        [
+          "2024-10",
+          124.5,
+          "FY2025"
+        ]
+      ],
+      "total": 2,
+      "truncated": false
+    },
+    "meta": {
+      "group": "fiscal_year"
+    }
+  },
+  "sec": {
+    "summary": "Synthetic concept",
+    "dataType": "record",
+    "record": {
+      "entityName": "Example",
+      "concept": "Assets",
+      "label": "Assets",
+      "unit": "USD",
+      "annual": [
+        {
+          "period": "2024-09-30",
+          "value": 100.0,
+          "fy": 2024,
+          "filed": "2024-11-01"
+        }
+      ],
+      "quarterly": []
+    }
+  }
+}

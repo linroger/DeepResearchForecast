@@ -91,6 +91,63 @@ def _no_ambient_research_engine_selection(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+# 官方数据源的 key 名与路径旋钮（design §12）：key 不是 Config 属性，经 os.environ 透传。
+_DATA_SOURCE_ENV_NAMES = (
+    "FRED_API_KEY", "BLS_API_KEY", "EIA_API_KEY", "BEA_API_KEY", "CENSUS_API_KEY",
+    "DATA_GOV_API_KEY", "SEC_CONTACT_EMAIL",
+    "DATA_SOURCES", "DATA_SOURCES_DIR", "DATA_SOURCES_NODE", "DATA_SOURCES_CACHE_DIR",
+)
+
+
+def _reset_data_mcp_hubs():
+    """关闭并遗忘 data_mcp 的进程级 hub 单例（连同其 MCP 子进程）。
+
+    data_mcp 经 deerflow_bridge/ 上 sys.path 后按裸名导入，或按文件路径以 *data_mcp 别名加载；
+    只处理已导入的模块（未导入即不存在单例，无需重置，也不为此把 bridge 目录塞进 sys.path）。
+    """
+    # Clients retain an environment/cache view in addition to the transport.
+    # Reset them first so an opt-in test cannot reuse a prior disabled client
+    # (or a client holding the hub that is about to be closed).
+    for name, module in list(sys.modules.items()):
+        if module is None or not name.endswith("data_sources"):
+            continue
+        reset = getattr(module, "reset_data_sources_for_tests", None)
+        if callable(reset):
+            try:
+                reset()
+            except Exception:  # test cleanup must not mask the original failure
+                pass
+    for name, module in list(sys.modules.items()):
+        if module is None or not name.endswith("data_mcp"):
+            continue
+        reset = getattr(module, "reset_hub_for_tests", None)
+        if callable(reset):
+            try:
+                reset()
+            except Exception:  # noqa: BLE001 — 清理失败不能让无关测试失败
+                pass
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_data_sources(monkeypatch):
+    """官方数据源离线化（offline-first 契约）：六个数据 MCP 服务会联网、依赖 node 与已构建的
+    datamcps/，且 FRED_API_KEY 等 key 可能经开发者 shell profile 泄入 pytest 进程。测试一律
+    DATA_SOURCES_ENABLED=false，剥离 key 与路径旋钮，并在每个测试前后重置 data_mcp 的进程级
+    hub 单例（不留 MCP 子进程、不跨测试串状态）。需要数据层行为的测试自行 setenv / monkeypatch
+    Config 打开，并用 fake stdio MCP server fixture 代替真实服务。"""
+    monkeypatch.setenv("DATA_SOURCES_ENABLED", "false")
+    for name in _DATA_SOURCE_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    try:
+        from app.config import Config
+        monkeypatch.setattr(Config, "DATA_SOURCES_ENABLED", False, raising=False)
+    except Exception:  # noqa: BLE001 — Config 不可导入时旗标已由环境变量兜底
+        pass
+    _reset_data_mcp_hubs()
+    yield
+    _reset_data_mcp_hubs()
+
+
 @pytest.fixture
 def fake_llm():
     """Factory: fake_llm(responses=[...], json_responses=[...]) -> FakeLLMClient."""

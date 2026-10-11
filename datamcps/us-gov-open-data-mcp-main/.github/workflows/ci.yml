@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Supported: maintained LTS lines (package.json "engines": >=22).
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck sources and tests
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm run test
+
+  package:
+    # Install the packed tarball the way a consumer would and check the
+    # exports, the bin, and that importing the root has no side effects.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package smoke test
+        run: npm run test:package
+
+  audit:
+    # Report known advisories in the runtime dependency tree. New advisories
+    # appear without any change to the code, so this warns instead of failing.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: npm audit (runtime dependencies)
+        run: |
+          if ! npm audit --omit=dev --audit-level=high; then
+            echo "::warning title=npm audit::High or critical advisories in runtime dependencies. See the audit job log."
+          fi
+
+  docs:
+    # Build the documentation site as the Pages deployment does, so generator
+    # errors and dead links show up before merge.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs/package-lock.json
+
+      - name: Install dependencies (builds dist via prepare)
+        run: npm ci
+
+      - name: Install the docs toolchain
+        run: npm run docs:install
+
+      - name: Build docs
+        run: npm run docs:build
+
+  docker:
+    # Build the image and check it runs as intended: non-root, refuses to
+    # listen without a token, rejects unauthenticated requests, and becomes
+    # healthy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build -t us-gov-open-data-mcp:ci .
+
+      - name: Refuses to start without MCP_AUTH_TOKEN
+        run: |
+          set +e
+          out=$(docker run --rm us-gov-open-data-mcp:ci 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          test "$code" -ne 0
+          echo "$out" | grep -q "Refusing to serve HTTP"
+
+      - name: Start with a token
+        run: |
+          TOKEN=$(openssl rand -hex 32)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          docker run -d --name mcp -e MCP_AUTH_TOKEN="$TOKEN" -e MODULES=fred -p 8080:8080 us-gov-open-data-mcp:ci
+
+      - name: Runs as a non-root user
+        run: |
+          uid=$(docker exec mcp id -u)
+          echo "uid=$uid"
+          test "$uid" != "0"
+
+      - name: Becomes healthy
+        run: |
+          for _ in $(seq 1 45); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' mcp)
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "health status: $status"
+          exit 1
+
+      - name: Rejects MCP requests without the token
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/mcp \
+            -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0.0"}}}')
+          echo "status=$code"
+          test "$code" = "401"
+
+      - name: Completes an authenticated handshake
+        run: |
+          curl -sf -X POST http://127.0.0.1:8080/mcp -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0.0"}}}' \
+            | tee init.txt
+          grep -q '"serverInfo"' init.txt
+
+      - name: Container logs
+        if: always()
+        run: docker logs mcp || true

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://lzinga.github.io/us-gov-open-data-mcp
+    about: Check the docs for guides on adding modules and SDK usage.

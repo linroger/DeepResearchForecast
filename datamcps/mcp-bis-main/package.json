@@ -1,0 +1,32 @@
+{
+  "name": "@pipeworx/mcp-bis",
+  "version": "0.1.2",
+  "description": "BIS MCP — Bank for International Settlements statistics (no auth)",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "bin": {
+    "mcp-bis": "bin/cli.js"
+  },
+  "keywords": ["mcp", "mcp-server", "model-context-protocol", "pipeworx", "bis"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipeworx-io/mcp-bis.git"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@cloudflare/workers-types": "^4.20260405.1"
+  },
+  "pipeworx": {
+    "sourceHash": "v1-854c7cb5f9385157a222973dbd41ab4136ad4b712875b42e0dd33e133f22de64",
+    "sourceCommit": "babdd280d475dceddecc9ebf8f2a661712781a81"
+  }
+}

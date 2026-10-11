@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pipeworx-io/bis",
+  "title": "Bis",
+  "description": "BIS MCP — Bank for International Settlements statistics (no auth)",
+  "version": "0.1.2",
+  "websiteUrl": "https://pipeworx.io/packs/bis",
+  "repository": {
+    "url": "https://github.com/pipeworx-io/mcp-bis",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://gateway.pipeworx.io/bis/mcp"
+    }
+  ]
+}

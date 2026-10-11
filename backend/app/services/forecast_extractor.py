@@ -1454,9 +1454,233 @@ def _is_circular_market_forecast(
     return False
 
 
+def official_series_rows(official_data: Any) -> List[Dict[str, Any]]:
+    """Bound and check the persisted carrier, without fetching or filling gaps.
+
+    This is a rendering boundary, not an alternative provider normalizer. Bad
+    rows are omitted; valid normalized observations retain their exact values.
+    """
+    from datetime import date
+    from urllib.parse import urlsplit
+
+    if (not isinstance(official_data, dict) or type(official_data.get("schema_version")) is not int
+            or official_data["schema_version"] != 1):
+        return []
+    rows = official_data.get("series")
+    if not isinstance(rows, list):
+        return []
+    from .official_data import data_api
+    api = data_api()
+    if api is None:
+        return []
+    result = []
+    seen = set()
+    for row in rows[:12]:
+        if not isinstance(row, dict) or not isinstance(row.get("series"), str):
+            continue
+        identity = row["series"]
+        if (identity in seen or not identity or not isinstance(row.get("units"), str)
+                or not row["units"].strip() or row.get("frequency") not in ("D", "W", "M", "Q", "A")):
+            continue
+        try:
+            parsed = api.parse_series_id(identity)
+            if not parsed or ":".join(parsed) != identity:
+                continue
+            if row.get("transform", "") != parsed[1].partition("#")[2]:
+                continue
+            url = urlsplit(str(row.get("source_url") or ""))
+            if url.scheme not in {"https", "http"} or not url.hostname or url.username or url.password:
+                continue
+            boundary = row.get("projection_from")
+            if boundary and date.fromisoformat(boundary).isoformat() != boundary:
+                continue
+            observations = row.get("observations")
+            if not isinstance(observations, list):
+                continue
+            points = []
+            dates = set()
+            for point in observations[-240:]:
+                period, value = point["date"], point["value"]
+                if date.fromisoformat(period).isoformat() != period or period in dates:
+                    raise ValueError("noncanonical or duplicate observation period")
+                if value is not None and (isinstance(value, bool) or
+                        not isinstance(value, (int, float)) or not math.isfinite(value)):
+                    raise ValueError("nonfinite observation")
+                dates.add(period)
+                points.append(dict(point))
+            if not any(p["value"] is not None for p in points):
+                continue
+            points.sort(key=lambda p: p["date"])
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+        seen.add(identity)
+        result.append({**row, "observations": points})
+    return result
+
+
+def official_observation_kind(row: Dict[str, Any], point: Dict[str, Any]) -> str:
+    """Do not present publisher forecasts, estimates or unknown status as actuals."""
+    flag = str(point.get("flag") or "").strip().lower()
+    boundary = str(row.get("projection_from") or "")
+    provider = str(row.get("provider") or row["series"].split(":", 1)[0]).lower()
+    if provider == "wb" or row["series"].startswith("usgov:spending/"):
+        return "unclassified publisher value"
+    if flag == "unknown":
+        return "unclassified publisher value"
+    if flag in {"preliminary", "prelim", "provisional"} or flag == "p" and provider == "bls":
+        return "publisher preliminary"
+    if flag == "p":
+        return "unclassified publisher value"
+    if flag in {"projection", "projected", "forecast"}:
+        return "publisher projection"
+    if flag in {"e", "estimate", "estimated"}:
+        return "publisher estimate"
+    if flag and flag not in {"a", "actual", "historical", "observed", "reported", "r", "revised"}:
+        return "unclassified publisher value"
+    if not flag and row["series"].startswith(("imf:WEO/", "imf:WEO_")):
+        return "unclassified publisher value"
+    if boundary and str(point["date"]) >= boundary:
+        return "unclassified publisher value" if flag else "publisher projection"
+    if not flag and point.get("is_projection") is True:
+        return "publisher projection"
+    # WEO/GEP often mixes actuals and outlooks without status metadata. Absence
+    # of that metadata cannot establish a historical observation (source study).
+    if not flag and not boundary and re.search(r"WEO|GEP", row["series"], re.I):
+        return "unclassified publisher value"
+    return "historical observation"
+
+
+def official_data_statements(official_data: Any) -> List[Tuple[Dict[str, Any], str]]:
+    """Exact, narrow factual sentences for report grounding; no free-form claims."""
+    rows = official_series_rows(official_data)
+    if not rows:
+        return []
+    from .official_data import format_value
+    return [(row, f"{row['series']}: {format_value(point['value'], row['units'])} "
+             f"on {point['date']} ({official_observation_kind(row, point)}, units: {row['units']}).")
+            for row in rows for point in row["observations"] if point["value"] is not None]
+
+
+def official_source_tag(row: Dict[str, Any], index: Dict[str, Any]) -> str:
+    """Match the actual V3/legacy ledger dataset identity, including transforms."""
+    from urllib.parse import parse_qsl, urlsplit
+
+    def origin(value: Any, *, decorated: bool = False):
+        try:
+            parts = urlsplit(str(value or ""))
+        except ValueError:
+            return None
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        decorations = [v for k, v in query if k == "drf_series"]
+        if decorations:
+            if not decorated or decorations != [row.get("series")]:
+                return None
+            query = [(k, v) for k, v in query if k != "drf_series"]
+        return (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"),
+                tuple(sorted(query)), parts.fragment)
+
+    exact, generic = [], []
+    for tag, source in index.items():
+        if not isinstance(source, dict):
+            continue
+        dataset = source.get("dataset")
+        dataset = dataset if isinstance(dataset, dict) else {}
+        url = source.get("url") or source.get("source_url") or dataset.get("source_url")
+        identity = dataset.get("series") or source.get("series") or source.get("series_id")
+        if origin(url, decorated=identity == row.get("series")) != origin(row.get("source_url")):
+            continue
+        if dataset.get("source_url") and origin(dataset["source_url"]) != origin(row.get("source_url")):
+            continue
+        if identity == row.get("series"):
+            exact.append(tag)
+        elif not identity:
+            generic.append(tag)
+    matches = exact or generic
+    return str(matches[0]) if len(matches) == 1 else ""
+
+
+def _data_anchor_matches_binary(anchor: Dict[str, Any], binary: Dict[str, Any], official_data: Any) -> bool:
+    """Admit optional anchors only when the displayed proposition is unambiguous.
+
+    The shared helper checks the dataset; this boundary also binds the model's
+    threshold to its prose. Unparseable prose keeps its existing forecast but
+    loses automatic anchoring rather than acquiring a different settlement rule.
+    """
+    statement = str(binary.get("statement") or "")
+    criteria = str(binary.get("resolution_criteria") or "")
+    text = statement + " " + criteria
+    rows = official_series_rows(official_data)
+    row = next((r for r in rows if r["series"] == anchor["series"]), None)
+    if row is None:
+        return False
+    metric_words = set(re.findall(r"[a-z]{4,}", str(row.get("title") or "").lower()))
+    if row["series"] not in criteria:
+        return False
+    if row["series"] not in statement and (not metric_words or not metric_words.issubset(set(re.findall(r"[a-z]{4,}", statement.lower())))):
+        return False
+    unit = str(row["units"])
+    unit_pattern = (r"(?:%|percent\b)" if unit.lower() in {"%", "percent", "percentage"}
+                    else re.escape(unit))
+    comparison = re.compile(r"(>=|<=|>|<|≥|≤)\s*([+-]?\d+(?:\.\d+)?)\s*" + unit_pattern, re.I)
+    criterion_matches = list(comparison.finditer(criteria))
+    statement_matches = list(comparison.finditer(statement))
+    matches = list(comparison.finditer(text))
+    if len(criterion_matches) != 1 or len(statement_matches) != 1 or any(
+            m.group(1).replace("≥", ">=").replace("≤", "<=") != anchor["comparator"]
+            or float(m.group(2)) != anchor["threshold"] for m in matches):
+        return False
+    period = str(anchor.get("observation") or anchor.get("period") or "")
+    frequency = row["frequency"]
+    # Admit complete affirmative predicates, not a matching substring inside
+    # negation, alternatives or conditional events. Canonical IDs support every
+    # report language without trying to infer the meaning of arbitrary prose.
+    labels = {row["series"].casefold(), str(row.get("title") or "").casefold()}
+    geography = str(row.get("geography") or "")
+    geographies = {geography} if geography else set()
+    if geography == "USA":
+        geographies.update({"US", "United States"})
+    labels.update(f"{geo} {row.get('title', '')}".casefold() for geo in geographies)
+    month_names = ("January", "February", "March", "April", "May", "June", "July", "August",
+                   "September", "October", "November", "December")
+    period_pattern = {
+        "M": r"(?:\d{4}-\d{2}(?:-01)?|(?:" + "|".join(month_names) + r")\s+\d{4}|\d{4}年\d{1,2}月)",
+        "Q": r"\d{4}[- ]?Q[1-4]",
+        "A": r"\d{4}",
+        "D": r"\d{4}-\d{2}-\d{2}",
+        "W": r"\d{4}-\d{2}-\d{2}",
+    }[frequency]
+    for surface, match, allowed in ((statement, statement_matches[0], labels),
+                                     (criteria, criterion_matches[0], {row["series"].casefold()})):
+        prefix = surface[:match.start()].strip().rstrip(":").casefold()
+        prefix = re.sub(r"^the\s+|\s+is$", "", prefix)
+        suffix = surface[match.end():].strip()
+        if prefix not in allowed or not re.fullmatch(
+                r"(?:(?:in|for|on)\s+)?" + period_pattern + r"[.!]?", suffix, re.I):
+            return False
+    dates = set()
+    if frequency == "M":
+        dates.update(m.group(0) for m in re.finditer(r"\b\d{4}-\d{2}(?!-\d|\d)", text))
+        dates.update(value[:7] for value in re.findall(r"\b\d{4}-\d{2}-01\b", text))
+        for month, name in enumerate(month_names, 1):
+            dates.update(f"{year}-{month:02d}" for year in re.findall(rf"\b{name}\s+(\d{{4}})\b", text, re.I))
+        dates.update(f"{year}-{int(month):02d}" for year, month in re.findall(r"(\d{4})年(\d{1,2})月", text))
+        target = period[:7]
+    elif frequency == "Q":
+        dates.update(f"{year}-Q{quarter}" for year, quarter in re.findall(r"\b(\d{4})[- ]?Q([1-4])\b", text, re.I))
+        target = period if "Q" in period else f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
+    elif frequency == "A":
+        dates.update(re.findall(r"\b\d{4}\b", text))
+        target = period[:4]
+    else:
+        dates.update(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text))
+        target = period
+    return dates == {target}
+
+
 def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
-                        market_lookup: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+                        market_lookup: Optional[Dict[str, float]] = None,
+                        official_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1592,6 +1816,11 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
                     "implied_yes_prob": round(ip, 4),
                     "divergence": round(row["probability"] - ip, 4),
                 }
+        if official_data and isinstance(it.get("data_anchor"), dict):
+            from .official_data import validate_data_anchor
+            data_anchor = validate_data_anchor(it["data_anchor"], official_data)
+            if data_anchor is not None and _data_anchor_matches_binary(data_anchor, it, official_data):
+                row["data_anchor"] = data_anchor
         out.append(row)
     return out
 
@@ -2658,7 +2887,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              markets: Optional[List[Dict[str, Any]]] = None,
                              scenarios: Optional[List[Dict[str, Any]]] = None,
                              ensemble_client_factory: Optional[Any] = None,
-                             horizon_date: Optional[str] = None) -> Dict[str, Any]:
+                             horizon_date: Optional[str] = None,
+                             data_pack: Optional[str] = None,
+                             official_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -2736,6 +2967,21 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             )
         if market_aware:
             user += _BINARY_MARKET_RULE
+        if data_pack and official_data:
+            user += (
+                "\n\n[Official data snapshot]\n" + str(data_pack)[:3500]
+                + '\nFor a binary about a listed series, optionally add data_anchor '
+                  '{"series": "exact canonical ID", "comparator": ">|>=|<|<=", '
+                  '"threshold": number, "observation": "YYYY-MM|YYYY-Qn|YYYY|YYYY-MM-DD", '
+                  '"transform": "exact listed transform", "units": "exact listed units"}. '
+                  "Match the series frequency and a single exact period. Thresholds and "
+                  "probabilities are model forecasts; publisher projections are not observed "
+                  "outcomes. In resolution_criteria include the canonical series ID, literal "
+                  "comparator, numeric threshold, units and observation period exactly; keep "
+                  "the statement's metric and numeric comparison consistent with this criterion "
+                  "(use the same literal comparator and units in the statement). Do not transcribe latest "
+                  "values or invent series metadata."
+            )
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
@@ -2769,7 +3015,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              temperature=0.25, max_tokens=4096)
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         return _normalize_binaries(items or [], allowed_themes=themes,
-                                   market_lookup=market_lookup or None)
+                                   market_lookup=market_lookup or None,
+                                   official_data=official_data)
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
@@ -3507,7 +3754,8 @@ def upsert_binary_forecasts_block(markdown: str, block: str) -> tuple[str, str]:
 
 def render_resolution_block(forecast: Optional[Dict[str, Any]],
                             indicators: Optional[List[Dict[str, Any]]] = None,
-                            language: str = "Chinese") -> str:
+                            language: str = "Chinese",
+                            official_data: Optional[Dict[str, Any]] = None) -> str:
     """NEXTSTEPS P2-2: 渲染一个**确定性**的「如何验证本预测」章节。
 
     逐情景列出可证伪的判定标准 + 来自 forecast_inputs 的带日期/触发型观察指标（并把指标绑定到
@@ -3566,6 +3814,32 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
             trig = _esc_cell(i.get("date_or_trigger") or i.get("date") or i.get("trigger") or "—")
             disc = _esc_cell(i.get("discriminates") or i.get("scenario") or "—")
             lines.append(f"| {name or '—'} | {trig or '—'} | {disc or '—'} |")
+    if official_data:
+        from .official_data import validate_data_anchor
+        binaries = forecast.get("binary_forecasts")
+        binaries = binaries if isinstance(binaries, list) else []
+        anchors = []
+        for binary in binaries:
+            if not isinstance(binary, dict):
+                continue
+            anchor = validate_data_anchor(binary.get("data_anchor"), official_data)
+            if anchor and _data_anchor_matches_binary(anchor, binary, official_data):
+                anchors.append(anchor)
+        if anchors:
+            lines += ["", "### 官方观察序列" if zh else "### Official series to watch",
+                      ("| 序列 | 最近历史观测 | 模型阈值 / 观察期 | 来源 |" if zh else
+                       "| Series | Latest historical observation | Model threshold / period | Source |"),
+                      "|---|---|---|---|"]
+            for anchor in anchors[:12]:
+                latest = ((f"{anchor['latest_value']} {anchor.get('units', '')} "
+                           f"({anchor.get('latest_date') or '—'})")
+                          if anchor.get("latest_value") is not None else
+                          ("暂无历史观测" if zh else "Historical observation unavailable"))
+                threshold = (f"{anchor['comparator']} {anchor['threshold']} "
+                             f"{anchor.get('units', '')} / {anchor['observation']}")
+                url = str(anchor.get("source_url") or "")
+                lines.append(f"| {_esc_cell(anchor['series'])} | {_esc_cell(latest)} | "
+                             f"{_esc_cell(threshold)} | [Source](<{url}>) |")
     return "\n".join(lines)
 
 

@@ -28,11 +28,14 @@
 from __future__ import annotations
 
 import argparse
+import calendar
+import hashlib
 import json
+import math
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # ── 让脚本无论从哪个 cwd 调用都能 import 到 backend 的 app 包（与 scheduled_rerun.py 一致）──
@@ -323,6 +326,160 @@ def detect_needs_manual(binaries: List[Dict[str, Any]],
     return out
 
 
+def _data_period_bounds(value: Any) -> Optional[tuple[str, str]]:
+    """Only exact supported periods can trigger a bounded provider query."""
+    text = str(value or "").strip()
+    try:
+        if re.fullmatch(r"\d{4}", text):
+            year = int(text)
+            return date(year, 1, 1).isoformat(), date(year, 12, 31).isoformat()
+        quarter = re.fullmatch(r"(\d{4})-Q([1-4])", text)
+        if quarter:
+            year, q = int(quarter[1]), int(quarter[2])
+            start_month, end_month = 3 * q - 2, 3 * q
+            return (date(year, start_month, 1).isoformat(),
+                    date(year, end_month, calendar.monthrange(year, end_month)[1]).isoformat())
+        if re.fullmatch(r"\d{4}-\d{2}", text):
+            year, month = map(int, text.split("-"))
+            return date(year, month, 1).isoformat(), date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+            value = date.fromisoformat(text).isoformat()
+            return value, value
+    except ValueError:
+        pass
+    return None
+
+
+def resolve_official_forecasts(binaries, *, report_id, as_of, already_resolved=(), data_client=None,
+                              dry_run=False):
+    """Resolve an exact period; None means current time after each retrieval."""
+    from app.services import official_data
+    records, statuses = [], []
+    if not getattr(Config, "DATA_SOURCES_ENABLED", False):
+        return records, statuses
+    skipped = {str(fid).strip() for fid in already_resolved}
+    for binary in binaries:
+        anchor = binary.get("data_anchor")
+        fid = str(binary.get("id") or "").strip()
+        if not isinstance(anchor, dict) or fid in skipped:
+            continue
+        identity = str(anchor.get("series") or "").strip()
+        status = {"forecast_id": fid, "series": identity, "status": "manual", "reason": "Invalid data anchor"}
+        bounds = _data_period_bounds(anchor.get("observation") or anchor.get("period"))
+        if not fid or not identity or bounds is None:
+            statuses.append(status)
+            continue
+        if bounds[1] > str(as_of if as_of is not None else _utcnow_iso())[:10]:
+            status.update(status="pending", reason="Observation period has not ended")
+            statuses.append(status)
+            continue
+        if dry_run:
+            # Official adapters maintain disk caches/quotas and may start MCP
+            # processes. Preserve the monitor's no-write dry-run guarantee.
+            status.update(status="pending", reason="Dry run: official source fetch not performed", attempted=False)
+            statuses.append(status)
+            continue
+        try:
+            if data_client is None:
+                data_client = official_data.get_data_sources()
+            if data_client is None:
+                status["reason"] = "Official data unavailable"
+                statuses.append(status)
+                continue
+            fetched = data_client.get(identity, start=bounds[0], end=bounds[1],
+                                      transform=str(anchor.get("transform") or ""), max_obs=240)
+            payload = fetched.to_dict() if hasattr(fetched, "to_dict") else fetched
+            if not isinstance(payload, dict) or not isinstance(payload.get("observations"), list):
+                status["reason"] = "Provider did not return a usable official series"
+                statuses.append(status)
+                continue
+            # A current-time check must include the retrieval it just performed.
+            # Explicit historical cutoffs never move as a consequence of fetching.
+            resolution_cutoff = as_of if as_of is not None else _utcnow_iso()
+            decision = official_data.resolve_data_anchor(anchor, fetched, as_of=resolution_cutoff)
+            if not isinstance(decision, dict):
+                raise ValueError("Invalid resolution response")
+            status.update(status=decision.get("status", "manual"), reason=str(decision.get("reason") or "")[:300])
+            if status["status"] not in {"resolved", "pending", "manual"}:
+                status.update(status="manual", reason="Invalid official resolution status")
+            probability = _coerce_float(binary.get("probability"))
+            if (status["status"] == "resolved" and type(decision.get("outcome")) is bool
+                    and isinstance(decision.get("observation"), dict)
+                    and probability is not None and math.isfinite(probability) and 0 <= probability <= 1):
+                encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+                records.append({
+                    "report_id": report_id, "forecast_id": fid, "series": identity,
+                    "resolved_outcome": decision["outcome"], "model_p": probability,
+                    "brier_contribution": round((probability - float(decision["outcome"])) ** 2, 4),
+                    "resolved_at": resolution_cutoff, "observation": decision["observation"],
+                    "units": payload.get("units"), "transform": payload.get("transform", ""),
+                    "source_url": payload.get("source_url"), "retrieved_at": payload.get("retrieved_at"),
+                    "vintage": payload.get("vintage", ""), "data_anchor": dict(anchor),
+                    "dataset_sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+                    "dataset_snapshot": json.loads(encoded),
+                })
+            elif status["status"] == "resolved":
+                status.update(status="manual", reason="Incomplete outcome or model probability")
+        except Exception as exc:  # source outage preserves a pending/manual outcome
+            status.update(status="manual", reason=f"Official data unavailable ({type(exc).__name__})")
+        statuses.append(status)
+    return records, statuses
+
+
+def _recorded_official_outcomes(binaries, previous, *, report_id, as_of):
+    """A recorded outcome is immutable and cannot leak into an earlier cutoff."""
+    from app.services import official_data
+    rows = {(str(row.get("forecast_id") or "").strip(), str(row.get("series") or "").strip()): row
+            for row in previous if str(row.get("report_id") or "").strip() == str(report_id).strip()}
+    records, statuses, seen = [], [], set()
+    keys = ("series", "comparator", "threshold", "period", "transform", "units")
+    for binary in binaries:
+        anchor = binary.get("data_anchor")
+        if not isinstance(anchor, dict):
+            continue
+        fid, sid = str(binary.get("id") or "").strip(), str(anchor.get("series") or "").strip()
+        prior = rows.get((fid, sid))
+        if prior is None:
+            continue
+        seen.add(fid)
+        status = {"forecast_id": fid, "series": sid, "status": "manual",
+                  "reason": "Recorded outcome differs from the current forecast contract"}
+        try:
+            snapshot = prior.get("dataset_snapshot")
+            encoded = json.dumps(snapshot, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            if hashlib.sha256(encoded.encode("utf-8")).hexdigest() != prior.get("dataset_sha256"):
+                raise ValueError("Recorded dataset hash mismatch")
+            carrier = {"series": [snapshot]}
+            original = official_data.validate_data_anchor(prior.get("data_anchor"), carrier)
+            current = official_data.validate_data_anchor(anchor, carrier)
+            probability = _coerce_float(binary.get("probability"))
+            if (not original or not current or any(original[key] != current[key] for key in keys)
+                    or probability is None or not math.isfinite(probability) or not 0 <= probability <= 1
+                    or prior.get("model_p") != probability):
+                raise ValueError("Recorded forecast contract mismatch")
+            recorded_at = official_data.resolution_instant(prior.get("resolved_at"))
+            cutoff = official_data.resolution_instant(as_of)
+            if recorded_at > cutoff:
+                status.update(status="pending", reason="Recorded outcome was unavailable at the requested cutoff")
+            else:
+                # Revalidate the sealed snapshot under the same eligibility rules
+                # as a fresh observation. Never refetch a revised provider value.
+                decision = official_data.resolve_data_anchor(anchor, snapshot, as_of=prior.get("resolved_at"))
+                if (decision.get("status") != "resolved"
+                        or type(prior.get("resolved_outcome")) is not bool
+                        or decision.get("outcome") != prior["resolved_outcome"]
+                        or decision.get("observation") != prior.get("observation")):
+                    raise ValueError("Recorded outcome does not match its snapshot")
+                record = dict(prior, report_id=str(report_id).strip(), forecast_id=fid, series=sid)
+                record["brier_contribution"] = round((probability - float(prior["resolved_outcome"])) ** 2, 4)
+                records.append(record)
+                status.update(status="resolved", reason="Previously recorded official outcome; original observation retained")
+        except (TypeError, ValueError, KeyError, OverflowError):
+            pass  # malformed or obsolete evidence requires manual adjudication
+        statuses.append(status)
+    return records, statuses, seen
+
+
 def _pct(v: Optional[float]) -> str:
     return f"{v * 100:.0f}%" if isinstance(v, (int, float)) else "—"
 
@@ -491,13 +648,14 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                 ledger_dir: Optional[str] = None, dry_run: bool = False,
                 as_of: Optional[str] = None,
                 threshold: Optional[float] = None,
-                write_report: bool = True) -> Dict[str, Any]:
+                write_report: bool = True, data_client: Any = None) -> Dict[str, Any]:
     """对一份报告跑一次解析监测。返回结果摘要 dict（供 CLI 打印/聚合）。
 
     可注入 forecast / report_folder / client / ledger_dir / as_of，全离线可测。
     dry_run=True 时不写任何盘（price_track / ledger / monitor_report.md 均跳过）。
     任何市场访问失败都退化为部分报告（degraded=True），绝不抛。"""
-    as_of = as_of or _utcnow_iso()
+    current_time = as_of is None
+    as_of = _utcnow_iso() if current_time else as_of
     as_of_day = str(as_of)[:10]
     thr = threshold if threshold is not None else drift_threshold()
     if report_folder is None:
@@ -508,9 +666,9 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         from app.utils.prediction_markets import PolymarketClient
         client = PolymarketClient()
 
-    binaries = [b for b in ((forecast or {}).get("binary_forecasts") or [])
+    binaries = [dict(b, id=str(b.get("id") or "").strip()) for b in ((forecast or {}).get("binary_forecasts") or [])
                 if isinstance(b, dict)]
-    anchored = anchored_forecasts(forecast)
+    anchored = anchored_forecasts(dict(forecast or {}, binary_forecasts=binaries))
     degraded = False
 
     # (1)+(2) 重报价锚点市场 → 价格快照；同时收集当前市场访问健康度。
@@ -547,9 +705,22 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     records = build_resolution_records(anchored, resolutions,
                                        report_id=report_id, resolved_at=as_of)
 
-    # (4) 指标检查：过期却无市场判定的预测 → 需人工判定。
-    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day)
-
+    prior_data, prior_statuses, prior_ids = _recorded_official_outcomes(
+        binaries, _ledger.read_data_resolutions(ledger_dir), report_id=report_id, as_of=as_of,
+    ) if getattr(Config, "DATA_SOURCES_ENABLED", False) else ([], [], set())
+    # Preserve the first official resolution rather than scoring this forecast
+    # a second time when a market subsequently reaches its terminal state.
+    records = [row for row in records if str(row.get("forecast_id") or "") not in prior_ids]
+    data_records, data_statuses = resolve_official_forecasts(
+        binaries, report_id=report_id, as_of=None if current_time else as_of,
+        already_resolved=[row.get("forecast_id") for row in records] + list(prior_ids),
+        data_client=data_client, dry_run=dry_run,
+    )
+    data_records = prior_data + data_records
+    data_statuses = prior_statuses + data_statuses
+    if current_time:
+        as_of = _utcnow_iso()
+        as_of_day = str(as_of)[:10]
     # ── 写盘（dry-run 跳过全部写操作）──
     newly_recorded: List[Dict[str, Any]] = []
     if not dry_run:
@@ -568,16 +739,58 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                 d=ledger_dir)
             if written is not None:
                 newly_recorded.append(written)
+        for rec in data_records:
+            written = _ledger.append_data_resolution(rec, d=ledger_dir)
+            if written is not None:
+                newly_recorded.append(written)
+        if data_statuses:
+            # The append lock can choose another monitor's row. Apply exactly
+            # the replay contract/cutoff validation to that committed winner.
+            committed, committed_statuses, _ = _recorded_official_outcomes(
+                binaries, _ledger.read_data_resolutions(ledger_dir), report_id=report_id, as_of=as_of)
+            committed_keys = {(row["forecast_id"], row["series"]) for row in committed_statuses}
+            for row in data_statuses:
+                if row["status"] == "resolved" and (row["forecast_id"], row["series"]) not in committed_keys:
+                    row.update(status="manual", reason="Official outcome was not durably recorded")
+            data_statuses = [row for row in data_statuses
+                             if (row["forecast_id"], row["series"]) not in committed_keys] + committed_statuses
+            data_records = committed
+
+    # Compute presentation and counts only after the committed evidence wins.
+    data_resolved_ids = {row["forecast_id"] for row in data_records}
+    data_pending_ids = {row["forecast_id"] for row in data_statuses if row["status"] == "pending"}
+    data_manual = {row["forecast_id"]: row for row in data_statuses if row["status"] == "manual"}
+    degraded = degraded or bool(data_manual)
+    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day)
+    needs_manual = [row for row in needs_manual
+                    if row.get("forecast_id") not in data_resolved_ids | data_pending_ids]
+    for row in needs_manual:
+        if row.get("forecast_id") in data_manual:
+            row["reason"] = data_manual[row["forecast_id"]]["reason"]
 
     # ── 汇总分数（账本读取；dry-run 也能读，只是不含本次未写入的新判定）──
     calibration = _ledger.calibration_summary(ledger_dir)
     market_brier = _ledger.market_brier_summary(ledger_dir)
+    data_brier = _ledger.data_brier_summary(ledger_dir) if data_statuses else {"n_resolved": 0, "mean_brier": None}
 
     md = render_monitor_md(
         report_id=report_id, as_of=as_of_day, movers=movers,
         resolution_records=records, needs_manual=needs_manual,
         calibration=calibration, market_brier=market_brier,
         anchored_count=len(anchored), degraded=degraded)
+    if data_statuses:
+        lines = ["", "## Official data outcomes", "",
+                 "| Forecast | Series | Status | Evidence |", "|---|---|---|---|"]
+        by_id = {row["forecast_id"]: row for row in data_records}
+        for row in data_statuses:
+            record = by_id.get(row["forecast_id"])
+            if record:
+                obs = record["observation"]
+                evidence = f"{obs.get('value')} {record.get('units') or ''} ({obs.get('date')}); Brier {record['brier_contribution']}"
+            else:
+                evidence = row["reason"]
+            lines.append(f"| {_cell(row['forecast_id'])} | {_cell(row['series'])} | {_cell(row['status'])} | {_cell(evidence)} |")
+        md += "\n".join(lines) + "\n"
 
     report_path: Optional[str] = None
     if not dry_run and write_report:
@@ -589,12 +802,12 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
             logger.warning(f"落 monitor_report.md 失败（忽略）: {e}")
             report_path = None
 
-    return {
+    result = {
         "report_id": report_id,
         "as_of": as_of_day,
         "anchored_count": len(anchored),
         "movers": movers,
-        "resolved_count": len(records),
+        "resolved_count": len(records) + len(data_records),
         "newly_recorded_count": len(newly_recorded),
         "needs_manual_count": len(needs_manual),
         "needs_manual": needs_manual,
@@ -606,6 +819,10 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         "monitor_report_path": report_path,
         "monitor_report_md": md,
     }
+    if data_statuses:
+        result.update(data_resolution_records=data_records,
+                      data_resolution_status=data_statuses, data_brier=data_brier)
+    return result
 
 
 # ---------------------------------------------------------------------------

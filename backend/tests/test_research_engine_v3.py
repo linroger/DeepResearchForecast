@@ -1138,12 +1138,17 @@ def test_search_rows_expose_fetchable_urls(tmp_path):
 
 @pytest.fixture
 def restore_environ():
-    saved = dict(os.environ)
+    identity_names = {"HOME", "home", "CODEX_HOME", "USERPROFILE"}
+    saved = {name: value for name, value in os.environ.items() if name not in identity_names}
     try:
         yield
     finally:
-        os.environ.clear()
-        os.environ.update(saved)
+        for name in list(os.environ):
+            if name not in identity_names and name not in saved:
+                del os.environ[name]
+        for name, value in saved.items():
+            if os.environ.get(name) != value:
+                os.environ[name] = value
 
 
 def test_main_dispatches_research_engine_v3_end_to_end(tmp_path, bridge, monkeypatch, restore_environ):

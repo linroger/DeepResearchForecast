@@ -6,6 +6,7 @@
     "setup": "npm install && cd frontend && npm install",
     "setup:backend": "cd backend && uv sync --python 3.12",
     "setup:all": "npm run setup && npm run setup:backend",
+    "setup:datamcps": "bash scripts/setup_datamcps.sh",
     "doctor": "bash scripts/doctor.sh",
     "smoke": "bash scripts/smoke.sh",
     "dev": "concurrently --kill-others -n \"backend,frontend\" -c \"green,cyan\" \"npm run backend\" \"npm run frontend\"",

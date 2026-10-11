@@ -101,3 +101,18 @@ handoff.md
 .foglamp/
 # linear-engine / search-tool runtime caches
 deerflow_bridge/.cache/
+
+# 官方数据源 MCP 服务（datamcps/）：第三方源码原样入库；构建产物与运行期杂物永不入库
+# （由 scripts/setup_datamcps.sh 重建）。上方全局 dist/ build/ node_modules/ .venv/ 等规则
+# 已覆盖其中多数；此处显式列出，使该目录树不依赖全局规则，并补上服务专属的运行期产物。
+datamcps/**/node_modules/
+datamcps/**/dist/
+datamcps/**/build/
+datamcps/**/.venv/
+datamcps/**/*.egg-info/
+datamcps/**/__pycache__/
+# data360 未配置图表存储时把 Vega 规格写进自己的 static/viz_specs/
+datamcps/**/static/viz_specs/
+# 会话 hook 在当前目录生成的日志 / 会话记录（可能含敏感信息）
+datamcps/**/logs/
+datamcps/**/.claude/

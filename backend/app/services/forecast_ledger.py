@@ -434,3 +434,77 @@ def market_brier_summary(d: Optional[str] = None,
         return {"n_resolved": len(recs), "mean_brier": None}
     return {"n_resolved": len(recs),
             "mean_brier": round(sum(briers) / len(briers), 4)}
+
+
+def read_data_resolutions(d: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Read official-observation outcomes separately from market outcomes."""
+    target = os.path.join(d or ledger_dir(), "data_resolutions.jsonl")
+    rows: List[Dict[str, Any]] = []
+    try:
+        with open(target, encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict):
+                        rows.append(row)
+                except (ValueError, TypeError):
+                    continue
+    except OSError:
+        pass
+    return rows
+
+
+def append_data_resolution(record: Dict[str, Any], *, d: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Append one verified official outcome, idempotently under the ledger lock.
+
+    Report/forecast/series identity is immutable. A later provider revision is
+    evidence for an explicit review, never an automatic rewrite of an outcome.
+    """
+    import math
+    rid = str(record.get("report_id") or "").strip()
+    fid = str(record.get("forecast_id") or "").strip()
+    series = str(record.get("series") or "").strip()
+    observation = record.get("observation")
+    probability = record.get("model_p")
+    outcome = record.get("resolved_outcome")
+    if (not rid or not fid or not series or type(outcome) is not bool
+            or not isinstance(observation, dict)
+            or isinstance(probability, bool) or not isinstance(probability, (int, float))
+            or not math.isfinite(probability) or not 0 <= probability <= 1):
+        return None
+    entry = dict(record)
+    entry.update(report_id=rid, forecast_id=fid, series=series,
+                 schema_version=1, resolution_kind="official_data",
+                 brier_contribution=round((float(probability) - float(outcome)) ** 2, 4))
+    try:
+        encoded = json.dumps(entry, ensure_ascii=False, allow_nan=False)
+        target = os.path.join(d or ledger_dir(), "data_resolutions.jsonl")
+        key = _resolution_key(rid, fid, "data:" + series)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with _RESOLUTIONS_WRITE_LOCK:
+            with open(target, "a", encoding="utf-8") as stream:
+                _flock_exclusive(stream)
+                existing = {
+                    _resolution_key(str(row.get("report_id") or "").strip(),
+                                    str(row.get("forecast_id") or "").strip(),
+                                    "data:" + str(row.get("series") or "").strip())
+                    for row in read_data_resolutions(d)
+                }
+                if key in existing:
+                    return None
+                stream.write(encoded + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+        return entry
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def data_brier_summary(d: Optional[str] = None) -> Dict[str, Any]:
+    """Official-data calibration never enters the market-only denominator."""
+    import math
+    rows = read_data_resolutions(d)
+    values = [row.get("brier_contribution") for row in rows]
+    values = [float(value) for value in values if isinstance(value, (int, float))
+              and not isinstance(value, bool) and math.isfinite(value)]
+    return {"n_resolved": len(rows), "mean_brier": round(sum(values) / len(values), 4) if values else None}

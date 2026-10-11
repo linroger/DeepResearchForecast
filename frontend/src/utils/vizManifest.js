@@ -114,6 +114,8 @@ const ZH_CHART_CAPTIONS = Object.freeze({
   'Baseline vs Scenario': '基线与情景对比',
   'Calibration Curve': '校准曲线',
   'Market-Implied P(yes) History vs Model': '市场隐含 P(是) 历史与模型对比',
+  'Official Indicators': '官方指标',
+  'Official Series History and Forecast Thresholds': '官方序列历史与预测阈值',
 })
 
 export function localizeChartCaption(caption, lang) {

@@ -1,0 +1,163 @@
+{
+  "created_utc": "2026-10-11T16:39:38.137943+00:00",
+  "branch": "main",
+  "head": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "files": [
+    {
+      "path": ".env.example",
+      "status": " M",
+      "sha256": "d46d68b2ec2052df614f08e3bba144fc753141103715a2326211b89a48450b4f"
+    },
+    {
+      "path": ".gitignore",
+      "status": " M",
+      "sha256": "bcff96ce592f5be264558c56012d3310228e2e72997fda627fe11de51c796443"
+    },
+    {
+      "path": "backend/app/config.py",
+      "status": " M",
+      "sha256": "664c3efc2163688bde8027e6035a4f227b1cea61d4b79012261c5bc59a8386ea"
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "status": " M",
+      "sha256": "bdc1c33e31320e1cf2a870663bcb1981f9f707fc967371d306ffbd3a5058a7a9"
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "status": " M",
+      "sha256": "1fcc05fc9b39ae8bddd8beed78c92f49ea9eded8794b6fa13a9126017512cfba"
+    },
+    {
+      "path": "backend/tests/test_bridge_extensions_config.py",
+      "status": " M",
+      "sha256": "d43b67670eca8fd8c7f988460a03229c775e08f71205175e80c13238d6796ace"
+    },
+    {
+      "path": "backend/tests/test_deerflow_bridge_sync_guard.py",
+      "status": " M",
+      "sha256": "f96c83410231ed14f557d26c8bd45405541a85a2dfa2e490688df8489b7ac059"
+    },
+    {
+      "path": "backend/tests/test_runtime_skill_sync.py",
+      "status": " M",
+      "sha256": "a37d912570a6bd9302869265eefda67dd49cd089f1a57b9e1140af41bbcbf8e8"
+    },
+    {
+      "path": "deerflow_bridge/runtime_skill_sync.py",
+      "status": " M",
+      "sha256": "f34554b3581a17dcbb7118e2175136663e52fc09a32a161b2dbe983087fccb10"
+    },
+    {
+      "path": "handoff.md",
+      "status": " M",
+      "sha256": "341cc3e64375b6bb3808f658290e9f5dd6ca9cd4106d014f2d9618f6b03b6463"
+    },
+    {
+      "path": "init.sh",
+      "status": " M",
+      "sha256": "59da3ae93b0c63ee07ff762bfaf5d820e00586c526fe2d45a274273b8e104e15"
+    },
+    {
+      "path": "package.json",
+      "status": " M",
+      "sha256": "4779c53d7f400ad47fdf7a885063986a6d8ef56936a4b31bfe9b450a547412b9"
+    },
+    {
+      "path": "scripts/doctor.sh",
+      "status": " M",
+      "sha256": "50b7076616feede3d5e4e85acecbf9b2f4c9eedf897e87c7530240db21d856e9"
+    },
+    {
+      "path": "setup.sh",
+      "status": " M",
+      "sha256": "aeb3399f923b84795a008cd7ab179eebced78153850de820b5e20c8db79348d9"
+    },
+    {
+      "path": ".zcodeignore",
+      "status": "??",
+      "sha256": "a31a7973a2cba92eae0701e98d5699b7904be3e017defea05be17c4e48674124"
+    },
+    {
+      "path": "backend/tests/test_data_mcp.py",
+      "status": "??",
+      "sha256": "9f41f7308efd8825b87bd9f8a51b05ed547ecd146815dd8b33b0a34e48c51b48"
+    },
+    {
+      "path": "backend/tests/test_data_sources_config.py",
+      "status": "??",
+      "sha256": "622fbbb237b678c41f282f062d806524983beb356fd708c180de72c03392a935"
+    },
+    {
+      "path": "backend/tests/test_data_visuals_render.py",
+      "status": "??",
+      "sha256": "b9571b11ffd11994ff9bf84e63c2bc10b5f72e403fa71a396443e85985460aab"
+    },
+    {
+      "path": "deerflow_bridge/data_catalog.py",
+      "status": "??",
+      "sha256": "5c0d1eaf04142e60b6bfd3db8a8b7f3a53fdc2213c65c6be26f1a934d667fecb"
+    },
+    {
+      "path": "deerflow_bridge/data_mcp.py",
+      "status": "??",
+      "sha256": "56c5679b20749f7bd1313cd263191fc2fd1477bafa00fdfb8dda1265b1c5fde6"
+    },
+    {
+      "path": "scripts/setup_datamcps.sh",
+      "status": "??",
+      "sha256": "13fdde400b226fa7099e2cda5ca17f6910275680cca4bda83db370ac812c9179"
+    },
+    {
+      "path": "backend/app/services/actor_context.py",
+      "status": "selected-clean-baseline",
+      "sha256": "ff9dd29047c139edca8b46bbda74eecdfe2dc2329e425ad9822d6023e188e024"
+    },
+    {
+      "path": "backend/tests/test_actor_context_runtime.py",
+      "status": "selected-clean-baseline",
+      "sha256": "bc5e597536abd94c1e2e72e7ed2f7c15863072f31b9b0cd59417f078e39e8167"
+    },
+    {
+      "path": "frontend/src/components/research/DossierViewer.vue",
+      "status": "selected-clean-baseline",
+      "sha256": "17d8ba90036838e5e7471cf552975f6dc8f88826fa45095691f2c0c42cb24b99"
+    },
+    {
+      "path": "frontend/src/utils/researchTranslation.js",
+      "status": "selected-clean-baseline",
+      "sha256": "789419e1d6f75a09bb492c8fc357092b9510aa2630f243daf2c54d4f8fbdf225"
+    },
+    {
+      "path": "frontend/tests/researchTranslation.test.mjs",
+      "status": "selected-clean-baseline",
+      "sha256": "b169a0c0e109db05f17a988db5256c33175559c7eb03ac199930c7b557e14704"
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "status": "selected-clean-baseline",
+      "sha256": "c0a82f353462ce7cda61d95c5b2393d4e085de57e26cde51259c0ee4f005c4a4"
+    },
+    {
+      "path": "deerflow_bridge/research_gateway.py",
+      "status": "selected-clean-baseline",
+      "sha256": "d840bcf83da03cb90f2d718a10d24daedc57194ddd66220ff2cffcaad5ec03a7"
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "status": "selected-clean-baseline",
+      "sha256": "abef7d74ca76ae28b68f5b69dd9fe526191c1e8113e37176da635b77865f2674"
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "status": "selected-clean-baseline",
+      "sha256": "7b316111f484289a1841f75b23ae366fccaea577ea44349a6341dc06105c5365"
+    },
+    {
+      "path": "backend/app/services/report_visualizer.py",
+      "status": "selected-clean-baseline",
+      "sha256": "9bccfad258e3df0833443aa71a86f97e2cb81566e5ca1c9df9add28e1d520bad"
+    }
+  ],
+  "preserve": "All pre-existing unrelated changes and deletions; existing data-MCP foundation is adopted only for this requested integration."
+}

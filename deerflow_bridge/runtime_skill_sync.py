@@ -42,10 +42,12 @@ STATE_FILENAME = ".drf-runtime-skill-manifest.json"
 LOCK_FILENAME = ".drf-runtime-skill-sync.lock"
 STAGE_PREFIX = ".drf-public-stage-"
 
-# All four bundles participate in the current research workflow.  Callers may
+# All six bundles participate in the current research workflow.  Callers may
 # pass a narrower explicit set for isolated tests or future mode-specific use.
 DEFAULT_REQUIRED_SKILLS: tuple[str, ...] = (
     "actor-ontology-research",
+    "data-sources",
+    "data-visuals",
     "deep-research",
     "forecast-visuals",
     "prediction-markets",
@@ -60,6 +62,11 @@ RUNTIME_GENERATED_ALLOWLIST: tuple[str, ...] = ()
 PUBLIC_ROOT_FILE_ALLOWLIST: tuple[str, ...] = ()
 
 _SAFE_SKILL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# Directory names that are never skill content: bytecode caches, plus the
+# ``logs/`` and ``.claude/`` trees that agent-session hooks create in whatever
+# directory a shell happened to run in (they hold session transcripts and must
+# never be deployed into the runtime skill bundle).
+_SOURCE_NOISE_DIRNAMES = {"__pycache__", "logs", ".claude"}
 _SOURCE_NOISE_FILENAMES = {".DS_Store"}
 _SOURCE_NOISE_SUFFIXES = {".pyc", ".pyo"}
 
@@ -97,7 +104,7 @@ def _validate_skill_name(name: str) -> str:
 
 def _is_source_noise(relative_path: Path) -> bool:
     return (
-        any(part == "__pycache__" for part in relative_path.parts)
+        any(part in _SOURCE_NOISE_DIRNAMES for part in relative_path.parts)
         or relative_path.name in _SOURCE_NOISE_FILENAMES
         or relative_path.suffix in _SOURCE_NOISE_SUFFIXES
     )

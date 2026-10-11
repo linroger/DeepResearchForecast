@@ -1,0 +1,28 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../src/apis/index.ts"],
+  "tsconfig": "../tsconfig.json",
+  "out": "api",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "categorizeByGroup": true,
+  "searchInComments": true,
+  "cleanOutputDir": true,
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "expandObjects": true,
+  "expandParameters": true,
+  "useCodeBlocks": true,
+  "parametersFormat": "table",
+  "enumMembersFormat": "table",
+  "tableColumnSettings": {
+    "hideDefaults": false,
+    "hideInherited": false,
+    "hideModifiers": false,
+    "hideOverrides": false,
+    "hideSources": true
+  }
+}

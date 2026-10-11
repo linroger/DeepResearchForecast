@@ -827,6 +827,13 @@ tools:
     group: web
     use: market_tools:prediction_market_search_tool
 
+  - name: data_search
+    group: web
+    use: data_tools:data_search_tool
+  - name: data_get
+    group: web
+    use: data_tools:data_get_tool
+
   # Image search tool (uses DuckDuckGo)
   # Use this to find reference images before image generation
   - name: image_search
@@ -952,6 +959,12 @@ loop_detection:
     web_fetch:
       warn: 100
       hard_limit: 150
+    data_search:
+      warn: 30
+      hard_limit: 45
+    data_get:
+      warn: 30
+      hard_limit: 45
 
 # ============================================================================
 # Provider Safety Termination Configuration
@@ -1188,6 +1201,9 @@ subagents:
 
         TOOLING: This is WEB research. Work via `web_search` and `web_fetch`; when the assigned
         focus has a forecastable outcome, use `prediction_market_search` for calibration.
+        When available, use `data_search` and `data_get` for official observations; preserve
+        exact units, periods, dataset URLs and provisional citations. Search metadata is
+        discovery only; keep publisher projections labelled separately from observations.
         `read_file` is only for an activated skill or a harness-managed externalized tool
         result; do not browse an arbitrary local corpus. Your evidence comes from pages and
         markets you actually fetch.
@@ -1216,11 +1232,14 @@ subagents:
         - web_search
         - web_fetch
         - prediction_market_search
+        - data_search
+        - data_get
         - read_file
         - write_file
       skills:                 # 技能白名单：搜证纪律 + 市场锚点
         - deep-research
         - prediction-markets
+        - data-sources
       model: inherit          # 继承 lead 的模型（与主研究同一档推理/工具调用能力）
       max_turns: 120          # 单个定域子调查的步数上限（多步 search→fetch→read 够用、又有界）
       timeout_seconds: 1800   # 30 min —— 与全局默认一致，deep 子调查不被过早掐断

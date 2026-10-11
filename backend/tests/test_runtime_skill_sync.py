@@ -299,3 +299,82 @@ def test_bridge_rehashes_parent_payload_for_durable_run_telemetry(
             source / "alpha" / "references" / "guide.md"
         )
     }
+
+
+def test_session_hook_litter_is_never_deployed(tmp_path, skill_sync_module):
+    """Agent-session hooks write ``logs/`` and ``.claude/`` trees into whatever
+    directory a shell ran in (observed under forecast-visuals/scripts/).  They
+    hold session transcripts, so neither they nor bytecode / Finder noise may
+    reach the runtime bundle, its manifest, or its identity hash."""
+    source = tmp_path / "source"
+    public = _public_root(tmp_path)
+    _write_skill(source, "alpha", {
+        "SKILL.md": "---\nname: alpha\n---\n",
+        "scripts/render.py": "print('render')\n",
+        "scripts/logs/user_prompt_submit.json": "{}\n",
+        "scripts/logs/session-1/pre_tool_use.json": "{}\n",
+        "scripts/.claude/data/sessions/session-1.json": "{}\n",
+        "logs/top_level.json": "{}\n",
+        "scripts/__pycache__/render.cpython-312.pyc": "bytecode\n",
+        "scripts/.DS_Store": "finder\n",
+    })
+
+    payload = skill_sync_module.sync_runtime_skills(
+        source,
+        public,
+        required_skills=("alpha",),
+    )
+
+    manifest = payload["skills"]["alpha"]
+    assert [entry["path"] for entry in manifest["files"]] == [
+        "SKILL.md", "scripts/render.py"]
+    assert manifest["directories"] == ["scripts"]
+    assert sorted(_tree_bytes(public / "alpha")) == ["SKILL.md", "scripts/render.py"]
+    assert not (public / "alpha" / "scripts" / "logs").exists()
+    assert not (public / "alpha" / "scripts" / ".claude").exists()
+    assert not (public / "alpha" / "logs").exists()
+
+    # New litter written after a sync leaves the bundle identity untouched.
+    (source / "alpha" / "scripts" / "logs" / "later.json").write_text(
+        "{}\n", encoding="utf-8")
+    again = skill_sync_module.sync_runtime_skills(
+        source,
+        public,
+        required_skills=("alpha",),
+    )
+    assert again["outcome"] == "verified"
+    assert again["source_manifest_hash"] == payload["source_manifest_hash"]
+
+
+def test_noise_filter_matches_whole_path_components_only(skill_sync_module):
+    is_noise = skill_sync_module._is_source_noise
+    for noisy in (
+        "logs", "scripts/logs/a.json", ".claude/x.json",
+        "a/.claude/data/s.json", "scripts/__pycache__/m.pyc",
+        ".DS_Store", "references/.DS_Store", "scripts/m.pyo",
+    ):
+        assert is_noise(Path(noisy)), noisy
+    for kept in (
+        "SKILL.md", "scripts/render_data.py", "references/logs-and-metrics.md",
+        "scripts/catalog.py", "assets/claude.svg", "references/changelogs/a.md",
+    ):
+        assert not is_noise(Path(kept)), kept
+
+
+def test_default_required_skills_exist_in_the_source_tree(skill_sync_module):
+    """The production launch guard deploys DEFAULT_REQUIRED_SKILLS and fails
+    closed when any bundle is missing, so every name must ship a SKILL.md."""
+    assert skill_sync_module.DEFAULT_REQUIRED_SKILLS == (
+        "actor-ontology-research",
+        "data-sources",
+        "data-visuals",
+        "deep-research",
+        "forecast-visuals",
+        "prediction-markets",
+    )
+    source_root = REPO_ROOT / "deerflow_bridge" / "skills"
+    missing = [
+        name for name in skill_sync_module.DEFAULT_REQUIRED_SKILLS
+        if not (source_root / name / "SKILL.md").is_file()
+    ]
+    assert not missing, f"required runtime skills without a SKILL.md: {missing}"

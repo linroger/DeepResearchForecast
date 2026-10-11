@@ -1,0 +1,37 @@
+{
+  "name": "@data360/chart-payload-normalize",
+  "version": "0.0.2",
+  "description": "Normalize Charts API envelopes and raw Vega-Lite JSON into spec + title for Data360 charts.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  },
+  "keywords": [
+    "data360",
+    "vega-lite",
+    "world-bank"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/worldbank/data360-mcp"
+  }
+}

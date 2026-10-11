@@ -616,10 +616,12 @@ class SimulationConfigGenerator:
             logger.info(f"市场先验: 载入 {len(market_priors)} 个 relevance-gated 市场")
         world_brief = ""
         try:
+            from .official_data import load_for_simulation
             world_brief = self._build_world_brief(
                 simulation_requirement, actors, event_config.hot_topics,
                 prediction_markets=market_priors,
                 actor_context_packs=actor_context_packs,
+                official_data=load_for_simulation(simulation_id),
             )
             if world_brief:
                 reasoning_parts.append(f"世界简报: {len(world_brief)} 字")
@@ -1672,10 +1674,25 @@ class SimulationConfigGenerator:
         is explicitly public, and retain their uncertainty label in the brief.
         A missing pack is not interpreted through raw dossier fields.
         """
+        import unicodedata
+
         if not isinstance(actor_context_packs, dict):
             return []
-        rows: List[Dict[str, Any]] = []
-        seen_claims = set()
+
+        def claim_keys(raw: Dict[str, Any]) -> set:
+            # Match complete identities/text before display sanitization or
+            # truncation. A long denied claim must not hide behind an alias.
+            keys = set()
+            for kind, value in (("id", raw.get("claim_id")), ("text", raw.get("claim"))):
+                if isinstance(value, str):
+                    normalized = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+                    if normalized:
+                        keys.add((kind, normalized))
+            return keys
+
+        admitted_packs = []
+        aliases: Dict[Any, set] = {}
+        denied = set()
         for actor in extract_actor_rows(actors):
             if not cls._is_canonical_actor(actor):
                 continue
@@ -1684,6 +1701,38 @@ class SimulationConfigGenerator:
                 continue
             pack = cls._validated_canonical_context_pack(actor, actor_context_packs)
             cls._validate_actor_context_dossier_binding(pack, actors)
+            admitted_packs.append(pack)
+            dimensions = (pack.get("actor_intelligence") or {}).get("dimensions") or {}
+            if not isinstance(dimensions, dict):
+                continue
+            for dimension in INTELLIGENCE_DIMENSIONS:
+                claims = dimensions.get(dimension)
+                if not isinstance(claims, list):
+                    continue
+                for raw in claims:
+                    if not isinstance(raw, dict):
+                        continue
+                    keys = claim_keys(raw)
+                    for key in keys:
+                        aliases.setdefault(key, set()).update(keys)
+                    qualifiers = raw.get("qualifiers")
+                    qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
+                    if raw.get("actor_knows") is False or qualifiers.get("actor_knows") is False:
+                        denied.update(keys)
+
+        # Any admitted actor's explicit denial vetoes common knowledge. Close
+        # identity/text aliases globally so a differently worded duplicate and
+        # then a differently identified copy cannot reintroduce that claim.
+        pending = list(denied)
+        while pending:
+            for alias in aliases.get(pending.pop(), ()):
+                if alias not in denied:
+                    denied.add(alias)
+                    pending.append(alias)
+
+        rows: List[Dict[str, Any]] = []
+        seen_claims = set()
+        for pack in admitted_packs:
             intelligence = pack.get("actor_intelligence") or {}
             dimensions = intelligence.get("dimensions") or {}
             if not isinstance(dimensions, dict):
@@ -1694,6 +1743,12 @@ class SimulationConfigGenerator:
                     continue
                 for raw in claims:
                     if not isinstance(raw, dict):
+                        continue
+                    qualifiers = raw.get("qualifiers")
+                    qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
+                    if (raw.get("actor_knows") is False
+                            or qualifiers.get("actor_knows") is False
+                            or claim_keys(raw) & denied):
                         continue
                     claim = sanitize_untrusted_dossier_text(raw.get("claim"), 520)
                     refs = cls._safe_actor_context_list(
@@ -1706,8 +1761,6 @@ class SimulationConfigGenerator:
                     ).strip().casefold().replace("-", "_").replace(" ", "_")
                     if evidence_type == "analyst_inference":
                         continue
-                    qualifiers = raw.get("qualifiers")
-                    qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
                     visibility = str(
                         raw.get("visibility") or qualifiers.get("visibility") or ""
                     ).strip().casefold().replace("-", "_").replace(" ", "_")
@@ -1847,6 +1900,7 @@ class SimulationConfigGenerator:
         hot_topics: Optional[List[str]],
         prediction_markets: Optional[List[Dict[str, Any]]] = None,
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
+        official_data: Optional[Dict[str, Any]] = None,
     ) -> str:
         """NEXTSTEPS SIM_WORLD_BRIEF: 拼装全体 Agent 共享的紧凑世界底稿（≤1400 字）。
 
@@ -1907,6 +1961,22 @@ class SimulationConfigGenerator:
             market_block = self._build_market_pricing_block(prediction_markets)
             if market_block:
                 parts.append(market_block)
+
+        # Canonical-v1 returned above: new common knowledge must enter through
+        # its source-bound actor packs, never through this legacy public brief.
+        # The default v3 dossier uses this unversioned path and can consume the
+        # stored historical baseline without querying providers at PREPARE.
+        if official_data:
+            from .official_data import historical_snapshot
+            snapshot = historical_snapshot(
+                official_data,
+                as_of=actors.get("as_of_date") if isinstance(actors, dict) else None,
+                max_chars=max(0, max_chars - sum(len(part) + 2 for part in parts) - 160),
+            )
+            if snapshot:
+                parts.append(delimit_untrusted_research_text(
+                    "official public historical statistics", snapshot, max_chars=max_chars,
+                ))
 
         # RQ-7 / I-6-4：世界简报上限从固定 1400 升级为按提供方窗口预算化——大窗口模型
         # （MiniMax 512K / DeepSeek 1M）抬到 SIM_WORLD_BRIEF_MAX_CHARS（默认 3000）以承载更完整的

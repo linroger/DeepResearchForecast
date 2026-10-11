@@ -18,7 +18,11 @@ test -f "$project_root/deerflow_bridge/deerflow_research.py"
   "$project_root/backend/app/services/simulation_manager.py" \
   "$project_root/backend/app/services/simulation_runner.py" \
   "$project_root/backend/app/utils/actors.py" \
-  "$project_root/deerflow_bridge/deerflow_research.py"
+  "$project_root/deerflow_bridge/deerflow_research.py" \
+  "$project_root/deerflow_bridge/data_mcp.py" \
+  "$project_root/deerflow_bridge/data_catalog.py" \
+  "$project_root/deerflow_bridge/data_sources.py" \
+  "$project_root/deerflow_bridge/data_tools.py"
 
 node -e "const p=require(process.argv[1]); if(!p.scripts) process.exit(1)" \
   "$project_root/frontend/package.json"
