@@ -324,3 +324,9 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - All substantive provider/status/fiscal, promotion, replay/cutoff, generation, actor-denial and caption-publication findings closed. No live model/provider/deployment proof claimed.
 - Preserved unrelated64 deletions/root handoff/.zcodeignore/other work. Two demo-corpus checks still fail solely on those absent assets; no test weakened. Remote publication not retried with previously rejected credentials.
 - Next: scoped integration commit and closing handoff.
+
+### 2026-10-11T19:59:15.198182+00:00 — delivery complete on main
+
+- Commits: d48552c actor digest;6372005 dossier translation; eac717b six-provider quantitative integration and source/verification artifacts. All requested feature entries now pass with recorded offline evidence.
+- Final implementation hashes unchanged after acceptance; current owned files committed, no unrelated deletion staged. Closing documentation records this state.
+- No coding follow-up remains in scope. Optional live-provider/deployment validation and remote publication remain separate; previous GitHub authentication was rejected and not retried unchanged. Preserve the64unrelated missing assets and all other baseline work.

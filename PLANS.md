@@ -1,7 +1,7 @@
 # Main-branch fixes and official quantitative-data integration
 
 **Date:** 2026-10-12 Asia/Shanghai
-**Status:** Approved by the user on 2026-10-12 Asia/Shanghai. Implementation is authorized for all listed slices.
+**Status:** Complete on main. The user approved all slices on 2026-10-12 Asia/Shanghai; implementation, offline acceptance and scoped independent review are delivered. See the continuity and final-verification records for exact commits and limits.
 **Source/workspace:** Current `main` at c20ec60 plus the recorded existing data-MCP foundation. Finharness branches are excluded.
 **Continuity:** `docs/handoff/main-quantitative-integration-20261012/handoff.md`.
 

@@ -1,5 +1,5 @@
 {
-  "status": "Reviewed explicit ownership; source acceptance complete",
+  "status": "Delivered on main; all owned code accepted and committed",
   "base_head": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
   "paths": [
     ".env.example",
@@ -120,5 +120,10 @@
     "other handoff/study trees",
     "prior data-sources-mcp/handoff.md"
   ],
-  "note": "Approved existing data-MCP foundation adopted; workers do not stage or commit."
+  "note": "Approved existing data-MCP foundation adopted; workers do not stage or commit.",
+  "implementation_commits": [
+    "d48552c",
+    "6372005",
+    "eac717b"
+  ]
 }

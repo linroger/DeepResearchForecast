@@ -1,8 +1,8 @@
 # Handoff.md
 
-**Last Updated (UTC):** 2026-10-11T19:50:18.391621+00:00
-**Status:** In Progress
-**Current Focus:** Deliver the verified implementation through scoped commits on main; all functional and independent review gates are complete.
+**Last Updated (UTC):** 2026-10-11T19:59:15.198182+00:00
+**Status:** Complete
+**Current Focus:** Implementation, independent review and scoped local commits are complete; preserve the documented verification limits and unrelated baseline.
 
 ## 1) Request & Context
 
@@ -35,7 +35,7 @@ Two disjoint workers own the bug fixes. Read-only provider specialists investiga
 - [x] All six provider studies, the approved plan and authoritative shared contracts are complete.
 - [x] The user explicitly approved PLANS.md on 2026-10-12 Asia/Shanghai; proceed with all listed slices.
 - [x] Approved integration, bilingual docs, skills and offline producer-to-publication verification are complete.
-- [ ] Finish scoped Git delivery; preserve unrelated changes and do not retry previously rejected credentials.
+- [x] Scoped local delivery complete: d48552c (actor digest), 6372005 (dossier envelope), eac717b (official-data integration). Unrelated baseline preserved; remote publication was not retried with previously rejected credentials.
 
 ## 5) Findings, Decisions, Assumptions
 
@@ -55,7 +55,7 @@ Current acceptance: 2,025 combined tests, a real MCP-to-publication/API/export s
 
 ## 9) Remaining Work & Next Steps
 
-All requested implementation and independent scoped reviews are complete. Remaining delivery work is to commit the owned integration and final continuity record. Live provider compatibility, paid model forecasting and deployment were not run or claimed. The two demo-corpus failures arise from the 64 preserved pre-existing deletions and remain outside this task. Previous GitHub authentication failed; do not retry unchanged credentials as a substitute for local verification.
+All requested implementation and independent scoped reviews are complete. The three implementation commits are on main; this closing continuity update records delivery. No requested coding item remains. Live provider compatibility, paid model forecasting and deployment were not run or claimed. The two demo-corpus failures arise from the 64 preserved pre-existing deletions and remain outside this task. Previous GitHub authentication failed; do not retry unchanged credentials as a substitute for local verification.
 
 ## 10) Updates
 
@@ -96,3 +96,9 @@ All requested implementation and independent scoped reviews are complete. Remain
 - 2026-10-11T19:21:54.886442+00:00: Aligned the data-visuals lazy chart-pattern reference with the same canonical status precedence and keyed fiscal labels as its entrypoint. Main README generation-binding descriptions now reflect current behavior. No production change in this documentation pass.
 
 - 2026-10-11T19:50:18.391621+00:00: All code and verification reviews closed. Combined2025/no drift; true-publication E2E1/no drift; final sidecarc329 independentlyverified5negativecontrols plus9/13/4 nativegates. FinalRuff over50Pythonfiles has0 introduced findings and71 matchedbaseline style findings. Both bugfixes committed on main as d48552c and6372005. Explicitowned-path/source receipt checks preserve root handoff/.zcodeignore/all64deletions. Scoped integrationcommit and closingrecord next.
+
+- 2026-10-11T19:59:15.198182+00:00: Delivered scoped implementation commits d48552c,6372005,eac717b on main. All owned Python hashes still match delivery-source-receipt.json. Stagedvendor705 blobs exactly match supplied bytes;927 upstream whitespace warnings preserved, first-party staged whitespace clean. No deletions were staged. Finalowned-file status wasclean before this documentation-only closingupdate;68unrelated statusentries remain intentionallypreserved. Finalsidecarc329 failure-path/normal9+13+4 reviewclosed, no runtimeworkpending.
+
+## Next-session prompt
+
+“Read this handoff and final-verification.md first. The requested main-branch implementation is complete in d48552c,6372005,eac717b, with a separate closing documentation commit. Preserve the64unrelated deletions, root handoff, .zcodeignore and other study/handoff trees. Do not reimplement accepted slices or inspect finharness. If explicitly asked to deploy or verify live sources, start from the documented setup/configuration and use fresh scratch evidence; current acceptance is offline and no paid-model or saved-run action was performed. Remote publication requires resolved GitHub authentication; do not retry the previously rejected credentials unchanged.”

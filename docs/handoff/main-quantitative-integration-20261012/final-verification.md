@@ -1,6 +1,6 @@
 # Final quantitative integration verification
 
-Status: Functional acceptance and all scoped independent reviews complete on main; scoped Git delivery is being closed. No live provider/model/deployment result is claimed.
+Status: Complete. Functional acceptance, all scoped independent reviews and the implementation commits are delivered on main. No live provider/model/deployment result is claimed.
 
 ## Current acceptance
 
@@ -46,3 +46,5 @@ Use the exact command stored in the combined receipt, with a new nonexistent evi
 - 2026-10-11T19:50:18.391621+00:00: Euler independently closed c329 sidecar failure paths and all fresh9/13/4 receipts. The new5case fault control also passed independently. No app/provider/runner code changed after final functional acceptance. Actor/dossier fixes are committed as d48552c/6372005.
 
 Vendor preservation check: all705 staged vendor blobs (including the original dangling .npmrc symlink) exactly match supplied working-tree bytes. Git reports 927 existing vendor whitespace/line-ending warnings; vendor sources were intentionally not reformatted. Scoped staged whitespace checks excluding datamcps pass after cleaning five owned documentation whitespace-only issues. No deletion is staged.
+
+Local implementation commits: `d48552c` aligns the actor roster digest, `6372005` fixes the dossier envelope/stale replies, and `eac717b` delivers the official-data workflow with preserved vendor sources. The closing documentation commit changes no tested application bytes. Remote publication was not attempted after the recorded authentication rejection.
