@@ -1272,9 +1272,11 @@ def _validate_actor_intelligence_contract(
                 "actor intelligence contract has missing or duplicate actor identities"
             )
         actor_ids.append(actor_id)
-    expected_ids_sha = hashlib.sha256(
-        "\n".join(sorted(actor_ids)).encode("utf-8")
-    ).hexdigest()
+    # The incoming producer seal binds a JSON multiplicity map. The context
+    # manifest separately seals its selected, ordered actor-ID list.
+    expected_ids_sha = canonical_json_sha256({
+        actor_id: actor_ids.count(actor_id) for actor_id in actor_ids
+    })
     if contract["actor_ids_sha256"] != expected_ids_sha:
         raise ValueError("actor intelligence actor roster fingerprint mismatch")
     if type(contract.get("actor_count")) is not int or contract["actor_count"] != len(actor_rows):

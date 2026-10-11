@@ -6,9 +6,11 @@ import asyncio
 import hashlib
 import json
 import os
+import socket
 import sys
 from copy import deepcopy
 
+import httpx
 import pytest
 
 
@@ -52,6 +54,22 @@ from app.services.zep_entity_reader import (  # noqa: E402
     EntityNode,
     FilteredEntities,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_actor_context_external_calls(monkeypatch):
+    """Context acceptance must never depend on a live model or HTTP response."""
+    from app.utils.llm_client import LLMClient
+
+    def unexpected_call(*_args, **_kwargs):
+        raise AssertionError("actor context regression must not invoke LLM/network")
+
+    monkeypatch.setattr(LLMClient, "chat", unexpected_call)
+    monkeypatch.setattr(LLMClient, "chat_json", unexpected_call)
+    monkeypatch.setattr(httpx.Client, "send", unexpected_call)
+    monkeypatch.setattr(httpx.AsyncClient, "send", unexpected_call)
+    monkeypatch.setattr(socket, "create_connection", unexpected_call)
+    monkeypatch.setattr(socket, "getaddrinfo", unexpected_call)
 
 
 REPORT = """# Forecast situation
@@ -172,9 +190,7 @@ def _actor(actor_id: str, name: str, alias: str) -> dict:
 def _dossier() -> dict:
     alpha = _actor("actor_alpha", "Alpha Systems", "Alpha")
     beta = _actor("actor_beta", "Beta Union", "Beta")
-    actor_ids_sha = hashlib.sha256(
-        "\n".join(sorted((alpha["actor_id"], beta["actor_id"]))).encode("utf-8")
-    ).hexdigest()
+    actor_ids_sha = canonical_json_sha256({alpha["actor_id"]: 1, beta["actor_id"]: 1})
     return {
         "as_of_date": "2026-07-01",
         "forecast_horizon": "through 2027",
@@ -925,6 +941,19 @@ def test_sparse_legacy_dossier_gets_a_safe_pack_without_fake_report_coverage():
 
 
 def test_role_context_reaches_real_reddit_and_twitter_oasis_system_messages(tmp_path, monkeypatch):
+    # OASIS creates relative log files at import time. Keep them in this test's
+    # temporary root, and avoid tokenizer vocabulary downloads during real
+    # agent construction; this scenario verifies system messages, not BPE ranks.
+    monkeypatch.chdir(tmp_path)
+    tiktoken = pytest.importorskip("tiktoken")
+    byte_encoding = tiktoken.Encoding(
+        name="actor-context-offline-bytes",
+        pat_str=r"\S+|\s+",
+        mergeable_ranks={bytes([value]): value for value in range(256)},
+        special_tokens={},
+    )
+    monkeypatch.setattr(tiktoken, "encoding_for_model", lambda *_args, **_kwargs: byte_encoding)
+    monkeypatch.setattr(tiktoken, "get_encoding", lambda *_args, **_kwargs: byte_encoding)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     oasis = pytest.importorskip("oasis")
     generate_reddit_agent_graph = oasis.generate_reddit_agent_graph
