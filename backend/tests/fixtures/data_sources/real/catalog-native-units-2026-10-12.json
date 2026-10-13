@@ -1,0 +1,2532 @@
+{
+ "bis": {
+  "bis:WS_CBPOL/M.AU": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "AU"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "4.35"
+   ]
+  },
+  "bis:WS_CBPOL/M.BR": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "BR"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "13.75"
+   ]
+  },
+  "bis:WS_CBPOL/M.CA": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CA"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "2.25"
+   ]
+  },
+  "bis:WS_CBPOL/M.CH": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CH"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "0"
+   ]
+  },
+  "bis:WS_CBPOL/M.CN": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CN"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "3"
+   ]
+  },
+  "bis:WS_CBPOL/M.GB": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "GB"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "3.75"
+   ]
+  },
+  "bis:WS_CBPOL/M.IN": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "IN"
+    ]
+   },
+   "last": [
+    "2026-06",
+    "5.25"
+   ]
+  },
+  "bis:WS_CBPOL/M.JP": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "JP"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "1.25"
+   ]
+  },
+  "bis:WS_CBPOL/M.KR": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "KR"
+    ]
+   },
+   "last": [
+    "2026-07",
+    "2.75"
+   ]
+  },
+  "bis:WS_CBPOL/M.MX": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "MX"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "6.5"
+   ]
+  },
+  "bis:WS_CBPOL/M.US": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "US"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "3.875"
+   ]
+  },
+  "bis:WS_CBPOL/M.XM": {
+   "UNIT_MEASURE": [
+    "368"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent per year"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "XM"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "2.5"
+   ]
+  },
+  "bis:WS_CBTA/M.CN.B.XDC.CNY.N": {
+   "UNIT_MEASURE": [
+    "XDC"
+   ],
+   "UNIT_MEASURE_label": [
+    "Domestic currency (incl. conversion to current currency made using a fixed parity)"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_METHOD": [
+     "B"
+    ],
+    "CURRENCY": [
+     "CNY"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CN"
+    ],
+    "TRANSFORMATION": [
+     "N"
+    ]
+   },
+   "last": [
+    "2026-06",
+    "49433.5"
+   ]
+  },
+  "bis:WS_CBTA/M.JP.B.XDC.JPY.N": {
+   "UNIT_MEASURE": [
+    "XDC"
+   ],
+   "UNIT_MEASURE_label": [
+    "Domestic currency (incl. conversion to current currency made using a fixed parity)"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_METHOD": [
+     "B"
+    ],
+    "CURRENCY": [
+     "JPY"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "JP"
+    ],
+    "TRANSFORMATION": [
+     "N"
+    ]
+   },
+   "last": [
+    "2026-07",
+    "644295.7"
+   ]
+  },
+  "bis:WS_CBTA/M.US.B.XDC.USD.N": {
+   "UNIT_MEASURE": [
+    "XDC"
+   ],
+   "UNIT_MEASURE_label": [
+    "Domestic currency (incl. conversion to current currency made using a fixed parity)"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_METHOD": [
+     "B"
+    ],
+    "CURRENCY": [
+     "USD"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "US"
+    ],
+    "TRANSFORMATION": [
+     "N"
+    ]
+   },
+   "last": [
+    "2026-07",
+    "6738.19"
+   ]
+  },
+  "bis:WS_CBTA/M.XM.B.XDC.EUR.N": {
+   "UNIT_MEASURE": [
+    "XDC"
+   ],
+   "UNIT_MEASURE_label": [
+    "Domestic currency (incl. conversion to current currency made using a fixed parity)"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_METHOD": [
+     "B"
+    ],
+    "CURRENCY": [
+     "EUR"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "XM"
+    ],
+    "TRANSFORMATION": [
+     "N"
+    ]
+   },
+   "last": [
+    "2026-07",
+    "5941.248"
+   ]
+  },
+  "bis:WS_CREDIT_GAP/Q.CN.P.A.C": {
+   "UNIT_MEASURE": [
+    "770"
+   ],
+   "UNIT_MEASURE_label": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "CN"
+    ],
+    "CG_DTYPE": [
+     "C"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "-5.1412"
+   ]
+  },
+  "bis:WS_CREDIT_GAP/Q.GB.P.A.C": {
+   "UNIT_MEASURE": [
+    "770"
+   ],
+   "UNIT_MEASURE_label": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "GB"
+    ],
+    "CG_DTYPE": [
+     "C"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "-20.1244"
+   ]
+  },
+  "bis:WS_CREDIT_GAP/Q.JP.P.A.C": {
+   "UNIT_MEASURE": [
+    "770"
+   ],
+   "UNIT_MEASURE_label": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "JP"
+    ],
+    "CG_DTYPE": [
+     "C"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "5.6702"
+   ]
+  },
+  "bis:WS_CREDIT_GAP/Q.US.P.A.C": {
+   "UNIT_MEASURE": [
+    "770"
+   ],
+   "UNIT_MEASURE_label": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "CG_DTYPE": [
+     "C"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "-11.3204"
+   ]
+  },
+  "bis:WS_CREDIT_GAP/Q.XM.P.A.C": {
+   "UNIT_MEASURE": [
+    "770"
+   ],
+   "UNIT_MEASURE_label": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "XM"
+    ],
+    "CG_DTYPE": [
+     "C"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "-17.0674"
+   ]
+  },
+  "bis:WS_DSR/Q.CN.P": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "CN"
+    ],
+    "DSR_BORROWERS": [
+     "P"
+    ],
+    "FREQ": [
+     "Q"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "19.1"
+   ]
+  },
+  "bis:WS_DSR/Q.GB.P": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "GB"
+    ],
+    "DSR_BORROWERS": [
+     "P"
+    ],
+    "FREQ": [
+     "Q"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "12.9"
+   ]
+  },
+  "bis:WS_DSR/Q.US.H": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "DSR_BORROWERS": [
+     "H"
+    ],
+    "FREQ": [
+     "Q"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "8"
+   ]
+  },
+  "bis:WS_DSR/Q.US.P": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "DSR_BORROWERS": [
+     "P"
+    ],
+    "FREQ": [
+     "Q"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "13.8"
+   ]
+  },
+  "bis:WS_EER/M.N.B.US": {
+   "UNIT_MEASURE": [
+    "882"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2020 = 100"
+   ],
+   "UNIT_MULT": [],
+   "dims": {
+    "EER_BASKET": [
+     "B"
+    ],
+    "EER_TYPE": [
+     "N"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "US"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "101.72"
+   ]
+  },
+  "bis:WS_EER/M.R.B.CN": {
+   "UNIT_MEASURE": [
+    "882"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2020 = 100"
+   ],
+   "UNIT_MULT": [],
+   "dims": {
+    "EER_BASKET": [
+     "B"
+    ],
+    "EER_TYPE": [
+     "R"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CN"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "91.77"
+   ]
+  },
+  "bis:WS_EER/M.R.B.JP": {
+   "UNIT_MEASURE": [
+    "882"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2020 = 100"
+   ],
+   "UNIT_MULT": [],
+   "dims": {
+    "EER_BASKET": [
+     "B"
+    ],
+    "EER_TYPE": [
+     "R"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "JP"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "66.02"
+   ]
+  },
+  "bis:WS_EER/M.R.B.US": {
+   "UNIT_MEASURE": [
+    "882"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2020 = 100"
+   ],
+   "UNIT_MULT": [],
+   "dims": {
+    "EER_BASKET": [
+     "B"
+    ],
+    "EER_TYPE": [
+     "R"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "US"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "106.7"
+   ]
+  },
+  "bis:WS_EER/M.R.B.XM": {
+   "UNIT_MEASURE": [
+    "882"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2020 = 100"
+   ],
+   "UNIT_MULT": [],
+   "dims": {
+    "EER_BASKET": [
+     "B"
+    ],
+    "EER_TYPE": [
+     "R"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "XM"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "103.34"
+   ]
+  },
+  "bis:WS_GLI/Q.USD.3P.N.A.I.B.USD": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_label": [
+    "US dollar"
+   ],
+   "UNIT_MULT": [
+    "6"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "3P"
+    ],
+    "BORROWERS_SECTOR": [
+     "N"
+    ],
+    "CURR_DENOM": [
+     "USD"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "LENDERS_SECTOR": [
+     "A"
+    ],
+    "L_INSTR": [
+     "B"
+    ],
+    "L_POS_TYPE": [
+     "I"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "14747653.746"
+   ]
+  },
+  "bis:WS_LONG_CPI/M.CN.771": {
+   "UNIT_MEASURE": [
+    "771"
+   ],
+   "UNIT_MEASURE_label": [
+    "Year-on-year changes, in per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CN"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "0.8"
+   ]
+  },
+  "bis:WS_LONG_CPI/M.JP.771": {
+   "UNIT_MEASURE": [
+    "771"
+   ],
+   "UNIT_MEASURE_label": [
+    "Year-on-year changes, in per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "JP"
+    ]
+   },
+   "last": [
+    "2026-07",
+    "1.898102"
+   ]
+  },
+  "bis:WS_LONG_CPI/M.US.771": {
+   "UNIT_MEASURE": [
+    "771"
+   ],
+   "UNIT_MEASURE_label": [
+    "Year-on-year changes, in per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "US"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "3.396548"
+   ]
+  },
+  "bis:WS_LONG_CPI/M.XM.771": {
+   "UNIT_MEASURE": [
+    "771"
+   ],
+   "UNIT_MEASURE_label": [
+    "Year-on-year changes, in per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "XM"
+    ]
+   },
+   "last": [
+    "2026-08",
+    "3.248577"
+   ]
+  },
+  "bis:WS_SPP/Q.CN.R.628": {
+   "UNIT_MEASURE": [
+    "628"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2010 = 100"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "Q"
+    ],
+    "REF_AREA": [
+     "CN"
+    ],
+    "VALUE": [
+     "R"
+    ]
+   },
+   "last": [
+    "2026-Q2",
+    "84.37"
+   ]
+  },
+  "bis:WS_SPP/Q.GB.R.628": {
+   "UNIT_MEASURE": [
+    "628"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2010 = 100"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "Q"
+    ],
+    "REF_AREA": [
+     "GB"
+    ],
+    "VALUE": [
+     "R"
+    ]
+   },
+   "last": [
+    "2026-Q2",
+    "108.5357"
+   ]
+  },
+  "bis:WS_SPP/Q.US.N.628": {
+   "UNIT_MEASURE": [
+    "628"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2010 = 100"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "Q"
+    ],
+    "REF_AREA": [
+     "US"
+    ],
+    "VALUE": [
+     "N"
+    ]
+   },
+   "last": [
+    "2026-Q2",
+    "236.2362"
+   ]
+  },
+  "bis:WS_SPP/Q.US.R.628": {
+   "UNIT_MEASURE": [
+    "628"
+   ],
+   "UNIT_MEASURE_label": [
+    "Index, 2010 = 100"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "FREQ": [
+     "Q"
+    ],
+    "REF_AREA": [
+     "US"
+    ],
+    "VALUE": [
+     "R"
+    ]
+   },
+   "last": [
+    "2026-Q2",
+    "154.2147"
+   ]
+  },
+  "bis:WS_TC/Q.CN.H.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "CN"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "H"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "57.5"
+   ]
+  },
+  "bis:WS_TC/Q.CN.P.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "CN"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "204.1"
+   ]
+  },
+  "bis:WS_TC/Q.JP.G.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "JP"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "G"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "175.6"
+   ]
+  },
+  "bis:WS_TC/Q.US.G.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "G"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "110.8"
+   ]
+  },
+  "bis:WS_TC/Q.US.H.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "H"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "67.2"
+   ]
+  },
+  "bis:WS_TC/Q.US.P.A.M.770.A": {
+   "UNIT_MEASURE": [
+    "367"
+   ],
+   "UNIT_MEASURE_label": [
+    "Per cent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "BORROWERS_CTY": [
+     "US"
+    ],
+    "FREQ": [
+     "Q"
+    ],
+    "TC_ADJUST": [
+     "A"
+    ],
+    "TC_BORROWERS": [
+     "P"
+    ],
+    "TC_LENDERS": [
+     "A"
+    ],
+    "UNIT_TYPE": [
+     "770"
+    ],
+    "VALUATION": [
+     "M"
+    ]
+   },
+   "last": [
+    "2026-Q1",
+    "139.7"
+   ]
+  },
+  "bis:WS_XRU/M.CN.CNY.A": {
+   "UNIT_MEASURE": [],
+   "UNIT_MEASURE_label": [],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COLLECTION": [
+     "A"
+    ],
+    "CURRENCY": [
+     "CNY"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "CN"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "6.708948"
+   ]
+  },
+  "bis:WS_XRU/M.GB.GBP.A": {
+   "UNIT_MEASURE": [],
+   "UNIT_MEASURE_label": [],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COLLECTION": [
+     "A"
+    ],
+    "CURRENCY": [
+     "GBP"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "GB"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "0.745391"
+   ]
+  },
+  "bis:WS_XRU/M.IN.INR.A": {
+   "UNIT_MEASURE": [],
+   "UNIT_MEASURE_label": [],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COLLECTION": [
+     "A"
+    ],
+    "CURRENCY": [
+     "INR"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "IN"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "95.471159"
+   ]
+  },
+  "bis:WS_XRU/M.JP.JPY.A": {
+   "UNIT_MEASURE": [],
+   "UNIT_MEASURE_label": [],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COLLECTION": [
+     "A"
+    ],
+    "CURRENCY": [
+     "JPY"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "JP"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "156.388"
+   ]
+  },
+  "bis:WS_XRU/M.XM.EUR.A": {
+   "UNIT_MEASURE": [],
+   "UNIT_MEASURE_label": [],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COLLECTION": [
+     "A"
+    ],
+    "CURRENCY": [
+     "EUR"
+    ],
+    "FREQ": [
+     "M"
+    ],
+    "REF_AREA": [
+     "XM"
+    ]
+   },
+   "last": [
+    "2026-09",
+    "0.86863"
+   ]
+  }
+ },
+ "captured": "2026-10-12",
+ "source": "Distinct per-row attribute values returned live through the vendored MCP servers: World Bank Data360 data360_get_data rows plus data360_get_metadata measurement_unit (review capture units_wb.jsonl), BIS fetch_dataset rows for 2025-01..2026-10 (slice B probe5). An empty list means the rows carry no such attribute.",
+ "wb": {
+  "wb:IMF_WEO_BCA_NGDPD/CHN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_BCA_NGDPD/DEU": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_BCA_NGDPD/JPN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_BCA_NGDPD/USA": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_GGXWDG_NGDP/CHN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_GGXWDG_NGDP/GBR": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_GGXWDG_NGDP/JPN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_GGXWDG_NGDP/USA": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of GDP",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_LUR/CHN": {
+   "UNIT_MEASURE": [
+    "PT_POP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of population"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of population",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_LUR/DEU": {
+   "UNIT_MEASURE": [
+    "PT_POP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of population"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of population",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_LUR/GBR": {
+   "UNIT_MEASURE": [
+    "PT_POP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of population"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of population",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_LUR/JPN": {
+   "UNIT_MEASURE": [
+    "PT_POP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of population"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of population",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_LUR/USA": {
+   "UNIT_MEASURE": [
+    "PT_POP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of population"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage of population",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDPD/CHN": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "billion US Dollars"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "US dollars (Billions)",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDPD/USA": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "billion US Dollars"
+   ],
+   "UNIT_MULT": [
+    "9"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "US dollars (Billions)",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/CHN": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/DEU": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/GBR": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/IND": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/JPN": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_NGDP_RPCH/USA": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/CHN": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/DEU": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/GBR": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/IND": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/JPN": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:IMF_WEO_PCPIPCH/USA": {
+   "UNIT_MEASURE": [
+    "PC"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "V_LST"
+    ]
+   },
+   "measurement_unit": "Percentage change",
+   "periods": [
+    "2020",
+    "2031"
+   ]
+  },
+  "wb:WB_GEP_NYGDPMKTPKDZ/CHN": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Percentage change per annum",
+   "periods": [
+    "2022",
+    "2026"
+   ]
+  },
+  "wb:WB_GEP_NYGDPMKTPKDZ/EMU": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Percentage change per annum",
+   "periods": [
+    "2022",
+    "2026"
+   ]
+  },
+  "wb:WB_GEP_NYGDPMKTPKDZ/IND": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Percentage change per annum",
+   "periods": [
+    "2022",
+    "2026"
+   ]
+  },
+  "wb:WB_GEP_NYGDPMKTPKDZ/USA": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Percentage change per annum",
+   "periods": [
+    "2022",
+    "2026"
+   ]
+  },
+  "wb:WB_WDI_EG_USE_ELEC_KH_PC/CHN": {
+   "UNIT_MEASURE": [
+    "KWH"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Kilowatt hour (KWh)"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "kilowatt-hour (kWh) per capita",
+   "periods": [
+    "2020",
+    "2023"
+   ]
+  },
+  "wb:WB_WDI_EG_USE_ELEC_KH_PC/IND": {
+   "UNIT_MEASURE": [
+    "KWH"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Kilowatt hour (KWh)"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "kilowatt-hour (kWh) per capita",
+   "periods": [
+    "2020",
+    "2023"
+   ]
+  },
+  "wb:WB_WDI_EG_USE_ELEC_KH_PC/USA": {
+   "UNIT_MEASURE": [
+    "KWH"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Kilowatt hour (KWh)"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "kilowatt-hour (kWh) per capita",
+   "periods": [
+    "2020",
+    "2024"
+   ]
+  },
+  "wb:WB_WDI_EN_GHG_CO2_MT_CE_AR5/CHN": {
+   "UNIT_MEASURE": [
+    "MTCO2E"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Megatonnes of CO2-equivalent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Mt CO2eq",
+   "periods": [
+    "2020",
+    "2024"
+   ]
+  },
+  "wb:WB_WDI_EN_GHG_CO2_MT_CE_AR5/IND": {
+   "UNIT_MEASURE": [
+    "MTCO2E"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Megatonnes of CO2-equivalent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Mt CO2eq",
+   "periods": [
+    "2020",
+    "2024"
+   ]
+  },
+  "wb:WB_WDI_EN_GHG_CO2_MT_CE_AR5/USA": {
+   "UNIT_MEASURE": [
+    "MTCO2E"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Megatonnes of CO2-equivalent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Mt CO2eq",
+   "periods": [
+    "2020",
+    "2024"
+   ]
+  },
+  "wb:WB_WDI_EN_GHG_CO2_MT_CE_AR5/WLD": {
+   "UNIT_MEASURE": [
+    "MTCO2E"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Megatonnes of CO2-equivalent"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Mt CO2eq",
+   "periods": [
+    "2020",
+    "2024"
+   ]
+  },
+  "wb:WB_WDI_FP_CPI_TOTL_ZG/CHN": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_FP_CPI_TOTL_ZG/IND": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NE_EXP_GNFS_ZS/CHN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NE_TRD_GNFS_ZS/CHN": {
+   "UNIT_MEASURE": [
+    "PT_GDP"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of GDP"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/CHN": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/IND": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/WLD": {
+   "UNIT_MEASURE": [
+    "PC_A"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage change per annum"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "%",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_PCAP_CD/CHN": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "US Dollars"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "current US$",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_PCAP_CD/IND": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "US Dollars"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "current US$",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_NY_GDP_PCAP_CD/USA": {
+   "UNIT_MEASURE": [
+    "USD"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "US Dollars"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "current US$",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_SL_UEM_TOTL_ZS/CHN": {
+   "UNIT_MEASURE": [
+    "PT_LF"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Percentage of labor force"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "% of total labor force",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_SP_POP_TOTL/CHN": {
+   "UNIT_MEASURE": [
+    "PS"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Persons"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Unit",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_SP_POP_TOTL/IND": {
+   "UNIT_MEASURE": [
+    "PS"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Persons"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Unit",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_SP_POP_TOTL/USA": {
+   "UNIT_MEASURE": [
+    "PS"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Persons"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Unit",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  },
+  "wb:WB_WDI_SP_POP_TOTL/WLD": {
+   "UNIT_MEASURE": [
+    "PS"
+   ],
+   "UNIT_MEASURE_NAME": [
+    "Persons"
+   ],
+   "UNIT_MULT": [
+    "0"
+   ],
+   "dims": {
+    "COMP_BREAKDOWN_1": [
+     "None"
+    ]
+   },
+   "measurement_unit": "Unit",
+   "periods": [
+    "2020",
+    "2025"
+   ]
+  }
+ }
+}

@@ -1,0 +1,126 @@
+{
+ "success": true,
+ "data": {
+  "name": "datasets",
+  "content": {
+   "generated_at": "2026-10-13T19:18:00.984602+00:00",
+   "schema_version": 1,
+   "series": [
+    {
+     "api_url": "https://api.usaspending.gov/api/v2/search/spending_over_time/",
+     "chart": "charts/data_usgov_spending_total_610c87ef52d6bcd6.png",
+     "csv": "data/usgov_spending_total_610c87ef52d6bcd6.d91e1b5a1ee29153.csv",
+     "csv_sha256": "d91e1b5a1ee291538a3297d15dedf9803710724de59815aa81c4f7d1aa7ced16",
+     "file": "data/usgov_spending_total_610c87ef52d6bcd6.63b87d7ff1f514a4.json",
+     "first": "2022-10-01",
+     "frequency": "A",
+     "geography": "USA",
+     "kiqs": [],
+     "last": "2026-10-01",
+     "last_updated": "",
+     "latest": null,
+     "notes": "Fiscal-year award obligations; native handler converts missing amounts to zero. Missingness cannot be certified.",
+     "observations": 5,
+     "projection_from": "",
+     "provenance": {
+      "delivered_end": "2026-10-01",
+      "delivered_start": "2022-10-01",
+      "fidelity_policy_version": 3,
+      "fiscal_start_month": 10,
+      "intentional_delivery_trim": false,
+      "metadata_origin": "curated_recipe",
+      "native_frequency": "A",
+      "native_missingness": "lost; do not resolve",
+      "normalization_policy_version": 3,
+      "periods": {
+       "2022-10-01": {
+        "calendar": "us_federal_fiscal_year",
+        "complete": true,
+        "covered_end": "2023-09-30",
+        "covered_start": "2022-10-01",
+        "end": "2023-09-30",
+        "label": "FY2023",
+        "start": "2022-10-01"
+       },
+       "2023-10-01": {
+        "calendar": "us_federal_fiscal_year",
+        "complete": true,
+        "covered_end": "2024-09-30",
+        "covered_start": "2023-10-01",
+        "end": "2024-09-30",
+        "label": "FY2024",
+        "start": "2023-10-01"
+       },
+       "2024-10-01": {
+        "calendar": "us_federal_fiscal_year",
+        "complete": true,
+        "covered_end": "2025-09-30",
+        "covered_start": "2024-10-01",
+        "end": "2025-09-30",
+        "label": "FY2025",
+        "start": "2024-10-01"
+       },
+       "2025-10-01": {
+        "calendar": "us_federal_fiscal_year",
+        "complete": false,
+        "covered_end": "2026-09-30",
+        "covered_start": "2025-10-01",
+        "end": "2026-09-30",
+        "label": "FY2026",
+        "start": "2025-10-01"
+       },
+       "2026-10-01": {
+        "calendar": "us_federal_fiscal_year",
+        "complete": false,
+        "covered_end": "2026-10-11",
+        "covered_start": "2026-10-01",
+        "end": "2027-09-30",
+        "label": "FY2027",
+        "start": "2026-10-01"
+       }
+      },
+      "requested_end": "2026-10-11",
+      "requested_start": "2022-10-01",
+      "resolution_safe": false,
+      "response_sha256": "d0d2db9267c1919a001261a53c54a5d1cf10cba13aa10c4c201b30cca3bf0466",
+      "retrieval_route": "mcp",
+      "tool_responses": [
+       {
+        "arguments": {
+         "end_date": "2026-10-11",
+         "group": "fiscal_year",
+         "start_date": "2022-10-01"
+        },
+        "sha256": "fa9c91627cc7f7e1287155ee7b8a2de10b5eb61e770a696a7e291729ae236f83",
+        "sources": [
+         {
+          "cached": false,
+          "fetchedAt": "2026-10-11T22:08:20.566Z",
+          "method": "POST",
+          "url": "https://api.usaspending.gov/api/v2/search/spending_over_time/"
+         }
+        ],
+        "tool": "usa_spending_over_time"
+       }
+      ]
+     },
+     "provider": "usgov",
+     "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending, EIA, BEA)",
+     "retrieved_at": "2026-10-11T22:08:20+00:00",
+     "route": "mcp",
+     "seasonal_adjustment": "",
+     "series": "usgov:spending/total",
+     "sha256": "63b87d7ff1f514a4a16592c3444c31a747316ff1a3d1a258f8fa6db0ed64b6d3",
+     "slug": "usgov_spending_total_610c87ef52d6bcd6",
+     "source_id": "",
+     "source_url": "https://www.usaspending.gov/explorer",
+     "title": "USAspending: Federal Award Spending by Fiscal Year",
+     "title_zh": "美国联邦奖励支出（按财年）",
+     "transform": "",
+     "units": "U.S. dollars",
+     "vintage": ""
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,402 @@
+{
+ "capture": {
+  "cache_file": "1991b3fb0ca063c2dd40f6ac370fb55d046e40e8f1768e9d8d4b0da57aff2e29.json",
+  "retrieved_at": "2026-10-11T19:51:25.213642+00:00",
+  "source": "normalized live series cache (scratchpad/fix/cache)",
+  "trimmed": "newest 30 observations; provenance without ['chunks', 'metadata', 'pages', 'tool_responses']"
+ },
+ "head_brief": "[S3] bis:WS_CBPOL/M.US — Central bank policy rates - United States - Monthly - End of period (Per cent per year, M)\n2026-02: 3.62% [observed]\n2026-03: 3.62% [observed]\n2026-04: 3.62% [observed]\n2026-05: 3.62% [observed]\n2026-06: 3.62% [observed]\n2026-07: 3.62% [observed]\n2026-08: 3.62% [observed]\n2026-09: 3.88% [observed]\nFor the United States BIS reports the midpoint of the federal funds target range; fred:DFEDTARU is the upper limit.",
+ "head_page": "# Central bank policy rates - United States - Monthly - End of period\nProvider: Bank for International Settlements (BIS) · Series: bis:WS_CBPOL/M.US · Units: Per cent per year · Frequency: M · Seasonal adjustment: unknown\nSource: https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US · Retrieved: 2026-10-11T19:51:25.213642+00:00 · Coverage shown: 2024-04-01 to 2026-09-01 (30 observations)\nGeography: USA · Vintage: unknown · Route: mcp\nNotes: For the United States BIS reports the midpoint of the federal funds target range; fred:DFEDTARU is the upper limit.\n## Summary\n- Latest: 3.88% (2026-09-01); see observation status below.\n- Year earlier: 4.12% (2025-09-01); change -0.25% (-6.06%).\n- 5-year range: 3.62% (2025-12-01) to 5.38% (2024-04-01).\n## Observations (Per cent per year)\nValues in Per cent per year.\n| Period | Value | Status |\n|---|---|---|\n| 2024-04 | 5.38% | observed |\n| 2024-05 | 5.38% | observed |\n| 2024-06 | 5.38% | observed |\n| 2024-07 | 5.38% | observed |\n| 2024-08 | 5.38% | observed |\n| 2024-09 | 4.88% | observed |\n| 2024-10 | 4.88% | observed |\n| 2024-11 | 4.62% | observed |\n| 2024-12 | 4.38% | observed |\n| 2025-01 | 4.38% | observed |\n| 2025-02 | 4.38% | observed |\n| 2025-03 | 4.38% | observed |\n| 2025-04 | 4.38% | observed |\n| 2025-05 | 4.38% | observed |\n| 2025-06 | 4.38% | observed |\n| 2025-07 | 4.38% | observed |\n| 2025-08 | 4.38% | observed |\n| 2025-09 | 4.12% | observed |\n| 2025-10 | 3.88% | observed |\n| 2025-11 | 3.88% | observed |\n| 2025-12 | 3.62% | observed |\n| 2026-01 | 3.62% | observed |\n| 2026-02 | 3.62% | observed |\n| 2026-03 | 3.62% | observed |\n| 2026-04 | 3.62% | observed |\n| 2026-05 | 3.62% | observed |\n| 2026-06 | 3.62% | observed |\n| 2026-07 | 3.62% | observed |\n| 2026-08 | 3.62% | observed |\n| 2026-09 | 3.88% | observed |",
+ "row": {
+  "api_url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/M.US?startPeriod=2016-10-11&endPeriod=2026-10-11&format=csv&labels=both",
+  "frequency": "M",
+  "geography": "USA",
+  "kiqs": [],
+  "last_updated": "",
+  "notes": "For the United States BIS reports the midpoint of the federal funds target range; fred:DFEDTARU is the upper limit.",
+  "observations": [
+   {
+    "date": "2024-04-01",
+    "flag": "observed",
+    "value": 5.375
+   },
+   {
+    "date": "2024-05-01",
+    "flag": "observed",
+    "value": 5.375
+   },
+   {
+    "date": "2024-06-01",
+    "flag": "observed",
+    "value": 5.375
+   },
+   {
+    "date": "2024-07-01",
+    "flag": "observed",
+    "value": 5.375
+   },
+   {
+    "date": "2024-08-01",
+    "flag": "observed",
+    "value": 5.375
+   },
+   {
+    "date": "2024-09-01",
+    "flag": "observed",
+    "value": 4.875
+   },
+   {
+    "date": "2024-10-01",
+    "flag": "observed",
+    "value": 4.875
+   },
+   {
+    "date": "2024-11-01",
+    "flag": "observed",
+    "value": 4.625
+   },
+   {
+    "date": "2024-12-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-01-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-02-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-03-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-04-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-05-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-06-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-07-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-08-01",
+    "flag": "observed",
+    "value": 4.375
+   },
+   {
+    "date": "2025-09-01",
+    "flag": "observed",
+    "value": 4.125
+   },
+   {
+    "date": "2025-10-01",
+    "flag": "observed",
+    "value": 3.875
+   },
+   {
+    "date": "2025-11-01",
+    "flag": "observed",
+    "value": 3.875
+   },
+   {
+    "date": "2025-12-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-01-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-02-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-03-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-04-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-05-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-06-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-07-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-08-01",
+    "flag": "observed",
+    "value": 3.625
+   },
+   {
+    "date": "2026-09-01",
+    "flag": "observed",
+    "value": 3.875
+   }
+  ],
+  "projection_from": "",
+  "provenance": {
+   "attributes": {
+    "COMPILATION": [
+     "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate."
+    ],
+    "DECIMALS": [
+     "4"
+    ],
+    "TITLE": [
+     "Central bank policy rates - United States - Monthly - End of period"
+    ],
+    "UNIT_MEASURE": [
+     "368"
+    ],
+    "UNIT_MEASURE_LABEL": [
+     "Per cent per year"
+    ],
+    "UNIT_MULT": [
+     "0"
+    ]
+   },
+   "delivered_end": "2026-09-01",
+   "delivered_start": "2016-11-01",
+   "dimensions": {
+    "FREQ": "M",
+    "REF_AREA": "US"
+   },
+   "flow_ref": "BIS,WS_CBPOL,1.0",
+   "intentional_delivery_trim": false,
+   "metadata_origin": "provider_and_curated_catalog",
+   "native_frequency": "M",
+   "normalization_policy_version": 2,
+   "raw_status": {
+    "2024-04-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-05-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-06-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-07-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-08-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-09-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-10-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-11-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2024-12-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-01-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-02-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-03-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-04-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-05-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-06-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-07-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-08-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-09-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-10-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-11-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2025-12-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-01-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-02-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-03-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-04-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-05-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-06-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-07-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-08-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ],
+    "2026-09-01": [
+     {
+      "code": "A",
+      "text": "Normal value"
+     }
+    ]
+   },
+   "requested_end": "2026-10-11",
+   "requested_start": "2016-10-11",
+   "response_sha256": "d06203e1f9b5ba1a526e2bc9f67ecd4c339150af07e0a96e0ede99f6f50f7719",
+   "retrieval_route": "mcp"
+  },
+  "provider": "bis",
+  "provider_name": "Bank for International Settlements (BIS)",
+  "retrieved_at": "2026-10-11T19:51:25.213642+00:00",
+  "route": "mcp",
+  "seasonal_adjustment": "",
+  "series": "bis:WS_CBPOL/M.US",
+  "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+  "title": "Central bank policy rates - United States - Monthly - End of period",
+  "title_zh": "美国央行政策利率",
+  "transform": "",
+  "units": "Per cent per year",
+  "vintage": ""
+ }
+}

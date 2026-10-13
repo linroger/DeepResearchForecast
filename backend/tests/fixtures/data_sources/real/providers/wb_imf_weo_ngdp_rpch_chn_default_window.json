@@ -1,0 +1,421 @@
+{
+ "captured_at": "2026-10-11T22:08:07Z",
+ "clock": 1791756487,
+ "series": "wb:IMF_WEO_NGDP_RPCH/CHN",
+ "request": {},
+ "calls": [
+  {
+   "provider": "wb",
+   "tool": "data360_get_metadata",
+   "args": {
+    "database_id": "IMF_WEO",
+    "indicator_id": "IMF_WEO_NGDP_RPCH",
+    "fetch_disaggregation": false,
+    "required_country": "CHN"
+   },
+   "response": {
+    "indicator_metadata": {
+     "idno": "IMF_WEO_NGDP_RPCH",
+     "database_id": "IMF_WEO",
+     "database_name": "World Economic Outlook (WEO)",
+     "name": "Gross domestic product (GDP), Constant prices, Percent change",
+     "measurement_unit": "Percentage change",
+     "periodicity": "Annual",
+     "date_released": null,
+     "date_last_update": null,
+     "version_statement": {
+      "version": null,
+      "version_date": "2026-10-06",
+      "version_resp": null,
+      "version_notes": null
+     },
+     "time_periods": [
+      {
+       "start": "1980",
+       "end": "2031",
+       "notes": null
+      }
+     ]
+    },
+    "disaggregation_options": [],
+    "error": null,
+    "stale": false
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_get_data",
+   "args": {
+    "database_id": "IMF_WEO",
+    "indicator_id": "IMF_WEO_NGDP_RPCH",
+    "country_code": "CHN",
+    "start_year": 2001,
+    "end_year": 2032,
+    "limit": 100,
+    "offset": 0,
+    "ref_area_filter": "none"
+   },
+   "response": {
+    "count": 31,
+    "total_count": null,
+    "offset": 0,
+    "has_more": false,
+    "next_offset": null,
+    "data": [
+     {
+      "OBS_VALUE": "3.29054",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2031",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "4c886a44",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "3.348004",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2030",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "4ee4295d",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "3.665493",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2029",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "f93e294c",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "4",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2028",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "79d6e341",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "4.032895",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2027",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "aaed3318",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "4.41261",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2026",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "751e2421",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "4.958804",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2025",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "d11b3edd",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "5.002785",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2024",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "c99a2e04",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "5.376818",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2023",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "80b5eca8",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "3.112082",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2022",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "3be50a63",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "8.555707",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2021",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "bd74f322",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "2.33658",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2020",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "fd096120",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "6.064729",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2019",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "9ff2c3cb",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "6.758615",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2018",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "70629366",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "6.890957",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2017",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "a2f9120b",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "6.775548",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2016",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "c6cb5495",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "7.018399",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2015",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "2665775c",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "7.491329",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2014",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "3891409d",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "7.770638",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2013",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "a93c8674",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "7.847656",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2012",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "8997d951",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "9.450959",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2011",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "68e16dea",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "10.586733",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2010",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "afc23a12",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "9.445003",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2009",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "77dcc308",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "9.638175",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2008",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "d6c95a13",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "14.153597",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2007",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "ecfb3102",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "12.664509",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2006",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "ab634ecf",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "11.436838",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2005",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "9816a38a",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "10.115163",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2004",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "55fb3d6a",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "10.121313",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2003",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "eee40114",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "9.214343",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2002",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "491e12b0",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     },
+     {
+      "OBS_VALUE": "8.319445",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2001",
+      "UNIT_MEASURE": "PC",
+      "claim_id": "ef57e711",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change",
+      "COMP_BREAKDOWN_1": "V_LST"
+     }
+    ],
+    "metadata": {
+     "idno": "IMF_WEO_NGDP_RPCH",
+     "name": "Gross domestic product (GDP), Constant prices, Percent change",
+     "database_id": "IMF_WEO",
+     "database_name": "World Economic Outlook (WEO)",
+     "measurement_unit": "Percentage change",
+     "periodicity": "Annual",
+     "definition_short": null
+    },
+    "error": null,
+    "failed_validation": null
+   }
+  }
+ ]
+}

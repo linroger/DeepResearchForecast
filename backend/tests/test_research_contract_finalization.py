@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -409,3 +410,38 @@ def test_finalization_is_noop_for_legacy_unmanifested_handoff(tmp_path):
     assert result is None
     assert (handoff / "research_report.md").read_text() == original
     assert not (handoff / po._RESEARCH_CONTRACT_FILENAME).exists()
+
+
+def test_research_data_directory_pins_config_style_parent_pair(tmp_path):
+    # Config joins roots as <app>/../uploads, so runtime handoff paths carry a
+    # benign lexical parent pair; pinning must resolve it against the pinned
+    # parent instead of failing, and must match the kernel-resolved target.
+    uploads = tmp_path / "uploads" / "pipelines" / "pipe_x" / "handoff"
+    uploads.mkdir(parents=True)
+    (tmp_path / "app").mkdir()
+    config_style = os.path.join(str(tmp_path / "app"), "..", str(uploads.relative_to(tmp_path)))
+
+    fd = po._research_data_directory(config_style)
+    assert fd >= 0
+    os.close(fd)
+    assert os.path.samefile(config_style, os.path.realpath(config_style))
+
+    fresh = tmp_path / "uploads" / "pipelines" / "pipe_y" / "handoff"
+    fresh_style = os.path.join(str(tmp_path / "app"), "..", str(fresh.relative_to(tmp_path)))
+    fd = po._research_data_directory(fresh_style, create=True)
+    assert fd >= 0
+    os.close(fd)
+    assert fresh.is_dir()
+
+    with pytest.raises(ValueError, match="parent traversal"):
+        po._research_data_directory("handoff/../../elsewhere")
+
+    # A symlink hiding inside link/.. would resolve outside its lexical parent;
+    # the pinned walk must refuse it even though normalization would collapse it.
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "nested").mkdir(parents=True)
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "link").symlink_to(elsewhere / "nested", target_is_directory=True)
+    with pytest.raises(ValueError, match="parent traversal"):
+        po._research_data_directory(str(base) + "/link/../target")

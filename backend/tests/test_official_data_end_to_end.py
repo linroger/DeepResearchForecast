@@ -2,6 +2,8 @@
 
 Run with main_offline_pytest.py, allowing fixtures/official_data_mcp.py and the
 existing data-visuals/scripts/render_data.py. Every observation is synthetic.
+Plain pytest skips it (``guarded_runner``): the runner's audit guard is what proves
+the run touched no network, saved data or files outside its evidence directory.
 """
 from __future__ import annotations
 
@@ -12,6 +14,8 @@ from pathlib import Path
 import re
 import sys
 from types import SimpleNamespace
+
+import pytest
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -83,8 +87,8 @@ def _synthetic_forecast(carrier):
             "binary_forecasts": binaries, "binary_quality": quality}
 
 
+@pytest.mark.guarded_runner
 def test_guarded_mcp_to_promoted_research_and_report_png(tmp_path, monkeypatch):
-    assert os.environ.get("MAIN_OFFLINE_EVIDENCE"), "Use the documented guarded runner"
     evidence_root = Path(os.environ["MAIN_OFFLINE_EVIDENCE"])
     before = {name: _hash(REPO / name) for name in SOURCES}
     identity = {key: os.environ.get(key) for key in ("HOME", "home", "CODEX_HOME", "USERPROFILE")}
@@ -92,10 +96,12 @@ def test_guarded_mcp_to_promoted_research_and_report_png(tmp_path, monkeypatch):
                 "source_before": before, "stage": "imports", "artifacts": {}}
     hub = None
     try:
-        # Real bridge package APIs and backend consumers; no module substitutes.
-        from deerflow_bridge import data_mcp as dm, data_sources as ds
-        from deerflow_bridge import research_gateway as rg, linear_research as lr
+        # Real bridge modules (bare names, as deployed) and backend consumers; no substitutes.
         monkeypatch.syspath_prepend(str(REPO / "deerflow_bridge"))
+        import data_mcp as dm
+        import data_sources as ds
+        import research_gateway as rg
+        import linear_research as lr
         import deerflow_research as bridge
         from app.config import Config
         from app.services import pipeline_orchestrator as po
@@ -281,7 +287,14 @@ def test_guarded_mcp_to_promoted_research_and_report_png(tmp_path, monkeypatch):
         assert audit["official_chart_captions"]["passed"]
         assert audit["structured_forecast"]["required"] and audit["structured_forecast"]["valid"]
         assert audit["publish_gate"]["passed"] is True
-        assert audit["citation_body_markers"]["counts"]["S1"] == len(official)
+        # Body [S1] markers: one per official chart caption plus one per "Official series to
+        # watch" row (each anchored binary's row cites its stored series), none dangling.
+        watch_rows = [line for line in report.markdown_content.splitlines()
+                      if line.startswith("| Unemployment Rate — United States (fred:UNRATE) |")]
+        assert len(watch_rows) == len(agent._forecast_spine["binary_forecasts"]) == 10
+        assert all(line.endswith("[S1] |") for line in watch_rows)
+        assert audit["citation_body_markers"]["counts"] == {"S1": len(official) + len(watch_rows)}
+        assert audit["citation_body_markers"]["dangling"] == []
         assert audit["markdown_sha256"] == _hash(report_dir / "full_report.md")
         assert audit["forecast_sha256"] == _hash(report_dir / "forecast.json")
         (report_dir / "publication-stages.json").write_text(json.dumps(

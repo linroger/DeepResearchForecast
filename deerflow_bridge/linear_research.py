@@ -58,11 +58,14 @@ answered (see ``_Engine._require_model_output``).
 from __future__ import annotations
 
 import bisect
+import calendar
 import datetime as _dt
 import difflib
 import functools
 import hashlib
 import importlib
+import inspect
+import itertools
 import json
 import math
 import os
@@ -195,6 +198,9 @@ TOOL_BUDGET_TEXT = "TOOL_BUDGET_EXHAUSTED: write your final notes now."
 NOTES_NUDGE_TEXT = ("FORMAT: your reply had neither a tool call nor notes. Call web_search or web_fetch to "
                     "continue, or write your final notes now in the required format (## Findings, "
                     "## Conflicts, ## Open questions, ## Discovered) with [S<n>] markers.")
+# The same texts for an agent whose tools include the official-data tools.
+NOTES_NUDGE_DATA_TEXT = NOTES_NUDGE_TEXT.replace("Call web_search or web_fetch",
+                                                 "Call web_search, web_fetch, data_search or data_get")
 TOOL_CALLS_SKIPPED_TEXT = (f"SKIPPED: at most {MAX_TOOL_CALLS_PER_STEP} tool calls run per step; repeat "
                            "this call in a later step if you still need it.")
 ALREADY_READ_TEXT = ("ALREADY_READ: you already read S{sid} with this or a near-same focus; use a clearly "
@@ -521,6 +527,234 @@ _KIND_EMPHASIS: Mapping[str, str] = {
     "data": ("quantitative series: latest values, trends, definitions, units, as-of dates and the "
              "primary publisher of each number."),
 }
+
+# ---------------------------------------------------------------------------
+# Official data (stored series).  All of this text is used only in runs with
+# official data enabled or stored, so prompts and artifacts of runs without
+# official data stay byte-identical; it is volatile last-message text or part of
+# the digest that is built once, never ENGINE_CORE.
+# ---------------------------------------------------------------------------
+
+# Reader-facing status of one stored point (see :func:`data_point_kind`).  Only
+# "observed" is stated as a fact (VERIFIED); every other status is the
+# publisher's statement (or a period not fully covered) and is attributed
+# (REPORTED).
+_DATA_STATUS: Mapping[str, Mapping[str, str]] = {
+    ENGLISH: {"observed": "stored observation", "preliminary": "publisher preliminary value",
+              "estimate": "publisher estimate", "projection": "publisher projection",
+              "partial": "partial period", "unknown": "status not supplied by publisher"},
+    CHINESE: {"observed": "已存观测值", "preliminary": "发布方初值", "estimate": "发布方估计值",
+              "projection": "发布方预测值", "partial": "不完整周期", "unknown": "发布方未提供状态"},
+}
+
+_DATA_TEXT: Mapping[str, Mapping[str, str]] = {
+    ENGLISH: {
+        "year_earlier": "year earlier", "change": "change", "range": "5-year range", "to": "to",
+        "daily": "latest daily value",
+        "path": "same period in earlier years", "recent": "earlier values",
+        "projection": "publisher projection, not observed",
+        "digest": ("OFFICIAL DATA (stored series: quote each value exactly as shown here, with its marker; "
+                   "publisher projections and estimates are the publisher's statements, not observations)"),
+        "table": ("| Series | Latest historical value | Period | Yearly change | Status | Publisher projection "
+                  "| Source |"),
+        "none": "—", "figure": "Figure", "chart": "Official series",
+        "caption": "Stored observations; publisher projections are marked separately.",
+        "next_release": "next {word} release after {period}",
+    },
+    CHINESE: {
+        "year_earlier": "上年同期", "change": "变化", "range": "近5年区间", "to": "至", "daily": "最新日度值",
+        "path": "往年同期", "recent": "此前数值", "projection": "发布方预测（非观测值）",
+        "digest": ("OFFICIAL DATA (stored series: quote each value exactly as shown here, with its marker; "
+                   "publisher projections and estimates are the publisher's statements, not observations)"),
+        "table": "| 序列 | 最新历史值 | 时期 | 同比变化 | 状态 | 发布方预测 | 来源 |",
+        "none": "—", "figure": "图", "chart": "官方序列",
+        "caption": "已存观测值；发布方预测值单独标注。",
+        "next_release": "{period}之后的下一次{word}发布",
+    },
+}
+_DATA_FREQUENCY_WORDS: Mapping[str, Mapping[str, str]] = {
+    ENGLISH: {"D": "daily", "W": "weekly", "M": "monthly", "Q": "quarterly", "A": "annual"},
+    CHINESE: {"D": "日度", "W": "周度", "M": "月度", "Q": "季度", "A": "年度"},
+}
+# Stored rows of these families run past the retrieval date: the publisher's
+# projection path (IMF WEO, World Bank GEP).  Their prefetch window ends at the
+# forecast horizon (at most DATA_PROJECTION_YEARS ahead): a stored window is
+# immutable for the run, so agents could not extend it later.
+_DATA_PROJECTION_FAMILIES = ("imf:WEO/", "imf:WEO_", "wb:IMF_WEO_", "wb:WB_GEP_")
+DATA_PROJECTION_YEARS = 6
+# A base-rate question asks for history long enough to count comparable
+# episodes: its prefetch starts this many years back (a stored series keeps
+# the newest rg.DATA_MAX_OBSERVATIONS observations).
+DATA_BASE_RATE_YEARS = 30
+# The wording that makes a question a base-rate question.  It names the
+# method, not the statistic, so catalog matching ignores it ("historical
+# growth" is a catalog keyword of GDP growth, no semiconductor-sales series).
+_BASE_RATE_RE = re.compile(r"base[\s-]?rates?|historical(?:ly)?|precedents?|how often|frequency of|"
+                           r"基准率|历史先例|历史|先例|频率", re.I)
+# Deterministic catalog seeding when the planner names no data_needs: at most
+# this many series, the strong catalog matches of the question first.
+DATA_FALLBACK_MAX = 6
+DATA_FALLBACK_PER_QUERY = 3
+# Providers that answer one request at a time in 30-60 s (IMF): the
+# deterministic fallback seeds their series only when no faster match exists,
+# since the data phase holds back gathering.
+_DATA_SLOW_PROVIDERS = frozenset({"imf"})
+# Clause boundaries of a compound question (the same split as the legacy
+# engine's prefetch): sentence ends, semicolons, colons, ", and/but/or ...".
+_DATA_CLAUSE_RE = re.compile(r"\.(?=\s|$)|[?!;。？！；：\n]+|:\s|,\s*(?:and|but|or|while|whereas)\s+|[，、]")
+# Catalog IDs suggested to a data KIQ in its task (discovery hints, never evidence).
+DATA_TASK_HINTS = 5
+# A catalog series measures a KIQ's own question only above one keyword-level
+# match (STRONG_CONCEPT_SCORE): a lone keyword is often a generic word ("growth",
+# "rate") that names an exchange rate for a question about ECB rate decisions.
+DATA_KIQ_CONCEPT_MARGIN = 1.0
+# Statistics (catalog topics) a KIQ without data needs is given series for, in its own words'
+# order ("the federal funds rate path and inflation": policy rates, then inflation).
+DATA_KIQ_STATISTICS = 2
+# meta.data_sources keys of a run without official data (as before the data
+# telemetry grew): such a run's meta stays byte-identical.
+_DATA_STATS_BASE_KEYS = frozenset({"calls", "failures", "cached", "series_count", "route_counts", "per_agent"})
+# Digest trajectory: points of the same period in earlier years (annual series:
+# the latest points), and publisher projection points shown per series.
+DATA_PATH_POINTS = 5
+DATA_PROJECTION_POINTS = 6
+# The official block of the digest gets at most this share of the digest cap.
+DATA_DIGEST_SHARE = 6
+# Status wording that attributes a value to its publisher as a projection or
+# estimate: such a statement may stay VERIFIED (the publisher did publish it).
+_DATA_FORECAST_WORDS_RE = re.compile(
+    r"\b(?:project(?:s|ed|ion|ions)?|forecast(?:s|ed)?|estimat(?:e|es|ed)|expect(?:s|ed)?|outlook|"
+    r"preliminary|provisional)\b|预测|预计|估计|展望|初值|初步", re.I)
+# The leading percent word of a unit that format_value already rendered as
+# "%": "Per cent per year" → "4.2% per year", "Percent" → "4.2%",
+# "Per cent, year-on-year change" → "3.4% year-on-year change".
+_DATA_PERCENT_UNIT_RE = re.compile(r"^\s*(?:percent(?:age)?|per\s*cent|%)\s*,?\s*", re.I)
+# Chinese labels of published units (values in a Chinese run's text): an exact
+# vocabulary (case and whitespace insensitive) plus index-base and chained-
+# dollar rules; a unit outside it stays as published.  The data-visuals
+# renderer labels its Chinese axes with the same vocabulary and rules
+# (render_data._UNITS_ZH, render_data._units_zh): a parity test keeps them equal.
+_DATA_UNITS_ZH: Mapping[str, str] = {
+    "percent": "百分比（%）", "percentage": "百分比（%）", "per cent": "百分比（%）",
+    "percent of labor force": "占劳动力比重（%）", "percent of total labor force": "占劳动力比重（%）",
+    "percent change": "变化率（%）", "percentage change": "变化率（%）",
+    "percent change per annum": "年变化率（%）", "percentage change per annum": "年变化率（%）",
+    "percent change, year over year": "同比变化率（%）", "per cent, year-on-year change": "同比变化率（%）",
+    "percent change over 12 months": "同比变化率（%）", "percent change from year ago": "同比变化率（%）",
+    "percent change from preceding period": "环比变化率（%）",
+    "percent change from previous period": "环比变化率（%）",
+    "percent change from preceding period (annual rate)": "环比折年率（%）",
+    "percent change from previous quarter at annual rate": "环比折年率（%）",
+    "percent of gdp": "占GDP比重（%）", "percentage of gdp": "占GDP比重（%）",
+    "percentage points of gdp": "占GDP百分点", "percentage points": "百分点",
+    "per cent per year": "年率（%）", "percent per annum": "年率（%）",
+    "per cent of income": "占收入比重（%）", "index": "指数",
+    "u.s. dollars": "美元", "us dollars": "美元", "dollars": "美元", "current u.s. dollars": "现价美元",
+    "billions of dollars": "十亿美元", "millions of dollars": "百万美元",
+    "millions of u.s. dollars": "百万美元", "us dollar, billions": "十亿美元",
+    "us dollar, millions": "百万美元", "euro, billions": "十亿欧元", "japanese yen, billions": "十亿日元",
+    "chinese yuan renminbi, billions": "十亿元人民币",
+    "billions of dollars (seasonally adjusted annual rate)": "十亿美元（季调年率）",
+    "millions of dollars (seasonally adjusted annual rate)": "百万美元（季调年率）",
+    "u.s. dollars (imf states no unit)": "美元（IMF 未注明单位）",
+    "dollars per hour": "美元/小时", "u.s. dollars per hour": "美元/小时",
+    "u.s. dollars per week": "美元/周", "dollars per barrel": "美元/桶",
+    "u.s. dollars per barrel": "美元/桶", "u.s. dollars per metric ton": "美元/公吨",
+    "u.s. dollars per pound": "美元/磅", "u.s. dollars per gallon": "美元/加仑",
+    "dollars per gallon": "美元/加仑", "u.s. dollars per troy ounce": "美元/金衡盎司",
+    "u.s. dollars per dozen": "美元/打", "u.s. dollars per kilowatt-hour": "美元/千瓦时",
+    "u.s. dollars per million british thermal units": "美元/百万英热单位",
+    "u.s. dollars per million metric british thermal unit": "美元/百万英热单位",
+    "dollars per million btu": "美元/百万英热单位", "cents per kilowatt-hour": "美分/千瓦时",
+    "foreign currency units per u.s. dollar": "每美元兑外币单位",
+    "yen per us dollar": "每美元兑日元", "renminbi per us dollar": "每美元兑人民币",
+    "euro per us dollar": "每美元兑欧元", "pounds sterling per us dollar": "每美元兑英镑",
+    "indian rupees per us dollar": "每美元兑印度卢比",
+    "u.s. dollars to one euro": "每欧元兑美元", "japanese yen to one u.s. dollar": "每美元兑日元",
+    "chinese yuan renminbi to one u.s. dollar": "每美元兑人民币",
+    "u.s. dollars to one u.k. pound sterling": "每英镑兑美元",
+    "mexican pesos to one u.s. dollar": "每美元兑墨西哥比索",
+    "indian rupees to one u.s. dollar": "每美元兑印度卢比",
+    "persons": "人", "thousands of persons": "千人", "thousands": "千", "level in thousands": "千",
+    "thousands of units": "千单位", "millions of units": "百万单位", "number": "数量", "hours": "小时",
+    "million kilowatt-hours": "百万千瓦时", "thousand megawatt-hours": "千兆瓦时",
+    "kilowatt-hours per capita": "人均千瓦时", "megawatts": "兆瓦",
+    "thousand barrels per day": "千桶/日", "mt co2 equivalent": "百万吨二氧化碳当量",
+    "millions of 1982-84 cpi adjusted dollars": "百万美元（按1982-84年CPI调整）",
+}
+_DATA_UNITS_INDEX_RE = re.compile(r"^index[,:]?\s+(.+)$", re.IGNORECASE)
+_DATA_UNITS_MONTH_BASE_RE = re.compile(
+    r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{4})(\s*=\s*100)$", re.IGNORECASE)
+_DATA_UNITS_CHAINED_RE = re.compile(r"^(billions|millions) of chained (\d{4}) dollars$", re.IGNORECASE)
+# Periods a finding names ("2026-09", "September 2026", "Q2 2026", "2026年9月",
+# "2026"), compared with the periods of the stored points it quotes.
+_DATA_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+_DATA_NAMED_PERIOD_RE = re.compile(
+    r"(?P<iso>(?<!\d)(?:19|20)\d{2}-(?:0[1-9]|1[0-2])(?!\d))"
+    r"|(?P<qy>(?<!\d)(?:19|20)\d{2})[- ]?Q(?P<qn>[1-4])\b|\bQ(?P<nq>[1-4])[- ]?(?P<yq>(?:19|20)\d{2})(?!\d)"
+    r"|\b(?P<month>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
+    r"sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?\s+(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?"
+    r"(?P<my>(?:19|20)\d{2})(?!\d)"
+    r"|(?P<zy>(?:19|20)\d{2})年(?P<zm>1[0-2]|0?[1-9])月"
+    r"|(?P<year>(?<!\d)(?:19|20)\d{2}(?!\d))", re.I)
+_DATA_UNIT_SCALE_RE = re.compile(r"\b(thousand|million|billion|trillion)s?\b", re.I)
+_DATA_ISO_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# Period designators in prose about a stored series: their digits name a
+# period, not a figure the dataset page must contain ("Q2", "2026-Q2", "H1",
+# "第二季度", "9月30日", "September 30").
+_DATA_PERIOD_LABEL_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:(?:19|20)\d{2}[-/ ]?)?[QH][1-4](?![A-Za-z0-9])"
+    r"|第[一二三四1-4]季度|[一二三四1-4]季度|[上下]半年"
+    r"|(?<=年)\d{1,2}月(?:\d{1,2}日)?|(?<![\d.])\d{1,2}月\d{1,2}日"
+    r"|(?<=\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[a-z]*\.?\s+\d{1,2}"
+    r"(?:(?:st|nd|rd|th)\b|(?=,?\s+(?:19|20)\d{2}\b)),?"
+    r"|(?<![\d.,])\b\d{1,2}(?:st|nd|rd|th)?\s+(?=(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b)", re.I)
+# Writer, executive-summary and critique rules of runs that hold official data
+# (appended to the last message only then; the static rules stay unchanged).
+_DATA_SECTION_RULE = ("- Official data: anchor current-state, trend and base-rate statements on the OFFICIAL DATA "
+                      "series of the evidence where they are relevant; quote each value with its unit, period and "
+                      "geography exactly as stored there, with its marker; never round, convert or recompute a "
+                      "stored value; state a publisher projection or estimate as the publisher's, never as an "
+                      "observed fact.")
+_DATA_EXEC_RULE = ("Where the official series below bear on the key numbers, use them: copy value, unit, period "
+                   "and marker exactly, and call a publisher projection or estimate the publisher's (a projection "
+                   "to the horizon is the publisher's outlook to set the forecast against, never an observation).")
+_DATA_CRITIQUE_RULE = ("Also flag every statement that contradicts the stored official series below: another "
+                       "value, period, unit or geography for the same series, or a publisher projection, estimate "
+                       "or status-not-supplied value presented as an observed fact; and a forecast or scenario "
+                       "claim that departs from a listed publisher projection for the horizon without saying why.")
+LABEL_DATA_HEADLINES = "official data headlines"
+# Official-data charts render inside the QA deadline less this reserve (the
+# repairs and checks after them), and not at all with less than the minimum.
+DATA_CHARTS_RESERVE_S = 30.0
+DATA_CHARTS_MIN_S = 5.0
+# A falling or negative quantity stated by its magnitude ("fell 0.25 pp", "a
+# deficit of $166.8 billion"): an unsigned number may match a negative stored value.
+_DATA_DECLINE_RE = re.compile(
+    r"\b(?:fell|fall(?:s|en|ing)?|declin\w*|decreas\w*|dropp?\w*|contract\w*|shr[aiu]nk\w*|lower\w*|down"
+    r"|deficits?|negative|minus|loss(?:es)?)\b|下降|下跌|减少|回落|收缩|赤字|为负|负值|负增长|降至|降低", re.I)
+# A threshold the research question itself sets, restated after a comparison word ("two of
+# three episodes above 3.5% fell below 2.5% within 15 months"), is the question's rule, not
+# a figure read from a stored series (live eval 2026-10-14).
+_DATA_THRESHOLD_RE = re.compile(
+    r"(?:\b(?:above|below|under|over|exceed(?:s|ed|ing)?|than|within|at\s+least|at\s+most|beneath)\s+"
+    r"|超过|高于|低于|不低于|不高于|跌破|突破|以内)\s*[$€£¥]?(?P<number>\d+(?:\.\d+)?)", re.I)
+
+
+def data_question_thresholds(text: str, numbers: set[str]) -> str:
+    """``text`` without the comparison thresholds whose number is one of ``numbers`` (the
+    numbers of the research question and its KIQs)."""
+    return _DATA_THRESHOLD_RE.sub(lambda match: " " if match["number"] in numbers else match[0], text)
+
+
+def data_scenario_weights(text: str, scenarios: Sequence[Any]) -> str:
+    """``text`` without each scenario's own weight written right after its name ("跌破四（35%）",
+    "Sticky above target — 35%"): the report's probability, not a figure of a stored series."""
+    for scenario in scenarios:
+        name, weight = str(getattr(scenario, "name", "") or ""), getattr(scenario, "weight", None)
+        if name and isinstance(weight, (int, float)):
+            text = re.sub(rf"({re.escape(name)}[^\d\n]{{0,8}}?){re.escape(f'{weight:g}')}\s*%", r"\1 ", text)
+    return text
 
 
 def _render(template: string.Template, **fields: Any) -> str:
@@ -3554,7 +3788,8 @@ class KiqAgent:
                 # (on the last step the forced final's STOP is that nudge).
                 nudged = True
                 if step < max_steps:
-                    messages.append(self._human(content=NOTES_NUDGE_TEXT))
+                    messages.append(self._human(content=NOTES_NUDGE_DATA_TEXT if self._data_tools()
+                                                else NOTES_NUDGE_TEXT))
                 continue
             if any(not call.get("id") for call in result.tool_calls):
                 # A call without an id cannot be answered, and an unanswered
@@ -3813,10 +4048,18 @@ class KiqAgent:
         if terms is not None and terms not in self._reads.setdefault(sid, []):
             self._reads[sid].append(terms)
 
+    def _data_tools(self) -> bool:
+        """The official-data tools are bound on this agent's calls."""
+        return getattr(self, "agent_tools", None) is rg.AGENT_TOOLS_WITH_DATA_SCHEMA
+
     def _call_tool(self, call: Mapping[str, Any]) -> str:
         tools = self.engine.tools
         try:
             if call.get("error"):
+                if self._data_tools():
+                    return (f"INVALID_TOOL_CALL: {call['error']}. Call web_search with a query string, "
+                            "web_fetch with a url (and optionally a focus), data_search with a query or "
+                            "data_get with a series ID.")
                 return (f"INVALID_TOOL_CALL: {call['error']}. Call web_search with a query string "
                         "or web_fetch with a url (and optionally a focus).")
             args = call.get("args") or {}
@@ -3847,6 +4090,8 @@ class KiqAgent:
                 focus = args.get("focus")
                 return tools.fetch(url, focus=focus if isinstance(focus, str) else "",
                                    agent_id=self.kiq.id, kiq_text=self.kiq.question)
+            if self._data_tools():
+                return "UNKNOWN_TOOL: only web_search, web_fetch, data_search and data_get are available."
             return "UNKNOWN_TOOL: only web_search and web_fetch are available."
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
@@ -3981,6 +4226,389 @@ def _jaccard(left: set[str], right: set[str]) -> float:
 
 
 # ===========================================================================
+# Official data displays: stored series → digest lines, findings, table rows
+# ===========================================================================
+
+def _accepts_keyword(func: Any, name: str) -> bool:
+    """Whether ``func`` takes the keyword argument ``name`` (or ``**kwargs``)."""
+    try:
+        parameters = inspect.signature(func).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(p.name == name or p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters)
+
+
+def _data_catalog() -> Any:
+    """The curated official-data catalog (lazy, package/bare compatible)."""
+    return importlib.import_module(f"{__package__}.data_catalog" if __package__ else "data_catalog")
+
+
+def _data_statistic(entry: Any) -> str:
+    """The statistic a catalog entry's title names without its geography
+    ("GDP (annual % growth): World" → "GDP (annual % growth)")."""
+    return str(entry.title).rsplit(": ", 1)[0]
+
+
+def _data_lang(language: str) -> str:
+    return "zh" if language == CHINESE else "en"
+
+
+def data_point_kind(series: Any, observation: Any) -> str:
+    """Status of one stored point: ``data_sources.observation_kind`` ("observed",
+    "preliminary", "estimate", "projection", "unknown" or "partial"); a point
+    dated after the retrieval date is a publisher projection under every
+    display policy (rows stored before the current policy included)."""
+    kind = rg._data_api().observation_kind(observation, series)
+    retrieved = str(getattr(series, "retrieved_at", "") or "")[:10]
+    if kind != "projection" and _DATA_ISO_DAY_RE.fullmatch(retrieved) and observation.date > retrieved:
+        return "projection"
+    return kind
+
+
+def _data_period_meta(series: Any, day: str) -> Mapping[str, Any]:
+    periods = series.provenance.get("periods") if isinstance(series.provenance, dict) else None
+    meta = periods.get(day) if isinstance(periods, dict) else None
+    return meta if isinstance(meta, dict) else {}
+
+
+def data_period(series: Any, day: str) -> str:
+    """Reader period of a stored point: the publisher's own label when the row
+    has one (fiscal years, months of daily data), else 2026, 2026-Q2, 2026-09
+    or the date."""
+    label = _data_period_meta(series, day).get("label")
+    if isinstance(label, str) and label.strip():
+        return _collapse(label, 40)
+    frequency = str(getattr(series, "frequency", "") or "")
+    if frequency == "A":
+        return day[:4]
+    if frequency == "Q":
+        return f"{day[:4]}-Q{(int(day[5:7]) - 1) // 3 + 1}"
+    return day[:7] if frequency == "M" else day
+
+
+def data_period_end(series: Any, day: str) -> str:
+    """Last day (YYYY-MM-DD) of the period a stored point covers."""
+    end = _data_period_meta(series, day).get("end")
+    if isinstance(end, str) and _DATA_ISO_DAY_RE.fullmatch(end):
+        return end
+    frequency = str(getattr(series, "frequency", "") or "")
+    year, month = int(day[:4]), int(day[5:7])
+    if frequency == "A":
+        return f"{year}-12-31"
+    if frequency in ("Q", "M"):
+        last = (month - 1) // 3 * 3 + 3 if frequency == "Q" else month
+        return f"{year}-{last:02d}-{calendar.monthrange(year, last)[1]:02d}"
+    return day
+
+
+def _data_shift(day: str, months: int) -> str:
+    """``day`` moved by whole months (the day of month clamped)."""
+    year, month = divmod(int(day[:4]) * 12 + int(day[5:7]) - 1 + months, 12)
+    return f"{year:04d}-{month + 1:02d}-{min(int(day[8:10]), calendar.monthrange(year, month + 1)[1]):02d}"
+
+
+def data_units_zh(units: str) -> str:
+    """Chinese label of a published unit ("Per cent per year" → "年率（%）",
+    "Index Dec 2005=100" → "指数（2005年12月=100）"); a unit outside the
+    vocabulary is returned as published (whitespace collapsed).  The same
+    rules as the data-visuals renderer's ``_units_zh``."""
+    text = re.sub(r"\s+", " ", str(units or "")).strip()
+    exact = _DATA_UNITS_ZH.get(text.casefold())
+    if exact:
+        return exact
+    chained = _DATA_UNITS_CHAINED_RE.match(text)
+    if chained:
+        scale = "十亿" if chained.group(1).casefold() == "billions" else "百万"
+        return f"{scale}美元（{chained.group(2)}年链式美元）"
+    index = _DATA_UNITS_INDEX_RE.match(text)
+    if index:
+        base = index.group(1).strip()
+        month = _DATA_UNITS_MONTH_BASE_RE.match(base)
+        if month:
+            number = _DATA_MONTHS.index(month.group(1)[:3].casefold()) + 1
+            base = f"{month.group(2)}年{number}月{month.group(3).replace(' ', '')}"
+        return f"指数（{base}）"
+    return text
+
+
+def data_unit_text(units: str, value_text: str, language: str) -> str:
+    """The unit shown after a stored value's text: the published unit, its
+    percent word dropped after a "%" ("Per cent per year" → "per year",
+    "Percent" → ""); a Chinese run shows its Chinese label instead ("年率",
+    "十亿美元": :func:`data_units_zh` without the "（%）" a "%" value already
+    carries), and a unit outside that vocabulary as published.  Only the
+    label changes: the value text is the stored page's own."""
+    published = _collapse(units, 120)
+    percent = value_text.endswith("%") and rg._data_api().is_percent_units(published)
+    shown = _DATA_PERCENT_UNIT_RE.sub("", published, count=1).strip() if percent else published
+    if language != CHINESE or not shown:
+        return shown
+    label = data_units_zh(units)
+    if label == re.sub(r"\s+", " ", str(units or "")).strip():
+        return shown
+    return label.removesuffix("（%）") if percent else label
+
+
+def data_value_text(series: Any, value: float, *, language: str, page: str | None = None) -> str:
+    """A stored value as the run shows it: the page's own number format, the
+    unit (:func:`data_unit_text`: "4.2% per year", Chinese "4.2% 年率"), and
+    the magnitude companion of a large level ("≈ 40.27 trillion U.S. dollars").
+    With ``page`` the companion is kept only when that page states it, so a
+    finding checked against the page shows no number the page lacks."""
+    api = rg._data_api()
+    text = api.format_series_value(value, series)
+    units = data_unit_text(series.units, text, language)
+    if units:
+        text += " " + units
+    scaled = api.scaled_value(value, series.units, _data_lang(language))
+    if scaled and (page is None or scaled in page):
+        text += f" ({scaled})"
+    return text
+
+
+def _data_signed(text: str) -> str:
+    return text if text.startswith("-") or text.rstrip("%") == "0" else "+" + text
+
+
+def data_view(series: Any) -> dict | None:
+    """The reader's view of one stored series, or ``None`` without values.
+
+    ``latest`` is the newest point that is no publisher projection and no
+    period still open at retrieval (a partial month of daily data; it is the
+    latest only when nothing else is), with its status ``kind``; ``daily``
+    the newest daily ``(date, value)`` of an aggregated daily series when it
+    is newer; ``prior`` the same period a year earlier; ``low``/``high`` the
+    range of the five years up to ``latest``; ``path`` earlier points (the
+    same period in earlier years, or earlier annual values) and
+    ``projections`` the publisher projection path, never mixed with history.
+    """
+    api = rg._data_api()
+    points = [(o, data_point_kind(series, o)) for o in series.observations if o.value is not None]
+    history = [(o, kind) for o, kind in points if kind != "projection"]
+    projections = [o for o, kind in points if kind == "projection"]
+    if not points:
+        return None
+    view: dict[str, Any] = {"latest": None, "kind": "", "daily": None, "prior": None, "prior_kind": "",
+                            "change": "", "low": None, "high": None, "path": [], "projections": projections}
+    if not history:
+        return view
+    history = [(o, kind) for o, kind in history if kind != "partial"] or history
+    latest, kind = history[-1]
+    kinds = {o.date: k for o, k in history}
+    by_date = {o.date: o for o, _ in history}
+    view.update(latest=latest, kind=kind)
+    provenance = series.provenance if isinstance(series.provenance, dict) else {}
+    daily = provenance.get("latest_daily")
+    if (isinstance(daily, dict) and isinstance(daily.get("value"), (int, float)) and not isinstance(daily["value"], bool)
+            and _DATA_ISO_DAY_RE.fullmatch(str(daily.get("date") or "")) and daily["date"] > data_period_end(series, latest.date)):
+        view["daily"] = (daily["date"], float(daily["value"]))
+    if series.frequency in ("A", "Q", "M"):
+        prior = by_date.get(_data_shift(latest.date, -12))
+        if prior is not None:
+            delta = latest.value - prior.value
+            change = api.format_change(delta, series.units)
+            if not api.is_percent_units(series.units) and prior.value:
+                change += f" ({_data_signed(api.format_value(delta / abs(prior.value) * 100, 'Percent'))})"
+            view.update(prior=prior, prior_kind=kinds[prior.date], change=change)
+        window = [o for o, _ in history if o.date >= _data_shift(latest.date, -60)]
+        if len(window) >= 3:
+            view.update(low=min(window, key=lambda o: o.value), high=max(window, key=lambda o: o.value))
+        if series.frequency == "A":
+            view["path"] = [o for o, _ in history[:-2]][-(DATA_PATH_POINTS - 1):]
+        else:
+            view["path"] = [by_date[day] for day in (_data_shift(latest.date, -12 * years)
+                                                       for years in range(DATA_PATH_POINTS, 1, -1))
+                            if day in by_date]
+    return view
+
+
+def _data_punctuation(language: str) -> tuple[str, str, str, str]:
+    """(colon, semicolon, open, close) of the run language."""
+    return ("：", "；", "（", "）") if language == CHINESE else (": ", "; ", " (", ")")
+
+
+def data_status_text(kind: str, language: str) -> str:
+    return _DATA_STATUS[_lang_key(language)].get(kind, _DATA_STATUS[_lang_key(language)]["unknown"])
+
+
+def _data_dated(period: str, kind: str, language: str) -> str:
+    """`` (2026-09; stored observation)`` / ``（2026-09；已存观测值）``."""
+    status = data_status_text(kind, language)
+    return f"（{period}；{status}）" if language == CHINESE else f" ({period}; {status})"
+
+
+def _data_points(series: Any, points: Sequence[Any]) -> str:
+    api = rg._data_api()
+    return ", ".join(f"{data_period(series, o.date)} {api.format_series_value(o.value, series)}" for o in points)
+
+
+def data_digest_line(series: Any, sid: int, language: str) -> str:
+    """One OFFICIAL DATA line of the evidence digest: latest historical value
+    with its status, the year-earlier change, the five-year range, earlier
+    points and the publisher projection path (separately labelled)."""
+    view = data_view(series)
+    if view is None:
+        return ""
+    text = _DATA_TEXT[_lang_key(language)]
+    colon, semi, left, right = _data_punctuation(language)
+    label = rg._data_api().series_label(series, _data_lang(language))
+    parts = []
+    if view["latest"] is not None:
+        latest = view["latest"]
+        parts.append(data_value_text(series, latest.value, language=language)
+                     + _data_dated(data_period(series, latest.date), view["kind"], language))
+    if view["daily"] is not None:
+        day, value = view["daily"]
+        parts.append(f"{text['daily']} {rg._data_api().format_series_value(value, series)}{left}{day}{right}")
+    if view["prior"] is not None:
+        prior = view["prior"]
+        parts.append(f"{text['year_earlier']} {data_value_text(series, prior.value, language=language)}{left}"
+                     f"{data_period(series, prior.date)}{right}{'，' if language == CHINESE else ', '}"
+                     f"{text['change']} {view['change']}")
+    if view["low"] is not None:
+        low, high = view["low"], view["high"]
+        api = rg._data_api()
+        parts.append(f"{text['range']} {api.format_series_value(low.value, series)}{left}"
+                     f"{data_period(series, low.date)}{right} {text['to']} {api.format_series_value(high.value, series)}"
+                     f"{left}{data_period(series, high.date)}{right}")
+    if view["path"]:
+        word = text["recent"] if series.frequency == "A" else text["path"]
+        parts.append(f"{word}{colon}{_data_points(series, view['path'])}")
+    if view["projections"]:
+        parts.append(f"{text['projection']}{colon}"
+                     f"{_data_points(series, view['projections'][:DATA_PROJECTION_POINTS])}")
+    return f"[S{sid}] {series.series} — {label}{colon}{semi.join(parts)}"
+
+
+def data_headline(series: Any, sid: int | None, language: str) -> str:
+    """``[S<n>] label: latest historical value (period; status)`` (no marker
+    without ``sid``), or ``""``."""
+    view = data_view(series)
+    if view is None or view["latest"] is None:
+        return ""
+    colon = _data_punctuation(language)[0]
+    latest = view["latest"]
+    marker = f"[S{sid}] " if sid is not None else ""
+    return (f"{marker}{rg._data_api().series_label(series, _data_lang(language))}{colon}"
+            + data_value_text(series, latest.value, language=language)
+            + _data_dated(data_period(series, latest.date), view["kind"], language))
+
+
+def data_outlook_headline(series: Any, sid: int, language: str, horizon: int) -> str:
+    """:func:`data_headline` and, for a series with a publisher projection
+    path, its points through the ``horizon`` year (at least the first, at
+    most ``DATA_PROJECTION_POINTS``), labelled as the publisher's: the outside
+    view a summary quotes and a critique checks.  The digest line shows the
+    same points, so every number is one the official-data checks accept."""
+    line = data_headline(series, sid, language)
+    view = data_view(series)
+    if not line or view is None or not view["projections"]:
+        return line
+    points = ([o for o in view["projections"] if str(o.date)[:4].isdigit() and int(str(o.date)[:4]) <= horizon]
+              or view["projections"][:1])
+    colon, semi, _, _ = _data_punctuation(language)
+    return (f"{line}{semi}{_DATA_TEXT[_lang_key(language)]['projection']}{colon}"
+            f"{_data_points(series, points[:DATA_PROJECTION_POINTS])}")
+
+
+def data_facts(series: Any, sid: int, language: str, page: str) -> list[tuple[str, bool]]:
+    """Deterministic findings ``(text, observed)`` for a KIQ shown a stored
+    series: the latest historical value (with the year-earlier value when that
+    is an observation too) and, separately, the publisher projection path.
+    Only an "observed" finding may be VERIFIED; every number is on ``page``."""
+    view = data_view(series)
+    if view is None:
+        return []
+    text = _DATA_TEXT[_lang_key(language)]
+    colon, semi, left, right = _data_punctuation(language)
+    label = rg._data_api().series_label(series, _data_lang(language))
+    facts: list[tuple[str, bool]] = []
+    if view["latest"] is not None:
+        latest, observed = view["latest"], view["kind"] == "observed"
+        line = (f"{label}{colon}{data_value_text(series, latest.value, language=language, page=page)}"
+                + _data_dated(data_period(series, latest.date), view["kind"], language))
+        prior = view["prior"]
+        if prior is not None and (view["prior_kind"] == "observed" or not observed):
+            line += (f"{semi}{text['year_earlier']} {data_value_text(series, prior.value, language=language, page=page)}"
+                     f"{left}{data_period(series, prior.date)}{right}")
+        facts.append((f"{line} [S{sid}]", observed))
+    if view["projections"]:
+        facts.append((f"{label}{colon}{text['projection']}{colon}"
+                      f"{_data_points(series, view['projections'][:DATA_PROJECTION_POINTS])} [S{sid}]", False))
+    return facts
+
+
+def data_table_row(series: Any, sid: int, language: str) -> str:
+    """One row of the official-data baseline table (provider text escaped)."""
+    def cell(value: Any) -> str:
+        return (rg._clean_web_text(str(value)).replace("|", "\\|").replace("\n", " ")
+                .replace("[", "(").replace("]", ")"))
+    view = data_view(series)
+    if view is None:
+        return ""
+    none = _DATA_TEXT[_lang_key(language)]["none"]
+    latest = view["latest"]
+    value = data_value_text(series, latest.value, language=language) if latest is not None else none
+    period = data_period(series, latest.date) if latest is not None else none
+    status = data_status_text(view["kind"], language) if latest is not None else none
+    projections = "; ".join(f"{data_period(series, o.date)}: {rg._data_api().format_series_value(o.value, series)}"
+                            for o in view["projections"][:3]) or none
+    label = rg._data_api().series_label(series, _data_lang(language))
+    return (f"| {cell(label)} | {cell(value)} | {cell(period)} | {cell(view['change'] or none)} | {cell(status)} "
+            f"| {cell(projections)} | [S{sid}] |")
+
+
+def data_renderings(series: Any, sid: int, language: str) -> str:
+    """Every text this engine derives from one stored series (digest line,
+    headline, findings, table row): numbers a report may quote from them are
+    exact values of that series."""
+    page = rg._data_api().render_series_page(series)
+    return "\n".join([data_digest_line(series, sid, language), data_headline(series, sid, language),
+                      *(text for text, _ in data_facts(series, sid, language, page)),
+                      data_table_row(series, sid, language)])
+
+
+def data_claim_text(text: str) -> str:
+    """Prose about a stored series as the official-data checks read it: period
+    designators (quarters, halves, days of a month) out, their digits name a
+    period, not a figure."""
+    return _DATA_PERIOD_LABEL_RE.sub(" ", unicodedata.normalize("NFKC", str(text or "")))
+
+
+def data_named_periods(text: str) -> set[str]:
+    """Periods a statement names, as :func:`data_period` writes them
+    ("2026-09", "2026-Q2", "2026"); a full date names its month."""
+    periods: set[str] = set()
+    for match in _DATA_NAMED_PERIOD_RE.finditer(unicodedata.normalize("NFKC", str(text or ""))):
+        if match["iso"]:
+            periods.add(match["iso"])
+        elif match["qn"] or match["nq"]:
+            periods.add(f"{match['qy'] or match['yq']}-Q{match['qn'] or match['nq']}")
+        elif match["month"]:
+            periods.add(f"{match['my']}-{_DATA_MONTHS.index(match['month'][:3].lower()) + 1:02d}")
+        elif match["zy"]:
+            periods.add(f"{match['zy']}-{int(match['zm']):02d}")
+        else:
+            periods.add(match["year"])
+    return periods
+
+
+def _data_point_periods(series: Any, observation: Any) -> set[str]:
+    """The periods one stored point answers to (its reader period and month;
+    an annual point its year)."""
+    periods = {data_period(series, observation.date), observation.date[:7]}
+    if str(getattr(series, "frequency", "") or "") == "A":
+        periods.add(observation.date[:4])
+    return periods
+
+
+def data_units_exponent(units: str) -> int:
+    """Power of ten of a unit's scale word ("Billions of Dollars" → 9), else 0."""
+    match = _DATA_UNIT_SCALE_RE.search(str(units or ""))
+    return _SCALE_EXPONENTS[match.group(1).lower()] if match else 0
+
+
+# ===========================================================================
 # The engine
 # ===========================================================================
 
@@ -4037,6 +4665,9 @@ class _Engine:
             max_fetches_per_agent=self.preset.fetches_per_kiq,
             max_data_calls_total=data_cap("RESEARCH_LINEAR_MAX_DATA_CALLS_TOTAL", data_total, 200),
             max_data_calls_per_agent=data_cap("RESEARCH_LINEAR_DATA_CALLS_PER_KIQ", data_per_agent, 20),
+            # Stored series per run (quick 10, standard 16, deep 24; DATA_SOURCES_MAX_SERIES
+            # overrides); the plan-phase seeder may fill 60 % of it.
+            max_datasets=rg.dataset_cap(self.preset.depth, env),
             per_agent_overrides={
                 "planner": (SCOUT_QUERIES_MAX, 0),
                 "seeder": (SEED_QUERIES_PER_KIQ * (self.preset.max_kiqs + self.preset.gap_rounds
@@ -4056,6 +4687,8 @@ class _Engine:
         self.data_enabled = False
         self.data_index: dict[str, list[int]] = {}
         self.data_charts: list[dict] = []
+        # Title of the section the official-data baseline follows (set by QA).
+        self._data_baseline_after: str | None = None
         self._configure_data()
         self.agent_tools = rg.AGENT_TOOLS_WITH_DATA_SCHEMA if self.data_enabled else AGENT_TOOLS
         for name in ("data_search", "data_get"):
@@ -4082,23 +4715,31 @@ class _Engine:
         self._synth_context_cache: str | None = None
 
     def _configure_data(self) -> None:
-        """Capability discovery is lazy; resumed runs never prewarm providers."""
+        """Capability discovery is lazy.  A resumed attempt keeps the run's data
+        decision: evidence pinned by a finished gather stays frozen (stored
+        series only, no provider), and a run that recorded official data as
+        disabled or unavailable stays so; any other resumed run (it stopped
+        before or during acquisition, or mid-gather) configures the providers
+        again, so its data phase and its unfinished KIQs can still fetch; when
+        they are unavailable it keeps what an earlier attempt stored
+        (:meth:`_keep_stored_data`)."""
         self.meta["data_sources"] = {"status": "disabled", "providers": {}}
         if not callable(getattr(self.tools, "restore_data", None)):
             return
-        if not self.resumed and str(self.env.get("DATA_SOURCES_ENABLED", "true")).lower() in _FALSY:
+        enabled = str(self.env.get("DATA_SOURCES_ENABLED", "true")).lower() not in _FALSY
+        if not self.resumed and not enabled:
             return
         try:
             api = rg._data_api()
             self.tools.restore_data()
             saved = _read_json(self.work / "data" / "index.json")
             saved_enabled = isinstance(saved, dict) and bool(saved.get("enabled"))
-            if self.resumed:
+            data = self.state.phase("data")
+            recorded_off = data.get("status") == "done" and data.get("detail") == "disabled"
+            if self.resumed and (self._data_pinned() or recorded_off or not enabled):
                 self.tools.freeze_data()
                 self.data_enabled = saved_enabled or bool(self.tools.data_rows())
                 self.meta["data_sources"]["status"] = "stored_only"
-                return
-            if str(self.env.get("DATA_SOURCES_ENABLED", "true")).lower() in _FALSY:
                 return
             sources = self.tools.data_sources or api.get_data_sources(env=self.env)
             self.data_enabled = bool(sources.enabled())
@@ -4110,6 +4751,26 @@ class _Engine:
         except Exception as exc:  # noqa: BLE001 — optional capability must not fail research
             self.log("warn", f"v3: official data unavailable ({type(exc).__name__})")
             self.meta["data_sources"]["status"] = "unavailable"
+        if self.resumed and not self.data_enabled and self.meta["data_sources"]["status"] == "unavailable":
+            self._keep_stored_data()
+
+    def _keep_stored_data(self) -> None:
+        """A resumed attempt whose providers are unavailable keeps the official
+        data an earlier attempt enabled or stored, as stored series only
+        (admission frozen): its unfinished KIQs still read their seeds."""
+        try:
+            saved = _read_json(self.work / "data" / "index.json")
+            if not ((isinstance(saved, dict) and saved.get("enabled")) or self.tools.data_rows()):
+                return
+            self.tools.freeze_data()
+            self.data_enabled = True
+            self.meta["data_sources"]["status"] = "stored_only"
+        except Exception as exc:  # noqa: BLE001 — optional capability must not fail research
+            self.log("warn", f"v3: stored official data unavailable ({type(exc).__name__})")
+
+    def _data_pinned(self) -> bool:
+        """Gathering finished: the evidence agents saw is pinned, admission closed."""
+        return any(self.state.is_done(phase) for phase in ("gather", "synthesize", "qa", "finalize"))
 
     def _data_rows(self) -> list[tuple[Any, int]]:
         method = getattr(self.tools, "data_rows", None)
@@ -4333,6 +4994,11 @@ class _Engine:
 
     # ========================================================== official data
     def phase_data(self) -> None:
+        """Resolve the plan's data needs (or, when the planner named none, the
+        strong catalog matches of the question) and prefetch them in one
+        bounded batch: projection families up to the forecast horizon,
+        base-rate KIQs with long history.  The stored pages become seed
+        evidence of the KIQs that need them."""
         self._check_data_reuse()
         self._retire_previous_data_generation()
         available = {sid for _, sid in self._data_rows()}
@@ -4342,8 +5008,9 @@ class _Engine:
             if isinstance(index, dict):
                 self.data_index = {kid: [sid for sid in sids if isinstance(sid, int) and sid in available]
                                    for kid, sids in index.items() if isinstance(sids, list)}
-        if self.resumed or self.state.is_done("gather") or self.state.is_done("data"):
-            self._freeze_data()
+        if self.state.is_done("data") or self._data_pinned():
+            if self._data_pinned():
+                self._freeze_data()
             if not self.state.is_done("data"):
                 self.state.set_phase("data", "done", "skipped_resume")
             return
@@ -4352,48 +5019,295 @@ class _Engine:
             return
         with self.phase("data") as phase_deadline:
             deadline = phase_deadline.child(min(150.0, phase_deadline.remaining()), label="official data")
+            stored = failed = 0
             try:
-                cap = max(0, min(12, int(self.env.get("DATA_SOURCES_PREFETCH_MAX", "12"))))
-            except (TypeError, ValueError):
-                cap = 12
-            requested: dict[str, list[str]] = {}
-            try:
-                api = rg._data_api()
-                for kiq in self.kiqs:
-                    for need in kiq.data_needs[:3]:
-                        if deadline.expired() or self.cancelled or cap == 0:
-                            break
-                        series = need.get("series", "")
-                        if not api.parse_series_id(series):
-                            if len(requested) >= cap:
-                                continue
-                            query = " ".join(filter(None, (need.get("query"), need.get("geography"))))
-                            if not query:
-                                continue
-                            matches = self.tools.data_search(query, agent_id="data-seeder", deadline=deadline)
-                            series = matches.split(" — ", 1)[0].strip()
-                            if not api.parse_series_id(series):
-                                continue
-                        series = ":".join(api.parse_series_id(series))
-                        if series not in requested and len(requested) >= cap:
-                            continue
-                        requested.setdefault(series, []).append(kiq.id)
-                results = self.tools.prefetch_data(list(requested), deadline=deadline) if requested else {}
-                for series, output in results.items():
-                    sid, _ = tool_output_sids("data_get", output)
-                    for kid in requested[series]:
-                        if sid is not None and sid not in self.data_index.setdefault(kid, []):
-                            self.data_index[kid].append(sid)
-                    # Each completed need is restart-safe before phase done.
-                    self.write_json(self.work / "data" / "index.json",
-                                    {"schema_version": 1, "enabled": True, "kiqs": self.data_index})
+                requested = self._data_requests([k for k in self.kiqs if k.round == 0])
+                self.log("stage", f"research:v3:data start ({len(requested)} series)")
+                stored, failed = self._prefetch(requested, deadline)
             except Exception as exc:  # noqa: BLE001 — bounded enrichment never fails research
                 self.log("warn", f"v3: official data prefetch stopped ({type(exc).__name__})")
             self.ledger.flush()
             self.write_json(self.work / "data" / "index.json",
                             {"schema_version": 1, "enabled": True, "kiqs": self.data_index})
             self.state.set_phase("data", "done", "retrieved" if self._data_rows() else "no_needs_or_unavailable")
+            self.log("ok", f"research:v3:data done (stored={stored}, failed={failed})")
         self.meta["data_sources"].update(self.tools.data_stats())
+
+    def _prefetch(self, requested: Mapping[str, Sequence[str]], deadline: rg.Deadline) -> tuple[int, int]:
+        """One seeder batch for ``requested`` (series ID → needing KIQs); stored
+        pages are indexed to those KIQs.  Returns ``(stored, failed)``."""
+        if not requested:
+            return 0, 0
+        results = self.tools.prefetch_data(list(requested), deadline=deadline, kiqs=requested,
+                                           windows=self._data_windows(requested))
+        stored = 0
+        for series, output in results.items():
+            sid, _ = tool_output_sids("data_get", output)
+            stored += sid is not None
+            for kid in requested.get(series, []):
+                if sid is not None and sid not in self.data_index.setdefault(kid, []):
+                    self.data_index[kid].append(sid)
+        # Restart-safe before the phase is marked done.
+        self.write_json(self.work / "data" / "index.json",
+                        {"schema_version": 1, "enabled": True, "kiqs": self.data_index})
+        return stored, len(results) - stored
+
+    def _prefetch_cap(self) -> int:
+        """Series the plan-phase seeder may store in this run, over all its
+        batches: ``DATA_SOURCES_PREFETCH_MAX`` clamped to
+        ``limits.max_prefetch_datasets`` (60 % of the run's dataset cap)."""
+        try:
+            cap = int(self.env.get("DATA_SOURCES_PREFETCH_MAX", self.limits.max_prefetch_datasets))
+        except (TypeError, ValueError):
+            cap = self.limits.max_prefetch_datasets
+        return max(0, min(cap, self.limits.max_prefetch_datasets))
+
+    def _data_requests(self, kiqs: Sequence[Kiq], *, fallback: bool = True) -> dict[str, list[str]]:
+        """Series ID → needing KIQ IDs, within the prefetch slots left.
+
+        A need naming a valid ID is taken as is (routed to its faster catalog
+        equivalent); a query need resolves only to a strong catalog match in
+        its geography (see :meth:`_catalog_need`), otherwise the KIQ agent
+        looks it up (:meth:`_open_needs`): a provider search line is discovery
+        metadata, never a seed.  With no need in any KIQ (and ``fallback``),
+        the strong catalog matches of the question are used instead; otherwise
+        (``fallback``) a base-rate KIQ without needs is linked to the requested
+        series that measure its question (:meth:`_kiq_catalog_series`), so they
+        are stored with the long base-rate window, or, when none does, gets its
+        best catalog match.  A stored series is linked free; new series fill
+        only the slots earlier batches (and the needs before them) left of
+        :meth:`_prefetch_cap`, so no request is refused by the gateway's
+        prefetch limit.
+        """
+        api, catalog = rg._data_api(), _data_catalog()
+        held = {series.series for series, _ in self._data_rows()}
+        seeded = {sid for sids in self.data_index.values() for sid in sids}
+        free = max(0, self._prefetch_cap() - len(seeded))
+        requested: dict[str, list[str]] = {}
+
+        def add(identity: str, kid: str) -> None:
+            nonlocal free
+            if not identity:
+                return
+            if identity not in requested and identity not in held:
+                if free <= 0:
+                    return
+                free -= 1
+            needing = requested.setdefault(identity, [])
+            if kid not in needing:
+                needing.append(kid)
+
+        for kiq in kiqs:
+            for need in kiq.data_needs[:3]:
+                parsed = api.parse_series_id(need.get("series", ""))
+                if parsed:
+                    add(self._data_route(":".join(parsed)), kiq.id)
+                elif need.get("query"):
+                    add(self._catalog_need(need, catalog), kiq.id)
+        if fallback and not any(kiq.data_needs for kiq in kiqs):
+            for identity, kids in self._catalog_seeds(kiqs, catalog).items():
+                for kid in kids:
+                    add(identity, kid)
+        elif fallback:
+            # A base-rate KIQ the planner gave no needs (pipe_261de6107490 K7)
+            # reads the history of the series other KIQs need that measure its
+            # question: linked free, they are stored with the base-rate window
+            # (a series keeps the window it was first stored with).  When none
+            # does, its best catalog match takes a slot the needs left free.
+            for kiq in kiqs:
+                if not kiq.data_needs and _BASE_RATE_RE.search(kiq.question):
+                    matches = [identity for identity, _ in self._kiq_catalog_series(kiq, catalog)]
+                    for identity in [identity for identity in matches if identity in requested] or matches[:1]:
+                        add(identity, kiq.id)
+        if fallback:
+            # Any other KIQ left without a series whose own question names statistics the
+            # catalog measures (live eval 2026-10-14: the planner gave the Fed-path "actor" KIQ
+            # no needs, so no policy rate was stored): for each of its first
+            # DATA_KIQ_STATISTICS statistics (catalog topic), a requested or stored series
+            # measuring it is linked, else its best match takes a slot the needs left free.
+            linked = {kid for kids in requested.values() for kid in kids}
+            for kiq in kiqs:
+                if kiq.data_needs or kiq.id in linked or _BASE_RATE_RE.search(kiq.question):
+                    continue
+                statistics: dict[str, list[str]] = {}
+                for identity, entry in self._kiq_catalog_series(kiq, catalog, own_words=True):
+                    topics = tuple(getattr(entry, "topics", ()) or ())
+                    statistics.setdefault(topics[0] if topics else identity, []).append(identity)
+                for matches in list(statistics.values())[:DATA_KIQ_STATISTICS]:
+                    known = {identity.partition("#")[0]: identity for identity in [*held, *requested]}
+                    covered = [known[match.partition("#")[0]] for match in matches
+                               if match.partition("#")[0] in known]
+                    for identity in covered[:1] or matches[:1]:
+                        add(identity, kiq.id)
+        return requested
+
+    @staticmethod
+    def _need_geographies(need: Mapping[str, Any], catalog: Any) -> tuple[frozenset[str], str]:
+        """``(catalog geography codes, other place name)`` a need asks for: its
+        geography (an ISO3 code such as "CHN", "EA", a name or an alias), else
+        the countries its query names, else the world ("WLD": a global need).
+        A geography the catalog does not know ("Taiwan") is returned as a
+        name with no codes."""
+        raw = _collapse(need.get("geography"), 80)
+        codes = set(catalog.query_geographies(raw)) if raw else set()
+        if raw and not codes and raw.upper() in catalog.GEOGRAPHIES:
+            codes.add(raw.upper())
+        if raw and not codes:
+            return frozenset(), raw
+        return frozenset(codes or catalog.query_geographies(str(need.get("query") or "")) or {"WLD"}), ""
+
+    def _need_text(self, need: Mapping[str, Any]) -> str:
+        """The need's query with its geography spelled out by name, so the
+        catalog search never reads "CHN" as a word."""
+        catalog = _data_catalog()
+        query = str(need.get("query") or "")
+        codes, other = self._need_geographies(need, catalog)
+        names = [catalog.GEOGRAPHIES[code][0] for code in sorted(codes)
+                 if code != "WLD" and code in catalog.GEOGRAPHIES and code not in catalog.query_geographies(query)]
+        if other and other.casefold() not in query.casefold():
+            names.append(other)
+        return " ".join([query, *names]).strip()[:rg.MAX_QUERY_CHARS]
+
+    def _catalog_need(self, need: Mapping[str, Any], catalog: Any) -> str:
+        """The best strong catalog match of a query need in its geography (one
+        that answers it on its own: "Atlanta Fed wage tracker" is no policy
+        rate; a world series answers only a global need), routed to its
+        faster equivalent, or ``""``."""
+        codes, _ = self._need_geographies(need, catalog)
+        for hit in catalog.search_catalog_scored(self._need_text(need), env=self.env):
+            if hit.strong and hit.entry.geography in codes:
+                return self._data_route(hit.entry.series)
+        return ""
+
+    def _open_needs(self, kiq: Kiq) -> list[str]:
+        """The KIQ's data needs the data phase could not resolve (no valid ID
+        and no strong catalog match), as "query (geography)" for its agent to
+        look up with data_search; ``[]`` when that view is unavailable."""
+        try:
+            api, catalog = rg._data_api(), _data_catalog()
+            needs = []
+            for need in kiq.data_needs[:3]:
+                if api.parse_series_id(need.get("series", "")):
+                    continue
+                if need.get("query") and self._catalog_need(need, catalog):
+                    continue
+                geography = _collapse(need.get("geography"), 80)
+                needs.append(_collapse(need.get("query") or need.get("series"), 160)
+                             + (f" ({geography})" if geography else ""))
+            return needs
+        except Exception:  # noqa: BLE001 — a data problem never fails a KIQ task
+            return []
+
+    def _data_route(self, identity: str) -> str:
+        """``identity`` routed to its faster equivalent catalog series (an IMF
+        WEO series to its Data360 copy, an IMF commodity price to FRED) and,
+        without a BLS key (keyless BLS allows 20 requests a day), a BLS
+        headline series to its FRED copy."""
+        api = rg._data_api()
+        base, _, transform = identity.partition("#")
+        preferred = api.catalog_field(base, "preferred")
+        if not preferred and base.startswith("bls:") and not str(self.env.get("BLS_API_KEY") or "").strip():
+            preferred = api.catalog_field(base, "fred_equivalent")
+            preferred = preferred if not preferred or ":" in preferred else "fred:" + preferred
+        parsed = api.parse_series_id(preferred) if preferred else None
+        if not parsed:
+            return identity
+        return ":".join(parsed) + ("#" + transform if transform else "")
+
+    def _catalog_seeds(self, kiqs: Sequence[Kiq], catalog: Any) -> dict[str, list[str]]:
+        """Needs for a plan that names none (the deterministic fallback plan,
+        or a planner that ignored data_needs): the strong catalog matches of
+        the research question and of each of its clauses (one per provider
+        after routing, slow providers last) for the first data KIQ and the
+        base-rate KIQs (of any kind), then those of each data KIQ's own
+        question in the question's geography; at most ``DATA_FALLBACK_MAX``
+        series."""
+        plan = self.plan
+        question = " ".join(dict.fromkeys(filter(None, (self.question, plan.restated_question if plan else ""))))
+        geos = catalog.query_geographies(question)
+        names = " ".join(catalog.GEOGRAPHIES[code][0] for code in sorted(geos) if code in catalog.GEOGRAPHIES)
+        data_kiqs = [k for k in kiqs if k.kind == "data"]
+        if not data_kiqs:
+            return {}
+
+        def strong(query: str) -> list[str]:
+            picked: list[str] = []
+            slow: list[str] = []
+            providers: set[str] = set()
+            for hit in catalog.search_catalog_scored(query, limit=8, env=self.env):
+                entry = hit.entry
+                if not hit.strong or (geos and entry.geography not in geos):
+                    continue
+                identity = self._data_route(entry.series)
+                provider = identity.split(":", 1)[0]
+                if provider in providers:
+                    continue
+                providers.add(provider)
+                (slow if provider in _DATA_SLOW_PROVIDERS else picked).append(identity)
+            # A slow provider's series only fills a slot no faster match takes.
+            return (picked + slow)[:DATA_FALLBACK_PER_QUERY]
+
+        seeds: dict[str, list[str]] = {}
+        base_rate = [k.id for k in kiqs if _BASE_RATE_RE.search(k.question)]
+        # A compound question rarely matches one concept strongly as a whole;
+        # its clauses ("Will X fall below ...", "how will Y respond") often do.
+        clauses = [clause.strip() for clause in _DATA_CLAUSE_RE.split(question) if len(clause.strip()) >= 8]
+        # Limitation: a question or clause match goes to the first data KIQ
+        # whichever data KIQ it measures ("... and will the Fed cut the federal
+        # funds rate below 3%?" seeds fred:FEDFUNDS for an unemployment KIQ;
+        # the funds-rate KIQ gets only its own matches below).  Every KIQ task
+        # still lists each stored series, free to read with data_get, so only
+        # which KIQ's retrieved block and findings hold it is coarse.
+        for query in dict.fromkeys([question, *clauses]):
+            for identity in strong(query):
+                seeds.setdefault(identity, list(dict.fromkeys([data_kiqs[0].id, *base_rate])))
+        for kiq in data_kiqs:
+            for identity in strong(f"{kiq.question} {names}".strip())[:2]:
+                if len(seeds) < DATA_FALLBACK_MAX or identity in seeds:
+                    seeds.setdefault(identity, [])
+                    if kiq.id not in seeds[identity]:
+                        seeds[identity].append(kiq.id)
+        return dict(list(seeds.items())[:DATA_FALLBACK_MAX])
+
+    def _data_as_of(self) -> _dt.date:
+        """The plan's as-of date (today when the plan has none): data windows
+        are counted from it."""
+        return (_parse_iso_date(self.plan.as_of if self.plan else "")
+                or _dt.datetime.now(_dt.timezone.utc).date())
+
+    def _data_horizon(self) -> int:
+        """The forecast horizon year: the last year named in the plan's
+        horizon that is not past (a range "2026–2028" ends in 2028), else five
+        years ahead; at most ``DATA_PROJECTION_YEARS`` ahead."""
+        plan = self.plan
+        as_of = self._data_as_of()
+        years = [int(year) for year in re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", plan.horizon if plan else "")]
+        horizon = max((year for year in years if year >= as_of.year), default=as_of.year + 5)
+        return min(horizon, as_of.year + DATA_PROJECTION_YEARS)
+
+    def _data_history_text(self) -> str:
+        """What a base-rate request stores, for the planner and gap reviewer:
+        history from ``DATA_BASE_RATE_YEARS`` back, of which a stored series
+        keeps the newest ``rg.DATA_MAX_OBSERVATIONS`` observations."""
+        return (f"history back to {self._data_as_of().year - DATA_BASE_RATE_YEARS} (at most the newest "
+                f"{rg.DATA_MAX_OBSERVATIONS} observations: {rg.DATA_MAX_OBSERVATIONS // 12} years of a monthly "
+                "series)")
+
+    def _data_windows(self, requested: Mapping[str, Sequence[str]]) -> dict[str, tuple[str | None, str | None]]:
+        """Prefetch windows that differ from the provider default (a stored
+        window is immutable for the run): projection families end at the
+        forecast horizon (:meth:`_data_horizon`), and series a base-rate KIQ
+        needs start ``DATA_BASE_RATE_YEARS`` back."""
+        as_of = self._data_as_of()
+        horizon = self._data_horizon()
+        base_rate = {k.id for k in self.kiqs if _BASE_RATE_RE.search(k.question)}
+        windows: dict[str, tuple[str | None, str | None]] = {}
+        for identity, kids in requested.items():
+            start = str(as_of.year - DATA_BASE_RATE_YEARS) if base_rate.intersection(kids) else None
+            end = f"{horizon}-12-31" if identity.startswith(_DATA_PROJECTION_FAMILIES) else None
+            if start or end:
+                windows[identity] = (start, end)
+        return windows
 
     def _retire_previous_data_generation(self) -> None:
         """A changed question must not expose the previous run's data pack.
@@ -4429,38 +5343,39 @@ class _Engine:
                 path.rename(archived)
             self.write_json(completion, {"identity": self.state.snapshot()["identity"]})
 
-    @staticmethod
-    def _data_summary_lines(series: Any) -> list[str]:
-        page = rg._data_api().render_series_page(series)
-        summary = page.partition("## Summary\n")[2].split("\n## ", 1)[0]
-        return [line.lstrip("- ").strip() for line in summary.splitlines() if line.startswith("- ")]
-
-    @staticmethod
-    def _data_value_status(series: Any, observation: Any) -> tuple[str, bool]:
-        flag = str(observation.flag or "")
-        if ((series.projection_from and observation.date >= series.projection_from)
-                or flag.lower() in ("projection", "forecast")):
-            return "publisher projection", True
-        if flag.lower() in ("e", "estimate"):
-            return "publisher estimate", True
-        if flag:
-            # P can mean preliminary at one publisher and projected at
-            # another. Keep the actual label; do not infer historical status.
-            return "publisher-flagged value: " + rg._clean_web_text(flag), True
-        return "stored observation", False
-
-    @staticmethod
-    def _data_summary(series: Any, sid: int) -> tuple[str, bool]:
-        values = [observation for observation in series.observations if observation.value is not None]
-        if not values:
-            return "", False
-        latest = values[-1]
-        label, projected = _Engine._data_value_status(series, latest)
-        title = rg._clean_web_text(series.title)
-        value = rg._data_api().format_value(latest.value, series.units)
-        yearly = next((line for line in _Engine._data_summary_lines(series) if line.startswith("Year earlier:")), "")
-        change = "; " + yearly if yearly else ""
-        return f"{title}: {value} {series.units} ({latest.date}; {label}){change} [S{sid}]", projected
+    def _demote_data_statuses(self, facts: Sequence[dict], datasets: Mapping[int, Any]) -> None:
+        """An agent's VERIFIED finding cited only to stored series stays VERIFIED
+        only when every stored point it quotes is an observation: a quoted
+        publisher projection, estimate, preliminary, partial or
+        status-not-supplied value (a WEO current-year figure) becomes REPORTED,
+        unless the finding itself calls it a projection or estimate (the
+        publisher did publish that number).  The points a finding quotes are
+        those whose value it states; when it also names their period ("4% in
+        2026-09" of a target held at 4% into a partial October), those points."""
+        for fact in facts:
+            sids = [sid for sid in fact.get("sids") or [] if isinstance(sid, int)]
+            if (fact.get("tag") != "VERIFIED" or not sids or not all(sid in datasets for sid in sids)
+                    or _DATA_FORECAST_WORDS_RE.search(str(fact.get("text") or ""))):
+                continue
+            text = data_claim_text(fact.get("text"))
+            values = fact_number_values(text)
+            wanted = set(values) | {full for fulls in values.values() for full in fulls}
+            named = data_named_periods(str(fact.get("text") or ""))
+            quoted = []
+            for sid in sids:
+                series = datasets[sid]
+                for observation in series.observations:
+                    if observation.value is None:
+                        continue
+                    shown = _number_values(rg._data_api().format_series_value(abs(observation.value), series))
+                    if any(number in wanted or full in wanted for number, full in shown):
+                        quoted.append((series, observation))
+            dated = [(series, observation) for series, observation in quoted
+                     if named & _data_point_periods(series, observation)]
+            kinds = {data_point_kind(series, observation) for series, observation in dated or quoted}
+            if kinds - {"observed"}:
+                fact["tag"] = "REPORTED"
+                fact["verification"] = "official_status:" + ",".join(sorted(kinds - {"observed"}))
 
     # ================================================================= plan
     def phase_plan(self) -> None:
@@ -4597,12 +5512,27 @@ class _Engine:
                        min_sections=self.preset.sections_min, max_sections=self.preset.sections_max,
                        language=self.language, actor_cap=self.actor_prompt_cap)
         if self.data_enabled:
-            task += ("\nOptional per-KIQ data_needs: at most three objects with series (a catalog ID) "
-                     "or query, and geography. Request only evidence relevant to that question.\n"
+            task += ("\nOFFICIAL DATA: give each KIQ that needs official statistics the key "
+                     "\"data_needs\": [{\"series\": \"<catalog ID>\", \"query\": \"...\", \"geography\": \"...\"}] "
+                     "(at most three objects, the most important first), for example {\"question\": \"...\", "
+                     "\"queries\": [\"...\"], \"kind\": \"data\", \"data_needs\": [{\"series\": \"fred:UNRATE\"}]}. "
+                     "series is an ID from the catalog below (append #yoy to an index or level ID for its "
+                     "year-over-year rate, e.g. fred:CPIAUCSL#yoy); without a fitting ID, query names the concept "
+                     "in English and geography the country or area (a name or an ISO3 code such as CHN; World for "
+                     "a global series). Request what answers that KIQ: the latest values, the publisher's "
+                     "projection path to the horizon, or long history for base rates. Before research starts the "
+                     f"engine fetches at most {self._prefetch_cap()} series in all, publisher projection paths "
+                     f"(IMF WEO, World Bank GEP) through the horizon, and {self._data_history_text()} for a KIQ "
+                     "that asks for base rates or historical precedents: give such a KIQ, whatever its kind, "
+                     "data_needs for the series whose history it counts, and give an actor or policy KIQ about a "
+                     "quantity a series measures (a policy rate path, a price, an output level) data_needs for it "
+                     "too. KIQ agents can fetch further series while "
+                     "researching. Leave the key out for KIQs that need no official series; never name a series of "
+                     "another concept or place as a proxy.\n"
                      + "Providers: " + json.dumps(self.meta["data_sources"].get("providers", {})))
             try:
-                catalog = importlib.import_module(f"{__package__}.data_catalog" if __package__ else "data_catalog")
-                task += "\n" + self.delimit("OFFICIAL DATA CATALOG", catalog.catalog_digest(self.question))
+                task += "\n" + self.delimit("OFFICIAL DATA CATALOG",
+                                            _data_catalog().catalog_digest(self.question, env=self.env))
             except ImportError:
                 pass
         raw_plan: dict | None = None
@@ -4833,31 +5763,35 @@ class _Engine:
             return self.ledger.get(sid) if sid in shown else None
 
         notes_md, parts = postprocess_notes(kiq.id, outcome.notes, ledger_get, self.page_numbers)
-        for series, sid in self._data_rows():
+        data_rows = self._data_rows()
+        self._demote_data_statuses(parts["facts"], {sid: series for series, sid in data_rows})
+        for series, sid in data_rows:
             if sid not in shown:
                 continue
-            # Only a numerical statement computed from admitted observations;
-            # the existing number verifier decides if it is VERIFIED.
-            summary, projected = self._data_summary(series, sid)
-            if not summary:
-                continue
-            _, deterministic = postprocess_notes(kiq.id, "## Findings\n- " + summary
-                                                  + (" (REPORTED)" if projected else " (VERIFIED)"),
-                                                  ledger_get, self.page_numbers)
-            for fact in deterministic["facts"]:
-                if not any(f.get("text") == fact["text"] for f in parts["facts"]):
-                    parts["facts"].append(fact)
-                    notes_md += "\n- " + summary + f" ({fact['tag']})"
+            # Only numerical statements computed from admitted observations
+            # (an observation only VERIFIED); the number verifier still checks
+            # them against the stored page.
+            for summary, observed in data_facts(series, sid, self.language, self.tools.page_text(sid) or ""):
+                _, deterministic = postprocess_notes(kiq.id, "## Findings\n- " + summary
+                                                      + (" (VERIFIED)" if observed else " (REPORTED)"),
+                                                      ledger_get, self.page_numbers)
+                for fact in deterministic["facts"]:
+                    if not any(f.get("text") == fact["text"] for f in parts["facts"]):
+                        parts["facts"].append(fact)
+                        notes_md += "\n- " + summary + f" ({fact['tag']})"
         facts = parts["facts"]
         verified = sum(1 for fact in facts if fact["tag"] == "VERIFIED")
         sources = sorted({sid for fact in facts for sid in fact["sids"]})
+        stats = {"steps": outcome.steps, "forced": outcome.forced, "fallback": outcome.fallback,
+                 "truncated": outcome.truncated, "fetched": outcome.fetched, "seen": len(outcome.seen),
+                 "tools": self.tools.stats()["per_agent"].get(kiq.id, {})}
+        if self.data_enabled:
+            # Persisted with the record, so a resumed run still shows what its
+            # agents fetched (meta counts only the current attempt's calls).
+            stats["data"] = self._kiq_data_use(kiq.id)
         record = {
             "id": kiq.id, "question": kiq.question, "kind": kiq.kind, "round": kiq.round, **parts,
-            "sources": sources,
-            "stats": {"steps": outcome.steps, "forced": outcome.forced, "fallback": outcome.fallback,
-                      "truncated": outcome.truncated, "fetched": outcome.fetched, "seen": len(outcome.seen),
-                      "tools": self.tools.stats()["per_agent"].get(kiq.id, {})},
-            "finished_at": _iso_now(),
+            "sources": sources, "stats": stats, "finished_at": _iso_now(),
         }
         self.ledger.flush()  # every source the record cites is on disk before the record
         self._write_internal(self.work / "kiq" / f"{kiq.id}.md", notes_md + "\n")
@@ -4924,14 +5858,116 @@ class _Engine:
             max_steps=self.preset.agent_max_steps, language=self.language)
         if not getattr(self, "data_enabled", False):
             return task
-        task += (f"\nOfficial tools: data_search(query, provider), data_get(series, start, end, transform). "
-                 f"At most {self.limits.max_data_calls_per_agent} data calls; cached copies are free. "
-                 "Search matches are metadata only. Preserve units, geography, coverage, and projection labels.")
-        summaries = [rg._data_api().render_series_brief(series, sid) for series, sid in self._data_rows()
-                     if sid in self.data_index.get(kiq.id, [])]
+        return task + self._kiq_data_text(kiq)
+
+    def _kiq_data_text(self, kiq: Kiq) -> str:
+        """The official-data part of a KIQ task (data-enabled runs only; it is
+        volatile last-message text): tool use and evidence rules, catalog IDs
+        that may fit a data or base-rate KIQ, the planned needs left for the
+        agent to look up, the briefs of the series stored for this KIQ and a
+        one-line list of every other series the run stores."""
+        text = (f"\nOfficial tools: data_search(query, provider) finds official statistical series IDs; "
+                f"data_get(series, start, end, transform) fetches one series as a citable stored page. At most "
+                f"{self.limits.max_data_calls_per_agent} data calls; a series already stored in this run is "
+                "returned free. Search matches are metadata only.\n"
+                "Official data rules: a value on a stored page (OFFICIAL DATA ALREADY RETRIEVED, or returned by "
+                "data_get) is read evidence: tag it VERIFIED when its status there is an observation. Quote value, "
+                "unit, period and geography exactly as stored. A publisher projection, estimate, preliminary, "
+                "partial-period or status-not-supplied value is the publisher's statement: say so and tag it "
+                "REPORTED; never present it as an observed fact.\n"
+                "When to use them: when this question needs a statistic an official series measures (a level, "
+                "rate, price or volume, its history or a publisher projection), cite the stored series rather than "
+                "a web page restating it, and use web sources for what the series do not hold (releases after the "
+                "stored period, causes, guidance, other numbers). Use a series only when its title, units and "
+                "geography measure that statistic: a search result for another concept or place is no proxy, so "
+                "say instead that no official series covers it.")
+        rows = self._data_rows()
+        held = {series.series for series, _ in rows}
+        # A base-rate question, and a gap follow-up (always "general") that
+        # asked for official series, are data questions whatever their kind;
+        # any other KIQ gets hints only for a statistic its own words name (an
+        # actor KIQ about the policy rate path).
+        data_question = kiq.kind == "data" or bool(kiq.data_needs) or bool(_BASE_RATE_RE.search(kiq.question))
+        hints = self._data_hints(kiq, held, own_words=not data_question)
+        if hints:
+            text += ("\nOfficial series that may fit this question (catalog IDs; data_get before citing): "
+                     + "; ".join(hints))
+        needs = self._open_needs(kiq)
+        if needs:
+            text += ("\nOfficial data the plan asked for that no catalog series answers (look each up with "
+                     "data_search and data_get a result only when its title, units and geography measure it; when "
+                     "none does, say that no official series covers it): " + "; ".join(needs))
+        if _BASE_RATE_RE.search(kiq.question):
+            text += ("\nThis question needs long history: data_get a stored series to read its whole stored "
+                     "history (free; OFFICIAL DATA ALREADY RETRIEVED shows only its latest points), and request "
+                     f"series not yet stored with start=\"{self._data_as_of().year - DATA_BASE_RATE_YEARS}\" (a "
+                     "series keeps the window it was first stored with). Count comparable episodes in the stored "
+                     "history: name the series and its marker, the rule (threshold and horizon), each episode's "
+                     "period and value as stored and the count (for example 3 of 11 years); the count is your "
+                     "calculation from the series, so tag that finding REPORTED.")
+        mine = set(self.data_index.get(kiq.id, []))
+        summaries = [rg._data_api().render_series_brief(series, sid) for series, sid in rows if sid in mine]
         if summaries:
-            task += "\n" + self.delimit("OFFICIAL DATA ALREADY RETRIEVED", "\n\n".join(summaries))
-        return task
+            text += "\n" + self.delimit("OFFICIAL DATA ALREADY RETRIEVED", "\n\n".join(summaries))
+        # No marker here: an agent cites a series only after reading it.
+        others = [f"- {series.series} — {line}" for series, sid in rows if sid not in mine
+                  for line in [data_headline(series, None, self.language)] if line]
+        if others:
+            text += ("\nOther official series stored in this run (call data_get with the series ID to read and "
+                     "cite one; free):\n" + "\n".join(others))
+        return text
+
+    def _kiq_catalog_series(self, kiq: Kiq, catalog: Any, *, own_words: bool = False) -> list[tuple[str, Any]]:
+        """``(series ID, catalog entry)`` of the catalog series that measure a
+        KIQ's own question, best first and slow providers last: concept above
+        one keyword-level match (``DATA_KIQ_CONCEPT_MARGIN``), in the research
+        question's geography or the world, routed to the faster equivalent
+        (:meth:`_data_route`; the entry describes the route when the catalog
+        has it).  Base-rate wording is left out of the match (it names the
+        method), and so is a world aggregate of a statistic the catalog holds
+        for that geography (world GDP growth for a China GDP question; a world
+        price has no national counterpart).  The research question's words
+        join only when the KIQ's own words match nothing (a generic base-rate
+        question), never with ``own_words``: its other clauses are no part of a
+        narrower KIQ ("US CPI" is no policy-rate question)."""
+        question = " ".join(_BASE_RATE_RE.sub(" ", kiq.question).split())
+        geos = catalog.query_geographies(f"{kiq.question} {self.question}")
+        named = " ".join(catalog.GEOGRAPHIES[code][0] for code in sorted(geos - catalog.query_geographies(kiq.question))
+                         if code in catalog.GEOGRAPHIES)
+        floor = catalog.STRONG_CONCEPT_SCORE + DATA_KIQ_CONCEPT_MARGIN
+        national = ({_data_statistic(entry) for entry in catalog.CATALOG if entry.geography in geos}
+                    if geos and "WLD" not in geos else set())
+        queries = [f"{question} {named}".strip()] + ([] if own_words else [f"{question} {self.question}"])
+        for query in queries:
+            found: dict[str, Any] = {}
+            for hit in catalog.search_catalog_scored(query, limit=12, env=self.env):
+                entry = hit.entry
+                if hit.concept < floor or (geos and entry.geography not in geos and entry.geography != "WLD"):
+                    continue
+                if entry.geography == "WLD" and _data_statistic(entry) in national:
+                    continue
+                identity = self._data_route(entry.series)
+                found.setdefault(identity, catalog.lookup(identity) or entry)
+            if found:
+                return sorted(found.items(), key=lambda item: item[0].split(":", 1)[0] in _DATA_SLOW_PROVIDERS)
+        return []
+
+    def _data_hints(self, kiq: Kiq, held: set[str], *, own_words: bool = False) -> list[str]:
+        """Up to ``DATA_TASK_HINTS`` catalog series for a KIQ
+        (:meth:`_kiq_catalog_series`) not stored yet, taking the statistics (catalog
+        topics) its question names in turn, so "the federal funds rate path and
+        inflation" lists a policy rate beside the CPI series."""
+        try:
+            statistics: dict[str, list[tuple[str, Any]]] = {}
+            for identity, entry in self._kiq_catalog_series(kiq, _data_catalog(), own_words=own_words):
+                if identity not in held:
+                    topics = tuple(getattr(entry, "topics", ()) or ())
+                    statistics.setdefault(topics[0] if topics else identity, []).append((identity, entry))
+            turns = [pair for row in itertools.zip_longest(*statistics.values()) for pair in row if pair]
+            return [f"{identity} — {_collapse(entry.title, 90)} ({entry.units}, {entry.frequency}, "
+                    f"{entry.geography})" for identity, entry in turns[:DATA_TASK_HINTS]]
+        except Exception:  # noqa: BLE001 — hints are optional discovery text
+            return []
 
     # ================================================================== gap
     def phase_gap(self) -> None:
@@ -5020,6 +6056,8 @@ class _Engine:
                               f"({left})")
             pending = pending[:capacity]
         if pending:
+            if self.data_enabled and any(k.data_needs for k in pending):
+                self._prefetch_followups(round_no, pending, deadline)
             summary = self.gather_kiqs(pending, deadline)
             if summary["completed"]:
                 self.invalidate(("synthesize", "qa", "finalize"))
@@ -5031,11 +6069,34 @@ class _Engine:
             return f"diminishing returns ({gained} new verified facts)"
         return None
 
+    def _prefetch_followups(self, round_no: int, followups: Sequence[Kiq], deadline: rg.Deadline) -> None:
+        """Fetch the official series gap follow-ups asked for (seeder allowance,
+        a bounded slice of the gap deadline) so their agents start from them."""
+        try:
+            child = rg.Deadline(min(60.0, 0.2 * deadline.remaining()), deadline._clock, label="follow-up data")
+            requested = self._data_requests(followups, fallback=False)
+            stored, failed = self._prefetch(requested, child)
+            self.ledger.flush()
+            if requested:
+                self.log("stage", f"v3: gap round {round_no}: official data for follow-ups "
+                                  f"(stored={stored}, failed={failed})")
+        except Exception as exc:  # noqa: BLE001 — bounded enrichment never fails the gap round
+            self.log("warn", f"v3: follow-up official data stopped ({type(exc).__name__})")
+
     def _gap_review(self, round_no: int, deadline: rg.Deadline, *,
                     max_followups: int) -> tuple[str, list[Kiq], list[dict]]:
         already = "\n".join(f"- {k.id}: {k.question}" for k in sorted(self.kiqs, key=lambda k: _natural_key(k.id)))
         task = _render(_T_GAP, round=round_no, coverage=self._coverage_matrix(), already=already,
                        max_followups=max_followups, language=self.language)
+        if self.data_enabled:
+            task += ("\nOfficial data: a follow-up may add \"data_needs\": [{\"series\": \"<series ID>\", "
+                     "\"query\": \"...\", \"geography\": \"...\"}] (at most three) when an official statistical "
+                     "series would close its gap (a missing base rate, current value or projection path); the "
+                     "engine fetches them before the follow-up starts (a query no catalog series answers is left "
+                     "to the follow-up's agent). A stored series keeps the span listed above: when a base rate "
+                     "needs longer history, name a series not stored yet (or the #yoy form of a stored index) "
+                     "and ask for base rates or historical precedents in the question, which fetches "
+                     f"{self._data_history_text()}.")
         data = self.json_call([self.brief], task, label=f"gap:r{round_no}", required=("follow_ups",),
                               deadline=deadline)
         verdict = str(data.get("verdict") or "").strip().lower()
@@ -5062,12 +6123,14 @@ class _Engine:
             followups.append(Kiq(id=f"G{round_no}F{len(followups) + 1}", question=question,
                                  queries=queries or [question[:200]], kind="general",
                                  why=_collapse(item.get("why"), 400) or "Follow-up on a coverage gap.",
-                                 round=round_no))
+                                 round=round_no,
+                                 data_needs=_data_needs(item.get("data_needs")) if self.data_enabled else []))
             existing.append(terms)
         return verdict, followups, rejected
 
     def _coverage_matrix(self) -> str:
         lines = []
+        data = self._coverage_data()
         for kiq in sorted(self.kiqs, key=lambda k: _natural_key(k.id)):
             record = self.records.get(kiq.id)
             if not record:
@@ -5079,8 +6142,52 @@ class _Engine:
             leads = " | ".join(_collapse(q, 120) for q in (record.get("discovered") or [])[:3])
             lines.append(f"- {kiq.id} ({_collapse(kiq.question, 120)}): facts={len(facts)} "
                          f"verified={verified} sources={len(record.get('sources') or [])}; "
-                         f"open: {open_q or 'none'}; leads: {leads or 'none'}")
+                         f"open: {open_q or 'none'}; leads: {leads or 'none'}" + data.get(kiq.id, ""))
+        if not self.data_enabled:
+            return "\n".join(lines)
+        held = [series.series + (f" ({data_period(series, series.observations[0].date)} to "
+                                 f"{data_period(series, series.observations[-1].date)})" if series.observations else "")
+                for series, _ in self._data_rows()]
+        lines.append(f"Official series stored in this run, with their stored spans ({len(held)} of at most "
+                     f"{self.limits.max_datasets}): " + (", ".join(held) or "none"))
         return "\n".join(lines)
+
+    def _coverage_data(self) -> dict[str, str]:
+        """Per-KIQ official-data coverage for the gap review (data-enabled runs):
+        series stored for the KIQ (seeded or fetched by its agent) and requests
+        that failed."""
+        if not self.data_enabled:
+            return {}
+        stats = self.tools.data_stats() if callable(getattr(self.tools, "data_stats", None)) else {}
+        by_sid = {sid: series.series for series, sid in self._data_rows()}
+        coverage = {}
+        for kiq in self.kiqs:
+            stored, failed = self._kiq_data_outcome(kiq.id, stats.get("per_kiq") or {}, by_sid)
+            coverage[kiq.id] = (f"; official data: {len(stored)} stored [{', '.join(stored) or 'none'}]"
+                                + (f", {len(failed)} failed [{', '.join(failed)}]" if failed else ""))
+        return coverage
+
+    def _kiq_data_outcome(self, kid: str, per_kiq: Mapping[str, Any],
+                          by_sid: Mapping[int, str]) -> tuple[list[str], list[str]]:
+        """``(stored, failed)`` series IDs of one KIQ: those stored for it
+        (seeded by any attempt's data phase or fetched by its agent) and its
+        requests that failed."""
+        outcome = per_kiq.get(kid) or {}
+        stored = list(dict.fromkeys([*(by_sid[sid] for sid in self.data_index.get(kid, []) if sid in by_sid),
+                                     *(outcome.get("stored") or [])]))
+        return stored, [identity for identity in outcome.get("failed") or [] if identity not in stored]
+
+    def _kiq_data_use(self, kid: str) -> dict:
+        """A KIQ record's official-data use (data-enabled runs): its agent's
+        data calls and its stored and failed series; ``{}`` when that view is
+        unavailable (telemetry never fails a KIQ)."""
+        try:
+            stats = self.tools.data_stats()
+            by_sid = {sid: series.series for series, sid in self._data_rows()}
+            stored, failed = self._kiq_data_outcome(kid, stats.get("per_kiq") or {}, by_sid)
+            return {"calls": int((stats.get("per_agent") or {}).get(kid, 0)), "stored": stored, "failed": failed}
+        except Exception:  # noqa: BLE001 — optional telemetry
+            return {}
 
 
     # =========================================================== synthesize
@@ -5095,15 +6202,57 @@ class _Engine:
         if not raw:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
             raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language)
-            summaries = [self._data_summary(series, sid)[0] for series, sid in self._data_rows()]
-            if any(summaries):
-                raw += "\n\nOFFICIAL DATA SERIES\n" + "\n".join("- " + line for line in summaries if line)
+            raw, lost = self._with_official_data(raw)
+            dropped += lost
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
                 self.log("warn", f"v3: evidence digest dropped {dropped} lower-priority lines to fit its caps")
             self._write_internal(path, raw)
         self._synth_context_cache = self.delimit(LABEL_EVIDENCE, raw)
         return self._synth_context_cache
+
+    def _with_official_data(self, digest: str) -> tuple[str, int]:
+        """``digest`` with the OFFICIAL DATA block (one line per stored series,
+        within its share of the digest cap) before the SOURCE INDEX, which then
+        lists every stored series; ``(digest, lines dropped)``.  Unchanged
+        without stored series."""
+        lines = [line for line in (data_digest_line(series, sid, self.language) for series, sid in self._data_rows())
+                 if line]
+        if not lines:
+            return digest, 0
+        budget = max(2000, self.preset.digest_cap // DATA_DIGEST_SHARE)
+        kept: list[str] = []
+        for line in lines:
+            if sum(len(item) + 3 for item in kept) + len(line) + 3 > budget:
+                break
+            kept.append(line)
+        head, _, index = digest.partition("\n\nSOURCE INDEX\n")
+        listed = {int(n) for n in _CITE_RE.findall(index)}
+        extra = []
+        for sid in sorted({int(n) for line in kept for n in _CITE_RE.findall(line)} - listed):
+            row = self.ledger.get(sid)
+            if row:
+                extra.append(f"[S{sid}] {row.get('title')} — {row.get('domain')} "
+                             f"({rg.tier_label(row.get('tier'))}, fetched)")
+        if index.strip() == "(no sources were cited)":
+            index = ""
+        index = "\n".join(part for part in (index.rstrip("\n"), *extra) if part)
+        block = _DATA_TEXT[_lang_key(self.language)]["digest"] + "\n" + "\n".join("- " + line for line in kept)
+        return f"{head}\n\n{block}\n\nSOURCE INDEX\n{index}", len(lines) - len(kept)
+
+    def _data_headlines(self, rule: str) -> str:
+        """``rule`` and the latest historical value of every stored series with
+        its publisher projection path through the horizon (a task suffix), or
+        ``""`` in a run without official data."""
+        rows = self._data_rows()
+        if not rows:
+            return ""
+        horizon = self._data_horizon()
+        lines = [line for line in (data_outlook_headline(series, sid, self.language, horizon)
+                                   for series, sid in rows) if line]
+        if not lines:
+            return ""
+        return "\n" + rule + "\n" + self.delimit(LABEL_DATA_HEADLINES, "\n".join(lines))
 
     def _outline(self, index: int) -> OutlineSection:
         return next(s for s in self.plan.sections if s.index == index)
@@ -5241,12 +6390,50 @@ class _Engine:
             if section.is_scenario:
                 lines.append("   " + _SCENARIO_SECTION_NOTE)
         lines += ["", _SECTION_RULES]
+        rows = self._data_rows()
+        if rows:
+            lines.append(_DATA_SECTION_RULE)
+            lines += self._section_data_lines(sections, rows)
         if current:
             lines += ["", "Current version of this section (rewrite it to fix the problem below and "
                           "keep every correct citation):", current]
         if note:
             lines += ["", note]
         return "\n".join(lines)
+
+    def _section_data_lines(self, sections: Sequence[OutlineSection], rows: Sequence[tuple[Any, int]]) -> list[str]:
+        """Writer-task pointers of a run with stored series: the series in each
+        section's evidence (seeded for, or fetched by, its KIQs) and, for the
+        scenario section, the series with a publisher projection path; ``[]``
+        when that view is unavailable (a data problem never fails writing)."""
+        try:
+            label = rg._data_api().series_label
+            sids_of = {series.series: sid for series, sid in rows}
+
+            def listed(items: Sequence[tuple[Any, int]]) -> str:
+                return ", ".join(f"[S{sid}] {label(series, _data_lang(self.language))}" for series, sid in items)
+
+            outlook = ([(series, sid) for series, sid in rows if (data_view(series) or {}).get("projections")]
+                       if any(section.is_scenario for section in sections) else [])
+            lines = []
+            for section in sections:
+                sids: list[int] = []
+                for kid in section.kiq_ids:
+                    use = ((self.records.get(kid) or {}).get("stats") or {}).get("data") or {}
+                    for sid in [*self.data_index.get(kid, []),
+                                *(sids_of[identity] for identity in use.get("stored") or [] if identity in sids_of)]:
+                        if sid not in sids:
+                            sids.append(sid)
+                own = [(series, sid) for series, sid in rows if sid in sids]
+                if own:
+                    lines.append(f"- Official series in the evidence for \"{section.title}\": {listed(own)}; cite "
+                                 "them where they bear on its focus.")
+                if section.is_scenario and outlook:
+                    lines.append("- Publisher projections to set the scenarios against (the publisher's outlook, "
+                                 f"never an observation): {listed(outlook)}.")
+            return lines
+        except Exception:  # noqa: BLE001 — optional writer guidance
+            return []
 
     def clean_body(self, body: str, section: OutlineSection) -> str:
         text = str(body or "").strip()
@@ -5443,7 +6630,8 @@ class _Engine:
                                      for i, (title, lead) in enumerate(leads, start=1)))
         heading = _text(self.language, "exec_title")
         length = "500 to 1000 Chinese characters" if self.language == CHINESE else "300 to 600 words"
-        task = _render(_T_EXEC, heading=heading, length=length, language=self.language)
+        task = _render(_T_EXEC, heading=heading, length=length, language=self.language) + self._data_headlines(
+            _DATA_EXEC_RULE)
         try:
             result = self._write_call(rg.build_messages(ENGINE_CORE, [self.brief, leads_block], task),
                                       label="synth:exec", deadline=deadline)
@@ -5498,7 +6686,7 @@ class _Engine:
 
     def _run_qa(self, deadline: rg.Deadline) -> tuple[dict, str]:
         """Deterministic checks, bounded section repairs, positional citations."""
-        self._prepare_data_exhibits()
+        self._prepare_data_exhibits(deadline)
         frame = self.plan.scenarios
         exec_body = str(self.synth["exec_summary"])
         sections = [dict(s) for s in self.synth["sections"]]
@@ -5592,8 +6780,7 @@ class _Engine:
         if not entries:
             return
         api = rg._data_api()
-        published = [api.Series.from_dict({**series.to_dict(), "kiqs": [kid for kid, sids in self.data_index.items()
-                                                                       if sid in sids]})
+        published = [api.Series.from_dict({**series.to_dict(), "kiqs": self._series_kiqs(series, sid)})
                      for series, sid in entries]
         manifest = api.write_dataset_files(published, self.out_dir, citations=citations)
         identities = {series.series for series, _ in entries}
@@ -5605,19 +6792,38 @@ class _Engine:
         manifest["producer"] = "v3"
         manifest["run_identity"] = self.state.snapshot()["identity"]
         # Add only routing metadata. Hashes still bind the untouched series bytes.
-        sids = {series.series: sid for series, sid in entries}
+        kiqs = {series.series: self._series_kiqs(series, sid) for series, sid in entries}
         for row in manifest.get("series", []):
-            row["kiqs"] = [kid for kid, sources in self.data_index.items() if sids.get(row["series"]) in sources]
+            row["kiqs"] = kiqs.get(row["series"], [])
         self.write_json(self.out_dir / "data" / "datasets.json", manifest, internal=False)
 
-    def _prepare_data_exhibits(self) -> None:
+    def _series_kiqs(self, series: Any, sid: int) -> list[str]:
+        """KIQs a stored series serves: those it was prefetched for (seeded),
+        then those whose agents requested it (``Series.kiqs``)."""
+        seeded = [kid for kid, sids in self.data_index.items() if sid in sids]
+        return list(dict.fromkeys([*seeded, *(series.kiqs or [])]))[:20]
+
+    def _prepare_data_exhibits(self, deadline: rg.Deadline | None = None) -> None:
+        """Publish the stored generation and render its charts within the QA
+        deadline (less a reserve for the QA work after them); with too little
+        time left the stored-observation table is the exhibit."""
         self._freeze_data()
         entries = self._data_rows()
         if not entries:
             return
         self._publish_data({series.series: sid for series, sid in entries})
-        rows = self.bridge_call("_render_data_charts", self.out_dir, plog=self.reporter,
-                                question=self.question, lang="zh" if self.language == CHINESE else "en")
+        self.data_charts = []
+        kwargs: dict[str, Any] = {"plog": self.reporter, "question": self.question,
+                                  "lang": "zh" if self.language == CHINESE else "en"}
+        if deadline is not None:
+            seconds = deadline.remaining() - DATA_CHARTS_RESERVE_S
+            if seconds < DATA_CHARTS_MIN_S:
+                self.log("warn", "v3: no QA time left for official data charts; publishing the "
+                                 "stored-observation table")
+                return
+            if _accepts_keyword(getattr(self.bridge, "_render_data_charts", None), "deadline_s"):
+                kwargs["deadline_s"] = seconds
+        rows = self.bridge_call("_render_data_charts", self.out_dir, **kwargs)
         identities = {series.series for series, _ in entries}
         self.data_charts = []
         for row in rows if isinstance(rows, list) else []:
@@ -5641,38 +6847,34 @@ class _Engine:
         return "官方数据基线" if self.language == CHINESE else "Official Data Baseline"
 
     def _embed_data_exhibits(self, sections: list[dict]) -> None:
+        """Official-data figures into the sections of the KIQs that needed their
+        series (at most two per section), and the baseline section — one table
+        row per stored series plus the remaining figures — right after the first
+        analytical section (the current state), in the run language."""
+        self._data_baseline_after = None
         entries = self._data_rows()
         if not entries:
             return
-        api = rg._data_api()
+        text = _DATA_TEXT[_lang_key(self.language)]
+        colon = _data_punctuation(self.language)[0]
+
         # Escape provider titles used as Markdown; provider text cannot create
         # an extra heading, citation or link in the trusted assembled report.
-        def cell(text: Any) -> str:
-            return rg._clean_web_text(str(text)).replace("|", "\\|").replace("\n", " ").replace("[", "(").replace("]", ")")
-        rows = ["| Series | Latest stored value | Period | Yearly change | Status | Source |",
-                "|---|---|---|---|---|---|"]
-        for series, sid in entries:
-            values = [observation for observation in series.observations if observation.value is not None]
-            if not values:
-                continue
-            latest = values[-1]
-            label, _ = self._data_value_status(series, latest)
-            year_line = next((line for line in self._data_summary_lines(series)
-                              if line.startswith("Year earlier:")), "")
-            change = year_line.partition("change ")[2] or "Unavailable"
-            rows.append(f"| {cell(series.title)} | {cell(api.format_value(latest.value, series.units))} "
-                        f"{cell(series.units)} | {latest.date} | {cell(change)} | {label} | [S{sid}] |")
+        def cell(value: Any) -> str:
+            return rg._clean_web_text(str(value)).replace("|", "\\|").replace("\n", " ").replace("[", "(").replace("]", ")")
+        rows = [text["table"], "|---|---|---|---|---|---|---|"]
+        rows += [row for row in (data_table_row(series, sid, self.language) for series, sid in entries) if row]
         remainder = []
         counts: dict[int, int] = {}
         sid_by_series = {series.series: sid for series, sid in entries}
         for chart in self.data_charts:
             sources = [sid_by_series[identity] for identity in chart["series"]]
             citations = " ".join(f"[S{sid}]" for sid in sources)
-            title = cell(chart.get("title") or "Official series")
-            caption = cell(_CITE_RE.sub("", str(chart.get("caption") or
-                           "Stored observations; publisher projections are marked separately."))).strip()
-            block = f"### Figure: {title}\n\n![{title}]({chart['path']})\n\n*{caption} {citations}*"
+            title = cell(chart.get("title") or text["chart"])
+            caption = cell(_CITE_RE.sub("", str(chart.get("caption") or text["caption"]))).strip()
+            block = f"### {text['figure']}{colon}{title}\n\n![{title}]({chart['path']})\n\n*{caption} {citations}*"
             kiqs = {kid for kid, sids in self.data_index.items() if any(sid in sids for sid in sources)}
+            kiqs.update(kid for series, sid in entries if sid in sources for kid in series.kiqs)
             target = next((section for section in sections if not section.get("is_scenario")
                            and counts.get(section["index"], 0) < 2
                            and kiqs.intersection(self._outline(section["index"]).kiq_ids)), None)
@@ -5681,8 +6883,12 @@ class _Engine:
                 counts[target["index"]] = counts.get(target["index"], 0) + 1
             else:
                 remainder.append(block)
-        sections.append({"index": -1, "title": self._data_heading(), "is_scenario": False,
-                         "body": "\n".join(rows) + "\n\n" + "\n\n".join(remainder), "origin": "official_data"})
+        position = next((number + 1 for number, section in enumerate(sections)
+                         if not section.get("is_scenario") and has_section_content(section["body"])), len(sections))
+        sections.insert(position, {"index": -1, "title": self._data_heading(), "is_scenario": False,
+                                   "body": "\n".join(rows) + ("\n\n" + "\n\n".join(remainder) if remainder else ""),
+                                   "origin": "official_data"})
+        self._data_baseline_after = str(sections[position - 1]["title"]) if position else None
 
     def _finalize_data_citations(self, order: Sequence[int]) -> None:
         entries = self._data_rows()
@@ -5729,36 +6935,85 @@ class _Engine:
         value = _join_digit_groups(_number_text(text, strip_dates=True)).replace("−", "-")
         signed = set()
         for offset, _, full in _number_values_at(value):
-            sign = "-" if re.search(r"-[$€£¥]?$", value[:offset]) and full != "=0" else "+"
+            # A hyphen joined to a word or a digit ("mid-2026", "3-3.5%") is no minus sign.
+            sign = "-" if re.search(r"(?<![A-Za-z0-9])-[$€£¥]?$", value[:offset]) and full != "=0" else "+"
             signed.add((sign, full))
         return signed
 
+    def _data_support(self, series: Any, sid: int) -> tuple[frozenset[str], set[tuple[str, str]]]:
+        """``(numbers, signed values)`` a sentence citing only stored series may
+        state for ``series``: its page and every display this engine derived
+        from it (digest line, findings, baseline row), the years it covers, and
+        page values at the scale its unit names ("32563.03" of "Billions of
+        Dollars" is 32563030000000)."""
+        page = self.tools.page_text(sid) or ""
+        shown = data_renderings(series, sid, self.language)
+        numbers = set(self.page_numbers(sid) or frozenset()) | page_number_set(shown)
+        signed = self._data_signed_values(page) | self._data_signed_values(shown)
+        provenance = series.provenance if isinstance(series.provenance, dict) else {}
+        days = [o.date for o in series.observations] + [str(provenance.get(key) or "") for key in (
+            "requested_start", "requested_end", "delivered_start", "delivered_end")]
+        years = {day[:4] for day in days if re.fullmatch(r"(?:19|20)\d{2}", day[:4])}
+        numbers |= years | {"=" + year for year in years}
+        signed |= {("+", "=" + year) for year in years}
+        exponent = data_units_exponent(series.units)
+        if exponent:
+            for sign, full in list(signed):
+                try:
+                    signed.add((sign, "=" + format(Decimal(full[1:]).scaleb(exponent).normalize(), "f")))
+                except InvalidOperation:
+                    continue
+        return frozenset(numbers), signed
+
     def _data_checks(self, final: str, order: Sequence[int]) -> list[dict]:
+        """Sentences citing only stored series state only that series' numbers.
+
+        Each number must be on the cited pages or in the engine's own displays
+        of those series (sign included; a falling quantity may be stated by
+        its magnitude); period designators and covered years are no figures.
+        The failing lines are recorded with the check (advisory: QA never
+        rewrites them after renumbering)."""
         entries = self._data_rows()
         if not entries:
             return []
         original = {index: sid for index, sid in enumerate(order, 1)}
-        dataset_sids = {sid for _, sid in entries}
+        by_sid = {sid: series for series, sid in entries}
+        support: dict[int, tuple[frozenset[str], set[tuple[str, str]]]] = {}
+        figure = "### " + _DATA_TEXT[_lang_key(self.language)]["figure"]
+        asked = set(re.findall(r"\d+(?:\.\d+)?", " ".join(
+            [self.question, *(kiq.question for kiq in self.kiqs)])))
         bad = []
         # Data-only assertions must be supported by those dataset pages.
         # Mixed-source prose keeps the ordinary evidence policy.
         for line in strip_references(final).splitlines():
             refs = {original.get(int(value)) for value in _CITE_RE.findall(line)}
-            if not refs or not refs.issubset(dataset_sids) or line.startswith(("![", "### Figure:")):
+            if (not refs or not refs.issubset(by_sid)
+                    or line.startswith(("![", "### Figure:", figure))):
                 continue
-            rewritten = _CITE_RE.sub(lambda match: f"[S{original[int(match[1])]}]", line)
+            rewritten = data_scenario_weights(data_question_thresholds(
+                data_claim_text(_CITE_RE.sub(lambda match: f"[S{original[int(match[1])]}]", line)), asked),
+                self.plan.scenarios if self.plan else ())
+            for sid in refs:
+                if sid not in support:
+                    support[sid] = self._data_support(by_sid[sid], sid)
+            available = frozenset().union(*(support[sid][0] for sid in refs))
+            signed_pages = set().union(*(support[sid][1] for sid in refs))
             tokens = _numbers_in(_join_digit_groups(_number_text(rewritten, strip_dates=True)))
-            available = set().union(*(self.page_numbers(sid) or frozenset() for sid in refs))
             values, percents, units = fact_number_values(rewritten), fact_percent_tokens(rewritten), fact_unit_tokens(rewritten)
-            signed_pages = set().union(*(self._data_signed_values(self.tools.page_text(sid) or "") for sid in refs))
-            if (not self._data_signed_values(rewritten).issubset(signed_pages)
+            signed = self._data_signed_values(rewritten)
+            if _DATA_DECLINE_RE.search(rewritten):
+                signed = {(sign, full) for sign, full in signed if not (sign == "+" and ("-", full) in signed_pages)}
+            if (not signed.issubset(signed_pages)
                     or any(not _number_on_pages(token, available, values.get(token, frozenset()),
                                                percent=token in percents, units=units.get(token, frozenset())) for token in tokens)):
                 bad.append(line[:180])
         paths = re.findall(r"!\[[^\]]*\]\((charts/data_[^)]+)\)", final)
         exhibits = self._data_heading() in final and all((self.out_dir / path).is_file() for path in paths)
-        return [{"name": "data_numbers_consistent", "passed": not bad,
-                 "detail": "stored dataset numbers checked" if not bad else f"{len(bad)} unsupported data assertions"},
+        numbers = {"name": "data_numbers_consistent", "passed": not bad,
+                   "detail": "stored dataset numbers checked" if not bad else f"{len(bad)} unsupported data assertions"}
+        if bad:
+            numbers["lines"] = bad[:5]
+        return [numbers,
                 {"name": "data_exhibits", "passed": exhibits,
                  "detail": f"baseline table and {len(paths)} existing official-data figures"}]
 
@@ -5881,7 +7136,8 @@ class _Engine:
         """Advisory critique → at most 3 section rewrites (same adoption rule)."""
         report = render_report(self.question, self.language, exec_body, sections, self.plan.scenarios)
         shared = [self.brief, self.delimit(LABEL_REPORT, report)]
-        task = _render(_T_CRITIQUE, max_issues=MAX_CRITIQUE_ISSUES, language=self.language)
+        task = _render(_T_CRITIQUE, max_issues=MAX_CRITIQUE_ISSUES, language=self.language) + self._data_headlines(
+            _DATA_CRITIQUE_RULE)
         if not self.optional_allowed(rg.estimate_tokens(rg.build_messages(ENGINE_CORE, shared, task)),
                                      deadline, keep_reserve=False, min_seconds=180.0):
             return [], []
@@ -5923,9 +7179,11 @@ class _Engine:
                    dropped: Sequence[str] = ()) -> list[dict]:
         sections = report_sections(final)
         body_sections = [(t, b) for t, b in sections if t != "References"]
-        expected = ([_text(self.language, "exec_title")]
-                    + [s.title for s in self.plan.sections if s.title not in dropped]
-                    + ([self._data_heading()] if self._data_rows() else []) + ["References"])
+        expected = [_text(self.language, "exec_title")] + [s.title for s in self.plan.sections if s.title not in dropped]
+        if self._data_rows():
+            after = getattr(self, "_data_baseline_after", None)
+            expected.insert(expected.index(after) + 1 if after in expected else len(expected), self._data_heading())
+        expected.append("References")
         headings = [t for t, _ in sections]
         short = [t for t, b in body_sections if len(b.strip()) < SECTION_MIN_CHARS and t != self._data_heading()]
         density, paragraphs = citation_density(body_sections)
@@ -6045,6 +7303,7 @@ class _Engine:
                              self.meta, self.reporter, model_name=self.model_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
                              question=self.question)
+            counts.update(self._attach_official_quant())
             final_text = _read_text(self.out_dir / report_name) or report
             words = self.bridge_call("count_prose_words", final_text)
             fetched = sum(1 for row in sources if row.get("source_origin") in ("fetched", "official_data"))
@@ -6106,10 +7365,11 @@ class _Engine:
                 entry["dataset"] = {**row["dataset"], "file": dataset.get("file", "")}
                 if stored:
                     entry["url"] = stored.source_url
-                    entry["excerpt"] = "; ".join(self._data_summary_lines(stored))[:EXCERPT_CHARS]
-                    summary, flagged = self._data_summary(stored, sid)
-                    if flagged:
-                        entry["excerpt"] = _CITE_RE.sub("", summary).strip() + "; " + entry["excerpt"]
+                    # The digest line without its marker: latest historical
+                    # value with its status, change, range and, labelled
+                    # apart, the publisher projection path.
+                    line = data_digest_line(stored, sid, self.language)
+                    entry["excerpt"] = _collapse(line.removeprefix(f"[S{sid}] "), EXCERPT_CHARS)
                     if self.language == CHINESE:
                         entry["excerpt"] += " 官方数据：数值来自本次研究保存的序列，预测与估计保留原标记。"
             entry["supports"] = []
@@ -6293,7 +7553,119 @@ class _Engine:
     def forecast_inputs(self) -> dict:
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
                                "narrative": s.thesis} for s in self.plan.scenarios],
-                "base_rates": [], "drivers": [], "indicators": []}
+                "base_rates": [], "drivers": [], "indicators": self._official_indicators()}
+
+    def _official_refs(self) -> tuple[list[tuple[Any, int]], dict[int, int], dict[str, str]]:
+        """Stored series (cited ones first, in report order), the positional
+        marker of each cited source, and the published dataset file per series."""
+        order = [int(sid) for sid in self.qa.get("citation_order") or []]
+        positions = {sid: index for index, sid in enumerate(order, 1)}
+        rows = sorted(self._data_rows(), key=lambda row: (positions.get(row[1], len(order) + 1), row[1]))
+        manifest = _read_json(self.out_dir / "data" / "datasets.json")
+        files = {str(item.get("series")): str(item.get("file") or "")
+                 for item in (manifest.get("series") or [] if isinstance(manifest, dict) else []) if isinstance(item, dict)}
+        return rows, positions, files
+
+    def _official_quant(self) -> list[dict]:
+        """Deterministic quantitative.json rows (fix contract §1.6): per stored
+        series its latest observation ("actual") and, labelled as the
+        publisher's, each projection point ("forecast").  ``as_of_date`` is the
+        source as-of date (the retrieval date) and ``period_end`` the end of
+        the period measured, as in every quantitative row."""
+        api = rg._data_api()
+        rows, positions, files = self._official_refs()
+        out: list[dict] = []
+        for series, sid in rows:
+            view = data_view(series)
+            if view is None:
+                continue
+            ledger_row = self.ledger.get(sid) or {}
+            retrieved = str(series.retrieved_at or "")[:10]
+            base = {"metric": api.series_label(series, _data_lang(self.language)), "series": series.series,
+                    "unit": series.units, "geography": series.geography, "source": series.provider_name,
+                    "source_url": series.source_url, "tier": ledger_row.get("tier"),
+                    "as_of_date": retrieved if _DATA_ISO_DAY_RE.fullmatch(retrieved) else self.plan.as_of,
+                    "source_ref": f"S{positions[sid]}" if sid in positions else "",
+                    "source_origin": "official_data", "dataset_file": files.get(series.series, "")}
+            observed = next((o for o in reversed(series.observations)
+                             if o.value is not None and data_point_kind(series, o) == "observed"), None)
+            if observed is not None:
+                out.append({**base, "value": observed.value, "period_end": data_period_end(series, observed.date),
+                            "period": data_period(series, observed.date), "value_type": "actual",
+                            "definition": data_status_text("observed", self.language)})
+            for point in view["projections"][:DATA_PROJECTION_POINTS]:
+                out.append({**base, "value": point.value, "period_end": data_period_end(series, point.date),
+                            "period": data_period(series, point.date), "value_type": "forecast",
+                            "definition": f"{series.provider_name}: {_DATA_TEXT[_lang_key(self.language)]['projection']}"})
+        return out
+
+    @staticmethod
+    def _with_official_quant(quant: Sequence[Mapping[str, Any]], official: Sequence[dict]) -> list[dict]:
+        """``official`` rows first; an extracted row restating a stored value
+        (an official row of an earlier pass, the same series ID, or a stored
+        series' source with the same value) is replaced by its deterministic row."""
+        ids = {row["series"].casefold() for row in official}
+        values: dict[str, list[float]] = {}
+        for row in official:
+            values.setdefault(row["source_url"], []).append(float(row["value"]))
+
+        def restates(row: Mapping[str, Any]) -> bool:
+            if row.get("source_origin") == "official_data" or str(row.get("series") or "").casefold() in ids:
+                return True
+            match = re.search(r"-?\d+(?:\.\d+)?", str(row.get("value") or "").replace(",", ""))
+            number = float(match.group(0)) if match else None
+            return number is not None and any(math.isclose(number, value, rel_tol=1e-9, abs_tol=1e-12)
+                                              for value in values.get(str(row.get("source_url") or ""), []))
+        return [*official, *(dict(row) for row in quant if isinstance(row, Mapping) and not restates(row))]
+
+    def _attach_official_quant(self) -> dict[str, int]:
+        """Join the deterministic official rows to quantitative.json after the
+        research charts rendered, so its quantitative charts never re-plot a
+        stored series (that series' official-data chart shows it); the meta
+        counts, or ``{}`` without stored series.  Never raises: the rows are an
+        additive view of stored evidence."""
+        try:
+            official = self._official_quant()
+            if not official:
+                return {}
+            path = self.out_dir / self._filename("QUANTITATIVE_FILENAME", "quantitative.json")
+            current = _read_json(path)
+            quant = self._with_official_quant(current if isinstance(current, list) else [], official)
+            self.write_json(path, quant, internal=False)
+            self.log("ok", f"wrote {path.name} ({len(quant)} rows, {len(official)} from official data)")
+            return {"quantitative_count": len(quant), "official_quantitative_count": len(official)}
+        except Exception as exc:  # noqa: BLE001 — a data problem never fails finalize
+            self.log("warn", f"v3: official quantitative rows unavailable ({type(exc).__name__})")
+            return {}
+
+    def _official_indicators(self) -> list[dict]:
+        """forecast_inputs.indicators (fix contract §1.6): every stored series
+        with its latest historical value and the next release to watch (``[]``
+        when that view is unavailable: a data problem never fails finalize)."""
+        if self.plan is None:
+            return []
+        try:
+            rows, positions, _ = self._official_refs()
+            text = _DATA_TEXT[_lang_key(self.language)]
+            indicators = []
+            for series, sid in rows:
+                view = data_view(series)
+                if view is None or view["latest"] is None:
+                    continue
+                latest = view["latest"]
+                word = _DATA_FREQUENCY_WORDS[_lang_key(self.language)].get(series.frequency, series.frequency)
+                indicators.append({
+                    "indicator": f"{rg._data_api().series_label(series, _data_lang(self.language))} ({series.series})",
+                    "series": series.series, "latest_value": latest.value,
+                    "latest_date": data_period_end(series, latest.date),
+                    "latest_period": data_period(series, latest.date), "status": view["kind"],
+                    "units": series.units, "frequency": series.frequency,
+                    "date_or_trigger": text["next_release"].format(word=word, period=data_period(series, latest.date)),
+                    "source_ref": f"S{positions[sid]}" if sid in positions else ""})
+            return indicators
+        except Exception as exc:  # noqa: BLE001 — see the docstring
+            self.log("warn", f"v3: official indicators unavailable ({type(exc).__name__})")
+            return []
 
     def _analytics(self, sources: Sequence[Mapping[str, Any]], actors_obj: Mapping[str, Any]) -> None:
         tiers = self.bridge_call("source_tier_histogram", list(sources))
@@ -6359,9 +7731,28 @@ class _Engine:
             events.append(f"{tools['search_failed']} of {tools['searches']} searches failed")
         if tools["fetch_failed"] and 2 * tools["fetch_failed"] >= tools["fetches"]:
             events.append(f"{tools['fetch_failed']} of {tools['fetches']} page fetches failed")
-        if self.data_enabled and not self._data_rows() and self.tools.data_stats().get("failures"):
-            events.append("official data was enabled but no requested dataset was available")
+        events += self._data_events()
         return events
+
+    def _data_events(self) -> list[str]:
+        """Official data the run asked for but could not use: none of the
+        requested series was available, or at least half of them failed (each
+        with its reason class, see ``meta.data_sources.failed_requests``)."""
+        if not self.data_enabled or not callable(getattr(self.tools, "data_stats", None)):
+            return []
+        stats = self.tools.data_stats()
+        if not self._data_rows():
+            return ["official data was enabled but no requested dataset was available"] if stats.get("failures") else []
+        per_kiq = stats.get("per_kiq") or {}
+        requested = {identity for outcome in per_kiq.values() for identity in outcome.get("requested") or []}
+        stored = {identity for outcome in per_kiq.values() for identity in outcome.get("stored") or []}
+        stored |= {series.series for series, _ in self._data_rows()}
+        failed = sorted(requested - stored)
+        if len(requested) >= 2 and 2 * len(failed) >= len(requested):
+            codes = sorted({str(row.get("code")) for row in stats.get("failed_requests") or [] if row.get("code")})
+            return [f"{len(failed)} of {len(requested)} requested official series were unavailable "
+                    f"({', '.join(failed[:5])}{'; reasons: ' + ', '.join(codes) if codes else ''})"]
+        return []
 
     def _degradation_events(self, actor_count: int) -> list[str]:
         """What this run published incompletely: its research
@@ -6407,7 +7798,12 @@ class _Engine:
                               "calls_recorded": len(ledger["calls"]), "calls_dropped": ledger["calls_dropped"]}
         self.meta["tools"] = self.tools.stats()
         if callable(getattr(self.tools, "data_stats", None)):
-            self.meta.setdefault("data_sources", {}).update(self.tools.data_stats())
+            stats = self.tools.data_stats()
+            if not self.data_enabled:
+                # A run without official data keeps the keys such a run always
+                # recorded (fix contract §0.2); the rest describes a data run.
+                stats = {key: value for key, value in stats.items() if key in _DATA_STATS_BASE_KEYS}
+            self.meta.setdefault("data_sources", {}).update(stats)
         self.meta["phases"] = {name: {**self.state.phase(name), "seconds": self.phase_seconds.get(name)}
                                for name in PHASES if self.state.phase(name)}
         records = list(self.records.values())
@@ -6419,6 +7815,10 @@ class _Engine:
             "facts": sum(len(r.get("facts") or []) for r in records),
             "verified": sum(1 for r in records for f in r.get("facts") or [] if f.get("tag") == "VERIFIED"),
         }
+        if self.data_enabled:
+            # Every attempt's agent data calls (from the persisted KIQ records).
+            self.meta["kiqs"]["data_calls"] = sum(int(((r.get("stats") or {}).get("data") or {}).get("calls") or 0)
+                                                  for r in records)
         if self.analytics_errors:
             self.meta["analytics_errors"] = list(self.analytics_errors)
 

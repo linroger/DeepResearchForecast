@@ -1,0 +1,234 @@
+{
+ "captured_at": "2026-10-11T22:07:48Z",
+ "clock": 1791756468,
+ "series": "fred:DGS10",
+ "request": {
+  "start": "2026-08-01"
+ },
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_get_series",
+   "args": {
+    "series_id": "DGS10",
+    "observation_start": "2026-08-01",
+    "observation_end": "2026-10-11",
+    "units": "lin",
+    "sort_order": "desc",
+    "offset": 0,
+    "limit": 5000
+   },
+   "response": {
+    "series_id": "DGS10",
+    "title": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis",
+    "units": "Percent",
+    "frequency": "Daily",
+    "seasonal_adjustment": "Not Seasonally Adjusted",
+    "observation_range": "1962-01-02 to 2026-10-08",
+    "total_observations": 49,
+    "data_offset": 0,
+    "data_limit": 5000,
+    "source": "Federal Reserve Economic Data (FRED)",
+    "notes": "H.15 Statistical Release (https://www.federalreserve.gov/releases/h15/current/h15.pdf) notes and Treasury Yield Curve Methodology (https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/yieldmethod.aspx).\n\nFor questions on the data, please contact the data source (https://www.federalreserve.gov/apps/ContactUs/feedback.aspx?refurl=/releases/h15/%). For questions on FRED functionality, please contact us here (https://fred.stlouisfed.org/contactus/).</p>",
+    "data": [
+     {
+      "date": "2026-10-08",
+      "value": 5.22
+     },
+     {
+      "date": "2026-10-07",
+      "value": 5.28
+     },
+     {
+      "date": "2026-10-06",
+      "value": 5.27
+     },
+     {
+      "date": "2026-10-05",
+      "value": 5.31
+     },
+     {
+      "date": "2026-10-02",
+      "value": 5.28
+     },
+     {
+      "date": "2026-10-01",
+      "value": 5.24
+     },
+     {
+      "date": "2026-09-30",
+      "value": 5.29
+     },
+     {
+      "date": "2026-09-29",
+      "value": 5.26
+     },
+     {
+      "date": "2026-09-28",
+      "value": 5.24
+     },
+     {
+      "date": "2026-09-25",
+      "value": 5.17
+     },
+     {
+      "date": "2026-09-24",
+      "value": 5.18
+     },
+     {
+      "date": "2026-09-23",
+      "value": 5.11
+     },
+     {
+      "date": "2026-09-22",
+      "value": 4.96
+     },
+     {
+      "date": "2026-09-21",
+      "value": 4.96
+     },
+     {
+      "date": "2026-09-18",
+      "value": 5.01
+     },
+     {
+      "date": "2026-09-17",
+      "value": 4.94
+     },
+     {
+      "date": "2026-09-16",
+      "value": 5.01
+     },
+     {
+      "date": "2026-09-15",
+      "value": 5
+     },
+     {
+      "date": "2026-09-14",
+      "value": 4.97
+     },
+     {
+      "date": "2026-09-11",
+      "value": 4.96
+     },
+     {
+      "date": "2026-09-10",
+      "value": 4.95
+     },
+     {
+      "date": "2026-09-09",
+      "value": 4.83
+     },
+     {
+      "date": "2026-09-08",
+      "value": 4.8
+     },
+     {
+      "date": "2026-09-07",
+      "value": null
+     },
+     {
+      "date": "2026-09-04",
+      "value": 4.78
+     },
+     {
+      "date": "2026-09-03",
+      "value": 4.77
+     },
+     {
+      "date": "2026-09-02",
+      "value": 4.79
+     },
+     {
+      "date": "2026-09-01",
+      "value": 4.79
+     },
+     {
+      "date": "2026-08-31",
+      "value": 4.75
+     },
+     {
+      "date": "2026-08-28",
+      "value": 4.73
+     },
+     {
+      "date": "2026-08-27",
+      "value": 4.67
+     },
+     {
+      "date": "2026-08-26",
+      "value": 4.66
+     },
+     {
+      "date": "2026-08-25",
+      "value": 4.64
+     },
+     {
+      "date": "2026-08-24",
+      "value": 4.7
+     },
+     {
+      "date": "2026-08-21",
+      "value": 4.74
+     },
+     {
+      "date": "2026-08-20",
+      "value": 4.69
+     },
+     {
+      "date": "2026-08-19",
+      "value": 4.65
+     },
+     {
+      "date": "2026-08-18",
+      "value": 4.71
+     },
+     {
+      "date": "2026-08-17",
+      "value": 4.72
+     },
+     {
+      "date": "2026-08-14",
+      "value": 4.68
+     },
+     {
+      "date": "2026-08-13",
+      "value": 4.63
+     },
+     {
+      "date": "2026-08-12",
+      "value": 4.68
+     },
+     {
+      "date": "2026-08-11",
+      "value": 4.7
+     },
+     {
+      "date": "2026-08-10",
+      "value": 4.72
+     },
+     {
+      "date": "2026-08-07",
+      "value": 4.65
+     },
+     {
+      "date": "2026-08-06",
+      "value": 4.69
+     },
+     {
+      "date": "2026-08-05",
+      "value": 4.63
+     },
+     {
+      "date": "2026-08-04",
+      "value": 4.63
+     },
+     {
+      "date": "2026-08-03",
+      "value": 4.7
+     }
+    ]
+   }
+  }
+ ]
+}

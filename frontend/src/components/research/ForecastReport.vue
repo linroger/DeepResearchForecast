@@ -155,9 +155,9 @@
         </div>
 
         <div ref="scrollEl" class="report-scroll">
-          <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片）。
-               端点 404/409（旧报告 / 未启用结构化预测）→ 整体隐藏（degrade-safe）。 -->
-          <section v-if="showDashboard" class="forecast-dash">
+          <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片 + 官方指标瓦片）。
+               端点 404/409（旧报告 / 未启用结构化预测 / 无官方数据）→ 对应区块隐藏（degrade-safe）。 -->
+          <section v-if="showDashboard || officialTiles.length" class="forecast-dash">
             <div class="dash-head">
               <span class="diamond">◇</span>
               <span class="panel-label">{{ L('预测仪表盘','Forecast Dashboard') }}</span>
@@ -172,7 +172,7 @@
               </span>
             </div>
             <p v-if="fcHeadline" class="dash-headline">{{ fcHeadline }}</p>
-            <div class="dash-grid">
+            <div v-if="dashScenarios.length" class="dash-grid">
               <article v-for="(s, idx) in dashScenarios" :key="'sc-' + idx" class="dash-card">
                 <div class="dash-prob">{{ pct(s.probability) }}</div>
                 <div class="dash-bar" aria-hidden="true"><span :style="{ width: pct(s.probability) }"></span></div>
@@ -198,10 +198,71 @@
                 </div>
               </div>
             </div>
+            <!-- RPT-12：官方指标瓦片（报告目录内存储的官方观测值，GET /official-data；从不重新抓取）。 -->
+            <div v-if="officialTiles.length" class="dash-official">
+              <div class="dash-sub">
+                {{ L('官方指标','Official Indicators') }}
+                <span class="dash-sub-note">{{ L('研究阶段存储的官方观测值，撰写报告时从不重新抓取','Stored official observations from research, never re-fetched for the report') }}</span>
+              </div>
+              <div class="official-grid">
+                <article
+                  v-for="t in officialTiles"
+                  :key="t.key"
+                  class="official-tile"
+                  :title="officialTileTitle(t)"
+                >
+                  <div class="ot-head">
+                    <span class="ot-label">{{ t.label }}</span>
+                    <span v-if="t.sourceId" class="ot-sid">{{ t.sourceId }}</span>
+                  </div>
+                  <div class="ot-value">{{ t.valueText }}</div>
+                  <div v-if="t.valueScaled" class="ot-scaled">{{ t.valueScaled }}</div>
+                  <div v-if="t.unitsLabel" class="ot-units">{{ t.unitsLabel }}</div>
+                  <div class="ot-meta">
+                    {{ t.periodText }}<template v-if="t.frequencyLabel"> · {{ t.frequencyLabel }}</template>
+                    <span v-if="t.headlineKind" class="ot-kind">{{ officialKindLabel(t.headlineKind, officialLang) }}</span>
+                  </div>
+                  <div v-if="t.changeText" class="ot-change">
+                    <span class="ot-arrow" aria-hidden="true">{{ changeArrow(t.changeDirection) }}</span>
+                    {{ L('同比','YoY') }} {{ t.changeText }}
+                  </div>
+                  <svg
+                    v-if="t.spark"
+                    class="ot-spark"
+                    :width="t.spark.width"
+                    :height="t.spark.height"
+                    :viewBox="`0 0 ${t.spark.width} ${t.spark.height}`"
+                    role="img"
+                    :aria-label="sparkLabel(t)"
+                  >
+                    <polyline :points="t.spark.points" />
+                    <circle :cx="t.spark.last.x" :cy="t.spark.last.y" r="2" />
+                  </svg>
+                  <div class="ot-foot">
+                    <a
+                      v-if="t.sourceUrl"
+                      class="ot-link"
+                      :href="t.sourceUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ t.providerName || L('来源','Source') }} ↗</a>
+                    <span v-else class="ot-provider">{{ t.providerName }}</span>
+                    <button
+                      v-if="officialCarrierSeries.has(t.series)"
+                      class="ot-csv"
+                      type="button"
+                      :title="L('下载存储的观测值（CSV）','Download the stored observations (CSV)')"
+                      :aria-label="L(`下载${officialCsvNames[t.key]} CSV`, `Download ${officialCsvNames[t.key]} as CSV`)"
+                      @click="downloadOfficialCsv(t.series)"
+                    >CSV</button>
+                  </div>
+                </article>
+              </div>
+            </div>
           </section>
           <!-- LOOP-017：一等公民二元预测表（forecast.binary_forecasts，与仪表盘同源同门）。
                行模型在 utils/binaryForecasts.js（纯函数）；无二元预测 → 组件整体不渲染。 -->
-          <BinaryForecastTable :forecast="fc" />
+          <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" />
           <!-- VIZ-1：图表画廊（确定性生成的 PNG/SVG 图表 + 图注）。无工件时整体不渲染。 -->
           <section v-if="galleryCharts.length" class="chart-gallery">
             <div class="gallery-head">
@@ -222,6 +283,22 @@
                   <span>{{ L('打开交互式可视化','Open interactive visualization') }} ↗</span>
                 </a>
                 <figcaption v-if="c.caption" class="chart-cap">{{ c.caption }}</figcaption>
+                <!-- RPT-12：官方数据图的出处（与成稿中审计过的来源行同源：provenance / source_caption）。 -->
+                <div v-if="c.attribution.length" class="chart-src">
+                  <span class="chart-src-label">{{ L('来源','Source') }}</span>
+                  <span
+                    v-for="(s, sIdx) in c.attribution"
+                    :key="(c.id || 'chart') + '-src-' + sIdx"
+                    class="chart-src-item"
+                    :title="s.title || null"
+                  >
+                    <template v-if="c.attribution.length === 1 && s.title">{{ s.title }} · </template>
+                    <a v-if="s.href" :href="s.href" target="_blank" rel="noopener noreferrer">{{ s.label }}</a>
+                    <template v-else>{{ s.label }}</template>
+                    <span v-if="s.sourceId" class="chart-src-sid"> [{{ s.sourceId }}]</span>
+                    <span v-if="s.detail" class="chart-src-detail">; {{ s.detail }}</span>
+                  </span>
+                </div>
                 <!-- VIZ-2：manifest 中存在同名 .html 孪生 → 新标签页打开交互版。 -->
                 <a
                   v-if="c.interactive && c.src"
@@ -245,12 +322,13 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   getReport, getVizManifest, getSectionsPartial,
   getReportTranslationMd, requestReportTranslation, getReportTranslationStatus,
-  reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast
+  reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast, getReportOfficialData
 } from '../../api/report'
 import BinaryForecastTable from './BinaryForecastTable.vue'
 import { renderMarkdown, extractHeadings } from '../../utils/markdown'
 import {
   chartAssetKind,
+  chartAttribution,
   filterVizGalleryByMarkdown,
   localizeChartCaption,
   normalizeVizGallery,
@@ -266,6 +344,15 @@ import {
   reportTranslationIssues,
   reportTranslationPollOutcome,
 } from '../../utils/reportLanguages'
+import {
+  distinctSeriesNames,
+  officialCsvFilename,
+  officialIndicatorTiles,
+  officialKindLabel,
+  officialSeriesCsv,
+  officialSeriesIndex,
+} from '../../utils/officialData'
+import { saveTextFile } from '../../utils/saveTextFile'
 import { L } from '../../i18n'
 
 const props = defineProps({
@@ -286,6 +373,10 @@ const vizManifest = ref([])
 // 404/409/网络错误（报告缺失或未通过发布门）→ null → 仪表盘隐藏。
 const forecastByLang = ref({})
 const forecastInFlight = new Set()
+// RPT-12：报告所依据的官方数据（GET /api/report/<id>/official-data?lang= 的 data），按展示语种缓存；
+// available:false / 404 / 409 / 网络错误 → null → 官方指标瓦片与数据锚点标签隐藏（degrade-safe）。
+const officialByLang = ref({})
+const officialInFlight = new Set()
 // BILINGUAL：当前展示语种。null=原文（markdown_content）；否则为某翻译语种码（'en'|'zh'）。
 const activeLang = ref(null)
 const langMdCache = ref({})       // 翻译成稿缓存 { lang: markdown }
@@ -343,12 +434,14 @@ async function load() {
     loading.value = false
     vizManifest.value = []
     forecastByLang.value = {}
+    officialByLang.value = {}
     partialSections.value = []
     return
   }
   loading.value = true
   error.value = ''
   forecastByLang.value = {}
+  officialByLang.value = {}
   try {
     const res = await getReport(reportId)
     if (version !== loadVersion || reportId !== props.reportId) return
@@ -359,6 +452,7 @@ async function load() {
     if (md.value) {
       loadVizManifest(reportId, version)
       loadForecast(reportId, version, viewLang.value)
+      loadOfficialData(reportId, version, viewLang.value)
     } else {
       startPolling(reportId, version)
     }
@@ -403,6 +497,27 @@ async function loadForecast(reportId = props.reportId, version = loadVersion, la
     }
   } finally {
     forecastInFlight.delete(flight)
+  }
+}
+
+// RPT-12：拉取某展示语种的官方指标摘要 + 存储载体。无官方数据（available:false）与失败同样记 null。
+async function loadOfficialData(reportId = props.reportId, version = loadVersion, lang = '') {
+  const key = String(lang || '')
+  const flight = `${version}:${reportId}:${key}`
+  if (officialInFlight.has(flight)) return
+  officialInFlight.add(flight)
+  try {
+    const res = await getReportOfficialData(reportId, key || undefined)
+    if (version !== loadVersion || reportId !== props.reportId) return
+    const data = (res && res.data) || {}
+    const payload = data.available === true && Array.isArray(data.indicators) ? data : null
+    officialByLang.value = { ...officialByLang.value, [key]: payload }
+  } catch (e) {
+    if (version === loadVersion && reportId === props.reportId) {
+      officialByLang.value = { ...officialByLang.value, [key]: null }
+    }
+  } finally {
+    officialInFlight.delete(flight)
   }
 }
 
@@ -810,6 +925,7 @@ const galleryCharts = computed(() => {
       id: item.id,
       src: item.imagePath ? resolveAsset(item.imagePath) : '',
       caption: localizeChartCaption(item.caption, viewLang.value),
+      attribution: chartAttribution(item, officialLang.value),
       // schema-v2 的主 path 是 Plotly HTML、png_path 是静态孪生；legacy
       // PNG+HTML 双行同样被纯函数折叠为一个预览和一个交互链接。
       interactive: item.interactivePath ? resolveAsset(item.interactivePath) : ''
@@ -900,6 +1016,67 @@ function divergencePP(m) {
   return (pp > 0 ? '+' : '') + pp + 'pp'
 }
 
+// ---------- RPT-12：官方指标瓦片 + 数据锚点标签 ----------
+// 当前语种的官方数据；该语种尚未加载时回退为已加载的另一份（同一载体，仅标签语种不同）。
+const officialPayload = computed(() => {
+  const cache = officialByLang.value
+  return cache[viewLang.value || ''] || cache[sourceLang.value || ''] || cache[''] || null
+})
+// 官方数据展示语种：服务端返回的 lang（未指定时为报告语种），否则当前视图语种。
+const officialLang = computed(() => {
+  const lang = String((officialPayload.value && officialPayload.value.lang) || viewLang.value || '')
+  return lang === 'zh' ? 'zh' : 'en'
+})
+const officialTiles = computed(() => officialIndicatorTiles(officialPayload.value))
+const officialSeries = computed(() => officialSeriesIndex(officialPayload.value))
+// Tile CSV buttons are named after their series ('Download <label> as CSV'), never just 'CSV'.
+const officialCsvNames = computed(() => distinctSeriesNames(
+  officialTiles.value.map(t => ({ key: t.key, label: t.label, series: t.series })),
+))
+const officialCarrier = computed(() => {
+  const carrier = officialPayload.value && officialPayload.value.official_data
+  return carrier && typeof carrier === 'object' ? carrier : null
+})
+const officialCarrierSeries = computed(() => {
+  const rows = officialCarrier.value && Array.isArray(officialCarrier.value.series) ? officialCarrier.value.series : []
+  return new Set(rows.filter(row => row && Array.isArray(row.observations)).map(row => row.series))
+})
+
+function changeArrow(direction) {
+  if (direction === 'up') return '▲'
+  if (direction === 'down') return '▼'
+  return '■'
+}
+
+function sparkLabel(t) {
+  const spark = t.spark
+  return L(
+    `${t.label}：${spark.count} 个历史观测值（${spark.firstDate} 至 ${spark.lastDate}）`,
+    `${t.label}: ${spark.count} historical observations (${spark.firstDate} to ${spark.lastDate})`,
+  )
+}
+
+function officialTileTitle(t) {
+  const lines = [t.label, t.series]
+  const meta = [t.units, t.frequencyLabel, t.seasonalAdjustment].filter(Boolean).join(' · ')
+  if (meta) lines.push(meta)
+  if (t.range) {
+    lines.push(L('五年区间', 'Five-year range') + `: ${t.range.low.display} (${t.range.low.period}) – `
+      + `${t.range.high.display} (${t.range.high.period})`)
+  }
+  if (t.publisher) {
+    lines.push(L('发布方数值', 'Publisher value') + `: ${t.publisher.display} (${t.publisher.period}, `
+      + `${officialKindLabel(t.publisher.kind, officialLang.value)})`)
+  }
+  return lines.join('\n')
+}
+
+function downloadOfficialCsv(series) {
+  const text = officialSeriesCsv(officialCarrier.value, series)
+  if (!text) return
+  saveTextFile(text, officialCsvFilename(series), 'text/csv;charset=utf-8')
+}
+
 // ---------- PROGRESSIVE：生成期章节轮询 ----------
 function stopPolling() {
   if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
@@ -951,6 +1128,7 @@ async function pollOnce(reportId = props.reportId, version = loadVersion) {
       if (firstFinalBody) {
         loadVizManifest(reportId, version)
         loadForecast(reportId, version, viewLang.value)
+        loadOfficialData(reportId, version, viewLang.value)
       }
     }
     // A primary body may land before automatic translation metadata. Keep
@@ -1076,8 +1254,9 @@ watch(() => props.reportId, load)
 // 切换语种（原文 ⇄ 译文）时按需拉取该语种的仪表盘文本；已缓存则不重复请求。
 watch(viewLang, lang => {
   const key = String(lang || '')
-  if (!props.reportId || !md.value || key in forecastByLang.value) return
-  loadForecast(props.reportId, loadVersion, key)
+  if (!props.reportId || !md.value) return
+  if (!(key in forecastByLang.value)) loadForecast(props.reportId, loadVersion, key)
+  if (!(key in officialByLang.value)) loadOfficialData(props.reportId, loadVersion, key)
 })
 onBeforeUnmount(() => {
   stopTranslationPolling()
@@ -1774,6 +1953,151 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* ---------- Official indicator tiles (RPT-12) ---------- */
+.dash-official { margin-top: 14px; }
+.dash-head + .dash-official { margin-top: 0; }
+.dash-sub-note {
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.official-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.official-tile {
+  border: 1px solid var(--border);
+  background: var(--paper);
+  padding: 10px 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: default;
+}
+.ot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ot-label {
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ot-sid {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  line-height: 1.6;
+}
+.ot-value {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ot-scaled {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ot-units {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+.ot-meta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+.ot-kind {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--orange);
+  border: 1px solid var(--orange);
+  padding: 0 5px;
+}
+.ot-change {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ot-arrow {
+  font-size: 9px;
+  margin-right: 3px;
+  color: var(--muted);
+}
+.ot-spark {
+  display: block;
+  max-width: 100%;
+  margin: 2px 0;
+}
+.ot-spark polyline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.ot-spark circle { fill: var(--orange); }
+.ot-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.ot-link,
+.ot-provider {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.ot-link { text-decoration: none; transition: color 0.12s ease; }
+.ot-link:hover { color: var(--orange); }
+.ot-csv {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.ot-csv:hover { color: var(--orange); border-color: var(--orange); }
+
 /* ---------- Chart gallery (VIZ-1) ---------- */
 .chart-gallery {
   max-width: 760px;
@@ -1840,6 +2164,30 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   letter-spacing: 0.01em;
 }
+/* RPT-12：官方数据图出处（provider ↗ [S#] · 单位; 频率; 季调）。 */
+.chart-src {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+.chart-src-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.chart-src-item { overflow-wrap: anywhere; }
+.chart-src-item a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+.chart-src-item a:hover { color: var(--orange); border-bottom-color: var(--orange); }
+.chart-src-sid { color: var(--muted); }
 /* VIZ-2：画廊图的交互孪生链接。 */
 .chart-interactive {
   display: inline-block;
@@ -1951,5 +2299,7 @@ onBeforeUnmount(() => {
   .chart-fig { break-inside: avoid-page; }
   .forecast-dash,
   .chart-gallery { max-width: none; }
+  .ot-csv { display: none; }
+  .official-tile { break-inside: avoid-page; }
 }
 </style>

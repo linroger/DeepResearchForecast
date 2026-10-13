@@ -15,6 +15,7 @@ import hashlib
 import time
 import re
 import logging
+import math
 import threading
 import contextvars
 from contextlib import contextmanager
@@ -753,6 +754,16 @@ FORECAST_STRUCTURE_MANDATE = (
     "其余章节可据预测发现自由设计，但上述两类必须被覆盖（标题可自拟，语义需对应）。"
 )
 
+# RPT-10: appended to the outline prompt only when stored official data exists.
+OFFICIAL_DATA_PLAN_RULE = (
+    "\n\n**官方数据（Official data）**：上方【Official data snapshot】中的官方存储序列会作为确定性的"
+    "「Key official indicators / 关键官方指标」表自动插入在预测之后（无需也不得规划一个只复述该表的章节）。"
+    "若其中有序列直接度量核心问题（问题所问的指标本身或其直接驱动），大纲须至少有一节分析这些指标对核心问题"
+    "意味着什么（相对历史的水平与趋势、发布方预测与本报告判断的差异、需要观察的阈值），该节引用指标时必须使用"
+    "快照中的存储值、期间与来源标记 [S#]；只作背景的序列（其他经济体、相邻行业或替代指标）在相关章节中引用即可，"
+    "不要为其单设章节。"
+)
+
 # ── 章节生成 prompt ──
 
 SECTION_SYSTEM_PROMPT_TEMPLATE = """\
@@ -1482,6 +1493,645 @@ def render_market_comparison_block(forecast: Optional[Dict[str, Any]],
             else:
                 lines.append(f"- {label} — implied P(yes) {ip_s}")
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Official data: deterministic indicator summaries and claim support.
+# Stored observations only (never a fetch); shared by the data pack, the
+# "Key official indicators" section, the executive brief and the report API.
+# ═══════════════════════════════════════════════════════════════
+OFFICIAL_INDICATORS_HEADINGS = ("## Key official indicators", "## 关键官方指标")
+_OFFICIAL_FREQUENCY_LABELS = {
+    "en": {"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "A": "Annual"},
+    "zh": {"D": "日度", "W": "周度", "M": "月度", "Q": "季度", "A": "年度"},
+}
+_OFFICIAL_KIND_LABELS_ZH = {
+    "historical observation": "历史观测值",
+    "publisher projection": "发布方预测值",
+    "publisher estimate": "发布方估计值",
+    "publisher preliminary": "发布方初值",
+    "unclassified publisher value": "未分类发布值",
+    "partial-period value": "不完整期间值",
+}
+_OFFICIAL_TABLE_HEADERS = {
+    "en": ("Indicator", "Units", "Latest observed", "Period", "Year-over-year change",
+           "Five-year range", "Publisher value (status)", "Source"),
+    "zh": ("指标", "单位", "最新观测值", "期间", "同比变化", "五年区间", "发布方数值（状态）", "来源"),
+}
+_OFFICIAL_TABLE_NOTE = {
+    "en": "_Stored official observations behind this report, exactly as published (never re-fetched)._",
+    "zh": "_本报告所依据的官方存储观测值，与发布值完全一致（撰写报告时从不重新抓取）。_",
+}
+
+
+# The stored-data pack every report prompt shares (outline, sections, spine,
+# binaries, critique, chat), in the report language.
+_OFFICIAL_PACK_TEXT = {
+    "en": {
+        "title": "[Official data snapshot]",
+        "intro": ("Stored official observations (never fetched while writing). Quote values exactly with "
+                  "their period and source marker; claims about these series must use these values. "
+                  "Historical observations, publisher projections/estimates and model thresholds are "
+                  "distinct. Unknown status cannot establish an observed outcome. Attribute a publisher "
+                  "value to its publisher as a projection or estimate (e.g. 'the IMF projects 2.1% for "
+                  "2027'), never as an observed value; a period still open is not a complete observation."),
+        "columns": "| Series | Latest historical value / period | Units / frequency / adjustment | Source |",
+        "unindexed": "unindexed source", "unavailable": "unavailable", "unknown": "unknown",
+        "daily": "Monthly values are the {basis}; latest daily value {value} on {date} {citation}",
+        "daily_plain": "Monthly values are the {basis} {citation}",
+        "change": "Year-over-year change: {value} {citation}",
+        "range": "Historical five-year range in stored window: {low} ({low_period}) to {high} ({high_period}) {citation}",
+        "publisher": "Publisher values, not observed history: {values} {citation}",
+        "publisher_value": "{period} {value} ({kind})", "joiner": "; ",
+        "open": "Period still open: {period} {value} (partial-period value, not a complete observation) {citation}",
+        "transform": "Transform: {transform}.", "source": "Source: {url}",
+        "omitted": "{n} further stored series not shown: {ids}{more}.", "more": " and {n} more",
+    },
+    "zh": {
+        "title": "[Official data snapshot / 官方数据快照]",
+        "intro": ("已存储的官方观测值（撰写时从不重新抓取）。引用时原样使用数值、期间与来源标记 [S#]；涉及这些序列的"
+                  "论断必须使用这些数值。历史观测值、发布方预测/估计值与模型阈值互不相同；状态未知的数值不能证明已发生的"
+                  "结果。发布方数值须归于发布方并写明是预测或估计（如「IMF 预测 2027 年为 2.1%」），绝不能写成已观测值；"
+                  "尚未结束的期间不是完整观测。"),
+        "columns": "| 序列 | 最新历史值 / 期间 | 单位 / 频率 / 调整 | 来源 |",
+        "unindexed": "未编入来源索引", "unavailable": "暂无", "unknown": "未知",
+        "daily": "月度值为{basis}；最新日度值 {value}（{date}）{citation}",
+        "daily_plain": "月度值为{basis} {citation}",
+        "change": "同比变化：{value} {citation}",
+        "range": "存储窗口内五年历史区间：{low}（{low_period}）至 {high}（{high_period}）{citation}",
+        "publisher": "发布方数值（非观测历史）：{values} {citation}",
+        "publisher_value": "{period} {value}（{kind}）", "joiner": "；",
+        "open": "尚未结束的期间：{period} {value}（不完整期间值，不是完整观测）{citation}",
+        "transform": "变换：{transform}。", "source": "来源：{url}",
+        "omitted": "另有 {n} 个已存储序列未列出：{ids}{more}。", "more": " 等（另 {n} 个）",
+    },
+}
+
+
+def official_report_lang(language: Any) -> str:
+    """'en' for an English report, 'zh' otherwise (the report-language convention)."""
+    return "en" if str(language or "English").strip().lower().startswith("en") else "zh"
+
+
+def _official_cell(value: Any) -> str:
+    return " ".join(str(value or "").replace("|", "/").split())
+
+
+def _official_shift_months(day: str, months: int) -> str:
+    index = int(day[:4]) * 12 + int(day[5:7]) - 1 + months
+    return f"{index // 12:04d}-{index % 12 + 1:02d}{day[7:]}"
+
+
+def official_period_label(row: Dict[str, Any], day: str) -> str:
+    """Reader period for one stored date: 2026-09, 2026-Q2, 2025, or a fiscal label."""
+    provenance = row.get("provenance")
+    periods = provenance.get("periods") if isinstance(provenance, dict) else None
+    record = periods.get(day) if isinstance(periods, dict) else None
+    if (isinstance(record, dict) and record.get("calendar") == "us_federal_fiscal_year"
+            and isinstance(record.get("label"), str) and record["label"].strip()):
+        return record["label"].strip()
+    frequency = row.get("frequency")
+    if frequency == "A":
+        return day[:4]
+    if frequency == "Q":
+        return f"{day[:4]}-Q{(int(day[5:7]) - 1) // 3 + 1}"
+    return day[:7] if frequency == "M" else day
+
+
+def _official_scaled_value(api: Any, value: Any, units: str, lang: str, *, rescale: bool = False) -> str:
+    """The magnitude companion of a stored value (data_sources.scaled_value). With
+    ``rescale`` (the agents' data pack), a value stored in thousands or millions
+    ('58522249' Thousands of U.S. Dollars, '150578.728' Million kilowatt-hours), which
+    that helper skips, also gets the amount it stands for ('≈ 58.52 billion U.S.
+    Dollars'); published displays keep the data layer's rule, which the frontend mirrors."""
+    scaled = api.scaled_value(value, units, lang)
+    match = _OFFICIAL_UNIT_SCALE_RE.match(units or "")
+    if scaled or not rescale or not match or match.group(1).lower() not in ("thousand", "million"):
+        return scaled
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        return ""
+    factor = 1e3 if match.group(1).lower() == "thousand" else 1e6
+    return api.scaled_value(value * factor, units[match.end():].strip(), lang)
+
+
+def _official_value_display(api: Any, value: Any, units: str, lang: str, *, rescale: bool = False) -> str:
+    text = api.format_value(value, units)
+    scaled = _official_scaled_value(api, value, units, lang, rescale=rescale)
+    return f"{text} ({scaled})" if scaled else text
+
+
+def _official_change_display(api: Any, delta: float, prior: float, units: str, lang: str,
+                             points_word: str, *, rescale: bool = False) -> str:
+    text = api.format_change(delta, units)
+    if api.is_percent_units(units):
+        return text[:-3] + points_word if text.endswith(" pp") else text
+    extras = [_official_scaled_value(api, abs(delta), units, lang, rescale=rescale)]
+    # A relative change of a points measure (Sahm rule, basis-point spreads) is
+    # meaningless ("0.23 to 0" would read "-100%"): show the points change only.
+    if prior and not re.search(r"point", units, re.I):
+        percent = api.format_change(delta / abs(prior) * 100, "Percent").replace(" pp", "%")
+        extras.append(percent)
+    extras = [extra for extra in extras if extra]
+    return f"{text} ({'; '.join(extras)})" if extras else text
+
+
+def _official_path_points(path: List[Dict[str, Any]], horizon_year: str = "") -> List[Optional[Dict[str, Any]]]:
+    """The publisher values a prompt lists: all of up to eight, else the first three,
+    every value in the forecast horizon's year and the last two; None marks each
+    elided run (rendered '…')."""
+    if len(path) <= 8:
+        return list(path)
+    keep = {0, 1, 2, len(path) - 2, len(path) - 1}
+    keep.update(index for index, point in enumerate(path)
+                if horizon_year and str(point["period"]).startswith(horizon_year))
+    shown: List[Optional[Dict[str, Any]]] = []
+    previous = None
+    for index in sorted(keep):
+        if previous is not None and index > previous + 1:
+            shown.append(None)
+        shown.append(path[index])
+        previous = index
+    return shown
+
+
+def _official_daily_basis(api: Any, row: Dict[str, Any], units: str, lang: str) -> Optional[Dict[str, Any]]:
+    """How a monthly series aggregates native daily data, plus the newest daily value.
+
+    ``{"method": "eop"|"avg"|"", "basis": text, "latest_daily": {date, value, display}|None}``
+    for rows the data layer aggregated from daily data, else None. The wording
+    matches the simulation snapshot (official_data._snapshot_line).
+    """
+    provenance = row.get("provenance")
+    if not isinstance(provenance, dict):
+        return None
+    method = str(provenance.get("aggregation_method") or "")
+    text = " ".join(str(provenance.get("aggregation") or "").split())
+    if method not in ("eop", "avg") and not text:
+        return None
+    if method == "eop":
+        basis = "end-of-month value of daily data" if lang == "en" else "日度数据的月末值"
+    elif method == "avg":
+        basis = "monthly mean of daily data" if lang == "en" else "日度数据的月均值"
+    else:
+        basis = (f"aggregated from daily data ({text[:120]})" if lang == "en"
+                 else f"由日度数据汇总（{text[:120]}）")
+    daily = provenance.get("latest_daily")
+    latest = None
+    if (isinstance(daily, dict) and isinstance(daily.get("date"), str)
+            and isinstance(daily.get("value"), (int, float)) and not isinstance(daily.get("value"), bool)
+            and math.isfinite(daily["value"])):
+        latest = {"date": daily["date"][:10], "value": daily["value"],
+                  "display": _official_value_display(api, daily["value"], units, lang)}
+    return {"method": method if method in ("eop", "avg") else "", "basis": basis, "latest_daily": latest}
+
+
+def official_indicator_summary(row: Dict[str, Any], *, lang: str = "en", tag: str = "",
+                               kinds: Optional[List[str]] = None) -> Dict[str, Any]:
+    """One stored series as reader-facing facts: latest observed value, year-over-year
+    change, five-year range and the newest non-historical publisher value.
+
+    History is only what official_observation_kind classifies as a historical
+    observation; changes and ranges never mix in projections or partial periods.
+    ``kinds`` (aligned with the row's observations) avoids reclassifying a row.
+    """
+    from .forecast_extractor import official_observation_kinds
+    from .official_data import data_api
+    api = data_api()
+    units = row["units"]
+    observations = row["observations"]
+    if kinds is None:
+        kinds = official_observation_kinds(row)
+    pairs = [(point, kind) for point, kind in zip(observations, kinds, strict=True)
+             if point["value"] is not None]
+    history = [point for point, kind in pairs if kind == "historical observation"]
+    others = [(point, kind) for point, kind in pairs if kind != "historical observation"]
+    points_word = " pp" if lang == "en" else " 个百分点"
+
+    def _point(point: Dict[str, Any]) -> Dict[str, Any]:
+        return {"date": point["date"], "period": official_period_label(row, point["date"]),
+                "value": point["value"], "display": _official_value_display(api, point["value"], units, lang)}
+
+    summary: Dict[str, Any] = {
+        "series": row["series"], "label": api.series_label(row, lang),
+        "provider": row.get("provider") or "", "provider_name": row.get("provider_name") or "",
+        "units": units, "frequency": row["frequency"],
+        "frequency_label": _OFFICIAL_FREQUENCY_LABELS[lang].get(row["frequency"], row["frequency"]),
+        "seasonal_adjustment": row.get("seasonal_adjustment") or "", "transform": row.get("transform") or "",
+        "geography": row.get("geography") or "", "source_url": row.get("source_url") or "",
+        "source_id": tag, "latest": None, "previous_year": None, "change": None, "five_year": None,
+        "publisher_value": None, "history": [[point["date"], point["value"]] for point in history[-24:]],
+        # Every non-historical publisher value (estimates and projections, oldest first) and
+        # the newest still-open period, so prompts can show the path through the horizon.
+        "publisher_path": [{**_point(point), "kind": kind} for point, kind in others
+                           if kind != "partial-period value"],
+        "open_period": next(({**_point(point), "kind": kind} for point, kind in reversed(others)
+                             if kind == "partial-period value"), None),
+        "daily": _official_daily_basis(api, row, units, lang),
+    }
+    if history:
+        latest = history[-1]
+        summary["latest"] = _point(latest)
+        if row["frequency"] != "W":
+            target = _official_shift_months(latest["date"], -12)
+            prior = next((point for point in history if point["date"] == target), None)
+            if prior is not None:
+                delta = latest["value"] - prior["value"]
+                summary["previous_year"] = _point(prior)
+                summary["change"] = {
+                    "value": delta,
+                    "percent": delta / abs(prior["value"]) * 100 if prior["value"] else None,
+                    "display": _official_change_display(api, delta, prior["value"], units, lang, points_word),
+                    "display_words": _official_change_display(
+                        api, delta, prior["value"], units, lang,
+                        " percentage points" if lang == "en" else " 个百分点"),
+                }
+        start = _official_shift_months(latest["date"], -60)
+        window = [point for point in history if point["date"] >= start]
+        summary["five_year"] = {"min": _point(min(window, key=lambda point: point["value"])),
+                                "max": _point(max(window, key=lambda point: point["value"]))}
+    if others:
+        point, kind = others[-1]
+        summary["publisher_value"] = {**_point(point), "kind": kind}
+    return summary
+
+
+# A malformed stored row degrades to "skipped" (fix contract §0.1), never a failed report.
+_OFFICIAL_ROW_ERRORS = (KeyError, TypeError, ValueError, ZeroDivisionError, AttributeError, IndexError)
+
+
+def official_indicator_rows(official_data: Any, *, lang: str = "en",
+                            tag_for: Optional[Callable[[Dict[str, Any]], str]] = None) -> List[Dict[str, Any]]:
+    """Summaries for every valid stored row, in carrier order; malformed rows are skipped."""
+    from .forecast_extractor import official_series_rows
+    out: List[Dict[str, Any]] = []
+    for row in official_series_rows(official_data):
+        try:
+            out.append(official_indicator_summary(row, lang=lang, tag=tag_for(row) if tag_for else ""))
+        except _OFFICIAL_ROW_ERRORS as exc:
+            logger.info("Official indicator summary skipped for a malformed stored row (%s)", type(exc).__name__)
+    return out
+
+
+def _official_kind_text(kind: str, lang: str) -> str:
+    return _OFFICIAL_KIND_LABELS_ZH.get(kind, kind) if lang == "zh" else kind
+
+
+def render_official_indicator_row(summary: Dict[str, Any], lang: str) -> str:
+    """One canonical Markdown row of the Key official indicators table."""
+    latest, change, window, other = (summary["latest"], summary["change"], summary["five_year"],
+                                     summary["publisher_value"])
+    joiner = " to " if lang == "en" else " 至 "
+    publisher = "—"
+    if other:
+        sep = ", " if lang == "en" else "，"
+        publisher = (f"{other['display']} ({other['period']}{sep}{_official_kind_text(other['kind'], lang)})"
+                     if lang == "en" else
+                     f"{other['display']}（{other['period']}{sep}{_official_kind_text(other['kind'], lang)}）")
+    cells = [
+        summary["label"], summary["units"],
+        latest["display"] if latest else "—", latest["period"] if latest else "—",
+        change["display"] if change else "—",
+        f"{window['min']['display']}{joiner}{window['max']['display']}" if window else "—",
+        publisher, f"[{summary['source_id']}]" if summary["source_id"] else "—",
+    ]
+    return "| " + " | ".join(_official_cell(cell) for cell in cells) + " |"
+
+
+def render_official_indicators_section(summaries: List[Dict[str, Any]], lang: str) -> str:
+    """Deterministic H2 section; "" when no stored series is available."""
+    if not summaries:
+        return ""
+    headers = _OFFICIAL_TABLE_HEADERS[lang]
+    lines = [OFFICIAL_INDICATORS_HEADINGS[0 if lang == "en" else 1], "", _OFFICIAL_TABLE_NOTE[lang], "",
+             "| " + " | ".join(headers) + " |", "|" + "---|" * len(headers)]
+    lines.extend(render_official_indicator_row(summary, lang) for summary in summaries)
+    return "\n".join(lines)
+
+
+def read_report_official_data(path: str) -> Optional[Dict[str, Any]]:
+    """Read a report-local official_data.json; None when absent, malformed or tampered.
+
+    The carrier must re-hash to the recorded ``sha256`` (canonical JSON), so a
+    consumer (API, executive brief, visual backfill) never renders edited values.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return None
+    carrier, tags = payload.get("official_data"), payload.get("source_tags")
+    if not isinstance(carrier, dict) or not isinstance(tags, dict):
+        return None
+    canonical = json.dumps(carrier, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if hashlib.sha256(canonical.encode("utf-8")).hexdigest() != payload.get("sha256"):
+        logger.warning("Report official_data.json failed its digest check; ignored")
+        return None
+    payload["source_tags"] = {str(key): str(value) for key, value in tags.items()
+                              if isinstance(value, str) and re.fullmatch(r"S[1-9]\d*", value)}
+    return payload
+
+
+# Claim parsing for carrier-backed citation support (RPT-1). A claim number is
+# supported only by the stored value AT a period the claim names, by a change
+# between stored historical periods, or (with no conflicting period) by the
+# series' latest value, year-over-year change or five-year range.
+_OFFICIAL_MONTHS = {"january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+                    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11,
+                    "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7,
+                    "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12}
+_OFFICIAL_MONTH_ALT = "|".join(sorted(_OFFICIAL_MONTHS, key=len, reverse=True))
+_OFFICIAL_QUARTER_WORDS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "1st": 1, "2nd": 2,
+                           "3rd": 3, "4th": 4, "一": 1, "二": 2, "三": 3, "四": 4}
+_OFFICIAL_PERIOD_RES = (
+    re.compile(r"(?<!\d)(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})(?!\d)"),
+    re.compile(rf"\b(?P<mn>{_OFFICIAL_MONTH_ALT})\.?\s+(?P<d>\d{{1,2}}),?\s+(?P<y>\d{{4}})\b", re.I),
+    re.compile(rf"\b(?P<d>\d{{1,2}})\s+(?P<mn>{_OFFICIAL_MONTH_ALT})\.?,?\s+(?P<y>\d{{4}})\b", re.I),
+    re.compile(r"(?P<y>\d{4})\s*年\s*(?P<m>\d{1,2})\s*月\s*(?P<d>\d{1,2})\s*日"),
+    re.compile(r"(?P<y>\d{4})\s*年\s*(?P<m>\d{1,2})\s*月"),
+    re.compile(rf"\b(?P<mn>{_OFFICIAL_MONTH_ALT})\.?\s+(?:of\s+)?(?P<y>\d{{4}})\b", re.I),
+    re.compile(r"(?<![\d-])(?P<y>\d{4})-(?P<m>\d{2})(?![\d-])"),
+    re.compile(r"\b(?P<y>\d{4})\s*-?\s*Q(?P<q>[1-4])\b", re.I),
+    re.compile(r"\bQ(?P<q>[1-4])\s*(?:of\s+)?(?P<y>\d{4})\b", re.I),
+    re.compile(r"\b(?P<qw>first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s+(?:of\s+)?(?P<y>\d{4})\b",
+               re.I),
+    re.compile(r"(?P<y>\d{4})\s*年\s*(?:第\s*)?(?P<qw>[一二三四1-4])\s*季度"),
+    # A year may end the sentence ('… in 2024.'); a decimal or digit group ('2024.5', '2,024,500') is a number.
+    re.compile(r"(?<![\d.,$])(?:FY\s?)?(?P<y>(?:19|20)\d{2})(?:\s*年)?(?!\d|[.,]\d|%)"
+               r"(?!\s?(?:%|per\s?cent|percentage|points?\b|trillion|billion|million|thousand|tn\b|bn\b|mn\b|"
+               r"万亿|亿|万|个百分点))", re.I),
+)
+_OFFICIAL_RISE_RE = re.compile(
+    r"(?i)\b(?:rose|rise[sn]?|rising|increas\w*|up\b|higher|climb\w*|grew|grow\w*|gain\w*|jump\w*)|"
+    r"上升|上涨|增加|提高|回升|升至")
+_OFFICIAL_FALL_RE = re.compile(
+    r"(?i)\b(?:fell|fall\w*|declin\w*|decreas\w*|down\b|lower|dropp?\w*|slipp?\w*|eas(?:ed|ing))|"
+    r"下降|下跌|减少|回落|降低|降至")
+# Base years inside units ("chained 2017 dollars", "2015=100") and durations
+# ("10-year", "five-year" digits, "3个月") are labels, never claimed values.
+_OFFICIAL_LABEL_NUMBER_RES = (
+    re.compile(r"(?i)(?:chained|constant)\s+(?:19|20)\d{2}\b|(?:19|20)\d{2}\s*=\s*100\b"),
+    re.compile(r"(?i)\b\d+(?:\.\d+)?\s*-?\s*(?:years?|yrs?|months?|weeks?|days?|quarters?|decades?)\b"),
+    re.compile(r"(?<![\d.])\d{1,2}\s*(?:年期|个月|个季度|年)(?![\d月])"),
+)
+_OFFICIAL_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9_.,])(?P<sign>[-+−])?\s?(?:US)?\$?\s?"
+    r"(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    r"(?P<scale>\s?(?:trillion|billion|million|thousand|tn|bn|mn)\b|\s?(?:万亿|亿|万))?"
+    r"(?P<unit>\s?(?:%|per\s?cent\b|percent\b|percentage\s+points?\b|points?\b|ppts?\b|pp\b|个百分点|百分点))?"
+    r"(?![A-Za-z\d])", re.I)
+_OFFICIAL_SCALES = {"trillion": 1e12, "tn": 1e12, "billion": 1e9, "bn": 1e9, "million": 1e6, "mn": 1e6,
+                    "thousand": 1e3, "万亿": 1e12, "亿": 1e8, "万": 1e4}
+# 'Billions of Chained 2017 Dollars' and 'Million kilowatt-hours' (EIA) both carry a scale word.
+_OFFICIAL_UNIT_SCALE_RE = re.compile(r"(?i)^\s*(thousand|million|billion|trillion)s?(?:\s+of)?\s")
+_OFFICIAL_RANGE_WORDS_RE = re.compile(
+    r"(?i)\brange|\branged|\bbetween\b|\bhigh(?:est)?\b|\blow(?:est)?\b|\bpeak|\btrough|"
+    r"five-year|5-year|区间|最高|最低|峰值|谷值|之间")
+_OFFICIAL_STATUS_WORDS = {
+    "projection": re.compile(r"(?i)project|forecast|outlook|expect|预测|预计|展望|预期"),
+    "estimate": re.compile(r"(?i)estimat|估计|估算|预估"),
+    "preliminary": re.compile(r"(?i)prelim|initial|advance|flash|provisional|初值|初步"),
+    "partial": re.compile(r"(?i)partial|month-to-date|to date|so far|average of daily|不完整|截至|月内"),
+}
+_OFFICIAL_PUBLISHER_WORDS_RE = re.compile(
+    r"(?i)according to|\bper the\b|\bpublish|publisher|reported by|\bIMF\b|World Bank|\bWEO\b|"
+    r"据|发布|口径")
+
+
+def _official_status_labeled(kind: str, claim: str) -> bool:
+    """A non-historical stored value supports a claim only when the claim says what it is."""
+    if kind == "historical observation":
+        return True
+    if "partial" in kind:
+        return bool(_OFFICIAL_STATUS_WORDS["partial"].search(claim))
+    for key in ("projection", "estimate", "preliminary"):
+        if key in kind:
+            return bool(_OFFICIAL_STATUS_WORDS[key].search(claim) or _OFFICIAL_PUBLISHER_WORDS_RE.search(claim))
+    return bool(_OFFICIAL_PUBLISHER_WORDS_RE.search(claim)
+                or any(pattern.search(claim) for pattern in _OFFICIAL_STATUS_WORDS.values()))
+
+
+def _official_claim_periods(text: str, frequency: str) -> Tuple[str, List[str], int]:
+    """Mask period expressions; return (masked text, stored-grid dates named, periods mentioned).
+
+    A period finer or coarser than the series grid is still counted as
+    mentioned (so the latest value cannot answer for it) but maps to no date.
+    """
+    found: List[str] = []
+    mentioned = 0
+
+    def _grid(year: int, month: int, day: int, quarter: int) -> str:
+        if day:
+            # Only an exact stored period start identifies a monthly/quarterly/annual period.
+            return f"{year:04d}-{month:02d}-{day:02d}"
+        if quarter:
+            return f"{year:04d}-{3 * (quarter - 1) + 1:02d}-01" if frequency == "Q" else ""
+        if month:
+            return f"{year:04d}-{month:02d}-01" if frequency == "M" else ""
+        return f"{year:04d}-01-01" if frequency == "A" else ""
+
+    def _consume(match: "re.Match[str]") -> str:
+        nonlocal mentioned
+        parts = match.groupdict()
+        try:
+            year = int(parts["y"])
+            month = int(parts["m"]) if parts.get("m") else _OFFICIAL_MONTHS.get(
+                str(parts.get("mn") or "").lower().rstrip("."), 0)
+            quarter = int(parts["q"]) if parts.get("q") else _OFFICIAL_QUARTER_WORDS.get(
+                str(parts.get("qw") or "").lower(), 0)
+            day = int(parts["d"]) if parts.get("d") else 0
+        except (TypeError, ValueError):
+            return match.group(0)
+        if not 1800 <= year <= 2200 or month > 12 or day > 31:
+            return match.group(0)
+        mentioned += 1
+        stamp = _grid(year, month, day, quarter)
+        if stamp:
+            found.append(stamp)
+        return " " * len(match.group(0))
+
+    for pattern in _OFFICIAL_PERIOD_RES:
+        text = pattern.sub(_consume, text)
+    return text, found, mentioned
+
+
+def _official_unit_kind(unit: str) -> str:
+    unit = re.sub(r"\s+", " ", unit.strip().lower())
+    if not unit:
+        return "plain"
+    if "point" in unit or unit in ("pp", "ppt", "ppts") or "百分点" in unit:
+        return "pp"
+    return "percent"
+
+
+def _official_claim_numbers(text: str) -> List[Dict[str, Any]]:
+    for pattern in _OFFICIAL_LABEL_NUMBER_RES:
+        text = pattern.sub(lambda match: " " * len(match.group(0)), text)
+    numbers = []
+    for match in _OFFICIAL_NUMBER_RE.finditer(text):
+        raw = match.group("num")
+        scale = re.sub(r"\s+", "", match.group("scale") or "").lower()
+        numbers.append({
+            "value": float(raw.replace(",", "")),
+            "decimals": len(raw.partition(".")[2]),
+            "scale": _OFFICIAL_SCALES[scale] if scale else 0.0,
+            "signed": match.group("sign") in ("-", "−", "+"),
+            "negative": match.group("sign") in ("-", "−"),
+            "unit": _official_unit_kind(match.group("unit") or ""),
+        })
+    return numbers
+
+
+def _official_number_equals(number: Dict[str, Any], stored: float, unit_scale: float) -> bool:
+    """Claimed number == stored value at the claim's own precision (and scale word)."""
+    claimed = number["value"] * (number["scale"] or 1.0)
+    target = stored * (unit_scale if number["scale"] else 1.0)
+    if number["signed"]:
+        claimed = -claimed if number["negative"] else claimed
+    else:
+        target = abs(target)
+    tolerance = 0.5 * 10 ** -number["decimals"] * (number["scale"] or 1.0)
+    return abs(claimed - target) <= tolerance + 1e-9 * max(1.0, abs(target))
+
+
+def official_claim_support(claim: str, prepared: Dict[str, Any]) -> Optional[bool]:
+    """Carrier-backed support of one numeric claim about one stored series.
+
+    True when every claimed number equals a stored value at a period the claim
+    names (non-historical values only when the claim labels their status), a
+    change between stored historical periods, or the latest / year-over-year /
+    five-year statistics when the claim names no conflicting period. False when
+    the claim names a stored period yet a number matches nothing stored. None
+    when the stored series cannot decide (no numbers, or unstored periods).
+    """
+    row = prepared["row"]
+    frequency = row["frequency"]
+    claim = str(claim or "")
+    text, periods, mentioned = _official_claim_periods(claim, frequency)
+    numbers = _official_claim_numbers(text)
+    if not numbers:
+        return None
+    values, kinds, historical = prepared["values"], prepared["kinds"], prepared["historical"]
+    percent_units = prepared["percent_units"]
+    point_units = "point" in row["units"].lower()
+    unit_scale = prepared["unit_scale"]
+    stored_periods = [day for day in periods if day in values]
+    history_dates = prepared["history_dates"]
+    rises, falls = bool(_OFFICIAL_RISE_RE.search(claim)), bool(_OFFICIAL_FALL_RE.search(claim))
+
+    def _level(number: Dict[str, Any], value: float) -> bool:
+        if number["unit"] == "pp" and not point_units:
+            return False
+        if number["unit"] == "percent" and not percent_units:
+            return False
+        return _official_number_equals(number, value, unit_scale)
+
+    def _change(number: Dict[str, Any], delta: float, prior: float) -> bool:
+        if not number["signed"] and rises != falls and (delta > 0) != rises and delta:
+            return False  # "rose" cannot be supported by a stored decline (and vice versa)
+        if number["unit"] in ("pp", "plain") or (number["unit"] == "percent" and percent_units):
+            if _official_number_equals(number, delta, unit_scale):
+                return True
+        return bool(number["unit"] == "percent" and prior
+                    and _official_number_equals(number, delta / abs(prior) * 100, 1.0))
+
+    def _changes_at(day: str) -> List[Tuple[float, float]]:
+        out = []
+        position = history_dates.index(day)
+        priors = {_official_shift_months(day, -12)} if frequency != "W" else set()
+        if position:
+            priors.add(history_dates[position - 1])
+        for prior_day in priors:
+            if prior_day in historical:
+                out.append((historical[day] - historical[prior_day], historical[prior_day]))
+        return out
+
+    stats = prepared["stats"]
+    latest_named = bool(stats.get("latest")) and stats["latest"][0] in periods
+    # Series-level statistics answer a claim that names no period, or names the
+    # latest one; any other named period must be matched at that period.
+    series_level = not mentioned or latest_named
+    ranged = bool(_OFFICIAL_RANGE_WORDS_RE.search(claim)) and series_level
+    for number in numbers:
+        explained = False
+        for day in stored_periods:
+            if _level(number, values[day]) and _official_status_labeled(kinds[day], claim):
+                explained = True
+                break
+            if day in historical and any(_change(number, delta, prior) for delta, prior in _changes_at(day)):
+                explained = True
+                break
+        if not explained and series_level and stats.get("latest"):
+            latest_day, latest_value = stats["latest"]
+            explained = (_level(number, latest_value)
+                         or any(_change(number, delta, prior) for delta, prior in _changes_at(latest_day)))
+        if not explained and ranged and stats.get("five_year"):
+            explained = any(_level(number, value) for value in stats["five_year"])
+        if not explained:
+            return False if stored_periods else None
+    return True
+
+
+def prepare_official_row(row: Dict[str, Any], kinds: List[str]) -> Dict[str, Any]:
+    """Precomputed lookups for official_claim_support (one per stored series)."""
+    from .official_data import data_api
+    api = data_api()
+    values, kind_by_day, historical = {}, {}, {}
+    for point, kind in zip(row["observations"], kinds, strict=True):
+        if point["value"] is None:
+            continue
+        values[point["date"]] = point["value"]
+        kind_by_day[point["date"]] = kind
+        if kind == "historical observation":
+            historical[point["date"]] = point["value"]
+    history_dates = sorted(historical)
+    stats: Dict[str, Any] = {}
+    if history_dates:
+        latest = history_dates[-1]
+        stats["latest"] = (latest, historical[latest])
+        start = _official_shift_months(latest, -60)
+        window = [historical[day] for day in history_dates if day >= start]
+        stats["five_year"] = (min(window), max(window))
+    scale = _OFFICIAL_UNIT_SCALE_RE.match(row["units"])
+    title = str(row.get("title") or "")
+    words = {word for word in re.findall(r"[a-z][a-z-]{3,}", title.lower())
+             if word not in _OFFICIAL_SUBJECT_STOPWORDS}
+    if "gross domestic product" in title.lower():
+        words.add("gdp")
+    native = row["series"].split(":", 1)[1].split("/", 1)[0].split("#", 1)[0].lower()
+    if re.fullmatch(r"[a-z][a-z0-9_]{2,}", native) and native not in _OFFICIAL_SUBJECT_STOPWORDS:
+        words.add(native)
+    zh_title = re.sub(r"[^一-鿿]", "", str(row.get("title_zh") or ""))
+    return {
+        "row": row, "values": values, "kinds": kind_by_day, "historical": historical,
+        "history_dates": history_dates, "stats": stats, "geography": str(row.get("geography") or ""),
+        "percent_units": bool(api.is_percent_units(row["units"])),
+        "unit_scale": {"thousand": 1e3, "million": 1e6, "billion": 1e9, "trillion": 1e12}[
+            scale.group(1).lower()] if scale else 1.0,
+        "subject_words": words,
+        "subject_bigrams": {zh_title[i:i + 2] for i in range(len(zh_title) - 1)} - _OFFICIAL_ZH_GEOGRAPHY_BIGRAMS,
+    }
+
+
+_OFFICIAL_SUBJECT_STOPWORDS = frozenset({
+    "rate", "rates", "index", "total", "united", "states", "percent", "change", "constant", "prices",
+    "price", "seasonally", "adjusted", "annual", "monthly", "quarterly", "level", "value", "series",
+    "market", "quoted", "basis", "investment", "real", "time", "from", "with", "minus", "current",
+    "month", "year", "period", "statement", "public", "outstanding", "data", "indicator", "end-of-period",
+    "period", "spot", "average", "averages", "of", "the", "and", "for",
+})
+_OFFICIAL_ZH_GEOGRAPHY_BIGRAMS = frozenset({"美国", "中国", "世界", "全球", "欧元", "日本", "英国"})
+
+
+def official_claim_mentions(claim: str, prepared: Dict[str, Any]) -> bool:
+    """Whether an uncited claim names this stored series (title words, id or zh title)."""
+    lowered = str(claim or "").lower()
+    for word in prepared["subject_words"]:
+        if re.search(r"(?<![a-z0-9])" + re.escape(word) + r"s?(?![a-z0-9])", lowered):
+            return True
+    bigrams = prepared["subject_bigrams"]
+    return bool(bigrams) and sum(bigram in lowered for bigram in bigrams) >= min(2, len(bigrams))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2230,7 +2880,76 @@ class ReportAgent:
 
         REPORT_CITATION_SINGLE_GRAMMAR=false 时回退旧行为（分层 [S1-a] 或位置 [:40]），
         映射按对应旧格式构建（degrade-safe）。缺省来源返回 ("", {})。
+
+        RPT-16: stored official datasets that no research source identifies are
+        appended after the research positions (see _append_official_dataset_sources).
         """
+        text, tag_map = self._build_research_sources_index()
+        return self._append_official_dataset_sources(text, tag_map)
+
+    def _append_official_dataset_sources(
+        self, text: str, tag_map: Dict[str, Dict[str, Any]]
+    ) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+        """Make every stored dataset citable in this report (RPT-16).
+
+        Research sources.json lists only sources the research report cited, so a
+        stored series nobody cited had no [S#] and its true values could only be
+        dropped by grounding. Each such dataset gets an S1 official-data source
+        AFTER the research positions (research S<n> identities never move), with
+        its dataset identity and a stored-value excerpt. Nothing changes without
+        a carrier.
+        """
+        from .forecast_extractor import official_source_tag
+        missing = [entry for entry in self._official_prepared_rows()
+                   if not official_source_tag(entry["row"], tag_map)]
+        if not missing:
+            return text, tag_map
+        lang = official_report_lang(getattr(self, "output_language", None))
+        from .official_data import data_api
+        api = data_api()
+        positioned: List[Any] = [None] * len(self.sources or [])
+        for entry in missing:
+            row = entry["row"]
+            try:
+                summary = official_indicator_summary(row, lang="en", kinds=self._official_entry_kinds(entry))
+            except _OFFICIAL_ROW_ERRORS as exc:
+                logger.info("Official dataset source skipped for a malformed stored row (%s)", type(exc).__name__)
+                continue
+            facts = []
+            if summary["latest"]:
+                facts.append(f"Latest: {summary['latest']['display']} ({summary['latest']['date']})")
+            if summary["change"]:
+                facts.append(f"year-over-year change {summary['change']['display_words']}")
+            if summary["five_year"]:
+                facts.append(f"five-year range {summary['five_year']['min']['display']} "
+                             f"({summary['five_year']['min']['date']}) to "
+                             f"{summary['five_year']['max']['display']} ({summary['five_year']['max']['date']})")
+            if summary["publisher_value"]:
+                other = summary["publisher_value"]
+                facts.append(f"{other['display']} for {other['date']} ({other['kind']})")
+            dataset = {key: row.get(key, "") for key in ("series", "provider", "units", "frequency", "source_url")}
+            if isinstance(row.get("file"), str):
+                dataset["file"] = row["file"]
+            source = {"source_id": "official:" + row["series"], "url": row["source_url"],
+                      "title": api.series_label(row, lang), "tier": "S1", "date": None,
+                      "source_origin": "official_data", "reachable": True,
+                      "excerpt": "; ".join(facts) + ".", "dataset": dataset, "supports": []}
+            if _citation_source_admissible(source):
+                positioned.append(source)
+        extra = [source for source in positioned if source is not None]
+        if not extra:
+            return text, tag_map
+        from ..utils import actors as _actors
+        extra_text, extra_map = _actors.sources_index_unified(positioned, max_sources=len(extra))
+        merged = dict(tag_map)
+        merged.update(extra_map)
+        lines = extra_text.split("\n")[1:]
+        if text:
+            return text + "\n" + "\n".join(lines), merged
+        return extra_text, merged
+
+    def _build_research_sources_index(self) -> Tuple[str, Dict[str, Dict[str, Any]]]:
+        """Research-source part of _build_sources_index (positional [S<n>] tags)."""
         if not self.sources:
             return "", {}
         # Keep original list positions stable (S<n> is positional), but replace
@@ -2283,16 +3002,189 @@ class ReportAgent:
         from .forecast_extractor import official_source_tag
         return official_source_tag(row, self._citation_index_or_fallback())
 
-    def _official_source_caption_part(self, row: Dict[str, Any]) -> str:
-        """One deterministic attribution, distinct from a source-supported claim."""
+    @staticmethod
+    def _official_provider_label(row: Dict[str, Any]) -> str:
+        """Publisher display name: the stored provider_name, else the catalog's, else the code."""
+        name = str(row.get("provider_name") or "").strip()
+        if not name:
+            from .official_data import data_api
+            api = data_api()
+            catalog = getattr(api, "catalog", None) if api is not None else None
+            provider = str(row.get("provider") or "")
+            series = str(row.get("series") or "")
+            native = series.split(":", 1)[1] if series.startswith(provider + ":") else ""
+            try:  # per-recipe publisher for usgov rows (EIA, BEA, Treasury, USAspending)
+                name = str(catalog.provider_name(provider, native) or "").strip() if catalog is not None else ""
+            except Exception:  # noqa: BLE001 — unknown provider / older catalog: fall back to the code
+                name = ""
+        return name or str(row.get("provider") or "Publisher")
+
+    def _official_source_caption_part(self, row: Dict[str, Any], lang: Optional[str] = None) -> str:
+        """One deterministic attribution, distinct from a source-supported claim.
+
+        The single caption helper (MISSED-4): the markdown caption, the final
+        caption audit and the persisted viz manifest all use it, so the visible
+        attribution names the publisher and a localized frequency label
+        (``lang`` defaults to the report language).
+        """
         from .report_visualizer import _md_cell
         if not isinstance(row, dict) or not row.get("source_url"):
             return ""
+        lang = lang or official_report_lang(getattr(self, "output_language", None))
         tag = self._official_source_tag(row)
-        label = _md_cell(row.get("provider") or "Publisher")
+        label = _md_cell(self._official_provider_label(row), 120)
+        frequency = str(row.get("frequency") or "")
+        adjustment = row.get("seasonal_adjustment") or ("adjustment unknown" if lang == "en" else "季节调整未知")
         return (f"[{label}](<{row['source_url']}>)" + (f" [{tag}]" if tag else "")
-                + f"; {_md_cell(row.get('units'))}; {_md_cell(row.get('frequency'))}; "
-                + _md_cell(row.get("seasonal_adjustment") or "adjustment unknown"))
+                + f"; {_md_cell(row.get('units'), 120)}; "
+                + f"{_md_cell(_OFFICIAL_FREQUENCY_LABELS[lang].get(frequency, frequency))}; "
+                + _md_cell(adjustment))
+
+    def _official_rows_for_provenance(self, provenance: Any) -> List[Dict[str, Any]]:
+        """Carrier rows behind an exhibit's provenance; [] when any entry has drifted.
+
+        The carrier is authoritative: an exhibit is attributed only when every
+        provenance entry names a stored series with the same URL, units,
+        frequency and adjustment.
+        """
+        from .forecast_extractor import official_series_rows
+        if not isinstance(provenance, list) or not provenance:
+            return []
+        stored = {row["series"]: row for row in official_series_rows(getattr(self, "official_data", None))}
+        rows = []
+        for entry in provenance:
+            row = stored.get(entry.get("series")) if isinstance(entry, dict) else None
+            if row is None or any(str(entry.get(key) or "") != str(row.get(key) or "") for key in (
+                    "source_url", "units", "frequency", "seasonal_adjustment")):
+                return []
+            rows.append(row)
+        return rows
+
+    def _official_caption_line(self, rows: List[Dict[str, Any]]) -> str:
+        """The complete italic attribution line placed under one official exhibit."""
+        parts = [self._official_source_caption_part(row) for row in rows]
+        if not parts or not all(parts):
+            return ""
+        prefix = "Source: " if official_report_lang(getattr(self, "output_language", None)) == "en" else "来源："
+        return prefix + " · ".join(parts)
+
+    @staticmethod
+    def _official_entry_kinds(entry: Dict[str, Any]) -> List[str]:
+        """Observation kinds of a prepared row, aligned with its observations."""
+        return [entry["kinds"].get(point["date"], "") if point["value"] is not None else ""
+                for point in entry["row"]["observations"]]
+
+    def _official_indicator_summaries(self) -> List[Dict[str, Any]]:
+        """Indicator summaries in the report language, tagged through this report's index."""
+        lang = official_report_lang(getattr(self, "output_language", None))
+        summaries = []
+        for entry in self._official_prepared_rows():
+            try:
+                summaries.append(official_indicator_summary(
+                    entry["row"], lang=lang, tag=self._official_source_tag(entry["row"]),
+                    kinds=self._official_entry_kinds(entry)))
+            except _OFFICIAL_ROW_ERRORS as exc:
+                logger.info("Official indicator summary skipped for a malformed stored row (%s)", type(exc).__name__)
+        return summaries
+
+    def _official_prepared_rows(self) -> List[Dict[str, Any]]:
+        """Validated carrier rows with their classified observations, cached per carrier object."""
+        carrier = getattr(self, "official_data", None)
+        cached = getattr(self, "_official_prepared_cache", None)
+        if cached is not None and cached[0] is carrier:
+            return cached[1]
+        from .forecast_extractor import official_observation_kinds, official_series_rows
+        prepared = []
+        for row in official_series_rows(carrier):
+            try:
+                prepared.append(prepare_official_row(row, official_observation_kinds(row)))
+            except _OFFICIAL_ROW_ERRORS as exc:
+                logger.info("Official claim lookup skipped a malformed stored row (%s)", type(exc).__name__)
+        self._official_prepared_cache = (carrier, prepared)
+        return prepared
+
+    def _official_indicator_line_support(self, line: str, tag: str) -> Optional[bool]:
+        """A Key official indicators row is metadata only when it is byte-identical to
+        the row regenerated from the carrier with this report's current tags."""
+        text = str(line or "").strip()
+        if not text.startswith("| ") or not text.endswith(" |") or text.count(" | ") < 7:
+            return None
+        carrier = getattr(self, "official_data", None)
+        if not carrier:
+            return None
+        lang = official_report_lang(getattr(self, "output_language", None))
+        tags = tuple(self._official_source_tag(entry["row"]) for entry in self._official_prepared_rows())
+        cached = getattr(self, "_official_indicator_rows_cache", None)
+        if cached is not None and cached[0] is carrier and cached[1] == (lang, tags):
+            rows = cached[2]
+        else:
+            rows = {render_official_indicator_row(summary, lang): summary["source_id"]
+                    for summary in self._official_indicator_summaries()}
+            self._official_indicator_rows_cache = (carrier, (lang, tags), rows)
+        if text not in rows:
+            return None
+        return not tag or tag == rows[text]
+
+    _OFFICIAL_WATCH_HEADINGS = ("### Official series to watch", "### 官方观察序列")
+
+    def _official_watch_line_support(self, line: str, tag: str) -> Optional[bool]:
+        """An 'Official series to watch' row (RPT-16: tagged with this report's [S#]) is
+        metadata only when it is byte-identical to the row regenerated from this
+        report's forecast and the stored carrier with the current citation index."""
+        text = str(line or "").strip()
+        if not text.startswith("| ") or not text.endswith(" |") or text.count(" | ") != 4:
+            return None
+        forecast = getattr(self, "_forecast_spine", None)
+        carrier = getattr(self, "official_data", None)
+        if not isinstance(forecast, dict) or not carrier:
+            return None
+        from .forecast_extractor import render_resolution_block
+        index = self._citation_index_or_fallback()
+        language = getattr(self, "output_language", None) or "Chinese"
+        tags = tuple(self._official_source_tag(entry["row"]) for entry in self._official_prepared_rows())
+        # Rows depend only on the binaries (anchors, probabilities), the carrier and the tags.
+        try:
+            fingerprint = hashlib.sha256(json.dumps(
+                forecast.get("binary_forecasts"), sort_keys=True, ensure_ascii=False, default=str
+            ).encode("utf-8")).hexdigest()
+        except (TypeError, ValueError):
+            return None
+        key = (language, tags, fingerprint)
+        cached = getattr(self, "_official_watch_rows_cache", None)
+        if cached is not None and cached[0] is carrier and cached[1] == key:
+            rows = cached[2]
+        else:
+            rows = {}
+            try:
+                lines = render_resolution_block(forecast, [], language=language, official_data=carrier,
+                                                source_index=index).split("\n")
+            except _OFFICIAL_ROW_ERRORS as exc:
+                logger.info("Official watch rows unavailable for validation (%s)", type(exc).__name__)
+                lines = []
+            start = next((i for i, row in enumerate(lines) if row.strip() in self._OFFICIAL_WATCH_HEADINGS), None)
+            # Heading, column header and delimiter precede the canonical rows.
+            for row in (lines[start + 3:] if start is not None else []):
+                if not row.startswith("| "):
+                    break
+                marker = re.search(r"\[(S\d+)\] \|$", row)
+                rows[row.strip()] = marker.group(1) if marker else ""
+            self._official_watch_rows_cache = (carrier, key, rows)
+        if text not in rows:
+            return None
+        return not tag or tag == rows[text]
+
+    def _official_metadata_support(self, line: str, tag: str) -> Optional[bool]:
+        """Canonical official metadata: exhibit attribution, Key official indicators
+        row or Official series to watch row."""
+        supported = self._official_source_caption_support(line, tag)
+        if supported is None:
+            supported = self._official_indicator_line_support(line, tag)
+        if supported is None:
+            supported = self._official_watch_line_support(line, tag)
+        return supported
+
+    def _official_canonical_line(self, line: str) -> bool:
+        return self._official_metadata_support(line, "") is True
 
     def _official_source_caption_support(self, line: str, tag: str) -> Optional[bool]:
         """Validate a complete generated attribution against the canonical carrier.
@@ -2311,21 +3203,28 @@ class ReportAgent:
         rows = official_series_rows(getattr(self, "official_data", None))
         if not rows:
             return None
-        expected = {self._official_source_caption_part(row): self._official_source_tag(row)
-                    for row in rows}
-        remaining = text[prefix.end():]
-        matched_tags = set()
-        for _ in range(len(rows)):
-            matches = [part for part in expected if remaining == part or remaining.startswith(part + " · ")]
-            if not matches:
-                return False
-            part = max(matches, key=len)
-            if expected[part]:
-                matched_tags.add(expected[part])
-            remaining = remaining[len(part):]
-            if not remaining:
-                return not tag or tag in matched_tags
-            remaining = remaining[len(" · "):]
+        tags = [self._official_source_tag(row) for row in rows]
+        # Either report language's canonical form is the same carrier metadata
+        # (a translated variant may keep or localize the frequency label).
+        own = official_report_lang(getattr(self, "output_language", None))
+        for lang in (own, "zh" if own == "en" else "en"):
+            expected = {self._official_source_caption_part(row, lang): row_tag
+                        for row, row_tag in zip(rows, tags, strict=True)}
+            remaining = text[prefix.end():]
+            matched_tags = set()
+            for _ in range(len(rows)):
+                matches = [part for part in expected if remaining == part or remaining.startswith(part + " · ")]
+                if not matches:
+                    break
+                part = max(matches, key=len)
+                if expected[part]:
+                    matched_tags.add(expected[part])
+                remaining = remaining[len(part):]
+                if not remaining:
+                    if not tag or tag in matched_tags:
+                        return True
+                    break
+                remaining = remaining[len(" · "):]
         return False
 
     def _audit_official_chart_captions(self, markdown: str, folder: str) -> Dict[str, Any]:
@@ -2367,11 +3266,12 @@ class ReportAgent:
             if len(matches) != 1 or not isinstance(matches[0].get("provenance"), list):
                 out["issues"].append(f"Official chart provenance missing or ambiguous: {path}")
                 continue
-            parts = [self._official_source_caption_part(row) for row in matches[0]["provenance"]]
-            if not parts or not all(parts):
+            rows = self._official_rows_for_provenance(matches[0]["provenance"])
+            caption = self._official_caption_line(rows) if rows else ""
+            if not caption:
                 out["issues"].append(f"Official chart attribution unavailable: {path}")
                 continue
-            expected = {prefix + " · ".join(parts) for prefix in ("Source: ", "来源：")}
+            expected = {caption}
             end = next((pos for pos, _ in markers if pos > index), len(lines))
             block = []
             caption_fence = None
@@ -2391,58 +3291,160 @@ class ReportAgent:
         out["passed"] = not out["issues"]
         return out
 
-    def _build_data_pack(self) -> str:
-        """Small deterministic context from stored observations only, never a fetch."""
-        from .forecast_extractor import official_series_rows, official_observation_kind
-        rows = official_series_rows(getattr(self, "official_data", None))
-        if not rows:
+    def _build_data_pack(self, budget: int = 5000) -> str:
+        """Small deterministic context from stored observations only, never a fetch.
+
+        Rows are whole or absent (RPT-5): the pack ends only at a row boundary
+        inside ``budget`` and names every stored series it leaves out, including
+        series the carrier itself dropped. Rows carry the curated series label
+        (zh title and zh wording in Chinese reports) and reader periods (2026-09,
+        2026-Q2, 2025); the source URL is shown only for a series without a
+        citation marker. An amount stored in thousands or millions also reads at
+        its scale ('58522249 (≈ 58.52 billion U.S. Dollars)'). A series aggregated
+        from daily data says how (end of month or monthly mean) and gives its
+        newest daily value; publisher estimates and projections are listed oldest
+        first, a long path elided around the simulation horizon's year
+        (_official_path_points), and never as observed history.
+        """
+        summaries = self._official_indicator_summaries()
+        if not summaries:
             return ""
-        from .official_data import format_value, series_stats
-        lines = ["[Official data snapshot]",
-                 "Quote stored values exactly with their source marker. Historical observations, "
-                 "publisher projections/estimates and model thresholds are distinct. "
-                 "Unknown status cannot establish an observed outcome.",
-                 "| Series | Latest historical value / period | Units / frequency / adjustment | Source |",
-                 "|---|---|---|---|"]
-        for row in rows:
-            history = [p for p in row["observations"] if p["value"] is not None and
-                       official_observation_kind(row, p) == "historical observation"]
-            latest = history[-1] if history else None
-            tag = self._official_source_tag(row)
-            citation = f"[{tag}]" if tag else "unindexed source"
-            value = (f"{format_value(latest['value'], row['units'])} / {latest['date']}"
-                     if latest else "unavailable")
-            cell = lambda text: str(text).replace("|", "/").replace("\n", " ")
-            chunk = [f"| {cell(row['series'])} | {value} | {cell(row['units'])} / "
-                     f"{cell(row['frequency'])} / {cell(row.get('seasonal_adjustment') or 'unknown')} | {citation} |"]
-            if history:
-                try:
-                    stats = series_stats({**row, "observations": history, "projection_from": ""})
-                except (ValueError, TypeError, KeyError):
-                    logger.info("Official-data statistics unavailable for a malformed stored row")
-                    stats = {}
-                change = stats.get("yoy_change")
-                if change is not None:
-                    delta_units = ("percentage points" if re.search(r"percent|%", row["units"], re.I)
-                                   and not re.search(r"point", row["units"], re.I) else row["units"])
-                    chunk.append(f"Year-over-year change: {format_value(change, delta_units)} "
-                                 f"{cell(delta_units)} {citation}")
-                low, high = stats.get("five_year_min"), stats.get("five_year_max")
-                if isinstance(low, dict) and isinstance(high, dict):
-                    chunk.append("Historical five-year range in stored window: "
-                                 f"{format_value(low['value'], row['units'])} ({low['date']}) to "
-                                 f"{format_value(high['value'], row['units'])} ({high['date']}) {citation}")
-            other = [p for p in row["observations"] if p["value"] is not None and
-                     official_observation_kind(row, p) != "historical observation"]
-            if other:
-                point = other[-1]
-                chunk.append(f"{cell(row['series'])}: {format_value(point['value'], row['units'])} "
-                             f"on {point['date']} ({official_observation_kind(row, point)}) {citation}")
-            chunk.append(f"Transform: {cell(row.get('transform') or 'none')}. Source: {row['source_url']}")
-            if len("\n".join(lines + chunk)) > 3500:
-                break  # Keep complete rows; never truncate a number or citation.
-            lines.extend(chunk)
-        return "\n".join(lines)
+        lang = official_report_lang(getattr(self, "output_language", None))
+        text = _OFFICIAL_PACK_TEXT[lang]
+        head = [text["title"], text["intro"], text["columns"], "|---|---|---|---|"]
+        horizon_year = (self._temporal_horizon_date() or "")[:4]
+        carrier = getattr(self, "official_data", None)
+        carrier_omitted = [str(sid) for sid in (carrier.get("omitted") or [])
+                           if isinstance(sid, str) and sid.strip()] if isinstance(carrier, dict) and isinstance(
+                               carrier.get("omitted"), list) else []
+        from .official_data import data_api
+        api = data_api()
+        chunks = []
+        for summary in summaries:
+            citation = f"[{summary['source_id']}]" if summary["source_id"] else text["unindexed"]
+            latest = summary["latest"]
+            units = summary["units"]
+            # Amounts stored in thousands or millions also read at their scale here (agents only).
+            value = (f"{_official_value_display(api, latest['value'], units, lang, rescale=True)} / "
+                     f"{latest['period']}" if latest else text["unavailable"])
+            frequency = summary["frequency"] if lang == "en" else summary["frequency_label"]
+            chunk = [f"| {_official_cell(summary['label'])} ({summary['series']}) | {value} | "
+                     f"{_official_cell(summary['units'])} / {frequency} / "
+                     f"{_official_cell(summary['seasonal_adjustment'] or text['unknown'])} | {citation} |"]
+            daily = summary.get("daily")
+            if daily:
+                daily_value = daily["latest_daily"]
+                chunk.append(text["daily"].format(basis=daily["basis"], value=daily_value["display"],
+                                                  date=daily_value["date"], citation=citation)
+                             if daily_value else text["daily_plain"].format(basis=daily["basis"], citation=citation))
+            if summary["change"]:
+                change = _official_change_display(
+                    api, summary["change"]["value"], summary["previous_year"]["value"], units, lang,
+                    " percentage points" if lang == "en" else " 个百分点", rescale=True)
+                chunk.append(text["change"].format(value=change, citation=citation))
+            window = summary["five_year"]
+            if window:
+                chunk.append(text["range"].format(low=window["min"]["display"], low_period=window["min"]["period"],
+                                                  high=window["max"]["display"], high_period=window["max"]["period"],
+                                                  citation=citation))
+            path = summary.get("publisher_path") or []
+            if path:
+                shown = _official_path_points(path, horizon_year)
+                values = text["joiner"].join(
+                    "…" if point is None else
+                    text["publisher_value"].format(period=point["period"], value=point["display"],
+                                                   kind=_official_kind_text(point["kind"], lang))
+                    for point in shown)
+                chunk.append(text["publisher"].format(values=values, citation=citation))
+            open_period = summary.get("open_period")
+            if open_period and not (daily and daily["latest_daily"]):
+                chunk.append(text["open"].format(period=open_period["period"], value=open_period["display"],
+                                                 citation=citation))
+            if summary["transform"]:
+                chunk.append(text["transform"].format(transform=_official_cell(summary["transform"])))
+            if not summary["source_id"]:
+                chunk.append(text["source"].format(url=summary["source_url"]))
+            chunks.append((summary["series"], chunk))
+
+        def _render(kept: List[List[str]], missing: List[str]) -> str:
+            lines = head + [line for chunk in kept for line in chunk]
+            if missing:
+                shown = missing[:12]
+                more = text["more"].format(n=len(missing) - len(shown)) if len(missing) > len(shown) else ""
+                lines.append(text["omitted"].format(n=len(missing), ids=", ".join(shown), more=more))
+            return "\n".join(lines)
+
+        kept: List[List[str]] = []
+        dropped: List[str] = []
+        for index, (series, chunk) in enumerate(chunks):
+            remaining = [sid for sid, _ in chunks[index + 1:]]
+            if len(_render(kept + [chunk], dropped + remaining + carrier_omitted)) <= budget:
+                kept.append(chunk)
+            else:
+                dropped.append(series)  # Keep complete rows; never truncate a number or citation.
+        return _render(kept, dropped + carrier_omitted)
+
+    def _persist_official_data(self, report_id: str) -> None:
+        """Write reports/<id>/official_data.json (carrier, digest, [S#] map, binding)."""
+        from .forecast_extractor import official_series_rows
+        try:
+            tags = {row["series"]: self._official_source_tag(row)
+                    for row in official_series_rows(self.official_data)}
+            binding = None
+            try:
+                from .official_data import simulation_research_binding
+                proof = simulation_research_binding(self.simulation_id)
+                if proof.get("status") == "valid":
+                    binding = {"pipeline_id": proof.get("pipeline_id"), "files": proof.get("files")}
+            except Exception:  # noqa: BLE001 — the binding fingerprint is optional context
+                binding = None
+            ReportManager.save_official_data(report_id, self.official_data,
+                                             source_tags={sid: tag for sid, tag in tags.items() if tag},
+                                             research_binding=binding)
+        except Exception as exc:  # noqa: BLE001 — a data problem never fails a report
+            logger.warning(f"official_data.json 落盘失败（忽略）: {exc}")
+
+    @staticmethod
+    def _spine_facts_budget() -> int:
+        """The spine prompt's facts slice (REPORT_SPINE_INPUT_CAP_FACTS, default the pack
+        budget as in derive_forecast_spine), capped at the pack size."""
+        from .forecast_extractor import OFFICIAL_PACK_PROMPT_CAP as cap
+        try:
+            return max(600, min(cap, int(getattr(Config, "REPORT_SPINE_INPUT_CAP_FACTS", cap) or cap)))
+        except (TypeError, ValueError):
+            return cap
+
+    def _official_pack_kwargs(self) -> Dict[str, str]:
+        """RPT-14: the stored-data pack for critique, pre-mortem and fallback extraction,
+        followed by the empirical outside view from the stored history (the base rate
+        their base-rate-neglect checks need; computed to the calendar horizon when the
+        simulation has one).
+
+        Passed only when a pack exists, so those calls (and their prompts) are
+        unchanged without official data.
+        """
+        pack = getattr(self, "_data_pack", "")
+        if not pack:
+            return {}
+        outside = self._official_outside_view()
+        return {"data_pack": pack + ("\n\n" + outside if outside else "")}
+
+    def _official_outside_view(self) -> str:
+        """The empirical outside view from the stored history, computed once per carrier
+        to the simulation's calendar horizon (default steps without one); "" without data."""
+        carrier = getattr(self, "official_data", None)
+        cached = getattr(self, "_official_outside_view_cache", None)
+        if cached is not None and cached[0] is carrier:
+            return cached[1]
+        from .forecast_extractor import official_outside_view_block
+        try:
+            block = official_outside_view_block(carrier, self._temporal_horizon_date() or None,
+                                                getattr(self, "output_language", None) or "English")
+        except Exception as exc:  # noqa: BLE001 — a data problem never fails a report
+            logger.info("Official outside view skipped (%s)", type(exc).__name__)
+            block = ""
+        self._official_outside_view_cache = (carrier, block)
+        return block
 
     def _official_data_corroborated_claim(self, claim: str) -> bool:
         return self._official_data_claim_status(claim) is True
@@ -2482,7 +3484,14 @@ class ReportAgent:
         return ""
 
     def _report_citation_support(self, claim: str, source: Dict[str, Any]) -> Optional[bool]:
-        """Exact stored-data sentences retain support after citation renumbering."""
+        """Exact stored-data sentences retain support after citation renumbering.
+
+        RPT-1: a source that identifies a stored dataset is then checked against
+        the stored series itself (official_claim_support), so true values at any
+        stored period, stored changes and ranges keep their marker while a value
+        contradicting a named stored period loses it. Only an undecidable claim
+        falls back to the source's excerpt.
+        """
         from .forecast_extractor import official_data_statements, official_source_tag
         bare = self._official_claim_text(claim)
         recognized = False
@@ -2494,7 +3503,62 @@ class ReportAgent:
                 return True
         if recognized:
             return False
+        decision = self._official_carrier_support(claim, source)
+        if decision is not None:
+            return decision
         return self._semantic_citation_support(claim, source)
+
+    @staticmethod
+    def _official_claim_geographies(text: str) -> frozenset:
+        """Geographies a claim names (catalog aliases, EN and ZH); empty when none."""
+        from .official_data import data_api
+        catalog = getattr(data_api(), "catalog", None)
+        named = getattr(catalog, "query_geographies", None)
+        return frozenset(named(text)) if callable(named) else frozenset()
+
+    def _official_carrier_support(self, claim: str, source: Dict[str, Any]) -> Optional[bool]:
+        """Support of a claim by the stored series a source identifies (RPT-1).
+
+        True when a stored series behind the source supports every number; False
+        when it contradicts a named stored period or the claim is about another
+        geography; None when no stored series stands behind the source or the
+        stored values cannot decide.
+        """
+        from .forecast_extractor import official_source_tag
+        entries = [entry for entry in self._official_prepared_rows()
+                   if official_source_tag(entry["row"], {"matching": source})]
+        if not entries:
+            return None
+        bare = self._official_claim_text(claim)
+        geographies = self._official_claim_geographies(bare)
+        decisions = {False if geographies and entry["geography"] and entry["geography"] not in geographies
+                     else official_claim_support(bare, entry) for entry in entries}
+        if True in decisions:
+            return True
+        return False if decisions == {False} else None
+
+    def _official_numeric_claim_tag(self, claim: str) -> str:
+        """The single stored series that an uncited numeric claim names and matches.
+
+        Used only to add a citation (never to remove a claim): the claim must name
+        the series (title words, id or zh title), must not name another
+        geography, and exactly one tagged series may support it.
+        """
+        prepared = self._official_prepared_rows()
+        if not prepared:
+            return ""
+        bare = self._official_claim_text(claim)
+        geographies = self._official_claim_geographies(bare)
+        tags = set()
+        for entry in prepared:
+            if geographies and entry["geography"] and entry["geography"] not in geographies:
+                continue
+            if not official_claim_mentions(bare, entry) or official_claim_support(bare, entry) is not True:
+                continue
+            tag = self._official_source_tag(entry["row"])
+            if tag:
+                tags.add(tag)
+        return next(iter(tags)) if len(tags) == 1 else ""
 
     def _prepend_research_background(self, prompt: str, section_title: str = "") -> str:
         """T4.1: 把背景档案 + 来源索引钉到提示词最前；二者皆空时原样返回（回退冷图路径）。
@@ -2525,9 +3589,45 @@ class ReportAgent:
         ) if p]
         # W9-8: 章节定向证据块——标题命中关键词时追加争议表 / 时间线（块为空时自动跳过）。
         prefix_parts.extend(self._section_evidence_blocks(section_title))
+        prefix_parts.extend(self._section_official_blocks(section_title))
         if not prefix_parts:
             return prompt
         return "\n\n".join(prefix_parts) + "\n\n" + prompt
+
+    _OFFICIAL_SECTION_KEYWORDS = (
+        "calibrat", "base rate", "base-rate", "indicator", "official", "statistic", "quantitative",
+        "baseline", "probabilit", "校准", "基率", "指标", "统计", "量化", "基线", "概率")
+
+    # How a section writer may use the computed base rates (the citation audit checks every
+    # [S#] against stored values, which a computed quantile is not).
+    _OFFICIAL_SECTION_BASE_RATE_NOTE = {
+        "en": ("Calibrate the probabilities this section discusses against these base rates. They are this "
+               "report's own calculation from the stored history, not research findings: quote one only in a "
+               "sentence of its own that says so ('by this report's calculation from the stored history, ...'), "
+               "without a [S#] marker; markers stay on stored values."),
+        "zh": ("本章讨论的概率须与上述基率对照校准。这些分位数是本报告根据已存储历史的计算，不是研究结论：如需引用，须单独成句"
+               "并写明「据本报告根据已存储历史计算」，不加 [S#] 来源标记；来源标记只用于存储值本身。"),
+    }
+
+    def _section_official_blocks(self, section_title: str) -> List[str]:
+        """The empirical outside view for sections that weigh probabilities or indicators.
+
+        Calibration, indicator and baseline sections (titles matching
+        _OFFICIAL_SECTION_KEYWORDS) get the outside view computed from the stored
+        history, the same block the spine and the binary extraction see, plus how to
+        quote it (this report's calculation, no [S#]); [] without official data or a
+        matching title, so other prompts are unchanged. Kept out of
+        _section_evidence_blocks: it does not lower a section's tool-call floor.
+        """
+        title = (section_title or "").lower()
+        if not (title and getattr(self, "_data_pack", "")
+                and any(key in title for key in self._OFFICIAL_SECTION_KEYWORDS)):
+            return []
+        block = self._official_outside_view()
+        if not block:
+            return []
+        note = self._OFFICIAL_SECTION_BASE_RATE_NOTE[official_report_lang(getattr(self, "output_language", None))]
+        return [block + "\n" + note]
 
     def _section_evidence_blocks(self, section_title: str) -> List[str]:
         """W9-8 / LOOP-015: 章节定向证据块——标题命中关键词时返回争议性论断表 / 紧凑时间线。
@@ -3118,6 +4218,13 @@ class ReportAgent:
             _hz = self._temporal_horizon_date()
             if _hz:
                 horizon = _hz
+            # RPT-5: a spine-sized pack keeps every listed row whole inside the
+            # spine's facts budget (the full pack would be cut mid-row).
+            official_kwargs = {}
+            spine_facts = getattr(self, "_data_pack", "")
+            if spine_facts:
+                spine_facts = self._build_data_pack(budget=self._spine_facts_budget())
+                official_kwargs["official_data"] = self.official_data
             spine = _fe.derive_forecast_spine(
                 self.llm,
                 central_question=self.simulation_requirement or "",
@@ -3126,8 +4233,9 @@ class ReportAgent:
                 forecast_inputs=forecast_inputs,
                 signal_pack=signal_pack,
                 market_block=market_pack,
-                quantitative_facts=getattr(self, "_data_pack", ""),
+                quantitative_facts=spine_facts,
                 language=getattr(self, "output_language", None) or "",
+                **official_kwargs,
             )
             if not spine or not spine.get("scenarios"):
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
@@ -3143,10 +4251,10 @@ class ReportAgent:
                 try:
                     _forecast_language = getattr(self, "output_language", None) or ""
                     _critiqued = _fe.self_critique_forecast(
-                        spine, self.llm, language=_forecast_language
+                        spine, self.llm, language=_forecast_language, **self._official_pack_kwargs()
                     )
                     _critiqued = _fe.premortem_forecast(
-                        _critiqued, self.llm, language=_forecast_language
+                        _critiqued, self.llm, language=_forecast_language, **self._official_pack_kwargs()
                     )
                     if _critiqued.get("scenarios"):
                         spine = _critiqued
@@ -3198,6 +4306,7 @@ class ReportAgent:
                 report_markdown, self.llm,
                 situation_brief=getattr(self, "situation_brief", None),
                 language=getattr(self, "output_language", None) or "",
+                **self._official_pack_kwargs(),
             )
         # RPT-3: 骨架已在叙事前完成批判（critiqued=True，数据驱动判断）时不再二次批判——
         # 成稿后再动概率会让正文与 forecast.json 按构造矛盾。非骨架路径（成稿后抽取，
@@ -3207,6 +4316,7 @@ class ReportAgent:
             forecast = self_critique_forecast(
                 forecast, self.llm,
                 language=getattr(self, "output_language", None) or "",
+                **self._official_pack_kwargs(),
             )
         # XRUN-16(1): 骨架情景数与最终情景数漂移检测（正文按骨架 N 情景撰写、交付却是
         # M 情景 ⇒ 必然矛盾）；随 forecast.json quality 落盘供健康门消费。
@@ -3406,6 +4516,7 @@ class ReportAgent:
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
         if getattr(Config, "REPORT_FORECAST_LEDGER", True):
+            _cs: Dict[str, Any] = {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
             try:
                 from .forecast_ledger import calibration_summary as _cal
                 _cs = _cal()
@@ -3416,6 +4527,18 @@ class ReportAgent:
                     forecast["confidence_rationale"] = (
                         (str(forecast.get("confidence_rationale") or "").strip()
                          + " ｜" + _note).strip(" ｜"))
+            except Exception:  # noqa: BLE001
+                pass
+            # G5: data-anchored binaries settled against the official observation keep their
+            # own binary Brier record beside (never inside) the scenario calibration or the
+            # confidence note; absent until one has resolved, so forecast.json is unchanged.
+            try:
+                from .forecast_ledger import official_data_track_record as _odtr
+                _otr = _odtr()
+                if _otr:
+                    forecast["historical_calibration"] = {
+                        **(forecast.get("historical_calibration") or _cs),
+                        "official_data_track_record": _otr}
             except Exception:  # noqa: BLE001
                 pass
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
@@ -3768,7 +4891,7 @@ class ReportAgent:
                 if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
             )
             body = "\n".join(line for line in body.splitlines()
-                             if self._official_source_caption_support(line, "") is not True)
+                             if not self._official_canonical_line(line))
             return _audit_grounding(
                 body,
                 index_map=self._citation_index_or_fallback(),
@@ -3902,7 +5025,7 @@ class ReportAgent:
                 or not stripped
                 or stripped.startswith("#")
                 or not _number_re.search(stripped)
-                or self._official_source_caption_support(line, "") is True
+                or self._official_canonical_line(line)
             ):
                 if not stripped or (stripped and not table_cells):
                     active_table_headers = []
@@ -4466,7 +5589,15 @@ class ReportAgent:
             # An exact stored value is preserved, but missing source-ledger
             # identity still remains an honest citation/publication gap.
             return "", "unverifiable"
+        official_tag = self._official_numeric_claim_tag(claim)
+        if official_tag:
+            return official_tag, "supported"
         tag = self._best_semantic_source_tag_for_line(claim)
+        # A stored dataset's excerpt is not provenance when the stored series itself
+        # contradicts the claim or the claim is about another geography (RPT-1).
+        source = self._citation_index_or_fallback().get(tag) if tag else None
+        if tag and isinstance(source, dict) and self._official_carrier_support(claim, source) is False:
+            tag = ""
         if tag:
             return tag, "supported"
         if self._market_corroborated_claim(claim):
@@ -4564,7 +5695,7 @@ class ReportAgent:
                     claim_clause,
                     list(_headers),
                 )
-                supported = self._official_source_caption_support(_line, tag)
+                supported = self._official_metadata_support(_line, tag)
                 if supported is None:
                     supported = self._report_citation_support(semantic_claim, source)
                 if supported is True:
@@ -4626,7 +5757,6 @@ class ReportAgent:
                     continue
                 checked += 1
                 tag = match.group(1).upper()
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
                 claim_clause = self._citation_claim_clause(
                     line, match.start(), match.end()
                 )
@@ -4636,7 +5766,13 @@ class ReportAgent:
                     claim_clause,
                     table_headers,
                 )
-                supported = self._official_source_caption_support(line, tag)
+                supported = self._official_metadata_support(line, tag)
+                # RPT-16: canonical official attribution (exhibit caption, indicator or
+                # watch row) is generated per series/anchor, not prose reliance on one
+                # source; like References it stays out of the concentration count
+                # (_repair_overused_citations applies the same exemption).
+                if supported is not True:
+                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
                 if supported is None:
                     supported = self._report_citation_support(semantic_claim, source)
                 if supported is None:
@@ -4714,6 +5850,10 @@ class ReportAgent:
             if (in_refs
                     or is_markdown_table_header(lines, line_index)
                     or is_markdown_table_delimiter(line)):
+                continue
+            # RPT-16: canonical official attribution lines are neither counted nor
+            # stripped (same exemption as _audit_semantic_citations).
+            if not marker_re.search(line) or self._official_canonical_line(line):
                 continue
             # 记号剥掉后再判数字行：记号本身的 S<n> 编号不能把纯文字行误判成数字行。
             bare = marker_re.sub(" ", line)
@@ -5058,10 +6198,13 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             indicators = []
         # WAVE9：判定章节跟随报告输出语言（此前硬编码中文标题，英文报告里出现整段中文章节）。
+        # RPT-16: official watch rows carry this report's [S#] (validated byte for byte
+        # by _official_watch_line_support); without official data the block is unchanged.
         block = render_resolution_block(
             self._forecast_spine, indicators,
             language=getattr(self, "output_language", None) or "Chinese",
-            official_data=getattr(self, "official_data", None))
+            official_data=getattr(self, "official_data", None),
+            source_index=self._citation_index_or_fallback())
         if not block:
             return
         new_md = (report.markdown_content or "").rstrip() + "\n\n" + block + "\n"
@@ -5307,6 +6450,10 @@ class ReportAgent:
                 in_fence = not in_fence
                 continue
             if in_fence or not s:
+                continue
+            if self._official_canonical_line(line):
+                # MISSED-1: validated official metadata keeps publisher names and
+                # units verbatim; translating it would break the caption audit.
                 continue
             scan_line = self._LANG_INLINE_PROTECTED_RE.sub(" ", line)
             if target_is_cjk:
@@ -5653,7 +6800,7 @@ class ReportAgent:
                         in_fence = not in_fence
                         out_lines.append(line)
                         continue
-                    if in_fence:
+                    if in_fence or self._official_canonical_line(line):
                         out_lines.append(line)
                         continue
                     protected: List[str] = []
@@ -6690,6 +7837,12 @@ class ReportAgent:
             spine=(self._forecast_spine if isinstance(
                 getattr(self, "_forecast_spine", None), dict) else None),
         )
+        if getattr(self, "official_data", None):
+            # Canonical official metadata (either language's form) keeps
+            # publisher names and units verbatim, as in the primary audit.
+            lint_audit["language_contamination"] = _rl.detect_language_contamination(
+                "\n".join("" if self._official_canonical_line(line) else line
+                          for line in variant_body.split("\n")), target_name)
 
         marker_audit = validate_citation_markers(variant_body, primary_by_tag)
         expected_tags = list(marker_audit.get("order") or [])
@@ -8738,7 +9891,7 @@ class ReportAgent:
         # unit label as an uncited empirical claim. Marker/semantic audits below
         # still inspect the full body and the same exact attribution validator.
         claim_body = "\n".join(line for line in body.splitlines()
-                               if self._official_source_caption_support(line, "") is not True)
+                               if not self._official_canonical_line(line))
         citation_audit = _acg(
             claim_body,
             index_map=index_map,
@@ -8797,6 +9950,13 @@ class ReportAgent:
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
         )
+        if getattr(self, "official_data", None):
+            # MISSED-1: canonical official metadata (exhibit attribution and
+            # Key official indicators rows) is validated against the carrier
+            # above and keeps publisher names/units verbatim in any language.
+            lint_audit["language_contamination"] = _rl.detect_language_contamination(
+                "\n".join("" if self._official_canonical_line(line) else line
+                          for line in md.split("\n")), lang)
 
         audit: Dict[str, Any] = {
             "schema_version": 2,
@@ -9113,10 +10273,12 @@ class ReportAgent:
             part3_note = "_The detailed, section-by-section analysis supporting Parts 1–2 follows._"
         lines = md.split("\n")
         # 定位第一个非 Part-1 的 "## " 标题 = 详细章节起点；Part 2 + Part 3 标题插在其前。
+        # RPT-10: the Key official indicators section stays with Part 1 (front matter).
         insert_at = None
         for i, ln in enumerate(lines):
             s = ln.strip()
-            if s.startswith("## ") and not any(m in s for m in self._PART1_MARKERS):
+            if (s.startswith("## ") and not any(m in s for m in self._PART1_MARKERS)
+                    and s not in OFFICIAL_INDICATORS_HEADINGS):
                 insert_at = i
                 break
         block = [part2_head, "", synthesis, "", part3_head, "", part3_note, ""]
@@ -9132,6 +10294,37 @@ class ReportAgent:
         except Exception as _we:  # noqa: BLE001
             logger.warning(f"重写 full_report.md（三部结构骨架）失败（忽略）: {_we}")
         logger.info(f"已套用三部结构骨架（Part 2 综合 {len(synthesis)} 字）: {report_id}")
+
+    def _insert_official_indicators_section(self, report_id: str, report: "Report") -> None:
+        """RPT-10: insert the deterministic Key official indicators section.
+
+        Values come only from the stored carrier (format_value, scaled companions,
+        [S#] from this report's citation index); the rows are canonical metadata
+        that grounding, purity and the final audit validate byte for byte. The
+        section follows Part 1 (or precedes the first detailed section).
+        Idempotent; without stored data nothing changes.
+        """
+        md = report.markdown_content or ""
+        if not md.strip() or any(line.strip() in OFFICIAL_INDICATORS_HEADINGS for line in md.split("\n")):
+            return
+        section = render_official_indicators_section(
+            self._official_indicator_summaries(), official_report_lang(getattr(self, "output_language", None)))
+        if not section:
+            return
+        lines = md.split("\n")
+        insert_at = next((i for i, line in enumerate(lines) if line.strip().startswith("## ")
+                          and not any(m in line for m in self._PART1_MARKERS)), None)
+        if insert_at is None:
+            new_md = md.rstrip() + "\n\n" + section + "\n"
+        else:
+            new_md = "\n".join(lines[:insert_at] + section.split("\n") + [""] + lines[insert_at:])
+        report.markdown_content = new_md
+        try:
+            folder = ReportManager._get_report_folder(report_id)
+            write_text_atomic(os.path.join(folder, "full_report.md"), new_md)
+        except Exception as _we:  # noqa: BLE001
+            logger.warning(f"重写 full_report.md（关键官方指标章节）失败（忽略）: {_we}")
+        logger.info(f"已插入关键官方指标章节: {report_id}")
 
     # ──────────────────────────────────────────────────────────────
     # VIZ-1 钩子：确定性可视化注入（build_all → 图表落盘 → 注入成稿）
@@ -9166,6 +10359,7 @@ class ReportAgent:
             return
         if not manifest:
             return
+        self._harmonize_official_manifest(folder, manifest)
         try:
             new_md = self._place_visualizations(md, folder, manifest)
         except Exception as _pe:  # noqa: BLE001 — 注入失败保留原文
@@ -9179,6 +10373,43 @@ class ReportAgent:
         except Exception as _we:  # noqa: BLE001
             logger.warning(f"回写注入图表后 full_report.md 失败（忽略）: {_we}")
         logger.info(f"已注入 {len(manifest)} 项报告可视化: {report_id}")
+
+    def _harmonize_official_manifest(self, folder: str, manifest: List[Dict[str, Any]]) -> None:
+        """MISSED-4: official exhibits carry this report's own attribution.
+
+        The visualizer resolves [S#] from the raw research source list; the
+        report resolves it through its citation index (which also holds the
+        RPT-16 dataset sources). The manifest items (gallery, frontend, PDF) are
+        rewritten in place and on disk to the exact caption line placed under
+        each exhibit, so manifest and markdown can never disagree.
+        """
+        updates: Dict[str, Dict[str, Any]] = {}
+        for item in manifest:
+            if not isinstance(item, dict) or item.get("source") != "official_data":
+                continue
+            rows = self._official_rows_for_provenance(item.get("provenance"))
+            caption = self._official_caption_line(rows) if rows else ""
+            if not caption:
+                continue
+            item["source_caption"] = caption
+            for entry, row in zip(item["provenance"], rows, strict=True):
+                entry["source_id"] = self._official_source_tag(row)
+            updates[str(item.get("path") or "")] = item
+        if not updates:
+            return
+        path = os.path.join(folder, "viz_manifest.json")
+        try:
+            with open(path, "r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+            items = payload.get("items") if isinstance(payload, dict) else None
+            if not isinstance(items, list):
+                return
+            payload["items"] = [updates.get(str(row.get("path") or ""), row) if isinstance(row, dict) else row
+                                for row in items]
+            write_json_atomic(path, payload)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("Official exhibit attribution was not persisted to the viz manifest (%s)",
+                           type(exc).__name__)
 
     def _collect_viz_artifacts(self, report_id: str, folder: str) -> Dict[str, Any]:
         """汇集 build_all 消费的结构化工件（全部可选，缺失即跳过对应图）。来源皆为报告代理已有
@@ -9303,7 +10534,15 @@ class ReportAgent:
                               manifest: List[Dict[str, str]]) -> str:
         """把 manifest 的图注入成稿：所有可视化类型都按 placement_hint 匹配到相关章节后
         就地插入；只有未匹配项才汇入文末「Visual Annex」。逐图带唯一标记 → 幂等
-        （已注入的图跳过）。无可注入项 → 原样返回 md。"""
+        （已注入的图跳过）。无可注入项 → 原样返回 md。
+
+        RPT-2: a Chinese report gets the Chinese chart title (CHART_TITLES_ZH) as
+        both alt text and caption, so publication never depends on an LLM purity
+        pass. RPT-10: official exhibits go after the Key official indicators table
+        (dashboard first, then the threshold detail charts) when that section
+        exists; otherwise they follow the keyword placement.
+        """
+        from .report_visualizer import CHART_TITLES_ZH
         zh = not str(getattr(self, "output_language", "") or "English").lower().startswith("en")
         lines = md.split("\n")
         # 预扫描 "## " 详细章节标题（行号 + 小写标题），供 Mermaid 就地放置的模糊匹配。
@@ -9312,8 +10551,10 @@ class ReportAgent:
             s = ln.strip()
             if s.startswith("## "):
                 headings.append((i, s[3:].strip().lower()))
-        inserts: Dict[int, List[str]] = {}   # 标题行号 → [图 markdown 块, ...]
+        official_at = next((i for i, ln in enumerate(lines) if ln.strip() in OFFICIAL_INDICATORS_HEADINGS), None)
+        inserts: Dict[int, List[str]] = {}   # 插入行号 → [图 markdown 块, ...]
         annex: List[str] = []
+        official_blocks: List[str] = []
         for item in manifest:
             if not isinstance(item, dict):
                 continue
@@ -9325,6 +10566,8 @@ class ReportAgent:
                 continue  # 幂等：该图已注入
             vtype = str(item.get("type") or "").strip().lower()
             caption = str(item.get("caption") or "").strip()
+            if zh:
+                caption = CHART_TITLES_ZH.get(caption, caption)
             hint = str(item.get("placement_hint") or item.get("hint") or "").strip().lower()
             png_path = str(item.get("png_path") or "").strip()
             block = self._render_viz_block(folder, path, vtype, caption, marker, zh,
@@ -9334,30 +10577,37 @@ class ReportAgent:
             if item.get("source") == "official_data":
                 # Captions remain separate from digit-free image titles. Resolve
                 # tags through this report's citation index, not a stale manifest.
-                source_lines = []
-                for row in item.get("provenance") or []:
-                    part = self._official_source_caption_part(row)
-                    if part:
-                        source_lines.append(part)
-                if source_lines:
-                    # Figure attribution is repeatable metadata, not duplicate
-                    # narrative prose. Caption formatting also keeps it beside
-                    # every exhibit through the existing editorial lint pass.
-                    block += "\n\n*" + ("来源：" if zh else "Source: ") + " · ".join(source_lines) + "*"
+                # Figure attribution is repeatable metadata, not duplicate
+                # narrative prose. Caption formatting also keeps it beside
+                # every exhibit through the existing editorial lint pass.
+                rows = self._official_rows_for_provenance(item.get("provenance"))
+                source_line = self._official_caption_line(rows) if rows else ""
+                if source_line:
+                    block += "\n\n*" + source_line + "*"
+                if official_at is not None:
+                    official_blocks.append(block)
+                    continue
             target = self._match_section(headings, hint)
             if target is not None:
-                inserts.setdefault(target, []).append(block)
+                # 插入点=标题行之后、跳过其后紧邻的空行。
+                at = target + 1
+                while at < len(lines) and not lines[at].strip():
+                    at += 1
+                inserts.setdefault(at, []).append(block)
             else:
                 annex.append(block)
+        if official_blocks:
+            # End of the Key official indicators section (before the next H2).
+            end = next((i for i, _ in headings if i > official_at), len(lines))
+            while end > official_at + 1 and not lines[end - 1].strip():
+                end -= 1
+            inserts.setdefault(end, []).extend(official_blocks)
         if not inserts and not annex:
             return md
-        # 就地插入（从后往前，避免行号漂移）。插入点=标题行之后、跳过其后紧邻的空行。
-        for line_no in sorted(inserts.keys(), reverse=True):
-            at = line_no + 1
-            while at < len(lines) and not lines[at].strip():
-                at += 1
+        # 就地插入（从后往前，避免行号漂移）。
+        for at in sorted(inserts.keys(), reverse=True):
             payload: List[str] = []
-            for blk in inserts[line_no]:
+            for blk in inserts[at]:
                 payload.extend(["", blk, ""])
             lines[at:at] = payload
         new_md = "\n".join(lines)
@@ -10225,6 +11475,8 @@ class ReportAgent:
             user_prompt += "\n\n" + forecast_spine_block
         if require_forecast_structure:
             user_prompt += FORECAST_STRUCTURE_MANDATE
+        if getattr(self, "_data_pack", ""):
+            user_prompt += OFFICIAL_DATA_PLAN_RULE
 
         try:
             response = self.llm.chat_json(
@@ -11452,6 +12704,9 @@ class ReportAgent:
         try:
             # 初始化：创建报告文件夹并保存初始状态
             ReportManager._ensure_report_folder(report_id)
+            # RPT-12 (fix contract §1.7): keep the exact stored carrier with the report.
+            if getattr(self, "official_data", None):
+                self._persist_official_data(report_id)
             
             # 初始化日志记录器（结构化日志 agent_log.jsonl）
             self.report_logger = ReportLogger(report_id)
@@ -11782,6 +13037,13 @@ class ReportAgent:
                         self._prepend_binary_forecasts_section(report_id, report)
                     except Exception as _bs_err:  # noqa: BLE001
                         logger.warning(f"前置二元预测章节失败（忽略）: {_bs_err}")
+                # RPT-10: deterministic "Key official indicators" section from the
+                # stored carrier, beside Part 1; the official exhibits are placed in it.
+                if getattr(self, "official_data", None):
+                    try:
+                        self._insert_official_indicators_section(report_id, report)
+                    except Exception as _oi_err:  # noqa: BLE001 — optional enrichment
+                        logger.warning(f"Key official indicators section skipped: {_oi_err}")
                 # VIZ-1：确定性可视化注入——由已落盘工件生成图表（charts/*.mmd + *.png +
                 # viz_manifest.json），Mermaid 按章节关键词就地插入、未匹配图 + PNG 归入
                 # 「Visual Annex」。放在 Part-1 前置之后、三部骨架之前，使图属于详细章节区
@@ -12039,6 +13301,14 @@ class ReportAgent:
             report_content=report_content if report_content else "（暂无报告）",
             tools_description=self._get_tools_description(),
         )
+        # RPT-14: questions about the indicators are answered from the stored
+        # observations (the pack is empty, and the prompt unchanged, without data).
+        if getattr(self, "_data_pack", ""):
+            system_prompt += (
+                "\n\n" + self._data_pack
+                + "\n回答涉及上述官方指标的问题时，只使用这些存储值及其期间与来源标记 [S#]；"
+                  "不要编造未列出的数值。"
+            )
 
         # 构建消息
         messages = [{"role": "system", "content": system_prompt}]
@@ -12179,6 +13449,32 @@ class ReportManager:
     def _get_report_markdown_path(cls, report_id: str) -> str:
         """获取完整报告Markdown文件路径"""
         return os.path.join(cls._get_report_folder(report_id), "full_report.md")
+
+    OFFICIAL_DATA_FILENAME = "official_data.json"
+
+    @classmethod
+    def save_official_data(cls, report_id: str, official_data: Dict[str, Any], *,
+                           source_tags: Dict[str, str],
+                           research_binding: Optional[Dict[str, Any]] = None) -> None:
+        """RPT-12 / fix contract §1.7: persist the exact carrier a report uses.
+
+        ``sha256`` digests the canonical JSON of the carrier; ``source_tags``
+        maps each series to the [S#] this report cites it with.
+        """
+        canonical = json.dumps(official_data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        payload = {
+            "schema_version": 1, "report_id": report_id,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            "source_tags": dict(source_tags), "research_binding": research_binding,
+            "official_data": official_data,
+        }
+        write_json_atomic(os.path.join(cls._ensure_report_folder(report_id), cls.OFFICIAL_DATA_FILENAME), payload)
+
+    @classmethod
+    def load_report_official_data(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        """The report-local carrier record, or None when absent or not self-consistent."""
+        return read_report_official_data(os.path.join(cls._get_report_folder(report_id), cls.OFFICIAL_DATA_FILENAME))
 
     @classmethod
     def load_structured_forecast(cls, report_id: str) -> Optional[Dict[str, Any]]:

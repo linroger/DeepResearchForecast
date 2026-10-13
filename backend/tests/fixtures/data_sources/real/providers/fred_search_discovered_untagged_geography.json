@@ -1,0 +1,234 @@
+{
+ "captured_at": "2026-10-13T12:51:50Z",
+ "clock": 1791895910.660783,
+ "series": "fred:NIKKEI225",
+ "request": {
+  "start": "2026-08-01",
+  "end": "2026-09-30"
+ },
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_get_series",
+   "args": {
+    "series_id": "NIKKEI225",
+    "observation_start": "2026-08-01",
+    "observation_end": "2026-09-30",
+    "units": "lin",
+    "sort_order": "desc",
+    "offset": 0,
+    "limit": 5000
+   },
+   "response": {
+    "series_id": "NIKKEI225",
+    "title": "Nikkei Stock Average, Nikkei 225",
+    "units": "Index",
+    "frequency": "Daily, Close",
+    "seasonal_adjustment": "Not Seasonally Adjusted",
+    "observation_range": "1949-05-16 to 2026-10-09",
+    "total_observations": 43,
+    "data_offset": 0,
+    "data_limit": 5000,
+    "source": "Federal Reserve Economic Data (FRED)",
+    "notes": "The observations for the Nikkei Stock Average, Nikkei 225 represent the daily index value at market close.\n\nNikkei 225 is the major stock market index comprising of 225 highly liquid stocks of the Tokyo Stock Exchange (TSE).\n\nFor in depth information, visit here (http://indexes.nikkei.co.jp/nkave/archives/faq/faq_nikkei_stock_average_en.pdf).\n\nCopyright, 2016, Nikkei Inc. Reprinted with permission.\n\nDownloading the data for research reports or research projects is permitted.\n\nHowever, if you wish to redistribute the data itself or research reports (information with Nikkei data) to the third parties/persons, the user shall report back to the Nikkei, Inc for permission.",
+    "data": [
+     {
+      "date": "2026-09-30",
+      "value": 66753.72
+     },
+     {
+      "date": "2026-09-29",
+      "value": 65481.27
+     },
+     {
+      "date": "2026-09-28",
+      "value": 65877.62
+     },
+     {
+      "date": "2026-09-25",
+      "value": 66364.2
+     },
+     {
+      "date": "2026-09-24",
+      "value": 65513.99
+     },
+     {
+      "date": "2026-09-23",
+      "value": null
+     },
+     {
+      "date": "2026-09-22",
+      "value": null
+     },
+     {
+      "date": "2026-09-21",
+      "value": null
+     },
+     {
+      "date": "2026-09-18",
+      "value": 65018.95
+     },
+     {
+      "date": "2026-09-17",
+      "value": 64136.25
+     },
+     {
+      "date": "2026-09-16",
+      "value": 63923
+     },
+     {
+      "date": "2026-09-15",
+      "value": 63484.1
+     },
+     {
+      "date": "2026-09-14",
+      "value": 63492.99
+     },
+     {
+      "date": "2026-09-11",
+      "value": 64011.34
+     },
+     {
+      "date": "2026-09-10",
+      "value": 65270.95
+     },
+     {
+      "date": "2026-09-09",
+      "value": 65142.78
+     },
+     {
+      "date": "2026-09-08",
+      "value": 65269.33
+     },
+     {
+      "date": "2026-09-07",
+      "value": 66399.84
+     },
+     {
+      "date": "2026-09-04",
+      "value": 65020.94
+     },
+     {
+      "date": "2026-09-03",
+      "value": 64214.48
+     },
+     {
+      "date": "2026-09-02",
+      "value": 64325.64
+     },
+     {
+      "date": "2026-09-01",
+      "value": 66215.34
+     },
+     {
+      "date": "2026-08-31",
+      "value": 66311.93
+     },
+     {
+      "date": "2026-08-28",
+      "value": 66405.56
+     },
+     {
+      "date": "2026-08-27",
+      "value": 66131.98
+     },
+     {
+      "date": "2026-08-26",
+      "value": 66262.16
+     },
+     {
+      "date": "2026-08-25",
+      "value": 65856.43
+     },
+     {
+      "date": "2026-08-24",
+      "value": 65528.09
+     },
+     {
+      "date": "2026-08-21",
+      "value": 66016.36
+     },
+     {
+      "date": "2026-08-20",
+      "value": 66216.79
+     },
+     {
+      "date": "2026-08-19",
+      "value": 65326.42
+     },
+     {
+      "date": "2026-08-18",
+      "value": 67460.73
+     },
+     {
+      "date": "2026-08-17",
+      "value": 69220.25
+     },
+     {
+      "date": "2026-08-14",
+      "value": 68713.8
+     },
+     {
+      "date": "2026-08-13",
+      "value": 68308.59
+     },
+     {
+      "date": "2026-08-12",
+      "value": 67524.06
+     },
+     {
+      "date": "2026-08-11",
+      "value": null
+     },
+     {
+      "date": "2026-08-10",
+      "value": 66970.22
+     },
+     {
+      "date": "2026-08-07",
+      "value": 65606.71
+     },
+     {
+      "date": "2026-08-06",
+      "value": 65683.26
+     },
+     {
+      "date": "2026-08-05",
+      "value": 66300.44
+     },
+     {
+      "date": "2026-08-04",
+      "value": 63957.53
+     },
+     {
+      "date": "2026-08-03",
+      "value": 63754.9
+     }
+    ]
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "NIKKEI225",
+    "search_type": "series_id",
+    "tag_names": "nation;usa",
+    "limit": 25
+   },
+   "response": {
+    "total_results": 0,
+    "showing": "1-0",
+    "results": []
+   }
+  }
+ ],
+ "captured_result": {
+  "title": "Nikkei Stock Average, Nikkei 225",
+  "geography": "",
+  "label": "Nikkei Stock Average, Nikkei 225",
+  "geography_basis": null,
+  "n": 2
+ },
+ "note": "Live FRED answers through the data hub and the working-tree adapter: fred_get_series for a series outside the catalog, then fred_search by series id restricted to FRED's 'nation' and 'usa' tags (the geography check)."
+}

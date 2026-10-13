@@ -6,7 +6,7 @@
  * GET /api/report/<id>/forecast, which ForecastReport.vue already fetches —
  * carries a structured `binary_forecasts[]` payload ({id, statement,
  * probability, confidence, adjustment_rationale, p_low/p_high/interval_source,
- * market_anchor{...}, market_influence{...}}). This module folds each raw entry
+ * market_anchor{...}, market_influence{...}, data_anchor{...}}). This module folds each raw entry
  * into a display-ready, language-neutral row model so BinaryForecastTable.vue
  * stays a thin template; bilingual labels/tooltips are assembled in the
  * component via L().
@@ -14,6 +14,16 @@
  * Contract: never throws on malformed payloads — invalid entries are skipped
  * and absent fields collapse to null/'' so the template degrades per cell.
  */
+
+import {
+  formatOfficialChange,
+  formatOfficialDisplay,
+  formatOfficialValue,
+  isPercentUnits,
+  officialAnchorPeriodLabel,
+  roundHalfEven,
+  safeSourceUrl,
+} from './officialData.js'
 
 /** Strict numeric coercion: numbers and non-empty numeric strings only. */
 function num(v) {
@@ -128,12 +138,116 @@ function influenceModel(raw) {
   }
 }
 
+const COMPARATORS = Object.freeze({ '>': '>', '>=': '≥', '<': '<', '<=': '≤' })
+// forecast_extractor._BASE_RATE_DIVERGENCE: binary_quality flags (never adjusts) a
+// model probability more than 25 pp from its anchor's empirical base rate.
+const BASE_RATE_DIVERGENCE = 0.25
+// forecast_extractor._empirical_season: how the h-step sample of a monthly series without
+// seasonal adjustment treats its seasons ('same_calendar_month', 'seasonal_profile' = the
+// same-month seasonal mean plus pooled deviations, or 'all_start_months'). Every display of
+// the rate discloses it, and binary_quality never flags a rate that pools the seasons
+// ('all_start_months').
+const SEASONAL_BASES = new Set(['same_calendar_month', 'seasonal_profile', 'all_start_months'])
+
+function round9(n) {
+  return Math.abs(n) < 1e21 ? Number(n.toFixed(9)) : n
+}
+
+function holds(value, comparator, threshold) {
+  const v = round9(value)
+  const t = round9(threshold)
+  return { '>': v > t, '>=': v >= t, '<': v < t, '<=': v <= t }[comparator]
+}
+
+/**
+ * data_anchor.empirical_base_rate (fix contract §1.8) → outside-view model:
+ * p = share of historical h-step outcomes that satisfy the anchor.
+ */
+function baseRateModel(raw, probability, units, frequency, provenance) {
+  if (!isPlainObject(raw)) return null
+  const p = num(raw.p)
+  if (p == null || p < 0 || p > 1) return null
+  const n = num(raw.n)
+  const h = num(raw.h)
+  const window = isPlainObject(raw.window) ? raw.window : {}
+  const quantiles = isPlainObject(raw.quantiles) ? raw.quantiles : {}
+  const sigma = num(raw.sigma_distance)
+  const seasonalBasis = SEASONAL_BASES.has(str(raw.seasonal_basis)) ? str(raw.seasonal_basis) : ''
+  const model = num(probability)
+  // Same gap as binary_quality (round(probability - p, 4)): 0.3 - 0.55 is
+  // -0.25000000000000006 in floating point and must not read as over 25 pp.
+  const gap = model == null ? null : roundHalfEven(model - p, 4)
+  return {
+    pText: formatProbability(p),
+    n: Number.isInteger(n) ? n : null,
+    h: Number.isInteger(h) ? h : null,
+    windowText: str(window.start) && str(window.end)
+      ? `${officialAnchorPeriodLabel(window.start, frequency, provenance)} – ${officialAnchorPeriodLabel(window.end, frequency, provenance)}`
+      : '',
+    sigmaText: sigma == null ? '' : String(sigma),
+    rangeText: num(quantiles.p10) != null && num(quantiles.p90) != null
+      ? `${formatOfficialValue(quantiles.p10, units)} – ${formatOfficialValue(quantiles.p90, units)}`
+      : '',
+    medianText: num(quantiles.p50) == null ? '' : formatOfficialValue(quantiles.p50, units),
+    seasonalBasis,
+    divergence: gap == null ? null : formatDivergence(gap),
+    divergent: gap != null && seasonalBasis !== 'all_start_months' && Math.abs(gap) > BASE_RATE_DIVERGENCE,
+  }
+}
+
+/**
+ * data_anchor (admitted by forecast_extractor._admit_data_anchor) → display model:
+ * threshold + period, the latest historical observation against the threshold,
+ * and the empirical base rate when the history supports one. `officialSeries`
+ * (officialSeriesIndex of the report's stored data) supplies the reader label and
+ * the report's [S#]. Dropped (null) without a series, comparator or threshold.
+ */
+function dataAnchorModel(raw, officialSeries, lang) {
+  const anchor = raw.data_anchor
+  if (!isPlainObject(anchor)) return null
+  const series = str(anchor.series)
+  const threshold = num(anchor.threshold)
+  const comparator = str(anchor.comparator)
+  if (!series || threshold == null || !COMPARATORS[comparator]) return null
+  const units = str(anchor.units)
+  const frequency = str(anchor.frequency)
+  const info = isPlainObject(officialSeries) && isPlainObject(officialSeries[series]) ? officialSeries[series] : {}
+  // Fiscal-year rows read 'FY2027' for 2026-10-01, as the report does (stored carrier provenance).
+  const provenance = isPlainObject(info.provenance) ? info.provenance : null
+  const latest = num(anchor.latest_value)
+  const latestDate = str(anchor.latest_date)
+  // Percentage-point gaps read '个百分点' in zh, as in the report's indicator table.
+  const gap = latest == null ? '' : formatOfficialChange(round9(threshold) - round9(latest), units)
+  const gapText = String(lang || '').toLowerCase().startsWith('zh') && gap.endsWith(' pp')
+    ? gap.slice(0, -3) + ' 个百分点'
+    : gap
+  return {
+    series,
+    label: str(info.label) || series,
+    sourceId: str(info.sourceId),
+    sourceUrl: safeSourceUrl(anchor.source_url) || str(info.sourceUrl),
+    comparator,
+    comparatorText: COMPARATORS[comparator],
+    thresholdText: formatOfficialDisplay(threshold, units, lang),
+    units,
+    percentUnits: isPercentUnits(units),
+    periodText: officialAnchorPeriodLabel(anchor.period, frequency, provenance) || str(anchor.observation),
+    latestText: latest == null ? '' : formatOfficialDisplay(latest, units, lang),
+    latestPeriod: latest == null ? '' : officialAnchorPeriodLabel(latestDate, frequency, provenance),
+    gapText,
+    met: latest == null ? null : holds(latest, comparator, threshold),
+    baseRate: baseRateModel(anchor.empirical_base_rate, raw.probability, units, frequency, provenance),
+  }
+}
+
 /**
  * One raw binary forecast → row model, or null when the entry has no usable
  * statement (a probability without a proposition is unreadable in a table).
  * `key` is always unique per list position even when ids collide.
+ * Options: `officialSeries` (officialSeriesIndex: series id → {label, sourceId, sourceUrl, provenance}) and `lang`
+ * ('en' | 'zh', for scaled magnitudes) shape the data-anchor model.
  */
-export function binaryForecastRow(raw, index = 0) {
+export function binaryForecastRow(raw, index = 0, { officialSeries = null, lang = 'en' } = {}) {
   if (!isPlainObject(raw)) return null
   const statement = str(raw.statement)
   if (!statement) return null
@@ -149,17 +263,18 @@ export function binaryForecastRow(raw, index = 0) {
     confidenceRaw: String(raw.confidence == null ? '' : raw.confidence).trim(),
     anchor: anchorModel(raw),
     influence: influenceModel(raw),
+    dataAnchor: dataAnchorModel(raw, officialSeries, lang),
   }
 }
 
 /** Forecast payload → row models. Missing/invalid `binary_forecasts` → []. */
-export function binaryForecastRows(forecast) {
+export function binaryForecastRows(forecast, options = {}) {
   const list = isPlainObject(forecast) && Array.isArray(forecast.binary_forecasts)
     ? forecast.binary_forecasts
     : []
   const rows = []
   list.forEach((raw, i) => {
-    const row = binaryForecastRow(raw, i)
+    const row = binaryForecastRow(raw, i, options)
     if (row) rows.push(row)
   })
   return rows

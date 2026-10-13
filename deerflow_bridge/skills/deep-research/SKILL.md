@@ -1,16 +1,15 @@
 ---
 name: deep-research
-description: Use for web research, comparisons, explanations that depend on external evidence, and every forecast investigation. Provides the always-on core for KIQ decomposition, source grading, evidence-yield stopping, disconfirmation, forecast inputs, provenance, and phase-aware handoffs. Detailed tradecraft and the final-dossier contract live in lazy references.
+description: Use for web research, comparisons, explanations that depend on external evidence, and every forecast investigation. Provides the always-on core for KIQ decomposition, source grading, evidence-yield stopping, disconfirmation, forecast inputs, provenance, and phase-aware handoffs. Tradecraft and the final-dossier contract are lazy references.
 ---
 
 # Deep Research — Core Contract
 
-Produce decision-grade research: real fetched evidence, graded provenance, explicit uncertainty, and forecast-useful structure. This core is intentionally compact because `/deep-research` may be activated in every independent pass.
+Produce decision-grade research: real fetched evidence, graded provenance, explicit uncertainty, and forecast-useful structure.
 
 ## Activation discipline
 
-When this body is injected, do **not** reread `SKILL.md`; it is already in the
-conversation. Load only a named lazy reference when the phase needs it.
+When this body is injected, do **not** reread `SKILL.md`. Load only a named lazy reference when the phase needs it.
 
 ## Phase type comes first
 
@@ -20,12 +19,12 @@ Identify the current phase from its prompt. The phase contract overrides any fin
 - **Final dossier synthesis only** — the prompt explicitly says to write/synthesize/finalize the complete research dossier. Only this phase uses the long-form output contract in `references/final-dossier-contract.md`.
 - **Structured extraction/judging** — follow the requested JSON/scorecard schema, not the prose length contract.
 
-This distinction is mandatory. A global dossier floor applied to every pass multiplies latency and tokens.
+This distinction is mandatory: a dossier floor on every pass multiplies latency and tokens.
 
 ## Core loop
 
 1. Decompose the brief into 3–7 Key Intelligence Questions (KIQs). Mark load-bearing KIQs, likely S1/S2 source classes, priors, and what would falsify them.
-2. Search for documents, not commentary. Use `web_search`, then `web_fetch` the strongest pages in full. For forecast calibration use `prediction_market_search`; if unavailable, use read-only `web_fetch` against the public Gamma API. Run the full market sweep **once, in the opening pass**; if it surfaces zero topically relevant markets, record `no_market_coverage` and skip market search in later phases (one refresh at synthesis only). A transport-failing market tool must not be retried within the same phase.
+2. Search for documents, not commentary. Use `web_search`, then `web_fetch` the strongest pages in full. For official statistics use `data_search` → `data_get` if available. For forecast calibration use `prediction_market_search`; if unavailable, use read-only `web_fetch` against the public Gamma API. Run the full market sweep **once, in the opening pass**; if it surfaces zero topically relevant markets, record `no_market_coverage` and skip market search in later phases (one refresh at synthesis only). A transport-failing market tool must not be retried within the same phase.
 3. Maintain an evidence ledger: `KIQ → claim → source/title/real URL/date/tier → independence → grade → open gap`.
 4. Prefer primary origins, verify numbers/units/as-of dates, trace repeated claims back to their origin, and seek the strongest opposing case.
 5. Check convergence after every evidence-bearing call. Continue only for a named unresolved KIQ with a credible next upgrade.
@@ -40,9 +39,9 @@ This distinction is mandatory. A global dossier floor applied to every pass mult
 
 Only cite sources actually fetched and read. Preserve their true URL and on-page date. Never invent a title, URL, market, quote, or future-dated document. Two outlets repeating one underlying report are one origin, not triangulation.
 
-For each quantitative fact record the metric, value/range, unit, as-of date, definition, geography/population, and source URL. Sanity-check magnitude, currency, nominal/real basis, denominators, totals, and compounding.
+For each quantitative fact record the metric, value/range, unit, as-of date, definition, geography/population, and source URL. Sanity-check magnitude, currency, nominal/real basis, denominators, totals, and compounding. Quote stored official series exactly with period and `[S<n>]`; projections are not history.
 
-For detailed query operators, document targeting, source maps, grading, number checks, adversarial analysis, and obstacle routing, load:
+For query operators, document targeting, source maps, grading, number checks, adversarial analysis, and obstacle routing, load:
 
 `references/source-tradecraft.md`
 
@@ -61,7 +60,7 @@ Tool counts and source counts are safety telemetry, never quotas or quality prox
 
 Research forecasting inputs, not only present-state description:
 
-- outside-view reference classes and base rates;
+- outside-view reference classes and base rates (long official history via `data_get` where a series exists);
 - named actors, stated versus revealed behavior, incentives, capabilities, constraints, and what each gains/loses;
 - directed typed relationships among key actors, each with an evidence basis;
 - causal drivers, countervailing forces, catalysts, and second-order effects;
@@ -92,4 +91,4 @@ When—and only when—the prompt requests the complete final research dossier, 
 
 `references/final-dossier-contract.md`
 
-That reference contains the long-form completeness floor, structured handoff fields, citations, scenarios, market section, tables, conflicts, and failure checklist; working phases must not load or inherit its length floor.
+It holds the long-form floor, handoff fields, citations, scenarios, market section, tables, conflicts, and failure checklist; working phases must not load or inherit its length floor.

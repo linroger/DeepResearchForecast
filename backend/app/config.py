@@ -1493,6 +1493,10 @@ class Config:
     DATA_SOURCES_PREFETCH_MAX = max(0, int(os.environ.get('DATA_SOURCES_PREFETCH_MAX', '12') or '12'))
     # 研究卷宗内官方数据图（Figure + 官方数据基线节）上限（0 = 不出图，仅保留指标表）。
     DATA_SOURCES_CHARTS_MAX = max(0, int(os.environ.get('DATA_SOURCES_CHARTS_MAX', '8') or '8'))
+    # 下游（报告/预测锚/模拟世界简报/知识图谱）读取的官方数据序列上限（1~200，默认 24）：按
+    # 「研究报告引用 > 关键问题关联 > 其余」排序截取，被截掉的序列 id 记入载体 omitted 并写日志。
+    # v3 研究按预设的单次运行数据集上限（quick 10 / standard 16 / deep 24）同样以显式设置的此变量覆盖。
+    DATA_SOURCES_MAX_SERIES = min(200, max(1, int(os.environ.get('DATA_SOURCES_MAX_SERIES', '24') or '24')))
     # 预测报告的官方数据图族（official_indicators 指标看板 + official_series_* 历史/阈值/情景叠加图）。
     # 关闭 = 报告不出这类图（数据快照表照常）；无官方数据时该族自然为空。
     REPORT_DATA_CHARTS = os.environ.get('REPORT_DATA_CHARTS', 'true').strip().lower() == 'true'

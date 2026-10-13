@@ -13,10 +13,12 @@ so it is unit-testable offline with a fake client.
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import logging
 import math
 import re
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -95,7 +97,7 @@ def _coerce_float(v: Any) -> Optional[float]:
         return None
 
 
-def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
+def _normalize_scenarios(scenarios: Any, *, keep_metric_range: bool = False) -> List[Dict[str, Any]]:
     """Validate + normalize scenarios so probabilities are floats summing to ~1.0."""
     if not isinstance(scenarios, list):
         return []
@@ -117,6 +119,8 @@ def _normalize_scenarios(scenarios: Any) -> List[Dict[str, Any]]:
             row["base_rate_anchor"] = str(s.get("base_rate_anchor"))
         if s.get("adjustment_rationale"):
             row["adjustment_rationale"] = str(s.get("adjustment_rationale"))
+        if keep_metric_range and isinstance(s.get("metric_range"), dict):
+            row["metric_range"] = dict(s["metric_range"])
         cleaned.append(row)
     total = sum(s["probability"] for s in cleaned)
     if total > 0:
@@ -226,7 +230,7 @@ _ALLOCATION_CONTEXT_RE = re.compile(
 def _range_value_pattern(prefix: str) -> str:
     return (
         rf"(?P<{prefix}_currency>[$€£¥])?\s*"
-        rf"(?P<{prefix}_number>\d+(?:,\d{{3}})*(?:\.\d+)?)\s*"
+        rf"(?P<{prefix}_number>[-+−]?\d+(?:,\d{{3}})*(?:\.\d+)?)\s*"
         rf"(?P<{prefix}_unit>%|[KMBT]\b|thousand\b|million\b|billion\b|"
         rf"trillion\b|seats?\b|points?\b|units?\b|tons?\b|tonnes?\b|"
         rf"barrels?\b|votes?\b)"
@@ -444,7 +448,7 @@ def _supported_range_trailing(value: str) -> bool:
 
 def _range_value(match: "re.Match[str]", prefix: str) -> Optional[tuple[float, str]]:
     try:
-        number = float(match.group(f"{prefix}_number").replace(",", ""))
+        number = float(match.group(f"{prefix}_number").replace(",", "").replace("−", "-"))
     except (AttributeError, TypeError, ValueError):
         return None
     currency = str(match.group(f"{prefix}_currency") or "").lower()
@@ -998,7 +1002,8 @@ def slice_head_tail(text: str, budget: int, head_ratio: float = 0.6) -> str:
 
 def extract_structured_forecast(report_markdown: str, llm,
                                 situation_brief: Optional[str] = None,
-                                language: str = "") -> Dict[str, Any]:
+                                language: str = "",
+                                data_pack: str = "") -> Dict[str, Any]:
     """Run one LLM pass to produce a validated structured forecast object.
 
     ``llm`` must expose ``chat_json(messages, temperature, max_tokens)``. Returns a
@@ -1018,6 +1023,7 @@ def extract_structured_forecast(report_markdown: str, llm,
     if situation_brief:
         user += f"\n\n[态势简报]\n{situation_brief[:2000]}"
     user += f"\n\n[预测报告]\n{content}"
+    user += _official_context_suffix(data_pack)
     user += forecast_language_rule(language)
     raw = llm.chat_json(
         messages=[{"role": "user", "content": user}],
@@ -1029,14 +1035,32 @@ def extract_structured_forecast(report_markdown: str, llm,
     return _assemble_forecast(raw)
 
 
-def _assemble_forecast(raw: Dict[str, Any]) -> Dict[str, Any]:
+# Prompt room for the report's stored-data pack (report_agent builds it within this budget).
+OFFICIAL_PACK_PROMPT_CAP = 5000
+# The judging stages (critique, pre-mortem, fallback extraction) get the pack followed by
+# the outside view (official_outside_view_block, at most 3600 characters by default).
+OFFICIAL_JUDGING_PROMPT_CAP = OFFICIAL_PACK_PROMPT_CAP + 4000
+
+
+def _official_context_suffix(data_pack: Any) -> str:
+    """Fixed suffix with the stored official-data pack ("" when absent: prompt unchanged)."""
+    text = str(data_pack or "").strip()
+    if not text:
+        return ""
+    return ("\n\n[官方统计数据（已存储的观测值，数值以此为准；外部视角/基率须与之核对）]\n"
+            + _cap_at_line(text, OFFICIAL_JUDGING_PROMPT_CAP))
+
+
+def _assemble_forecast(raw: Dict[str, Any], *, keep_metric_range: bool = False) -> Dict[str, Any]:
     """Normalize a raw model JSON into the canonical structured-forecast dict.
 
     Shared by ``extract_structured_forecast`` (post-hoc, from prose) and
     ``derive_forecast_spine`` (NEXTSTEPS P0-1, from signals) so both emit an
     identical shape regardless of where the probabilities came from.
+    ``keep_metric_range`` keeps a raw per-scenario ``metric_range`` for the
+    caller to validate against the official-data carrier.
     """
-    scenarios = _normalize_scenarios(raw.get("scenarios"))
+    scenarios = _normalize_scenarios(raw.get("scenarios"), keep_metric_range=keep_metric_range)
     confidence = str(raw.get("confidence") or "medium").lower()
     if confidence not in ("low", "medium", "high"):
         confidence = "medium"
@@ -1454,11 +1478,27 @@ def _is_circular_market_forecast(
     return False
 
 
-def official_series_rows(official_data: Any) -> List[Dict[str, Any]]:
+OFFICIAL_SERIES_MAX = 24
+_OFFICIAL_KIND_LABELS = {
+    "observed": "historical observation",
+    "preliminary": "publisher preliminary",
+    "estimate": "publisher estimate",
+    "projection": "publisher projection",
+    "unknown": "unclassified publisher value",
+    "partial": "partial-period value",
+}
+# Rows stored before normalization policy 3 flagged every aggregated calendar month
+# incomplete; their completeness is re-derived from the recorded coverage bounds.
+_OFFICIAL_COMPLETENESS_POLICY = 3
+_OFFICIAL_KINDS_MEMO = threading.local()
+
+
+def official_series_rows(official_data: Any, max_rows: int = OFFICIAL_SERIES_MAX) -> List[Dict[str, Any]]:
     """Bound and check the persisted carrier, without fetching or filling gaps.
 
     This is a rendering boundary, not an alternative provider normalizer. Bad
     rows are omitted; valid normalized observations retain their exact values.
+    The bound matches the carrier cap, so an anchor on any carried row validates.
     """
     from datetime import date
     from urllib.parse import urlsplit
@@ -1475,7 +1515,7 @@ def official_series_rows(official_data: Any) -> List[Dict[str, Any]]:
         return []
     result = []
     seen = set()
-    for row in rows[:12]:
+    for row in rows[:max(0, int(max_rows))]:
         if not isinstance(row, dict) or not isinstance(row.get("series"), str):
             continue
         identity = row["series"]
@@ -1518,36 +1558,154 @@ def official_series_rows(official_data: Any) -> List[Dict[str, Any]]:
     return result
 
 
-def official_observation_kind(row: Dict[str, Any], point: Dict[str, Any]) -> str:
-    """Do not present publisher forecasts, estimates or unknown status as actuals."""
+def _official_legacy_periods(row: Dict[str, Any], dates: List[str]) -> Optional[Dict[str, Any]]:
+    """Completeness for calendar months stored under policy < 3, which marked all incomplete.
+
+    A month is complete when its recorded coverage spans the whole month and either
+    a later month was stored or the retrieval came more than a week after month end
+    (the same rule the current data layer applies at fetch time).
+    """
+    provenance = row.get("provenance")
+    periods = provenance.get("periods") if isinstance(provenance, dict) else None
+    version = provenance.get("normalization_policy_version") if isinstance(provenance, dict) else None
+    if (not isinstance(periods, dict) or isinstance(version, bool)
+            or isinstance(version, int) and version >= _OFFICIAL_COMPLETENESS_POLICY):
+        return None
+    from datetime import date, timedelta
+    retrieved = str(row.get("retrieved_at") or "")[:10]
+    try:
+        retrieved_day = date.fromisoformat(retrieved)
+    except ValueError:
+        retrieved_day = None
+    fixed = dict(periods)
+    for period, record in periods.items():
+        if (not isinstance(record, dict) or record.get("calendar") != "calendar_month"
+                or record.get("complete") is not False):
+            continue
+        try:
+            end = date.fromisoformat(str(record.get("end")))
+        except ValueError:
+            continue
+        covered = (record.get("covered_start"), record.get("covered_end")) == (record.get("start"), record.get("end"))
+        later = any(d > str(record.get("end")) for d in dates)
+        settled = later or (retrieved_day is not None and retrieved_day > end + timedelta(days=7))
+        if covered and settled:
+            fixed[period] = {**record, "complete": True}
+    return fixed
+
+
+def _official_flag_kind(row: Dict[str, Any], point: Dict[str, Any]) -> str:
+    """Conservative label for a row the data layer cannot revalidate: never history."""
     flag = str(point.get("flag") or "").strip().lower()
-    boundary = str(row.get("projection_from") or "")
-    provider = str(row.get("provider") or row["series"].split(":", 1)[0]).lower()
-    if provider == "wb" or row["series"].startswith("usgov:spending/"):
-        return "unclassified publisher value"
-    if flag == "unknown":
-        return "unclassified publisher value"
-    if flag in {"preliminary", "prelim", "provisional"} or flag == "p" and provider == "bls":
-        return "publisher preliminary"
-    if flag == "p":
-        return "unclassified publisher value"
+    provider = str(row.get("provider") or str(row.get("series") or "").split(":", 1)[0]).lower()
     if flag in {"projection", "projected", "forecast"}:
         return "publisher projection"
     if flag in {"e", "estimate", "estimated"}:
         return "publisher estimate"
-    if flag and flag not in {"a", "actual", "historical", "observed", "reported", "r", "revised"}:
-        return "unclassified publisher value"
-    if not flag and row["series"].startswith(("imf:WEO/", "imf:WEO_")):
-        return "unclassified publisher value"
-    if boundary and str(point["date"]) >= boundary:
-        return "unclassified publisher value" if flag else "publisher projection"
-    if not flag and point.get("is_projection") is True:
-        return "publisher projection"
-    # WEO/GEP often mixes actuals and outlooks without status metadata. Absence
-    # of that metadata cannot establish a historical observation (source study).
-    if not flag and not boundary and re.search(r"WEO|GEP", row["series"], re.I):
-        return "unclassified publisher value"
-    return "historical observation"
+    if flag in {"preliminary", "prelim", "provisional"} or flag == "p" and provider == "bls":
+        return "publisher preliminary"
+    return "unclassified publisher value"
+
+
+def _official_kinds(row: Dict[str, Any], points: List[Any]) -> List[str]:
+    from .official_data import data_api
+    api = data_api()
+    clean = [{"date": p.get("date"), "value": p.get("value"), "flag": p.get("flag") or ""}
+             for p in points if isinstance(p, dict)]
+    series = None
+    if api is not None and len(clean) == len(points):
+        try:
+            candidate = {**row, "observations": clean}
+            periods = _official_legacy_periods(row, [str(p["date"]) for p in clean])
+            if periods is not None:
+                candidate["provenance"] = {**row["provenance"], "periods": periods}
+            series = api.Series.from_dict(candidate)
+        except (TypeError, ValueError, KeyError, AttributeError, OverflowError):
+            series = None
+    if series is None:
+        return [_official_flag_kind(row, p if isinstance(p, dict) else {}) for p in points]
+    by_date = {o.date: _OFFICIAL_KIND_LABELS.get(api.observation_kind(o, series), "unclassified publisher value")
+               for o in series.observations}
+    return [by_date.get(str(p["date"]), "unclassified publisher value") for p in clean]
+
+
+def official_observation_kinds(row: Dict[str, Any]) -> List[str]:
+    """Status label for each of ``row['observations']`` (same order), via the data layer.
+
+    Labels: historical observation, publisher preliminary/estimate/projection,
+    unclassified publisher value, partial-period value (an aggregated period that is
+    not fully covered). Rows the data layer rejects are never labelled history.
+    """
+    points = row.get("observations") if isinstance(row, dict) else None
+    if not isinstance(points, list):
+        return []
+    provenance = row.get("provenance")
+    fingerprint = (row.get("series"), row.get("provider"), row.get("projection_from"), row.get("retrieved_at"),
+                   row.get("frequency"), id(provenance),
+                   tuple((p.get("date"), p.get("value"), p.get("flag")) if isinstance(p, dict) else None
+                         for p in points))
+    memo = getattr(_OFFICIAL_KINDS_MEMO, "entry", None)
+    if memo is not None and memo[0] is row and memo[1] == fingerprint:
+        return list(memo[2])
+    kinds = _official_kinds(row, points)
+    _OFFICIAL_KINDS_MEMO.entry = (row, fingerprint, tuple(kinds))
+    return kinds
+
+
+def official_observation_kind(row: Dict[str, Any], point: Dict[str, Any]) -> str:
+    """Do not present publisher forecasts, estimates, unknown status or partial periods as actuals."""
+    points = row.get("observations") if isinstance(row.get("observations"), list) else []
+    for candidate, kind in zip(points, official_observation_kinds(row)):
+        if candidate is point or (isinstance(candidate, dict) and candidate.get("date") == point.get("date")
+                                  and candidate.get("value") == point.get("value")
+                                  and (candidate.get("flag") or "") == (point.get("flag") or "")):
+            return kind
+    return official_observation_kinds({**row, "observations": [point]})[0]
+
+
+def official_latest_observed(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Newest complete historical observation ``{date, value}`` (display-safe), else None.
+
+    The report pack, charts, anchors and the resolution table share this helper so
+    they never disagree; resolution itself still requires ``resolve_data_anchor``.
+    """
+    points = row.get("observations") if isinstance(row, dict) else None
+    if not isinstance(points, list):
+        return None
+    pairs = [(p, k) for p, k in zip(points, official_observation_kinds(row))
+             if k == "historical observation" and isinstance(p, dict) and p.get("value") is not None]
+    if not pairs:
+        return None
+    point = max(pairs, key=lambda item: str(item[0].get("date")))[0]
+    return {"date": point["date"], "value": point["value"]}
+
+
+# IMF WEO rows stored before the vintage status policy carry no resolution flag, yet every
+# fresh fetch of them is inferred-status data.
+_OFFICIAL_INFERRED_STATUS_PREFIXES = ("imf:WEO/", "imf:WEO_")
+
+
+def official_auto_resolvable(row: Dict[str, Any]) -> bool:
+    """Whether ``resolve_data_anchor`` can ever settle an anchor on this series from a fetch.
+
+    The data layer answers 'manual' for every period of a series it marks resolution-unsafe:
+    daily data averaged or sampled to months, World Bank Data360 and USAspending fiscal
+    totals (status or missingness stripped) and IMF WEO vintages (status inferred). Anchors
+    on them still feed charts and watch tables; the resolution monitor need not refetch them.
+    """
+    from .official_data import data_api
+    api = data_api()
+    if not isinstance(row, dict) or api is None or str(row.get("series") or "").startswith(
+            _OFFICIAL_INFERRED_STATUS_PREFIXES):
+        return False
+    points = row.get("observations") if isinstance(row.get("observations"), list) else []
+    try:
+        series = api.Series.from_dict({**row, "observations": [
+            {"date": p.get("date"), "value": p.get("value"), "flag": p.get("flag") or ""}
+            for p in points if isinstance(p, dict)]})
+    except (TypeError, ValueError, KeyError, AttributeError, OverflowError):
+        return False
+    return series.provenance.get("resolution_safe") is not False
 
 
 def official_data_statements(official_data: Any) -> List[Tuple[Dict[str, Any], str]]:
@@ -1556,9 +1714,13 @@ def official_data_statements(official_data: Any) -> List[Tuple[Dict[str, Any], s
     if not rows:
         return []
     from .official_data import format_value
-    return [(row, f"{row['series']}: {format_value(point['value'], row['units'])} "
-             f"on {point['date']} ({official_observation_kind(row, point)}, units: {row['units']}).")
-            for row in rows for point in row["observations"] if point["value"] is not None]
+    out = []
+    for row in rows:
+        for point, kind in zip(row["observations"], official_observation_kinds(row)):
+            if point["value"] is not None:
+                out.append((row, f"{row['series']}: {format_value(point['value'], row['units'])} "
+                                 f"on {point['date']} ({kind}, units: {row['units']})."))
+    return out
 
 
 def official_source_tag(row: Dict[str, Any], index: Dict[str, Any]) -> str:
@@ -1599,88 +1761,1341 @@ def official_source_tag(row: Dict[str, Any], index: Dict[str, Any]) -> str:
     return str(matches[0]) if len(matches) == 1 else ""
 
 
+EMPIRICAL_MIN_SAMPLES = 30
+_EMPIRICAL_DEFAULT_STEPS = {"M": 12, "Q": 4, "A": 1}
+_EMPIRICAL_QUANTILES = (("p10", 0.10), ("p25", 0.25), ("p50", 0.50), ("p75", 0.75), ("p90", 0.90))
+
+
+def _official_period_index(period: Any, frequency: str) -> Optional[int]:
+    """Ordinal of a monthly/quarterly/annual period ('YYYY-MM[-DD]', 'YYYY-Qn' or 'YYYY')."""
+    text = str(period or "")
+    quarter = re.fullmatch(r"(\d{4})-?Q([1-4])", text, re.I)
+    match = re.fullmatch(r"(\d{4})(?:-(\d{2})(?:-\d{2})?)?", text)
+    if quarter:
+        year, month = int(quarter.group(1)), (int(quarter.group(2)) - 1) * 3 + 1
+    elif match:
+        year, month = int(match.group(1)), int(match.group(2) or 1)
+    else:
+        return None
+    if not 1 <= month <= 12:
+        return None
+    return {"M": year * 12 + month - 1, "Q": year * 4 + (month - 1) // 3, "A": year}.get(frequency)
+
+
+def _official_history(row: Dict[str, Any]) -> List[Tuple[int, str, float]]:
+    """(period ordinal, date, value) of complete historical observations, ascending.
+
+    Projections, estimates, preliminary and unclassified values and partial periods
+    never enter an outside view.
+    """
+    history = {}
+    for point, kind in zip(row.get("observations") or [], official_observation_kinds(row)):
+        if kind != "historical observation" or point.get("value") is None:
+            continue
+        index = _official_period_index(point.get("date"), str(row.get("frequency") or ""))
+        if index is not None:
+            history[index] = (index, str(point["date"]), float(point["value"]))
+    return [history[i] for i in sorted(history)]
+
+
+def _empirical_quantile(ordered: List[float], q: float) -> float:
+    position = (len(ordered) - 1) * q
+    low = math.floor(position)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
+
+
+def _empirical_changes(history: List[Tuple[int, str, float]], steps: int,
+                       month: Optional[int] = None) -> List[float]:
+    """h-step changes of ``history``; with ``month`` (0-11) only from starts in that calendar month."""
+    values = {index: value for index, _date, value in history}
+    return [values[index + steps] - value for index, _date, value in history
+            if index + steps in values and (month is None or index % 12 == month)]
+
+
+# How an h-step sample of a monthly series published without seasonal adjustment treats its
+# seasonal swing (see _empirical_season): (EN, ZH) wording for tables and briefs, and a short
+# form for the length-capped outside view and chart labels.
+EMPIRICAL_SEASONAL_BASIS_TEXT = {
+    "same_calendar_month": ("same-month starts only, not seasonally adjusted", "仅同月起点，未经季节调整"),
+    "seasonal_profile": ("same-month seasonal mean plus pooled deviations, not seasonally adjusted",
+                         "同月季节均值加合并偏差，未经季节调整"),
+    "all_start_months": ("start months pooled, not seasonally adjusted", "合并所有起始月份，未经季节调整"),
+}
+EMPIRICAL_SEASONAL_BASIS_SHORT = {
+    "same_calendar_month": ("same-month starts", "仅同月起点"),
+    "seasonal_profile": ("seasonal profile", "同月季节均值"),
+    "all_start_months": ("seasons pooled", "合并各起始月份"),
+}
+
+
+# Share of the month-over-month variance that the calendar month explains (adjusted for the 11
+# month means any history fits by chance) from which an NSA monthly series counts as seasonal.
+# The share is taken on the ranks of the changes, so one shock (the 2020 pandemic months in
+# every ten-year carrier) cannot hide a seasonal swing: on raw changes the live NSA FRED
+# unemployment rate (UNRATENSA), payrolls (PAYNSA) and CPI (CPIAUCNS) of 2016-11 to 2026 read
+# -0.00, 0.19 and 0.22, on ranks 0.47, 0.66 and 0.33. On the stored 2026-10-13 carriers the EIA
+# sales, price and generation series and the euro-area HICP index read 0.44-0.93; FRED's policy
+# rates (FEDFUNDS, ECBDFR) and the semiconductor PPI, which FRED also labels 'Not Seasonally
+# Adjusted', read 0.07 or less. A non-seasonal history long enough for a seasonal profile
+# (61+ months) reaches 0.25 in under 1% of simulated random walks.
+EMPIRICAL_SEASONAL_SHARE = 0.25
+# 'seasonal_profile' sample (_empirical_profile): a start month needs this many h-step changes
+# for its seasonal mean, and the latest observation's calendar month this many.
+EMPIRICAL_PROFILE_MONTH_MIN = 3
+EMPIRICAL_PROFILE_LATEST_MIN = 5
+
+
+def _empirical_seasonal_share(history: List[Tuple[int, str, float]]) -> Optional[float]:
+    """Adjusted share (epsilon squared, on ranks: the Kruskal-Wallis effect size) of the variance
+    of month-over-month changes of a monthly ``history`` explained by their calendar month; None
+    while some calendar month has fewer than three changes (too short a history to tell)."""
+    changes = [(start % 12, value - before) for (start, _d, before), (end, _e, value) in zip(history, history[1:])
+               if end == start + 1]
+    order = sorted(range(len(changes)), key=lambda i: changes[i][1])
+    ranks = [0.0] * len(changes)
+    first = 0
+    while first < len(order):  # ties share their average rank
+        last = first
+        while last + 1 < len(order) and changes[order[last + 1]][1] == changes[order[first]][1]:
+            last += 1
+        for position in range(first, last + 1):
+            ranks[order[position]] = (first + last) / 2 + 1
+        first = last + 1
+    groups: Dict[int, List[float]] = {}
+    for (month, _change), rank in zip(changes, ranks):
+        groups.setdefault(month, []).append(rank)
+    if len(groups) < 12 or min(len(group) for group in groups.values()) < 3:
+        return None
+    mean = sum(ranks) / len(ranks)
+    total = sum((rank - mean) ** 2 for rank in ranks)
+    if total <= 0:
+        return 0.0
+    between = sum(len(group) * (sum(group) / len(group) - mean) ** 2 for group in groups.values())
+    return (between - 11 * (total - between) / (len(changes) - 12)) / total
+
+
+def _empirical_profile(history: List[Tuple[int, str, float]], steps: int, *,
+                       relative: bool = False) -> List[float]:
+    """'seasonal_profile' sample of the h-step changes of a monthly ``history`` (fix contract,
+    RPT-R2-7): every change c_t grouped by its start calendar month; each month with at least
+    EMPIRICAL_PROFILE_MONTH_MIN changes gets its mean s(m), and the sample is s(m*) + r_t with
+    r_t = c_t - s(month(t)) over the starts in those months, where m* (the latest
+    observation's calendar month) needs at least EMPIRICAL_PROFILE_LATEST_MIN changes ([]
+    otherwise). ``relative`` uses changes as a fraction of the starting value (zero starts
+    skipped, as in _empirical_relative_changes)."""
+    values = {index: value for index, _date, value in history}
+    pairs = [(index % 12, (values[index + steps] - value) / (abs(value) if relative else 1))
+             for index, _date, value in history if index + steps in values and (value or not relative)]
+    groups: Dict[int, List[float]] = {}
+    for month, change in pairs:
+        groups.setdefault(month, []).append(change)
+    latest = history[-1][0] % 12 if history else None
+    if len(groups.get(latest, ())) < EMPIRICAL_PROFILE_LATEST_MIN:
+        return []
+    means = {month: sum(group) / len(group) for month, group in groups.items()
+             if len(group) >= EMPIRICAL_PROFILE_MONTH_MIN}
+    return [means[latest] + change - means[month] for month, change in pairs if month in means]
+
+
+def _empirical_season(row: Dict[str, Any], history: List[Tuple[int, str, float]],
+                      steps: int) -> Tuple[Optional[int], str]:
+    """(start calendar month or None, seasonal basis) of an h-step sample of ``row``.
+
+    A monthly series that is not seasonally adjusted (NSA, and not a year-over-year
+    transform) carries its seasonal swing into every change between two different
+    calendar months (h not a multiple of 12), so pooling every start month mixes the
+    seasons: on the stored EIA commercial electricity sales, July-to-December changes
+    have a median of -21,842 million kWh over the July starts and +63 over all starts.
+    Such a sample keeps only starts in the latest observation's calendar month when they
+    give at least EMPIRICAL_MIN_SAMPLES changes ('same_calendar_month'; with at most 240
+    stored observations that needs a longer monthly history than a carrier holds). Else a
+    history measured as seasonal takes the seasonal profile ('seasonal_profile',
+    _empirical_profile: the latest calendar month's mean change plus every pooled
+    deviation from its own month's mean) when that gives EMPIRICAL_MIN_SAMPLES values;
+    otherwise every start month stays pooled and the basis says so ('all_start_months')
+    wherever the sample is shown. 'NSA' alone does not make a series seasonal (FRED labels
+    policy rates and yields so): a history whose calendar months explain less than
+    EMPIRICAL_SEASONAL_SHARE of its month-over-month variance has no swing to mix, and a
+    history too short to measure that share is never given a seasonal profile. Every
+    other series or horizon: (None, ''), the plain pooled sample.
+    """
+    if (row.get("frequency") != "M" or row.get("seasonal_adjustment") != "NSA" or row.get("transform") == "yoy"
+            or steps % 12 == 0 or not history):
+        return None, ""
+    share = _empirical_seasonal_share(history)
+    if share is not None and share < EMPIRICAL_SEASONAL_SHARE:
+        return None, ""
+    month = history[-1][0] % 12
+    if len(_empirical_changes(history, steps, month)) >= EMPIRICAL_MIN_SAMPLES:
+        return month, "same_calendar_month"
+    if share is not None and len(_empirical_profile(history, steps)) >= EMPIRICAL_MIN_SAMPLES:
+        return None, "seasonal_profile"
+    return None, "all_start_months"
+
+
+def _empirical_sample(row: Dict[str, Any], history: List[Tuple[int, str, float]], steps: int, *,
+                      relative: bool = False) -> Tuple[List[float], str]:
+    """(h-step sample, seasonal basis) of ``row`` under _empirical_season: the changes
+    (``relative``: as a fraction of the starting value) from every start, from the
+    same-calendar-month starts, or the seasonal-profile sample."""
+    month, basis = _empirical_season(row, history, steps)
+    if basis == "seasonal_profile":
+        return _empirical_profile(history, steps, relative=relative), basis
+    return (_empirical_relative_changes if relative else _empirical_changes)(history, steps, month), basis
+
+
+def empirical_seasonal_note(base: Any, zh: bool, *, short: bool = False) -> str:
+    """Disclosure of an empirical sample's seasonal basis ('' for the plain pooled sample)."""
+    basis = base.get("seasonal_basis") if isinstance(base, dict) else None
+    texts = EMPIRICAL_SEASONAL_BASIS_SHORT if short else EMPIRICAL_SEASONAL_BASIS_TEXT
+    text = texts.get(basis) if isinstance(basis, str) else None
+    return text[1 if zh else 0] if text else ""
+
+
+def _empirical_outlook(row: Dict[str, Any], period: Any, holds) -> Optional[Dict[str, Any]]:
+    """Empirical h-step distribution from the latest historical observation to ``period``."""
+    frequency = str(row.get("frequency") or "")
+    history = _official_history(row)
+    target = _official_period_index(period, frequency)
+    if not history or target is None:
+        return None
+    latest_index, latest_date, latest = history[-1]
+    steps = target - latest_index
+    if steps <= 0:
+        return None
+    changes, basis = _empirical_sample(row, history, steps)
+    if len(changes) < EMPIRICAL_MIN_SAMPLES:
+        return None
+    levels = sorted(round(latest + change, 9) for change in changes)
+    mean = sum(changes) / len(changes)
+    sd = math.sqrt(sum((c - mean) ** 2 for c in changes) / (len(changes) - 1))
+    outlook = {
+        "p": round(sum(1 for level in levels if holds(level)) / len(levels), 4),
+        "n": len(levels), "h": steps,
+        "window": {"start": history[0][1], "end": latest_date},
+        "method": "empirical_h_step",
+        "latest": {"date": latest_date, "value": latest},
+        "quantiles": {name: round(_empirical_quantile(levels, q), 6) for name, q in _EMPIRICAL_QUANTILES},
+        "historical_share": round(sum(1 for _i, _d, value in history if holds(round(value, 9))) / len(history), 4),
+        "sd": sd,
+    }
+    if basis:
+        outlook["seasonal_basis"] = basis
+    return outlook
+
+
+def official_empirical_base_rate(row: Dict[str, Any], anchor: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Outside view for a validated data anchor (fix contract §1.8), or None.
+
+    h = periods from the latest complete historical observation to the anchor
+    period; p = share of the historical h-step changes that, added to the latest
+    value, satisfy the anchor's comparison (n >= 30 samples). ``sigma_distance`` is
+    (threshold - latest) in standard deviations of those changes. A seasonal monthly
+    series without seasonal adjustment adds ``seasonal_basis`` (_empirical_season), which
+    every display of the rate discloses. The model's probability is never adjusted from it.
+    """
+    try:
+        threshold = round(float(anchor["threshold"]), 9)
+        compare = {">": lambda v: v > threshold, ">=": lambda v: v >= threshold,
+                   "<": lambda v: v < threshold, "<=": lambda v: v <= threshold}[anchor["comparator"]]
+        outlook = _empirical_outlook(row, anchor["period"], compare)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if outlook is None:
+        return None
+    sd = outlook.pop("sd")
+    outlook["sigma_distance"] = round((threshold - outlook["latest"]["value"]) / sd, 2) if sd > 0 else None
+    return outlook
+
+
+def _official_period_date(index: int, frequency: str) -> str:
+    if frequency == "M":
+        year, month = divmod(index, 12)
+        return f"{year:04d}-{month + 1:02d}-01"
+    if frequency == "Q":
+        year, quarter = divmod(index, 4)
+        return f"{year:04d}-{quarter * 3 + 1:02d}-01"
+    return f"{index:04d}-01-01"
+
+
+def official_empirical_fan(row: Dict[str, Any], period: Any, max_steps: int = 120) -> List[Dict[str, Any]]:
+    """Empirical outcome fan from the latest historical observation to ``period``.
+
+    One point per step k = 1..h (h <= ``max_steps``): quantiles p10..p90 of the
+    latest value plus every historical k-step change. Steps with fewer than 30
+    samples are skipped; [] when the history cannot support any step. A step of a
+    seasonal monthly series without seasonal adjustment uses the base rate's seasonal rule
+    (_empirical_season) and records its ``seasonal_basis``.
+    """
+    frequency = str(row.get("frequency") or "")
+    history = _official_history(row)
+    target = _official_period_index(period, frequency)
+    if not history or target is None:
+        return []
+    latest_index, _latest_date, latest = history[-1]
+    fan = []
+    for steps in range(1, min(target - latest_index, max_steps) + 1):
+        changes, basis = _empirical_sample(row, history, steps)
+        if len(changes) < EMPIRICAL_MIN_SAMPLES:
+            continue
+        levels = sorted(latest + change for change in changes)
+        fan.append({"date": _official_period_date(latest_index + steps, frequency), "n": len(levels),
+                    **{name: round(_empirical_quantile(levels, q), 6) for name, q in _EMPIRICAL_QUANTILES},
+                    **({"seasonal_basis": basis} if basis else {})})
+    return fan
+
+
+def validate_metric_range(value: Any, official_data: Any) -> Optional[Dict[str, Any]]:
+    """Normalize a scenario's ``metric_range`` against the stored carrier, or None.
+
+    ``{series, low, high, period, units}``: one listed series, at least one finite
+    bound (``null`` = open), low <= high, and a single period at the series frequency
+    (validated by the shared anchor helper). Listed units are required; '%' is
+    accepted for percent-unit series. Adds the empirical share of h-step outcomes
+    that land in the range when the history supports it.
+    """
+    if not isinstance(value, dict):
+        return None
+
+    def bound(raw: Any) -> Optional[float]:
+        if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+            return None
+        return float(raw)
+
+    low, high = bound(value.get("low")), bound(value.get("high"))
+    for key in ("low", "high"):
+        if value.get(key) is not None and bound(value.get(key)) is None:
+            return None
+    if (low is None and high is None) or (low is not None and high is not None and low > high):
+        return None
+    row = next((r for r in official_series_rows(official_data) if r["series"] == value.get("series")), None)
+    if row is None:
+        return None
+    from .official_data import data_api, validate_data_anchor
+    api = data_api()
+    probe = {"series": row["series"], "comparator": ">=", "threshold": low if low is not None else high,
+             "observation": value.get("period", value.get("observation"))}
+    if "transform" in value:
+        probe["transform"] = value["transform"]
+    units = str(value.get("units") or "")
+    if units and not (units.strip().casefold() == row["units"].strip().casefold()
+                      or api is not None and api.is_percent_units(units) and api.is_percent_units(row["units"])):
+        return None
+    anchor = validate_data_anchor(probe, official_data)
+    if anchor is None:
+        return None
+    result = {"series": anchor["series"], "low": low, "high": high, "period": anchor["period"],
+              "observation": anchor["observation"], "units": anchor["units"],
+              "frequency": anchor["frequency"], "transform": anchor["transform"]}
+
+    def inside(level: float) -> bool:
+        return (low is None or level >= round(low, 9)) and (high is None or level <= round(high, 9))
+
+    outlook = _empirical_outlook(row, anchor["period"], inside)
+    if outlook is not None:
+        outlook.pop("sd")
+        result["empirical_base_rate"] = outlook
+    return result
+
+
+def _official_period_text(period: str, frequency: str) -> str:
+    if frequency == "M":
+        return period[:7]
+    if frequency == "Q":
+        return f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
+    if frequency == "A":
+        return period[:4]
+    return period[:10]
+
+
+def official_fiscal_label(row: Any, period: Any) -> str:
+    """'FY2026' when ``period`` (a stored date, '2025-10-01') of an annual ``row`` is a US
+    federal fiscal year, else ''. The label is the row's stored period record (data layer
+    provenance ``periods``, as report_agent.official_period_label reads it); a fiscal-year
+    period the row does not store yet takes the data layer's own rule, FY<start year + 1>."""
+    if not isinstance(row, dict) or row.get("frequency") != "A":
+        return ""
+    provenance = row.get("provenance")
+    periods = provenance.get("periods") if isinstance(provenance, dict) else None
+    if not isinstance(periods, dict):
+        return ""
+    day = str(period or "")[:10]
+    record = periods.get(day)
+    if isinstance(record, dict) and record.get("calendar") == "us_federal_fiscal_year":
+        label = str(record.get("label") or "").strip()
+        return label if re.fullmatch(r"FY\d{4}", label) else ""
+    if (provenance.get("fiscal_start_month") == 10 and re.fullmatch(r"\d{4}-10-01", day)
+            and any(isinstance(r, dict) and r.get("calendar") == "us_federal_fiscal_year" for r in periods.values())):
+        return f"FY{int(day[:4]) + 1}"
+    return ""
+
+
+def official_anchor_period_text(row: Any, period: Any, frequency: str) -> str:
+    """Reader period of a stored or anchored period: the fiscal-year label of a US federal
+    fiscal-year row ('FY2026' for 2025-10-01), else the calendar period text (2026-12, 2026-Q2, 2026)."""
+    return (official_fiscal_label(row, period) if frequency == "A" else "") or _official_period_text(
+        str(period), frequency)
+
+
+def _official_index_text(index: int, frequency: str) -> str:
+    """The reader period of a period ordinal (inverse of _official_period_index)."""
+    if frequency == "M":
+        return f"{index // 12:04d}-{index % 12 + 1:02d}"
+    if frequency == "Q":
+        return f"{index // 4:04d}-Q{index % 4 + 1}"
+    return f"{index:04d}"
+
+
+def _official_horizon_index(horizon_date: Any, frequency: str) -> Optional[int]:
+    text = str(horizon_date or "").strip()
+    match = re.match(r"(\d{4})(?:-(\d{2}))?", text)
+    if not match:
+        return None
+    return _official_period_index(f"{match.group(1)}-{match.group(2) or '12'}", frequency)
+
+
+def _empirical_relative_changes(history: List[Tuple[int, str, float]], steps: int,
+                                month: Optional[int] = None) -> List[float]:
+    """h-step changes as a fraction of the starting value (zero starts skipped); ``month`` as
+    in _empirical_changes."""
+    values = {index: value for index, _date, value in history}
+    return [(values[index + steps] - value) / abs(value) for index, _date, value in history
+            if index + steps in values and value and (month is None or index % 12 == month)]
+
+
+def official_outside_view_block(official_data: Any, horizon_date: Any = None, language: str = "English",
+                                max_chars: int = 3600) -> str:
+    """Deterministic outside-view lines from stored history ("" when none).
+
+    Per monthly/quarterly/annual series: latest complete historical value, its
+    percentile within the stored history, and empirical quantiles of the change
+    from the latest period to the horizon (or over a standard 12 months / 4 quarters /
+    1 year, said so, when the horizon is unknown or lacks 30 samples); each line names
+    the window it describes and, for a seasonal monthly series without seasonal adjustment, the
+    start months its sample uses (_empirical_season). For levels and indexes (units not in percent or points) the same
+    change is also given in percent, the scale a growth or inflation threshold is
+    set on. Lines are dropped whole beyond ``max_chars`` with a count note.
+    """
+    rows = official_series_rows(official_data)
+    if not rows:
+        return ""
+    from .official_data import data_api
+    api = data_api()
+    if api is None:
+        return ""
+    zh = str(language or "").lower().startswith(("zh", "chinese")) or "中文" in str(language or "")
+    lines = []
+    for row in rows:
+        frequency = row["frequency"]
+        history = _official_history(row)
+        if frequency not in _EMPIRICAL_DEFAULT_STEPS or len(history) < 12:
+            continue
+        latest_index, latest_date, latest = history[-1]
+        rank = sum(1 for _i, _d, value in history if value <= latest) / len(history)
+        units = row["units"]
+        label = api.series_label(row, "zh" if zh else "en")
+        span = (_official_period_text(history[0][1], frequency), _official_period_text(latest_date, frequency))
+        horizon = _official_horizon_index(horizon_date, frequency)
+        steps = horizon - latest_index if horizon is not None and horizon > latest_index else None
+        changes, basis = _empirical_sample(row, history, steps) if steps else ([], "")
+        to_horizon = len(changes) >= EMPIRICAL_MIN_SAMPLES
+        if not to_horizon:
+            steps = _EMPIRICAL_DEFAULT_STEPS[frequency]
+            changes, basis = _empirical_sample(row, history, steps)
+        seasonal = empirical_seasonal_note({"seasonal_basis": basis}, zh, short=True)
+        scaled = api.scaled_value(latest, units, "zh" if zh else "en")
+        value = (api.format_value(latest, units) + ("" if api.is_percent_units(units) else f" {units}")
+                 + (f"（{scaled}）" if zh and scaled else f" ({scaled})" if scaled else ""))
+        noun = {"M": ("months", "个月"), "Q": ("quarters", "个季度"), "A": ("years", "年")}[frequency]
+        target = _official_index_text(latest_index + steps, frequency)
+        if zh:
+            line = (f"- {label}（{row['series']}）：最新 {value}（{_official_period_text(latest_date, frequency)}）；"
+                    f"{span[0]} 至 {span[1]} 共 {len(history)} {noun[1]}历史值，最新值处于第 {round(rank * 100)} 百分位")
+        else:
+            line = (f"- {label} ({row['series']}): latest {value} ({_official_period_text(latest_date, frequency)}); "
+                    f"{len(history)} historical {noun[0]} {span[0]} to {span[1]}, latest at percentile "
+                    f"{round(rank * 100)} of that history")
+        if len(changes) >= EMPIRICAL_MIN_SAMPLES:
+            ordered = sorted(changes)
+            cells = [api.format_change(round(_empirical_quantile(ordered, q), 9), units) for q in (0.1, 0.5, 0.9)]
+            if zh:
+                sample = f"n={len(changes)}" + (f"；{seasonal}" if seasonal else "")
+                window = (f"至预测期末 {target} 的 {steps} {noun[1]}变化经验分位（{sample}）" if to_horizon
+                          else f"{steps} {noun[1]}变化经验分位（标准窗口，非预测期末；{sample}）")
+                line += f"；{window}：p10 {cells[0]}，中位数 {cells[1]}，p90 {cells[2]}"
+            else:
+                sample = f"n={len(changes)}" + (f"; {seasonal}" if seasonal else "")
+                window = (f"{steps}-{noun[0][:-1]} change to the horizon {target} ({sample})" if to_horizon
+                          else f"{steps}-{noun[0][:-1]} change (a standard window, not the horizon; {sample})")
+                line += f"; {window}: p10 {cells[0]}, median {cells[1]}, p90 {cells[2]}"
+            relative = ([] if api.is_percent_units(units) or re.search(r"point", units, re.I)
+                        else sorted(_empirical_sample(row, history, steps, relative=True)[0]))
+            if len(relative) >= EMPIRICAL_MIN_SAMPLES:
+                cells = [api.format_change(round(_empirical_quantile(relative, q) * 100, 9), "Percent")
+                         .replace(" pp", "%") for q in (0.1, 0.5, 0.9)]
+                if zh:
+                    line += f"；按百分比变化：p10 {cells[0]}，中位数 {cells[1]}，p90 {cells[2]}"
+                else:
+                    line += f"; as % change: p10 {cells[0]}, median {cells[1]}, p90 {cells[2]}"
+        lines.append(line + ("。" if zh else "."))
+    if not lines:
+        return ""
+    if zh:
+        head = "【官方历史·外部视角（仅由已存储的完整历史观测计算，不含不完整期、估计与预测值；不是预测）】"
+        foot = "为所列序列设定阈值或区间时，先以上述经验分布为基率，再按本案特征调整并说明理由。"
+    else:
+        head = ("[Official history — outside view (computed only from stored complete historical observations; "
+                "partial periods, estimates and projections excluded; not a forecast)]")
+        foot = ("When setting a threshold or range on a listed series, start from these empirical "
+                "distributions as the base rate, then adjust for case specifics and say why.")
+    kept = []
+    for line in lines:
+        if len(head) + len(foot) + 80 + sum(len(item) + 1 for item in kept) + len(line) > max_chars:
+            break
+        kept.append(line)
+    if len(kept) < len(lines):
+        omitted = len(lines) - len(kept)
+        kept.append(f"（另有 {omitted} 个序列因篇幅省略）" if zh else f"({omitted} further series omitted for length)")
+    return "\n".join([head, *kept, foot])
+
+
+_ANCHOR_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august",
+                  "september", "october", "november", "december")
+_ANCHOR_MONTH_ALIASES = {**{name: i for i, name in enumerate(_ANCHOR_MONTHS, 1)},
+                         **{name[:3]: i for i, name in enumerate(_ANCHOR_MONTHS, 1)}, "sept": 9}
+_ANCHOR_ORDINAL_QUARTERS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "1st": 1, "2nd": 2,
+                            "3rd": 3, "4th": 4, "一": 1, "二": 2, "三": 3, "四": 4}
+# Chinese dates may be typeset with spaces around the digits ('2027 年 12 月'); a neighbouring
+# CJK character is not a word boundary for the Latin forms ('在Q4 2027', '2027年Q4').
+_ANCHOR_PERIOD_RE = re.compile(
+    r"(?P<ymd>(?<!\d)(?P<ymd_y>\d{4})-(?P<ymd_m>\d{2})-(?P<ymd_d>\d{2})(?!\d))"
+    r"|(?P<zhd>(?P<zhd_y>\d{4})\s*年\s*(?P<zhd_m>\d{1,2})\s*月\s*(?P<zhd_d>\d{1,2})\s*[日号])"
+    r"|(?P<zhm>(?P<zhm_y>\d{4})\s*年\s*(?P<zhm_m>\d{1,2})\s*月份?)"
+    r"|(?P<zhq>(?P<zhq_y>\d{4})\s*年\s*第?\s*(?P<zhq_q>[一二三四1-4])\s*季度)"
+    r"|(?P<yq>(?<!\d)(?P<yq_y>\d{4})\s*(?:年\s*)?[- ]?Q(?P<yq_q>[1-4])(?![A-Za-z0-9]))"
+    r"|(?P<qy>(?<![A-Za-z0-9])Q(?P<qy_q>[1-4])[- ]?(?P<qy_y>\d{4})(?!\d))"
+    r"|(?P<oq>\b(?P<oq_o>first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s+(?:of\s+)?(?P<oq_y>\d{4})(?!\d))"
+    r"|(?P<ym>(?<!\d)(?P<ym_y>\d{4})-(?P<ym_m>\d{2})(?![\d-]))"
+    r"|(?P<my>(?<![A-Za-z])(?P<my_m>" + "|".join(sorted(_ANCHOR_MONTH_ALIASES, key=len, reverse=True))
+    + r")\.?(?:,?\s+|-)(?:of\s+)?(?P<my_y>\d{4})(?!\d))"
+    r"|(?P<y>(?<![\d.])(?P<y_y>\d{4})(?:\s*年(?!\s*[\d第]))?(?!\d|\.\d|%))",
+    re.I,
+)
+# Periods introduced by these words describe a deadline or a different interval.
+_ANCHOR_PERIOD_LEAD_RE = re.compile(
+    r"(?:\b(?:by|before|until|till|through|thru|prior\s+to|no\s+later\s+than|ahead\s+of|from|since|"
+    r"after|end|end\s+of|close\s+of|within)|截至|截止|到|自|从)\s*(?:the\s+)?(?:end\s+of\s+)?$",
+    re.I,
+)
+_ANCHOR_PERIOD_TAIL_RE = re.compile(r"^\s*(?:之前|以前|前|底|末|以来|之后|以后|后|起)")
+_ANCHOR_NUMBER = (r"(?P<sign>[-+−])?\s*(?P<currency>US\$|\$|USD\s)?\s*"
+                  r"(?P<number>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*"
+                  r"(?P<scale>(?:trillion|billion|million|thousand)(?![A-Za-z])|万亿|亿|万)?")
+_ANCHOR_SCALES = {"trillion": 1e12, "billion": 1e9, "million": 1e6, "thousand": 1e3,
+                  "万亿": 1e12, "亿": 1e8, "万": 1e4}
+_ANCHOR_UNIT_TOKENS = (r"percentage\s+points?|个百分点|百分点|per\s*cent|percent|pp\b|%|"
+                       r"u\.?s\.?\s+dollars?|dollars?|美元")
+_ANCHOR_COMPARATOR_WORDS = (
+    (">=", ("greater than or equal to", "equal to or greater than", "more than or equal to",
+            "equal to or above", "equal to or higher than", "at or above", "at or over", "at or higher than",
+            "at least", "no less than", "not less than", "no lower than", "not lower than", "not below",
+            "no fewer than",
+            "大于或等于", "大于等于", "高于或等于", "达到或超过", "不低于", "不少于", "不小于", "至少")),
+    ("<=", ("less than or equal to", "equal to or less than", "equal to or below", "equal to or lower than",
+            "at or below", "at or under", "at or lower than", "at most", "no more than", "not more than",
+            "no higher than", "not higher than", "not above", "no greater than", "not exceeding",
+            "小于或等于", "小于等于", "低于或等于", "不超过", "不高于", "不大于", "至多", "最多")),
+    (">", ("greater than", "more than", "higher than", "in excess of", "above", "exceeds", "exceeding",
+           "exceeded", "exceed", "surpasses", "surpass", "tops", "over",
+           "超过", "高于", "大于", "突破", "超出")),
+    ("<", ("less than", "lower than", "below", "under", "beneath",
+           "低于", "小于", "少于", "跌破", "不足", "不到")),
+)
+_ANCHOR_POSTFIX_WORDS = ((">=", ("or more", "or higher", "or above", "or greater", "及以上", "或以上", "或更高")),
+                         ("<=", ("or less", "or lower", "or below", "or fewer", "及以下", "或以下", "或更低")))
+# The sign of the value is a comparison with zero ('the spread is negative', '增速为负').
+_ANCHOR_SIGN_WORDS = (("<", ("negative", "below zero", "under zero", "less than zero",
+                             "为负", "转负", "负值", "低于零", "小于零")),
+                      (">", ("positive", "above zero", "greater than zero",
+                             "为正", "转正", "正值", "高于零", "大于零")))
+_ANCHOR_SYMBOLS = {">=": ">=", "=>": ">=", "≥": ">=", "<=": "<=", "=<": "<=", "≤": "<=", ">": ">", "<": "<"}
+_ANCHOR_SYMBOL_RE = r"(?P<symbol>>=|=>|≥|<=|=<|≤|>|<)"
+# Full-width forms typed with Chinese input methods read as their ASCII equivalents.
+_ANCHOR_FULLWIDTH = str.maketrans({"＞": ">", "＜": "<", "＝": "=", "≧": "≥", "≦": "≤", "⩾": "≥", "⩽": "≤",
+                                   "％": "%", "．": ".", "－": "-",
+                                   **{chr(0xFF10 + digit): str(digit) for digit in range(10)}})
+# Negation, alternatives, conditions and conjunctions change the proposition.
+_ANCHOR_BLOCKERS_RE = re.compile(
+    r"\b(?:not|no|never|neither|nor|unless|if|or|either|except|excluding|without|fail|fails|failed|"
+    r"instead|otherwise|whether|and|but|while|whereas|although|though|plus|then|also|"
+    r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|"
+    r"hundred|percent|per\s*cent|trillion|billion|million|thousand)\b|n't|%|"
+    r"不|未|没|无|非|或|若|如果|除非|否则|并且|而且|且|同时|但|以及|和|与|及|并|百分之",
+    re.I,
+)
+_ANCHOR_FRAMING_RE = re.compile(
+    r"^(?:(?:this\s+(?:question|forecast|binary)\s+)?resolves?\s+(?:to\s+)?yes\s+(?:if|when)|"
+    r"resolved?\s+yes\s+(?:if|when)|yes\s+(?:if|when)|resolution\s*[:：]|resolution\s+criteria\s*[:：]|"
+    r"criteria\s*[:：]|判定(?:标准)?\s*[:：]?\s*(?:为是)?\s*(?:若|如果|当)?|若|如果|当|是\s*[:：]?)\s*",
+    re.I,
+)
+_ANCHOR_SOURCE_SUFFIX_RE = re.compile(
+    r"^[\s,;，；—–-]*(?:[(（]\s*)?(?:(?:source|sources|data\s+source|per|according\s+to|as\s+(?:published|"
+    r"reported|released|measured)\s+(?:by|in|on)|published\s+by|reported\s+by|released\s+by|from|via)\b|"
+    r"数据来源|来源|据|以|按)",
+    re.I,
+)
+_ANCHOR_YES_SUFFIX_RE = re.compile(r"^[\s,，]*(?:则)?(?:判定|视为|记为)?为?\s*[“\"]?(?:是|YES)[”\"]?\s*[。.!]?\s*$", re.I)
+# A provider whose name carries digits ('World Bank Data360') is a name, not a second number.
+_ANCHOR_PROVIDER_DIGITS_RE = re.compile(r"(?<![A-Za-z0-9])data\s?360(?![A-Za-z0-9])", re.I)
+# A resolution phrase directly after the clause, before a source ('，判定为是（数据来源：FRED）').
+_ANCHOR_YES_LEAD_RE = re.compile(
+    r"^[\s,，]*(?:(?:则\s*)?(?:判定|视为|记为)\s*为?\s*[“\"]?(?:是|YES)[”\"]?|"
+    r"(?:then\s+)?(?:it\s+)?resolves?\s+(?:to\s+)?[“\"]?yes[”\"]?)(?![A-Za-z])", re.I)
+
+
+def _anchor_period_key(match: "re.Match[str]") -> Optional[Tuple[str, str]]:
+    """(granularity, canonical period) for one period mention."""
+    try:
+        if match.group("ymd"):
+            return "D", f"{int(match.group('ymd_y')):04d}-{int(match.group('ymd_m')):02d}-{int(match.group('ymd_d')):02d}"
+        if match.group("zhd"):
+            return "D", f"{int(match.group('zhd_y')):04d}-{int(match.group('zhd_m')):02d}-{int(match.group('zhd_d')):02d}"
+        if match.group("zhm"):
+            month = int(match.group("zhm_m"))
+            return ("M", f"{int(match.group('zhm_y')):04d}-{month:02d}") if 1 <= month <= 12 else None
+        for name in ("zhq", "yq", "qy", "oq"):
+            if match.group(name):
+                raw = match.group(f"{name}_q" if name != "oq" else "oq_o").lower()
+                quarter = _ANCHOR_ORDINAL_QUARTERS.get(raw) or int(raw)
+                return "Q", f"{int(match.group(name + '_y')):04d}-Q{quarter}"
+        if match.group("ym"):
+            month = int(match.group("ym_m"))
+            return ("M", f"{int(match.group('ym_y')):04d}-{month:02d}") if 1 <= month <= 12 else None
+        if match.group("my"):
+            return "M", f"{int(match.group('my_y')):04d}-{_ANCHOR_MONTH_ALIASES[match.group('my_m').lower()]:02d}"
+        if match.group("y"):
+            return "A", f"{int(match.group('y_y')):04d}"
+    except (TypeError, ValueError, KeyError):
+        return None
+    return None
+
+
+def _anchor_target(period: str, frequency: str, row: Any = None) -> Tuple[str, str]:
+    """The anchor's normalized period as (granularity, canonical text) for prose matching.
+
+    A US federal fiscal year of ``row`` is ('FY', 'FY2026'): only a fiscal-year mention
+    (_anchor_periods with ``fiscal``) or its exact start date names it, never a calendar year."""
+    label = official_fiscal_label(row, period) if row is not None and frequency == "A" else ""
+    if label:
+        return "FY", label
+    if frequency == "M":
+        return "M", period[:7]
+    if frequency == "Q":
+        return "Q", f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
+    if frequency == "A":
+        return "A", period[:4]
+    return "D", period[:10]
+
+
+def _anchor_mention_matches(key: Tuple[str, str], target: Tuple[str, str]) -> bool:
+    """A period mention names exactly the target period at the series frequency.
+
+    Exact period starts written as dates ("2027-04-01" for Q2 2027) are accepted.
+    """
+    granularity, value = key
+    if (granularity, value) == target:
+        return True
+    if granularity != "D" or target[0] == "D":
+        return False
+    year, month, day = int(value[:4]), int(value[5:7]), int(value[8:10])
+    if day != 1:
+        return False
+    if target[0] == "FY":
+        return month == 10 and f"FY{year + 1}" == target[1]
+    if target[0] == "M":
+        return f"{year:04d}-{month:02d}" == target[1]
+    if target[0] == "Q":
+        return month in (1, 4, 7, 10) and f"{year:04d}-Q{(month - 1) // 3 + 1}" == target[1]
+    return month == 1 and f"{year:04d}" == target[1]
+
+
+def _anchor_end_of_month(row: Dict[str, Any]) -> bool:
+    """A monthly series whose values are end-of-month readings: daily data the data
+    layer aggregated end of month, or (when the data layer did not aggregate) a
+    publisher's monthly end-of-period series such as BIS 'Monthly - End of period'."""
+    if row.get("frequency") != "M":
+        return False
+    provenance = row.get("provenance")
+    method = provenance.get("aggregation_method") if isinstance(provenance, dict) else None
+    if method:
+        return method == "eop"
+    return bool(re.search(r"\bend[\s-]of[\s-]period\b", str(row.get("title") or ""), re.I))
+
+
+def _anchor_month_end_text(text: str, target: Tuple[str, str]) -> str:
+    """Month-end wordings of the target month rewritten to the canonical month.
+
+    Only for an end-of-month series (whose month value IS its last daily reading):
+    '31 December 2026', 'December 31, 2026', 'the end of December 2026',
+    '2026-12-31' and '2026年12月31日/底' (and, for December, 'year-end 2026',
+    'end of 2026', '2026年底') name the target month. A deadline before them
+    ('by the end of 2026') stays a deadline; any other day stays a day.
+    """
+    if target[0] != "M":
+        return text
+    year, month = int(target[1][:4]), int(target[1][5:7])
+    last = calendar.monthrange(year, month)[1]
+    names = "|".join(sorted((re.escape(name) for name, number in _ANCHOR_MONTH_ALIASES.items()
+                             if number == month), key=len, reverse=True))
+    day = rf"{last}(?:st|nd|rd|th)?"
+    patterns = [
+        rf"(?<![\w-])(?:(?:at|on)\s+)?(?:the\s+)?(?:last\s+day|end)\s+of\s+(?:{names})\.?,?\s+(?:of\s+)?{year}(?!\d)",
+        rf"(?<![\w-])(?:on\s+)?(?:the\s+)?{day}\s+(?:of\s+)?(?:{names})\.?,?\s+{year}(?!\d)",
+        rf"(?<![\w-])(?:on\s+)?(?:{names})\.?\s+{day},?\s+{year}(?!\d)",
+        rf"(?<![\d-]){year}-{month:02d}-{last:02d}(?![\d-])",
+        rf"(?<!\d){year}\s*年\s*0?{month}\s*月\s*(?:{last}\s*[日号]|底|末)",
+    ]
+    if month == 12:
+        patterns += [
+            rf"(?<![\w-])(?:(?:at|on)\s+)?(?:the\s+)?(?:end\s+of\s+|year[-\s]end\s+(?:of\s+)?|end-){year}(?!\d)",
+            rf"(?<!\d){year}\s*年\s*(?:底|末)",
+        ]
+    for pattern in patterns:
+        text = re.sub(pattern, target[1], text, flags=re.I)
+    return text
+
+
+# A year named as a fiscal year ('FY2026', 'FY 2026', 'fiscal year 2026', 'fiscal 2026',
+# '2026 fiscal year', '2026财年', '2026财政年度'), read only for a fiscal-year anchor.
+_ANCHOR_FISCAL_PREFIX_RE = re.compile(r"(?:(?<![A-Za-z])FY|\bfiscal(?:\s+year)?)\s*$", re.I)
+_ANCHOR_FISCAL_SUFFIX_RE = re.compile(r"^(?:\s*(?:财年|财政年度|会计年度)|\s+fiscal\s+year\b)", re.I)
+
+
+def _anchor_periods(text: str, fiscal: bool = False) -> List[Tuple[int, int, Optional[Tuple[str, str]], bool]]:
+    """Every period mention: (start, end, key, introduced by a deadline/interval word).
+
+    With ``fiscal`` (a US federal fiscal-year anchor) a year named as a fiscal year is
+    ('FY', 'FY2026') and its span includes the fiscal wording; a bare year stays a calendar year."""
+    found = []
+    for match in _ANCHOR_PERIOD_RE.finditer(text):
+        start, end, key = match.start(), match.end(), _anchor_period_key(match)
+        if fiscal and match.group("y") and not re.search(r"年\s*$", match.group(0)):
+            prefix = _ANCHOR_FISCAL_PREFIX_RE.search(text[max(0, start - 20):start])
+            suffix = _ANCHOR_FISCAL_SUFFIX_RE.match(text[end:])
+            if prefix or suffix:
+                key = ("FY", f"FY{int(match.group('y_y')):04d}")
+                start -= len(prefix.group(0)) if prefix else 0
+                end += suffix.end() if suffix else 0
+        lead = bool(_ANCHOR_PERIOD_LEAD_RE.search(text[max(0, start - 40):start]))
+        tail = bool(_ANCHOR_PERIOD_TAIL_RE.match(text[end:]))
+        found.append((start, end, key, lead or tail))
+    return found
+
+
+_ANCHOR_UNIT_SCALE_RE = re.compile(r"^\s*(thousand|million|billion|trillion)s?(?:\s+of)?\s+", re.I)
+
+
+def _anchor_unit_scale(units: str) -> Tuple[float, str]:
+    """(multiplier, base units) of scaled units: 'Billions of Chained 2017 Dollars' -> (1e9, ...),
+    'Million kilowatt-hours' -> (1e6, 'kilowatt-hours')."""
+    match = _ANCHOR_UNIT_SCALE_RE.match(units)
+    return (_ANCHOR_SCALES[match.group(1).lower()], units[match.end():]) if match else (1.0, units)
+
+
+def _anchor_value(match: "re.Match[str]", units: str = "") -> Optional[float]:
+    """The written number in the series' units: a scale word ('$24.5 trillion') is
+    divided by the units' own scale ('Billions of ...' -> 24500)."""
+    try:
+        value = float(match.group("number").replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    if match.group("sign") in ("-", "−"):
+        value = -value
+    scale = match.group("scale")
+    return value * _ANCHOR_SCALES[scale.lower()] / _anchor_unit_scale(units)[0] if scale else value
+
+
+def _anchor_unit_ok(match: "re.Match[str]", units: str) -> bool:
+    """Units written next to the number must agree with the stored units."""
+    from .official_data import data_api
+    api = data_api()
+    percent = bool(api and api.is_percent_units(units))
+    points = bool(re.search(r"percentage\s+points?", units, re.I))
+    dollars = bool(re.search(r"dollar|usd", units, re.I))
+    token = re.sub(r"\s+", " ", str(match.group("unit") or "").strip().lower())
+    full = re.sub(r"\s+", " ", units.strip().lower())
+    base = re.sub(r"\s+", " ", _anchor_unit_scale(units)[1].strip().lower())
+    if (match.group("currency") or token in {"dollar", "dollars", "美元"} or token.endswith("dollars")
+            or token.endswith("dollar")) and not dollars:
+        return False
+    if match.group("scale") and (percent or points):
+        return False
+    if token == full or not (token or match.group("currency")):
+        return True
+    if base != full and not match.group("scale"):
+        # Units with a scale word ('Thousands of U.S. Dollars', 'Million kilowatt-hours'): an amount
+        # written with a currency or unit but no scale word ('$70,000,000', '160,000 kilowatt-hours')
+        # is a thousandth or a millionth of the same number in the series' units.
+        return False
+    if not token or token == base:
+        return True
+    if token in {"%", "percent", "per cent"}:
+        return percent
+    if token in {"pp", "percentage point", "percentage points", "个百分点", "百分点"}:
+        return points
+    return dollars and ("dollar" in token or token == "美元")
+
+
+def _anchor_comparisons(text: str, units: str) -> List[Tuple[int, int, str, Optional[float], bool]]:
+    """Comparator+number expressions: (start, end, comparator, value, units agree)."""
+    # A unit ends at a word boundary: 'Percent' must not swallow the start of 'percentage points'.
+    # Scaled units also read without their scale word after a written one ('160,000 million kilowatt-hours').
+    base = _anchor_unit_scale(units)[1].strip()
+    names = "|".join(re.escape(name) for name in dict.fromkeys((units.strip(), base)) if name)
+    unit = rf"(?:\s*(?P<unit>(?:{names}|{_ANCHOR_UNIT_TOKENS})(?![A-Za-z])))?" if names else \
+        rf"(?:\s*(?P<unit>(?:{_ANCHOR_UNIT_TOKENS})(?![A-Za-z])))?"
+    spans: List[Tuple[int, int, str, Optional[float], bool]] = []
+    patterns = [(re.compile(_ANCHOR_SYMBOL_RE + r"\s*" + _ANCHOR_NUMBER + unit, re.I), None)]
+    for comparator, words in _ANCHOR_COMPARATOR_WORDS:
+        alternation = "|".join(re.escape(w).replace(r"\ ", r"\s+") for w in sorted(words, key=len, reverse=True))
+        patterns.append((re.compile(rf"(?:(?<![A-Za-z])(?:{alternation})(?![A-Za-z]))\s*(?:of\s+)?"
+                                    + _ANCHOR_NUMBER + unit, re.I), comparator))
+    for comparator, words in _ANCHOR_POSTFIX_WORDS:
+        alternation = "|".join(re.escape(w).replace(r"\ ", r"\s+") for w in words)
+        # A CJK verb may sit right before the number ('达到5%及以上'); a Latin identifier may not.
+        patterns.append((re.compile(r"(?<![A-Za-z0-9_.])" + _ANCHOR_NUMBER + unit
+                                    + rf"\s*(?:{alternation})(?![A-Za-z])", re.I), comparator))
+    for pattern, comparator in patterns:
+        for match in pattern.finditer(text):
+            if any(match.start() < end and start < match.end() for start, end, *_ in spans):
+                continue
+            symbol = _ANCHOR_SYMBOLS.get(match.groupdict().get("symbol") or "", comparator)
+            spans.append((match.start(), match.end(), symbol, _anchor_value(match, units),
+                          _anchor_unit_ok(match, units)))
+    for comparator, words in _ANCHOR_SIGN_WORDS:
+        alternation = "|".join(re.escape(w).replace(r"\ ", r"\s+") for w in sorted(words, key=len, reverse=True))
+        # 'non-negative' is the opposite proposition, so a hyphenated prefix never counts.
+        for match in re.finditer(rf"(?<![A-Za-z-])(?:{alternation})(?![A-Za-z-])", text, re.I):
+            if not any(match.start() < end and start < match.end() for start, end, *_ in spans):
+                spans.append((match.start(), match.end(), comparator, 0.0, True))
+    return sorted(spans)
+
+
+def _anchor_blank(text: str, spans: List[Tuple[int, int]]) -> str:
+    chars = list(text)
+    for start, end in spans:
+        for i in range(start, end):
+            chars[i] = " "
+    return "".join(chars)
+
+
+def _anchor_units_spans(text: str, units: str) -> List[Tuple[int, int]]:
+    """Mentions of the stored units in prose ('(chained 2017 dollars)'): descriptive, not a second number."""
+    spans: List[Tuple[int, int]] = []
+    for term in sorted({units.strip(), _anchor_unit_scale(units)[1].strip()}, key=len, reverse=True):
+        if len(term) < 3:
+            continue
+        for match in re.finditer(r"(?<![A-Za-z0-9])" + re.escape(term) + r"(?![A-Za-z0-9])", text, re.I):
+            if not any(match.start() < end and start < match.end() for start, end in spans):
+                spans.append(match.span())
+    return spans
+
+
+def _anchor_row_geography(row: Dict[str, Any]) -> str:
+    """The series' geography code: the stored one, else its catalog entry's, else the single
+    geography its title names (a FRED search result such as 'ECB Deposit Facility Rate for
+    Euro Area' is stored without one)."""
+    geography = str(row.get("geography") or getattr(_anchor_catalog_entry(row), "geography", "") or "").upper()
+    if geography:
+        return geography
+    from .official_data import data_api
+    api = data_api()
+    named = api.catalog.query_geographies(str(row.get("title") or "")) if api is not None else ()
+    return next(iter(named)) if len(named) == 1 else ""
+
+
+def _anchor_catalog_entry(row: Dict[str, Any]) -> Any:
+    from .official_data import data_api
+    api = data_api()
+    return api.catalog.lookup(row["series"].partition("#")[0]) if api is not None else None
+
+
+def _anchor_metric_labels(row: Dict[str, Any]) -> List[str]:
+    """Reader-facing names of the series (EN and ZH titles, labels, catalog terms)."""
+    from .official_data import data_api
+    api = data_api()
+    entry = _anchor_catalog_entry(row)
+    titles = {str(row.get("title") or ""), str(row.get("title_zh") or ""),
+              str(getattr(entry, "title", "") or ""), str(getattr(entry, "title_zh", "") or "")}
+    if api is not None:
+        titles.update({api.series_label(row), api.series_label(row, "zh")})
+    geography = _anchor_row_geography(row)
+    name, aliases = (api.catalog.GEOGRAPHIES.get(geography, (geography, ())) if api is not None else ("", ()))
+    # A trailing qualifier ('（月均）', '(daily)') is part of the title, not of how prose names
+    # it; the shortened name must stay specific (two words, or four CJK characters).
+    for title in list(titles):
+        short = re.sub(r"\s*[（(][^（）()]*[）)]\s*$", "", title)
+        if short != title and (len(short.split()) >= 2 or len(re.findall(r"[㐀-鿿]", short)) >= 4):
+            titles.add(short)
+    for title in list(titles):
+        for term in (name, *aliases):
+            term = str(term or "")
+            if term and re.search(r"[㐀-鿿]", term) and term in title:
+                titles.add(title.replace(term, ""))
+        titles.add(re.sub(r"\s*(?:—|:|-)\s*" + re.escape(name) + r"\s*$", "", title, flags=re.I) if name else title)
+    for keyword in getattr(entry, "keywords", ()) or ():
+        keyword = str(keyword)
+        cjk = len(re.findall(r"[㐀-鿿]", keyword))
+        # Specific keywords only: two words, three CJK characters, or an acronym with two ('gdp增速').
+        if len(keyword.split()) >= 2 or cjk >= 3 or cjk >= 2 and len(re.findall(r"[A-Za-z]", keyword)) >= 2:
+            titles.add(keyword)
+    labels = {re.sub(r"\s+", " ", t).strip(" —:-") for t in titles}
+    # Chinese prose names a growth rate 增速 as often as 增长率 ('实际GDP增速' is '实际GDP增长率').
+    labels |= {label.replace(a, b) for label in labels for a, b in (("增长率", "增速"), ("增速", "增长率"))
+               if a in label}
+    return sorted((t for t in labels if len(t) >= 2), key=len, reverse=True)
+
+
+# Title words prose leaves out when naming a series ('Market Yield on U.S. Treasury Securities at
+# 10-Year Constant Maturity' is 'the 10-year Treasury yield'); the remaining title words must all
+# appear together, joined only by the connective words below.
+_ANCHOR_TITLE_FILLER = frozenset((
+    "a", "an", "the", "of", "for", "in", "on", "at", "to", "by", "and", "or", "as", "all", "item", "items",
+    "total", "plus", "minus", "less", "constant", "maturity", "market", "yield", "yields", "quoted",
+    "investment", "basis", "securities", "seasonally", "adjusted", "index", "level", "average", "rate",
+    "rates", "u", "s", "us", "daily", "weekly", "monthly", "quarterly", "annual", "end", "period", "percent",
+    "change", "prices", "current", "month", "units",
+))
+_ANCHOR_TITLE_JOINERS = frozenset((
+    "the", "of", "on", "and", "minus", "less", "between", "versus", "vs", "u", "s", "us", "constant",
+    "maturity", "market", "yield", "yields", "rate", "rates", "securities", "note", "notes", "bond", "bonds",
+    "bill", "bills",
+))
+_ANCHOR_TENOR_NUMBERS = {"one": 1, "two": 2, "three": 3, "five": 5, "six": 6, "seven": 7, "ten": 10,
+                         "twenty": 20, "thirty": 30}
+# Tenors read alike in every spelling: '10-year', '10 year', '10y', 'ten-year' -> '10y'; '3-month', '3m' -> '3m'.
+_ANCHOR_TOKEN_RE = re.compile(
+    r"(?<![0-9.])(?P<n>\d{1,2})(?:-?(?P<short>yrs?|y|mos?|m)|[\s-]?(?P<long>years?|months?))(?![a-z])"
+    r"|(?<![a-z])(?P<word>" + "|".join(_ANCHOR_TENOR_NUMBERS) + r")[\s-](?P<wlong>years?|months?)(?![a-z])"
+    r"|[a-z]+", re.I)
+_ANCHOR_WINDOW_GAP_RE = re.compile(r"[\s\-–—/()'’.]*")
+
+
+def _anchor_tokens(text: str) -> List[Tuple[str, int, int]]:
+    """(token, start, end) of the ASCII words (lowercased) and normalized tenors of ``text``;
+    offsets index ``text`` itself."""
+    tokens = []
+    for match in _ANCHOR_TOKEN_RE.finditer(text):
+        number = match.group("n") or _ANCHOR_TENOR_NUMBERS.get((match.group("word") or "").lower())
+        unit = (match.group("short") or match.group("long") or match.group("wlong") or "").lower()
+        token = f"{int(number)}{'y' if unit[0] == 'y' else 'm'}" if number and unit else match.group(0).lower()
+        tokens.append((token, match.start(), match.end()))
+    return tokens
+
+
+# Clause boundaries of a compound question, as the data catalog splits one ("Will US CPI fall below
+# 2.5% ..., and how will the Fed policy rate evolve?"): sentence ends (not the 'S.' of 'U.S.'),
+# ?!;: , ', and/but/or/while/whereas', 'and/but' before a question word, and CJK punctuation.
+_QUESTION_CLAUSE_RE = re.compile(
+    r"(?<!\b[A-Za-z])\.(?=\s|$)|[?!;。？！；：\n]+|:\s|,\s*(?:and|but|or|while|whereas)\s+"
+    r"|\s+(?:and|but)\s+(?=(?:how|what|when|where|whether|which|who|why|will|would|could|can|should|does|do"
+    r"|did|is|are)\b)|[，、]",
+    re.I,
+)
+
+
+def official_question_mention(question: str, row: Dict[str, Any]) -> Optional[Tuple[int, int]]:
+    """(clause, position) where ``question`` first names a stored series (title, catalog name
+    or acronym, EN or ZH, with hyphenated compounds such as 'data-center' read as words); None
+    when it does not name it or the series' geography is not one the question asks about."""
+    text = re.sub(r"(?<=[A-Za-z])-(?=[A-Za-z])", " ", _anchor_markup(question))
+    from .official_data import data_api
+    api = data_api()
+    asked = set(api.catalog.query_geographies(text)) if api is not None else set()
+    geography = _anchor_row_geography(row)
+    if asked and geography and geography not in asked:
+        return None
+    spans = _anchor_metric_spans(text, row)
+    if not spans:
+        return None
+    start = min(begin for begin, _end in spans)
+    return sum(1 for match in _QUESTION_CLAUSE_RE.finditer(text) if match.end() <= start), start
+
+
+def _anchor_title_windows(statement: str, row: Dict[str, Any]) -> List[Tuple[int, int]]:
+    """Spans naming the series by its distinctive English title words in any order
+    ('the 10-year minus 3-month Treasury spread' for '10-Year Treasury Constant Maturity Minus
+    3-Month Treasury Constant Maturity'). A single distinctive word must be a long one."""
+    from .official_data import data_api
+    api = data_api()
+    entry = _anchor_catalog_entry(row)
+    geography = _anchor_row_geography(row)
+    name, aliases = (api.catalog.GEOGRAPHIES.get(geography, (geography, ())) if api is not None else ("", ()))
+    places = {token for term in (name, *aliases) for token, _s, _e in _anchor_tokens(str(term or ""))}
+    tokens = _anchor_tokens(statement)
+    spans: List[Tuple[int, int]] = []
+    for title in {str(row.get("title") or ""), str(getattr(entry, "title", "") or "")}:
+        distinct = {token for token, _s, _e in _anchor_tokens(title)
+                    if token not in _ANCHOR_TITLE_FILLER and token not in places and len(token) > 1}
+        if not distinct or len(distinct) == 1 and not (next(iter(distinct)).isalpha()
+                                                       and len(next(iter(distinct))) >= 6):
+            continue
+        for first, (token, start, _end) in enumerate(tokens):
+            if token not in distinct:
+                continue
+            covered = set()
+            for last in range(first, min(len(tokens), first + len(distinct) + 4)):
+                word = tokens[last][0]
+                if (word not in distinct and word not in _ANCHOR_TITLE_JOINERS
+                        or last > first and not _ANCHOR_WINDOW_GAP_RE.fullmatch(
+                            statement[tokens[last - 1][2]:tokens[last][1]])):
+                    break
+                covered.add(word)
+                if covered >= distinct:
+                    span = (start, tokens[last][2])
+                    if not any(span[0] < e and s < span[1] for s, e in spans):
+                        spans.append(span)
+                    break
+    return spans
+
+
+def _anchor_identifier_spans(statement: str, row: Dict[str, Any]) -> List[Tuple[int, int]]:
+    """The bare native id ('UNRATE', 'T10Y3M') and catalog acronyms written in capitals ('CPI')
+    match their exact case; catalog terms with digits ('10y3m', 'u-6') match in any case."""
+    native = row["series"].partition(":")[2].partition("#")[0]
+    exact = {native} if len(native) >= 3 else set()
+    loose = set()
+    for keyword in getattr(_anchor_catalog_entry(row), "keywords", ()) or ():
+        keyword = str(keyword)
+        if not re.fullmatch(r"[A-Za-z0-9-]+", keyword):
+            continue
+        if re.search(r"\d", keyword):
+            loose.add(keyword)
+        elif len(keyword) <= 5:
+            exact.add(keyword.upper())
+    spans: List[Tuple[int, int]] = []
+    for terms, flags in ((exact, 0), (loose, re.I)):
+        for term in sorted(terms, key=len, reverse=True):
+            for match in re.finditer(r"(?<![A-Za-z0-9_:/.])" + re.escape(term) + r"(?![A-Za-z0-9_])",
+                                     statement, flags):
+                if not any(match.start() < end and start < match.end() for start, end in spans):
+                    spans.append(match.span())
+    return spans
+
+
+def _anchor_singular(token: str) -> str:
+    """'prices' -> 'price', 'semiconductors' -> 'semiconductor'; 'gas', 'us', 'business' unchanged."""
+    return token[:-1] if len(token) > 3 and token.endswith("s") and not token.endswith(("ss", "us", "is")) else token
+
+
+# A price-index acronym among a series' catalog keywords names the same thing as its spelled-out
+# prices (the catalog already pairs 'cpi' with 'consumer prices' on most CPI entries).
+_ANCHOR_ACRONYM_KEYWORDS = {"cpi": "consumer prices", "ppi": "producer prices"}
+
+
+def _anchor_keyword_windows(statement: str, row: Dict[str, Any]) -> List[Tuple[int, int]]:
+    """Spans naming the series by a multi-word catalog keyword in natural word order and number:
+    'consumer price inflation' for 'consumer prices', 'industrial production of semiconductors'
+    and 'semiconductor industrial production' for 'semiconductor production'.
+
+    Every keyword word (singular or plural, any order) appears in one run joined only by
+    'of'/'the' and the series' own title words; a negation, conjunction, number word or place
+    never sits inside the run, so the remainder checks still see it.
+    """
+    entry = _anchor_catalog_entry(row)
+    keywords = [str(keyword) for keyword in getattr(entry, "keywords", ()) or ()
+                if re.fullmatch(r"[A-Za-z][A-Za-z -]*[A-Za-z]", str(keyword))]
+    keywords += [_ANCHOR_ACRONYM_KEYWORDS[k] for k in keywords if k in _ANCHOR_ACRONYM_KEYWORDS]
+    if not keywords:
+        return []
+    from .official_data import data_api
+    api = data_api()
+    geography = _anchor_row_geography(row)
+    name, aliases = (api.catalog.GEOGRAPHIES.get(geography, (geography, ())) if api is not None else ("", ()))
+    places = {_anchor_singular(token) for term in (name, *aliases)
+              for token, _s, _e in _anchor_tokens(str(term or ""))}
+    titles = {str(row.get("title") or ""), str(getattr(entry, "title", "") or "")}
+    fillers = {_anchor_singular(token) for title in titles for token, _s, _e in _anchor_tokens(title)}
+    fillers = {token for token in fillers if token not in places and not _ANCHOR_BLOCKERS_RE.fullmatch(token)}
+    fillers |= {"of", "the"}
+    tokens = [(_anchor_singular(token), start, end) for token, start, end in _anchor_tokens(statement)]
+    spans: List[Tuple[int, int]] = []
+    for keyword in keywords:
+        words = {_anchor_singular(token) for token, _s, _e in _anchor_tokens(keyword)}
+        if len(words) < 2:
+            continue
+        for first, (token, start, _end) in enumerate(tokens):
+            if token not in words:
+                continue
+            covered = set()
+            for last in range(first, min(len(tokens), first + len(words) + 3)):
+                word = tokens[last][0]
+                if (word not in words and word not in fillers
+                        or last > first and not _ANCHOR_WINDOW_GAP_RE.fullmatch(
+                            statement[tokens[last - 1][2]:tokens[last][1]])):
+                    break
+                covered.add(word)
+                if covered >= words:
+                    span = (start, tokens[last][2])
+                    if not any(span[0] < e and s < span[1] for s, e in spans):
+                        spans.append(span)
+                    break
+    return spans
+
+
+def _anchor_metric_spans(statement: str, row: Dict[str, Any]) -> List[Tuple[int, int]]:
+    """Where ``statement`` names the series; overlapping names merge into one span ('10-year
+    breakeven inflation expectations' joins the title words and the keyword)."""
+    folded = statement.casefold()
+    found: List[Tuple[int, int]] = []
+    for label in [row["series"], *_anchor_metric_labels(row)]:
+        key = label.casefold()
+        cjk = bool(re.search(r"[㐀-鿿]", key))
+        # A name ending in 通胀 ('整体通胀') never takes the 通胀 of 通胀预期 (inflation
+        # expectations, a sibling qualifier the remainder check must still see).
+        pattern = (re.escape(key) + ("(?!预期)" if key.endswith("通胀") else "") if cjk
+                   else r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])")
+        found.extend(match.span() for match in re.finditer(pattern, folded))
+    found += [*_anchor_identifier_spans(statement, row), *_anchor_title_windows(statement, row),
+              *_anchor_keyword_windows(statement, row)]
+    spans: List[Tuple[int, int]] = []
+    for start, end in sorted(found):
+        if spans and start < spans[-1][1]:
+            spans[-1] = (spans[-1][0], max(end, spans[-1][1]))
+        else:
+            spans.append((start, end))
+    if not spans:
+        # Legacy rule: every ≥4-letter title word appears in the statement.
+        words = set(re.findall(r"[a-z]{4,}", str(row.get("title") or "").lower()))
+        if words and words.issubset(set(re.findall(r"[a-z]{4,}", folded))):
+            spans = [m.span() for m in re.finditer(r"[a-z]{4,}", folded) if m.group(0) in words]
+    return spans
+
+
+# Words naming a sibling series of the same family (core vs headline prices, real vs nominal,
+# the lower vs upper target limit, market-implied or forward rates, inflation expectations vs
+# realized inflation, the ECB's main refinancing or marginal lending rate vs its deposit facility
+# rate, the Fed's discount (primary credit) rate or interest on reserve balances vs its policy
+# rate). A statement may use one only when the anchored series' own names carry it ('real' also
+# fits a constant-price series).
+_ANCHOR_QUALIFIER_RE = re.compile(
+    r"(?<![A-Za-z])(?:core|supercore|real|nominal|underlying|trimmed|median|sticky|youth|teen|teenage|"
+    r"inflation[\s-]indexed|tips|implied|futures|forward|expectations?|refinancing|marginal[\s-]+lending|"
+    r"discount|primary[\s-]+credit|reserve[\s-]+balances?|iorb|"
+    r"(?:upper|lower)\s+(?:bound|limit|end))(?![A-Za-z-])"
+    r"|核心|名义|青年|广义|隐含|期货|远期|上限|下限|通胀预期|再融资|边际贷款|边际借贷|贴现|准备金余额|实际(?![值公发数读])",
+    re.I,
+)
+# Words naming a component or a population subgroup of a headline series (services or food
+# prices, the commercial sector, Black or female workers, wage earners): allowed, like the
+# sibling qualifiers, only when the anchored series' own names carry them (singular or plural).
+_ANCHOR_SUBSET_RE = re.compile(
+    r"(?<![A-Za-z])(?:services?|goods|food|energy|shelter|rents?|housing|medical|gasoline|"
+    r"residential|commercial|industrial|black|white|hispanic|latino|asian|women|men|female|male|"
+    r"veterans?|graduates?|wage[\s-]+earners?|clerical|part[\s-]time|full[\s-]time)(?![A-Za-z-])"
+    r"|服务|食品|能源|住房|房租|女性|男性|黑人|白人",
+    re.I,
+)
+# Other price measures beside a generic inflation name ('PCE headline inflation', '美国PPI整体通胀'):
+# allowed only when the anchored series' own names carry the measure, by its acronym or in full.
+_ANCHOR_PRICE_MEASURES = tuple(
+    (re.compile(pattern, re.I), re.compile(pattern)) for pattern in (
+        r"(?<![A-Za-z])(?:pce|personal[\s-]+consumption[\s-]+expenditures?)(?![A-Za-z])|个人消费支出",
+        r"(?<![A-Za-z])(?:ppi|producer[\s-]+prices?|wholesale)(?![A-Za-z])|生产者价格|出厂价格|批发",
+    )
+)
+
+
+def _anchor_foreign_qualifier(remainder: str, row: Dict[str, Any]) -> bool:
+    names = " | ".join(_anchor_metric_labels(row)).casefold()
+    real_terms = bool(re.search(r"\breal\b|constant\s+prices|chained|实际",
+                                " ".join(str(row.get(key) or "") for key in ("title", "title_zh", "units")), re.I)
+                      or re.search(r"_KD(?:_|/|$)", row["series"]))
+    for match in _ANCHOR_QUALIFIER_RE.finditer(remainder):
+        term = re.sub(r"[\s-]+", " ", match.group(0).casefold())
+        if term in ("real", "实际") and real_terms:
+            continue
+        side = re.fullmatch(r"(upper|lower) (?:bound|limit|end)", term)  # 'upper bound' is the 'Upper Limit'
+        pattern = (side[1] + r"[\s-]+(?:bound|limit|end)" if side else "expectations?" if term.startswith("expectation")
+                   else re.escape(term).replace(r"\ ", r"[\s-]+"))
+        if not re.search(r"(?<![a-z])" + pattern + r"(?![a-z])", names):
+            return True
+    for match in _ANCHOR_SUBSET_RE.finditer(remainder):
+        word = _anchor_singular(re.sub(r"[\s-]+", " ", match.group(0).casefold()))
+        if not re.search(r"(?<![a-z])" + re.escape(word).replace(r"\ ", r"[\s-]+") + r"s?(?![a-z])", names):
+            return True
+    return any(mention.search(remainder) and not carried.search(names) for mention, carried in _ANCHOR_PRICE_MEASURES)
+
+
+def _anchor_settlement_sentence(anchor: Dict[str, Any], zh: bool, row: Any = None) -> str:
+    """Canonical settlement clause appended to an admitted binary's resolution criteria
+    (the anchored ``row`` names a US federal fiscal year by its label, 'for FY2026')."""
+    from .official_data import data_api
+    api = data_api()
+    units = str(anchor.get("units") or "")
+    threshold = api.format_value(anchor["threshold"], units) if api is not None else str(anchor["threshold"])
+    percent = bool(api and api.is_percent_units(units))
+    period = _anchor_target(str(anchor["period"]), str(anchor.get("frequency") or ""), row)[1]
+    scaled = api.scaled_value(anchor["threshold"], units, "zh" if zh else "en") if api is not None else ""
+    if zh:
+        return (f"官方判定：{anchor['series']} {anchor['comparator']} {threshold}"
+                + (f"（{scaled}）" if scaled else "") + ("" if percent else f"（单位 `{units}`）")
+                + f"，观察期 {period}。")
+    return (f"Official resolution: {anchor['series']} {anchor['comparator']} {threshold}"
+            + ("" if percent else f" {units}") + (f" ({scaled})" if scaled else "") + f" for {period}.")
+
+
+def _strip_anchor_settlement(criteria: str, anchor: Dict[str, Any], row: Any = None) -> str:
+    for zh in (False, True):
+        criteria = criteria.replace(_anchor_settlement_sentence(anchor, zh, row), "")
+    return criteria.strip()
+
+
+def _anchor_markup(text: str) -> str:
+    """Drop Markdown emphasis/code marks; underscores inside identifiers (debt_to_penny) stay.
+    Full-width symbols and digits ('＜3％') read as ASCII."""
+    text = re.sub(r"[`*]+", "", str(text or "").translate(_ANCHOR_FULLWIDTH))
+    return re.sub(r"(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])", "", text).replace("−", "-").strip()
+
+
+def _anchor_threshold_equal(value: Optional[float], threshold: float) -> bool:
+    return value is not None and math.isclose(value, threshold, rel_tol=1e-9, abs_tol=1e-12)
+
+
+def _anchor_criteria_ok(criteria: str, anchor: Dict[str, Any], row: Dict[str, Any]) -> bool:
+    """Exactly one canonical clause '<series> <cmp> <threshold> [units] [in|for|on] <period>'.
+
+    The comparator is a symbol or a word ('fred:FEDFUNDS 于2027年12月低于3%'). Framing
+    ('Resolves YES if', '当 … 时') and source attributions ('(source: FRED)', ', per the
+    BLS release') are allowed; any other number, comparator, negation or condition is not.
+    """
+    text = re.sub(r"https?://\S+", " ", _anchor_markup(criteria))
+    # Chinese prose sets the id between CJK characters without spaces ('若fred:FEDFUNDS于…');
+    # only a Latin identifier character extends the id.
+    identity = re.compile(r"(?<![A-Za-z0-9_:/])" + re.escape(row["series"])
+                          + r"(?![A-Za-z0-9_#/-]|\.[A-Za-z0-9_])", re.I)
+    if len(identity.findall(text)) != 1:
+        return False
+    id_match = identity.search(text)
+    head = text[:id_match.start()].strip()
+    framing = _ANCHOR_FRAMING_RE.match(head)
+    rest_of_head = head[framing.end():] if framing else head
+    if (re.search(r"\d|[<>=≥≤]", rest_of_head) or _ANCHOR_BLOCKERS_RE.search(rest_of_head)
+            or len(rest_of_head.split()) > 6):
+        return False
+    tail = text[id_match.end():]
+    target = _anchor_target(anchor["period"], row["frequency"], row)
+    if _anchor_end_of_month(row):
+        tail = _anchor_month_end_text(tail, target)
+    comparisons = _anchor_comparisons(tail, row["units"])
+    # A comparison's own digits (a 4-digit threshold, '2017' in its units) are not periods.
+    periods = _anchor_periods(_anchor_blank(tail, [(s, e) for s, e, *_ in comparisons]), target[0] == "FY")
+    if len(comparisons) != 1 or len(periods) != 1:
+        return False
+    start, end, comparator, value, unit_ok = comparisons[0]
+    p_start, p_end, key, lead = periods[0]
+    if (comparator != anchor["comparator"] or not unit_ok or not _anchor_threshold_equal(value, anchor["threshold"])
+            or lead or key is None or not _anchor_mention_matches(key, target)):
+        return False
+    first, last = (start, p_end) if p_start > start else (p_start, end)
+    if p_start > start:
+        between = tail[end:p_start]
+        joiners = (r"\s*(?:[,，]\s*)?(?:(?:in|for|on|during|at)\s+(?:the\s+)?(?:period\s+)?|"
+                   r"(?:于|在|观察期\s*[:：]?)\s*)?(?:[(（]\s*)?")
+    else:
+        between = tail[p_end:start]
+        joiners = (r"\s*(?:[)）]\s*)?(?:在|于)?\s*(?:的?(?:月度|月均|季度|年度)?(?:数值|值|读数))?\s*"
+                   r"(?:(?:(?:monthly|quarterly|annual)\s+)?(?:value|reading)\s+)?(?:(?:is|will\s+be)\s+)?")
+    lead_text = tail[:first]
+    if not re.fullmatch(joiners, between, re.I) or not re.fullmatch(
+            r"\s*(?:[)）:：]\s*)?(?:(?:在|于)\s*)?(?:(?:in|for|on|during|at)\s+)?(?:[(（]\s*)?"
+            r"(?:(?:the\s+)?(?:value|reading)\s+)?(?:(?:is|will\s+be)\s+)?", lead_text, re.I):
+        return False
+    after = _ANCHOR_PROVIDER_DIGITS_RE.sub("Data", tail[last:]).strip()
+    # '时' closes a '当/若 … 时' condition clause before the resolution phrase.
+    after = re.sub(r"^[)）]?\s*时?\s*", "", after)
+    yes = _ANCHOR_YES_LEAD_RE.match(after)
+    if yes:
+        after = after[yes.end():].strip()
+    if not after or re.fullmatch(r"[.!。;；]?", after):
+        return True
+    if re.search(r"\d|[<>=≥≤]", after) or _ANCHOR_BLOCKERS_RE.search(_ANCHOR_SOURCE_SUFFIX_RE.sub("", after, 1)):
+        return False
+    return bool(_ANCHOR_SOURCE_SUFFIX_RE.match(after) or _ANCHOR_YES_SUFFIX_RE.match(after))
+
+
+def _anchor_statement_ok(statement: str, anchor: Dict[str, Any], row: Dict[str, Any]) -> bool:
+    """The prose proposition is the anchored one: same metric, one comparison with the
+    anchor's comparator (symbol or word, EN/ZH) and threshold, the anchor period, the
+    series geography, and no negation, alternative, condition, second number or a
+    qualifier naming a sibling series ('core', 'real', 'lower limit')."""
+    text = _anchor_markup(statement)
+    metric = _anchor_metric_spans(text, row)
+    if not metric:
+        return False
+    from .official_data import data_api
+    api = data_api()
+    geographies = set(api.catalog.query_geographies(_anchor_blank(text, metric))) if api is not None else set()
+    geography = _anchor_row_geography(row)
+    if geographies and geographies != {geography}:
+        return False
+    comparisons = _anchor_comparisons(text, row["units"])
+    if len(comparisons) != 1:
+        return False
+    start, end, comparator, value, unit_ok = comparisons[0]
+    if (comparator != anchor["comparator"] or not unit_ok
+            or not _anchor_threshold_equal(value, anchor["threshold"])):
+        return False
+    remainder = _anchor_blank(text, [*metric, (start, end)])
+    remainder = _anchor_blank(remainder, _anchor_units_spans(remainder, row["units"]))
+    target = _anchor_target(anchor["period"], row["frequency"], row)
+    if _anchor_end_of_month(row):
+        remainder = _anchor_month_end_text(remainder, target)
+    periods = _anchor_periods(remainder, target[0] == "FY")
+    if not periods or any(lead or key is None or not _anchor_mention_matches(key, target)
+                          for _s, _e, key, lead in periods):
+        return False
+    remainder = _anchor_blank(remainder, [(s, e) for s, e, _k, _l in periods])
+    if api is not None and geography:
+        name, aliases = api.catalog.GEOGRAPHIES.get(geography, (geography, ()))
+        short = {"USA": ("U.S.A.", "U.S.", "US"), "GBR": ("U.K.", "UK")}.get(geography, ())
+        for term in sorted({name, *aliases, *short, geography}, key=len, reverse=True):
+            remainder = re.sub(r"(?<![A-Za-z])" + re.escape(term) + r"(?![A-Za-z])", " ", remainder,
+                               flags=0 if term in short else re.I)
+    remainder = _ANCHOR_PROVIDER_DIGITS_RE.sub("Data", remainder)
+    return not (re.search(r"\d|[<>=≥≤]", remainder) or _ANCHOR_BLOCKERS_RE.search(remainder)
+                or _anchor_foreign_qualifier(remainder, row))
+
+
 def _data_anchor_matches_binary(anchor: Dict[str, Any], binary: Dict[str, Any], official_data: Any) -> bool:
     """Admit optional anchors only when the displayed proposition is unambiguous.
 
     The shared helper checks the dataset; this boundary also binds the model's
-    threshold to its prose. Unparseable prose keeps its existing forecast but
-    loses automatic anchoring rather than acquiring a different settlement rule.
+    threshold to its prose. The criterion must state the canonical clause for the
+    anchored series; the statement must state the same proposition in natural
+    language (EN or ZH). Anything ambiguous keeps its forecast but loses automatic
+    anchoring rather than acquiring a different settlement rule.
     """
-    statement = str(binary.get("statement") or "")
-    criteria = str(binary.get("resolution_criteria") or "")
-    text = statement + " " + criteria
     rows = official_series_rows(official_data)
     row = next((r for r in rows if r["series"] == anchor["series"]), None)
     if row is None:
         return False
-    metric_words = set(re.findall(r"[a-z]{4,}", str(row.get("title") or "").lower()))
-    if row["series"] not in criteria:
+    try:
+        criteria = str(binary.get("resolution_criteria") or "")
+        return ((_anchor_criteria_ok(criteria, anchor, row)
+                 or _anchor_criteria_ok(_strip_anchor_settlement(criteria, anchor, row), anchor, row))
+                and _anchor_statement_ok(str(binary.get("statement") or ""), anchor, row))
+    except (KeyError, TypeError, ValueError, OverflowError):
         return False
-    if row["series"] not in statement and (not metric_words or not metric_words.issubset(set(re.findall(r"[a-z]{4,}", statement.lower())))):
-        return False
-    unit = str(row["units"])
-    unit_pattern = (r"(?:%|percent\b)" if unit.lower() in {"%", "percent", "percentage"}
-                    else re.escape(unit))
-    comparison = re.compile(r"(>=|<=|>|<|≥|≤)\s*([+-]?\d+(?:\.\d+)?)\s*" + unit_pattern, re.I)
-    criterion_matches = list(comparison.finditer(criteria))
-    statement_matches = list(comparison.finditer(statement))
-    matches = list(comparison.finditer(text))
-    if len(criterion_matches) != 1 or len(statement_matches) != 1 or any(
-            m.group(1).replace("≥", ">=").replace("≤", "<=") != anchor["comparator"]
-            or float(m.group(2)) != anchor["threshold"] for m in matches):
-        return False
-    period = str(anchor.get("observation") or anchor.get("period") or "")
-    frequency = row["frequency"]
-    # Admit complete affirmative predicates, not a matching substring inside
-    # negation, alternatives or conditional events. Canonical IDs support every
-    # report language without trying to infer the meaning of arbitrary prose.
-    labels = {row["series"].casefold(), str(row.get("title") or "").casefold()}
-    geography = str(row.get("geography") or "")
-    geographies = {geography} if geography else set()
-    if geography == "USA":
-        geographies.update({"US", "United States"})
-    labels.update(f"{geo} {row.get('title', '')}".casefold() for geo in geographies)
-    month_names = ("January", "February", "March", "April", "May", "June", "July", "August",
-                   "September", "October", "November", "December")
-    period_pattern = {
-        "M": r"(?:\d{4}-\d{2}(?:-01)?|(?:" + "|".join(month_names) + r")\s+\d{4}|\d{4}年\d{1,2}月)",
-        "Q": r"\d{4}[- ]?Q[1-4]",
-        "A": r"\d{4}",
-        "D": r"\d{4}-\d{2}-\d{2}",
-        "W": r"\d{4}-\d{2}-\d{2}",
-    }[frequency]
-    for surface, match, allowed in ((statement, statement_matches[0], labels),
-                                     (criteria, criterion_matches[0], {row["series"].casefold()})):
-        prefix = surface[:match.start()].strip().rstrip(":").casefold()
-        prefix = re.sub(r"^the\s+|\s+is$", "", prefix)
-        suffix = surface[match.end():].strip()
-        if prefix not in allowed or not re.fullmatch(
-                r"(?:(?:in|for|on)\s+)?" + period_pattern + r"[.!]?", suffix, re.I):
-            return False
-    dates = set()
-    if frequency == "M":
-        dates.update(m.group(0) for m in re.finditer(r"\b\d{4}-\d{2}(?!-\d|\d)", text))
-        dates.update(value[:7] for value in re.findall(r"\b\d{4}-\d{2}-01\b", text))
-        for month, name in enumerate(month_names, 1):
-            dates.update(f"{year}-{month:02d}" for year in re.findall(rf"\b{name}\s+(\d{{4}})\b", text, re.I))
-        dates.update(f"{year}-{int(month):02d}" for year, month in re.findall(r"(\d{4})年(\d{1,2})月", text))
-        target = period[:7]
-    elif frequency == "Q":
-        dates.update(f"{year}-Q{quarter}" for year, quarter in re.findall(r"\b(\d{4})[- ]?Q([1-4])\b", text, re.I))
-        target = period if "Q" in period else f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
-    elif frequency == "A":
-        dates.update(re.findall(r"\b\d{4}\b", text))
-        target = period[:4]
-    else:
-        dates.update(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text))
-        target = period
-    return dates == {target}
 
 
 def _normalize_binaries(items: Any, *, start_index: int = 1,
                         allowed_themes: Optional[List[str]] = None,
                         market_lookup: Optional[Dict[str, float]] = None,
-                        official_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                        official_data: Optional[Dict[str, Any]] = None,
+                        language: str = "English") -> List[Dict[str, Any]]:
     """Clamp/round each probability INDEPENDENTLY (no sum-normalization), dedup by
     statement, attach an objective-criteria quality flag. Drops rows missing a
     statement or a numeric probability.
@@ -1820,9 +3235,33 @@ def _normalize_binaries(items: Any, *, start_index: int = 1,
             from .official_data import validate_data_anchor
             data_anchor = validate_data_anchor(it["data_anchor"], official_data)
             if data_anchor is not None and _data_anchor_matches_binary(data_anchor, it, official_data):
-                row["data_anchor"] = data_anchor
+                _admit_data_anchor(row, data_anchor, official_data, language)
         out.append(row)
     return out
+
+
+def _admit_data_anchor(row: Dict[str, Any], anchor: Dict[str, Any], official_data: Any, language: str) -> None:
+    """Attach an admitted anchor: display-safe latest, outside view, canonical settlement.
+
+    ``latest_value``/``latest_date`` come from the same helper as the data pack and
+    charts (complete historical observations only); the probability is never changed.
+    ``auto_resolvable`` is False for series the data layer never settles automatically
+    (official_auto_resolvable), so the resolution monitor can leave them to manual review.
+    """
+    series = next(r for r in official_series_rows(official_data) if r["series"] == anchor["series"])
+    latest = official_latest_observed(series)
+    anchor["latest_value"], anchor["latest_date"] = (latest["value"], latest["date"]) if latest else (None, "")
+    anchor["auto_resolvable"] = official_auto_resolvable(series)
+    base_rate = official_empirical_base_rate(series, anchor)
+    if base_rate is not None:
+        anchor["empirical_base_rate"] = base_rate
+    row["data_anchor"] = anchor
+    zh = str(language or "").lower().startswith(("zh", "chinese")) or "中文" in str(language or "")
+    sentence = _anchor_settlement_sentence(anchor, zh, series)
+    if sentence not in row["resolution_criteria"]:
+        row["resolution_criteria"] = (row["resolution_criteria"].rstrip() + " " + sentence).strip()
+        row["criteria_sharp"] = bool(validate_resolution_criteria(
+            f"{row['statement']} {row['resolution_criteria']}").get("sharp"))
 
 
 def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
@@ -1872,12 +3311,35 @@ def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
         issues.append(f"only {sharp}/{n} have objective metric+number+date criteria")
     if n > 1 and theme_cardinality <= 1:
         issues.append("all forecasts share a single theme — no thematic spread")
-    return {
+    out = {
         "count": n, "prob_stdev": round(std, 3), "midband_share": round(midband_share, 3),
         "conviction_count": conviction, "sharp_criteria_count": sharp, "themes": themes,
         "theme_cardinality": theme_cardinality,
         "passed": bool(passed), "issues": issues,
     }
+    # Official-data outside view (fix contract §1.8): flag, never adjust, a model
+    # probability more than 25 pp from the empirical base rate of its data anchor. A rate
+    # that pools the seasons of a series without seasonal adjustment is shown with that
+    # caveat but is no yardstick for a divergence flag.
+    divergent = []
+    for b in binaries:
+        anchor = b.get("data_anchor") if isinstance(b.get("data_anchor"), dict) else {}
+        base = anchor.get("empirical_base_rate")
+        if (isinstance(base, dict) and isinstance(base.get("p"), (int, float))
+                and base.get("seasonal_basis") != "all_start_months"):
+            gap = round(b["probability"] - base["p"], 4)
+            if abs(gap) > _BASE_RATE_DIVERGENCE:
+                divergent.append({"id": str(b.get("id") or ""), "probability": b["probability"],
+                                  "empirical_p": base["p"], "divergence": gap})
+    if divergent:
+        out["base_rate_divergence"] = divergent
+        issues.append(f"{len(divergent)} data-anchored forecast(s) differ from the official-data empirical "
+                      f"base rate by more than {_BASE_RATE_DIVERGENCE * 100:.0f} pp: "
+                      + ", ".join(d["id"] for d in divergent))
+    return out
+
+
+_BASE_RATE_DIVERGENCE = 0.25
 
 
 # --------------------------------------------- PM-2: deterministic market anchoring
@@ -2878,6 +4340,28 @@ def _run_ensemble_draws(models: List[str], draw_fn: Any, min_count: int, *,
     return secondary
 
 
+_BINARY_DATA_ANCHOR_EXAMPLE = (
+    "\nFormat illustration only (use a series and period that are actually listed): "
+    '{"statement": "The US unemployment rate is at least 5% in June 2027", '
+    '"resolution_criteria": "Resolves YES if fred:UNRATE >= 5% in 2027-06 (source: FRED).", '
+    '"data_anchor": {"series": "fred:UNRATE", "comparator": ">=", "threshold": 5, '
+    '"observation": "2027-06", "transform": "", "units": "Percent"}}. '
+    "The statement may use words (at least, above, below, at most; 不低于, 超过, 低于, 不超过) "
+    "but must name one metric, one threshold and the same single period, with no second "
+    "number, negation, alternative or condition; the criterion must contain exactly one "
+    "'<series> <comparator> <threshold> [units] in <period>' clause plus an optional source."
+)
+
+
+def _cap_at_line(text: str, cap: int) -> str:
+    """Bound prompt text at a line boundary, noting omitted lines (unchanged when within cap)."""
+    if len(text) <= cap:
+        return text
+    note = "\n[further rows omitted for length]"
+    cut = text.rfind("\n", 0, max(0, cap - len(note)))
+    return (text[:cut] if cut > 0 else text[:max(0, cap - len(note))]) + note
+
+
 def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              language: str = "English",
                              situation_brief: Optional[str] = None,
@@ -2968,20 +4452,39 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         if market_aware:
             user += _BINARY_MARKET_RULE
         if data_pack and official_data:
+            pack = _cap_at_line(str(data_pack), OFFICIAL_PACK_PROMPT_CAP)
             user += (
-                "\n\n[Official data snapshot]\n" + str(data_pack)[:3500]
-                + '\nFor a binary about a listed series, optionally add data_anchor '
+                ("\n\n" if pack.startswith("[Official data snapshot") else "\n\n[Official data snapshot]\n")
+                + pack
+                + '\nWhenever a binary\'s metric is one of the listed series, add data_anchor '
                   '{"series": "exact canonical ID", "comparator": ">|>=|<|<=", '
-                  '"threshold": number, "observation": "YYYY-MM|YYYY-Qn|YYYY|YYYY-MM-DD", '
-                  '"transform": "exact listed transform", "units": "exact listed units"}. '
-                  "Match the series frequency and a single exact period. Thresholds and "
-                  "probabilities are model forecasts; publisher projections are not observed "
-                  "outcomes. In resolution_criteria include the canonical series ID, literal "
-                  "comparator, numeric threshold, units and observation period exactly; keep "
-                  "the statement's metric and numeric comparison consistent with this criterion "
-                  "(use the same literal comparator and units in the statement). Do not transcribe latest "
-                  "values or invent series metadata."
+                  '"threshold": number, "observation": "YYYY-MM|YYYY-Qn|YYYY|YYYY-MM-DD|FYyyyy", '
+                  '"transform": "exact listed transform", "units": "exact listed units"}: an anchored '
+                  "binary settles from the publisher's data, and its probability is compared with the "
+                  "empirical base rate computed from the stored history (the outside view below). "
+                  "Match the series frequency and a single exact period (monthly YYYY-MM, quarterly "
+                  "YYYY-Qn, annual YYYY; a fiscal-year series listed with FY labels uses its label, such "
+                  "as FY2026). For a series whose monthly values are end-of-month values (the "
+                  "end-of-month value of daily data, or a monthly 'End of period' series), a question "
+                  "about the last day of a month or the end of a year uses that month ('on 31 December "
+                  "2026' or 'at the end of 2026' -> 2026-12; 'by the end of 2026' is a deadline, not a "
+                  "period); a monthly mean of daily data cannot settle a single-day question, so do not "
+                  "anchor one. In the statement, name the metric as the snapshot lists it (its title, or a "
+                  "short form keeping the title's distinctive words, such as 'the US unemployment rate'); "
+                  "when your wording differs from the title, put the canonical ID in parentheses right "
+                  "after it (such as 'the US jobless rate (fred:UNRATE)'), or the anchor cannot be "
+                  "verified and is dropped. State thresholds with at least / above / below / at most: an "
+                  "exact-value statement ('is 4.25%') cannot be anchored. Thresholds and probabilities are model "
+                  "forecasts; publisher projections are not observed outcomes. In resolution_criteria "
+                  "include the canonical series ID, literal comparator, numeric threshold, units and "
+                  "observation period exactly; keep the statement's metric and numeric comparison "
+                  "consistent with this criterion (use the same literal comparator and units in the "
+                  "statement). Do not transcribe latest values or invent series metadata."
+                + _BINARY_DATA_ANCHOR_EXAMPLE
             )
+            outside_view = official_outside_view_block(official_data, horizon_date, language)
+            if outside_view:
+                user += "\n\n" + outside_view
         if exclude:
             user += "\n\nDo NOT repeat these already-captured forecasts (produce NEW, distinct ones):\n" + \
                 "\n".join(f"- {s}" for s in exclude[:30])
@@ -3016,7 +4519,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
         items = raw.get("binary_forecasts") if isinstance(raw, dict) else None
         return _normalize_binaries(items or [], allowed_themes=themes,
                                    market_lookup=market_lookup or None,
-                                   official_data=official_data)
+                                   official_data=official_data, language=language)
 
     def _merge(base: List[Dict[str, Any]], extra: List[Dict[str, Any]]) -> None:
         seen = {_binary_key(b["statement"]) for b in base}
@@ -3273,7 +4776,18 @@ _SPINE_INSTRUCTIONS = """你是预测校准专家。在撰写任何叙事之前�
 adjustment_rationale 说明，以抵御基率忽视/内视过度自信。先确定数字与判定标准，再让叙事去捍卫它们。"""
 
 
-def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str, Any]:
+_SPINE_METRIC_RANGE_RULE = (
+    "\n\n[情景量化区间（可选）]\n若某情景可由上方所列官方序列在单一观察期的数值区间刻画，为该情景增加 "
+    'metric_range：{"series": "所列规范ID（原样）", "low": 数值或null, "high": 数值或null, '
+    '"period": "YYYY-MM|YYYY-Qn|YYYY|YYYY-MM-DD|FYyyyy（与序列频率一致；财年序列用所列 FY 标签，如 FY2026）", '
+    '"units": "所列单位原文"}。'
+    "low/high 至少一个为数值（开区间用 null），同一序列的各情景区间应互斥；不要使用未列出的序列，"
+    "无法量化的情景不要加此字段。"
+)
+
+
+def _spine_draw(llm, user: str, temperature: float, max_tokens: int, *,
+                keep_metric_range: bool = False) -> Dict[str, Any]:
     """One spine LLM draw → assembled forecast dict (degrade-safe on bad replies)."""
     raw = llm.chat_json(
         messages=[{"role": "user", "content": user}],
@@ -3282,7 +4796,7 @@ def _spine_draw(llm, user: str, temperature: float, max_tokens: int) -> Dict[str
     )
     if not isinstance(raw, dict):
         raw = {}
-    return _assemble_forecast(raw)
+    return _assemble_forecast(raw, keep_metric_range=keep_metric_range)
 
 
 def _pool_spine_draws(draws: List[Dict[str, Any]], floor: float) -> Dict[str, Any]:
@@ -3430,7 +4944,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                           base_distribution: Optional[Dict[str, float]] = None,
                           quantitative_facts: str = "",
                           market_block: str = "",
-                          language: str = "") -> Dict[str, Any]:
+                          language: str = "",
+                          official_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
     simulation SIGNALS — *before* any prose is written.
 
@@ -3449,13 +4964,16 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         cite a metric + as-of date.
       * ``REPORT_SPINE_SELFCONSISTENCY_K`` — K self-consistency draws pooled to
         mean + spread (R2-CAL-1 / R2-CAL-17).
+      * ``official_data`` — the stored carrier: adds the empirical outside view from
+        official history and asks for an optional per-scenario ``metric_range``,
+        validated against the carrier (invalid ranges are dropped).
     """
     # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
     # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
     cap_brief = int(_cfg("REPORT_SPINE_INPUT_CAP_BRIEF", 2000))
     cap_inputs = int(_cfg("REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
     cap_signal = int(_cfg("REPORT_SPINE_INPUT_CAP_SIGNAL", 6000))
-    cap_facts = int(_cfg("REPORT_SPINE_INPUT_CAP_FACTS", 3000))
+    cap_facts = int(_cfg("REPORT_SPINE_INPUT_CAP_FACTS", OFFICIAL_PACK_PROMPT_CAP))
     user = _SPINE_INSTRUCTIONS
     if central_question:
         user += f"\n\n[核心问题]\n{central_question[:600]}"
@@ -3479,7 +4997,13 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     # R2-CAL-16：S 级量化事实数字底座，要求锚点引用 指标 + as_of 日期。
     if quantitative_facts:
         user += ("\n\n[S级量化事实（数字底座，base_rate_anchor 须引用其中的 指标+as_of 日期）]\n"
-                 + str(quantitative_facts)[:cap_facts])
+                 + _cap_at_line(str(quantitative_facts), cap_facts))
+    # 官方数据外部视角 + 情景量化区间（仅在传入已存储官方数据时追加；缺省提示词逐字节不变）。
+    if official_data:
+        outside_view = official_outside_view_block(official_data, horizon, language or "Chinese")
+        if outside_view:
+            user += "\n\n" + outside_view
+        user += _SPINE_METRIC_RANGE_RULE
     # R2-CAL-3：把模拟得到的 WorldState.shares 作为基准分布锚点，约束情景集合与概率带。
     anchor_ws = bool(_cfg("REPORT_SPINE_ANCHOR_WORLDSTATE", False)) and isinstance(base_distribution, dict)
     if anchor_ws and base_distribution:
@@ -3500,11 +5024,12 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
         k = 1
     k = max(1, k)
 
-    first = _spine_draw(llm, user, 0.2, max_tokens)
+    keep_ranges = bool(official_data)
+    first = _spine_draw(llm, user, 0.2, max_tokens, keep_metric_range=keep_ranges)
     if not first.get("scenarios"):
         # R2-CAL-11：骨架为空 → 告警并重试一次后再让上层回退成稿后抽取。
         logger.warning("预测骨架首轮无情景，重试一次")
-        first = _spine_draw(llm, user, 0.2, max_tokens)
+        first = _spine_draw(llm, user, 0.2, max_tokens, keep_metric_range=keep_ranges)
 
     draws = [first]
     if k > 1 and first.get("scenarios"):
@@ -3513,12 +5038,17 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                          "（其和≈1），不要新增或重命名情景]\n" + "；".join(names))
         for i in range(1, k):
             temp = min(0.9, 0.2 + 0.15 * i)  # varied temperature for diversity
-            d = _spine_draw(llm, follow, temp, max_tokens)
+            d = _spine_draw(llm, follow, temp, max_tokens, keep_metric_range=keep_ranges)
             if d.get("scenarios"):
                 draws.append(d)
 
     out = _pool_spine_draws(draws, floor) if len(draws) > 1 else first
     out["derived_from"] = "spine"
+    for scenario in out.get("scenarios") or []:
+        if isinstance(scenario, dict) and "metric_range" in scenario:
+            metric_range = validate_metric_range(scenario.pop("metric_range"), official_data)
+            if metric_range is not None:
+                scenario["metric_range"] = metric_range
 
     # R2-CAL-3 echo + R2-CAL-18 per-scenario model-vs-sim divergence.
     if anchor_ws and base_distribution and out.get("scenarios"):
@@ -3636,6 +5166,18 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
                   if zh else
                   " Forecasts with a market-implied probability are benchmarked against live "
                   "prediction markets (markets are calibration anchors, not ground truth).")
+    # 官方数据经验基率列：任一预测的 data_anchor 带 empirical_base_rate 时追加（外部视角，
+    # 不改概率）；全无时不加列，表格逐字节不变。
+    has_base_rate = any(isinstance(b, dict) and isinstance(b.get("data_anchor"), dict)
+                        and isinstance(b["data_anchor"].get("empirical_base_rate"), dict) for b in binaries)
+    if has_base_rate:
+        cols += " 官方数据经验基率 |" if zh else " Official-data base rate |"
+        sep += "---|"
+        intro += ("经验基率＝历史上从最新完整观测出发、同样期数的变化中满足阈值的比例（外部视角，非预测）。"
+                  if zh else
+                  " The official-data base rate is the share of past moves over the same number of "
+                  "periods, applied to the latest complete observation, that meet the threshold "
+                  "(an outside view, not a forecast).")
     lines = [head, "", intro, "", cols, sep]
     # ITEM 12：多模型集成开启时，概率列以 ±spread（跨模型样本 stdev）显示分歧；spread 超阈值
     # （binary_quality.ensemble.spread_threshold，缺省 0.15）的预测加 ⚠ 低一致性标记。无 ensemble
@@ -3679,6 +5221,8 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
                     if dv is not None:
                         cell += f" (Δ{dv * 100:+.0f}pt)"
             line += f" {_esc_cell(cell)} |"
+        if has_base_rate:
+            line += f" {_esc_cell(_base_rate_cell(b, zh))} |"
         lines.append(line)
     q = forecast.get("binary_quality") or {}
     if q:
@@ -3701,6 +5245,17 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
                            f"(spread > {_ens_meta2.get('spread_threshold')}, flagged ⚠ in the "
                            f"probability column — interpret with caution)._")]
     return "\n".join(lines)
+
+
+def _base_rate_cell(binary: Dict[str, Any], zh: bool) -> str:
+    anchor = binary.get("data_anchor") if isinstance(binary.get("data_anchor"), dict) else {}
+    base = anchor.get("empirical_base_rate")
+    if not isinstance(base, dict) or not isinstance(base.get("p"), (int, float)):
+        return "—"
+    note = empirical_seasonal_note(base, zh)
+    if zh:
+        return f"{base['p'] * 100:.0f}%（n={base.get('n')}，{base.get('h')} 期" + (f"；{note}" if note else "") + "）"
+    return f"{base['p'] * 100:.0f}% (n={base.get('n')}, h={base.get('h')}" + (f"; {note}" if note else "") + ")"
 
 
 def upsert_binary_forecasts_block(markdown: str, block: str) -> tuple[str, str]:
@@ -3755,7 +5310,8 @@ def upsert_binary_forecasts_block(markdown: str, block: str) -> tuple[str, str]:
 def render_resolution_block(forecast: Optional[Dict[str, Any]],
                             indicators: Optional[List[Dict[str, Any]]] = None,
                             language: str = "Chinese",
-                            official_data: Optional[Dict[str, Any]] = None) -> str:
+                            official_data: Optional[Dict[str, Any]] = None,
+                            source_index: Optional[Dict[str, Any]] = None) -> str:
     """NEXTSTEPS P2-2: 渲染一个**确定性**的「如何验证本预测」章节。
 
     逐情景列出可证伪的判定标准 + 来自 forecast_inputs 的带日期/触发型观察指标（并把指标绑定到
@@ -3764,6 +5320,10 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
 
     WAVE9：新增 language 参数（默认 "Chinese"，与历史输出逐字节一致）——此前标题/表头硬编码
     中文，英文报告末尾出现整段中文章节。调用方（report_agent）传入报告输出语言。
+
+    官方观察序列表：最近完整历史观测与数据包/图表同源（official_latest_observed），数值经
+    format_value 格式化（大额附量级），附经验基率；传入 ``source_index``（报告引文索引）时
+    来源列带 [S#]。
     """
     if not isinstance(forecast, dict):
         return ""
@@ -3818,29 +5378,65 @@ def render_resolution_block(forecast: Optional[Dict[str, Any]],
         from .official_data import validate_data_anchor
         binaries = forecast.get("binary_forecasts")
         binaries = binaries if isinstance(binaries, list) else []
-        anchors = []
+        rows = {row["series"]: row for row in official_series_rows(official_data)}
+        anchored = []
         for binary in binaries:
             if not isinstance(binary, dict):
                 continue
             anchor = validate_data_anchor(binary.get("data_anchor"), official_data)
-            if anchor and _data_anchor_matches_binary(anchor, binary, official_data):
-                anchors.append(anchor)
-        if anchors:
+            if anchor and anchor["series"] in rows and _data_anchor_matches_binary(anchor, binary, official_data):
+                anchored.append((anchor, binary))
+        if anchored:
             lines += ["", "### 官方观察序列" if zh else "### Official series to watch",
-                      ("| 序列 | 最近历史观测 | 模型阈值 / 观察期 | 来源 |" if zh else
-                       "| Series | Latest historical observation | Model threshold / period | Source |"),
-                      "|---|---|---|---|"]
-            for anchor in anchors[:12]:
-                latest = ((f"{anchor['latest_value']} {anchor.get('units', '')} "
-                           f"({anchor.get('latest_date') or '—'})")
-                          if anchor.get("latest_value") is not None else
-                          ("暂无历史观测" if zh else "Historical observation unavailable"))
-                threshold = (f"{anchor['comparator']} {anchor['threshold']} "
-                             f"{anchor.get('units', '')} / {anchor['observation']}")
-                url = str(anchor.get("source_url") or "")
-                lines.append(f"| {_esc_cell(anchor['series'])} | {_esc_cell(latest)} | "
-                             f"{_esc_cell(threshold)} | [Source](<{url}>) |")
+                      ("| 序列 | 最近完整历史观测 | 模型阈值 / 观察期 | 经验基率 vs 模型概率 | 来源 |" if zh else
+                       "| Series | Latest complete historical observation | Model threshold / period | "
+                       "Empirical base rate vs model P | Source |"),
+                      "|---|---|---|---|---|"]
+            for anchor, binary in anchored[:12]:
+                lines.append(_official_watch_row(anchor, binary, rows[anchor["series"]], zh, source_index))
     return "\n".join(lines)
+
+
+def _official_watch_row(anchor: Dict[str, Any], binary: Dict[str, Any], row: Dict[str, Any], zh: bool,
+                        source_index: Optional[Dict[str, Any]]) -> str:
+    """One 'Official series to watch' row from the stored carrier (never model-transcribed values)."""
+    from .official_data import data_api
+    api = data_api()
+    units = str(row["units"])
+    percent = bool(api and api.is_percent_units(units))
+
+    def shown(value: float) -> str:
+        text = api.format_value(value, units) if api is not None else str(value)
+        scaled = api.scaled_value(value, units, "zh" if zh else "en") if api is not None else ""
+        return text + ("" if percent else f" {units}") + (f"（{scaled}）" if zh and scaled else f" ({scaled})" if scaled else "")
+
+    label = api.series_label(row, "zh" if zh else "en") if api is not None else row["series"]
+    series = f"{label}（{row['series']}）" if zh else f"{label} ({row['series']})"
+    latest = official_latest_observed(row)
+    if latest:
+        latest_period = official_anchor_period_text(row, latest["date"], row["frequency"])
+        latest_text = (f"{shown(latest['value'])}（{latest_period}）" if zh
+                       else f"{shown(latest['value'])} ({latest_period})")
+    else:
+        latest_text = "暂无历史观测" if zh else "Historical observation unavailable"
+    threshold = (f"{anchor['comparator']} {shown(anchor['threshold'])} / "
+                 f"{official_anchor_period_text(row, anchor['period'], anchor['frequency'])}")
+    base = official_empirical_base_rate(row, anchor)
+    probability = _coerce_float(binary.get("probability"))
+    model = f"{probability * 100:.0f}%" if probability is not None else "—"
+    if base:
+        note = empirical_seasonal_note(base, zh)
+        base_text = (f"{base['p'] * 100:.0f}%（n={base['n']}，{base['h']} 期" + (f"；{note}" if note else "")
+                     + f"）vs 模型 {model}" if zh
+                     else f"{base['p'] * 100:.0f}% (n={base['n']}, h={base['h']}" + (f"; {note}" if note else "")
+                     + f") vs model {model}")
+    else:
+        base_text = (f"历史样本不足 vs 模型 {model}" if zh else f"insufficient history vs model {model}")
+    tag = official_source_tag(row, source_index) if isinstance(source_index, dict) and source_index else ""
+    url = str(row.get("source_url") or "")
+    source = f"[{'来源' if zh else 'Source'}](<{url}>)" + (f" [{tag}]" if tag else "")
+    return (f"| {_esc_cell(series)} | {_esc_cell(latest_text)} | {_esc_cell(threshold)} | "
+            f"{_esc_cell(base_text)} | {source} |")
 
 
 _CRITIQUE_INSTRUCTIONS = """你是预测红队评审。下面是一个结构化预测对象（JSON）。请审查并修正它，重点检查：
@@ -3853,13 +5449,17 @@ key_uncertainties/confidence/confidence_rationale），并在每个情景加一�
 只输出 JSON。概率之和应≈1。"""
 
 
-def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dict[str, Any]:
+def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "",
+                           data_pack: str = "") -> Dict[str, Any]:
     """Red-team + recalibrate a structured forecast (EXECPLAN2 I-3-5).
 
     Runs one adversarial LLM pass that pushes back on overconfidence / base-rate
     neglect / unsupported leaps and may add a status-quo fallback scenario, then
     re-normalizes. Returns a new forecast dict tagged ``critiqued=True``; on any
-    failure returns the input unchanged (degrade-safe).
+    failure returns the input unchanged (degrade-safe). ``data_pack`` (stored
+    official data and its outside view) is appended as a fixed suffix block so the
+    base-rate check can use it; validated scenario ``metric_range`` values survive
+    by scenario name and the critique cannot invent new ones.
     """
     import json as _json
     try:
@@ -3867,6 +5467,7 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") ->
             messages=[{"role": "user",
                        "content": _CRITIQUE_INSTRUCTIONS + "\n\n[预测对象]\n"
                        + _json.dumps(forecast, ensure_ascii=False)
+                       + _official_context_suffix(data_pack)
                        + forecast_language_rule(language)}],
             temperature=0.2,
             max_tokens=2048,
@@ -3889,6 +5490,11 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "") ->
         for new_s, raw_s in zip(out["scenarios"], raw_scenarios or [], strict=True):
             if isinstance(raw_s, dict) and raw_s.get("critique_note"):
                 new_s["critique_note"] = str(raw_s["critique_note"])
+        ranges = {s.get("name"): s["metric_range"] for s in forecast.get("scenarios") or []
+                  if isinstance(s, dict) and isinstance(s.get("metric_range"), dict)}
+        for new_s in out["scenarios"]:
+            if new_s.get("name") in ranges:
+                new_s["metric_range"] = ranges[new_s["name"]]
         if raw.get("confidence"):
             c = str(raw["confidence"]).lower()
             if c in ("low", "medium", "high"):
@@ -3984,11 +5590,13 @@ _PREMORTEM_INSTRUCTIONS = """你是预测红队的「事前验尸（pre-mortem�
   "overconfident_scenario": "情景名（可空）" }"""
 
 
-def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dict[str, Any]:
+def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "",
+                       data_pack: str = "") -> Dict[str, Any]:
     """R2-CAL-8 pre-mortem: imagine the forecast failed badly, surface missed signals,
     and gently widen uncertainty (append key_uncertainties + shave the overconfident
     peak toward the underweighted scenario, bounded). Gated by REPORT_PREMORTEM; on any
-    failure returns the input unchanged (degrade-safe).
+    failure returns the input unchanged (degrade-safe). ``data_pack`` is appended as a
+    fixed suffix block ("" leaves the prompt unchanged).
     """
     if not _cfg("REPORT_PREMORTEM", False):
         return forecast
@@ -4001,6 +5609,7 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "") -> Dic
             messages=[{"role": "user",
                        "content": _PREMORTEM_INSTRUCTIONS + "\n\n[预测对象]\n"
                        + _json.dumps(forecast, ensure_ascii=False)
+                       + _official_context_suffix(data_pack)
                        + forecast_language_rule(language)}],
             temperature=0.3,
             max_tokens=1024,

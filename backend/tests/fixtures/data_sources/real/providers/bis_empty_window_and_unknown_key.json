@@ -1,0 +1,54 @@
+{
+ "captured_at": "2026-10-13T12:39:33Z",
+ "clock": 1791895173,
+ "note": "Live BIS answers (vendored mcp-bis server, through the data hub) for a well-formed key with no observations in the window (an ended month BIS has not published yet, and a future month) and for a key BIS never published. 'error' is the hub's CallResult.error (redacted, clipped by the hub); 'text' is the full tool text.",
+ "series": "bis:WS_LONG_CPI/M.US.771",
+ "request": {
+  "start": "2026-09-01",
+  "end": "2026-09-30",
+  "max_obs": 240
+ },
+ "calls": [
+  {
+   "provider": "bis",
+   "tool": "fetch_dataset",
+   "args": {
+    "flow_ref": "BIS,WS_LONG_CPI,1.0",
+    "key": "M.US.771",
+    "start_period": "2026-09-01",
+    "end_period": "2026-09-30",
+    "limit": 5000
+   },
+   "error": "user_error: flow_ref \"BIS,WS_LONG_CPI,1.0\" and key \"M.US.771\" ARE valid — BIS has published this exact series — so this is a well-formed key with a genuinely empty result, not a malformed one. There is no data in 2026-09-01–2026-09-30; its most recent published observation is 2026-08. If this ser...",
+   "text": "user_error: flow_ref \"BIS,WS_LONG_CPI,1.0\" and key \"M.US.771\" ARE valid — BIS has published this exact series — so this is a well-formed key with a genuinely empty result, not a malformed one. There is no data in 2026-09-01–2026-09-30; its most recent published observation is 2026-08. If this series looks discontinued or superseded, try fetch_dataset with no key for this flow_ref to see which keys are currently active (a euro-area country's national rate series, for example, is typically superseded by the aggregate code \"XM\")."
+  }
+ ],
+ "other_calls": [
+  {
+   "provider": "bis",
+   "tool": "fetch_dataset",
+   "args": {
+    "flow_ref": "BIS,WS_CBPOL,1.0",
+    "key": "M.US",
+    "start_period": "2026-11-01",
+    "end_period": "2026-11-30",
+    "limit": 5000
+   },
+   "error": "user_error: flow_ref \"BIS,WS_CBPOL,1.0\" and key \"M.US\" ARE valid — BIS has published this exact series — so this is a well-formed key with a genuinely empty result, not a malformed one. There is no data in 2026-11-01–2026-11-30; its most recent published observation is 2026-09. BIS's own note on...",
+   "text": "user_error: flow_ref \"BIS,WS_CBPOL,1.0\" and key \"M.US\" ARE valid — BIS has published this exact series — so this is a well-formed key with a genuinely empty result, not a malformed one. There is no data in 2026-11-01–2026-11-30; its most recent published observation is 2026-09. BIS's own note on this series: \"From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.\" If this series looks discontinued or superseded, try fetch_dataset with no key for this flow_ref to see which keys are currently active (a euro-area country's national rate series, for example, is typically superseded by the aggregate code \"XM\")."
+  },
+  {
+   "provider": "bis",
+   "tool": "fetch_dataset",
+   "args": {
+    "flow_ref": "BIS,WS_CBPOL,1.0",
+    "key": "M.ZZ",
+    "start_period": "2025-01-01",
+    "end_period": "2025-12-31",
+    "limit": 5000
+   },
+   "error": "user_error: BIS has never published a series matching key \"M.ZZ\" under flow_ref \"BIS,WS_CBPOL,1.0\" — this is a malformed or wrong-value key, not a temporarily-empty one. Keys are positional over this flow's dimensions, in order: FREQ.REF_AREA (leave a position empty to not filter on it, e.g. \".\")...",
+   "text": "user_error: BIS has never published a series matching key \"M.ZZ\" under flow_ref \"BIS,WS_CBPOL,1.0\" — this is a malformed or wrong-value key, not a temporarily-empty one. Keys are positional over this flow's dimensions, in order: FREQ.REF_AREA (leave a position empty to not filter on it, e.g. \".\"). Re-run fetch_dataset with no key and a bounded start_period/end_period to see the values actually present, then filter."
+  }
+ ]
+}

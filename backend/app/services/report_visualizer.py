@@ -245,6 +245,7 @@ _GRID = "#e1e0d9"
 _AXIS = "#c3c2b7"
 _INK = "#0b0b0b"
 _INK_2 = "#52514e"
+_OFFICIAL_HORIZON_COLOR = "#94a3b8"  # 官方序列详图的预测期限竖线（实线，区别于各点线/虚线数据与阈值）
 
 # 影响力/显著度分级 → 数值（气泡图 y 轴与网络图节点排序共用）。
 _LEVEL_NUM = {"very high": 4.0, "high": 3.0, "medium": 2.0, "med": 2.0,
@@ -4314,15 +4315,19 @@ class ReportVisualizer:
 
     @staticmethod
     def _official_chart_panels(official_data: Any, forecast: Any) -> List[Dict[str, Any]]:
-        from .forecast_extractor import official_series_rows, official_observation_kind, _data_anchor_matches_binary
+        from .forecast_extractor import (
+            _data_anchor_matches_binary, official_empirical_base_rate, official_latest_observed,
+            official_observation_kinds, official_series_rows, validate_metric_range,
+        )
         from .official_data import validate_data_anchor
 
         rows = official_series_rows(official_data)
         binaries = forecast.get("binary_forecasts", []) if isinstance(forecast, dict) else []
+        scenarios = forecast.get("scenarios", []) if isinstance(forecast, dict) else []
         panels = []
         for row in rows:
             points = row["observations"]
-            kinds = [official_observation_kind(row, p) for p in points]
+            kinds = official_observation_kinds(row)
             thresholds = []
             for binary in binaries if isinstance(binaries, list) else []:
                 if not isinstance(binary, dict):
@@ -4331,13 +4336,48 @@ class ReportVisualizer:
                 if (anchor and anchor["series"] == row["series"]
                         and _data_anchor_matches_binary(anchor, binary, official_data)):
                     probability = _to_float(binary.get("probability"))
-                    thresholds.append({**anchor, "probability": probability})
+                    thresholds.append({**anchor, "probability": probability,
+                                       "empirical_base_rate": official_empirical_base_rate(row, anchor)})
+            bands = []
+            for scenario in (scenarios if isinstance(scenarios, list) else [])[:6]:
+                if not isinstance(scenario, dict):
+                    continue
+                metric_range = validate_metric_range(scenario.get("metric_range"), official_data)
+                if metric_range and metric_range["series"] == row["series"]:
+                    bands.append({**metric_range, "name": str(scenario.get("name") or "Scenario"),
+                                  "probability": _to_float(scenario.get("probability"))})
+            named = {band["name"] for band in bands}
+            for band in ReportVisualizer._official_scenario_bands(row, forecast):
+                if band["name"] not in named:
+                    bands.append({**band, "period": f"{int(band['scope']):04d}-01-01", "frequency": "A"})
+            latest = official_latest_observed(row)
+            # A scenario range is drawn only for a period not yet observed.
+            bands = [band for band in bands
+                     if not latest or ReportVisualizer._official_band_bounds(band)[1] > latest["date"]]
             panels.append({"row": row, "x": [p["date"] for p in points],
                            "values": {kind: [p["value"] if k == kind else None
                                              for p, k in zip(points, kinds, strict=True)]
-                                      for kind in dict.fromkeys(kinds)},
-                           "thresholds": thresholds[:6]})
+                                      for kind in ReportVisualizer._OFFICIAL_STYLES if kind in kinds},
+                           "thresholds": thresholds[:6], "bands": bands[:6], "latest": latest})
         return panels
+
+    @staticmethod
+    def _official_rank(panels: List[Dict[str, Any]], source_index: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Anchored/banded first, then KIQ-linked, then cited; providers interleave within a class."""
+        from .forecast_extractor import official_source_tag
+
+        counts: Dict[Tuple[Any, ...], int] = {}
+        keyed = []
+        for position, panel in enumerate(panels):
+            row = panel["row"]
+            kiqs = row.get("kiqs") if isinstance(row.get("kiqs"), list) else []
+            cited = bool(source_index) and bool(official_source_tag(row, source_index))
+            group = (not (panel["thresholds"] or panel["bands"]), not kiqs, not cited)
+            provider = str(row.get("provider") or row["series"].split(":", 1)[0])
+            turn = counts.get((group, provider), 0)
+            counts[(group, provider)] = turn + 1
+            keyed.append(((group, turn, position), panel))
+        return [panel for _key, panel in sorted(keyed, key=lambda item: item[0])]
 
     @staticmethod
     def _official_horizon(forecast: Any) -> Optional[str]:
@@ -4351,8 +4391,10 @@ class ReportVisualizer:
 
     @staticmethod
     def _official_scenario_bands(row: Dict[str, Any], forecast: Any) -> List[Dict[str, Any]]:
+        """Bands parsed from annual prose criteria (structured ``metric_range`` covers any frequency)."""
         from .forecast_extractor import _extract_comparable_numeric_range, _normalise_metric_label
-        # The existing range parser resolves whole years, not monthly/quarterly
+        from .official_data import data_api
+        # The prose range parser resolves whole years, not monthly/quarterly
         # periods or adjustment conventions. Only annual series can match it.
         if not isinstance(forecast, dict) or row.get("transform") or row.get("frequency") != "A":
             return []
@@ -4362,8 +4404,9 @@ class ReportVisualizer:
         scenarios = forecast.get("scenarios")
         if not isinstance(scenarios, list):
             return []
+        api = data_api()
         units = str(row["units"]).lower()
-        unit = "%" if units in {"percent", "%", "percentage"} else units
+        unit = "%" if api is not None and api.is_percent_units(row["units"]) else units
         bands = []
         for scenario in scenarios[:6]:
             if not isinstance(scenario, dict):
@@ -4372,16 +4415,30 @@ class ReportVisualizer:
             if (interval and interval["metric"] == _normalise_metric_label(row.get("title", ""))
                     and interval["unit"] == unit and interval.get("scope") == horizon[:4]
                     and math.isfinite(interval["low"]) and math.isfinite(interval["high"])):
-                bands.append({**interval, "name": str(scenario.get("name") or "Scenario")})
+                bands.append({**interval, "name": str(scenario.get("name") or "Scenario"),
+                              "probability": _to_float(scenario.get("probability"))})
         return bands
 
     _OFFICIAL_STYLES = {
         "historical observation": ("Historical observations", "#2563eb", "solid"),
+        "partial-period value": ("Partial period (incomplete, not a full observation)", "#0891b2", "dot"),
         "publisher projection": ("Publisher projections", "#d97706", "dash"),
         "publisher estimate": ("Publisher estimates", "#9333ea", "dot"),
         "publisher preliminary": ("Publisher preliminary values", "#b45309", "dot"),
         "unclassified publisher value": ("Publisher values — status unknown", "#64748b", "dot"),
     }
+    _OFFICIAL_BAND_COLORS = ("#22c55e", "#0ea5e9", "#a855f7", "#f97316", "#14b8a6", "#e11d48")
+
+    @staticmethod
+    def _official_period_after(period: str, frequency: str) -> str:
+        """Start of the period following ``period`` (exclusive end of its span)."""
+        last = dt.date.fromisoformat(period)
+        if frequency in {"D", "W"}:
+            return (last + dt.timedelta(days=1 if frequency == "D" else 7)).isoformat()
+        months = {"M": 1, "Q": 3, "A": 12}[frequency]
+        total = last.year * 12 + last.month - 1 + months
+        year, month = divmod(total, 12)
+        return dt.date(year, month + 1, 1).isoformat()
 
     @staticmethod
     def _official_projection_bounds(panel: Dict[str, Any]) -> Optional[Tuple[str, str]]:
@@ -4389,21 +4446,168 @@ class ReportVisualizer:
                      if y is not None]
         if not projected:
             return None
-        last = dt.date.fromisoformat(projected[-1])
-        frequency = panel["row"]["frequency"]
-        if frequency in {"D", "W"}:
-            end = last + dt.timedelta(days=1 if frequency == "D" else 7)
-        else:
-            months = {"M": 1, "Q": 3, "A": 12}[frequency]
-            total = last.year * 12 + last.month - 1 + months
-            year, month = divmod(total, 12)
-            end = dt.date(year, month + 1, 1)
-        return projected[0], end.isoformat()
+        return projected[0], ReportVisualizer._official_period_after(projected[-1], panel["row"]["frequency"])
 
     @staticmethod
     def _official_band_bounds(band: Dict[str, Any]) -> Tuple[str, str]:
-        year = int(band["scope"])
-        return f"{year:04d}-01-01", f"{year + 1:04d}-01-01"
+        return band["period"], ReportVisualizer._official_period_after(band["period"], band["frequency"])
+
+    @staticmethod
+    def _official_fan(panel: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Empirical outcome fan to the furthest anchored or banded period of a detail panel."""
+        from .forecast_extractor import official_empirical_fan
+        periods = [t["period"] for t in panel["thresholds"]] + [b["period"] for b in panel["bands"]]
+        return official_empirical_fan(panel["row"], max(periods)) if periods else []
+
+    @staticmethod
+    def _official_chart_value(value: float, units: str, *, with_units: bool = True) -> str:
+        """Readable value for chart labels: magnitude words for large levels (45 trillion U.S. dollars).
+
+        ``with_units=False`` gives the short form for the plot-margin tag (45 trillion)."""
+        from .official_data import data_api, format_value
+        api = data_api()
+        scaled = api.scaled_value(value, units) if api is not None else ""
+        if scaled:
+            match = re.search(r"(-?\d+(?:\.\d+)?) (trillion|billion)", scaled)
+            exact = math.isclose(float(match.group(1)) * (1e12 if match.group(2) == "trillion" else 1e9), value,
+                                 rel_tol=1e-12)
+            return ("" if exact else "≈ ") + (match.group(0) if not with_units else scaled[match.start():])
+        return format_value(value, units)
+
+    @classmethod
+    def _official_threshold_label(cls, anchor: Dict[str, Any], units: str, row: Any = None) -> str:
+        """Legend label of a threshold; ``row`` (the charted series) names a US federal fiscal
+        year by its label ('FY2026')."""
+        from .forecast_extractor import official_anchor_period_text
+        period = official_anchor_period_text(row, anchor["period"], anchor["frequency"])
+        label = f"Model threshold {anchor['comparator']} {cls._official_chart_value(anchor['threshold'], units)} ({period})"
+        p = anchor["probability"]
+        if p is not None and math.isfinite(p) and 0 <= p <= 1:
+            label += f"; P(yes)={p:.0%}"
+        base = anchor.get("empirical_base_rate")
+        label += (f"; empirical base rate {base['p']:.0%} (n={base['n']}"
+                  f"{cls._official_seasonal_tag(base)})" if isinstance(base, dict)
+                  else "; empirical base rate: insufficient history")
+        return label
+
+    @staticmethod
+    def _official_seasonal_tag(sample: Any) -> str:
+        """', seasons pooled' for an empirical sample of a series without seasonal adjustment
+        (the short form: static legend labels are length-capped)."""
+        from .forecast_extractor import empirical_seasonal_note
+        note = empirical_seasonal_note(sample, False, short=True)
+        return f", {note}" if note else ""
+
+    @staticmethod
+    def _official_fan_label(label: str, fan: List[Dict[str, Any]]) -> str:
+        """A fan legend says which seasonal basis its steps of a series without seasonal
+        adjustment use; the seasonal profile reads in its short chart form. A fan whose steps
+        change basis (a seasonal profile for the near steps, pooled seasons further out) names
+        each basis in step order, in the short form."""
+        from .forecast_extractor import EMPIRICAL_SEASONAL_BASIS_SHORT, EMPIRICAL_SEASONAL_BASIS_TEXT
+        bases = list(dict.fromkeys(point.get("seasonal_basis") for point in fan if point.get("seasonal_basis")))
+        if not bases:
+            return label
+        if len(bases) > 1:
+            steps = ", then ".join(EMPIRICAL_SEASONAL_BASIS_SHORT[basis][0] for basis in bases)
+            return f"{label} ({steps}; not seasonally adjusted)"
+        basis = bases[0]
+        texts = EMPIRICAL_SEASONAL_BASIS_SHORT if basis == "seasonal_profile" else EMPIRICAL_SEASONAL_BASIS_TEXT
+        return f"{label} ({texts[basis][0]})"
+
+    @classmethod
+    def _official_threshold_tag(cls, anchor: Dict[str, Any], units: str) -> str:
+        """Short value tag drawn in the right margin beside a threshold line."""
+        return f"{anchor['comparator']} {cls._official_chart_value(anchor['threshold'], units, with_units=False)}"
+
+    _OFFICIAL_DETAIL_YEARS = {"M": 5, "Q": 8, "A": 20, "D": 2, "W": 2}
+    _OFFICIAL_DETAIL_MAX = 6
+
+    @staticmethod
+    def _official_detail_window(panel: Dict[str, Any], horizon: Optional[str]) -> Tuple[str, str]:
+        """x range of a detail chart: recent history (5 years monthly, 8 quarterly, 20 annual,
+        and at least three times the forecast span) through the furthest forecast period.
+
+        The dashboard keeps the full stored history; the detail chart zooms so the
+        thresholds, scenario ranges and empirical fan stay legible.
+        """
+        last = panel["latest"]["date"] if panel["latest"] else panel["x"][-1]
+        end = max([horizon or "", panel["x"][-1]]
+                  + [ReportVisualizer._official_band_bounds(b)[1] for b in panel["bands"]]
+                  + [ReportVisualizer._official_period_after(t["period"], t["frequency"])
+                     for t in panel["thresholds"]])
+        last_day, end_day = dt.date.fromisoformat(last), dt.date.fromisoformat(end)
+        years = ReportVisualizer._OFFICIAL_DETAIL_YEARS.get(str(panel["row"].get("frequency")), 5)
+        span = max(dt.timedelta(days=round(365.25 * years)), 3 * (end_day - last_day))
+        start = max(dt.date.fromisoformat(panel["x"][0]), last_day - span)
+        pad = (end_day - start) * 0.02
+        return (start - pad).isoformat(), (end_day + pad).isoformat()
+
+    @staticmethod
+    def _official_visible(panel: Dict[str, Any], window: Tuple[str, str]) -> Dict[str, Any]:
+        """The panel's plotted values restricted to the detail window (for the y extent)."""
+        inside = [window[0] <= x <= window[1] for x in panel["x"]]
+        return {**panel, "values": {kind: [v if keep else None for v, keep in zip(values, inside, strict=True)]
+                                    for kind, values in panel["values"].items()}}
+
+    @staticmethod
+    def _official_large_scale(panel: Dict[str, Any], units: str) -> Optional[Tuple[float, str]]:
+        """(divisor, suffix) for static tick labels of large unscaled levels (40T, -500B)."""
+        from .official_data import data_api
+        api = data_api()
+        values = [abs(v) for series in panel["values"].values() for v in series if v is not None]
+        if not values or (api is not None and api.is_percent_units(units)) or \
+                re.search(r"(?i)\b(?:thousands?|millions?|billions?|trillions?)\b", units):
+            return None
+        top = max(values)
+        return next(((d, s) for d, s in ((1e12, "T"), (1e9, "B"), (1e6, "M")) if top >= d), None)
+
+    @staticmethod
+    def _official_band_span(band: Dict[str, Any], x_start: str, x_end: str) -> Tuple[str, str]:
+        """Band period bounds, widened symmetrically to >= 2.5% of the axis so a single
+        month stays visible on a decade of history (the label names the exact period)."""
+        start, end = (dt.date.fromisoformat(x) for x in ReportVisualizer._official_band_bounds(band))
+        try:
+            axis = (dt.date.fromisoformat(x_end) - dt.date.fromisoformat(x_start)).days
+        except ValueError:
+            return start.isoformat(), end.isoformat()
+        minimum = int(axis * 0.025)
+        if (end - start).days < minimum:
+            middle = start + (end - start) / 2
+            start, end = middle - dt.timedelta(days=minimum // 2), middle + dt.timedelta(days=minimum - minimum // 2)
+        return start.isoformat(), end.isoformat()
+
+    @staticmethod
+    def _official_band_label(band: Dict[str, Any], row: Any = None) -> str:
+        from .forecast_extractor import official_anchor_period_text
+        label = (f"Model scenario: {band['name']} — "
+                 f"{official_anchor_period_text(row, band['period'], band['frequency'])}")
+        p = band.get("probability")
+        if p is not None and math.isfinite(p) and 0 <= p <= 1:
+            label += f" (P={p:.0%}"
+            base = band.get("empirical_base_rate")
+            label += (f"; empirical {base['p']:.0%}{ReportVisualizer._official_seasonal_tag(base)})"
+                      if isinstance(base, dict) else ")")
+        return label
+
+    @staticmethod
+    def _official_y_extent(panel: Dict[str, Any], fan: List[Dict[str, Any]]) -> Optional[Tuple[float, float]]:
+        values = [v for series in panel["values"].values() for v in series if v is not None]
+        values += [t["threshold"] for t in panel["thresholds"]]
+        values += [b[k] for b in panel["bands"] for k in ("low", "high") if b.get(k) is not None]
+        values += [point[k] for point in fan for k in ("p10", "p90")]
+        if not values:
+            return None
+        low, high = min(values), max(values)
+        pad = (high - low) * 0.08 or abs(high) * 0.05 or 1.0
+        return low - pad, high + pad
+
+    @staticmethod
+    def _official_subtitle(row: Dict[str, Any], width: int) -> str:
+        from .official_data import data_api
+        api = data_api()
+        label = api.series_label(row) if api is not None else str(row.get("title") or row["series"])
+        return _wrap_hover(label, width, 160)
 
     @staticmethod
     def _official_fiscal_periods(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -4438,118 +4642,241 @@ class ReportVisualizer:
     def _build_official_plotly(self, panels: List[Dict[str, Any]], charts_dir: str,
                                stem: str, title: str, forecast: Any, *, detail: bool) -> Optional[str]:
         from plotly.subplots import make_subplots
-        fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=False,
-                            subplot_titles=[html_lib.escape(str(p["row"].get("title") or p["row"]["series"]))
+        cols = 2 if not detail and len(panels) > 1 else 1
+        rows = math.ceil(len(panels) / cols)
+        fig = make_subplots(rows=rows, cols=cols, shared_xaxes=False,
+                            subplot_titles=[self._official_subtitle(p["row"], 52 if cols == 2 else 96)
                                             for p in panels],
-                            vertical_spacing=min(0.12, 0.35 / len(panels)))
+                            horizontal_spacing=0.1, vertical_spacing=min(0.12, 0.42 / rows))
+        fig.update_annotations(font={"size": 12})
         horizon = self._official_horizon(forecast) if detail else None
-        for index, panel in enumerate(panels, 1):
+        shown = set()
+        for index, panel in enumerate(panels):
+            r, c = index // cols + 1, index % cols + 1
             row = panel["row"]
+            units = str(row["units"])
             fiscal_labels = self._official_fiscal_labels(row)
+            fan = self._official_fan(panel) if detail else []
             for kind, values in panel["values"].items():
                 name, color, dash = self._OFFICIAL_STYLES[kind]
+                partial = kind == "partial-period value"
                 fig.add_trace(go.Scatter(x=panel["x"], y=values, name=name,
                                         mode="lines+markers", connectgaps=False,
-                                        legendgroup=kind, showlegend=index == 1,
+                                        legendgroup=kind, showlegend=kind not in shown,
                                         line={"color": color, "dash": dash},
+                                        marker={"symbol": "circle-open" if partial else "circle",
+                                                "size": 9 if partial else 6, "color": color},
                                         customdata=[fiscal_labels.get(day, day) for day in panel["x"]],
-                                        hovertemplate="%{customdata}<br>%{y}<extra>" + name + "</extra>"), row=index, col=1)
-            historical = panel["values"].get("historical observation", [])
-            actual = [(x, y) for x, y in zip(panel["x"], historical, strict=False) if y is not None]
-            if actual:
-                fig.add_trace(go.Scatter(x=[actual[-1][0]], y=[actual[-1][1]], mode="markers",
-                                        name="Latest historical observation", showlegend=index == 1,
-                                        customdata=[fiscal_labels.get(actual[-1][0], actual[-1][0])],
+                                        hovertemplate="%{customdata}<br>%{y}<extra>" + name + "</extra>"), row=r, col=c)
+                shown.add(kind)
+            latest = panel["latest"]
+            if latest:
+                fig.add_trace(go.Scatter(x=[latest["date"]], y=[latest["value"]], mode="markers",
+                                        name="Latest historical observation", legendgroup="latest",
+                                        showlegend="latest" not in shown,
+                                        customdata=[fiscal_labels.get(latest["date"], latest["date"])],
                                         hovertemplate="%{customdata}<br>%{y}<extra>Latest historical observation</extra>",
-                                        marker={"color": "#1e40af", "size": 10, "symbol": "diamond"}), row=index, col=1)
+                                        marker={"color": "#1e40af", "size": 10, "symbol": "diamond"}), row=r, col=c)
+                shown.add("latest")
             projection_bounds = self._official_projection_bounds(panel)
             if projection_bounds:
                 fig.add_vrect(x0=projection_bounds[0], x1=projection_bounds[1], fillcolor="#f59e0b", opacity=0.08,
-                              line_width=0, row=index, col=1)
+                              line_width=0, row=r, col=c)
             if detail:
-                for anchor in panel["thresholds"]:
-                    p = anchor["probability"]
-                    label = f"Model threshold {anchor['comparator']} {anchor['threshold']:g} ({anchor['observation']})"
-                    if p is not None and math.isfinite(p) and 0 <= p <= 1:
-                        label += f"; P(yes)={p:.0%}"
-                    fig.add_hline(y=anchor["threshold"], line_dash="dash", line_color="#dc2626",
-                                  annotation_text=label, row=index, col=1)
+                if fan and latest:
+                    xs = [latest["date"]] + [point["date"] for point in fan]
+                    for low, high, opacity, label in (
+                            ("p10", "p90", 0.14, self._official_fan_label("Empirical outcome range p10–p90", fan)),
+                            ("p25", "p75", 0.24, self._official_fan_label("Empirical outcome range p25–p75", fan))):
+                        fig.add_trace(go.Scatter(x=xs, y=[latest["value"]] + [p[low] for p in fan], mode="lines",
+                                                line={"width": 0}, hoverinfo="skip", showlegend=False,
+                                                legendgroup=label), row=r, col=c)
+                        fig.add_trace(go.Scatter(x=xs, y=[latest["value"]] + [p[high] for p in fan], mode="lines",
+                                                line={"width": 0}, fill="tonexty",
+                                                fillcolor=f"rgba(37, 99, 235, {opacity})", name=label,
+                                                legendgroup=label, showlegend=label not in shown,
+                                                hoverinfo="skip"), row=r, col=c)
+                        shown.add(label)
+                    fig.add_trace(go.Scatter(x=xs, y=[latest["value"]] + [p["p50"] for p in fan], mode="lines",
+                                            line={"color": "#1d4ed8", "dash": "dot", "width": 1.5},
+                                            name="Empirical median path (historical changes)",
+                                            showlegend="median" not in shown, legendgroup="median",
+                                            hovertemplate="%{x}<br>%{y}<extra>Empirical median</extra>"),
+                                  row=r, col=c)
+                    shown.add("median")
+                window = self._official_detail_window(panel, horizon)
+                extent = self._official_y_extent(self._official_visible(panel, window), fan)
+                previous = None
+                for number, anchor in enumerate(sorted(panel["thresholds"], key=lambda a: a["threshold"])):
+                    dash = ("dash", "dashdot", "longdash")[number % 3]
+                    fig.add_hline(y=anchor["threshold"], line_dash=dash, line_color="#dc2626", row=r, col=c)
+                    # Full label in the legend; a short value tag in the right margin never covers data.
+                    fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", showlegend=True,
+                                             name=html_lib.escape(self._official_threshold_label(anchor, units, row)),
+                                             line={"color": "#dc2626", "dash": dash}), row=r, col=c)
+                    close = (previous is not None and extent is not None
+                             and anchor["threshold"] - previous < (extent[1] - extent[0]) * 0.05)
+                    fig.add_annotation(x=1.0, xref="x domain", y=anchor["threshold"], xanchor="left",
+                                       text=html_lib.escape(self._official_threshold_tag(anchor, units)),
+                                       showarrow=False, yshift=8 if close else 0,
+                                       font={"size": 11, "color": "#b91c1c"}, row=r, col=c)
+                    previous = anchor["threshold"]
                 if horizon:
-                    fig.add_shape(type="line", x0=horizon, x1=horizon, y0=0, y1=1,
-                                  yref="y domain", line={"dash": "dot", "color": "#64748b"}, row=index, col=1)
-                    fig.add_annotation(x=horizon, y=1, yref="y domain", text="Forecast horizon",
-                                       showarrow=False, xanchor="right", row=index, col=1)
-                if actual and horizon and horizon > actual[-1][0]:
-                    for band in self._official_scenario_bands(row, forecast):
-                        start, end = self._official_band_bounds(band)
-                        fig.add_shape(type="rect", x0=start, x1=end,
-                                      y0=band["low"], y1=band["high"], fillcolor="#22c55e",
-                                      opacity=0.08, line_width=0, row=index, col=1)
-                        fig.add_annotation(x=horizon, y=band["high"],
-                                           text="Model scenario: " + html_lib.escape(band["name"]),
-                                           showarrow=False, xanchor="right", row=index, col=1)
-            fig.update_xaxes(type="date", title_text=f"Period ({row['frequency']}; {row.get('seasonal_adjustment') or 'adjustment unknown'})", row=index, col=1)
+                    fig.add_shape(type="line", x0=horizon, x1=horizon, y0=0, y1=1, yref="y domain",
+                                  line={"width": 1.5, "color": _OFFICIAL_HORIZON_COLOR}, row=r, col=c)
+                    fig.add_annotation(x=horizon, y=1.0, yref="y domain", text="Forecast horizon",
+                                       showarrow=False, xanchor="right", yanchor="bottom",
+                                       font={"size": 11, "color": "#475569"}, row=r, col=c)
+                for number, band in enumerate(panel["bands"]):
+                    start, end = self._official_band_span(band, *window)
+                    color = self._OFFICIAL_BAND_COLORS[number % len(self._OFFICIAL_BAND_COLORS)]
+                    low = band["low"] if band.get("low") is not None else extent[0]
+                    high = band["high"] if band.get("high") is not None else extent[1]
+                    fig.add_shape(type="rect", x0=start, x1=end, y0=low, y1=high, fillcolor=color,
+                                  opacity=0.16, line={"width": 1, "color": color}, row=r, col=c)
+                    fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=html_lib.escape(
+                                                 self._official_band_label(band, row)),
+                                             marker={"symbol": "square", "size": 12, "color": color, "opacity": 0.5},
+                                             showlegend=True), row=r, col=c)
+                if extent:
+                    fig.update_yaxes(range=list(extent), row=r, col=c)
+                fig.update_xaxes(range=list(window), title_text=f"Period ({row['frequency']}; "
+                                 f"{row.get('seasonal_adjustment') or 'adjustment unknown'})", row=r, col=c)
+            fig.update_xaxes(type="date", row=r, col=c)
             if fiscal_labels:
                 days = list(fiscal_labels)
                 ticks = sorted(set(days[::max(1, math.ceil(len(days) / 8))] + days[-1:]))
                 fig.update_xaxes(tickmode="array", tickvals=ticks,
-                                 ticktext=[fiscal_labels[day] for day in ticks], row=index, col=1)
-            fig.update_yaxes(title_text=html_lib.escape(str(row["units"])), row=index, col=1)
-        _apply_layout(fig, title, height=max(520, len(panels) * 310))
-        fig.update_layout(legend={"orientation": "h", "y": -0.18, "x": 0}, margin={"b": 130})
+                                 ticktext=[fiscal_labels[day] for day in ticks], row=r, col=c)
+            fig.update_yaxes(title_text=_wrap_hover(units, 30 if cols == 2 else 60, 120),
+                             title_font={"size": 10}, row=r, col=c)
+        height = 680 if detail else max(560, rows * 300)
+        top, bottom = 90, (230 if detail else 140)
+        _apply_layout(fig, title, height=height)
+        # Legend below the last x axis (and its title on detail charts), never over a panel.
+        fig.update_layout(legend={"orientation": "h", "x": 0, "yanchor": "top", "font": {"size": 11},
+                                  "y": -(78 if detail else 42) / (height - top - bottom)},
+                          margin={"b": bottom, "t": top, "r": 150 if detail else 24})
         return self._save_pair(fig, charts_dir, stem)
 
     def _build_official_matplotlib(self, panels: List[Dict[str, Any]], charts_dir: str,
                                    stem: str, title: str, forecast: Any, *, detail: bool) -> Optional[str]:
+        import textwrap
+
+        from matplotlib.ticker import FuncFormatter
+
+        from .official_data import data_api
         fig = None
         try:
-            fig, axes = plt.subplots(len(panels), 1, figsize=(11, max(4.8, 3.5 * len(panels))), squeeze=False)
+            cols = 2 if not detail and len(panels) > 1 else 1
+            rows = math.ceil(len(panels) / cols)
             horizon = self._official_horizon(forecast) if detail else None
-            for panel, ax in zip(panels, axes[:, 0], strict=True):
+            # Constrained layout reserves room for the suptitle, wrapped panel titles, the
+            # right-margin threshold tags and the shared legend outside the panels.
+            fig = plt.figure(figsize=(12 if cols == 2 else 11, (5.0 if detail else 3.3 * rows + 0.9)),
+                             layout="constrained")
+            fig.get_layout_engine().set(h_pad=0.08, hspace=0.04)
+            axes = fig.subplots(rows, cols, squeeze=False)
+            handles: Dict[str, Any] = {}
+            api = data_api()
+            for index, ax in enumerate(axes.flat):
+                if index >= len(panels):
+                    ax.set_visible(False)
+                    continue
+                panel = panels[index]
                 row = panel["row"]
+                units = str(row["units"])
                 dates = [dt.date.fromisoformat(x) for x in panel["x"]]
+                fan = self._official_fan(panel) if detail else []
                 for kind, values in panel["values"].items():
                     name, color, dash = self._OFFICIAL_STYLES[kind]
-                    ax.plot(dates, [v if v is not None else math.nan for v in values],
-                            marker="o", markersize=4, color=color,
-                            linestyle={"solid": "-", "dash": "--", "dot": ":"}[dash], label=name)
-                historical = panel["values"].get("historical observation", [])
-                actual = [(x, y) for x, y in zip(dates, historical, strict=False) if y is not None]
-                if actual:
-                    ax.scatter([actual[-1][0]], [actual[-1][1]], marker="D", color="#1e40af",
-                               label="Latest historical observation")
+                    partial = kind == "partial-period value"
+                    (line,) = ax.plot(dates, [v if v is not None else math.nan for v in values],
+                                      marker="o", markersize=6 if partial else 4, color=color,
+                                      markerfacecolor="none" if partial else color,
+                                      linestyle={"solid": "-", "dash": "--", "dot": ":"}[dash], label=name)
+                    handles.setdefault(name, line)
+                latest = panel["latest"]
+                if latest:
+                    handles.setdefault("Latest historical observation", ax.scatter(
+                        [dt.date.fromisoformat(latest["date"])], [latest["value"]], marker="D", color="#1e40af",
+                        zorder=5, label="Latest historical observation"))
                 projection_bounds = self._official_projection_bounds(panel)
                 if projection_bounds:
                     ax.axvspan(*(dt.date.fromisoformat(x) for x in projection_bounds), color="#f59e0b", alpha=0.08)
+                visible = panel
                 if detail:
-                    for anchor in panel["thresholds"]:
-                        p = anchor["probability"]
-                        label = f"Model threshold {anchor['comparator']} {anchor['threshold']:g} ({anchor['observation']})"
-                        if p is not None and math.isfinite(p) and 0 <= p <= 1:
-                            label += f"; P(yes)={p:.0%}"
-                        ax.axhline(anchor["threshold"], color="#dc2626", linestyle="--", label=label)
+                    window = self._official_detail_window(panel, horizon)
+                    visible = self._official_visible(panel, window)
+                    if fan and latest:
+                        xs = [dt.date.fromisoformat(latest["date"])] + [dt.date.fromisoformat(p["date"]) for p in fan]
+                        for low, high, alpha, label in (
+                                ("p10", "p90", 0.14, self._official_fan_label("Empirical outcome range p10–p90", fan)),
+                                ("p25", "p75", 0.24, self._official_fan_label("Empirical outcome range p25–p75", fan))):
+                            handles.setdefault(label, ax.fill_between(
+                                xs, [latest["value"]] + [p[low] for p in fan],
+                                [latest["value"]] + [p[high] for p in fan], color="#2563eb", alpha=alpha,
+                                linewidth=0, label=label))
+                        (median,) = ax.plot(xs, [latest["value"]] + [p["p50"] for p in fan], color="#1d4ed8",
+                                            linestyle=":", linewidth=1.5,
+                                            label="Empirical median path (historical changes)")
+                        handles.setdefault(median.get_label(), median)
+                    for number, anchor in enumerate(sorted(panel["thresholds"], key=lambda a: a["threshold"])):
+                        label = _mpl_text(self._official_threshold_label(anchor, units, row), max_len=140)
+                        handles[label] = ax.axhline(anchor["threshold"], color="#dc2626",
+                                                    linestyle=("--", "-.", (0, (8, 3)))[number % 3], label=label)
+                        ax.annotate(_mpl_text(self._official_threshold_tag(anchor, units)),
+                                    xy=(1.0, anchor["threshold"]), xycoords=("axes fraction", "data"),
+                                    xytext=(4, 0), textcoords="offset points", va="center", fontsize=8,
+                                    color="#b91c1c", annotation_clip=False)
                     if horizon:
-                        end = dt.date.fromisoformat(horizon)
-                        ax.axvline(end, color="#64748b", linestyle=":", label="Forecast horizon")
-                        if actual and end > actual[-1][0]:
-                            for band in self._official_scenario_bands(row, forecast):
-                                band_dates = [dt.date.fromisoformat(x) for x in self._official_band_bounds(band)]
-                                ax.fill_between(band_dates, band["low"], band["high"],
-                                                color="#22c55e", alpha=0.08,
-                                                label="Model scenario: " + _mpl_text(band["name"]))
-                ax.set_title(_mpl_text(row.get("title") or row["series"]))
-                ax.set_ylabel(_mpl_text(row["units"]))
-                ax.set_xlabel(_mpl_text(f"Period ({row['frequency']}; {row.get('seasonal_adjustment') or 'adjustment unknown'})"))
+                        handles["Forecast horizon"] = ax.axvline(dt.date.fromisoformat(horizon), linewidth=1.5,
+                                                                 color=_OFFICIAL_HORIZON_COLOR, label="Forecast horizon")
+                    extent = self._official_y_extent(visible, fan)
+                    for number, band in enumerate(panel["bands"]):
+                        start, end = (dt.date.fromisoformat(x) for x in self._official_band_span(band, *window))
+                        color = self._OFFICIAL_BAND_COLORS[number % len(self._OFFICIAL_BAND_COLORS)]
+                        low = band["low"] if band.get("low") is not None else extent[0]
+                        high = band["high"] if band.get("high") is not None else extent[1]
+                        label = _mpl_text(self._official_band_label(band, row), max_len=140)
+                        handles[label] = ax.fill_between([start, end], low, high, color=color, alpha=0.18,
+                                                         label=label)
+                    if extent:
+                        ax.set_ylim(*extent)
+                    ax.set_xlim(*(dt.date.fromisoformat(x) for x in window))
+                    ax.set_xlabel(_mpl_text(f"Period ({row['frequency']}; "
+                                            f"{row.get('seasonal_adjustment') or 'adjustment unknown'})"), fontsize=9)
+                scale = self._official_large_scale(visible, units)
+                if scale:
+                    divisor, suffix = scale
+                    ax.yaxis.set_major_formatter(FuncFormatter(
+                        lambda value, _pos, d=divisor, s=suffix: f"{value / d:.4g}{s}" if value else "0"))
+                label = api.series_label(row) if api is not None else str(row.get("title") or row["series"])
+                label = textwrap.fill(_mpl_text(label, max_len=160), 62 if cols == 2 else 110,
+                                      max_lines=2, placeholder=" …")
+                ylabel = _mpl_text(units, max_len=40)
+                if not _mpl_labels_supported(label + ylabel):
+                    logger.info("Official static chart %s skipped: no installed font covers CJK labels", stem)
+                    return None
+                ax.set_title(label, fontsize=10, fontproperties=_font_at_size(_mpl_font_for_text(label), 10))
+                ax.set_ylabel(ylabel, fontsize=8, fontproperties=_font_at_size(_mpl_font_for_text(ylabel), 8))
                 fiscal_labels = self._official_fiscal_labels(row)
                 if fiscal_labels:
                     days = list(fiscal_labels)
                     ticks = sorted(set(days[::max(1, math.ceil(len(days) / 8))] + days[-1:]))
                     ax.set_xticks([dt.date.fromisoformat(day) for day in ticks],
                                   [fiscal_labels[day] for day in ticks])
+                ax.tick_params(labelsize=8)
                 ax.grid(alpha=0.2)
-                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), fontsize=8, ncol=2)
             fig.suptitle(title)
-            fig.tight_layout(rect=(0, 0, 1, 0.94))
+            # Scenario names in a Chinese report are Chinese: use a real CJK font or skip honestly.
+            legend_text = " ".join(handles)
+            if not _mpl_labels_supported(legend_text):
+                logger.info("Official static chart %s skipped: no installed font covers CJK labels", stem)
+                return None
+            legend_font = _mpl_font_for_text(legend_text)
+            fig.legend(list(handles.values()), list(handles), loc="outside lower center", ncol=2, frameon=False,
+                       **({"prop": _font_at_size(legend_font, 8)} if legend_font else {"fontsize": 8}))
             return self._save(fig, charts_dir, stem + ".png")
         finally:
             if fig is not None:
@@ -4568,16 +4895,25 @@ class ReportVisualizer:
         if not panels:
             skipped.append({"builder": "official_indicators", "reason": "no_valid_stored_observations"})
             return
-        jobs = [("official_indicators", "Official Indicators", panels[:6], False)]
         sources = artifacts.get("sources")
         source_index = ({f"S{i}": source for i, source in enumerate(sources, 1)}
                         if isinstance(sources, list) else {})
         if sources is not None and not isinstance(sources, list):
             skipped.append({"builder": "official_source_captions", "reason": "malformed_source_metadata"})
-        ranked = sorted(panels, key=lambda p: (
-            -bool(p["thresholds"]),
-            -len(p["row"]["kiqs"]) if isinstance(p["row"].get("kiqs"), list) else 0))
-        for panel in ranked[:4]:
+        ranked = self._official_rank(panels, source_index)
+        # Every carried series appears on a dashboard (two-column small multiples,
+        # twelve per figure); detail charts exist only for series a forecast
+        # anchors or bands, so they never repeat a plain dashboard panel. Binary
+        # thresholds (settleable propositions) take detail slots before scenario ranges.
+        jobs = [("official_indicators", "Official Indicators", ranked[:12], False)]
+        if len(ranked) > 12:
+            jobs.append(("official_indicators_more", "Official Indicators", ranked[12:24], False))
+        details = ([p for p in ranked if p["thresholds"]]
+                   + [p for p in ranked if p["bands"] and not p["thresholds"]])
+        if len(details) > self._OFFICIAL_DETAIL_MAX:
+            skipped.append({"builder": "official_series", "reason": "detail_chart_cap",
+                            "series": ", ".join(p["row"]["series"] for p in details[self._OFFICIAL_DETAIL_MAX:])})
+        for panel in details[:self._OFFICIAL_DETAIL_MAX]:
             # Letters only: chart filenames cannot add numeral tokens during
             # translation. The deterministic suffix also prevents slug collisions.
             digest = hashlib.sha256(panel["row"]["series"].encode()).hexdigest()[:16].translate(str.maketrans("0123456789", "klmnopqrst"))
@@ -4610,9 +4946,9 @@ class ReportVisualizer:
                     source_id = official_source_tag(row, source_index)
                 source_id = source_id if re.fullmatch(r"S[1-9]\d*", source_id) else ""
                 provenance.append({k: row.get(k, "") for k in (
-                    "series", "provider", "units", "frequency", "seasonal_adjustment", "geography",
-                    "transform", "source_url", "retrieved_at", "last_updated", "vintage", "projection_from",
-                    "sha256", "csv_sha256")})
+                    "series", "provider", "provider_name", "title", "units", "frequency", "seasonal_adjustment",
+                    "geography", "transform", "source_url", "retrieved_at", "last_updated", "vintage",
+                    "projection_from", "sha256", "csv_sha256")})
                 provenance[-1]["source_id"] = source_id
                 fiscal_periods = self._official_fiscal_periods(row)
                 if fiscal_periods:

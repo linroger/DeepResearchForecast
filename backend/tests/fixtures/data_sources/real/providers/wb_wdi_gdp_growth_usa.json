@@ -1,0 +1,193 @@
+{
+ "captured_at": "2026-10-11T22:08:02Z",
+ "clock": 1791756482,
+ "series": "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA",
+ "request": {
+  "start": "2015-01-01",
+  "end": "2025-12-31"
+ },
+ "calls": [
+  {
+   "provider": "wb",
+   "tool": "data360_get_metadata",
+   "args": {
+    "database_id": "WB_WDI",
+    "indicator_id": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+    "fetch_disaggregation": false,
+    "required_country": "USA"
+   },
+   "response": {
+    "indicator_metadata": {
+     "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+     "database_id": "WB_WDI",
+     "database_name": "World Development Indicators (WDI)",
+     "name": "GDP (annual % growth)",
+     "measurement_unit": "%",
+     "periodicity": "Annual",
+     "date_released": null,
+     "date_last_update": null,
+     "version_statement": {
+      "version": null,
+      "version_date": "2026-07-01",
+      "version_resp": null,
+      "version_notes": null
+     },
+     "time_periods": [
+      {
+       "start": "1961",
+       "end": "2024",
+       "notes": null
+      }
+     ]
+    },
+    "disaggregation_options": [],
+    "error": null,
+    "stale": false
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_get_data",
+   "args": {
+    "database_id": "WB_WDI",
+    "indicator_id": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+    "country_code": "USA",
+    "start_year": 2015,
+    "end_year": 2025,
+    "limit": 100,
+    "offset": 0,
+    "ref_area_filter": "none"
+   },
+   "response": {
+    "count": 11,
+    "total_count": null,
+    "offset": 0,
+    "has_more": false,
+    "next_offset": null,
+    "data": [
+     {
+      "OBS_VALUE": "2.161382",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2025",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "cfdaee7e",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.793187",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2024",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "801f4d67",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.934363",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2023",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "95e27eab",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.524214",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2022",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "7f745936",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "6.152022",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2021",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "8f924823",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "-2.081376",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2020",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "10d25756",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.583825",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2019",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "0ed2af8a",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.966505",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2018",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "fc35f945",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.457622",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2017",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "00c7aad4",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "1.819451",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2016",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "20594ab9",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.94555",
+      "UNIT_MULT": 0,
+      "REF_AREA": "USA",
+      "TIME_PERIOD": "2015",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "6af0e5cd",
+      "REF_AREA_NAME": "United States",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     }
+    ],
+    "metadata": {
+     "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+     "name": "GDP (annual % growth)",
+     "database_id": "WB_WDI",
+     "database_name": "World Development Indicators (WDI)",
+     "measurement_unit": "%",
+     "periodicity": "Annual",
+     "definition_short": null
+    },
+    "error": null,
+    "failed_validation": null
+   }
+  }
+ ]
+}

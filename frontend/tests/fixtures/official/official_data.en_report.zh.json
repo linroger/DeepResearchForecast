@@ -1,0 +1,2225 @@
+{
+ "data": {
+  "available": true,
+  "indicators": [
+   {
+    "change": {
+     "display": "-0.2 个百分点",
+     "display_words": "-0.2 个百分点",
+     "percent": -4.545454545454549,
+     "value": -0.20000000000000018
+    },
+    "five_year": {
+     "max": {
+      "date": "2021-09-01",
+      "display": "4.7%",
+      "period": "2021-09",
+      "value": 4.7
+     },
+     "min": {
+      "date": "2023-04-01",
+      "display": "3.4%",
+      "period": "2023-04",
+      "value": 3.4
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-09-01",
+      4.1
+     ],
+     [
+      "2024-10-01",
+      4.1
+     ],
+     [
+      "2024-11-01",
+      4.2
+     ],
+     [
+      "2024-12-01",
+      4.1
+     ],
+     [
+      "2025-01-01",
+      4.0
+     ],
+     [
+      "2025-02-01",
+      4.2
+     ],
+     [
+      "2025-03-01",
+      4.2
+     ],
+     [
+      "2025-04-01",
+      4.2
+     ],
+     [
+      "2025-05-01",
+      4.3
+     ],
+     [
+      "2025-06-01",
+      4.1
+     ],
+     [
+      "2025-07-01",
+      4.3
+     ],
+     [
+      "2025-08-01",
+      4.3
+     ],
+     [
+      "2025-09-01",
+      4.4
+     ],
+     [
+      "2025-11-01",
+      4.5
+     ],
+     [
+      "2025-12-01",
+      4.4
+     ],
+     [
+      "2026-01-01",
+      4.3
+     ],
+     [
+      "2026-02-01",
+      4.4
+     ],
+     [
+      "2026-03-01",
+      4.3
+     ],
+     [
+      "2026-04-01",
+      4.3
+     ],
+     [
+      "2026-05-01",
+      4.3
+     ],
+     [
+      "2026-06-01",
+      4.2
+     ],
+     [
+      "2026-07-01",
+      4.1
+     ],
+     [
+      "2026-08-01",
+      4.1
+     ],
+     [
+      "2026-09-01",
+      4.2
+     ]
+    ],
+    "label": "美国失业率",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "4.2%",
+     "period": "2026-09",
+     "value": 4.2
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "4.4%",
+     "period": "2025-09",
+     "value": 4.4
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": null,
+    "seasonal_adjustment": "SA",
+    "series": "fred:UNRATE",
+    "source_id": "S1",
+    "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+    "transform": "",
+    "units": "Percent"
+   },
+   {
+    "change": {
+     "display": "+523.448 (+2.192%)",
+     "display_words": "+523.448 (+2.192%)",
+     "percent": 2.191574532889718,
+     "value": 523.4480000000003
+    },
+    "five_year": {
+     "max": {
+      "date": "2026-04-01",
+      "display": "24408.011",
+      "period": "2026-Q2",
+      "value": 24408.011
+     },
+     "min": {
+      "date": "2021-04-01",
+      "display": "21474.077",
+      "period": "2021-Q2",
+      "value": 21474.077
+     }
+    },
+    "frequency": "Q",
+    "frequency_label": "季度",
+    "geography": "USA",
+    "history": [
+     [
+      "2020-07-01",
+      20558.879
+     ],
+     [
+      "2020-10-01",
+      20791.917
+     ],
+     [
+      "2021-01-01",
+      21106.619
+     ],
+     [
+      "2021-04-01",
+      21474.077
+     ],
+     [
+      "2021-07-01",
+      21641.672
+     ],
+     [
+      "2021-10-01",
+      22001.64
+     ],
+     [
+      "2022-01-01",
+      21945.682
+     ],
+     [
+      "2022-04-01",
+      21976.292
+     ],
+     [
+      "2022-07-01",
+      22124.384
+     ],
+     [
+      "2022-10-01",
+      22272.546
+     ],
+     [
+      "2023-01-01",
+      22456.938
+     ],
+     [
+      "2023-04-01",
+      22577.556
+     ],
+     [
+      "2023-07-01",
+      22828.796
+     ],
+     [
+      "2023-10-01",
+      23033.25
+     ],
+     [
+      "2024-01-01",
+      23115.975
+     ],
+     [
+      "2024-04-01",
+      23320.074
+     ],
+     [
+      "2024-07-01",
+      23501.76
+     ],
+     [
+      "2024-10-01",
+      23641.759
+     ],
+     [
+      "2025-01-01",
+      23650.213
+     ],
+     [
+      "2025-04-01",
+      23884.563
+     ],
+     [
+      "2025-07-01",
+      24112.966
+     ],
+     [
+      "2025-10-01",
+      24125.479
+     ],
+     [
+      "2026-01-01",
+      24274.383
+     ],
+     [
+      "2026-04-01",
+      24408.011
+     ]
+    ],
+    "label": "美国实际国内生产总值",
+    "latest": {
+     "date": "2026-04-01",
+     "display": "24408.011",
+     "period": "2026-Q2",
+     "value": 24408.011
+    },
+    "previous_year": {
+     "date": "2025-04-01",
+     "display": "23884.563",
+     "period": "2025-Q2",
+     "value": 23884.563
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": null,
+    "seasonal_adjustment": "SAAR",
+    "series": "fred:GDPC1",
+    "source_id": "S2",
+    "source_url": "https://fred.stlouisfed.org/series/GDPC1",
+    "transform": "",
+    "units": "Billions of Chained 2017 Dollars"
+   },
+   {
+    "change": {
+     "display": "-0.47 个百分点",
+     "display_words": "-0.47 个百分点",
+     "percent": -11.137440758293833,
+     "value": -0.46999999999999975
+    },
+    "five_year": {
+     "max": {
+      "date": "2023-08-01",
+      "display": "5.33%",
+      "period": "2023-08",
+      "value": 5.33
+     },
+     "min": {
+      "date": "2021-09-01",
+      "display": "0.08%",
+      "period": "2021-09",
+      "value": 0.08
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-10-01",
+      4.83
+     ],
+     [
+      "2024-11-01",
+      4.64
+     ],
+     [
+      "2024-12-01",
+      4.48
+     ],
+     [
+      "2025-01-01",
+      4.33
+     ],
+     [
+      "2025-02-01",
+      4.33
+     ],
+     [
+      "2025-03-01",
+      4.33
+     ],
+     [
+      "2025-04-01",
+      4.33
+     ],
+     [
+      "2025-05-01",
+      4.33
+     ],
+     [
+      "2025-06-01",
+      4.33
+     ],
+     [
+      "2025-07-01",
+      4.33
+     ],
+     [
+      "2025-08-01",
+      4.33
+     ],
+     [
+      "2025-09-01",
+      4.22
+     ],
+     [
+      "2025-10-01",
+      4.09
+     ],
+     [
+      "2025-11-01",
+      3.88
+     ],
+     [
+      "2025-12-01",
+      3.72
+     ],
+     [
+      "2026-01-01",
+      3.64
+     ],
+     [
+      "2026-02-01",
+      3.64
+     ],
+     [
+      "2026-03-01",
+      3.64
+     ],
+     [
+      "2026-04-01",
+      3.64
+     ],
+     [
+      "2026-05-01",
+      3.63
+     ],
+     [
+      "2026-06-01",
+      3.63
+     ],
+     [
+      "2026-07-01",
+      3.63
+     ],
+     [
+      "2026-08-01",
+      3.63
+     ],
+     [
+      "2026-09-01",
+      3.75
+     ]
+    ],
+    "label": "联邦基金有效利率（月均） — 美国",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "3.75%",
+     "period": "2026-09",
+     "value": 3.75
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "4.22%",
+     "period": "2025-09",
+     "value": 4.22
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": null,
+    "seasonal_adjustment": "NSA",
+    "series": "fred:FEDFUNDS",
+    "source_id": "S3",
+    "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+    "transform": "",
+    "units": "Percent"
+   },
+   {
+    "change": {
+     "display": "+0.841 个百分点",
+     "display_words": "+0.841 个百分点",
+     "percent": 1536.521739130435,
+     "value": 0.8414285714285714
+    },
+    "five_year": {
+     "max": {
+      "date": "2026-09-01",
+      "display": "0.896%",
+      "period": "2026-09",
+      "value": 0.8961904761904762
+     },
+     "min": {
+      "date": "2024-11-01",
+      "display": "-0.264%",
+      "period": "2024-11",
+      "value": -0.2642105263157895
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-11-01",
+      -0.2642105263157895
+     ],
+     [
+      "2024-12-01",
+      0.00047619047619047494
+     ],
+     [
+      "2025-01-01",
+      0.28619047619047616
+     ],
+     [
+      "2025-02-01",
+      0.11894736842105265
+     ],
+     [
+      "2025-03-01",
+      -0.05523809523809523
+     ],
+     [
+      "2025-04-01",
+      -0.043333333333333335
+     ],
+     [
+      "2025-05-01",
+      0.062380952380952384
+     ],
+     [
+      "2025-06-01",
+      -0.0375
+     ],
+     [
+      "2025-07-01",
+      -0.020454545454545454
+     ],
+     [
+      "2025-08-01",
+      -0.04
+     ],
+     [
+      "2025-09-01",
+      0.054761904761904755
+     ],
+     [
+      "2025-10-01",
+      0.08409090909090909
+     ],
+     [
+      "2025-11-01",
+      0.15666666666666665
+     ],
+     [
+      "2025-12-01",
+      0.4636363636363637
+     ],
+     [
+      "2026-01-01",
+      0.548
+     ],
+     [
+      "2026-02-01",
+      0.4378947368421053
+     ],
+     [
+      "2026-03-01",
+      0.5268181818181819
+     ],
+     [
+      "2026-04-01",
+      0.6227272727272727
+     ],
+     [
+      "2026-05-01",
+      0.7985
+     ],
+     [
+      "2026-06-01",
+      0.6595238095238095
+     ],
+     [
+      "2026-07-01",
+      0.7327272727272728
+     ],
+     [
+      "2026-08-01",
+      0.8076190476190477
+     ],
+     [
+      "2026-09-01",
+      0.8961904761904762
+     ]
+    ],
+    "label": "美国10年期与3个月期国债利差",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "0.896%",
+     "period": "2026-09",
+     "value": 0.8961904761904762
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "0.055%",
+     "period": "2025-09",
+     "value": 0.054761904761904755
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": {
+     "date": "2026-10-01",
+     "display": "1.05%",
+     "kind": "partial-period value",
+     "period": "2026-10",
+     "value": 1.05
+    },
+    "seasonal_adjustment": "NSA",
+    "series": "fred:T10Y3M",
+    "source_id": "S4",
+    "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+    "transform": "",
+    "units": "Percent"
+   },
+   {
+    "change": {
+     "display": "-0.23 (-100%)",
+     "display_words": "-0.23 (-100%)",
+     "percent": -100.0,
+     "value": -0.23
+    },
+    "five_year": {
+     "max": {
+      "date": "2024-08-01",
+      "display": "0.57",
+      "period": "2024-08",
+      "value": 0.57
+     },
+     "min": {
+      "date": "2021-09-01",
+      "display": "-0.37",
+      "period": "2021-09",
+      "value": -0.37
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-09-01",
+      0.5
+     ],
+     [
+      "2024-10-01",
+      0.43
+     ],
+     [
+      "2024-11-01",
+      0.43
+     ],
+     [
+      "2024-12-01",
+      0.4
+     ],
+     [
+      "2025-01-01",
+      0.37
+     ],
+     [
+      "2025-02-01",
+      0.27
+     ],
+     [
+      "2025-03-01",
+      0.27
+     ],
+     [
+      "2025-04-01",
+      0.27
+     ],
+     [
+      "2025-05-01",
+      0.27
+     ],
+     [
+      "2025-06-01",
+      0.17
+     ],
+     [
+      "2025-07-01",
+      0.1
+     ],
+     [
+      "2025-08-01",
+      0.13
+     ],
+     [
+      "2025-09-01",
+      0.23
+     ],
+     [
+      "2025-11-01",
+      0.43
+     ],
+     [
+      "2025-12-01",
+      0.35
+     ],
+     [
+      "2026-01-01",
+      0.3
+     ],
+     [
+      "2026-02-01",
+      0.27
+     ],
+     [
+      "2026-03-01",
+      0.2
+     ],
+     [
+      "2026-04-01",
+      0.13
+     ],
+     [
+      "2026-05-01",
+      0.1
+     ],
+     [
+      "2026-06-01",
+      0.07
+     ],
+     [
+      "2026-07-01",
+      -0.03
+     ],
+     [
+      "2026-08-01",
+      -0.07
+     ],
+     [
+      "2026-09-01",
+      0.0
+     ]
+    ],
+    "label": "萨姆规则衰退指标（实时） — 美国",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "0",
+     "period": "2026-09",
+     "value": 0.0
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "0.23",
+     "period": "2025-09",
+     "value": 0.23
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": null,
+    "seasonal_adjustment": "SA",
+    "series": "fred:SAHMREALTIME",
+    "source_id": "S5",
+    "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+    "transform": "",
+    "units": "Percentage Points"
+   },
+   {
+    "change": {
+     "display": "+0.869 个百分点",
+     "display_words": "+0.869 个百分点",
+     "percent": 21.079394429677563,
+     "value": 0.8685714285714283
+    },
+    "five_year": {
+     "max": {
+      "date": "2026-09-01",
+      "display": "4.989%",
+      "period": "2026-09",
+      "value": 4.989047619047619
+     },
+     "min": {
+      "date": "2025-10-01",
+      "display": "4.062%",
+      "period": "2025-10",
+      "value": 4.0618181818181816
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-11-01",
+      4.35578947368421
+     ],
+     [
+      "2024-12-01",
+      4.3914285714285715
+     ],
+     [
+      "2025-01-01",
+      4.629047619047618
+     ],
+     [
+      "2025-02-01",
+      4.451052631578947
+     ],
+     [
+      "2025-03-01",
+      4.2804761904761905
+     ],
+     [
+      "2025-04-01",
+      4.279047619047619
+     ],
+     [
+      "2025-05-01",
+      4.423809523809524
+     ],
+     [
+      "2025-06-01",
+      4.3835
+     ],
+     [
+      "2025-07-01",
+      4.391818181818182
+     ],
+     [
+      "2025-08-01",
+      4.2647619047619045
+     ],
+     [
+      "2025-09-01",
+      4.12047619047619
+     ],
+     [
+      "2025-10-01",
+      4.0618181818181816
+     ],
+     [
+      "2025-11-01",
+      4.0938888888888885
+     ],
+     [
+      "2025-12-01",
+      4.1431818181818185
+     ],
+     [
+      "2026-01-01",
+      4.2135
+     ],
+     [
+      "2026-02-01",
+      4.12578947368421
+     ],
+     [
+      "2026-03-01",
+      4.245909090909091
+     ],
+     [
+      "2026-04-01",
+      4.319090909090909
+     ],
+     [
+      "2026-05-01",
+      4.484
+     ],
+     [
+      "2026-06-01",
+      4.47047619047619
+     ],
+     [
+      "2026-07-01",
+      4.599545454545455
+     ],
+     [
+      "2026-08-01",
+      4.684285714285714
+     ],
+     [
+      "2026-09-01",
+      4.989047619047619
+     ]
+    ],
+    "label": "美国10年期国债收益率",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "4.989%",
+     "period": "2026-09",
+     "value": 4.989047619047619
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "4.12%",
+     "period": "2025-09",
+     "value": 4.12047619047619
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "publisher_value": {
+     "date": "2026-10-01",
+     "display": "5.267%",
+     "kind": "partial-period value",
+     "period": "2026-10",
+     "value": 5.266666666666667
+    },
+    "seasonal_adjustment": "NSA",
+    "series": "fred:DGS10",
+    "source_id": "S6",
+    "source_url": "https://fred.stlouisfed.org/series/DGS10",
+    "transform": "",
+    "units": "Percent"
+   },
+   {
+    "change": {
+     "display": "-0.25 个百分点",
+     "display_words": "-0.25 个百分点",
+     "percent": -6.0606060606060606,
+     "value": -0.25
+    },
+    "five_year": {
+     "max": {
+      "date": "2023-07-01",
+      "display": "5.375%",
+      "period": "2023-07",
+      "value": 5.375
+     },
+     "min": {
+      "date": "2021-09-01",
+      "display": "0.125%",
+      "period": "2021-09",
+      "value": 0.125
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-10-01",
+      4.875
+     ],
+     [
+      "2024-11-01",
+      4.625
+     ],
+     [
+      "2024-12-01",
+      4.375
+     ],
+     [
+      "2025-01-01",
+      4.375
+     ],
+     [
+      "2025-02-01",
+      4.375
+     ],
+     [
+      "2025-03-01",
+      4.375
+     ],
+     [
+      "2025-04-01",
+      4.375
+     ],
+     [
+      "2025-05-01",
+      4.375
+     ],
+     [
+      "2025-06-01",
+      4.375
+     ],
+     [
+      "2025-07-01",
+      4.375
+     ],
+     [
+      "2025-08-01",
+      4.375
+     ],
+     [
+      "2025-09-01",
+      4.125
+     ],
+     [
+      "2025-10-01",
+      3.875
+     ],
+     [
+      "2025-11-01",
+      3.875
+     ],
+     [
+      "2025-12-01",
+      3.625
+     ],
+     [
+      "2026-01-01",
+      3.625
+     ],
+     [
+      "2026-02-01",
+      3.625
+     ],
+     [
+      "2026-03-01",
+      3.625
+     ],
+     [
+      "2026-04-01",
+      3.625
+     ],
+     [
+      "2026-05-01",
+      3.625
+     ],
+     [
+      "2026-06-01",
+      3.625
+     ],
+     [
+      "2026-07-01",
+      3.625
+     ],
+     [
+      "2026-08-01",
+      3.625
+     ],
+     [
+      "2026-09-01",
+      3.875
+     ]
+    ],
+    "label": "美国央行政策利率",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "3.875%",
+     "period": "2026-09",
+     "value": 3.875
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "4.125%",
+     "period": "2025-09",
+     "value": 4.125
+    },
+    "provider": "bis",
+    "provider_name": "Bank for International Settlements (BIS)",
+    "publisher_value": null,
+    "seasonal_adjustment": "",
+    "series": "bis:WS_CBPOL/M.US",
+    "source_id": "S7",
+    "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+    "transform": "",
+    "units": "Per cent per year"
+   },
+   {
+    "change": null,
+    "five_year": null,
+    "frequency": "A",
+    "frequency_label": "年度",
+    "geography": "USA",
+    "history": [],
+    "label": "美国GDP年增长率（世界发展指标）",
+    "latest": null,
+    "previous_year": null,
+    "provider": "wb",
+    "provider_name": "World Bank Data360",
+    "publisher_value": {
+     "date": "2025-01-01",
+     "display": "2.161%",
+     "kind": "unclassified publisher value",
+     "period": "2025",
+     "value": 2.161382
+    },
+    "seasonal_adjustment": "",
+    "series": "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA",
+    "source_id": "S8",
+    "source_url": "https://data360.worldbank.org/en/indicator/WB_WDI_NY_GDP_MKTP_KD_ZG",
+    "transform": "",
+    "units": "Percentage change per annum"
+   },
+   {
+    "change": null,
+    "five_year": null,
+    "frequency": "A",
+    "frequency_label": "年度",
+    "geography": "WLD",
+    "history": [],
+    "label": "世界实际GDP增长率（IMF WEO）",
+    "latest": null,
+    "previous_year": null,
+    "provider": "imf",
+    "provider_name": "International Monetary Fund (IMF)",
+    "publisher_value": {
+     "date": "2026-01-01",
+     "display": "3.056%",
+     "kind": "unclassified publisher value",
+     "period": "2026",
+     "value": 3.055974
+    },
+    "seasonal_adjustment": "",
+    "series": "imf:WEO/G001.NGDP_RPCH.A",
+    "source_id": "S9",
+    "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+    "transform": "",
+    "units": "Percent change"
+   },
+   {
+    "change": null,
+    "five_year": null,
+    "frequency": "A",
+    "frequency_label": "年度",
+    "geography": "USA",
+    "history": [],
+    "label": "美国实际GDP增长率（IMF WEO）",
+    "latest": null,
+    "previous_year": null,
+    "provider": "wb",
+    "provider_name": "World Bank Data360",
+    "publisher_value": {
+     "date": "2026-01-01",
+     "display": "2.324%",
+     "kind": "unclassified publisher value",
+     "period": "2026",
+     "value": 2.323695
+    },
+    "seasonal_adjustment": "",
+    "series": "wb:IMF_WEO_NGDP_RPCH/USA",
+    "source_id": "S10",
+    "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+    "transform": "",
+    "units": "Percentage change"
+   },
+   {
+    "change": {
+     "display": "+2613202687377.672 (≈2.61万亿美元; +6.972%)",
+     "display_words": "+2613202687377.672 (≈2.61万亿美元; +6.972%)",
+     "percent": 6.972255994885594,
+     "value": 2613202687377.672
+    },
+    "five_year": {
+     "max": {
+      "date": "2026-09-01",
+      "display": "40093219044989.21 (≈40.09万亿美元)",
+      "period": "2026-09",
+      "value": 40093219044989.21
+     },
+     "min": {
+      "date": "2024-11-01",
+      "display": "35982038510142.02 (≈35.98万亿美元)",
+      "period": "2024-11",
+      "value": 35982038510142.016
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-11-01",
+      35982038510142.016
+     ],
+     [
+      "2024-12-01",
+      36162935625345.23
+     ],
+     [
+      "2025-01-01",
+      36195500195322.57
+     ],
+     [
+      "2025-02-01",
+      36219562256650.7
+     ],
+     [
+      "2025-03-01",
+      36216342936699.414
+     ],
+     [
+      "2025-04-01",
+      36214946151833.336
+     ],
+     [
+      "2025-05-01",
+      36214229572092.414
+     ],
+     [
+      "2025-06-01",
+      36214855354618.97
+     ],
+     [
+      "2025-07-01",
+      36618337399077.84
+     ],
+     [
+      "2025-08-01",
+      37104997455144.26
+     ],
+     [
+      "2025-09-01",
+      37480016357611.54
+     ],
+     [
+      "2025-10-01",
+      37961128592095.22
+     ],
+     [
+      "2025-11-01",
+      38209169292520.49
+     ],
+     [
+      "2025-12-01",
+      38388634843596.98
+     ],
+     [
+      "2026-01-01",
+      38471321721798.48
+     ],
+     [
+      "2026-02-01",
+      38672419608847.27
+     ],
+     [
+      "2026-03-01",
+      38947655725220.53
+     ],
+     [
+      "2026-04-01",
+      38967969317146.59
+     ],
+     [
+      "2026-05-01",
+      39016325057400.56
+     ],
+     [
+      "2026-06-01",
+      39275368478131.96
+     ],
+     [
+      "2026-07-01",
+      39557396511831.58
+     ],
+     [
+      "2026-08-01",
+      39974413944432.24
+     ],
+     [
+      "2026-09-01",
+      40093219044989.21
+     ]
+    ],
+    "label": "美国联邦公共债务总额（每日）",
+    "latest": {
+     "date": "2026-09-01",
+     "display": "40093219044989.21 (≈40.09万亿美元)",
+     "period": "2026-09",
+     "value": 40093219044989.21
+    },
+    "previous_year": {
+     "date": "2025-09-01",
+     "display": "37480016357611.54 (≈37.48万亿美元)",
+     "period": "2025-09",
+     "value": 37480016357611.54
+    },
+    "provider": "usgov",
+    "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+    "publisher_value": {
+     "date": "2026-10-01",
+     "display": "40269094993348.98 (≈40.27万亿美元)",
+     "kind": "partial-period value",
+     "period": "2026-10",
+     "value": 40269094993348.984
+    },
+    "seasonal_adjustment": "",
+    "series": "usgov:treasury/debt_to_penny",
+    "source_id": "S11",
+    "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+    "transform": "",
+    "units": "U.S. dollars"
+   },
+   {
+    "change": {
+     "display": "+177994939580.74 (≈1779.95亿美元; +51.624%)",
+     "display_words": "+177994939580.74 (≈1779.95亿美元; +51.624%)",
+     "percent": 51.62387625228262,
+     "value": 177994939580.74
+    },
+    "five_year": {
+     "max": {
+      "date": "2022-04-01",
+      "display": "308215060526.79 (≈3082.15亿美元)",
+      "period": "2022-04",
+      "value": 308215060526.79
+     },
+     "min": {
+      "date": "2026-07-01",
+      "display": "-432307874621.48 (≈-4323.08亿美元)",
+      "period": "2026-07",
+      "value": -432307874621.48
+     }
+    },
+    "frequency": "M",
+    "frequency_label": "月度",
+    "geography": "USA",
+    "history": [
+     [
+      "2024-09-01",
+      64263008867.74
+     ],
+     [
+      "2024-10-01",
+      -257450343191.91
+     ],
+     [
+      "2024-11-01",
+      -366763064368.07
+     ],
+     [
+      "2024-12-01",
+      -86731619013.29
+     ],
+     [
+      "2025-01-01",
+      -128640206673.49
+     ],
+     [
+      "2025-02-01",
+      -307017194699.27
+     ],
+     [
+      "2025-03-01",
+      -160530321499.36
+     ],
+     [
+      "2025-04-01",
+      258399949114.96
+     ],
+     [
+      "2025-05-01",
+      -316003761189.44
+     ],
+     [
+      "2025-06-01",
+      27010022077.77
+     ],
+     [
+      "2025-07-01",
+      -291142660287.67
+     ],
+     [
+      "2025-08-01",
+      -344791891858.12
+     ],
+     [
+      "2025-09-01",
+      197949630362.16
+     ],
+     [
+      "2025-10-01",
+      -284350050782.8
+     ],
+     [
+      "2025-11-01",
+      -173277175076.92
+     ],
+     [
+      "2025-12-01",
+      -144749235609.28
+     ],
+     [
+      "2026-01-01",
+      -94615162369.21
+     ],
+     [
+      "2026-02-01",
+      -307501433426.17
+     ],
+     [
+      "2026-03-01",
+      -164100338817.86
+     ],
+     [
+      "2026-04-01",
+      215024140197.77
+     ],
+     [
+      "2026-05-01",
+      -292648462083.74
+     ],
+     [
+      "2026-06-01",
+      -120305275586.37
+     ],
+     [
+      "2026-07-01",
+      -432307874621.48
+     ],
+     [
+      "2026-08-01",
+      -166796952277.38
+     ]
+    ],
+    "label": "美国联邦财政月度盈余（+）或赤字（-）",
+    "latest": {
+     "date": "2026-08-01",
+     "display": "-166796952277.38 (≈-1667.97亿美元)",
+     "period": "2026-08",
+     "value": -166796952277.38
+    },
+    "previous_year": {
+     "date": "2025-08-01",
+     "display": "-344791891858.12 (≈-3447.92亿美元)",
+     "period": "2025-08",
+     "value": -344791891858.12
+    },
+    "provider": "usgov",
+    "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+    "publisher_value": null,
+    "seasonal_adjustment": "NSA",
+    "series": "usgov:treasury/mts_deficit",
+    "source_id": "S13",
+    "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+    "transform": "",
+    "units": "U.S. dollars"
+   }
+  ],
+  "lang": "zh",
+  "official_data": {
+   "schema_version": 1,
+   "series": [
+    {
+     "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+     "chart": "charts/data_fred_unrate_9d03984317fdea12.png",
+     "csv": "data/fred_unrate_9d03984317fdea12.b5ace0e25da06e6f.csv",
+     "csv_sha256": "b5ace0e25da06e6f230fb9111637b35aae92261eb49be80785ac88c4170c5006",
+     "file": "data/fred_unrate_9d03984317fdea12.0111f98eef3e380a.json",
+     "first": "2019-01-01",
+     "frequency": "M",
+     "geography": "USA",
+     "kiqs": [],
+     "last": "2026-09-01",
+     "last_updated": "",
+     "latest": {
+      "date": "2026-09-01",
+      "value": 4.2
+     },
+     "observations": [
+      {
+       "date": "2019-01-01",
+       "flag": "",
+       "value": 4.0
+      },
+      {
+       "date": "2019-02-01",
+       "flag": "",
+       "value": 3.8
+      },
+      {
+       "date": "2019-03-01",
+       "flag": "",
+       "value": 3.8
+      },
+      {
+       "date": "2019-04-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2019-05-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2019-06-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2019-07-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2019-08-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2019-09-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2019-10-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2019-11-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2019-12-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2020-01-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2020-02-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2020-03-01",
+       "flag": "",
+       "value": 4.4
+      },
+      {
+       "date": "2020-04-01",
+       "flag": "",
+       "value": 14.8
+      },
+      {
+       "date": "2020-05-01",
+       "flag": "",
+       "value": 13.2
+      },
+      {
+       "date": "2020-06-01",
+       "flag": "",
+       "value": 11.0
+      },
+      {
+       "date": "2020-07-01",
+       "flag": "",
+       "value": 10.2
+      },
+      {
+       "date": "2020-08-01",
+       "flag": "",
+       "value": 8.4
+      },
+      {
+       "date": "2020-09-01",
+       "flag": "",
+       "value": 7.8
+      },
+      {
+       "date": "2020-10-01",
+       "flag": "",
+       "value": 6.9
+      },
+      {
+       "date": "2020-11-01",
+       "flag": "",
+       "value": 6.7
+      },
+      {
+       "date": "2020-12-01",
+       "flag": "",
+       "value": 6.7
+      },
+      {
+       "date": "2021-01-01",
+       "flag": "",
+       "value": 6.4
+      },
+      {
+       "date": "2021-02-01",
+       "flag": "",
+       "value": 6.2
+      },
+      {
+       "date": "2021-03-01",
+       "flag": "",
+       "value": 6.1
+      },
+      {
+       "date": "2021-04-01",
+       "flag": "",
+       "value": 6.1
+      },
+      {
+       "date": "2021-05-01",
+       "flag": "",
+       "value": 5.8
+      },
+      {
+       "date": "2021-06-01",
+       "flag": "",
+       "value": 5.9
+      },
+      {
+       "date": "2021-07-01",
+       "flag": "",
+       "value": 5.4
+      },
+      {
+       "date": "2021-08-01",
+       "flag": "",
+       "value": 5.1
+      },
+      {
+       "date": "2021-09-01",
+       "flag": "",
+       "value": 4.7
+      },
+      {
+       "date": "2021-10-01",
+       "flag": "",
+       "value": 4.5
+      },
+      {
+       "date": "2021-11-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2021-12-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2022-01-01",
+       "flag": "",
+       "value": 4.0
+      },
+      {
+       "date": "2022-02-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2022-03-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2022-04-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2022-05-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2022-06-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2022-07-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2022-08-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2022-09-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2022-10-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2022-11-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2022-12-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2023-01-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2023-02-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2023-03-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2023-04-01",
+       "flag": "",
+       "value": 3.4
+      },
+      {
+       "date": "2023-05-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2023-06-01",
+       "flag": "",
+       "value": 3.6
+      },
+      {
+       "date": "2023-07-01",
+       "flag": "",
+       "value": 3.5
+      },
+      {
+       "date": "2023-08-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2023-09-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2023-10-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2023-11-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2023-12-01",
+       "flag": "",
+       "value": 3.8
+      },
+      {
+       "date": "2024-01-01",
+       "flag": "",
+       "value": 3.7
+      },
+      {
+       "date": "2024-02-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2024-03-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2024-04-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2024-05-01",
+       "flag": "",
+       "value": 3.9
+      },
+      {
+       "date": "2024-06-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2024-07-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2024-08-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2024-09-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2024-10-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2024-11-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2024-12-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2025-01-01",
+       "flag": "",
+       "value": 4.0
+      },
+      {
+       "date": "2025-02-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2025-03-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2025-04-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2025-05-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2025-06-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2025-07-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2025-08-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2025-09-01",
+       "flag": "",
+       "value": 4.4
+      },
+      {
+       "date": "2025-10-01",
+       "flag": "",
+       "value": null
+      },
+      {
+       "date": "2025-11-01",
+       "flag": "",
+       "value": 4.5
+      },
+      {
+       "date": "2025-12-01",
+       "flag": "",
+       "value": 4.4
+      },
+      {
+       "date": "2026-01-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2026-02-01",
+       "flag": "",
+       "value": 4.4
+      },
+      {
+       "date": "2026-03-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2026-04-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2026-05-01",
+       "flag": "",
+       "value": 4.3
+      },
+      {
+       "date": "2026-06-01",
+       "flag": "",
+       "value": 4.2
+      },
+      {
+       "date": "2026-07-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2026-08-01",
+       "flag": "",
+       "value": 4.1
+      },
+      {
+       "date": "2026-09-01",
+       "flag": "",
+       "value": 4.2
+      }
+     ],
+     "projection_from": "",
+     "provider": "fred",
+     "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+     "retrieved_at": "2026-10-11T19:51:09.042257+00:00",
+     "route": "cache",
+     "seasonal_adjustment": "SA",
+     "series": "fred:UNRATE",
+     "sha256": "0111f98eef3e380ac48545e00936cde21b4d947a02872016ec731b58f4eff5b1",
+     "slug": "fred_unrate_9d03984317fdea12",
+     "source_id": "",
+     "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+     "title": "Unemployment Rate",
+     "title_zh": "美国失业率",
+     "transform": "",
+     "units": "Percent",
+     "vintage": ""
+    },
+    {
+     "api_url": "",
+     "chart": "charts/data_imf_weo_g001_ngdp_rpch_a_e36e0c7033c63e6c.png",
+     "csv": "data/imf_weo_g001_ngdp_rpch_a_e36e0c7033c63e6c.cb2fe38ee62e2d61.csv",
+     "csv_sha256": "cb2fe38ee62e2d610c019567582fc70f76ccd5e13c0024b80e43106cf16ca331",
+     "file": "data/imf_weo_g001_ngdp_rpch_a_e36e0c7033c63e6c.087f3b9db1785351.json",
+     "first": "2002-01-01",
+     "frequency": "A",
+     "geography": "WLD",
+     "kiqs": [],
+     "last": "2026-01-01",
+     "last_updated": "",
+     "latest": null,
+     "observations": [
+      {
+       "date": "2002-01-01",
+       "flag": "unknown",
+       "value": 2.832609
+      },
+      {
+       "date": "2003-01-01",
+       "flag": "unknown",
+       "value": 3.798842
+      },
+      {
+       "date": "2004-01-01",
+       "flag": "unknown",
+       "value": 5.263439
+      },
+      {
+       "date": "2005-01-01",
+       "flag": "unknown",
+       "value": 4.712692
+      },
+      {
+       "date": "2006-01-01",
+       "flag": "unknown",
+       "value": 5.286045
+      },
+      {
+       "date": "2007-01-01",
+       "flag": "unknown",
+       "value": 5.364044
+      },
+      {
+       "date": "2008-01-01",
+       "flag": "unknown",
+       "value": 2.930436
+      },
+      {
+       "date": "2009-01-01",
+       "flag": "unknown",
+       "value": -0.357571
+      },
+      {
+       "date": "2010-01-01",
+       "flag": "unknown",
+       "value": 5.252209
+      },
+      {
+       "date": "2011-01-01",
+       "flag": "unknown",
+       "value": 4.100359
+      },
+      {
+       "date": "2012-01-01",
+       "flag": "unknown",
+       "value": 3.387123
+      },
+      {
+       "date": "2013-01-01",
+       "flag": "unknown",
+       "value": 3.380306
+      },
+      {
+       "date": "2014-01-01",
+       "flag": "unknown",
+       "value": 3.559024
+      },
+      {
+       "date": "2015-01-01",
+       "flag": "unknown",
+       "value": 3.447288
+      },
+      {
+       "date": "2016-01-01",
+       "flag": "unknown",
+       "value": 3.22461
+      },
+      {
+       "date": "2017-01-01",
+       "flag": "unknown",
+       "value": 3.842261
+      },
+      {
+       "date": "2018-01-01",
+       "flag": "unknown",
+       "value": 3.642673
+      },
+      {
+       "date": "2019-01-01",
+       "flag": "unknown",
+       "value": 2.956766
+      },
+      {
+       "date": "2020-01-01",
+       "flag": "unknown",
+       "value": -2.706997
+      },
+      {
+       "date": "2021-01-01",
+       "flag": "unknown",
+       "value": 6.653434
+      },
+      {
+       "date": "2022-01-01",
+       "flag": "unknown",
+       "value": 3.773925
+      },
+      {
+       "date": "2023-01-01",
+       "flag": "unknown",
+       "value": 3.327812
+      },
+      {
+       "date": "2024-01-01",
+       "flag": "unknown",
+       "value": 3.416268
+      },
+      {
+       "date": "2025-01-01",
+       "flag": "unknown",
+       "value": 3.441279
+      },
+      {
+       "date": "2026-01-01",
+       "flag": "unknown",
+       "value": 3.055974
+      }
+     ],
+     "projection_from": "",
+     "provider": "imf",
+     "provider_name": "International Monetary Fund (IMF)",
+     "retrieved_at": "2026-10-11T19:53:36.864843+00:00",
+     "route": "cache",
+     "seasonal_adjustment": "",
+     "series": "imf:WEO/G001.NGDP_RPCH.A",
+     "sha256": "087f3b9db17853513b391c53360492271ff022e2446d9136ef8d5ea541464ced",
+     "slug": "imf_weo_g001_ngdp_rpch_a_e36e0c7033c63e6c",
+     "source_id": "",
+     "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+     "title": "Gross domestic product (GDP), Constant prices, Percent change: World",
+     "title_zh": "世界实际GDP增长率（IMF WEO）",
+     "transform": "",
+     "units": "Percent change",
+     "vintage": ""
+    },
+    {
+     "api_url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?fields=record_date%2Ctot_pub_debt_out_amt&filter=record_date%3Agte%3A2024-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date",
+     "chart": "charts/data_usgov_treasury_debt_to_penny_278dda426f0c19c5.png",
+     "csv": "data/usgov_treasury_debt_to_penny_278dda426f0c19c5.44f73931b27dfd4e.csv",
+     "csv_sha256": "44f73931b27dfd4e62599ab04fb5019599f00fa90b4b707665fcdfeb7917c9af",
+     "file": "data/usgov_treasury_debt_to_penny_278dda426f0c19c5.b28f99a2e60fcb11.json",
+     "first": "2024-10-01",
+     "frequency": "M",
+     "geography": "USA",
+     "kiqs": [],
+     "last": "2026-10-01",
+     "last_updated": "",
+     "latest": {
+      "date": "2026-10-01",
+      "value": 40269094993348.984
+     },
+     "observations": [
+      {
+       "date": "2024-10-01",
+       "flag": "",
+       "value": 35798782683927.75
+      },
+      {
+       "date": "2024-11-01",
+       "flag": "",
+       "value": 35982038510142.016
+      },
+      {
+       "date": "2024-12-01",
+       "flag": "",
+       "value": 36162935625345.23
+      },
+      {
+       "date": "2025-01-01",
+       "flag": "",
+       "value": 36195500195322.57
+      },
+      {
+       "date": "2025-02-01",
+       "flag": "",
+       "value": 36219562256650.7
+      },
+      {
+       "date": "2025-03-01",
+       "flag": "",
+       "value": 36216342936699.414
+      },
+      {
+       "date": "2025-04-01",
+       "flag": "",
+       "value": 36214946151833.336
+      },
+      {
+       "date": "2025-05-01",
+       "flag": "",
+       "value": 36214229572092.414
+      },
+      {
+       "date": "2025-06-01",
+       "flag": "",
+       "value": 36214855354618.97
+      },
+      {
+       "date": "2025-07-01",
+       "flag": "",
+       "value": 36618337399077.84
+      },
+      {
+       "date": "2025-08-01",
+       "flag": "",
+       "value": 37104997455144.26
+      },
+      {
+       "date": "2025-09-01",
+       "flag": "",
+       "value": 37480016357611.54
+      },
+      {
+       "date": "2025-10-01",
+       "flag": "",
+       "value": 37961128592095.22
+      },
+      {
+       "date": "2025-11-01",
+       "flag": "",
+       "value": 38209169292520.49
+      },
+      {
+       "date": "2025-12-01",
+       "flag": "",
+       "value": 38388634843596.98
+      },
+      {
+       "date": "2026-01-01",
+       "flag": "",
+       "value": 38471321721798.48
+      },
+      {
+       "date": "2026-02-01",
+       "flag": "",
+       "value": 38672419608847.27
+      },
+      {
+       "date": "2026-03-01",
+       "flag": "",
+       "value": 38947655725220.53
+      },
+      {
+       "date": "2026-04-01",
+       "flag": "",
+       "value": 38967969317146.59
+      },
+      {
+       "date": "2026-05-01",
+       "flag": "",
+       "value": 39016325057400.56
+      },
+      {
+       "date": "2026-06-01",
+       "flag": "",
+       "value": 39275368478131.96
+      },
+      {
+       "date": "2026-07-01",
+       "flag": "",
+       "value": 39557396511831.58
+      },
+      {
+       "date": "2026-08-01",
+       "flag": "",
+       "value": 39974413944432.24
+      },
+      {
+       "date": "2026-09-01",
+       "flag": "",
+       "value": 40093219044989.21
+      },
+      {
+       "date": "2026-10-01",
+       "flag": "",
+       "value": 40269094993348.984
+      }
+     ],
+     "projection_from": "",
+     "provider": "usgov",
+     "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+     "retrieved_at": "2026-10-11T19:52:31.054290+00:00",
+     "route": "cache",
+     "seasonal_adjustment": "",
+     "series": "usgov:treasury/debt_to_penny",
+     "sha256": "b28f99a2e60fcb110715a483f5cd202036820c29f7c7b845111125406d43bf15",
+     "slug": "usgov_treasury_debt_to_penny_278dda426f0c19c5",
+     "source_id": "",
+     "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+     "title": "Debt to the Penny: Total Public Debt Outstanding",
+     "title_zh": "美国联邦公共债务总额（每日）",
+     "transform": "",
+     "units": "U.S. dollars",
+     "vintage": ""
+    }
+   ]
+  },
+  "report_id": "report_full_english",
+  "research_binding": null,
+  "saved_at": "2026-10-12T14:02:41.386873+00:00",
+  "sha256": "b0c4efeaf7fb03da8b2c951814b1f6be34b8951f50b683ac69662d00bf60c440",
+  "simulation_id": "sim_x"
+ },
+ "success": true
+}

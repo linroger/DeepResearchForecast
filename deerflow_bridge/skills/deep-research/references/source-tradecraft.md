@@ -18,7 +18,7 @@ For each KIQ record its claim type—fact, statistic, mechanism, intention, esti
 
 | Domain | Preferred primary origins |
 |---|---|
-| Macro/economy | national statistics agencies, central banks, IMF, World Bank, BIS, OECD |
+| Macro/economy | national statistics agencies, central banks, IMF, World Bank, BIS, OECD; retrieve their series with `data_search` → `data_get` when available |
 | Companies/finance | exchange disclosures, SEC/local filings, earnings transcripts, audited reports |
 | Technology | company roadmap/capex disclosures, standards bodies, official export-control texts, reputable industry datasets |
 | Policy/regulation | enacted/proposed text, regulator notices, Federal Register, committee testimony, court dockets |
@@ -54,6 +54,7 @@ Admiralty shorthand: A/S1 reliable, B/S2 usually reliable, C/S3 conditional, D/s
 - Reconcile definitions before averaging conflicting numbers.
 - Check million/billion, percentages versus percentage points, currency, real/nominal, totals, denominators, and CAGR-implied endpoints.
 - Treat estimates/projections as method + assumptions + range, intentions as words + feasibility, rumors as rumors.
+- For a series `data_get` stored, quote the stored value, unit and period with its `[S<n>]`; keep each observation's status (observed, preliminary, estimate, projection) and never present a publisher projection as observed history. Use web pages for the release narrative, not to retype the numbers.
 
 ## Adversarial analysis
 

@@ -1,0 +1,248 @@
+{
+ "capture": {
+  "cache_file": "549b153092bfa41f9438b3f134e4034e8bced7a6da26e824b4753203973bd0df.json",
+  "retrieved_at": "2026-10-11T19:52:31.054290+00:00",
+  "source": "normalized live series cache (scratchpad/fix/cache)",
+  "trimmed": "newest 14 observations; provenance without ['chunks', 'metadata', 'pages', 'tool_responses']"
+ },
+ "head_brief": "[S3] usgov:treasury/debt_to_penny — Debt to the Penny: Total Public Debt Outstanding (U.S. dollars, M)\n2026-03 (partial): 38947655725220.5312 [observed]\n2026-04 (partial): 38967969317146.5938 [observed]\n2026-05 (partial): 39016325057400.5625 [observed]\n2026-06 (partial): 39275368478131.9609 [observed]\n2026-07 (partial): 39557396511831.5781 [observed]\n2026-08 (partial): 39974413944432.2422 [observed]\n2026-09 (partial): 40093219044989.2109 [observed]\n2026-10 (partial): 40269094993348.9844 [observed]\nBusiness-day series; includes intragovernmental holdings (use debt_held_public for market debt). Daily data aggregated to monthly mean; partial months possible.",
+ "head_page": "# Debt to the Penny: Total Public Debt Outstanding\nProvider: U.S. Government Open Data (Treasury Fiscal Data, USAspending) · Series: usgov:treasury/debt_to_penny · Units: U.S. dollars · Frequency: M · Seasonal adjustment: unknown\nSource: https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/ · Retrieved: 2026-10-11T19:52:31.054290+00:00 · Coverage shown: 2025-09-01 to 2026-10-01 (14 observations)\nGeography: USA · Vintage: unknown · Route: mcp\nNotes: Business-day series; includes intragovernmental holdings (use debt_held_public for market debt). Daily data aggregated to monthly mean; partial months possible.\n## Summary\n- Latest: 40269094993348.9844 (2026-10-01); see observation status below.\n- Year earlier: 37961128592095.2188 (2025-10-01); change 2307966401253.7656 (6.08%).\n- 5-year range: 37480016357611.5391 (2025-09-01) to 40269094993348.9844 (2026-10-01).\n## Observations (U.S. dollars)\nValues in U.S. dollars.\n| Period | Value | Status |\n|---|---|---|\n| 2025-09 (partial) | 37480016357611.5391 | observed |\n| 2025-10 (partial) | 37961128592095.2188 | observed |\n| 2025-11 (partial) | 38209169292520.4922 | observed |\n| 2025-12 (partial) | 38388634843596.9766 | observed |\n| 2026-01 (partial) | 38471321721798.4766 | observed |\n| 2026-02 (partial) | 38672419608847.2734 | observed |\n| 2026-03 (partial) | 38947655725220.5312 | observed |\n| 2026-04 (partial) | 38967969317146.5938 | observed |\n| 2026-05 (partial) | 39016325057400.5625 | observed |\n| 2026-06 (partial) | 39275368478131.9609 | observed |\n| 2026-07 (partial) | 39557396511831.5781 | observed |\n| 2026-08 (partial) | 39974413944432.2422 | observed |\n| 2026-09 (partial) | 40093219044989.2109 | observed |\n| 2026-10 (partial) | 40269094993348.9844 | observed |",
+ "row": {
+  "api_url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?fields=record_date%2Ctot_pub_debt_out_amt&filter=record_date%3Agte%3A2024-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date",
+  "frequency": "M",
+  "geography": "USA",
+  "kiqs": [],
+  "last_updated": "",
+  "notes": "Business-day series; includes intragovernmental holdings (use debt_held_public for market debt). Daily data aggregated to monthly mean; partial months possible.",
+  "observations": [
+   {
+    "date": "2025-09-01",
+    "flag": "",
+    "value": 37480016357611.54
+   },
+   {
+    "date": "2025-10-01",
+    "flag": "",
+    "value": 37961128592095.22
+   },
+   {
+    "date": "2025-11-01",
+    "flag": "",
+    "value": 38209169292520.49
+   },
+   {
+    "date": "2025-12-01",
+    "flag": "",
+    "value": 38388634843596.98
+   },
+   {
+    "date": "2026-01-01",
+    "flag": "",
+    "value": 38471321721798.48
+   },
+   {
+    "date": "2026-02-01",
+    "flag": "",
+    "value": 38672419608847.27
+   },
+   {
+    "date": "2026-03-01",
+    "flag": "",
+    "value": 38947655725220.53
+   },
+   {
+    "date": "2026-04-01",
+    "flag": "",
+    "value": 38967969317146.59
+   },
+   {
+    "date": "2026-05-01",
+    "flag": "",
+    "value": 39016325057400.56
+   },
+   {
+    "date": "2026-06-01",
+    "flag": "",
+    "value": 39275368478131.96
+   },
+   {
+    "date": "2026-07-01",
+    "flag": "",
+    "value": 39557396511831.58
+   },
+   {
+    "date": "2026-08-01",
+    "flag": "",
+    "value": 39974413944432.24
+   },
+   {
+    "date": "2026-09-01",
+    "flag": "",
+    "value": 40093219044989.21
+   },
+   {
+    "date": "2026-10-01",
+    "flag": "",
+    "value": 40269094993348.984
+   }
+  ],
+  "projection_from": "",
+  "provenance": {
+   "aggregation": "Arithmetic mean of available daily observations; partial months possible",
+   "delivered_end": "2026-10-01",
+   "delivered_start": "2024-10-01",
+   "intentional_delivery_trim": false,
+   "metadata_origin": "curated_recipe",
+   "native_complete": true,
+   "native_frequency": "D",
+   "normalization_policy_version": 2,
+   "parameter": "",
+   "periods": {
+    "2025-09-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2025-09-30",
+     "covered_start": "2025-09-01",
+     "end": "2025-09-30",
+     "label": "2025-09",
+     "start": "2025-09-01"
+    },
+    "2025-10-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2025-10-31",
+     "covered_start": "2025-10-01",
+     "end": "2025-10-31",
+     "label": "2025-10",
+     "start": "2025-10-01"
+    },
+    "2025-11-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2025-11-30",
+     "covered_start": "2025-11-01",
+     "end": "2025-11-30",
+     "label": "2025-11",
+     "start": "2025-11-01"
+    },
+    "2025-12-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2025-12-31",
+     "covered_start": "2025-12-01",
+     "end": "2025-12-31",
+     "label": "2025-12",
+     "start": "2025-12-01"
+    },
+    "2026-01-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-01-31",
+     "covered_start": "2026-01-01",
+     "end": "2026-01-31",
+     "label": "2026-01",
+     "start": "2026-01-01"
+    },
+    "2026-02-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-02-28",
+     "covered_start": "2026-02-01",
+     "end": "2026-02-28",
+     "label": "2026-02",
+     "start": "2026-02-01"
+    },
+    "2026-03-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-03-31",
+     "covered_start": "2026-03-01",
+     "end": "2026-03-31",
+     "label": "2026-03",
+     "start": "2026-03-01"
+    },
+    "2026-04-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-04-30",
+     "covered_start": "2026-04-01",
+     "end": "2026-04-30",
+     "label": "2026-04",
+     "start": "2026-04-01"
+    },
+    "2026-05-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-05-31",
+     "covered_start": "2026-05-01",
+     "end": "2026-05-31",
+     "label": "2026-05",
+     "start": "2026-05-01"
+    },
+    "2026-06-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-06-30",
+     "covered_start": "2026-06-01",
+     "end": "2026-06-30",
+     "label": "2026-06",
+     "start": "2026-06-01"
+    },
+    "2026-07-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-07-31",
+     "covered_start": "2026-07-01",
+     "end": "2026-07-31",
+     "label": "2026-07",
+     "start": "2026-07-01"
+    },
+    "2026-08-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-08-31",
+     "covered_start": "2026-08-01",
+     "end": "2026-08-31",
+     "label": "2026-08",
+     "start": "2026-08-01"
+    },
+    "2026-09-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-09-30",
+     "covered_start": "2026-09-01",
+     "end": "2026-09-30",
+     "label": "2026-09",
+     "start": "2026-09-01"
+    },
+    "2026-10-01": {
+     "calendar": "calendar_month",
+     "complete": false,
+     "covered_end": "2026-10-11",
+     "covered_start": "2026-10-01",
+     "end": "2026-10-31",
+     "label": "2026-10",
+     "start": "2026-10-01"
+    }
+   },
+   "recipe": "treasury/debt_to_penny",
+   "requested_end": "2026-10-11",
+   "requested_start": "2024-10-11",
+   "resolution_safe": false,
+   "response_sha256": "afc044e1e7e901f7709271907cd3084f6193ef2b857ef334cc83b4fc938636c1",
+   "retrieval_route": "mcp"
+  },
+  "provider": "usgov",
+  "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+  "retrieved_at": "2026-10-11T19:52:31.054290+00:00",
+  "route": "mcp",
+  "seasonal_adjustment": "",
+  "series": "usgov:treasury/debt_to_penny",
+  "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+  "title": "Debt to the Penny: Total Public Debt Outstanding",
+  "title_zh": "美国联邦公共债务总额（每日）",
+  "transform": "",
+  "units": "U.S. dollars",
+  "vintage": ""
+ }
+}

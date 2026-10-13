@@ -366,6 +366,33 @@ def _viz_state(tmp_path):
     return _po.PipelineState(pipeline_id="viz-pipe-1", prompt="x", handoff_dir=str(tmp_path))
 
 
+REAL_V3_SERIES = (Path(__file__).resolve().parent
+                  / "fixtures/data_sources/real/v3_engine/series-2026-10-12.json")
+
+
+def _real_dataset_generations(handoff):
+    """Persist the real 2026-10-12 v3 captures, then a newer DFEDTARU generation.
+
+    Dataset files are content-addressed, so the refetch writes a second CSV and
+    leaves the first one on disk next to the manifest that no longer names it.
+    Returns the current manifest and the stale CSV path.
+    """
+    from app.services.official_data import data_api
+
+    api = data_api()
+    rows = json.loads(REAL_V3_SERIES.read_text(encoding="utf-8"))["series"]
+    first = api.write_dataset_files([api.Series.from_dict(row) for row in rows], handoff,
+                                    citations={row["series"]: f"S{i}" for i, row in enumerate(rows, 1)})
+    assert "error" not in first and len(first["series"]) == len(rows)
+    stale = Path(handoff) / first["series"][0]["csv"]
+    refetched = api.Series.from_dict(rows[0])
+    refetched.observations = refetched.observations[:-1]
+    manifest = api.write_dataset_files([refetched], handoff)
+    assert "error" not in manifest and stale.is_file()
+    assert Path(handoff, manifest["series"][0]["csv"]) != stale
+    return manifest, stale
+
+
 def test_viz_specs_present_for_research_and_report(monkeypatch, tmp_path):
     monkeypatch.setattr(_po.Config, "PIPELINE_VIZ_ARTIFACTS", True, raising=False)
     st = _viz_state(tmp_path)
@@ -425,19 +452,20 @@ def test_viz_absent_files_are_not_discovered(monkeypatch, tmp_path):
 def test_viz_present_files_surface_as_partials(monkeypatch, tmp_path):
     monkeypatch.setattr(_po.Config, "PIPELINE_VIZ_ARTIFACTS", True, raising=False)
     (tmp_path / "charts").mkdir()
-    (tmp_path / "data").mkdir()
     (tmp_path / "charts" / "fig1.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     (tmp_path / "charts" / "fig1.html").write_text("<html></html>", encoding="utf-8")
     (tmp_path / "charts" / "charts.json").write_text(
-        '[{"title": "t", "caption": "c", "source_data": "data/fig1.csv"}]', encoding="utf-8")
-    (tmp_path / "data" / "fig1.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+        '[{"title": "t", "caption": "c", "source_data": "data/datasets.json"}]', encoding="utf-8")
+    manifest, _stale = _real_dataset_generations(tmp_path)
     st = _viz_state(tmp_path)
     # report_id 为空 → section_*.md 扫描分支自然跳过；不触碰 ReportManager。
     names = {p["name"] for p in _po.PipelineOrchestrator._discover_partial_artifacts(st, _po.STAGE_RESEARCH)}
     assert "charts" in names                # charts.json 经 specs 枚举登记为索引锚点
+    assert "datasets" in names              # datasets.json 同为索引锚点
     assert "chart_fig1.png" in names        # 原始 png 经目录扫描逐个透出
     assert "chart_fig1.html" in names       # 交互式 HTML 同样可深链
-    assert "dataset_fig1.csv" in names      # 原始 csv 经目录扫描逐个透出
+    for row in manifest["series"]:          # 当前代际的每个数据集 csv 逐个透出
+        assert f"dataset_{os.path.basename(row['csv'])}" in names
 
 
 def test_report_partial_scan_uses_report_owned_charts(monkeypatch, tmp_path):
@@ -479,6 +507,91 @@ def test_research_completion_registers_chart_assets_without_partial_suffix(
     assert st.artifacts["chart_actor.html"] == str(charts / "actor.html")
     assert "chart_actor.png_partial" not in st.artifacts
     assert "chart_actor.html_partial" not in st.artifacts
+
+
+def test_research_completion_registers_dataset_csvs_that_outlive_prepare(monkeypatch, tmp_path):
+    # G3's dossier links a series CSV only while status.artifacts lists
+    # dataset_<file>; live-scan *_partial keys are dropped at PREPARE.
+    monkeypatch.setattr(_po.Config, "PIPELINE_VIZ_ARTIFACTS", True, raising=False)
+    monkeypatch.setattr(_po.Config, "PIPELINE_VALIDATE_ARTIFACTS", False, raising=False)
+    manifest, stale = _real_dataset_generations(tmp_path)
+    current = {f"dataset_{os.path.basename(row['csv'])}": str(tmp_path / row["csv"])
+               for row in manifest["series"]}
+    st = _viz_state(tmp_path)
+    for name, path in current.items():
+        st.artifacts[f"{name}_partial"] = path
+    orch = _po.PipelineOrchestrator.__new__(_po.PipelineOrchestrator)
+
+    orch._record_stage_artifacts(st, _po.STAGE_RESEARCH)
+    for key in [k for k in st.artifacts if k.endswith("_partial")]:  # PREPARE (XRUN-15)
+        st.artifacts.pop(key)
+
+    assert st.artifacts["datasets"] == str(tmp_path / "data" / "datasets.json")
+    assert {k: v for k, v in st.artifacts.items() if k.startswith("dataset_")} == current
+    assert f"dataset_{stale.name}" not in st.artifacts
+    assert len(current) == 3
+
+
+def test_registered_dataset_csv_is_served_to_the_dossier(monkeypatch, tmp_path):
+    monkeypatch.setattr(_po.Config, "PIPELINE_VIZ_ARTIFACTS", True, raising=False)
+    monkeypatch.setattr(_po.Config, "PIPELINE_VALIDATE_ARTIFACTS", False, raising=False)
+    manifest, _stale = _real_dataset_generations(tmp_path)
+    st = _viz_state(tmp_path)
+    _po.PipelineOrchestrator.__new__(_po.PipelineOrchestrator)._record_stage_artifacts(
+        st, _po.STAGE_RESEARCH)
+    monkeypatch.setattr(_po.PipelineManager, "load",
+                        classmethod(lambda cls, pid: {"artifacts": dict(st.artifacts)}))
+    from app import create_app
+    client = create_app().test_client()
+
+    for row in manifest["series"]:
+        resp = client.get(f"/api/research/pipe/artifact/dataset_{os.path.basename(row['csv'])}")
+        assert resp.status_code == 200
+        content = resp.get_json()["data"]["content"]
+        assert content == (tmp_path / row["csv"]).read_text(encoding="utf-8")
+        assert content.startswith("date,value\n")
+
+
+def test_dataset_specs_list_only_current_regular_csvs(tmp_path):
+    manifest, stale = _real_dataset_generations(tmp_path)
+    data = tmp_path / "data"
+    outside = tmp_path / "outside.csv"
+    outside.write_text("date,value\n2026-01-01,1\n", encoding="utf-8")
+    os.symlink(outside, data / "linked.csv")
+    raw = json.loads((data / "datasets.json").read_text(encoding="utf-8"))
+    raw["series"] += [
+        {"series": "x:linked", "csv": "data/linked.csv"},
+        {"series": "x:escape", "csv": "data/../outside.csv"},
+        {"series": "x:root", "csv": "outside.csv"},
+        {"series": "x:json", "csv": "data/datasets.json"},
+        {"series": "x:missing", "csv": "data/missing.csv"},
+        "not a row",
+    ]
+    (data / "datasets.json").write_text(json.dumps(raw), encoding="utf-8")
+
+    specs = _po.PipelineOrchestrator._dataset_artifact_specs(str(tmp_path))
+
+    assert specs == [(f"dataset_{os.path.basename(row['csv'])}", str(tmp_path / row["csv"]))
+                     for row in manifest["series"]]
+    assert all(os.path.basename(path) != stale.name for _name, path in specs)
+
+
+@pytest.mark.parametrize("damage", ["absent", "malformed", "not_a_manifest", "symlink"])
+def test_dataset_specs_degrade_to_nothing_without_a_usable_manifest(tmp_path, damage):
+    _real_dataset_generations(tmp_path)
+    manifest = tmp_path / "data" / "datasets.json"
+    if damage == "absent":
+        manifest.unlink()
+    elif damage == "malformed":
+        manifest.write_text("{", encoding="utf-8")
+    elif damage == "not_a_manifest":
+        manifest.write_text("[]", encoding="utf-8")
+    else:
+        moved = tmp_path / "moved.json"
+        manifest.rename(moved)
+        os.symlink(moved, manifest)
+
+    assert _po.PipelineOrchestrator._dataset_artifact_specs(str(tmp_path)) == []
 
 
 def test_report_viz_reuse_validation_checks_every_declared_asset(tmp_path):
@@ -727,6 +840,10 @@ def _exercise_prepare_run_resume(
     monkeypatch.setattr(
         _po.Config, "OASIS_SIMULATION_DATA_DIR", str(simulation_root), raising=False)
     monkeypatch.setattr(_po.SimulationRunner, "RUN_STATE_DIR", str(simulation_root), raising=False)
+    # Production SimulationManager.SIMULATION_DATA_DIR is the same directory; the
+    # research-generation binding resolves simulations through it.
+    from app.services.simulation_manager import SimulationManager as _RealSimulationManager
+    monkeypatch.setattr(_RealSimulationManager, "SIMULATION_DATA_DIR", str(simulation_root))
     for name, value in {
         "REPORT_LINT": False,
         "CAST_RECONCILE": False,
@@ -860,6 +977,8 @@ def _exercise_prepare_run_resume(
 
         def create_simulation(self, project_id, graph_id, **kwargs):
             manager_calls["create"] += 1
+            # Like the real manager, creation makes the simulation directory.
+            (simulation_root / new_id).mkdir(parents=True, exist_ok=True)
             states[new_id] = SimpleNamespace(
                 simulation_id=new_id,
                 project_id=project_id,
@@ -1109,6 +1228,10 @@ def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(monkeypatch, tm
 
     assert result.state.status == "completed"
     assert result.state.simulation_id == result.new_id
+    # The rebuilt simulation pins the consumed research generation.
+    from app.services.official_data import simulation_research_binding
+    assert simulation_research_binding(result.new_id)["status"] == "valid"
+    assert "official_data_binding" not in result.state.options
     assert result.manager_calls == {
         "create": 1, "prepare": 1, "reseal": 1, "validate": 0,
     }
@@ -1138,6 +1261,49 @@ def test_prepare_rebuild_invalidates_and_executes_run_end_to_end(monkeypatch, tm
     assert result.manifest["run_summary"]["path"].endswith(
         f"{result.new_id}/run_summary.json")
     assert result.state.stages[_po.STAGE_RUN].message == "模拟完成"
+
+
+@pytest.mark.parametrize("failing", ["capture", "bind"])
+def test_research_binding_failure_degrades_to_unbound_simulation(monkeypatch, tmp_path, failing):
+    """D2: a capture/binding failure never fails the run; the simulation stays
+    unbound (official data unavailable) and the reason is recorded."""
+    from app.services import official_data
+
+    def broken(*args, **kwargs):
+        raise OSError(f"{failing} storage unavailable")
+
+    attempts = []
+    real_bind = official_data.bind_simulation_research
+    monkeypatch.setattr(official_data, "bind_simulation_research",
+                        lambda *a, **kw: attempts.append(a[0]) or real_bind(*a, **kw))
+    if failing == "capture":
+        monkeypatch.setattr(official_data, "capture_research_generation", broken)
+    else:
+        monkeypatch.setattr(official_data, "bind_simulation_research",
+                            lambda *a, **kw: attempts.append(a[0]) or broken())
+    result = _exercise_prepare_run_resume(monkeypatch, tmp_path, rebuild_prepare=True)
+
+    assert result.state.status == "completed"
+    assert result.state.simulation_id == result.new_id
+    recorded = result.state.options["official_data_binding"]
+    assert recorded["status"] == "unavailable"
+    assert recorded["stage"] == ("research" if failing == "capture" else "prepare")
+    assert f"OSError: {failing} storage unavailable" == recorded["reason"]
+    # A failed capture skips binding entirely; a failed bind leaves no proof file.
+    assert attempts == ([] if failing == "capture" else [result.new_id])
+    assert official_data.simulation_research_binding(result.new_id) == {"status": "missing"}
+
+
+def test_research_binding_conflict_stays_fail_closed(monkeypatch, tmp_path):
+    from app.services import official_data
+
+    def conflict(*args, **kwargs):
+        raise official_data.ResearchBindingConflict("Simulation is already bound to different research")
+
+    monkeypatch.setattr(official_data, "bind_simulation_research", conflict)
+    result = _exercise_prepare_run_resume(monkeypatch, tmp_path, rebuild_prepare=True)
+    assert result.state.status == "failed"
+    assert "official_data_binding" not in result.state.options
 
 
 def test_prepare_and_run_reuse_is_read_only_end_to_end(monkeypatch, tmp_path):

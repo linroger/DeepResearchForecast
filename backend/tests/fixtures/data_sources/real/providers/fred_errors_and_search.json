@@ -1,0 +1,91 @@
+{
+ "captured_at": "2026-10-12T14:08:00Z",
+ "source": "fred_get_series live for a nonexistent id and with an unregistered key (hub error texts), and fred_search 'semiconductor exports' (limit 6).",
+ "errors": {
+  "unknown_series": "Failed to retrieve series data: FRED API error (400): {\"error_code\":400,\"error_message\":\"Bad Request. The series does not exist.\"}",
+  "key_invalid": "Failed to retrieve series data: FRED API error (400): {\"error_code\":400,\"error_message\":\"Bad Request. The value for variable api_key is not registered. Read https:\\/\\/fred.stlouisfed.org\\/docs\\/api\\/api_key.html for more information.\"}"
+ },
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "semiconductor exports",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 25,
+    "showing": "1-6",
+    "results": [
+     {
+      "id": "IY3344",
+      "title": "Export Price Index (NAICS): Semiconductor and Other Electronic Component Manufacturing",
+      "units": "Index Dec 2005=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2005-12-01 to 2026-08-01",
+      "last_updated": "2026-09-16 07:41:44-05",
+      "popularity": 13,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     },
+     {
+      "id": "IQ21320",
+      "title": "Export Price Index (End Use): Semiconductors",
+      "units": "Index 2000=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1984-12-01 to 2026-08-01",
+      "last_updated": "2026-09-16 07:42:33-05",
+      "popularity": 5,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     },
+     {
+      "id": "ID8541",
+      "title": "Export Price Index (Harmonized System): Diodes, Transistors and Semiconductor Devices; Photo-Sensitive Semiconductor Devices, Including Photovoltaic Cells; Light-Emitting Diodes (LED); Mounted Crystals; Parts Thereof",
+      "units": "Index Dec 2017=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2017-12-01 to 2026-08-01",
+      "last_updated": "2026-09-16 07:42:13-05",
+      "popularity": 7,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     },
+     {
+      "id": "ID8486",
+      "title": "Export Price Index (Harmonized System): Machines used solely for manufacture of semiconductor boules (DISCONTINUED)",
+      "units": "Index Dec 2010=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2010-12-01 to 2013-12-01",
+      "last_updated": "2014-01-14 08:03:05-06",
+      "popularity": 1,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     },
+     {
+      "id": "IZ3344",
+      "title": "Import Price Index (NAICS): Semiconductor and Other Electronic Component Manufacturing",
+      "units": "Index Dec 2005=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2005-12-01 to 2026-08-01",
+      "last_updated": "2026-09-16 07:42:28-05",
+      "popularity": 33,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     },
+     {
+      "id": "COINDUSZ3344",
+      "title": "Import Price Index by Origin (NAICS): Semiconductor and Other Electronic Component Manufacturing for Industrialized Countries",
+      "units": "Index Jun 2012=100",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2012-06-01 to 2026-08-01",
+      "last_updated": "2026-09-16 07:41:42-05",
+      "popularity": 28,
+      "notes": "For more information, please see the Import/Export Price Indexes web site at https://www.bls.gov/mxp/"
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -84,6 +84,11 @@ packages = ["app"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+# Tests that need the audit guard of backend/scripts/main_offline_pytest.py skip under
+# plain pytest (tests/conftest.py) unless that runner set MAIN_OFFLINE_EVIDENCE.
+markers = [
+    "guarded_runner: requires backend/scripts/main_offline_pytest.py; skipped unless MAIN_OFFLINE_EVIDENCE is set",
+]
 
 # EXECPLAN2 I-7-6: lint gate. Scoped to the cheap, high-signal rules so it can be a
 # CI gate without churn: pyflakes (F) + a few error-prone bugbear/comprehension checks.

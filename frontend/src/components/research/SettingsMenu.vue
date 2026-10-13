@@ -71,6 +71,42 @@
           </div>
         </section>
 
+        <!-- I4：官方数据源探活（POST /api/settings/data-sources/test；纯建议性，不改配置、不阻断运行）。 -->
+        <section class="block">
+          <div class="block-label">{{ L('官方数据源', 'Official data sources') }}</div>
+          <p class="hint">
+            {{ L('检查 FRED、BLS、BIS、IMF、世界银行 Data360 与美国政府开放数据的 MCP 服务：逐一握手并取一条缓存优先的样本序列（BLS 只握手，不消耗每日配额）。仅作诊断，不影响任何运行；最长约 90 秒。',
+                 'Checks the FRED, BLS, BIS, IMF, World Bank Data360 and US Gov Open Data MCP servers: a handshake plus one cache-first sample series each (BLS handshake only, so its daily quota is untouched). Diagnostic only, never blocks a run; takes up to about 90 s.') }}
+          </p>
+          <div class="test-row">
+            <button class="test-btn" :disabled="dataTesting" @click="runDataSourceTest">
+              {{ dataTesting ? L('探测中…', 'Testing…') : L('测试数据源', 'Test data sources') }}
+            </button>
+            <!-- Always rendered: a live region announces only changes made after it exists. -->
+            <span class="test-result" :class="dataProbeSummary && dataProbeSummary.tone" aria-live="polite">
+              {{ dataProbeSummary ? dataProbeSummary.text : '' }}
+            </span>
+          </div>
+          <ul v-if="dataProbe && dataProbe.rows.length" class="ds-list">
+            <li v-for="row in dataProbe.rows" :key="row.provider" class="ds-row">
+              <div class="ds-head">
+                <span class="ds-name">{{ row.name }}</span>
+                <span class="ds-state" :class="'st-' + row.state">{{ probeStateLabel(row.state) }}</span>
+                <span v-if="row.latencyText" class="ds-latency">{{ row.latencyText }}</span>
+              </div>
+              <div v-if="row.detail" class="ds-detail">{{ row.detail }}</div>
+              <div v-if="row.keys.length" class="ds-keys">
+                <span
+                  v-for="key in row.keys"
+                  :key="row.provider + '-' + key.name"
+                  class="ds-key"
+                  :class="'key-' + key.status.replace(' ', '-')"
+                >{{ key.name }}: {{ probeKeyLabel(key.status) }}</span>
+              </div>
+            </li>
+          </ul>
+        </section>
+
         <!-- i8/MON-1：市场判定监测手动触发（202=已启动 / 409=上一轮在飞 / 网络错误）。 -->
         <section class="block">
           <div class="block-label">{{ L('维护', 'Maintenance') }}</div>
@@ -104,8 +140,9 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { getLlmSettings, setLlmSettings, testLlmSettings } from '../../api/settings'
+import { getLlmSettings, setLlmSettings, testLlmSettings, testDataSources } from '../../api/settings'
 import { runResolutionMonitor } from '../../api/research'
+import { dataSourceProbeRows } from '../../utils/officialData'
 import { locale, setLocale, L } from '../../i18n'
 
 const emit = defineEmits(['close', 'changed'])
@@ -249,6 +286,67 @@ async function runMonitor() {
   }
 }
 
+// ---------- I4：官方数据源探活 ----------
+const dataTesting = ref(false)
+const dataProbe = ref(null)    // dataSourceProbeRows(...) 的结果
+const dataProbeError = ref('')
+
+const PROBE_STATE_LABELS = {
+  ok: ['正常', 'OK'],
+  degraded: ['降级', 'Degraded'],
+  unavailable: ['不可用', 'Unavailable'],
+  disabled: ['已停用', 'Disabled'],
+  unknown: ['未知', 'Unknown'],
+}
+const PROBE_KEY_LABELS = {
+  set: ['已设置', 'set'],
+  'not set': ['未设置', 'not set'],
+  invalid: ['无效', 'invalid'],
+  unknown: ['未知', 'unknown'],
+}
+function probeStateLabel(state) {
+  const pair = PROBE_STATE_LABELS[state] || PROBE_STATE_LABELS.unknown
+  return L(pair[0], pair[1])
+}
+function probeKeyLabel(status) {
+  const pair = PROBE_KEY_LABELS[status] || PROBE_KEY_LABELS.unknown
+  return L(pair[0], pair[1])
+}
+
+// 汇总行：错误 > 已停用 > 各状态计数（全部正常为 ok，否则 warn）。
+const dataProbeSummary = computed(() => {
+  if (dataProbeError.value) return { tone: 'err', text: '✗ ' + dataProbeError.value }
+  const probe = dataProbe.value
+  if (!probe) return null
+  if (!probe.enabled) {
+    return { tone: 'warn', text: L('官方数据已停用（DATA_SOURCES_ENABLED=false）', 'Official data is disabled (DATA_SOURCES_ENABLED=false)') }
+  }
+  const parts = ['ok', 'degraded', 'unavailable', 'disabled', 'unknown']
+    .filter(state => probe.counts[state])
+    .map(state => `${probe.counts[state]} ${probeStateLabel(state)}`)
+  if (probe.elapsedText) parts.push(probe.elapsedText)
+  const healthy = probe.rows.length > 0 && probe.rows.every(row => row.state === 'ok' || row.state === 'disabled')
+  return { tone: healthy ? 'ok' : 'warn', text: (healthy ? '✓ ' : '') + parts.join(' · ') }
+})
+
+async function runDataSourceTest() {
+  if (dataTesting.value) return
+  dataTesting.value = true
+  dataProbeError.value = ''
+  dataProbe.value = null
+  try {
+    const res = await testDataSources()
+    dataProbe.value = dataSourceProbeRows(res && res.data)
+  } catch (e) {
+    const resp = e && e.response
+    dataProbeError.value = resp && resp.status === 409
+      ? L('另一次数据源测试仍在运行，请稍后再试', 'A data-source test is already running; retry when it finishes')
+      : ((e && e.message) || L('数据源测试失败', 'Data-source test failed'))
+  } finally {
+    dataTesting.value = false
+  }
+}
+
 // 切换提供方时清掉上一次的测试结果，避免误读为新选择的状态
 watch(selected, () => { testResult.value = null })
 
@@ -313,4 +411,19 @@ onBeforeUnmount(() => { if (monitorNoteTimer) clearTimeout(monitorNoteTimer) })
 .test-result.ok { color: #16a34a; margin-top: 0; }
 .test-result.err { color: var(--orange); margin-top: 0; }
 .test-result.warn { color: var(--color-warn, #D97706); margin-top: 0; }
+.ds-list { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--border); }
+.ds-row { padding: 9px 12px; border-top: 1px solid var(--border); }
+.ds-row:first-child { border-top: none; }
+.ds-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ds-name { font-weight: 600; font-size: .86rem; }
+.ds-state { font-family: var(--mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border: 1px solid #DDD; border-radius: var(--radius-pill, 999px); color: #666; }
+.ds-state.st-ok { color: #16a34a; border-color: #16a34a; }
+.ds-state.st-degraded { color: var(--color-warn, #D97706); border-color: var(--color-warn, #D97706); }
+.ds-state.st-unavailable { color: var(--color-err, #B91C1C); border-color: var(--color-err, #B91C1C); }
+.ds-latency { margin-left: auto; font-family: var(--mono); font-size: .7rem; color: #999; }
+.ds-detail { margin-top: 4px; font-family: var(--mono); font-size: .7rem; line-height: 1.55; color: #777; word-break: break-word; }
+.ds-keys { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 6px; }
+.ds-key { font-family: var(--mono); font-size: .66rem; padding: 1px 6px; border: 1px solid var(--border); color: #666; }
+.ds-key.key-not-set { color: #999; }
+.ds-key.key-invalid { color: var(--color-err, #B91C1C); border-color: var(--color-err, #B91C1C); }
 </style>

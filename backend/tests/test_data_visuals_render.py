@@ -547,7 +547,10 @@ def test_manifest_titles_and_captions_are_digit_free(renderer, tmp_path, capsys)
             _assert_digit_free(row["caption"])
             assert re.fullmatch(r"[A-Za-z0-9._-]+", row["id"])
     titles = {row["id"]: row["title"] for row in _manifest(run)}
-    assert titles["data_wb_imf_weo_ngdp_rpch_usa"] == "美国实际GDP增长率"
+    # The two WEO economies share one comparison chart (no member singles); the year in
+    # the zh title is neutralized and the geography stripped from the shared name.
+    assert titles["data_compare_wb_imf_weo_ngdp_rpch"] == "实际GDP增长率：跨经济体对比"
+    assert "data_wb_imf_weo_ngdp_rpch_usa" not in titles
     code, _ = _run(renderer, capsys, "--dir", str(run), "--lang", "en")
     titles = {row["id"]: row["title"] for row in _manifest(run)}
     assert titles["data_fred_dgs10"] == "Ten-Year Treasury Constant Maturity Rate"

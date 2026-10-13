@@ -1,0 +1,87 @@
+{
+ "captured_at": "2026-10-11T22:08:35Z",
+ "clock": 1791756515,
+ "series": "fred:UNRATE",
+ "request": {
+  "start": "2025-01-01",
+  "end": "2025-12-31"
+ },
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_get_series",
+   "args": {
+    "series_id": "UNRATE",
+    "observation_start": "2025-01-01",
+    "observation_end": "2025-12-31",
+    "units": "lin",
+    "sort_order": "desc",
+    "offset": 0,
+    "limit": 5000
+   },
+   "response": {
+    "series_id": "UNRATE",
+    "title": "Unemployment Rate",
+    "units": "Percent",
+    "frequency": "Monthly",
+    "seasonal_adjustment": "Seasonally Adjusted",
+    "observation_range": "1948-01-01 to 2026-09-01",
+    "total_observations": 12,
+    "data_offset": 0,
+    "data_limit": 5000,
+    "source": "Federal Reserve Economic Data (FRED)",
+    "notes": "The unemployment rate represents the number of unemployed as a percentage of the labor force. Labor force data are restricted to people 16 years of age and older, who currently reside in 1 of the 50 states or the District of Columbia, who do not reside in institutions (e.g., penal and mental facilities, homes for the aged), and who are not on active duty in the Armed Forces.\r\n\r\nThis rate is also defined as the U-3 measure of labor underutilization.\r\n\r\nThe series comes from the 'Current Population Survey (Household Survey)'\r\n\r\nThe source code is: LNS14000000",
+    "data": [
+     {
+      "date": "2025-12-01",
+      "value": 4.4
+     },
+     {
+      "date": "2025-11-01",
+      "value": 4.5
+     },
+     {
+      "date": "2025-10-01",
+      "value": null
+     },
+     {
+      "date": "2025-09-01",
+      "value": 4.4
+     },
+     {
+      "date": "2025-08-01",
+      "value": 4.3
+     },
+     {
+      "date": "2025-07-01",
+      "value": 4.3
+     },
+     {
+      "date": "2025-06-01",
+      "value": 4.1
+     },
+     {
+      "date": "2025-05-01",
+      "value": 4.3
+     },
+     {
+      "date": "2025-04-01",
+      "value": 4.2
+     },
+     {
+      "date": "2025-03-01",
+      "value": 4.2
+     },
+     {
+      "date": "2025-02-01",
+      "value": 4.2
+     },
+     {
+      "date": "2025-01-01",
+      "value": 4
+     }
+    ]
+   }
+  }
+ ]
+}

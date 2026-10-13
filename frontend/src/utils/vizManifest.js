@@ -1,3 +1,5 @@
+import { officialFrequencyLabel, safeSourceUrl } from './officialData.js'
+
 const IMAGE_RE = /\.(png|svg|jpe?g|gif|webp)$/i
 const HTML_RE = /\.html$/i
 
@@ -36,9 +38,39 @@ function preferImage(current, candidate) {
   return current
 }
 
+const SOURCE_ID_RE = /^S[1-9]\d*$/
+
+function text(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Official-data exhibit provenance (report_visualizer, harmonized to the report's
+ * own [S#] by report_agent) → attribution entries. Language-neutral: the
+ * frequency code is localized at render time by chartAttribution().
+ */
+function provenanceSources(provenance) {
+  if (!Array.isArray(provenance)) return []
+  return provenance
+    .filter(entry => entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map(entry => ({
+      series: text(entry.series),
+      title: text(entry.title),
+      label: text(entry.provider_name) || text(entry.provider) || text(entry.series),
+      href: safeSourceUrl(entry.source_url),
+      sourceId: SOURCE_ID_RE.test(text(entry.source_id)) ? text(entry.source_id) : '',
+      units: text(entry.units),
+      frequency: text(entry.frequency),
+      adjustment: text(entry.seasonal_adjustment),
+    }))
+    .filter(entry => entry.label)
+}
+
 /**
  * Fold legacy PNG+HTML twin rows and schema-v2 HTML/png_path rows into cards.
  * HTML-only Plotly artifacts remain first-class cards when static export fails.
+ * Official-data exhibits keep their attribution: `sourceCaption` (the audited
+ * Markdown line under the exhibit) and `sources` (structured provenance).
  */
 export function normalizeVizGallery(manifest) {
   const rows = Array.isArray(manifest) ? manifest.filter(x => x && typeof x === 'object') : []
@@ -63,11 +95,15 @@ export function normalizeVizGallery(manifest) {
       interactivePath: '',
       caption: '',
       id: '',
+      sourceCaption: '',
+      sources: [],
     }
     existing.imagePath = preferImage(existing.imagePath, imagePath)
     if (!existing.interactivePath && interactivePath) existing.interactivePath = interactivePath
     if (!existing.caption && item.caption) existing.caption = String(item.caption)
     if (!existing.id) existing.id = String(item.id || item.name || stem)
+    if (!existing.sourceCaption && text(item.source_caption)) existing.sourceCaption = text(item.source_caption)
+    if (!existing.sources.length) existing.sources = provenanceSources(item.provenance)
     groups.set(stem, existing)
   }
 
@@ -122,4 +158,45 @@ export function localizeChartCaption(caption, lang) {
   const text = String(caption || '')
   if (String(lang || '').toLowerCase() !== 'zh') return text
   return ZH_CHART_CAPTIONS[text.trim()] || text
+}
+
+const CAPTION_PREFIX_RE = /^(?:Source:\s*|来源[：:]\s*)/
+const CAPTION_PART_RE = /^\[([^\]]+)\]\(<?([^)<>\s]+)>?\)\s*(?:\[(S[1-9]\d*)\])?\s*;?\s*(.*)$/
+
+/**
+ * Attribution entries for one gallery card: structured provenance when present
+ * (frequency and an unknown adjustment localized to `lang`), else the parsed
+ * audited source caption ('Source: [FRED](<url>) [S1]; Percent; Monthly; SA · …').
+ * Each entry: { label, href, sourceId, detail, title } (title: the series title,
+ * '' when only the caption is known). [] for non-official charts.
+ */
+export function chartAttribution(item, lang = 'en') {
+  const zh = String(lang || '').toLowerCase() === 'zh'
+  const sources = Array.isArray(item?.sources) ? item.sources : []
+  if (sources.length) {
+    return sources.map(entry => ({
+      label: entry.label,
+      href: entry.href,
+      sourceId: entry.sourceId,
+      title: entry.title || '',
+      detail: [
+        entry.units,
+        officialFrequencyLabel(entry.frequency, lang),
+        entry.adjustment || (zh ? '季节调整未知' : 'adjustment unknown'),
+      ].filter(Boolean).join('; '),
+    }))
+  }
+  const caption = text(item?.sourceCaption).replace(CAPTION_PREFIX_RE, '')
+  if (!caption) return []
+  return caption.split(' · ').map(part => {
+    const match = part.trim().match(CAPTION_PART_RE)
+    if (!match) return { label: part.trim(), href: '', sourceId: '', detail: '', title: '' }
+    return {
+      label: match[1].trim(),
+      href: safeSourceUrl(match[2]),
+      sourceId: match[3] || '',
+      detail: match[4].trim(),
+      title: '',
+    }
+  }).filter(entry => entry.label)
 }

@@ -1,0 +1,106 @@
+{
+ "captured_at": "2026-10-13T12:51:46Z",
+ "clock": 1791895906.2788532,
+ "series": "fred:CORESTICKM159SFRBATL",
+ "request": {
+  "start": "2026-01-01",
+  "end": "2026-08-31"
+ },
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_get_series",
+   "args": {
+    "series_id": "CORESTICKM159SFRBATL",
+    "observation_start": "2026-01-01",
+    "observation_end": "2026-08-31",
+    "units": "lin",
+    "sort_order": "desc",
+    "offset": 0,
+    "limit": 5000
+   },
+   "response": {
+    "series_id": "CORESTICKM159SFRBATL",
+    "title": "Sticky Price Consumer Price Index less Food and Energy",
+    "units": "Percent Change from Year Ago",
+    "frequency": "Monthly",
+    "seasonal_adjustment": "Seasonally Adjusted",
+    "observation_range": "1968-01-01 to 2026-08-01",
+    "total_observations": 8,
+    "data_offset": 0,
+    "data_limit": 5000,
+    "source": "Federal Reserve Economic Data (FRED)",
+    "notes": "The Sticky Price Consumer Price Index (CPI) is calculated from a subset of goods and services included in the CPI that change price relatively infrequently. Because these goods and services change price relatively infrequently, they are thought to incorporate expectations about future inflation to a greater degree than prices that change on a more frequent basis. One possible explanation for sticky prices could be the costs firms incur when changing price.\n\nTo obtain more information about this release see: Michael F. Bryan, and Brent H. Meyer. “Are Some Prices in the CPI More Forward Looking Than Others? We Think So.” Economic Commentary (Federal Reserve Bank of Cleveland) (May 19, 2010): 1–6. https://doi.org/10.26509/frbc-ec-201002 (https://doi.org/10.26509/frbc-ec-201002).",
+    "data": [
+     {
+      "date": "2026-08-01",
+      "value": 2.700641247
+     },
+     {
+      "date": "2026-07-01",
+      "value": 2.715835582
+     },
+     {
+      "date": "2026-06-01",
+      "value": 2.806860184
+     },
+     {
+      "date": "2026-05-01",
+      "value": 3.091256621
+     },
+     {
+      "date": "2026-04-01",
+      "value": 3.03893235
+     },
+     {
+      "date": "2026-03-01",
+      "value": 2.929321192
+     },
+     {
+      "date": "2026-02-01",
+      "value": 2.903909284
+     },
+     {
+      "date": "2026-01-01",
+      "value": 2.979750936
+     }
+    ]
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "CORESTICKM159SFRBATL",
+    "search_type": "series_id",
+    "tag_names": "nation;usa",
+    "limit": 25
+   },
+   "response": {
+    "total_results": 1,
+    "showing": "1-1",
+    "results": [
+     {
+      "id": "CORESTICKM159SFRBATL",
+      "title": "Sticky Price Consumer Price Index less Food and Energy",
+      "units": "Percent Change from Year Ago",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Seasonally Adjusted",
+      "observation_range": "1968-01-01 to 2026-08-01",
+      "last_updated": "2026-09-11 12:02:27-05",
+      "popularity": 81,
+      "notes": "The Sticky Price Consumer Price Index (CPI) is calculated from a subset of goods and services included in the CPI that change price relatively infrequently. Because these goods and services change pri..."
+     }
+    ]
+   }
+  }
+ ],
+ "captured_result": {
+  "title": "Sticky Price Consumer Price Index less Food and Energy",
+  "geography": "USA",
+  "label": "Sticky Price Consumer Price Index less Food and Energy — United States",
+  "geography_basis": "FRED series tags: nation, usa",
+  "n": 8
+ },
+ "note": "Live FRED answers through the data hub and the working-tree adapter: fred_get_series for a series outside the catalog, then fred_search by series id restricted to FRED's 'nation' and 'usa' tags (the geography check)."
+}

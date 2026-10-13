@@ -35,7 +35,7 @@ import math
 import os
 import re
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 # ── 让脚本无论从哪个 cwd 调用都能 import 到 backend 的 app 包（与 scheduled_rerun.py 一致）──
@@ -350,6 +350,54 @@ def _data_period_bounds(value: Any) -> Optional[tuple[str, str]]:
     return None
 
 
+def _anchor_period_bounds(anchor: Dict[str, Any]) -> Optional[tuple[str, str]]:
+    """A validated anchor stores its canonical period start and the series frequency;
+    the whole period (an annual '2026-01-01' is the full year) bounds the query, so
+    the fetch waits until that period has ended. Other anchors use their text."""
+    period = str(anchor.get("period") or "").strip()
+    frequency = str(anchor.get("frequency") or "").strip().upper()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", period) and frequency in ("D", "W", "M", "Q", "A"):
+        try:
+            start = date.fromisoformat(period)
+            if frequency in ("D", "W"):
+                end = start + timedelta(days=0 if frequency == "D" else 6)
+            else:
+                months = start.month - 1 + {"M": 1, "Q": 3, "A": 12}[frequency]
+                end = date(start.year + months // 12, months % 12 + 1, 1) - timedelta(days=1)
+            return start.isoformat(), end.isoformat()
+        except ValueError:
+            return None
+    return _data_period_bounds(anchor.get("observation") or anchor.get("period"))
+
+
+# Days after a period ends during which a missing official value is ordinary
+# publication lag (pending); past this window it needs manual review.
+_PUBLICATION_GRACE_DAYS = {"D": 30, "W": 30, "M": 120, "Q": 210, "A": 730}
+
+
+def _unusable_fetch_status(fetched: Any, period_end: str, frequency: str, as_of: Optional[str]) -> Dict[str, str]:
+    """Status for a fetch without a usable series (normally the data layer's DataError).
+
+    A transient source failure, or an ended period the provider has no value for yet,
+    stays pending and is retried on the next run; any other failure, or a value still
+    missing after the publication grace window, needs manual review."""
+    code = str(getattr(fetched, "code", "") or "")
+    if getattr(fetched, "retryable", False) is True:
+        return {"status": "pending", "reason": f"Official source temporarily unavailable ({code}); retried on the next run"}
+    if code in ("not_found", "invalid_window"):
+        grace = _PUBLICATION_GRACE_DAYS.get(str(frequency or "").upper(), _PUBLICATION_GRACE_DAYS["M"])
+        try:
+            cutoff = date.fromisoformat(str(as_of if as_of is not None else _utcnow_iso())[:10])
+            overdue = cutoff > date.fromisoformat(period_end) + timedelta(days=grace)
+        except ValueError:
+            overdue = True
+        if not overdue:
+            return {"status": "pending", "reason": "Official value for the period is not yet published"}
+        return {"status": "manual", "reason": f"Official value still unpublished {grace} days after the period ended"}
+    return {"status": "manual",
+            "reason": "Provider did not return a usable official series" + (f" ({code})" if code else "")}
+
+
 def resolve_official_forecasts(binaries, *, report_id, as_of, already_resolved=(), data_client=None,
                               dry_run=False):
     """Resolve an exact period; None means current time after each retrieval."""
@@ -365,7 +413,7 @@ def resolve_official_forecasts(binaries, *, report_id, as_of, already_resolved=(
             continue
         identity = str(anchor.get("series") or "").strip()
         status = {"forecast_id": fid, "series": identity, "status": "manual", "reason": "Invalid data anchor"}
-        bounds = _data_period_bounds(anchor.get("observation") or anchor.get("period"))
+        bounds = _anchor_period_bounds(anchor)
         if not fid or not identity or bounds is None:
             statuses.append(status)
             continue
@@ -390,7 +438,7 @@ def resolve_official_forecasts(binaries, *, report_id, as_of, already_resolved=(
                                       transform=str(anchor.get("transform") or ""), max_obs=240)
             payload = fetched.to_dict() if hasattr(fetched, "to_dict") else fetched
             if not isinstance(payload, dict) or not isinstance(payload.get("observations"), list):
-                status["reason"] = "Provider did not return a usable official series"
+                status.update(_unusable_fetch_status(fetched, bounds[1], str(anchor.get("frequency") or ""), as_of))
                 statuses.append(status)
                 continue
             # A current-time check must include the retrieval it just performed.
@@ -835,8 +883,10 @@ def _print_json(obj: Any) -> None:
 
 
 def _summary_row(res: Dict[str, Any]) -> Dict[str, Any]:
-    """把 run_monitor 的完整结果压成一行便于聚合打印（去掉大字段）。"""
-    return {
+    """把 run_monitor 的完整结果压成一行便于聚合打印（去掉大字段）。
+
+    带官方数据锚的报告另附 data_* 计数（resolved / pending / manual），无锚时行不变。"""
+    row = {
         "report_id": res.get("report_id"),
         "anchored": res.get("anchored_count"),
         "movers": len(res.get("movers") or []),
@@ -846,6 +896,12 @@ def _summary_row(res: Dict[str, Any]) -> Dict[str, Any]:
         "degraded": res.get("degraded"),
         "monitor_report": res.get("monitor_report_path"),
     }
+    statuses = res.get("data_resolution_status")
+    if isinstance(statuses, list):
+        for status in ("resolved", "pending", "manual"):
+            row[f"data_{status}"] = sum(1 for item in statuses
+                                        if isinstance(item, dict) and item.get("status") == status)
+    return row
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -912,6 +968,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         _print_json({
             "market_brier": _ledger.market_brier_summary(),
             "scenario_calibration": _ledger.calibration_summary(),
+            # Official-data outcomes (data_resolutions.jsonl) stay a separate track record.
+            "official_data_brier": _ledger.data_brier_summary(),
         })
         return 0
     return 2  # 不可达（subparser required）

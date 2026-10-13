@@ -616,12 +616,14 @@ class SimulationConfigGenerator:
             logger.info(f"市场先验: 载入 {len(market_priors)} 个 relevance-gated 市场")
         world_brief = ""
         try:
-            from .official_data import load_for_simulation
+            from .official_data import load_for_simulation, research_window_for_simulation
+            official_data = load_for_simulation(simulation_id)
             world_brief = self._build_world_brief(
                 simulation_requirement, actors, event_config.hot_topics,
                 prediction_markets=market_priors,
                 actor_context_packs=actor_context_packs,
-                official_data=load_for_simulation(simulation_id),
+                official_data=official_data,
+                official_window=research_window_for_simulation(simulation_id) if official_data else None,
             )
             if world_brief:
                 reasoning_parts.append(f"世界简报: {len(world_brief)} 字")
@@ -1337,6 +1339,14 @@ class SimulationConfigGenerator:
     # NEXTSTEPS SIM_WORLD_BRIEF: 世界底稿的确定性长度上限（无 LLM 调用，纯拼装）。
     WORLD_BRIEF_MAX_CHARS = 1400
     WORLD_BRIEF_QUESTION_CHARS = 400
+    OFFICIAL_SNAPSHOT_LABEL = "official public historical statistics"
+    # The line above the delimited snapshot (outside it: the caller's framing, not
+    # research data) tells every actor what the numbers are and how to cite them.
+    OFFICIAL_SNAPSHOT_HEADER = {
+        True: ("## Official statistics (published before this world's start date: quote the exact "
+               "values and periods; observed history, not forecasts)"),
+        False: "## 官方统计（本世界起始日前已发布：引用时使用原值与期间；为已观测历史，不是预测）",
+    }
     # ITEM 11 SIM_MARKET_PRIORS: 世界底稿注入的头部相关市场数（top N：question + 隐含 P）。
     MARKET_PRIORS_TOP_N = 5
 
@@ -1792,9 +1802,11 @@ class SimulationConfigGenerator:
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]],
         max_chars: int,
         english: bool = False,
+        official_data: Optional[Dict[str, Any]] = None,
+        official_window: Optional[Dict[str, str]] = None,
     ) -> str:
         public_rows = cls._canonical_public_world_rows(actors, actor_context_packs)
-        if not public_rows:
+        if not public_rows and not official_data:
             return ""
         parts: List[str] = []
         question = " ".join(str(simulation_requirement or "").split()).strip()
@@ -1824,10 +1836,198 @@ class SimulationConfigGenerator:
             if len("\n\n".join(candidate_parts)) > max_chars:
                 continue
             evidence_lines.append(line)
-        if not evidence_lines:
+        if evidence_lines:
+            parts.append(header + "\n" + "\n".join(evidence_lines))
+        # Official statistics are public, source-bound [S#] evidence from the
+        # binding-verified generation; they enter as their own delimited block
+        # and never through the hash-bound actor packs. Public rows that fill
+        # the budget share it with the snapshot (fair shares) instead of
+        # leaving the snapshot nothing.
+        official_data = cls._official_data_for_question(official_data, simulation_requirement)
+        # Evidence lines stay whole: a cut line would lose its uncertainty label and sources.
+        fitted = cls._fit_official_brief(
+            parts[:1] if question else [], parts[1:] if question else parts,
+            official_data, actors, max_chars, official_window, english=english, whole_lines=True)
+        if fitted is not None:
+            return "\n\n".join(fitted).strip()
+        official_block = cls._official_snapshot_block(
+            official_data, actors, parts, max_chars, official_window, english=english)
+        if not evidence_lines and not official_block:
             return ""
-        parts.append(header + "\n" + "\n".join(evidence_lines))
+        if official_block:
+            parts.append(official_block)
         return "\n\n".join(parts).strip()
+
+    @classmethod
+    def _official_snapshot_block(
+        cls,
+        official_data: Optional[Dict[str, Any]],
+        actors: Optional[Dict[str, Any]],
+        parts: List[str],
+        max_chars: int,
+        official_window: Optional[Dict[str, str]] = None,
+        *,
+        english: bool = False,
+    ) -> str:
+        """The headed, delimited official snapshot that fits after ``parts`` within ``max_chars``.
+
+        The wrapped block is built first; while the joined brief would be too long
+        the snapshot is re-rendered under a smaller budget, which drops whole rows.
+        The wrapped text is never sliced, so BEGIN and END always appear together.
+        The snapshot body follows the world's language, as its header does.
+        """
+        if not official_data:
+            return ""
+        from .official_data import historical_snapshot
+        label = cls.OFFICIAL_SNAPSHOT_LABEL
+        header = cls.OFFICIAL_SNAPSHOT_HEADER[bool(english)] + "\n"
+        used = len("\n\n".join(parts)) + (2 if parts else 0)
+        budget = max_chars - used - len(header) - (len(delimit_untrusted_research_text(label, "x")) - 1)
+        as_of = actors.get("as_of_date") if isinstance(actors, dict) else None
+        while budget > 0:
+            snapshot = historical_snapshot(
+                official_data, as_of=as_of, research_window=official_window, max_chars=budget,
+                language="en" if english else "zh")
+            if not snapshot:
+                return ""
+            block = header + delimit_untrusted_research_text(label, snapshot, max_chars=max_chars)
+            excess = used + len(block) - max_chars
+            if excess <= 0:
+                return block
+            # Sanitization can lengthen text; shrink by the measured excess.
+            budget = min(budget - excess, len(snapshot) - 1)
+        return ""
+
+    @staticmethod
+    def _official_data_for_question(official_data: Optional[Dict[str, Any]],
+                                    question: str) -> Optional[Dict[str, Any]]:
+        """The carrier with the series the question names first, so the few snapshot rows a
+        brief has room for cover every clause of a compound question ('US CPI inflation …,
+        and how will the Federal Reserve policy rate evolve'): the clauses' named series take
+        turns in clause order (within a clause by where the question names them, then carrier
+        order), then the series it does not name, in carrier order. Unchanged without a
+        question, with fewer than two series, or when the question names none of them."""
+        rows = official_data.get("series") if isinstance(official_data, dict) else None
+        text = str(question or "").strip()
+        if not text or not isinstance(rows, list) or len(rows) < 2:
+            return official_data
+        from .forecast_extractor import official_question_mention
+        clauses: Dict[int, List[Any]] = {}
+        rest: List[Any] = []
+        for index, row in enumerate(rows):
+            try:
+                mention = official_question_mention(text, row) if isinstance(row, dict) else None
+            except Exception:  # noqa: BLE001 — a row that cannot be matched keeps its carrier place
+                mention = None
+            if mention is None:
+                rest.append(row)
+            else:
+                clauses.setdefault(mention[0], []).append((mention[1], index, row))
+        if not clauses:
+            return official_data
+        named = [sorted(clause, key=lambda item: item[:2]) for _clause, clause in sorted(clauses.items())]
+        turns = [clause[rank][2] for rank in range(max(len(clause) for clause in named))
+                 for clause in named if rank < len(clause)]
+        return {**official_data, "series": turns + rest}
+
+    @staticmethod
+    def _fair_shares(sizes: List[int], total: int) -> List[int]:
+        """Max-min fair allotments of ``total``: parts smaller than an equal share
+        stay whole and the larger parts split what they leave."""
+        shares = [0] * len(sizes)
+        remaining, left = max(0, total), len(sizes)
+        for index in sorted(range(len(sizes)), key=lambda i: sizes[i]):
+            shares[index] = min(sizes[index], remaining // left)
+            remaining -= shares[index]
+            left -= 1
+        return shares
+
+    @staticmethod
+    def _trim_brief_part(text: str, limit: int, *, whole_lines: bool = False) -> str:
+        """``text`` within ``limit``: whole lines, then the first line that does not
+        fit cut at a word boundary with '…' when at least 60 characters of it fit
+        (a situation paragraph or the one-line topic list is never lost whole);
+        "" when only headings remain. ``whole_lines`` never cuts a line: lines that
+        do not fit are skipped (canonical evidence rows keep their labels and sources)."""
+        if len(text) <= limit:
+            return text
+        kept: List[str] = []
+        for line in text.split("\n"):
+            if len("\n".join([*kept, line])) <= limit:
+                kept.append(line)
+                continue
+            if whole_lines:
+                continue
+            room = limit - (len("\n".join(kept)) + 1 if kept else 0) - 1
+            if room >= 60 and not line.lstrip().startswith("#"):
+                head = line[:room]
+                # Drop only a word the cut splits. CJK characters are boundaries themselves:
+                # Chinese prose has spaces only around numbers and Latin words, so cutting
+                # back to the last space lost whole clauses ('截至 2026 年 9…').
+                split_word = (re.search(r"[^\s\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]+$", head)
+                              if re.match(r"[^\s\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]",
+                                          line[room:room + 1]) else None)
+                cut = head[:split_word.start()] if split_word and head[:split_word.start()].strip() else head
+                kept.append(cut.rstrip(" ,;:，；、：") + "…")
+            break
+        while kept and kept[-1].lstrip().startswith("#"):
+            kept.pop()
+        return "\n".join(kept)
+
+    @classmethod
+    def _fit_official_brief(
+        cls,
+        fixed: List[str],
+        flexible: List[str],
+        official_data: Optional[Dict[str, Any]],
+        actors: Optional[Dict[str, Any]],
+        max_chars: int,
+        official_window: Optional[Dict[str, str]] = None,
+        *,
+        english: bool = False,
+        whole_lines: bool = False,
+    ) -> Optional[List[str]]:
+        """Brief parts that share ``max_chars`` with the official snapshot, or None.
+
+        The snapshot used to get only what the question, situation brief, hot
+        topics and market pricing left over, which in real runs was nothing, so
+        no simulated actor ever saw the official statistics. When everything
+        does not fit, the snapshot takes whole rows within its max-min fair share
+        of the room the ``fixed`` parts leave (up to a third, then half, of the
+        budget when one row needs more than that share); the ``flexible`` parts
+        split what the snapshot does not use (cut at lines, then words), and slack
+        from those cuts goes to more snapshot rows. None when there is no snapshot
+        or not even one row fits in half: callers keep their existing assembly,
+        so the brief is unchanged without official data. ``whole_lines`` drops
+        whole flexible lines instead of cutting one (see _trim_brief_part).
+        """
+        if not official_data:
+            return None
+        whole = cls._official_snapshot_block(official_data, actors, [], max_chars, official_window,
+                                             english=english)
+        if not whole:
+            return None
+        if len("\n\n".join([*fixed, *flexible, whole])) <= max_chars:
+            return [*fixed, *flexible, whole]
+        room = max_chars - sum(len(part) for part in fixed) - 2 * (len(fixed) + len(flexible))
+        share = cls._fair_shares([len(part) for part in flexible] + [len(whole)], room)[-1]
+        block = ""
+        for floor in (share, max_chars // 3, max_chars // 2):
+            budget = min(len(whole), max(share, floor), max(0, room))
+            block = cls._official_snapshot_block(official_data, actors, [], budget, official_window,
+                                                 english=english)
+            if block:
+                break
+        if not block:
+            return None
+        limits = cls._fair_shares([len(part) for part in flexible], room - len(block))
+        kept = [part for part in (cls._trim_brief_part(text, limit, whole_lines=whole_lines)
+                                  for text, limit in zip(flexible, limits)) if part]
+        slack = max_chars - len("\n\n".join([*fixed, *kept])) - (2 if fixed or kept else 0)
+        if slack > len(block):
+            block = cls._official_snapshot_block(official_data, actors, [], slack, official_window,
+                                                 english=english) or block
+        return [*fixed, *kept, block]
 
     @staticmethod
     def _resolve_output_language(research_language: Optional[str], simulation_requirement: str) -> str:
@@ -1901,6 +2101,7 @@ class SimulationConfigGenerator:
         prediction_markets: Optional[List[Dict[str, Any]]] = None,
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
         official_data: Optional[Dict[str, Any]] = None,
+        official_window: Optional[Dict[str, str]] = None,
     ) -> str:
         """NEXTSTEPS SIM_WORLD_BRIEF: 拼装全体 Agent 共享的紧凑世界底稿（≤1400 字）。
 
@@ -1916,9 +2117,11 @@ class SimulationConfigGenerator:
         actor-intelligence/v1 is fail-closed: raw situation_brief/hot_topics and
         unbound market rows are not shared with every actor.  Its brief is built
         only from explicitly-public, source-bound rows in validated
-        actor-context/v1 packs; actor-private and modeler-only evidence cannot
-        become common knowledge.  Legacy/unversioned dossiers retain the exact
-        historical assembly below.
+        actor-context/v1 packs plus the binding-verified official statistics
+        snapshot; actor-private and modeler-only evidence cannot become common
+        knowledge.  Legacy/unversioned dossiers retain the exact historical
+        assembly below.  ``official_window`` is the bound research run's
+        ``{started_at, finished_at}`` (snapshot availability window).
 
         可降级：任一段缺失 → 简报变短；全部缺失或 SIM_WORLD_BRIEF=false → 空串
         （调用方省略配置字段，运行脚本整体跳过注入）。
@@ -1935,6 +2138,8 @@ class SimulationConfigGenerator:
                 actor_context_packs,
                 max_chars,
                 english=self._english_output(),
+                official_data=official_data,
+                official_window=official_window,
             )
 
         english = self._english_output()
@@ -1962,21 +2167,21 @@ class SimulationConfigGenerator:
             if market_block:
                 parts.append(market_block)
 
-        # Canonical-v1 returned above: new common knowledge must enter through
-        # its source-bound actor packs, never through this legacy public brief.
-        # The default v3 dossier uses this unversioned path and can consume the
-        # stored historical baseline without querying providers at PREPARE.
-        if official_data:
-            from .official_data import historical_snapshot
-            snapshot = historical_snapshot(
-                official_data,
-                as_of=actors.get("as_of_date") if isinstance(actors, dict) else None,
-                max_chars=max(0, max_chars - sum(len(part) + 2 for part in parts) - 160),
-            )
-            if snapshot:
-                parts.append(delimit_untrusted_research_text(
-                    "official public historical statistics", snapshot, max_chars=max_chars,
-                ))
+        # Canonical-v1 returned above with its own official block. The default v3
+        # dossier uses this unversioned path and consumes the stored historical
+        # baseline without querying providers at PREPARE. The block is budgeted
+        # to fit whole, so the final cap below never cuts its END delimiter, and
+        # it shares the budget fairly with the parts above (never only leftovers).
+        official_data = self._official_data_for_question(official_data, question)
+        fitted = self._fit_official_brief(
+            parts[:1] if question else [], parts[1:] if question else parts,
+            official_data, actors, max_chars, official_window, english=english)
+        if fitted is not None:
+            return "\n\n".join(fitted).strip()
+        official_block = self._official_snapshot_block(
+            official_data, actors, parts, max_chars, official_window, english=english)
+        if official_block:
+            parts.append(official_block)
 
         # RQ-7 / I-6-4：世界简报上限从固定 1400 升级为按提供方窗口预算化——大窗口模型
         # （MiniMax 512K / DeepSeek 1M）抬到 SIM_WORLD_BRIEF_MAX_CHARS（默认 3000）以承载更完整的

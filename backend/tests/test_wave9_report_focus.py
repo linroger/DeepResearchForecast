@@ -103,6 +103,16 @@ def test_lint_table_cell_truncation_detected():
     assert hits, "expected the truncated cell to be flagged"
 
 
+def test_lint_table_cell_truncation_spares_official_series_titles():
+    # 官方数据表会把 FRED 系列全称原样贴进单元格：完整标题、无句末标点。
+    title = ("Total Unemployed, Plus All Persons Marginally Attached to the Labor "
+             "Force, Plus Total Employed Part Time for Economic Reasons, as a "
+             "Percent of the Civilian Labor Force Plus All Persons Marginally "
+             "Attached to the Labor Force (U-6) — United States")
+    md = f"| Series | Unit | Latest |\n|---|---|---|\n| {title} | Percent | 7.6% |\n"
+    assert rl.detect_table_cell_truncation(md) == []
+
+
 def test_lint_pass_narration_stripped_and_flagged():
     md = ("Big Fund III ¥344B [Pass 2 working notes] anchored the estimate.\n"
           "Pass 4 of the broader dossier documented the contradiction.\n")

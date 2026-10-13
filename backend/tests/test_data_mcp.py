@@ -432,13 +432,15 @@ def test_default_specs_resolve_all_six(tree, tmp_path):
     assert all(spec.cwd == work for spec in specs.values()) and os.path.isdir(work)
 
     fred, bls, bis, imf, wb, usgov = (specs[n] for n in dm.PROVIDERS)
-    assert fred.command == node and fred.args == (str(root / "fred-mcp-server-main/build/index.js"),)
-    assert bls.args == (str(root / "bls_mcp-main/dist/index.js"),)
-    assert bis.args == (str(root / "mcp-bis-main/bin/cli.js"),)
+    # node v22.4 takes the longer connect attempt before the entry script.
+    flag = f"--network-family-autoselection-attempt-timeout={dm.NODE_CONNECT_ATTEMPT_MS}"
+    assert fred.command == node and fred.args == (flag, str(root / "fred-mcp-server-main/build/index.js"))
+    assert bls.args == (flag, str(root / "bls_mcp-main/dist/index.js"))
+    assert bis.args == (flag, str(root / "mcp-bis-main/bin/cli.js"))
     assert imf.command == str(root / "imf-data-mcp-main/.venv/bin/imf-data-mcp") and imf.args == ()
     assert wb.command == str(root / "data360-mcp-dev/.venv/bin/python")
     assert wb.args == ("-m", "data360.mcp_server", "--transport", "stdio")
-    assert usgov.args == (str(root / "us-gov-open-data-mcp-main/dist/server.js"), "--modules",
+    assert usgov.args == (flag, str(root / "us-gov-open-data-mcp-main/dist/server.js"), "--modules",
                           "treasury,usaspending,sec,fdic,federal-register,eia")
 
     assert fred.env["FRED_API_KEY"] == "k" * 32 and fred.env["FRED_API_TIMEOUT_MS"] == "15000"
@@ -464,6 +466,23 @@ def test_default_specs_resolve_all_six(tree, tmp_path):
     bogus = dm.default_server_specs(env={**env, "DATA_SOURCES_CALL_TIMEOUT": "soon"}, datamcps_dir=root,
                                     work_dir=tmp_path / "work")
     assert bogus["fred"].call_timeout == dm.DEFAULT_CALL_TIMEOUT_S
+
+
+@pytest.mark.parametrize("version, flagged", [
+    ("v18.20.4", False), ("v20.12.2", False), ("v20.13.0", True), ("v21.7.3", False),
+    ("v22.0.0", False), ("v22.1.0", True), ("v24.2.0", True),
+])
+def test_node_servers_get_the_connect_attempt_flag_only_where_node_accepts_it(tree, tmp_path, version, flagged):
+    """Node's 250 ms per-address connect attempt timed out api.eia.gov and the Treasury API from a
+    distant network (2026-10-14); older nodes reject the flag, so they keep the default."""
+    root, env = tree
+    node = fake_node(tmp_path / f"node-{version}", version)
+    specs = dm.default_server_specs(env={**env, "DATA_SOURCES_NODE": str(node)}, datamcps_dir=root,
+                                    work_dir=tmp_path / "work")
+    flag = f"--network-family-autoselection-attempt-timeout={dm.NODE_CONNECT_ATTEMPT_MS}"
+    assert (specs["fred"].args[0] == flag) is flagged
+    assert specs["fred"].args[-1] == str(root / "fred-mcp-server-main/build/index.js")
+    assert flag not in specs["imf"].args and flag not in specs["wb"].args
 
 
 def test_default_specs_defaults_from_env(tree, tmp_path, monkeypatch):

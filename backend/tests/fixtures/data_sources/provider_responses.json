@@ -1,291 +1,1336 @@
 {
-  "fred": {
-    "series_id": "UNRATE",
-    "title": "Unemployment Rate",
-    "units": "Percent",
-    "frequency": "Monthly",
-    "seasonal_adjustment": "Seasonally Adjusted",
-    "total_observations": 3,
-    "data_offset": 0,
-    "data_limit": 5000,
-    "data": [
+ "_source": "Trimmed real MCP tool payloads captured 2026-10-11/12 through the vendored servers; see README.md and real/providers/*.json for the exact calls.",
+ "fred": {
+  "series_id": "UNRATE",
+  "title": "Unemployment Rate",
+  "units": "Percent",
+  "frequency": "Monthly",
+  "seasonal_adjustment": "Seasonally Adjusted",
+  "observation_range": "1948-01-01 to 2026-09-01",
+  "total_observations": 12,
+  "data_offset": 0,
+  "data_limit": 5000,
+  "source": "Federal Reserve Economic Data (FRED)",
+  "notes": "The unemployment rate represents the number of unemployed as a percentage of the labor force. Labor force data are restricted to people 16 years of age and older, who currently reside in 1 of the 50 states or the District of Columbia, who do not reside in institutions (e.g., penal and mental facilities, homes for the aged), and who are not on active duty in the Armed Forces.\r\n\r\nThis rate is also defined as the U-3 measure of labor underutilization.\r\n\r\nThe series comes from the 'Current Population Survey (Household Survey)'\r\n\r\nThe source code is: LNS14000000",
+  "data": [
+   {
+    "date": "2024-12-01",
+    "value": 4.1
+   },
+   {
+    "date": "2024-11-01",
+    "value": 4.2
+   },
+   {
+    "date": "2024-10-01",
+    "value": 4.1
+   },
+   {
+    "date": "2024-09-01",
+    "value": 4.1
+   },
+   {
+    "date": "2024-08-01",
+    "value": 4.2
+   },
+   {
+    "date": "2024-07-01",
+    "value": 4.2
+   },
+   {
+    "date": "2024-06-01",
+    "value": 4.1
+   },
+   {
+    "date": "2024-05-01",
+    "value": 3.9
+   },
+   {
+    "date": "2024-04-01",
+    "value": 3.9
+   },
+   {
+    "date": "2024-03-01",
+    "value": 3.9
+   },
+   {
+    "date": "2024-02-01",
+    "value": 3.9
+   },
+   {
+    "date": "2024-01-01",
+    "value": 3.7
+   }
+  ]
+ },
+ "bls": {
+  "status": "REQUEST_SUCCEEDED",
+  "responseTime": 77,
+  "message": [],
+  "Results": {
+   "series": [
+    {
+     "seriesID": "LNS14000000",
+     "data": [
       {
-        "date": "2024-03-01",
-        "value": 4.2
+       "year": "2026",
+       "period": "M09",
+       "periodName": "September",
+       "latest": "true",
+       "value": "4.2",
+       "footnotes": [
+        {}
+       ]
       },
       {
-        "date": "2024-02-01",
-        "value": null
+       "year": "2026",
+       "period": "M08",
+       "periodName": "August",
+       "value": "4.1",
+       "footnotes": [
+        {}
+       ]
       },
       {
-        "date": "2024-01-01",
-        "value": 4.0
-      }
-    ]
-  },
-  "bls": {
-    "status": "REQUEST_SUCCEEDED",
-    "message": [],
-    "Results": {
-      "series": [
+       "year": "2026",
+       "period": "M07",
+       "periodName": "July",
+       "value": "4.1",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M06",
+       "periodName": "June",
+       "value": "4.2",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M05",
+       "periodName": "May",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M04",
+       "periodName": "April",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M03",
+       "periodName": "March",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M02",
+       "periodName": "February",
+       "value": "4.4",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2026",
+       "period": "M01",
+       "periodName": "January",
+       "value": "4.3",
+       "footnotes": [
         {
-          "seriesID": "LNS14000000",
-          "data": [
-            {
-              "year": "2024",
-              "period": "M03",
-              "value": "4.2",
-              "footnotes": [
-                {
-                  "code": "P",
-                  "text": "Preliminary"
-                }
-              ]
-            },
-            {
-              "year": "2024",
-              "period": "M02",
-              "value": "-",
-              "footnotes": [
-                {}
-              ]
-            },
-            {
-              "year": "2024",
-              "period": "M01",
-              "value": "4.0",
-              "footnotes": [
-                {}
-              ]
-            },
-            {
-              "year": "2024",
-              "period": "M13",
-              "value": "4.1",
-              "footnotes": [
-                {}
-              ]
-            }
-          ]
+         "code": "12",
+         "text": "January 2026 estimates were revised to incorporate updated population controls. For more information, see www.bls.gov/cps/documentation.htm#pop."
         }
-      ]
-    }
-  },
-  "bis": {
-    "flow_ref": "BIS,WS_CBPOL,1.0",
-    "columns": [
-      "FREQ",
-      "REF_AREA",
-      "TIME_PERIOD",
-      "OBS_VALUE"
-    ],
-    "truncated": false,
-    "count": 3,
-    "rows": [
-      {
-        "FREQ": "M",
-        "REF_AREA": "US",
-        "TIME_PERIOD": "2024-03",
-        "OBS_VALUE": "4.2"
+       ]
       },
       {
-        "FREQ": "M",
-        "REF_AREA": "US",
-        "TIME_PERIOD": "2024-02",
-        "OBS_VALUE": ""
+       "year": "2025",
+       "period": "M12",
+       "periodName": "December",
+       "value": "4.4",
+       "footnotes": [
+        {}
+       ]
       },
       {
-        "FREQ": "M",
-        "REF_AREA": "US",
-        "TIME_PERIOD": "2024-01",
-        "OBS_VALUE": "4.0"
-      }
-    ]
-  },
-  "imf_defs": [
-    {
-      "parameter": "country",
-      "description": "Country"
-    },
-    {
-      "parameter": "indicator",
-      "description": "Indicator"
-    },
-    {
-      "parameter": "data_transformation",
-      "description": "Data transformation"
-    },
-    {
-      "parameter": "frequency",
-      "description": "Frequency"
-    }
-  ],
-  "imf": {
-    "database_id": "PCPS",
-    "columns": [
-      "country",
-      "indicator",
-      "data_transformation",
-      "frequency",
-      "time_period",
-      "obs_value"
-    ],
-    "row_count": 3,
-    "total_rows_before_cap": 3,
-    "truncated": false,
-    "rows": [
-      {
-        "country": "G001",
-        "indicator": "POILBRE",
-        "data_transformation": "USD",
-        "frequency": "M",
-        "time_period": "2024-M03",
-        "obs_value": 84.2
+       "year": "2025",
+       "period": "M11",
+       "periodName": "November",
+       "value": "4.5",
+       "footnotes": [
+        {}
+       ]
       },
       {
-        "country": "G001",
-        "indicator": "POILBRE",
-        "data_transformation": "USD",
-        "frequency": "M",
-        "time_period": "2024-M02",
-        "obs_value": null
-      },
-      {
-        "country": "G001",
-        "indicator": "POILBRE",
-        "data_transformation": "USD",
-        "frequency": "M",
-        "time_period": "2024-M01",
-        "obs_value": 80.0
-      }
-    ]
-  },
-  "wb": {
-    "data": [
-      {
-        "REF_AREA": "USA",
-        "TIME_PERIOD": "2024",
-        "OBS_VALUE": 2.5,
-        "UNIT_MEASURE": "PT",
-        "UNIT_MEASURE_NAME": "Percent"
-      },
-      {
-        "REF_AREA": "USA",
-        "TIME_PERIOD": "2023",
-        "OBS_VALUE": null,
-        "UNIT_MEASURE": "PT",
-        "UNIT_MEASURE_NAME": "Percent"
-      },
-      {
-        "REF_AREA": "USA",
-        "TIME_PERIOD": "2022",
-        "OBS_VALUE": 2.1,
-        "UNIT_MEASURE": "PT",
-        "UNIT_MEASURE_NAME": "Percent"
-      }
-    ],
-    "metadata": {
-      "indicator_name": "GDP growth (annual %)",
-      "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
-      "database_id": "WB_WDI",
-      "periodicity": "Annual",
-      "measurement_unit": "Percent"
-    },
-    "count": 3,
-    "offset": 0,
-    "has_more": false,
-    "next_offset": null,
-    "error": null,
-    "total_count": 3
-  },
-  "treasury": {
-    "summary": "Synthetic selected MTS rows",
-    "dataType": "table",
-    "data": {
-      "columns": [
-        "record_date",
-        "line_code_nbr",
-        "src_line_nbr",
-        "classification_desc",
-        "current_month_rcpt_outly_amt"
-      ],
-      "rows": [
-        [
-          "2024-03-31",
-          "520",
-          "37",
-          "Surplus or Deficit",
-          "-300.2"
-        ],
-        [
-          "2024-02-29",
-          "520",
-          "37",
-          "Surplus or Deficit",
-          null
-        ],
-        [
-          "2024-01-31",
-          "520",
-          "37",
-          "Surplus or Deficit",
-          "-200.1"
-        ]
-      ],
-      "total": 3,
-      "truncated": false
-    },
-    "meta": {
-      "endpoint": "/v1/accounting/mts/mts_table_3",
-      "recordsReturned": 3,
-      "totalPages": 1
-    }
-  },
-  "spending": {
-    "summary": "Synthetic fiscal spending",
-    "dataType": "timeseries",
-    "data": {
-      "columns": [
-        "periodStart",
-        "amount",
-        "fiscalPeriod"
-      ],
-      "rows": [
-        [
-          "2023-10",
-          123.4,
-          "FY2024"
-        ],
-        [
-          "2024-10",
-          124.5,
-          "FY2025"
-        ]
-      ],
-      "total": 2,
-      "truncated": false
-    },
-    "meta": {
-      "group": "fiscal_year"
-    }
-  },
-  "sec": {
-    "summary": "Synthetic concept",
-    "dataType": "record",
-    "record": {
-      "entityName": "Example",
-      "concept": "Assets",
-      "label": "Assets",
-      "unit": "USD",
-      "annual": [
+       "year": "2025",
+       "period": "M10",
+       "periodName": "October",
+       "value": "-",
+       "footnotes": [
         {
-          "period": "2024-09-30",
-          "value": 100.0,
-          "fy": 2024,
-          "filed": "2024-11-01"
+         "code": "9",
+         "text": "Data unavailable due to the 2025 lapse in appropriations."
         }
-      ],
-      "quarterly": []
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M09",
+       "periodName": "September",
+       "value": "4.4",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M08",
+       "periodName": "August",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M07",
+       "periodName": "July",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M06",
+       "periodName": "June",
+       "value": "4.1",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M05",
+       "periodName": "May",
+       "value": "4.3",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M04",
+       "periodName": "April",
+       "value": "4.2",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M03",
+       "periodName": "March",
+       "value": "4.2",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M02",
+       "periodName": "February",
+       "value": "4.2",
+       "footnotes": [
+        {}
+       ]
+      },
+      {
+       "year": "2025",
+       "period": "M01",
+       "periodName": "January",
+       "value": "4.0",
+       "footnotes": [
+        {}
+       ]
+      }
+     ]
     }
+   ]
   }
+ },
+ "bis": {
+  "flow_ref": "BIS,WS_CBPOL,1.0",
+  "source_url": "https://stats.bis.org/statx/srs/data/WS_CBPOL",
+  "columns": [
+   "FREQ",
+   "FREQ_label",
+   "REF_AREA",
+   "REF_AREA_label",
+   "UNIT_MEASURE",
+   "UNIT_MEASURE_label",
+   "UNIT_MULT",
+   "UNIT_MULT_label",
+   "TIME_FORMAT",
+   "TIME_FORMAT_label",
+   "COMPILATION",
+   "DECIMALS",
+   "DECIMALS_label",
+   "SOURCE_REF",
+   "SUPP_INFO_BREAKS",
+   "TITLE",
+   "TIME_PERIOD",
+   "OBS_VALUE",
+   "OBS_STATUS",
+   "OBS_STATUS_label",
+   "OBS_CONF",
+   "OBS_CONF_label",
+   "OBS_PRE_BREAK"
+  ],
+  "truncated": false,
+  "count": 12,
+  "rows": [
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-01",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-02",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-03",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-04",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-05",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-06",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-07",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-08",
+    "OBS_VALUE": "5.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-09",
+    "OBS_VALUE": "4.875",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-10",
+    "OBS_VALUE": "4.875",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-11",
+    "OBS_VALUE": "4.625",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   },
+   {
+    "FREQ": "M",
+    "FREQ_label": "Monthly",
+    "REF_AREA": "US",
+    "REF_AREA_label": "United States",
+    "UNIT_MEASURE": "368",
+    "UNIT_MEASURE_label": "Per cent per year",
+    "UNIT_MULT": "0",
+    "UNIT_MULT_label": "Units",
+    "TIME_FORMAT": "",
+    "TIME_FORMAT_label": "",
+    "COMPILATION": "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate.",
+    "DECIMALS": "4",
+    "DECIMALS_label": "Four",
+    "SOURCE_REF": "US Federal Reserve System",
+    "SUPP_INFO_BREAKS": "",
+    "TITLE": " Central bank policy rates - United States - Monthly - End of period",
+    "TIME_PERIOD": "2024-12",
+    "OBS_VALUE": "4.375",
+    "OBS_STATUS": "A",
+    "OBS_STATUS_label": "Normal value",
+    "OBS_CONF": "F",
+    "OBS_CONF_label": "Free",
+    "OBS_PRE_BREAK": ""
+   }
+  ]
+ },
+ "imf_defs": [
+  {
+   "parameter": "country",
+   "description": "Country"
+  },
+  {
+   "parameter": "indicator",
+   "description": "Primary Commodity Price System (PCPS) Indicator"
+  },
+  {
+   "parameter": "data_transformation",
+   "description": "Primary Commodity Price System (PCPS) Data Transformation"
+  },
+  {
+   "parameter": "frequency",
+   "description": "Frequency"
+  }
+ ],
+ "imf": {
+  "database_id": "PCPS",
+  "columns": [
+   "country",
+   "indicator",
+   "data_transformation",
+   "frequency",
+   "time_period",
+   "obs_value"
+  ],
+  "row_count": 45,
+  "total_rows_before_cap": 45,
+  "truncated": false,
+  "rows": [
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M01",
+    "obs_value": 84.08181818181818
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M02",
+    "obs_value": 83.6325
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M03",
+    "obs_value": 79.25652173913043
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M04",
+    "obs_value": 83.536
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M05",
+    "obs_value": 75.74739130434783
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M06",
+    "obs_value": 74.975
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M07",
+    "obs_value": 80.10904761904762
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M08",
+    "obs_value": 85.16826086956522
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M09",
+    "obs_value": 92.67333333333333
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M10",
+    "obs_value": 88.94772727272726
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M11",
+    "obs_value": 82.18636363636364
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2023-M12",
+    "obs_value": 77.54095238095238
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M01",
+    "obs_value": 79.11
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M02",
+    "obs_value": 81.7957142857143
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M03",
+    "obs_value": 84.96142857142857
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M04",
+    "obs_value": 88.97454545454545
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M05",
+    "obs_value": 83.05391304347826
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M06",
+    "obs_value": 82.9175
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M07",
+    "obs_value": 84.0486956521739
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M08",
+    "obs_value": 79.01863636363636
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M09",
+    "obs_value": 73.05761904761906
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M10",
+    "obs_value": 75.26652173913043
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M11",
+    "obs_value": 73.50857142857143
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2024-M12",
+    "obs_value": 73.22772727272726
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M01",
+    "obs_value": 78.19391304347826
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M02",
+    "obs_value": 75.193
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M03",
+    "obs_value": 71.74142857142857
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M04",
+    "obs_value": 66.92727272727274
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M05",
+    "obs_value": 64.09272727272727
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M06",
+    "obs_value": 69.84666666666666
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M07",
+    "obs_value": 69.56478260869565
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M08",
+    "obs_value": 67.24428571428571
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M09",
+    "obs_value": 67.60909090909091
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M10",
+    "obs_value": 63.98130434782609
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M11",
+    "obs_value": 63.6935
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2025-M12",
+    "obs_value": 61.81090909090909
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M01",
+    "obs_value": 64.59409090909091
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M02",
+    "obs_value": 69.4095
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M03",
+    "obs_value": 99.405
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M04",
+    "obs_value": 102.8136363636364
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M05",
+    "obs_value": 103.842380952381
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M06",
+    "obs_value": 84.48772727272727
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M07",
+    "obs_value": 83.73409090909091
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M08",
+    "obs_value": 88.06857142857143
+   },
+   {
+    "country": "G001",
+    "indicator": "POILBRE",
+    "data_transformation": "USD",
+    "frequency": "M",
+    "time_period": "2026-M09",
+    "obs_value": 102.0180952380952
+   }
+  ]
+ },
+ "wb": {
+  "count": 11,
+  "total_count": null,
+  "offset": 0,
+  "has_more": false,
+  "next_offset": null,
+  "data": [
+   {
+    "OBS_VALUE": "2.161382",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2025",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "cfdaee7e",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.793187",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2024",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "801f4d67",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.934363",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2023",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "95e27eab",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.524214",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2022",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "7f745936",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "6.152022",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2021",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "8f924823",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "-2.081376",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2020",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "10d25756",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.583825",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2019",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "0ed2af8a",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.966505",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2018",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "fc35f945",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.457622",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2017",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "00c7aad4",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "1.819451",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2016",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "20594ab9",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   },
+   {
+    "OBS_VALUE": "2.94555",
+    "UNIT_MULT": 0,
+    "REF_AREA": "USA",
+    "TIME_PERIOD": "2015",
+    "UNIT_MEASURE": "PC_A",
+    "claim_id": "6af0e5cd",
+    "REF_AREA_NAME": "United States",
+    "UNIT_MEASURE_NAME": "Percentage change per annum"
+   }
+  ],
+  "metadata": {
+   "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+   "name": "GDP (annual % growth)",
+   "database_id": "WB_WDI",
+   "database_name": "World Development Indicators (WDI)",
+   "measurement_unit": "%",
+   "periodicity": "Annual",
+   "definition_short": null
+  },
+  "error": null,
+  "failed_validation": null
+ },
+ "wb_metadata": {
+  "idno": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+  "database_id": "WB_WDI",
+  "database_name": "World Development Indicators (WDI)",
+  "name": "GDP (annual % growth)",
+  "measurement_unit": "%",
+  "periodicity": "Annual",
+  "date_released": null,
+  "date_last_update": null,
+  "version_statement": {
+   "version": null,
+   "version_date": "2026-07-01",
+   "version_resp": null,
+   "version_notes": null
+  },
+  "time_periods": [
+   {
+    "start": "1961",
+    "end": "2024",
+    "notes": null
+   }
+  ]
+ },
+ "treasury": {
+  "summary": "Query /v1/accounting/mts/mts_table_3: 12 returned, 12 total, page 1 of 1",
+  "dataType": "table",
+  "data": {
+   "columns": [
+    "record_date",
+    "line_code_nbr",
+    "src_line_nbr",
+    "classification_desc",
+    "current_month_rcpt_outly_amt"
+   ],
+   "rows": [
+    [
+     "2024-12-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-86731619013.29"
+    ],
+    [
+     "2024-11-30",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-366763064368.07"
+    ],
+    [
+     "2024-10-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-257450343191.91"
+    ],
+    [
+     "2024-09-30",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "64263008867.74"
+    ],
+    [
+     "2024-08-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-380080405434.50"
+    ],
+    [
+     "2024-07-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-243741087297.43"
+    ],
+    [
+     "2024-06-30",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-65965292476.34"
+    ],
+    [
+     "2024-05-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-347130893691.65"
+    ],
+    [
+     "2024-04-30",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "209529306625.33"
+    ],
+    [
+     "2024-03-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-236456823950.20"
+    ],
+    [
+     "2024-02-29",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-296274648079.89"
+    ],
+    [
+     "2024-01-31",
+     "520",
+     "55",
+     "Surplus (+) or Deficit (-)",
+     "-21930356331.02"
+    ]
+   ],
+   "total": 12,
+   "truncated": false
+  },
+  "meta": {
+   "endpoint": "/v1/accounting/mts/mts_table_3",
+   "recordsReturned": 12,
+   "totalPages": 1,
+   "sources": [
+    {
+     "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_3?format=json&fields=record_date%2Cline_code_nbr%2Csrc_line_nbr%2Cclassification_desc%2Ccurrent_month_rcpt_outly_amt&filter=line_code_nbr%3Aeq%3A520%2Crecord_date%3Agte%3A2024-01-01%2Crecord_date%3Alte%3A2024-12-31&sort=-record_date&page[number]=1&page[size]=100",
+     "fetchedAt": "2026-10-11T22:08:15.405Z"
+    }
+   ]
+  }
+ },
+ "spending": {
+  "summary": "Federal spending over time: 5 periods, grouped by fiscal_year (fiscal periods; periodStart is the calendar month each begins)",
+  "dataType": "timeseries",
+  "stats": {
+   "count": 5,
+   "min": 7897020000,
+   "max": 5315830000000,
+   "mean": 4060260000000,
+   "first": {
+    "date": "2022-10",
+    "value": 4832000501479.92
+   },
+   "last": {
+    "date": "2026-10",
+    "value": 7897018783.040001
+   },
+   "change": -4824100000000,
+   "changePct": -99.84,
+   "cagrPct": -79.89,
+   "trend": "decreasing"
+  },
+  "data": {
+   "columns": [
+    "periodStart",
+    "amount",
+    "fiscalPeriod"
+   ],
+   "rows": [
+    [
+     "2022-10",
+     4832000501479.92,
+     "FY2023"
+    ],
+    [
+     "2023-10",
+     4947316990218.29,
+     "FY2024"
+    ],
+    [
+     "2024-10",
+     5315833520242.8,
+     "FY2025"
+    ],
+    [
+     "2025-10",
+     5198258368866.829,
+     "FY2026"
+    ],
+    [
+     "2026-10",
+     7897018783.040001,
+     "FY2027"
+    ]
+   ],
+   "total": 5,
+   "truncated": false
+  },
+  "meta": {
+   "group": "fiscal_year",
+   "sources": [
+    {
+     "url": "https://api.usaspending.gov/api/v2/search/spending_over_time/",
+     "method": "POST",
+     "fetchedAt": "2026-10-11T22:08:20.566Z"
+    }
+   ]
+  }
+ }
 }

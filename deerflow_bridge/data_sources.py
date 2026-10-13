@@ -30,19 +30,65 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 try:
     from . import data_catalog as catalog
-    from .data_mcp import McpHub, get_hub
+    from .data_mcp import McpHub, _source_path, get_hub
 except ImportError:  # deployed bridge is also loaded as bare modules
     import data_catalog as catalog
-    from data_mcp import McpHub, get_hub
+    from data_mcp import McpHub, _source_path, get_hub
 
 PROVIDERS = tuple(catalog.PROVIDERS)
 logger = logging.getLogger(__name__)
 _MAX_BYTES = 2 * 1024 * 1024
 _MAX_ROWS = 5000
-NORMALIZATION_POLICY_VERSION = 2
+NORMALIZATION_POLICY_VERSION = 3
+# Restores re-render stored pages and require byte equality with the hash-bound
+# copy, so display rules apply only to rows fetched under this policy or later;
+# rows without provenance.normalization_policy_version (or older) keep the
+# original rendering byte for byte.
+_DISPLAY_POLICY_VERSION = 3
 _WRITE_LOCK = threading.RLock()
 _QUOTA_LOCK = threading.RLock()
 _SECRET = re.compile(r"(?i)(?:api[_-]?key|token|secret|password|authorization|registrationkey)")
+# Environment values scrubbed from provider text: credential-shaped names only, and only values
+# that cannot be ordinary data (MAX_TOKENS=20 or IMPLICIT_TOKEN=1 would otherwise corrupt dates).
+_CREDENTIAL_NAME = re.compile(r"(?i)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)$")
+_NOT_CREDENTIALS = frozenset(("true", "false", "none", "null", "yes", "no", "on", "off"))
+_MIN_CREDENTIAL_LEN = 8
+_CACHE_MAX_AGE_S = 7 * 86400
+_CACHE_FILE = re.compile(r"[0-9a-f]{64}\.json")
+_MEMORY_MAX = 512
+_PRUNED_CACHES: set[str] = set()
+_DEFAULT_MAX_SERIES = 24
+# Registration keys a provider rejected in this process, as (provider, sha256 of the key): every
+# DataSources sharing the process hub then serves that provider keyless (FRED CSV, BLS keyless quota).
+_KEY_NAMES = {"fred": "FRED_API_KEY", "bls": "BLS_API_KEY"}
+_REJECTED_KEYS: set[tuple[str, str]] = set()
+_KEY_LOCK = threading.Lock()
+# FRED: native daily windows longer than this can exceed one 5000-row page (7-day series); such
+# windows use FRED's own monthly aggregation for older months and native days for the latest ones.
+_FRED_DAILY_SPAN_DAYS = 4500
+_FRED_RECENT_MONTHS = 24
+# A daily history whose first native day comes more than this many days into its first month
+# (licensing-truncated FRED series such as SP500 or the ICE spreads start mid-month; FRED's own
+# monthly aggregation leaves such a month empty) covers that month only from that day. Weekends
+# and holidays never open a month this late.
+_LATE_FIRST_DAY_DAYS = 7
+_FRED_FALLBACK_CODES = ("rate_limited", "provider_unavailable", "timeout")
+# Upper bound (seconds) of the FRED tag lookup that gives an uncatalogued series its geography.
+_FRED_TAGS_S = 5.0
+# USAspending fiscal years keep rising with late agency reporting for months after they end.
+_FISCAL_SETTLE_DAYS = 120
+# eia_query rows newest first; a 200-row page of the widest route is ~22 kB, inside the usgov
+# server's 40 kB response budget (MAX_RESPONSE_BYTES).
+_EIA_PAGE_ROWS = 200
+_BEA_ROMAN_QUARTERS = {"I": 1, "II": 2, "III": 3, "IV": 4}
+
+
+def _credentials(env: Mapping[str, Any]) -> tuple[str, ...]:
+    """Secret values to scrub, longest first, from credential-named variables only."""
+    values = {str(v).strip() for k, v in env.items()
+              if isinstance(k, str) and isinstance(v, str) and _CREDENTIAL_NAME.search(k.strip())}
+    kept = (v for v in values if len(v) >= _MIN_CREDENTIAL_LEN and not v.isdigit() and v.lower() not in _NOT_CREDENTIALS)
+    return tuple(sorted(kept, key=len, reverse=True))
 
 
 def _clean(value: Any, limit: int = 400) -> str:
@@ -88,11 +134,25 @@ def _period(value: Any) -> str:
     return date.fromisoformat(text).isoformat()
 
 
+def _end_period(value: Any) -> str:
+    """Request-window end: a bare year, quarter or month means its last day."""
+    text = str(value).strip()
+    first = _period(text)
+    months = (12 if re.fullmatch(r"\d{4}", text) else 3 if re.fullmatch(r"\d{4}[- ]?Q[1-4]", text, re.I)
+              else 1 if re.fullmatch(r"\d{4}-\d{2}|\d{4}-?M\d{2}", text, re.I) else 0)
+    return (date.fromisoformat(_shift(first, months)) - timedelta(days=1)).isoformat() if months else first
+
+
 def _shift(period: str, months: int) -> str:
     d = date.fromisoformat(period)
     n = d.year * 12 + d.month - 1 + months
     year, month = n // 12, n % 12 + 1
     return date(year, month, min(d.day, calendar.monthrange(year, month)[1])).isoformat()
+
+
+def _kiq_ids(values: Iterable[Any]) -> list[str]:
+    """Requesting KIQ ids (producer-set): bounded, single-line, first-seen order."""
+    return list(dict.fromkeys(_clean(k, 40) for k in values if isinstance(k, str) and k.strip()))[:20]
 
 
 def parse_series_id(text: str) -> tuple[str, str] | None:
@@ -168,6 +228,9 @@ class Series:
         parsed = parse_series_id(self.series)
         if not parsed or (self.provider and parsed[0] != self.provider):
             raise ValueError("Invalid or mismatched series identity")
+        if not isinstance(self.kiqs, (list, tuple)):
+            raise ValueError("Series kiqs must be a list of KIQ ids")
+        self.kiqs = _kiq_ids(self.kiqs)
         self.provider = parsed[0]
         self.series = ":".join(parsed)
         suffix = parsed[1].partition("#")[2]
@@ -191,9 +254,17 @@ class Series:
         # older hash-consistent carriers. Byte integrity is not semantic proof.
         lossy = self.provider == "wb" or self.series.split("#")[0] == "usgov:spending/total"
         weo = self.series.startswith(("imf:WEO/", "imf:WEO_"))
+        # Feeds that strip status get it from a deterministic rule of the series identity,
+        # never from stored flags, and only for rows fetched under the current policy;
+        # older carriers keep "unknown" and re-render byte for byte.
+        policy = _status_policy(self.series) if _policy_current(self.provenance) else ""
+        vintage_year = self.provenance.get("vintage_year")
+        retrieved = re.match(r"(\d{4})-\d{2}-\d{2}", str(self.retrieved_at or ""))
         for obs in self.observations:
             raw = obs.flag
-            if lossy or weo and not raw:
+            if policy:
+                obs.flag = _policy_flag(policy, obs.date, vintage_year, int(retrieved[1]) if retrieved else None)
+            elif lossy or weo and not raw:
                 obs.flag = "unknown"
             elif self.provider == "bls" and raw == "P":
                 obs.flag = "preliminary"
@@ -201,8 +272,12 @@ class Series:
             elif raw:
                 obs.flag = _status_flag(raw)
         if lossy:
-            self.provenance["resolution_safe"] = False
             self.provenance["fidelity_policy_version"] = NORMALIZATION_POLICY_VERSION
+        if policy:
+            self.provenance["status_basis"] = _STATUS_BASIS[policy]
+        if lossy or policy in ("weo_vintage", "gep_vintage"):
+            # Inferred status shows history; it never proves an exact observation for resolution.
+            self.provenance["resolution_safe"] = False
         if self.series.split("#")[0] == "usgov:spending/total":
             periods = self.provenance.get("periods")
             if not isinstance(periods, dict):
@@ -248,15 +323,149 @@ class SearchHit:
     note: str = ""
 
 
+# Note prefix of a discovered or weak search result whose title shares no concept with the query
+# (catalog.shares_concept): listed after every other result, still fetchable.
+OFF_CONCEPT_NOTE = "Not matching: its title shares no concept with the query"
+
+
+def _entry_text(entry: Any) -> str:
+    """A catalog entry's title and curated keywords: the words its concept is judged by."""
+    return " ".join((entry.title, *entry.keywords))
+
+
+DATA_ERROR_CODES = ("invalid_input", "invalid_window", "unsupported_transform", "unknown_series", "unknown_recipe",
+                    "rate_limited", "quota_exhausted", "key_invalid", "provider_unavailable", "not_found", "timeout",
+                    "persistence_failed", "provider_error")
+_RETRYABLE_CODES = frozenset(("rate_limited", "timeout", "provider_unavailable"))
+_HINTS = {
+    "invalid_input": "Check the series ID, dates (YYYY-MM-DD) and max_obs.",
+    "invalid_window": "Use a narrower window inside the series coverage.",
+    "unsupported_transform": "Request the level series or a supported transform (yoy, pct).",
+    "unknown_series": "Find a valid ID with data_search or the official catalog.",
+    "unknown_recipe": "Use a usgov recipe listed in the official catalog.",
+    "rate_limited": "Retry in a minute and avoid request bursts.",
+    "quota_exhausted": "Use another provider or retry after the quota resets.",
+    "key_invalid": "Fix or remove the provider API key; keyless access may work.",
+    "provider_unavailable": "Retry later or use another source.",
+    "not_found": "Check the ID, geography and window, or search for another series.",
+    "timeout": "Retry later with a narrower window.",
+    "persistence_failed": "Check the run output directory; the data was not stored.",
+    "provider_error": "Use another series or source.",
+}
+
+
 @dataclass
 class DataError:
+    """Agent-facing failure: ``code`` is the stable reason class (DATA_ERROR_CODES)."""
     series: str
     message: str
     retryable: bool = False
+    code: str = "provider_error"
 
     def __post_init__(self):
         self.series = _clean(self.series, 200)
         self.message = _clean(self.message, 300)
+        if self.code not in DATA_ERROR_CODES:
+            self.code = "provider_error"
+
+    def unavailable_text(self) -> str:
+        return f"DATA_UNAVAILABLE[{self.code}]: {self.message}"
+
+
+class DataFailure(ValueError):
+    """Adapter failure with a known reason class; still a ValueError for callers."""
+
+    def __init__(self, message: str, code: str = "provider_error", retryable: bool | None = None):
+        super().__init__(message)
+        self.code = code if code in DATA_ERROR_CODES else "provider_error"
+        self.retryable = self.code in _RETRYABLE_CODES if retryable is None else bool(retryable)
+
+
+class _DailyOverflow(DataFailure):
+    """A native-daily FRED window exceeds one page; it is refetched as server-side months plus
+    recent native days."""
+
+
+class _ToolFailure(ValueError):
+    """A provider tool's own error answer. str() is the hub's clipped reason (what every
+    caller saw before); ``detail`` keeps the tool's full scrubbed text for adapters that read
+    the provider's diagnosis."""
+
+    def __init__(self, message: str, detail: str = ""):
+        super().__init__(message)
+        self.detail = detail
+
+
+# mcp-bis answers a 404 with its own diagnosis (datamcps/mcp-bis-main diagnoseNoData).
+_BIS_EMPTY_RE = re.compile(r"ARE valid\b.{0,200}?genuinely empty result", re.S)
+_BIS_LAST_RE = re.compile(r"most recent published observation is (\d{4}(?:-(?:Q[1-4]|S[12]|\d{2})(?:-\d{2})?)?)")
+_BIS_NOTE_RE = re.compile(r"BIS's own note on this series: \"(.+?)\"", re.S)
+_BIS_NEVER_RE = re.compile(r"never published a series matching key")
+_BIS_DIMS_RE = re.compile(r"in order: ([A-Z0-9_]+(?:\.[A-Z0-9_]+)*)")
+
+
+def _bis_failure(text: str, req: Mapping[str, Any]) -> DataFailure | None:
+    """BIS's diagnosis of an empty answer as a classified failure, else None.
+
+    A well-formed key with nothing in the window (a period not yet published, or a
+    discontinued series) is not_found, so callers wait for publication; a key BIS never
+    published is unknown_series. BIS's series note keeps its first clause, the current
+    regime (e.g. 'discontinued as Germany joined the euro area')."""
+    if _BIS_EMPTY_RE.search(text):
+        last = _BIS_LAST_RE.search(text)
+        note = _BIS_NOTE_RE.search(text)
+        clause = _clean(re.split(r";\s|\.\s", note[1], maxsplit=1)[0], 160) if note else ""
+        return DataFailure(f"BIS publishes this series but has no observations from {req['fetch_start']} to {req['end']}"
+                           + (f"; its most recent observation is {last[1]}" if last else "")
+                           + (f"; BIS note: {clause}" if clause else ""), "not_found")
+    if _BIS_NEVER_RE.search(text):
+        dims = _BIS_DIMS_RE.search(text)
+        return DataFailure("BIS has never published a series under this key"
+                           + (f"; the key's positions are {dims[1]}" if dims else ""), "unknown_series")
+    return None
+
+
+# Ordered: the first matching provider/hub text decides the reason class.
+_FAILURE_TEXT = (
+    ("rate_limited", re.compile(r"(?i)\b429\b|too many requests|rate.?limit")),
+    ("quota_exhausted", re.compile(r"(?i)daily threshold|quota (?:reached|exceeded|exhausted)")),
+    ("key_invalid", re.compile(r"(?i)\b40[13]\b|unauthori[sz]ed|forbidden|key(?::\S+)?\s+provided by the user is invalid"
+                               r"|(?:invalid|rejected)\s+(?:api\s*)?key|api_key\s+is\s+not\s+registered"
+                               r"|\b(?:api[_ ]?)?key\s+(?:is\s+)?(?:invalid|rejected)\b")),
+    ("timeout", re.compile(r"(?i)timed?\s*out|deadline exceeded|ETIMEDOUT")),
+    # FRED 400 "The series does not exist."; BLS "Series does not exist for Series <id>".
+    ("unknown_series", re.compile(r"(?i)series does not exist")),
+    ("invalid_window", re.compile(r"(?i)narrow (?:the requested window|start/end)")),
+    ("provider_unavailable", re.compile(r"(?i)\b50[0-4]\b|(?:service|server|provider|temporarily) unavailable|^unavailable$"
+                                        r"|bad gateway|connection (?:to the server )?(?:was )?(?:lost|reset|refused)|ECONNRESET"
+                                        r"|ECONNREFUSED|fetch failed|still starting|circuit open|not ready|automatic restart"
+                                        r"|hub (?:loop unavailable|is closed)")),
+    ("not_found", re.compile(r"(?i)\b404\b|not found|returned no (?:observations|data)")),
+)
+_NOT_RETRYABLE_TEXT = re.compile(r"(?i)hub is closed")
+
+
+def _failure_class(exc: Any) -> tuple[str, bool]:
+    """Map an exception (or reason text) to a DATA_ERROR_CODES code and retryability."""
+    if isinstance(exc, DataFailure):
+        return exc.code, exc.retryable
+    if isinstance(exc, TimeoutError):
+        return "timeout", True
+    status = getattr(exc, "code", None)
+    if isinstance(exc, OSError) and isinstance(status, int) and not isinstance(status, bool):
+        # urllib HTTPError carries the HTTP status as .code.
+        if status == 429:
+            return "rate_limited", True
+        if status == 404:
+            return "not_found", False
+        return ("provider_unavailable", True) if status >= 500 else ("provider_error", False)
+    if isinstance(exc, OSError):
+        return "provider_unavailable", True
+    text = str(exc or "")
+    for code, pattern in _FAILURE_TEXT:
+        if pattern.search(text):
+            return code, code in _RETRYABLE_CODES and not _NOT_RETRYABLE_TEXT.search(text)
+    return "provider_error", False
 
 
 def _status_flag(raw: Any) -> str:
@@ -269,6 +478,65 @@ def _status_flag(raw: Any) -> str:
     if not kinds <= {"observed", "unknown", "preliminary", "estimate", "projection"}:
         return "unknown"
     return next((k for k in ("unknown", "projection", "estimate", "preliminary", "observed") if k in kinds), "unknown")
+
+
+_WB_STATUS_POLICIES = {"WB_WDI": "history_only", "IMF_WEO": "weo_vintage", "WB_GEP": "gep_vintage"}
+_STATUS_BASIS = {"history_only": "WDI publishes history only", "weo_vintage": "inferred_from_vintage",
+                 "gep_vintage": "inferred_from_vintage"}
+
+
+def _policy_current(provenance: Any) -> bool:
+    version = provenance.get("normalization_policy_version") if isinstance(provenance, Mapping) else None
+    return isinstance(version, int) and not isinstance(version, bool) and version >= _DISPLAY_POLICY_VERSION
+
+
+def _status_policy(series_id: str) -> str:
+    """Status rule for feeds that strip observation status (fix contract §1.4), by identity:
+    the curated entry's status_policy, else the Data360 database or the IMF WEO flow."""
+    base = str(series_id or "").partition("#")[0]
+    policy = catalog_field(base, "status_policy")
+    if policy:
+        return policy
+    provider, _, native = base.partition(":")
+    if provider == "wb":
+        return _WB_STATUS_POLICIES.get(catalog.wb_database(native.split("/")[0]) or "", "")
+    if provider == "imf":
+        meta = catalog.imf_flow_info(native.split("/")[0])
+        return "weo_vintage" if meta and meta.get("base_flow") == "WEO" else ""
+    return ""
+
+
+def _aggregation(req: Mapping[str, Any]) -> str:
+    """How native daily points become months: the curated entry's (or usgov recipe's)
+    aggregation, 'eop' for stocks and policy targets, else 'avg'."""
+    method = catalog_field(req["base"], "aggregation")
+    if not method and req["provider"] == "usgov":
+        recipe = catalog.resolve_usgov_recipe(req["native"])
+        method = recipe[1].get("aggregation", "") if recipe else ""
+    return method if method in ("avg", "eop") else "avg"
+
+
+def _min_start(provider: str, sid: str, native: str) -> str:
+    """Earliest valid request start: the curated entry's (or usgov recipe's) min_start, else ''."""
+    floor = catalog_field(sid, "min_start")
+    if not floor and provider == "usgov":
+        recipe = catalog.resolve_usgov_recipe(native)
+        floor = str(recipe[1].get("min_start") or "") if recipe else ""
+    try:
+        return _period(floor) if floor else ""
+    except ValueError:
+        return ""
+
+
+def _policy_flag(policy: str, period: str, vintage_year: Any, retrieval_year: int | None) -> str:
+    """WDI: years before the retrieval year are history. WEO/GEP vintage V: years >= V are
+    publisher projections, V-1 an estimate, earlier years history (revisable)."""
+    year = int(period[:4])
+    if policy == "history_only":
+        return "observed" if retrieval_year and year < retrieval_year else "unknown"
+    if not isinstance(vintage_year, int) or isinstance(vintage_year, bool) or not 1900 <= vintage_year <= 2100:
+        return "unknown"
+    return "projection" if year >= vintage_year else "estimate" if year == vintage_year - 1 else "observed"
 
 
 def _observation_kind(obs: Observation, series: Series) -> str:
@@ -288,7 +556,9 @@ def _projected(obs: Observation, series: Series) -> bool:
 
 def series_stats(series: Series) -> dict:
     obs = series.observations
-    finite = [o for o in obs if o.value is not None and _observation_kind(o, series) == "observed"]
+    # Rows under the current policy also exclude partial periods and future-dated points.
+    kind = observation_kind if _display_current(series) else _observation_kind
+    finite = [o for o in obs if o.value is not None and kind(o, series) == "observed"]
     def point(o):
         return {"date": o.date, "value": o.value} if o else None
     latest = finite[-1] if finite else None
@@ -304,10 +574,11 @@ def series_stats(series: Series) -> dict:
             "five_year_min": point(min(window, key=lambda o: o.value)) if window else None,
             "five_year_max": point(max(window, key=lambda o: o.value)) if window else None,
             "cagr_10y": cagr, "count": len(obs), "first": obs[0].date if obs else "",
-            "last": obs[-1].date if obs else "", "projection_count": sum(_projected(o, series) for o in obs)}
+            "last": obs[-1].date if obs else "", "projection_count": sum(kind(o, series) == "projection" for o in obs)}
 
 
-def format_value(value: float | None, units: str = "") -> str:
+def _legacy_format_value(value: float | None, units: str = "") -> str:
+    """Policy <= 2 value text; kept so stored pages re-render byte for byte."""
     if value is None:
         return "missing"
     n = _number(value)
@@ -321,6 +592,242 @@ def format_value(value: float | None, units: str = "") -> str:
     return text + ("%" if percent else "")
 
 
+def _trim(text: str) -> str:
+    text = text.rstrip("0").rstrip(".") if "." in text else text
+    return "0" if text in ("-0", "") else text
+
+
+def is_percent_units(units: str) -> bool:
+    """Values are percents (changes are percentage points); 'percentage points' units are not."""
+    text = str(units or "")
+    return bool(re.search(r"per\s*cent|%", text, re.I)) and not re.search(r"point", text, re.I)
+
+
+def format_value(value: float | None, units: str = "") -> str:
+    """Percent-like units keep up to 3 decimals (3.875%); levels keep up to 4 decimals within
+    16 significant digits (debt 40171825101340.31, never binary noise), 4 significant below 1."""
+    if value is None:
+        return "missing"
+    n = _number(value)
+    if n is None:
+        return "missing"
+    if is_percent_units(units):
+        return _trim(f"{n:.3f}") + "%"
+    if n == 0 or abs(n) >= 1:
+        decimals = max(0, min(4, 15 - math.floor(math.log10(abs(n))))) if n else 4
+    else:
+        decimals = min(12, 3 - math.floor(math.log10(abs(n))))
+    return _trim(f"{n:.{decimals}f}")
+
+
+def _signed(text: str) -> str:
+    return text if text.startswith("-") or text.rstrip("% p") == "0" else "+" + text
+
+
+def format_change(delta: float | None, units: str = "") -> str:
+    """Signed change: percentage points for percent-like units (+0.25 pp), else a signed level."""
+    if delta is None:
+        return "missing"
+    n = _number(delta)
+    if n is None:
+        return "missing"
+    if is_percent_units(units):
+        return _signed(_trim(f"{n:.3f}") + " pp")
+    return _signed(format_value(n, units))
+
+
+_SCALE_WORD = re.compile(r"(?i)\b(?:thousands?|millions?|billions?|trillions?)\b")
+_ZH_UNITS = {"u.s. dollars": "美元", "us dollars": "美元", "u.s. dollar": "美元", "us dollar": "美元", "dollars": "美元"}
+
+
+def scaled_value(value: float | None, units: str = "", lang: str = "en") -> str:
+    """Magnitude companion such as '≈ 40.27 trillion U.S. dollars' (zh '≈40.27万亿美元').
+
+    The scale comes from the value's magnitude only, never from provider
+    multipliers; units that already carry a scale word or percents get ''.
+    """
+    try:
+        n = _number(value)
+    except (TypeError, ValueError):
+        return ""
+    text = _clean(units, 80)
+    if n is None or abs(n) < 1e9 or is_percent_units(text) or _SCALE_WORD.search(text):
+        return ""
+    if text.lower() in ("number", "value", "unknown", "units", "count"):
+        text = ""
+    if str(lang or "").lower().startswith("zh"):
+        divisor, word = (1e12, "万亿") if abs(n) >= 1e12 else (1e8, "亿")
+        unit = _ZH_UNITS.get(text.lower(), " " + text if text else "")
+        return f"≈{_trim(f'{n / divisor:.2f}')}{word}{unit}"
+    divisor, word = (1e12, "trillion") if abs(n) >= 1e12 else (1e9, "billion")
+    return f"≈ {_trim(f'{n / divisor:.2f}')} {word}" + (" " + text if text else "")
+
+
+_CATALOG_FIELD_DEFAULTS = {"native_unit": None, "native_dims": {}, "aggregation": "", "status_policy": "",
+                           "fred_equivalent": "", "preferred": "", "min_start": "", "requires_key": ""}
+
+
+def catalog_field(entry_or_series: Any, name: str) -> Any:
+    """Optional curated CatalogEntry field, validated, with its default when absent.
+
+    Reads by getattr so older catalogs without the field keep current behaviour.
+    Accepts a CatalogEntry or a series id (a '#transform' suffix is ignored).
+    """
+    if name not in _CATALOG_FIELD_DEFAULTS:
+        raise KeyError(name)
+    entry = entry_or_series
+    if isinstance(entry_or_series, str):
+        entry = catalog.lookup(entry_or_series.partition("#")[0])
+    value = getattr(entry, name, None) if entry is not None else None
+    default = copy.copy(_CATALOG_FIELD_DEFAULTS[name])
+    if name == "native_unit":
+        valid = (isinstance(value, (tuple, list)) and len(value) == 2 and isinstance(value[0], str)
+                 and isinstance(value[1], int) and not isinstance(value[1], bool))
+        return (value[0], value[1]) if valid else default
+    if name == "native_dims":
+        if not isinstance(value, Mapping) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+            return default
+        return dict(value)
+    allowed = {"aggregation": ("avg", "eop"), "status_policy": ("history_only", "weo_vintage", "gep_vintage")}.get(name)
+    if not isinstance(value, str) or (allowed and value not in allowed):
+        return default
+    return value.strip()
+
+
+def _display_current(series: Series) -> bool:
+    return _policy_current(series.provenance)
+
+
+def format_series_value(value: float | None, series: Series) -> str:
+    """Value text under the row's own display policy, so it matches that row's stored page."""
+    return (format_value if _display_current(series) else _legacy_format_value)(value, series.units)
+
+
+# A US state names its geography for a US series (EIA state recipes: "Retail Sales of Electricity:
+# Virginia, commercial sector"; zh "弗吉尼亚州…"), so no " — United States" is appended.
+_US_STATE_RE = re.compile(
+    r"(?<![A-Za-z])(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|"
+    r"Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|"
+    r"Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|"
+    r"North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|"
+    r"Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia)"
+    r"(?![A-Za-z])|[㐀-鿿]{2,6}州")
+
+
+def _geography_named(title: str, code: str, name: str, aliases: Iterable[str]) -> bool:
+    folded = title.casefold()
+    for term in (name, code, *aliases):
+        term = str(term or "").strip().casefold()
+        if not term:
+            continue
+        if re.search(r"[㐀-鿿]", term):
+            if term in folded:
+                return True
+        elif re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", folded):
+            return True
+    if code == "USA" and (re.search(r"(?<![A-Za-z])U\.?S\.?A?(?![A-Za-z])", title) or _US_STATE_RE.search(title)):
+        return True
+    return code == "GBR" and bool(re.search(r"(?<![A-Za-z])U\.?K\.?(?![A-Za-z])", title))
+
+
+def series_label(series_or_row: Series | Mapping[str, Any], lang: str = "en") -> str:
+    """Reader/model-facing series name: curated title, transform, then geography when not named.
+
+    zh uses the curated title_zh and Chinese geography names. Never raises.
+    """
+    def value(name):
+        raw = series_or_row.get(name) if isinstance(series_or_row, Mapping) else getattr(series_or_row, name, "")
+        return _clean(raw, 300) if isinstance(raw, str) else ""
+    try:
+        sid = value("series")
+        base, _, transform = sid.partition("#")
+        entry = catalog.lookup(base) if base else None
+        zh = str(lang or "").lower().startswith("zh")
+        title = ((entry.title_zh if entry else "") or value("title_zh")) if zh else ""
+        title = title or (entry.title if entry else "") or value("title") or sid
+        if transform in ("yoy", "pct"):
+            word = {"yoy": ("同比", "year-over-year % change"), "pct": ("环比", "% change from previous period")}[transform]
+            title += f"（{word[0]}）" if zh else f" ({word[1]})"
+        code = (value("geography") or (entry.geography if entry else "")).upper()
+        if not code:
+            return title
+        name, aliases = catalog.GEOGRAPHIES.get(code, (code, ()))
+        if zh:
+            name = next((a for a in aliases if re.search(r"[㐀-鿿]", a)), name)
+        return title if _geography_named(title, code, name, aliases) else f"{title} — {name}"
+    except Exception:
+        return _clean(getattr(series_or_row, "series", "") if not isinstance(series_or_row, Mapping) else series_or_row.get("series", ""), 300)
+
+
+def _partial_period(period: Any) -> bool:
+    if not isinstance(period, dict):
+        return False
+    if period.get("complete") is False:
+        return True
+    bounds = [period.get(k) for k in ("start", "end", "covered_start", "covered_end")]
+    return all(isinstance(b, str) for b in bounds) and (bounds[2], bounds[3]) != (bounds[0], bounds[1])
+
+
+def _legacy_month_complete(period: Any, series: Series) -> bool:
+    """Completeness of a calendar month stored under policy < 3, which marked every month
+    incomplete. The month is complete when its coverage spans the whole month and the row
+    holds a later period or was retrieved more than a week after month end: the rule
+    forecast_extractor._official_legacy_periods re-derives, so the snapshot, report pack,
+    charts and anchors agree on old stored rows."""
+    version = series.provenance.get("normalization_policy_version")
+    if isinstance(version, bool) or isinstance(version, int) and version >= _DISPLAY_POLICY_VERSION:
+        return False
+    if not isinstance(period, dict) or period.get("calendar") != "calendar_month" or period.get("complete") is not False:
+        return False
+    if (period.get("covered_start"), period.get("covered_end")) != (period.get("start"), period.get("end")):
+        return False
+    try:
+        end = date.fromisoformat(str(period.get("end")))
+    except ValueError:
+        return False
+    if series.observations and series.observations[-1].date > str(period.get("end")):
+        return True
+    try:
+        return date.fromisoformat(str(series.retrieved_at or "")[:10]) > end + timedelta(days=7)
+    except ValueError:
+        return False
+
+
+def observation_kind(obs: Observation | Mapping[str, Any], series: Series | Mapping[str, Any]) -> str:
+    """'observed'|'preliminary'|'estimate'|'projection'|'unknown'|'partial' for one stored point.
+
+    'partial' marks an aggregated period (provenance.periods) that is not fully
+    covered or not complete; months of rows stored under policy < 3 get their
+    completeness re-derived (_legacy_month_complete). Under the current policy a
+    period starting after the retrieval date cannot have been observed and is a
+    projection. Pass a Series when classifying many points.
+    """
+    try:
+        s = series if isinstance(series, Series) else Series.from_dict(series)
+        o = obs if isinstance(obs, Observation) else Observation(obs.get("date"), obs.get("value"), obs.get("flag") or "")
+        kind = _observation_kind(o, s)
+        retrieved = str(s.retrieved_at or "")[:10]
+        if (kind != "projection" and _display_current(s) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", retrieved)
+                and o.date > retrieved):
+            return "projection"
+        periods = s.provenance.get("periods")
+        period = periods.get(o.date) if isinstance(periods, dict) else None
+        if kind not in ("projection", "estimate") and _partial_period(period) and not _legacy_month_complete(period, s):
+            return "partial"
+        return kind
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return "unknown"
+
+
+def latest_observed(series: Series | Mapping[str, Any]) -> Observation | None:
+    """Newest non-missing point classified 'observed' (never partial/projection/estimate/unknown)."""
+    try:
+        s = series if isinstance(series, Series) else Series.from_dict(series)
+    except (ValueError, TypeError, KeyError):
+        return None
+    return next((o for o in reversed(s.observations) if o.value is not None and observation_kind(o, s) == "observed"), None)
+
+
 def _display_period(period: str, frequency: str, series: Series | None = None) -> str:
     metadata = series.provenance.get("periods", {}).get(period, {}) if series else {}
     if metadata.get("label"):
@@ -328,27 +835,59 @@ def _display_period(period: str, frequency: str, series: Series | None = None) -
     return period[:4] if frequency == "A" else period[:7] if frequency == "M" else period
 
 
+def _latest_daily(series: Series) -> dict | None:
+    """provenance.latest_daily {date, value}: the last native daily point behind monthly rows."""
+    point = series.provenance.get("latest_daily")
+    try:
+        if isinstance(point, Mapping) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(point.get("date"))):
+            value = _number(point.get("value"))
+            if value is not None:
+                return {"date": _period(point["date"]), "value": value}
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def _aggregation_words(series: Series) -> str:
+    return "end-of-month values" if series.provenance.get("aggregation_method") == "eop" else "means"
+
+
 def render_series_page(series: Series) -> str:
+    # Policy <= 2 rows keep their original bytes (see _DISPLAY_POLICY_VERSION).
+    current = _display_current(series)
+    fmt, kind = (format_value, observation_kind) if current else (_legacy_format_value, _observation_kind)
     stats = series_stats(series)
-    lines = [f"# {series.title}", f"Provider: {series.provider_name} · Series: {series.series} · Units: {series.units} · Frequency: {series.frequency} · Seasonal adjustment: {series.seasonal_adjustment or 'unknown'}",
+    lines = [f"# {series_label(series) if current else series.title}", f"Provider: {series.provider_name} · Series: {series.series} · Units: {series.units} · Frequency: {series.frequency} · Seasonal adjustment: {series.seasonal_adjustment or 'unknown'}",
              f"Source: {series.source_url} · Retrieved: {series.retrieved_at or 'unknown'} · Coverage shown: {stats['first']} to {stats['last']} ({stats['count']} observations)",
              f"Geography: {series.geography or 'unknown'} · Vintage: {series.vintage or 'unknown'} · Route: {series.route or 'unknown'}"]
-    if any(_projected(o, series) for o in series.observations):
+    if not current and any(_projected(o, series) for o in series.observations):
         lines.append("Projections: explicitly classified publisher projections are marked in the observation table.")
+    elif current and stats["projection_count"]:
+        lines.append("Projections: publisher projections are marked 'projection' in the observation table; they are not observed history.")
     if series.notes:
         lines.append(f"Notes: {series.notes}")
     lines += ["## Summary"]
     if stats["latest"]:
         p = stats["latest"]
-        lines.append(f"- Latest: {format_value(p['value'], series.units)} ({p['date']}); see observation status below.")
+        scaled = scaled_value(p["value"], series.units) if current else ""
+        lines.append(f"- Latest: {fmt(p['value'], series.units)} ({p['date']}){'; ' + scaled if scaled else ''}; see observation status below.")
+    daily = _latest_daily(series) if current else None
+    if daily:
+        lines.append(f"- Latest daily value: {fmt(daily['value'], series.units)} ({daily['date']}); monthly values are {_aggregation_words(series)} of daily data.")
     if stats["previous_year"]:
         p = stats["previous_year"]
-        lines.append(f"- Year earlier: {format_value(p['value'], series.units)} ({p['date']}); change {format_value(stats['yoy_change'], series.units)} ({format_value(stats['yoy_change_pct'], 'Percent')}).")
+        if not current:
+            change = f"{fmt(stats['yoy_change'], series.units)} ({fmt(stats['yoy_change_pct'], 'Percent')})"
+        elif is_percent_units(series.units) or stats["yoy_change_pct"] is None:
+            change = format_change(stats["yoy_change"], series.units)
+        else:
+            change = f"{format_change(stats['yoy_change'], series.units)} ({_signed(format_value(stats['yoy_change_pct'], 'Percent'))})"
+        lines.append(f"- Year earlier: {fmt(p['value'], series.units)} ({p['date']}); change {change}.")
     if stats["five_year_min"]:
         low, high = stats["five_year_min"], stats["five_year_max"]
-        lines.append(f"- 5-year range: {format_value(low['value'], series.units)} ({low['date']}) to {format_value(high['value'], series.units)} ({high['date']}).")
+        lines.append(f"- 5-year range: {fmt(low['value'], series.units)} ({low['date']}) to {fmt(high['value'], series.units)} ({high['date']}).")
     lines += [f"## Observations ({series.units})", f"Values in {series.units or 'unknown units'}.", "| Period | Value | Status |", "|---|---|---|"]
-    table = [f"| {_display_period(o.date, series.frequency, series)} | {format_value(o.value, series.units)} | {'missing' if o.value is None else _observation_kind(o, series)} |" for o in series.observations]
+    table = [f"| {_display_period(o.date, series.frequency, series)} | {fmt(o.value, series.units)} | {'missing' if o.value is None else kind(o, series)} |" for o in series.observations]
     while table and len("\n".join(lines + table)) > 11900:
         table.pop(0)
     if len(table) < len(series.observations):
@@ -357,11 +896,22 @@ def render_series_page(series: Series) -> str:
 
 
 def render_series_brief(series: Series, sid: int | None = None) -> str:
+    current = _display_current(series)
+    fmt, kind = (format_value, observation_kind) if current else (_legacy_format_value, _observation_kind)
     citation = f"[S{sid}] " if isinstance(sid, int) and not isinstance(sid, bool) and sid > 0 else ""
-    lines = [f"{citation}{series.series} — {series.title} ({series.units}, {series.frequency})"]
+    lines = [f"{citation}{series.series} — {series_label(series) if current else series.title} ({series.units}, {series.frequency})"]
+    if current:
+        latest = series_stats(series)["latest"]
+        if latest:
+            scaled = scaled_value(latest["value"], series.units)
+            lines.append(f"Latest observed: {fmt(latest['value'], series.units)} ({_display_period(latest['date'], series.frequency, series)})"
+                         + (f"; {scaled}" if scaled else ""))
+        daily = _latest_daily(series)
+        if daily:
+            lines.append(f"Latest daily: {fmt(daily['value'], series.units)} ({daily['date']})")
     for o in series.observations[-8:]:
-        status = _observation_kind(o, series)
-        lines.append(f"{_display_period(o.date, series.frequency, series)}: {format_value(o.value, series.units)} [{status}]")
+        status = kind(o, series)
+        lines.append(f"{_display_period(o.date, series.frequency, series)}: {fmt(o.value, series.units)} [{status}]")
     if series.notes:
         lines.append(series.notes)
     return "\n".join(lines)[:900]
@@ -371,19 +921,25 @@ def _bytes(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False, separators=(",", ":")) + "\n").encode("utf-8")
 
 
-def _safe_path(root: Path, relative: str = "") -> Path:
-    root = root.absolute()
-    part = Path(relative)
-    if part.is_absolute() or ".." in part.parts:
-        raise ValueError("Artifact path escapes output directory")
-    path = root / part
+def _no_symlinks(path: Path) -> Path:
+    path = Path(path).absolute()
     if any(p.is_symlink() for p in (path, *path.parents)):
         raise ValueError("Symlink artifacts are not accepted")
     return path
 
 
+def _safe_path(root: Path, relative: str = "") -> Path:
+    """``relative`` below the configured ``root``. The root is trusted configuration and is
+    resolved once (a symlinked ancestor such as macOS /var or a mounted uploads volume is
+    fine); no component below it may be a symlink, and nothing may escape it."""
+    part = Path(relative)
+    if part.is_absolute() or ".." in part.parts:
+        raise ValueError("Artifact path escapes output directory")
+    return _no_symlinks(Path(os.path.realpath(Path(root).absolute())) / part)
+
+
 def _read(path: Path, max_bytes: int = _MAX_BYTES) -> bytes:
-    _safe_path(path)
+    _no_symlinks(path)
     directory = _directory_fd(path.parent)
     try:
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
@@ -401,7 +957,7 @@ def _read(path: Path, max_bytes: int = _MAX_BYTES) -> bytes:
 
 def _directory_fd(path: Path, *, create: bool = False) -> int:
     """Pin a directory with kernel-enforced no-symlink traversal at every level."""
-    path = _safe_path(path)
+    path = _no_symlinks(path)
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     if hasattr(os, "O_NOFOLLOW_ANY"):
         # Darwin rejects a symlink in *any* component in the same lookup. Inode
@@ -445,7 +1001,7 @@ def _directory_fd(path: Path, *, create: bool = False) -> int:
 
 
 def _atomic(path: Path, data: bytes):
-    _safe_path(path)
+    _no_symlinks(path)
     directory = _directory_fd(path.parent, create=True)
     tmp = ".data-" + secrets.token_hex(16)
     try:
@@ -467,6 +1023,11 @@ def _slug(series_id: str) -> str:
     # All provider separators are lossy; always suffix a hash of full identity.
     stem = re.sub(r"[^a-z0-9]+", "_", series_id.lower()).strip("_")[:43]
     return stem + "_" + hashlib.sha256(series_id.encode()).hexdigest()[:16]
+
+
+def _reason(exc: BaseException) -> str:
+    """Concrete, bounded log reason (containment, integrity or OS error), never a raw payload."""
+    return f"{type(exc).__name__}: {_clean(exc, 200)}"
 
 
 def _citation(value: Any) -> str:
@@ -512,11 +1073,11 @@ def load_datasets(out_dir: str | Path) -> list[dict]:
                     raise ValueError("Empty or uncitable dataset")
                 seen.add(series.series)
                 result.append({**row, **data})
-            except (ValueError, TypeError, KeyError, OSError):
-                logger.warning("Official data row unavailable: integrity or containment validation failed")
+            except (ValueError, TypeError, KeyError, OSError) as exc:
+                logger.warning("Official data row unavailable: integrity or containment validation failed (%s)", _reason(exc))
         return result
-    except (ValueError, TypeError, KeyError, OSError):
-        logger.warning("Official data manifest unavailable: integrity or containment validation failed")
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        logger.warning("Official data manifest unavailable: integrity or containment validation failed (%s)", _reason(exc))
         return []
 
 
@@ -525,7 +1086,7 @@ def write_dataset_files(series_list: Iterable[Series], out_dir: str | Path, *, c
     with _WRITE_LOCK:
         try:
             root = Path(out_dir)
-            directory = _safe_path(root, "data")
+            _safe_path(root, "data")
             existing = {r["series"]: r for r in load_datasets(root)}
             incoming = list(series_list)
             if len(incoming) > 200:
@@ -535,8 +1096,8 @@ def write_dataset_files(series_list: Iterable[Series], out_dir: str | Path, *, c
                 if not s.observations or not s.source_url:
                     raise ValueError("Empty or uncitable dataset")
                 prior = existing.get(s.series, {})
-                if not s.kiqs:
-                    s.kiqs = list(prior.get("kiqs", []))
+                # KIQ links accumulate across requests for the same series.
+                s.kiqs = _kiq_ids([*(prior.get("kiqs") or []), *s.kiqs])
                 slug = _slug(s.series)
                 raw = _bytes(s.to_dict())
                 stream = io.StringIO(newline="")
@@ -548,8 +1109,8 @@ def write_dataset_files(series_list: Iterable[Series], out_dir: str | Path, *, c
                 # Immutable content generations keep the old manifest readable
                 # through a failed update or an in-flight successful write.
                 json_name, csv_name = f"{slug}.{digest[:16]}.json", f"{slug}.{csv_digest[:16]}.csv"
-                _atomic(_safe_path(directory, json_name), raw)
-                _atomic(_safe_path(directory, csv_name), csv_raw)
+                _atomic(_safe_path(root, "data/" + json_name), raw)
+                _atomic(_safe_path(root, "data/" + csv_name), csv_raw)
                 stats = series_stats(s)
                 row = {**s.to_dict(), "slug": slug, "observations": len(s.observations), "first": stats["first"], "last": stats["last"], "latest": stats["latest"],
                        "file": f"data/{json_name}", "csv": f"data/{csv_name}", "sha256": digest,
@@ -564,24 +1125,89 @@ def write_dataset_files(series_list: Iterable[Series], out_dir: str | Path, *, c
                     row["source_id"] = _citation(citations[sid])
                 rows.append(row)
             manifest = {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(), "series": rows}
-            _atomic(_safe_path(directory, "datasets.json"), _bytes(manifest))
+            _atomic(_safe_path(root, "data/datasets.json"), _bytes(manifest))
             return manifest
-        except (ValueError, TypeError, KeyError, OSError):
-            logger.warning("Official data persistence failed: invalid input or unavailable output directory")
-            return {"schema_version": 1, "series": [], "error": "Official data persistence failed"}
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            logger.warning("Official data persistence failed: invalid input or unavailable output directory (%s)", _reason(exc))
+            return {"schema_version": 1, "series": [], "error": "Official data persistence failed", "code": "persistence_failed"}
 
 
-def load_official_data(handoff_dir: str | Path, *, max_series: int = 12) -> dict | None:
-    if not isinstance(max_series, int) or isinstance(max_series, bool) or max_series < 1:
+_REPORT_CITATION = re.compile(r"[\[【]\s*(S\d+(?:\s*[,，;；]\s*S\d+)*)\s*[\]】]", re.I)
+
+
+def _report_citations(root: Path) -> set[str]:
+    """Source ids ([S#]) cited in the run's research_report.md; empty when unreadable."""
+    try:
+        text = _read(_safe_path(root, "research_report.md"), 8 * _MAX_BYTES).decode("utf-8", "replace")
+    except (ValueError, OSError):
+        return set()
+    return {f"S{int(n)}" for group in _REPORT_CITATION.findall(text) for n in re.findall(r"\d+", group)}
+
+
+def _max_series(value: Any) -> int | None:
+    """Carrier cap: the explicit value, else DATA_SOURCES_MAX_SERIES, else 24 (at most 200)."""
+    if value is None:
+        raw = str(os.environ.get("DATA_SOURCES_MAX_SERIES") or "").strip()
+        value = int(raw) if re.fullmatch(r"\d{1,4}", raw) and int(raw) >= 1 else _DEFAULT_MAX_SERIES
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         return None
-    rows = load_datasets(handoff_dir)[:min(max_series, 200)]
-    for row in rows:
+    return min(value, 200)
+
+
+def load_official_data(handoff_dir: str | Path, *, max_series: int | None = None,
+                       anchored: Iterable[str] = ()) -> dict | None:
+    """The bounded official-data carrier for downstream stages.
+
+    ``max_series`` defaults to DATA_SOURCES_MAX_SERIES (24). Rows rank anchored series
+    first, then series cited in the research report, then KIQ-linked ones, then the rest,
+    each in manifest order; ids beyond the cap are listed under ``omitted``.
+    """
+    limit = _max_series(max_series)
+    if limit is None:
+        return None
+    rows = load_datasets(handoff_dir)
+    if not rows:
+        return None
+    try:
+        anchors = set() if isinstance(anchored, (str, bytes)) else {a for a in anchored if isinstance(a, str)}
+    except TypeError:
+        anchors = set()
+    cited = _report_citations(Path(handoff_dir))
+    def rank(row):
+        if row["series"] in anchors:
+            return 0
+        if row.get("source_id") in cited:
+            return 1
+        return 2 if row.get("kiqs") else 3
+    ranked = sorted(rows, key=rank)
+    kept, omitted = ranked[:limit], [row["series"] for row in ranked[limit:]]
+    for row in kept:
         row["observations"] = row["observations"][-240:]
-    return {"schema_version": 1, "series": rows} if rows else None
+    carrier = {"schema_version": 1, "series": kept}
+    if omitted:
+        carrier["omitted"] = omitted
+        logger.warning("Official data carrier keeps %d of %d series (cap %d); omitted: %s",
+                       len(kept), len(rows), limit, ", ".join(omitted))
+    return carrier
+
+
+def _fiscal_label_period(text: str, series: Series) -> str | None:
+    """Start date of the stored fiscal period labelled ``text`` ('FY2026', 'FY 2026'), if any."""
+    label = re.fullmatch(r"(?i)FY\s?(\d{4})", text.strip())
+    periods = series.provenance.get("periods")
+    if not label or not isinstance(periods, dict):
+        return None
+    starts = [start for start, record in periods.items()
+              if isinstance(record, dict) and record.get("label") == f"FY{label.group(1)}"]
+    return starts[0] if len(starts) == 1 else None
 
 
 def _anchor_period(period: Any, series: Series) -> str:
     text = str(period)
+    if series.frequency == "A":
+        # A fiscal-year series may be anchored by its stored label ('FY2026' -> 2025-10-01).
+        text = _fiscal_label_period(text, series) or text
+        period = text
     if series.frequency == "M" and not re.fullmatch(r"\d{4}-\d{2}(?:-01)?", text):
         raise ValueError("Monthly anchor needs a month")
     if series.frequency == "Q" and not re.fullmatch(r"\d{4}-Q[1-4]|\d{4}-(?:01|04|07|10)-01", text):
@@ -715,7 +1341,9 @@ def resolve_data_anchor(anchor: Any, series: Series | Mapping[str, Any], *, as_o
 
 
 def _frequency(value: Any) -> str:
-    text = str(value or "").upper().strip()
+    """Native frequency label -> D/W/M/Q/A. FRED qualifies labels ("Daily, 7-Day", "Weekly,
+    Ending Friday", "Quarterly, End of Period"); the leading word names the frequency."""
+    text = str(value or "").upper().strip().split(",")[0].strip()
     return {"DAILY": "D", "WEEKLY": "W", "MONTHLY": "M", "QUARTERLY": "Q", "ANNUAL": "A", "YEARLY": "A"}.get(text, text if text in ("D", "W", "M", "Q", "A") else "")
 
 
@@ -734,43 +1362,146 @@ def _native_period(value: Any, frequency: str) -> str:
     return _period(text)
 
 
-def _sdmx_units(req: dict, attributes: dict) -> str:
-    """Recognize supported native units/scale; fail closed on contradictions."""
+# SDMX unit-measure codelist names, used only for uncurated keys of a known BIS flow (curated
+# entries carry a verified pin and always show their catalog units).
+_SDMX_UNIT_NAMES = {"367": "Per cent", "368": "Per cent per year", "770": "Percentage of GDP",
+                    "771": "Year-on-year changes, in per cent", "628": "Index, 2010 = 100", "882": "Index, 2020 = 100"}
+# Data360 unit codes; their free-text metadata unit is often terser ("%", "Unit") or richer.
+_WB_UNIT_NAMES = {"PC": "Percent change", "PC_A": "Percent change per annum", "PT_GDP": "Percent of GDP",
+                  "PT_LF": "Percent of labor force", "PT_POP": "Percent of population", "PS": "Persons",
+                  "USD": "US dollars", "MTCO2E": "Mt CO2 equivalent", "KWH": "Kilowatt-hours"}
+_UNINFORMATIVE_UNITS = frozenset(("", "%", "unit", "units", "number", "value", "none", "n/a", "na"))
+_SCALE_NAMES = {3: "thousands", 6: "millions", 9: "billions", 12: "trillions"}
+_WB_BREAKDOWNS = ("SEX", "AGE", "URBANISATION", "COMP_BREAKDOWN_1", "COMP_BREAKDOWN_2")
+_V_LST_VINTAGE = "latest published (V_LST)"
+_WEO_STATUS_NOTE = ("Publisher feed strips observation status; inferred from the vintage year V: periods from V are "
+                    "publisher projections, V-1 an estimate, earlier periods history (revisable).")
+
+
+def _release_year(metadata: Mapping[str, Any], retrieval_year: int) -> tuple[int, str] | None:
+    """Release year of a Data360 vintage from its metadata (released, version or update date)."""
+    version = metadata.get("version_statement")
+    candidates = (("date_released", metadata.get("date_released")),
+                  ("version_statement.version_date", version.get("version_date") if isinstance(version, Mapping) else None),
+                  ("date_last_update", metadata.get("date_last_update")))
+    for name, raw in candidates:
+        found = re.match(r"\s*(\d{4})-\d{2}-\d{2}", str(raw or ""))
+        if found and 1990 <= int(found[1]) <= retrieval_year:
+            return int(found[1]), f"Data360 {name} {found[0].strip()}"
+    return None
+
+
+def _scale_of(text: str) -> int:
+    """Power of ten named by a scale word in unit text ("US dollar, millions" -> 6), else 0."""
+    for exponent, word in ((12, "trillion"), (9, "billion"), (6, "million"), (3, "thousand")):
+        if re.search(r"(?i)\b" + word + r"s?\b", str(text or "")):
+            return exponent
+    return 0
+
+
+def _native_unit(attributes: Mapping[str, Any], label_key: str) -> tuple[str, str, int]:
+    """(unit code, label, UNIT_MULT exponent) as rows carry them; absent code '' and multiplier 0."""
+    code = str(next(iter(attributes.get("UNIT_MEASURE", [])), "") or "")
+    label = _clean(next(iter(attributes.get(label_key, [])), "") or "", 200)
+    raw = str(next(iter(attributes.get("UNIT_MULT", [])), "") or "").strip()
+    if raw and not re.fullmatch(r"-?\d{1,2}", raw):
+        raise DataFailure("Native unit multiplier is not an integer", "provider_error")
+    return code, label, int(raw or 0)
+
+
+def _pin_matches(entry: Any, code: str, multiplier: int, dims: Mapping[str, set]) -> bool | None:
+    """None when ``entry`` pins no native identity, else whether rows carry exactly the pin."""
+    pin = catalog_field(entry, "native_unit") if entry is not None else None
+    if pin is None:
+        return None
+    return (code, multiplier) == pin and all(dims.get(d) == {v} for d, v in catalog_field(entry, "native_dims").items())
+
+
+def _pinned_units(entry: Any, code: str, multiplier: int, dims: Mapping[str, set], what: str) -> str | None:
+    """Curated units when the entry pins its native identity; fail closed on any drift."""
+    matched = _pin_matches(entry, code, multiplier, dims)
+    if matched is None:
+        return None
+    pin = catalog_field(entry, "native_unit")
+    if (code, multiplier) != pin:
+        raise DataFailure(f"{what} native unit {code or 'none'} x10^{multiplier} differs from the verified catalog pin "
+                          f"{pin[0] or 'none'} x10^{pin[1]}; units cannot be established", "provider_error")
+    if not matched:
+        raise DataFailure(f"{what} key dimensions differ from the verified catalog pin; units cannot be established", "provider_error")
+    return entry.units
+
+
+# Key dimensions naming the economy: a curated series and an uncurated key that differ only
+# there are the same statistic, so the curated units (and unit pin) carry over.
+_GEOGRAPHY_DIMS = frozenset(("REF_AREA", "COUNTRY", "BORROWERS_CTY"))
+
+
+def _curated_sibling(req: dict) -> Any:
+    """For an uncurated id: the curated entry for the same indicator/flow key in another
+    economy, when all such entries agree on units and native identity; None otherwise."""
+    provider, native = req["provider"], req["native"]
+    if provider == "wb":
+        indicator = native.split("/")[0]
+        def same(e):
+            return e.native.split("/")[0] == indicator
+    elif provider in ("bis", "imf"):
+        flow, key = native.split("/")
+        info = catalog.BIS_FLOWS.get if provider == "bis" else catalog.imf_flow_info
+        meta, parts = info(flow), key.split(".")
+        keep = [i for i, dim in enumerate(meta["dims"]) if dim not in _GEOGRAPHY_DIMS]
+        def same(e):
+            other_flow, other_key = e.native.split("/")
+            other, other_meta = other_key.split("."), info(other_flow)
+            family = other_flow == flow if provider == "bis" else bool(other_meta) and other_meta["base_flow"] == meta["base_flow"]
+            return family and len(other) == len(parts) and all(other[i] == parts[i] for i in keep)
+    else:
+        return None
+    siblings = [e for e in catalog.CATALOG if e.provider == provider and same(e)]
+    identities = {(e.units, catalog_field(e, "native_unit"), tuple(sorted(catalog_field(e, "native_dims").items())))
+                  for e in siblings}
+    return siblings[0] if len(identities) == 1 else None
+
+
+def _sdmx_units(req: dict, attributes: dict, dims: Mapping[str, str]) -> tuple[str, dict]:
+    """Display units plus the native identity kept in provenance; fail closed on contradictions.
+
+    Curated entries pin (UNIT_MEASURE, UNIT_MULT) and key dimensions and always show their
+    catalog units. An uncurated key takes a curated sibling's units when its rows carry the
+    sibling's pin, else the native label or codelist name; IMF rows carry no unit attributes,
+    so an uncurated IMF key without a sibling has unknown units.
+    """
     entry = catalog.lookup(req["base"])
-    expected = entry.units if entry else ""
-    def normalize(value):
-        text = re.sub(r"[^a-z0-9%]+", " ", value.lower()).strip()
-        text = text.replace("per cent", "percent")
-        return {"%": "percent", "percentage": "percent", "pct": "percent", "pt": "percent", "pc": "percent",
-                "usd": "u s dollars", "us dollars": "u s dollars", "us dollar": "u s dollars", "us dollar per barrel": "u s dollars per barrel"}.get(text, text)
-    code = next(iter(attributes.get("UNIT_MEASURE", [])), "")
-    label = next(iter(attributes.get("UNIT_MEASURE_LABEL", [])), "")
-    scale = next(iter(attributes.get("UNIT_MULT", [])), "")
-    canonical = normalize(expected)
-    scale_words = {3: "thousand", 6: "million", 9: "billion", 12: "trillion"}
-    if scale:
-        exponent = int(scale)
-        expected_scale = next((n for n, word in scale_words.items() if word in canonical), 0)
-        if exponent != expected_scale:
-            raise ValueError("Native SDMX scale conflicts with catalog units")
-    if not code and not label:
-        return expected
-    if not expected:
-        if label and (not scale or int(scale) == 0):
-            return label
-        raise ValueError("Native SDMX units lack a verified canonical label")
-    stripped = re.sub(r"\b(thousands?|millions?|billions?|trillions?)\s+(?:of\s+)?", "", canonical)
-    stripped = re.sub(r" per (?:year|annum)$", "", stripped)
-    candidates = {normalize(v) for v in (code, label) if v}
-    compatible = {canonical, stripped}
-    recognized_codes = {"USD", "EUR", "GBP", "JPY", "PCT", "PC", "PT", "PERCENT", "PERCENTAGE", "%", "INDEX"}
-    if label and normalize(label) not in compatible:
-        raise ValueError("Native SDMX unit label contradicts the canonical units")
-    if code.upper() in recognized_codes and normalize(code) not in compatible:
-        raise ValueError("Native SDMX unit code contradicts the canonical units")
-    if canonical not in candidates and stripped not in candidates:
-        raise ValueError("Native SDMX units conflict with catalog label or are unrecognized")
-    return expected
+    code, label, multiplier = _native_unit(attributes, "UNIT_MEASURE_LABEL")
+    record = {"code": code, "label": label, "multiplier": multiplier}
+    row_dims = {k: {v} for k, v in dims.items()}
+    pinned = _pinned_units(entry, code, multiplier, row_dims, "SDMX")
+    if pinned is not None:
+        return pinned, {**record, "basis": "verified catalog pin"}
+    if entry is None:
+        sibling = _curated_sibling(req)
+        matched = _pin_matches(sibling, code, multiplier, row_dims)
+        if matched or matched is None and sibling is not None and not (code or label or multiplier):
+            return sibling.units, {**record, "basis": f"curated sibling {sibling.series}"}
+    if entry is not None:
+        # Curated without a pin (IMF rows carry no unit attributes): only the scale is checkable.
+        if (code or label or multiplier) and multiplier != _scale_of(entry.units):
+            raise DataFailure("Native SDMX scale conflicts with catalog units", "provider_error")
+        return entry.units, {**record, "basis": "curated catalog"}
+    if multiplier not in (0, *_SCALE_NAMES):
+        raise DataFailure("Native SDMX unit multiplier is unsupported", "provider_error")
+    base = label or _SDMX_UNIT_NAMES.get(code, "")
+    if not base and req["provider"] == "bis" and req["native"].startswith("WS_XRU/") and dims.get("CURRENCY"):
+        base = f"{dims['CURRENCY']} per US dollar"  # the BIS XRU flow quotes every currency per US dollar
+    if not base:
+        if req["provider"] == "imf" and not multiplier:
+            return "", {**record, "basis": "not supplied by provider"}
+        raise DataFailure("Native SDMX units are unavailable for an uncurated key", "provider_error")
+    named = _scale_of(base)
+    if multiplier and named and named != multiplier:
+        raise DataFailure("Native SDMX unit label and multiplier conflict", "provider_error")
+    if multiplier and not named:
+        base = f"{base}, {_SCALE_NAMES[multiplier]}"
+    return base, {**record, "basis": "native label" if label else "native codelist"}
 
 
 def _columnar(payload: dict) -> list[dict]:
@@ -785,43 +1516,41 @@ def _columnar(payload: dict) -> list[dict]:
     return [dict(zip(columns, row)) for row in rows]
 
 
-def _wb_unit_parts(text: str) -> tuple[str, int]:
-    normalized = re.sub(r"[^a-z0-9%]+", " ", text.lower()).strip().replace("per cent", "percent")
-    exponent = 0
-    for number, word in ((3, "thousand"), (6, "million"), (9, "billion"), (12, "trillion")):
-        if re.search(r"\b" + word + r"s?\b", normalized):
-            exponent = number
-            normalized = re.sub(r"\b" + word + r"s?\s*(?:of\s+)?", "", normalized).strip()
-    aliases = {"pt": "percent", "pct": "percent", "%": "percent", "percentage": "percent",
-               "ps": "people", "persons": "people", "person": "people", "number of people": "people",
-               "usd": "us dollars", "u s dollars": "us dollars", "ix": "index"}
-    normalized = aliases.get(normalized, normalized)
-    if normalized.startswith("percent") and "point" not in normalized:
-        normalized = "percent"
-    return normalized, exponent
+def _unit_text(text: Any) -> str:
+    return " ".join(str(text or "").lower().split())
 
 
-def _wb_units(attributes: dict, metadata: dict) -> str:
-    """Preserve raw values and verify their unit multiplier exactly once."""
-    code = next(iter(attributes.get("UNIT_MEASURE", [])), "")
-    label = next(iter(attributes.get("UNIT_MEASURE_NAME", [])), "")
-    measure = str(metadata.get("measurement_unit") or "")
-    scale = int(next(iter(attributes.get("UNIT_MULT", [])), "0"))
-    multipliers = {0: "", 3: "Thousands", 6: "Millions", 9: "Billions", 12: "Trillions"}
-    if scale not in multipliers or not code or not measure:
-        raise ValueError("Data360 unit code, measurement unit or multiplier is unavailable")
-    code_base, _ = _wb_unit_parts(code)
-    meta_base, meta_scale = _wb_unit_parts(measure)
-    if code_base != meta_base or meta_scale not in (0, scale):
-        raise ValueError("Data360 unit code and metadata disagree")
-    if label:
-        label_base, label_scale = _wb_unit_parts(label)
-        if label_base != code_base or label_scale != scale:
-            raise ValueError("Data360 unit label or multiplier conflicts with its code")
-        return label
-    if meta_scale == scale:
-        return measure
-    return f"{multipliers[scale]} of {measure}" if scale else measure
+def _wb_units(req: dict, attributes: dict, metadata: dict, dims: Mapping[str, set]) -> tuple[str, dict]:
+    """Display units for a Data360 series plus the native identity kept in provenance.
+
+    Curated entries pin (UNIT_MEASURE, UNIT_MULT): on an exact match the curated units are
+    shown, never the native label (labels can be wrong: KWH drops "per capita", WEO LUR says
+    "of population"). The same indicator for an uncurated economy takes a curated sibling's
+    units when its rows carry that sibling's exact pin. Data360 multipliers are otherwise
+    unverified (IMF_WEO_NGDPD says x10^9 on whole-dollar values), so any other indicator with a
+    non-zero multiplier, or whose label and metadata name different scales, fails closed.
+    """
+    entry = catalog.lookup(req["base"])
+    code, label, multiplier = _native_unit(attributes, "UNIT_MEASURE_NAME")
+    measure = _clean(metadata.get("measurement_unit") or "", 200)
+    record = {"code": code, "label": label, "multiplier": multiplier, "metadata_unit": measure}
+    pinned = _pinned_units(entry, code, multiplier, dims, "Data360")
+    if pinned is not None:
+        return pinned, {**record, "basis": "verified catalog pin"}
+    sibling = _curated_sibling(req) if entry is None else None
+    if _pin_matches(sibling, code, multiplier, dims):
+        # Same indicator in another economy with exactly the verified native identity.
+        return sibling.units, {**record, "basis": f"verified pin of curated sibling {sibling.series}"}
+    if not code:
+        raise DataFailure("Data360 unit code is unavailable", "provider_error")
+    informative = measure if _unit_text(measure) not in _UNINFORMATIVE_UNITS else ""
+    if multiplier or (label and informative and _scale_of(label) != _scale_of(informative)):
+        raise DataFailure("Data360 unit multiplier cannot be verified for an uncurated indicator; "
+                          "use a curated catalog series", "provider_error")
+    units = informative or label or _WB_UNIT_NAMES.get(code.upper(), "")
+    if not units:
+        raise DataFailure("Data360 units are unavailable for an uncurated indicator", "provider_error")
+    return units, {**record, "basis": "native metadata" if informative else "native label" if label else "native codelist"}
 
 
 def _http_csv(url: str, *, timeout: float = 15) -> bytes:
@@ -868,10 +1597,17 @@ class DataSources:
         raw = providers if providers is not None else (self._env.get("DATA_SOURCES", "") or ",".join(PROVIDERS)).split(",")
         self._allowed = {p.strip().lower() for p in raw if isinstance(p, str)} & set(PROVIDERS)
         self._on = self._env.get("DATA_SOURCES_ENABLED", "true").strip().lower() == "true"
-        # Match source/deployed layout without inspecting saved datasets at import.
+        # Match source/deployed layout without inspecting saved datasets at import. A relative
+        # DATA_SOURCES_CACHE_DIR means the repository root (as for the hub logs), never the cwd,
+        # so research, backend and monitor share one cache and one keyless BLS quota record;
+        # the root is resolved once (its own ancestors may be symlinks, nothing below it).
         root = Path(__file__).resolve().parent.parent
-        self._cache_dir = Path(cache_dir or self._env.get("DATA_SOURCES_CACHE_DIR") or root / "backend/uploads/.data_cache")
+        default = root / "backend/uploads/.data_cache"
+        configured = _source_path({"DATA_SOURCES_CACHE_DIR": str(cache_dir or self._env.get("DATA_SOURCES_CACHE_DIR") or "")},
+                                  "DATA_SOURCES_CACHE_DIR", default)
+        self._cache_dir = Path(os.path.realpath(configured))
         self._clock, self._http = clock, http_get or _http_csv
+        self._secrets = _credentials(self._env)
         self._lock = threading.RLock()
         self._locks: dict[str, threading.Lock] = {}
         self._memory: dict[str, tuple[float, dict]] = {}
@@ -879,6 +1615,23 @@ class DataSources:
         self._imf_defs: dict[str, dict] = {}
         self._semaphores = {p: threading.BoundedSemaphore(1 if p in ("imf", "bls") else 3) for p in PROVIDERS}
         self._closed = False
+        self._prune_cache()
+
+    def _prune_cache(self) -> None:
+        """Drop provider-cache files older than a week, once per directory and process; never raises."""
+        key = str(self._cache_dir)
+        with _WRITE_LOCK:
+            if key in _PRUNED_CACHES:
+                return
+            _PRUNED_CACHES.add(key)
+        try:
+            cutoff = self._clock() - _CACHE_MAX_AGE_S
+            with os.scandir(self._cache_dir) as entries:
+                for item in entries:
+                    if _CACHE_FILE.fullmatch(item.name) and item.is_file(follow_symlinks=False) and item.stat(follow_symlinks=False).st_mtime < cutoff:
+                        os.unlink(item.path)
+        except (OSError, ValueError, TypeError):
+            pass
 
     def _get_hub(self):
         with self._lock:
@@ -887,6 +1640,9 @@ class DataSources:
             return self._hub
 
     def providers(self) -> dict[str, str]:
+        """Per provider: ready | keyless (FRED CSV route) | key_invalid (the provider rejected the
+        configured key; FRED continues via CSV, BLS via a keyless server) | disabled | closed |
+        the hub's redacted failure reason."""
         if not self._on or self._closed:
             return {p: "disabled" if not self._on else "closed" for p in PROVIDERS}
         try:
@@ -898,21 +1654,50 @@ class DataSources:
             status = statuses.get(p, {})
             if p not in self._allowed:
                 result[p] = "disabled"
-            elif p == "fred" and not self._env.get("FRED_API_KEY", "").strip():
-                result[p] = "keyless"
+            elif p == "fred" and not self._key("fred"):
+                result[p] = "key_invalid" if self._key_rejected("fred") else "keyless"
             elif status.get("state") in ("ready", "idle", "starting"):
-                result[p] = "ready"
+                result[p] = "key_invalid" if p == "bls" and self._key_rejected("bls") else "ready"
             else:
                 result[p] = self._redact(status.get("error") or status.get("state") or "unavailable")
         return result
 
+    def hub_status(self) -> dict[str, dict]:
+        """The hub's per-provider status (state, error, tool calls, failures); {} before any use."""
+        try:
+            return dict(self._hub.status()) if self._hub is not None else {}
+        except Exception:
+            return {}
+
+    def _server_down(self, provider: str) -> bool:
+        """The provider's MCP server cannot serve now: unavailable (not built, no node) or failed."""
+        status = self.hub_status().get(provider)
+        return isinstance(status, Mapping) and status.get("state") in ("unavailable", "failed")
+
     def enabled(self) -> bool:
-        return self._on and not self._closed and any(v in ("ready", "keyless") for v in self.providers().values())
+        return self._on and not self._closed and any(v in ("ready", "keyless", "key_invalid") for v in self.providers().values())
+
+    def _key(self, provider: str) -> str:
+        """The configured registration key, or '' when absent or rejected earlier in this process."""
+        value = str(self._env.get(_KEY_NAMES[provider]) or "").strip()
+        return "" if not value or self._key_rejected(provider) else value
+
+    def _key_rejected(self, provider: str) -> bool:
+        value = str(self._env.get(_KEY_NAMES[provider]) or "").strip()
+        with _KEY_LOCK:
+            return bool(value) and (provider, hashlib.sha256(value.encode()).hexdigest()) in _REJECTED_KEYS
+
+    def _reject_key(self, provider: str) -> None:
+        value = str(self._env.get(_KEY_NAMES[provider]) or "").strip()
+        if value:
+            with _KEY_LOCK:
+                _REJECTED_KEYS.add((provider, hashlib.sha256(value.encode()).hexdigest()))
+            logger.warning("Official data: %s rejected %s; continuing keyless", provider, _KEY_NAMES[provider])
 
     def prewarm(self) -> None:
         if not self._on or self._closed:
             return
-        names = [p for p, s in self.providers().items() if s == "ready"]
+        names = [p for p, s in self.providers().items() if s == "ready" or s == "key_invalid" and p != "fred"]
         if names:
             try:
                 self._get_hub().start(names)
@@ -927,20 +1712,40 @@ class DataSources:
             except Exception:
                 logger.warning("Official data hub close failed")
 
-    def _redact(self, value: Any) -> str:
-        text = str(value or "")
-        for key, secret in self._env.items():
-            if _SECRET.search(key) and secret:
-                text = text.replace(secret, "[redacted]")
-        return _clean(text, 300)
+    def _scrub(self, text: str) -> str:
+        for secret in self._secrets:
+            text = text.replace(secret, "[redacted]")
+        return text
 
-    def _error(self, sid, exc, retryable=False):
-        return DataError(self._redact(sid), self._redact(exc), retryable)
+    def _redact(self, value: Any) -> str:
+        return _clean(self._scrub(str(value or "")), 300)
+
+    def _error(self, sid, exc) -> DataError:
+        """The only DataError factory: classified code, redacted reason, then a hint."""
+        code, retryable = _failure_class(exc)
+        hint = self._hint(sid, code)
+        reason = self._redact(exc).rstrip(" .;:") or code.replace("_", " ")
+        reason = reason[:300 - len(hint) - 2].rstrip(" .;:")
+        return DataError(self._redact(sid), f"{reason}. {hint}", retryable, code)
+
+    @staticmethod
+    def _hint(sid, code: str) -> str:
+        """Actionable hint; operational failures name a curated equivalent series."""
+        if code in ("rate_limited", "quota_exhausted", "key_invalid", "provider_unavailable", "timeout") and isinstance(sid, str):
+            base, _, transform = sid.strip().partition("#")
+            for name, why in (("fred_equivalent", "same data on FRED"), ("preferred", "faster equivalent")):
+                target = catalog_field(base, name) if parse_series_id(base) else ""
+                if target and ":" not in target:
+                    target = "fred:" + target
+                parsed = parse_series_id(target + ("#" + transform if transform else "")) if target else None
+                if parsed and ":".join(parsed) != sid.strip():
+                    return f"Use {':'.join(parsed)} ({why})" + (" or retry later." if code in _RETRYABLE_CODES else " instead.")
+        return _HINTS[code]
 
     def _remaining(self) -> float | None:
         deadline = getattr(self._local, "deadline", None)
         if self._closed:
-            raise ValueError("Data sources closed")
+            raise DataFailure("Data sources closed", "provider_unavailable", False)
         if deadline is None:
             return None
         left = deadline - time.monotonic()
@@ -961,7 +1766,8 @@ class DataSources:
         result = hub.call(provider, tool, args, **options)
         self._remaining()
         if not result.ok:
-            raise ValueError(self._redact(result.error or result.text or "Provider unavailable"))
+            raise _ToolFailure(self._redact(result.error or result.text or "Provider unavailable"),
+                               self._scrub(result.text or "")[:4000] if getattr(result, "is_tool_error", False) else "")
         raw = result.structured if result.structured is not None else result.text
         if isinstance(raw, str):
             if len(raw) > 8 * _MAX_BYTES:
@@ -991,97 +1797,152 @@ class DataSources:
             receipts.append(receipt)
         return raw
 
-    def search(self, query: str, *, provider: str | None = None, limit: int = 6) -> list[SearchHit]:
+    def search(self, query: str, *, provider: str | None = None, limit: int = 6,
+               deadline_s: float | None = None) -> list[SearchHit]:
+        """Curated catalog hits, then live discovery; ``deadline_s`` bounds the provider calls."""
         if not self._on or self._closed or not isinstance(query, str) or not query.strip():
             return []
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
             return []
+        try:
+            previous = self._bounded(deadline_s)
+        except Exception:
+            return []
+        try:
+            return self._search(query, provider, limit)
+        finally:
+            self._local.deadline = previous
+
+    def _search(self, query, provider, limit) -> list[SearchHit]:
+        """Strong catalog matches first, then live FRED and Data360 search (English rendering of
+        the query; Data360 pinned to the geographies the query names, else the world aggregate),
+        then BIS/Treasury discovery, then weak catalog matches as last-resort hints.  A discovered
+        or weak result whose title (catalog entries: title and keywords) shares no concept with the
+        query ("Arms exports" for "global semiconductor sales") comes last, its note starting with
+        ``OFF_CONCEPT_NOTE``."""
         selected = {provider.lower()} if isinstance(provider, str) else self._allowed
         selected &= self._allowed
         if not selected:
             return []
-        hits = {}
+        query = query[:300]
+        hits: dict[str, SearchHit] = {}
+        unmatched: dict[str, SearchHit] = {}
+        terms = None
+
+        def add(sid, *fields):
+            hits.setdefault(sid, SearchHit(sid, *fields))
+
+        def add_live(sid, title, units, frequency, coverage, provider_id, hint, text=None):
+            if sid in hits or sid in unmatched:
+                return
+            if terms is not None and catalog.shares_concept(terms, title if text is None else text) is False:
+                unmatched[sid] = SearchHit(sid, title, units, frequency, coverage, provider_id,
+                                           "; ".join(part for part in (OFF_CONCEPT_NOTE, hint) if part))
+            else:
+                hits[sid] = SearchHit(sid, title, units, frequency, coverage, provider_id, hint)
+
+        def note(value):
+            text = self._redact(value)
+            return "" if text.strip().lower() in ("undefined", "null", "none") else text
+
         try:
-            for entry in catalog.search_catalog(query[:300], provider=provider, limit=limit):
-                if entry.provider in selected:
-                    hits[entry.series] = SearchHit(entry.series, entry.title, entry.units, entry.frequency, "", entry.provider, entry.notes)
+            terms = catalog.concept_terms(query)
+            ranked = [h for h in catalog.search_catalog_scored(query, provider=provider, limit=50, env=self._env)
+                      if h.entry.provider in selected]
+            for hit in ranked:
+                if hit.strong:
+                    e = hit.entry
+                    add(e.series, e.title, e.units, e.frequency, "", e.provider, e.notes)
             if len(hits) >= limit:
                 return list(hits.values())[:limit]
-            if "fred" in selected and self._env.get("FRED_API_KEY"):
+            english = catalog.english_query(query)
+            if "fred" in selected and english and self._key("fred"):
                 try:
-                    payload = self._call("fred", "fred_search", {"search_text": query[:300], "limit": limit, "offset": 0})
+                    payload = self._call("fred", "fred_search", {"search_text": english, "limit": limit, "offset": 0})
                     for row in payload.get("results", []):
                         parsed = parse_series_id("fred:" + str(row.get("id", "")))
                         if parsed:
-                            sid = ":".join(parsed)
-                            hits.setdefault(sid, SearchHit(sid, self._redact(row.get("title")), self._redact(row.get("units")), _frequency(row.get("frequency")), self._redact(row.get("observation_range")), "fred", self._redact(row.get("notes"))))
+                            add_live(":".join(parsed), self._redact(row.get("title")), self._redact(row.get("units")),
+                                     _frequency(row.get("frequency")), self._redact(row.get("observation_range")),
+                                     "fred", note(row.get("notes")))
                 except Exception:
                     logger.warning("Official FRED search unavailable")
-            if "wb" in selected and len(hits) < limit:
+            if "wb" in selected and english and len(hits) < limit:
                 try:
-                    countries = [code for code, (name, aliases) in catalog.GEOGRAPHIES.items() if any(a.lower() in query.lower() for a in (name, *aliases))]
-                    # Native search identifies indicators; country must be explicit, never guessed.
-                    payload = self._call("wb", "data360_search_indicators", {"query": query[:300], "limit": limit, **({"required_country": countries[0]} if len(countries) == 1 else {})})
+                    # Countries come from whole-word/ZH geography names only; Data360 marks
+                    # coverage only for requested economies, so a query naming none asks for WLD.
+                    geos = sorted(catalog.query_geographies(query)) or ["WLD"]
+                    payload = self._call("wb", "data360_search_indicators",
+                                         {"query": english, "limit": limit, "required_country": ";".join(geos)})
                     for row in payload.get("indicators", []):
-                        areas = countries or [a for a, covered in (row.get("covers_country") or {}).items() if covered]
-                        if len(areas) != 1:
-                            continue
-                        parsed = parse_series_id(f"wb:{row.get('idno', '')}/{areas[0]}")
-                        if parsed:
-                            sid = ":".join(parsed)
-                            hits.setdefault(sid, SearchHit(sid, self._redact(row.get("name")), "", _frequency(row.get("periodicity")), "", "wb", "Discovery metadata; fetch before citing"))
-                except Exception:
-                    logger.warning("Official Data360 search unavailable")
+                        covered = row.get("covers_country") or {}
+                        for area in geos:
+                            parsed = parse_series_id(f"wb:{row.get('idno', '')}/{area}") if covered.get(area) else None
+                            if parsed:
+                                add_live(":".join(parsed), self._redact(row.get("name")), "",
+                                         _frequency(row.get("periodicity")), "", "wb",
+                                         "Discovery metadata; fetch before citing")
+                except Exception as exc:
+                    if not re.search(r"(?i)no indicators found", str(exc)):  # Data360 reports an empty result as an error
+                        logger.warning("Official Data360 search unavailable")
             if len(hits) < limit and "bis" in selected:
                 try:
-                    payload = self._call("bis", "search_dataflows", {"query": query[:300], "limit": limit})
+                    payload = self._call("bis", "search_dataflows", {"query": english or query, "limit": limit})
                     flows = {row.get("flow_ref") for row in payload.get("dataflows", [])}
                     for entry in catalog.CATALOG:
                         if entry.provider != "bis":
                             continue
                         flow = entry.native.split("/")[0]
                         if f"BIS,{flow},{catalog.BIS_FLOWS[flow]['version']}" in flows:
-                            hits.setdefault(entry.series, SearchHit(entry.series, entry.title, entry.units, entry.frequency, "", "bis", "Discovered flow; exact key from curated catalog"))
+                            add_live(entry.series, entry.title, entry.units, entry.frequency, "", "bis",
+                                     "Discovered flow; exact key from curated catalog", _entry_text(entry))
                 except Exception:
                     logger.warning("Official BIS flow discovery unavailable")
             if len(hits) < limit and "usgov" in selected:
                 try:
-                    payload = self._call("usgov", "treasury_search_datasets", {"query": query[:300]})
+                    payload = self._call("usgov", "treasury_search_datasets", {"query": english or query})
                     endpoints = {row.get("endpoint") for row in (payload.get("data") or {}).get("items", [])}
                     for entry in catalog.CATALOG:
-                        if entry.provider != "usgov":
+                        if entry.provider != "usgov" or not catalog.entry_available(entry, env=self._env):
                             continue
                         recipe = catalog.resolve_usgov_recipe(entry.native)
                         if recipe and recipe[1]["endpoint"] in endpoints:
-                            hits.setdefault(entry.series, SearchHit(entry.series, entry.title, entry.units, entry.frequency, "", "usgov", "Discovered endpoint; selected accounting recipe from curated catalog"))
+                            add_live(entry.series, entry.title, entry.units, entry.frequency, "", "usgov",
+                                     "Discovered endpoint; selected accounting recipe from curated catalog",
+                                     _entry_text(entry))
                 except Exception:
                     logger.warning("Official Treasury discovery unavailable")
+            # Weak catalog matches (a topic word, partial coverage) are hints; results sharing no
+            # concept with the query follow them.
+            for hit in ranked:
+                e = hit.entry
+                add_live(e.series, e.title, e.units, e.frequency, "", e.provider, e.notes, _entry_text(e))
             # Flow/endpoint discovery supplies no arbitrary new series keys.
             # Every returned series still has a complete curated fetch recipe.
-            return list(hits.values())[:limit]
+            return [*hits.values(), *(hit for sid, hit in unmatched.items() if sid not in hits)][:limit]
         except Exception:
             logger.warning("Official data search unavailable")
-            return list(hits.values())[:limit]
+            return [*hits.values(), *(hit for sid, hit in unmatched.items() if sid not in hits)][:limit]
 
     def _request(self, series, start, end, transform, max_obs):
         if not self._on or self._closed:
-            raise ValueError("Data sources disabled or closed")
+            raise DataFailure("Data sources disabled or closed", "provider_unavailable", False)
         parsed = parse_series_id(series)
         if not parsed:
             if isinstance(series, str) and series.strip().lower().startswith("usgov:"):
-                raise ValueError("Unknown usgov recipe. Valid recipes: " + ", ".join(catalog.USGOV_RECIPES))
-            raise ValueError("Invalid series ID; use data_search or the official catalog")
+                raise DataFailure("Unknown usgov recipe. Valid recipes: " + ", ".join(catalog.USGOV_RECIPES), "unknown_recipe")
+            raise DataFailure("Invalid series ID; use data_search or the official catalog", "unknown_series")
         provider, native = parsed
         if provider not in self._allowed:
-            raise ValueError("Provider is not enabled")
+            raise DataFailure("Provider is not enabled", "provider_unavailable", False)
         native, _, suffix = native.partition("#")
         if transform is not None and suffix and transform != suffix:
-            raise ValueError("Conflicting transform and series suffix")
+            raise DataFailure("Conflicting transform and series suffix", "invalid_input")
         transform = suffix or transform or ""
         if transform not in ("", "yoy", "pct"):
-            raise ValueError("Unsupported transform; use yoy or pct")
+            raise DataFailure("Unsupported transform; use yoy or pct", "unsupported_transform")
         if not isinstance(max_obs, int) or isinstance(max_obs, bool) or not 1 <= max_obs <= _MAX_ROWS:
-            raise ValueError("max_obs must be an integer from 1 to 5000")
+            raise DataFailure("max_obs must be an integer from 1 to 5000", "invalid_input")
         sid = f"{provider}:{native}"
         entry = catalog.lookup(sid)
         frequency = entry.frequency if entry else ""
@@ -1096,19 +1957,36 @@ class DataSources:
         if provider == "usgov":
             frequency = catalog.resolve_usgov_recipe(native)[1]["frequency"]
         today = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
-        finish = _period(end) if end is not None else today
-        years = 25 if frequency == "A" else 2 if frequency == "D" else 10
-        begin = _period(start) if start is not None else max("1900-01-01", _shift(finish, -12 * years))
+        try:
+            # Publisher projection paths (WEO, GEP) run past today: by default request them
+            # to the end of the sixth following year; history still counts back from today.
+            projecting = _status_policy(sid) in ("weo_vintage", "gep_vintage") or bool(entry and "projections" in entry.topics)
+            finish = _end_period(end) if end is not None else f"{int(today[:4]) + 6}-12-31" if projecting else today
+            # Daily data become months. FRED aggregates the older months server-side (_fred_split),
+            # so its daily series get the ten years monthly series get (enough h-step samples for
+            # an empirical base rate) in two bounded pages; Treasury's unaggregated daily pages
+            # keep two years.
+            years = 25 if frequency == "A" else 2 if frequency == "D" and provider != "fred" else 10
+            begin = _period(start) if start is not None else max("1900-01-01", _shift(min(finish, today), -12 * years))
+            if start is None and frequency == "D":
+                begin = begin[:8] + "01"  # daily data become months: never open on a partial first month
+        except (ValueError, TypeError, OverflowError):
+            raise DataFailure("start/end must be dates such as YYYY-MM-DD", "invalid_input") from None
+        # Providers reject windows before their earliest data (USAspending: FY2008).
+        floor = _min_start(provider, sid, native)
+        begin = max(begin, floor) if floor else begin
         if begin > finish or date.fromisoformat(begin).year < 1900 or date.fromisoformat(finish).year > 2100:
-            raise ValueError("Invalid start/end window (supported years 1900–2100)")
+            raise DataFailure("Invalid start/end window (supported years 1900–2100"
+                              + (f"; no data before {floor}" if floor else "") + ")", "invalid_window")
         warmup = 12 if transform == "yoy" else {"A": 12, "Q": 3, "M": 1, "D": 1, "W": 1}.get(frequency, 12) if transform == "pct" else 0
         if frequency == "W" and transform == "yoy":
-            raise ValueError("Weekly yoy is unsupported without a verified week-alignment policy")
-        fetch_start = max("1900-01-01", _shift(begin, -warmup)) if warmup else begin
+            raise DataFailure("Weekly yoy is unsupported without a verified week-alignment policy", "unsupported_transform")
+        fetch_start = max("1900-01-01", floor or "", _shift(begin, -warmup)) if warmup else begin
         canonical = sid + ("#" + transform if transform else "")
         key = hashlib.sha256(_bytes([NORMALIZATION_POLICY_VERSION, canonical, begin, finish, max_obs])).hexdigest()
         return {"series": canonical, "base": sid, "provider": provider, "native": native, "start": begin, "end": finish,
-                "fetch_start": fetch_start, "transform": transform, "max_obs": max_obs, "frequency": frequency, "key": key}
+                "fetch_start": fetch_start, "transform": transform, "max_obs": max_obs, "frequency": frequency, "key": key,
+                "default_window": start is None}
 
     def _cached(self, req):
         key = req["key"]
@@ -1138,18 +2016,54 @@ class DataSources:
     def _save_cache(self, req, result):
         timestamp, data = self._clock(), result.to_dict()
         with self._lock:
+            self._memory.pop(req["key"], None)
             self._memory[req["key"]] = timestamp, data
+            while len(self._memory) > _MEMORY_MAX:
+                self._memory.pop(next(iter(self._memory)))
         try:
             _atomic(_safe_path(self._cache_dir, req["key"] + ".json"), _bytes({"key": req["key"], "stored_at": timestamp, "series": data, "sha256": hashlib.sha256(_bytes(data)).hexdigest()}))
         except (ValueError, OSError):
             logger.warning("Official data cache unavailable; fetched result retained")
 
+    def _bounded(self, deadline_s: float | None):
+        """Install a thread-local deadline for one call; returns the one it replaced.
+
+        ``None`` keeps the caller's current deadline (unbounded when none). A
+        nested bound never extends an outer one.
+        """
+        previous = getattr(self._local, "deadline", None)
+        if deadline_s is None:
+            return previous
+        if isinstance(deadline_s, bool) or not isinstance(deadline_s, (int, float)) or not math.isfinite(deadline_s):
+            raise DataFailure("deadline_s must be a finite number of seconds", "invalid_input")
+        if deadline_s <= 0:
+            raise TimeoutError("Data request deadline exceeded")
+        deadline = time.monotonic() + deadline_s
+        self._local.deadline = deadline if previous is None else min(previous, deadline)
+        return previous
+
     def get(self, series: str, *, start: str | None = None, end: str | None = None,
-            transform: str | None = None, max_obs: int = 240) -> Series | DataError:
+            transform: str | None = None, max_obs: int = 240, deadline_s: float | None = None) -> Series | DataError:
+        """One normalized series or a DataError; ``deadline_s`` bounds every provider wait."""
+        try:
+            previous = self._bounded(deadline_s)
+        except Exception as exc:
+            return self._error(series, exc)
+        try:
+            return self._get(series, start, end, transform, max_obs)
+        finally:
+            self._local.deadline = previous
+
+    def _get(self, series, start, end, transform, max_obs) -> Series | DataError:
         try:
             req = self._request(series, start, end, transform, max_obs)
             with self._lock:
                 lock = self._locks.setdefault(req["key"], threading.Lock())
+                if len(self._locks) > _MEMORY_MAX:
+                    # Long-lived processes (backend, monitor) see unbounded windows; idle
+                    # single-flight locks are recreated on demand.
+                    for key in [k for k, v in self._locks.items() if k != req["key"] and not v.locked()]:
+                        del self._locks[key]
             left = self._remaining()
             if not lock.acquire(timeout=left if left is not None else -1):
                 raise TimeoutError("Data request deadline exceeded")
@@ -1185,12 +2099,23 @@ class DataSources:
             finally:
                 lock.release()
         except Exception as exc:
-            return self._error(series, exc, isinstance(exc, (TimeoutError, OSError)))
+            return self._error(series, exc)
 
     def get_many(self, ids: Sequence[str], *, deadline_s: float, **kw) -> dict[str, Series | DataError]:
-        ids = list(dict.fromkeys(ids))[:200]
-        if not isinstance(deadline_s, (float, int)) or not math.isfinite(deadline_s) or deadline_s <= 0:
-            return {sid: self._error(sid, "Data request deadline exceeded", True) for sid in ids}
+        """Each id's Series or DataError within one deadline; never raises."""
+        try:
+            members = [] if isinstance(ids, (str, bytes)) or ids is None else list(ids)
+        except TypeError:
+            members = []
+        invalid = {_clean(m, 200) or "invalid": self._error(m, DataFailure("Series IDs must be strings", "invalid_input"))
+                   for m in members if not isinstance(m, str)}
+        ids = list(dict.fromkeys(m for m in members if isinstance(m, str)))[:200]
+        unexpected = sorted(set(kw) - {"start", "end", "transform", "max_obs"})
+        if unexpected:
+            failure = DataFailure("Unsupported argument(s): " + ", ".join(_clean(k, 40) for k in unexpected[:5]), "invalid_input")
+            return {**invalid, **{sid: self._error(sid, failure) for sid in ids}}
+        if isinstance(deadline_s, bool) or not isinstance(deadline_s, (float, int)) or not math.isfinite(deadline_s) or deadline_s <= 0:
+            return {**invalid, **{sid: self._error(sid, TimeoutError("Data request deadline exceeded")) for sid in ids}}
         deadline = time.monotonic() + deadline_s
         output, bls = {}, []
         ordinary = []
@@ -1260,46 +2185,81 @@ class DataSources:
         for future in pending:
             future.cancel()
         pool.shutdown(wait=False, cancel_futures=True)
-        return {sid: output.get(sid, self._error(sid, "Data request deadline exceeded", True)) for sid in ids}
+        return {**invalid, **{sid: output.get(sid) or self._error(sid, TimeoutError("Data request deadline exceeded")) for sid in ids}}
 
     def _base(self, req, **metadata):
         entry = catalog.lookup(req["base"])
         values = {name: getattr(entry, name) for name in ("title", "title_zh", "units", "frequency", "seasonal_adjustment", "geography", "source_url", "notes")} if entry else {}
         values.update({k: v for k, v in metadata.items() if v not in (None, "")})
-        return Series(series=req["base"], provider=req["provider"], provider_name=catalog.PROVIDERS[req["provider"]]["name"],
+        if entry is not None and entry.title:
+            # Curated titles name the economy and stay stable across provider wording; the
+            # provider's own title is kept in provenance.
+            provider_title = _clean(metadata.get("title") or "")
+            values["title"], values["title_zh"] = entry.title, entry.title_zh or values.get("title_zh", "")
+            if provider_title and provider_title != entry.title:
+                values["provenance"] = {**values.get("provenance", {}), "provider_title": provider_title}
+        return Series(series=req["base"], provider=req["provider"], provider_name=catalog.provider_name(req["provider"], req["native"]),
                       route="mcp", retrieved_at=datetime.fromtimestamp(self._clock(), timezone.utc).isoformat(), **values)
+
+    def _monthly(self, req, s) -> tuple[list[Observation], dict]:
+        """Native daily points as calendar months, with each month's coverage in periods.
+
+        Stocks and policy targets (catalog aggregation "eop") keep the month's last value;
+        other series average the available days. A month is complete only when the request
+        covers all of it, the provider's history does too (_LATE_FIRST_DAY_DAYS), it ended
+        before retrieval and later native data (or two weeks) show it settled; any other month
+        is a partial, 'preliminary' period. Provenance keeps the last native daily point,
+        which forecast questions usually reference.
+        """
+        method = _aggregation(req)
+        today = datetime.fromtimestamp(self._clock(), timezone.utc).date()
+        months: dict[str, list[Observation]] = {}
+        for o in s.observations:
+            months.setdefault(o.date[:7] + "-01", []).append(o)
+        last_native = s.observations[-1].date if s.observations else ""
+        first_native = s.observations[0].date if s.observations else ""
+        observations, periods = [], {}
+        for start, rows in sorted(months.items()):
+            end = (date.fromisoformat(_shift(start, 1)) - timedelta(days=1)).isoformat()
+            covered = (max(start, req["fetch_start"]), min(end, req["end"]))
+            if start == first_native[:8] + "01" and (
+                    date.fromisoformat(first_native) - date.fromisoformat(covered[0])).days > _LATE_FIRST_DAY_DAYS:
+                covered = (first_native, covered[1])  # the provider's history opens inside this month
+            settled = last_native > end or today > date.fromisoformat(end) + timedelta(days=14)
+            complete = covered == (start, end) and end < today.isoformat() and settled
+            values = [o.value for o in rows if o.value is not None]
+            value = (values[-1] if method == "eop" else sum(values) / len(values)) if values else None
+            flag = ";".join(sorted({o.flag for o in rows if o.flag})) if complete else "preliminary"
+            observations.append(Observation(start, value, flag))
+            periods[start] = {"calendar": "calendar_month", "label": start[:7], "start": start, "end": end,
+                              "covered_start": covered[0], "covered_end": covered[1], "complete": complete}
+        latest = next((o for o in reversed(s.observations) if o.value is not None), None)
+        words = "end-of-month values (last available daily observation)" if method == "eop" else "means of available daily observations"
+        s.frequency = "M"
+        s.provenance.update({"aggregation": f"Monthly {words}; a month still open at retrieval is partial",
+                             "aggregation_method": method, "resolution_safe": False})
+        if latest is not None:
+            s.provenance["latest_daily"] = {"date": latest.date, "value": latest.value}
+        # First, so a long provider note cannot truncate it away.
+        s.notes = _clean(f"Daily data aggregated to monthly {words}; the open month is partial. {s.notes}")
+        return observations, periods
 
     def _finish(self, req, s):
         native_frequency = s.frequency
         if not s.observations:
-            raise ValueError("Provider returned no observations for the requested series")
+            raise DataFailure("Provider returned no observations for the requested series", "not_found")
         periods = s.provenance.get("periods", {})
         def intersects(o, start):
             return o.date <= req["end"] and periods.get(o.date, {}).get("end", o.date) >= start
         s.observations = [o for o in s.observations if intersects(o, req["fetch_start"])]
         if s.frequency == "D":
-            monthly = {}
-            for o in s.observations:
-                monthly.setdefault(o.date[:7] + "-01", []).append(o)
-            s.observations = [Observation(d, sum(o.value for o in rows if o.value is not None) / sum(o.value is not None for o in rows) if any(o.value is not None for o in rows) else None,
-                                          ";".join(sorted({o.flag for o in rows if o.flag}))) for d, rows in sorted(monthly.items())]
-            s.frequency = "M"
-            s.provenance["aggregation"] = "Arithmetic mean of available daily observations; partial months possible"
-            s.provenance["resolution_safe"] = False
-            periods = {}
-            for d, rows in monthly.items():
-                finish = (date.fromisoformat(_shift(d, 1)) - timedelta(days=1)).isoformat()
-                periods[d] = {"calendar": "calendar_month", "label": d[:7], "start": d, "end": finish,
-                              "covered_start": max(d, req["fetch_start"]), "covered_end": min(finish, req["end"]),
-                              "complete": False}
-            s.provenance["periods"] = periods
-            s.notes = _clean(s.notes + " Daily data aggregated to monthly mean; partial months possible.")
+            s.observations, periods = self._monthly(req, s)
         s.provenance["native_frequency"] = native_frequency
         if req["transform"]:
             if s.frequency == "W" and req["transform"] == "yoy":
-                raise ValueError("Weekly yoy is unsupported without a verified week-alignment policy")
+                raise DataFailure("Weekly yoy is unsupported without a verified week-alignment policy", "unsupported_transform")
             if s.series == "usgov:spending/total" and any(not periods.get(o.date, {}).get("complete") for o in s.observations):
-                raise ValueError("Cannot transform partial fiscal-year aggregates")
+                raise DataFailure("Cannot transform partial fiscal-year aggregates", "unsupported_transform")
             original = {o.date: o for o in s.observations}
             transformed = []
             for o in s.observations:
@@ -1310,7 +2270,7 @@ class DataSources:
                 else:
                     step = {"M": -1, "Q": -3, "A": -12}.get(s.frequency)
                     if step is None:
-                        raise ValueError("Cannot transform a series of unknown frequency")
+                        raise DataFailure("Cannot transform a series of unknown frequency", "unsupported_transform")
                     before = _shift(o.date, step)
                 prior = original.get(before)
                 value = (o.value / prior.value - 1) * 100 if o.value is not None and prior and prior.value not in (None, 0) else None
@@ -1323,7 +2283,7 @@ class DataSources:
         admitted_count = sum(intersects(o, req["start"]) for o in s.observations)
         s.observations = [o for o in s.observations if intersects(o, req["start"])][-req["max_obs"]:]
         if not s.observations:
-            raise ValueError("No observations in requested window")
+            raise DataFailure("No observations in requested window", "invalid_window")
         receipts = getattr(self._local, "receipts", [])
         s.provenance.setdefault("metadata_origin", "provider_and_curated_catalog")
         if periods:
@@ -1336,44 +2296,142 @@ class DataSources:
                              "tool_responses": receipts, "response_sha256": hashlib.sha256(_bytes(receipts)).hexdigest(),
                              "delivered_start": s.observations[0].date, "delivered_end": s.observations[-1].date,
                              "retrieval_route": s.route})
-        # Redact all provider-originated strings before any disk/cache write.
+        # Redact all provider-originated strings before any disk/cache write. Observation
+        # dates and values are validated data, never provider prose, so they are not scrubbed.
         def scrub(value):
             if isinstance(value, str):
-                text = value
-                for key, secret in self._env.items():
-                    if _SECRET.search(key) and secret:
-                        text = text.replace(secret, "[redacted]")
+                text = self._scrub(value)
                 return _clean(text, max(len(text), 1))
             if isinstance(value, list):
                 return [scrub(v) for v in value]
             if isinstance(value, dict):
-                return {k: "[redacted]" if _SECRET.search(k) else scrub(v) for k, v in value.items()}
+                return {k: "[redacted]" if _SECRET.search(k) else v if k == "observations" else scrub(v) for k, v in value.items()}
             return value
         return Series.from_dict(scrub(s.to_dict()))
 
     def _fetch_fred(self, req):
-        native = req["native"]
-        if not self._env.get("FRED_API_KEY", "").strip():
-            return self._fred_csv(req)
-        args = {"series_id": native, "observation_start": req["fetch_start"], "observation_end": req["end"],
-                "units": "lin", "sort_order": "desc", "offset": 0, "limit": _MAX_ROWS}
+        """FRED API route while a key works, else the keyless fredgraph CSV.
+
+        A rejected key switches this process to CSV (providers() reports key_invalid), and so
+        does a FRED MCP server that cannot run (not built, crashed past its restart): the CSV
+        route needs neither. A rate limit, 5xx or timeout falls back to CSV for curated ids
+        only (their catalog title and units stand in for the API metadata); other ids fail
+        retryable.
+        """
+        entry = catalog.lookup(req["base"])
+        daily = bool(entry and entry.frequency == "D")
+        reason, failure = ("key_invalid" if self._key_rejected("fred") else ""), None
+        if self._key("fred"):
+            try:
+                series = self._fred_window(req, self._fred_api, daily)
+                if entry is None:
+                    self._fred_geography(req, series)
+                return series
+            except (ValueError, TimeoutError) as exc:  # DataFailure is a ValueError
+                code = _failure_class(exc)[0]
+                if code == "key_invalid":
+                    self._reject_key("fred")
+                    reason = code
+                elif self._server_down("fred"):
+                    reason, failure = "provider_unavailable", exc
+                elif code in _FRED_FALLBACK_CODES and entry is not None:
+                    reason, failure = code, exc
+                else:
+                    raise
+            self._local.receipts = []  # receipts describe the delivered route only
         try:
-            payload = self._call("fred", "fred_get_series", args)
-        except ValueError as exc:
-            message = str(exc)
-            operational = re.search(r"(?i)\b429\b|\b5\d\d\b|rate.?limit|quota|timed?\s*out|timeout|unavailable", message)
-            auth = re.search(r"(?i)\b40[13]\b|unauthoriz|forbidden|(?:invalid|rejected|missing)\s+(?:api\s*)?key|(?:api\s*)?key\s+(?:is\s+)?(?:invalid|rejected|missing)", message)
-            auth = auth or re.search(r"(?i)\bapi_key\s+is\s+not\s+registered\b", message)
-            if auth and not operational:
-                return self._fred_csv(req)
+            series = self._fred_window(req, self._fred_csv, daily)
+        except Exception as exc:
+            if failure is not None:
+                raise DataFailure(f"{_clean(failure, 150)}; the keyless FRED CSV fallback failed too "
+                                  f"({_clean(exc, 100)})", reason, True) from None
             raise
+        if reason:
+            series.provenance["fallback_reason"] = reason
+        return series
+
+    def _fred_window(self, req, fetch, daily: bool):
+        """One native request, or for a long native-daily window FRED's own monthly aggregation
+        (catalog avg/eop) for older months plus native days for the latest months, so the open
+        month stays partial and the last daily value is kept."""
+        split = ""
+        if daily:
+            split = self._fred_split(req)
+        if not split:
+            try:
+                return fetch(req, req["fetch_start"], req["end"], "")
+            except _DailyOverflow:
+                split = self._fred_split(req)
+                if not split:
+                    raise DataFailure("FRED history exceeds bound; narrow start/end", "invalid_window") from None
+        method = _aggregation(req)
+        start = req["fetch_start"]
+        first = start if start.endswith("-01") else _shift(start[:8] + "01", 1)  # whole months only
+        recent = fetch(req, split, req["end"], "")
+        recent.frequency = recent.frequency or "D"  # split only for native-daily data
+        if first < split:
+            older = fetch(req, first, (date.fromisoformat(split) - timedelta(days=1)).isoformat(), method)
+            if any(o.date[8:] != "01" or o.date >= split for o in older.observations):
+                raise ValueError("FRED monthly aggregation returned non-month periods")
+            recent.observations = older.observations + recent.observations
+            words = "end-of-month values" if method == "eop" else "monthly means"
+            recent.provenance["server_aggregation"] = {
+                "method": method, "through": (date.fromisoformat(split) - timedelta(days=1)).isoformat(),
+                "route": recent.route, "request": older.api_url}
+            recent.notes = _clean(f"Months before {split[:7]} are FRED's own {words}. {recent.notes}")
+        return recent
+
+    def _fred_geography(self, req, series) -> None:
+        """Geography of a FRED series outside the catalog, from FRED's own tags: the exact id
+        among series tagged 'nation' and 'usa' is a United States national series. A FRED title
+        that names no economy (US national series, but also the Nikkei 225) never decides it.
+        Best effort and bounded to half the time left (at most _FRED_TAGS_S), so the lookup can
+        never cost the fetched series its deadline; any other answer or failure leaves the
+        geography unknown."""
+        if series.geography:
+            return
+        args = {"search_text": req["native"], "search_type": "series_id", "tag_names": "nation;usa", "limit": 25}
+        try:
+            left = self._remaining()
+            previous = self._bounded(_FRED_TAGS_S if left is None else min(_FRED_TAGS_S, left / 2))
+            try:
+                payload = self._call("fred", "fred_search", args)
+            finally:
+                self._local.deadline = previous
+            results = payload.get("results") if isinstance(payload, dict) else None
+            if isinstance(results, list) and any(isinstance(r, dict) and r.get("id") == req["native"] for r in results):
+                series.geography = "USA"
+                series.provenance["geography_basis"] = "FRED series tags: nation, usa"
+        except Exception:  # enrichment never fails a fetched series
+            logger.info("Official data: FRED geography tags unavailable for %s", req["native"])
+
+    @staticmethod
+    def _fred_split(req) -> str:
+        """First day of the native-daily part of a daily window, else '': a window too long for one
+        daily page, or the ten-year default window (no start given), keeps native days for the
+        latest _FRED_RECENT_MONTHS months only; an explicit window that fits one page is not split."""
+        span = (date.fromisoformat(req["end"]) - date.fromisoformat(req["fetch_start"])).days
+        if span <= _FRED_DAILY_SPAN_DAYS and not req.get("default_window"):
+            return ""
+        split = _shift(req["end"][:8] + "01", -_FRED_RECENT_MONTHS)
+        return split if split > req["fetch_start"] else ""
+
+    def _fred_api(self, req, start: str, end: str, method: str):
+        native = req["native"]
+        args = {"series_id": native, "observation_start": start, "observation_end": end,
+                "units": "lin", "sort_order": "desc", "offset": 0, "limit": _MAX_ROWS}
+        if method:
+            args.update(frequency="m", aggregation_method=method)
+        payload = self._call("fred", "fred_get_series", args)
         if payload.get("series_id") != native or not isinstance(payload.get("data"), list):
             raise ValueError("FRED response series identity mismatch")
         count, offset, limit = (payload.get(k) for k in ("total_observations", "data_offset", "data_limit"))
         if any(not isinstance(v, int) or isinstance(v, bool) for v in (count, offset, limit)) or count < 0 or offset != 0 or limit != _MAX_ROWS:
             raise ValueError("FRED native pagination metadata is invalid")
         if count > _MAX_ROWS:
-            raise ValueError("FRED history exceeds bound; narrow start/end")
+            if not method and _frequency(payload.get("frequency")) == "D":
+                raise _DailyOverflow("FRED daily history exceeds one page", "invalid_window")
+            raise DataFailure("FRED history exceeds bound; narrow start/end", "invalid_window")
         if len(payload["data"]) != count:
             raise ValueError("FRED native page is incomplete")
         observations = [Observation(r["date"], r["value"]) for r in payload["data"]]
@@ -1389,12 +2447,18 @@ class DataSources:
                           frequency=_frequency(payload.get("frequency")), seasonal_adjustment=_seasonal(payload.get("seasonal_adjustment")),
                           observations=observations, source_url=f"https://fred.stlouisfed.org/series/{native}",
                           api_url="https://api.stlouisfed.org/fred/series/observations?" + urlencode(args),
-                          notes=_clean(payload.get("notes")),
+                          # Curated pitfalls outrank FRED's release boilerplate (kept in provenance),
+                          # so the API and CSV routes describe a curated series alike.
+                          notes="" if entry is not None and entry.notes else _clean(payload.get("notes")),
                           provenance={"metadata_fields": authority, "native_complete": True, "native_count": count,
+                                      **({"provider_notes": _clean(payload.get("notes"))} if entry is not None and entry.notes else {}),
                                       "vintage_status": "not supplied by native handler", "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text"})
 
-    def _fred_csv(self, req):
-        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?" + urlencode({"id": req["native"], "cosd": req["fetch_start"], "coed": req["end"]})
+    def _fred_csv(self, req, start: str, end: str, method: str):
+        params = {"id": req["native"], "cosd": start, "coed": end}
+        if method:
+            params.update(fq="Monthly", fam=method)
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?" + urlencode(params)
         left = self._remaining()
         raw = self._http(url, timeout=min(left, 15) if left is not None else 15)
         self._remaining()
@@ -1411,8 +2475,13 @@ class DataSources:
                 raise ValueError("FRED CSV has malformed rows")
             rows.append(Observation(row[reader.fieldnames[0]], row[req["native"]]))
             if len(rows) > _MAX_ROWS:
-                raise ValueError("FRED CSV observation limit exceeded")
-        self._local.receipts = [{"tool": "fred_csv", "sha256": hashlib.sha256(raw).hexdigest()}]
+                days = (date.fromisoformat(rows[-1].date) - date.fromisoformat(rows[0].date)).days
+                if not method and days <= 3 * len(rows):  # business-day or 7-day spacing
+                    raise _DailyOverflow("FRED CSV daily history exceeds one page", "invalid_window")
+                raise DataFailure("FRED CSV observation limit exceeded; narrow start/end", "invalid_window")
+        receipts = getattr(self._local, "receipts", None)
+        if receipts is not None:
+            receipts.append({"tool": "fred_csv", "sha256": hashlib.sha256(raw).hexdigest()})
         series = self._base(req, observations=rows, source_url=f"https://fred.stlouisfed.org/series/{req['native']}", api_url=url,
                             provenance={"metadata_origin": "curated_catalog" if catalog.lookup(req["base"]) else "unknown",
                                         "vintage_status": "not available in keyless CSV"})
@@ -1422,7 +2491,7 @@ class DataSources:
         return series
 
     def _bls_quota(self):
-        if self._env.get("BLS_API_KEY", "").strip():
+        if self._key("bls"):
             return
         # flock serializes reservations across API instances/processes; reserve
         # before dispatch, so crashes cannot refund an already sent request.
@@ -1444,11 +2513,52 @@ class DataSources:
                         if old.get("day") == today:
                             value = old
                     except (ValueError, TypeError, KeyError):
-                        raise ValueError("BLS quota record corrupt; quota cannot safely be established") from None
+                        raise DataFailure("BLS quota record corrupt; quota cannot safely be established", "provider_unavailable", False) from None
                 if value["count"] >= 20:
-                    raise ValueError("BLS keyless daily quota reached (20 requests); retry tomorrow")
+                    raise DataFailure("BLS keyless daily quota reached (20 requests); retry tomorrow", "quota_exhausted")
                 value["count"] += 1
                 _atomic(path, _bytes(value))
+
+    def _bls_call(self, args):
+        """One get_multiple_series request. A rejected registration key respawns the BLS server
+        without it (hub.restart_without) and the request is retried once under the keyless quota."""
+        keyed = bool(self._key("bls"))
+        self._bls_quota()
+        payload = self._call("bls", "get_multiple_series", args)
+        if payload.get("status") == "REQUEST_SUCCEEDED":
+            return payload
+        failure = ValueError(self._redact("BLS request failed: " + str(payload.get("message", "invalid status"))))
+        restart = getattr(self._get_hub(), "restart_without", None)
+        if not keyed or _failure_class(failure)[0] != "key_invalid" or restart is None:
+            raise failure
+        self._reject_key("bls")
+        restart("bls", ("BLS_API_KEY",))  # False when a concurrent request already respawned it
+        self._remaining()
+        self._bls_quota()
+        payload = self._call("bls", "get_multiple_series", args)
+        if payload.get("status") != "REQUEST_SUCCEEDED":
+            raise ValueError(self._redact("BLS keyless retry failed: " + str(payload.get("message", "invalid status"))))
+        return payload
+
+    def _bls_messages(self, payload, requested, invalid: set) -> list[str]:
+        """Per-series BLS notices returned for provenance: 'No Data Available for Series X Year: Y'
+        (not yet published or before coverage) and 'Unable to get Catalog Data for series X'
+        (descriptive metadata only; curated titles and units apply). 'Invalid Series for Series X'
+        marks X invalid in ``invalid`` without failing the batch; any other message fails it."""
+        messages = payload.get("message") or []
+        notices = []
+        for text in [messages] if isinstance(messages, str) else messages:
+            text = str(text).strip()
+            benign = (re.fullmatch(r"No Data Available for Series (\S+) Year: \d{4}", text)
+                      or re.fullmatch(r"Unable to get Catalog Data for series (\S+)", text, re.I))
+            bad = re.fullmatch(r"(?:Invalid Series for Series|Series does not exist for Series) (\S+)", text)
+            if benign and benign[1] in requested:
+                notices.append(_clean(text, 120))
+            elif bad and bad[1] in requested:
+                invalid.add(bad[1])
+            elif text:
+                raise ValueError(self._redact("BLS response has warnings: " + text))
+        return notices
 
     def _bls_batch(self, requests):
         # Grouping by explicit windows retains true 25-ID batches even when
@@ -1460,17 +2570,14 @@ class DataSources:
         for (first, last), group in groups.items():
             gathered = {r["native"]: [] for r in group}
             metadata, raw_status, omitted, chunks = {}, {r["native"]: {} for r in group}, set(), []
+            invalid: set[str] = set()
             high = int(last)
             while high >= int(first):
                 low = max(int(first), high - 9)
                 self._remaining()
-                self._bls_quota()
                 args = {"series_ids": list(gathered), "start_year": str(low), "end_year": str(high)}
-                payload = self._call("bls", "get_multiple_series", args)
-                if payload.get("status") != "REQUEST_SUCCEEDED":
-                    raise ValueError(self._redact("BLS request failed: " + str(payload.get("message", "invalid status"))))
-                if payload.get("message"):
-                    raise ValueError(self._redact("BLS response has warnings: " + str(payload["message"])))
+                payload = self._bls_call(args)
+                notices = self._bls_messages(payload, gathered, invalid)
                 rows = payload.get("Results", {}).get("series")
                 if not isinstance(rows, list):
                     raise ValueError("BLS returned no series records")
@@ -1493,21 +2600,30 @@ class DataSources:
                             raise ValueError("BLS period frequency is unsupported")
                         month = int(period[1:]) if period[0] == "M" else (int(period[1:]) - 1) * 3 + 1 if period[0] == "Q" else 1
                         notes = [{"code": _clean(f.get("code", ""), 30), "text": _clean(f.get("text", ""))} for f in item.get("footnotes", []) if isinstance(f, dict) and (f.get("code") or f.get("text"))]
-                        flag_values = ["preliminary" if f["code"] == "P" else "observed" if f["code"] == "R" else "unknown" for f in notes]
+                        # Only code P marks a status (preliminary). Other footnotes are notes on a
+                        # published value (R revised, numbered notes such as CPS population
+                        # controls or a lapse in appropriations) and stay in raw_status.
+                        flag_values = ["preliminary" if f["code"].upper() == "P" else "observed" for f in notes]
                         flag = _status_flag(";".join(flag_values)) if flag_values else "observed"
                         normalized_date = date(int(item["year"]), month, 1).isoformat()
                         raw_status[native][normalized_date] = notes
                         gathered[native].append((Observation(normalized_date, item.get("value"), flag), period[0]))
                 omitted.update(set(gathered) - seen)
-                chunks.append({"start_year": low, "end_year": high, "returned_ids": sorted(seen)})
+                chunk = {"start_year": low, "end_year": high, "returned_ids": sorted(seen)}
+                if notices:
+                    chunk["notices"] = notices
+                chunks.append(chunk)
                 high = low - 1
             for req in group:
+                if req["native"] in invalid:
+                    output[req["series"]] = self._error(req["series"], DataFailure("BLS reports an invalid series ID", "unknown_series"))
+                    continue
                 if req["native"] in omitted:
-                    output[req["series"]] = self._error(req["series"], "BLS omitted the requested series from at least one year chunk")
+                    output[req["series"]] = self._error(req["series"], DataFailure("BLS omitted the requested series from at least one year chunk", "not_found"))
                     continue
                 rows = gathered[req["native"]]
                 if not rows:
-                    output[req["series"]] = self._error(req["series"], "BLS returned no observations for this series")
+                    output[req["series"]] = self._error(req["series"], DataFailure("BLS returned no observations for this series", "not_found"))
                     continue
                 frequencies = {freq for _, freq in rows}
                 if len(frequencies) != 1 or req["frequency"] and req["frequency"] not in frequencies:
@@ -1556,15 +2672,23 @@ class DataSources:
         dims = dict(zip(meta["dims"], key.split(".")))
         ref = f"BIS,{flow},{meta['version']}"
         args = {"flow_ref": ref, "key": key, "start_period": req["fetch_start"], "end_period": req["end"], "limit": _MAX_ROWS}
-        payload = self._call("bis", "fetch_dataset", args)
+        try:
+            payload = self._call("bis", "fetch_dataset", args)
+        except _ToolFailure as exc:
+            failure = _bis_failure(exc.detail or str(exc), req)
+            if failure is None:
+                raise
+            raise failure from None
         if payload.get("flow_ref") != ref:
             raise ValueError("BIS returned a different flow/version")
         observations, attributes = self._sdmx_rows(req, payload, dims)
-        return self._base(req, observations=observations, frequency=_frequency(dims.get("FREQ")),
-                          units=_sdmx_units(req, attributes),
+        raw_status = attributes.pop("raw_status", {})
+        units, native_unit = _sdmx_units(req, attributes, dims)
+        return self._base(req, observations=observations, frequency=_frequency(dims.get("FREQ")), units=units,
                           source_url=f"https://data.bis.org/topics/{meta['topic']}/BIS,{flow},{meta['version']}/{key}",
                           api_url=f"https://stats.bis.org/api/v2/data/dataflow/BIS/{flow}/{meta['version']}/{key}?" + urlencode({"startPeriod": req["fetch_start"], "endPeriod": req["end"], "format": "csv", "labels": "both"}),
-                          provenance={"raw_status": attributes.pop("raw_status", {}), "attributes": attributes, "flow_ref": ref, "dimensions": dims})
+                          provenance={"raw_status": raw_status, "attributes": attributes, "flow_ref": ref, "dimensions": dims,
+                                      "native_unit": native_unit})
 
     def _fetch_imf(self, req):
         flow, key = req["native"].split("/")
@@ -1588,18 +2712,28 @@ class DataSources:
         if payload.get("database_id") != flow:
             raise ValueError("IMF returned no data or a different database/vintage")
         observations, attributes = self._sdmx_rows(req, payload, {k: v[0] for k, v in filters.items()})
+        raw_status = attributes.pop("raw_status", {})
+        units, native_unit = _sdmx_units(req, attributes, dict(zip(meta["dims"], key.split("."))))
         projection_family = meta["base_flow"] == "WEO"
+        provenance = {"raw_status": raw_status, "attributes": attributes, "database_id": flow,
+                      "dimensions": {k: v[0] for k, v in filters.items()}, "native_unit": native_unit,
+                      "projection_status": "per-observation only; no inferred cutoff", "vintage_availability": "not supplied"}
+        projection_from = ""
         if projection_family:
             for obs in observations:
                 if not obs.flag:
                     obs.flag = "unknown"
-        return self._base(req, observations=observations, frequency=req["frequency"],
-                          units=_sdmx_units(req, attributes),
+            # The IMF server strips status; the vintage flow names its year, the live flow
+            # has no release date, so the retrieval year stands in (fix contract §1.4).
+            named = re.fullmatch(r"WEO_(\d{4})_(?:APR|OCT)_VINTAGE", flow)
+            vintage_year = int(named[1]) if named else datetime.fromtimestamp(self._clock(), timezone.utc).year
+            provenance.update({"vintage_year": vintage_year, "projection_status": "inferred from the vintage year",
+                               "vintage_basis": f"vintage flow {flow}" if named else "retrieval year (the live WEO flow carries no release date)"})
+            projection_from = f"{vintage_year}-01-01"
+        return self._base(req, observations=observations, frequency=req["frequency"], units=units,
                           source_url=f"https://data.imf.org/en/datasets/{meta['agency']}:{meta['base_flow']}",
-                          vintage=flow if "_VINTAGE" in flow else "",
-                          notes="Observation status is unknown where not supplied; WEO mixes history, estimates and projections." if projection_family else "",
-                          provenance={"raw_status": attributes.pop("raw_status", {}), "attributes": attributes, "database_id": flow, "dimensions": {k: v[0] for k, v in filters.items()},
-                                      "projection_status": "per-observation only; no inferred cutoff", "vintage_availability": "not supplied"})
+                          vintage=flow if "_VINTAGE" in flow else "", projection_from=projection_from,
+                          notes=_WEO_STATUS_NOTE if projection_family else "", provenance=provenance)
 
     def _fetch_wb(self, req):
         indicator, country = req["native"].split("/")
@@ -1648,7 +2782,7 @@ class DataSources:
             if page_frequency and page_frequency != "A":
                 raise ValueError("Data360 page periodicity conflicts with annual series")
             if "measurement_unit" in page_metadata:
-                if _wb_unit_parts(str(page_metadata["measurement_unit"])) != _wb_unit_parts(str(metadata.get("measurement_unit", ""))):
+                if _unit_text(page_metadata["measurement_unit"]) != _unit_text(metadata.get("measurement_unit", "")):
                     raise ValueError("Data360 page units contradict separate metadata")
             rows.extend(page)
             page_receipts.append({"offset": offset, "count": count, "has_more": has_more, "total_count": total})
@@ -1663,19 +2797,18 @@ class DataSources:
             offset = new_offset
         else:
             raise ValueError("Data360 pagination limit reached; narrow the requested window")
-        observations, per_row_units = [], set()
-        projection_family = database in ("IMF_WEO", "WB_GEP")
+        observations, per_row_units, breakdowns = [], set(), {}
         for row in rows:
             if row.get("REF_AREA") != country:
                 raise ValueError("Data360 returned a different geography")
-            if any(row.get(k) not in (None, "", "_T", "_Z") for k in ("SEX", "AGE", "URBANISATION", "COMP_BREAKDOWN_1", "COMP_BREAKDOWN_2")):
-                raise ValueError("Data360 returned ambiguous disaggregations")
+            for k in _WB_BREAKDOWNS:
+                breakdowns.setdefault(k, set()).add("" if row.get(k) in (None, "", "_T", "_Z") else str(row[k]))
             if "OBS_VALUE" not in row:
                 raise ValueError("Data360 observation value missing")
             observations.append(Observation(_native_period(row["TIME_PERIOD"], "A"), row["OBS_VALUE"], "unknown"))
-            row_attributes = {k: [str(row[k])] for k in ("UNIT_MEASURE", "UNIT_MEASURE_NAME", "UNIT_MULT") if row.get(k) not in (None, "")}
             if observations[-1].value is not None:
-                per_row_units.add(_wb_unit_parts(_wb_units(row_attributes, metadata)))
+                per_row_units.add(_native_unit({k: [row[k]] for k in ("UNIT_MEASURE", "UNIT_MEASURE_NAME", "UNIT_MULT")
+                                                if row.get(k) not in (None, "")}, "UNIT_MEASURE_NAME"))
             for k in ("UNIT_MEASURE", "UNIT_MEASURE_NAME", "UNIT_MULT"):
                 if row.get(k) not in (None, ""):
                     attributes.setdefault(k, set()).add(str(row[k]))
@@ -1683,24 +2816,48 @@ class DataSources:
             raise ValueError("Data360 returned inconsistent units or scale")
         if len(per_row_units) > 1:
             raise ValueError("Data360 observation-level units or scale are inconsistent")
-        units = _wb_units(attributes, metadata)
+        # Disaggregations must be absent, except IMF WEO's "latest published vintage" marker
+        # (COMP_BREAKDOWN_1="V_LST"), which is accepted only when every row carries it.
+        dims = {k: v for k, v in breakdowns.items() if v != {""}}
+        if any(k != "COMP_BREAKDOWN_1" or v != {"V_LST"} for k, v in dims.items()):
+            raise ValueError("Data360 returned ambiguous disaggregations")
+        units, native_unit = _wb_units(req, attributes, metadata, dims)
+        policy = _status_policy(req["base"])
+        provenance = {"database_id": database, "indicator_id": indicator, "country_code": country,
+                      "attributes": {k: sorted(v) for k, v in attributes.items()}, "native_unit": native_unit,
+                      "projection_status": "not supplied", "native_periodicity": native_frequency, "metadata": metadata,
+                      "pages": page_receipts, "native_complete": True, "native_rows": len(rows), "resolution_safe": False}
+        notes, projection_from = "Native Data360 strips observation status and may omit upstream metadata warnings.", ""
+        if policy == "history_only":
+            notes = "Native Data360 strips observation status; WDI publishes history only, so periods before the retrieval year are history."
+        elif policy in ("weo_vintage", "gep_vintage"):
+            retrieved = datetime.fromtimestamp(self._clock(), timezone.utc).year
+            released = _release_year(metadata, retrieved)
+            vintage_year, basis = released or (retrieved, "retrieval year (Data360 metadata carries no release date)")
+            provenance.update({"vintage_year": vintage_year, "vintage_basis": basis, "projection_status": "inferred from the vintage year"})
+            notes, projection_from = _WEO_STATUS_NOTE, f"{vintage_year}-01-01"
         return self._base(req, observations=observations, geography=country, frequency="A", units=units,
-                          title=metadata.get("indicator_name") or metadata.get("name"),
-                          source_url=f"https://data360.worldbank.org/en/indicator/{indicator}",
-                          notes="Native Data360 strips observation status; historical/estimate/projection boundary is unknown." if projection_family else "Native Data360 strips observation status and may omit upstream metadata warnings.",
-                          provenance={"database_id": database, "indicator_id": indicator, "country_code": country,
-                                      "attributes": {k: sorted(v) for k, v in attributes.items()}, "projection_status": "not supplied",
-                                      "native_periodicity": native_frequency, "metadata": metadata, "pages": page_receipts,
-                                      "native_complete": True, "native_rows": len(rows),
-                                      "resolution_safe": False})
+                          title=metadata.get("indicator_name") or metadata.get("name"), projection_from=projection_from,
+                          vintage=_V_LST_VINTAGE if dims else "",
+                          source_url=f"https://data360.worldbank.org/en/indicator/{indicator}", notes=notes, provenance=provenance)
 
     def _fetch_usgov(self, req):
         name, recipe, param = catalog.resolve_usgov_recipe(req["native"])
-        if name == "sec":
+        kind = recipe.get("kind", "treasury")
+        if kind == "sec":
             # Handler classifies by filing form and drops duration/start/accession;
             # its last 20 annual-form rows are not an annual time series.
-            return self._error(req["series"], "SEC native concept handler drops period starts/filing provenance and caps history; complete annual or as-of series is unavailable")
-        if name == "spending/total":
+            return self._error(req["series"], DataFailure("SEC native concept handler drops period starts/filing provenance and caps history; complete annual or as-of series is unavailable", "unknown_recipe"))
+        if not catalog.recipe_available(recipe, env=self._env):
+            raise DataFailure(f"usgov {name} needs {recipe.get('requires_key')}, which is not configured "
+                              "(the usgov server loads that module only with its key)", "unknown_recipe")
+        if kind == "eia":
+            return self._fetch_eia(req, name, recipe, param)
+        if kind in ("bea_nipa", "bea_industry"):
+            return self._fetch_bea(req, name, recipe, param)
+        if kind not in ("treasury", "usaspending"):
+            raise DataFailure(f"usgov recipe kind {kind} is not supported", "unknown_recipe")
+        if kind == "usaspending":
             payload = self._call("usgov", recipe["tool"], {**recipe["tool_args"], "start_date": req["fetch_start"], "end_date": req["end"]})
             rows = _columnar(payload)
             if payload.get("meta", {}).get("group") != "fiscal_year" or payload.get("data", {}).get("total") != len(rows):
@@ -1716,9 +2873,11 @@ class DataSources:
                 covered_start, covered_end = max(begin, req["fetch_start"]), min(finish, req["end"], today)
                 if covered_start > covered_end:
                     continue
+                # Agencies report late: a fiscal year counts as complete only once it has settled.
+                settled = today > (date.fromisoformat(finish) + timedelta(days=_FISCAL_SETTLE_DAYS)).isoformat()
                 periods[begin] = {"calendar": "us_federal_fiscal_year", "label": label, "start": begin, "end": finish,
                                   "covered_start": covered_start, "covered_end": covered_end,
-                                  "complete": covered_start == begin and covered_end == finish and today > finish}
+                                  "complete": covered_start == begin and covered_end == finish and settled}
                 observations.append(Observation(begin, row["amount"], "unknown"))
             return self._base(req, observations=observations, title=recipe["title"], units=recipe["units"], frequency="A", geography="USA",
                               source_url=recipe["source_url"], api_url=recipe["api_url"],
@@ -1793,6 +2952,145 @@ class DataSources:
                           notes=recipe["notes"], provenance={"recipe": name, "parameter": param, "pages": page,
                                                              "metadata_origin": "curated_recipe", "native_complete": True})
 
+    def _fetch_eia(self, req, name, recipe, param):
+        """EIA v2 route through eia_query, paged newest first. Every row must carry the recipe's
+        facet values and its verified unit text; one row per period."""
+        facets = dict(recipe["facets"])
+        if recipe["param_facets"]:
+            values = param.split(".")
+            if len(values) != len(recipe["param_facets"]):
+                raise DataFailure("EIA recipe parameter does not match its facets", "unknown_recipe")
+            facets.update(zip(recipe["param_facets"], values))
+        width = 7 if recipe["frequency"] == "M" else 4
+        query = {**recipe["tool_args"], "facets": "; ".join(f"{k}={v}" for k, v in facets.items()),
+                 "start": req["fetch_start"][:width], "end": req["end"][:width]}
+        route = str(recipe["tool_args"]["route"]).strip("/")
+        rows, total, offset, pages = [], None, 0, 0
+        for _ in range(50):
+            payload = self._call("usgov", recipe["tool"], {**query, "length": _EIA_PAGE_ROWS, "offset": offset})
+            pages += 1
+            if payload.get("dataType") == "empty" and payload.get("data") is None:
+                if offset:
+                    raise ValueError("EIA pagination ended before the advertised total")
+                break  # no rows in the window; reported as no observations
+            chunk = _columnar(payload)
+            if str((payload.get("meta") or {}).get("route", "")).strip("/") != route:
+                raise ValueError("EIA returned a different route")
+            page_total = payload["data"].get("total")
+            if not isinstance(page_total, int) or isinstance(page_total, bool) or page_total < 0 or total not in (None, page_total):
+                raise ValueError("EIA total row count is invalid or changed")
+            total = page_total
+            if not chunk or len(chunk) > _EIA_PAGE_ROWS:
+                raise ValueError("EIA page is empty or exceeds the requested length")
+            rows.extend(chunk)
+            offset += len(chunk)
+            if offset >= total:
+                break
+        else:
+            raise ValueError("EIA pagination limit reached; narrow the requested window")
+        if total is not None and len(rows) != total:
+            raise ValueError("EIA returned an incomplete requested window")
+        points: dict[str, Observation] = {}
+        for row in rows:
+            if any(str(row.get(k)) != v for k, v in facets.items()):
+                raise ValueError("EIA returned a row outside the recipe facets")
+            unit = " ".join(str(row.get(recipe["units_field"]) or "").split())
+            if recipe["native_units"] and unit.lower() != recipe["native_units"].lower():
+                raise DataFailure(f"EIA unit text {unit or 'none'!r} differs from the verified recipe units "
+                                  f"{recipe['native_units']!r}", "provider_error")
+            period = _native_period(row.get(recipe["date_field"]), recipe["frequency"])
+            if period in points:
+                raise ValueError("EIA returned several rows for one period; the recipe facets are not unique")
+            points[period] = Observation(period, row.get(recipe["value_field"]))
+        entry = catalog.lookup(req["base"])
+        citable = [("frequency", query["frequency"]), ("data[0]", query["data"]),
+                   *((f"facets[{k}][]", v) for k, v in facets.items()), ("start", query["start"]), ("end", query["end"])]
+        return self._base(req, observations=list(points.values()), title=recipe["title"] + (f" — {param}" if param else ""),
+                          title_zh=recipe["title_zh"], units=recipe["units"], frequency=recipe["frequency"],
+                          seasonal_adjustment=recipe["seasonal_adjustment"], geography=entry.geography if entry else "USA",
+                          source_url=recipe["source_url"], api_url=recipe["api_url"] + "?" + urlencode(citable),
+                          notes=recipe["notes"], provenance={"recipe": name, "parameter": param, "facets": facets,
+                                                             "native_units": recipe["native_units"], "pages": pages,
+                                                             "native_total": total or 0, "metadata_origin": "curated_recipe",
+                                                             "native_complete": True})
+
+    def _fetch_bea(self, req, name, recipe, param):
+        """BEA NIPA table line or GDP-by-industry row. The tools return at most
+        ``max_obs_per_call`` points per line, so the window is read in year chunks that cannot
+        reach the cap (newest first); the tools drop units, so the curated recipe units apply."""
+        per_year = {"Q": 4, "A": 1}[recipe["frequency"]]
+        span = recipe["max_obs_per_call"] // per_year
+        if span < 1:
+            raise DataFailure("BEA recipe cap is below one year of observations", "unknown_recipe")
+        first, last = int(req["fetch_start"][:4]), int(req["end"][:4])
+        this_year = datetime.fromtimestamp(self._clock(), timezone.utc).year
+        points: dict[str, Any] = {}
+        labels, chunks, high = set(), [], last
+        while high >= first:
+            low = max(first, high - span + 1)
+            args = {**recipe["tool_args"], "year": ",".join(str(y) for y in range(low, high + 1))}
+            if recipe["kind"] == "bea_industry":
+                args[recipe["param_field"]] = param
+            try:
+                payload = self._call("usgov", recipe["tool"], args)
+            except ValueError as exc:
+                # BEA rejects a year it has not published yet ("Invalid year", "No data exists").
+                if low >= this_year and re.search(r"(?i)invalid year|no data exists", str(exc)):
+                    chunks.append({"years": [low, high], "lines": 0, "note": "not yet published"})
+                    high = low - 1
+                    continue
+                raise
+            rows = [] if payload.get("dataType") == "empty" and payload.get("data") is None else _columnar(payload)
+            if recipe["kind"] == "bea_nipa":
+                rows = [r for r in rows if r.get("description") == recipe["line_description"]]
+            if len(rows) != 1:
+                if not rows and low >= this_year:
+                    chunks.append({"years": [low, high], "lines": 0, "note": "not yet published"})
+                    high = low - 1
+                    continue
+                what = recipe["line_description"] or f"industry {param}"
+                raise DataFailure(f"BEA returned {len(rows)} rows for {what}; exactly one is required",
+                                  "not_found" if not rows else "provider_error")
+            labels.add(_clean(rows[0].get("description") or rows[0].get("industry"), 200))
+            observations = rows[0].get("observations")
+            if isinstance(observations, str):
+                observations = json.loads(observations)
+            if not isinstance(observations, list) or len(observations) > recipe["max_obs_per_call"]:
+                raise ValueError("BEA observation list is missing or exceeds the tool cap")
+            for point in observations:
+                if not isinstance(point, dict):
+                    raise ValueError("Invalid BEA observation")
+                period = _bea_period(point.get("period"), recipe["frequency"])
+                if not low <= int(period[:4]) <= high:
+                    raise ValueError("BEA returned a period outside the requested years")
+                value = _number(point.get("value"))
+                if period in points and points[period] != value:
+                    raise ValueError("BEA returned conflicting values for one period")
+                points[period] = value
+            chunks.append({"years": [low, high], "lines": 1, "observations": len(observations)})
+            high = low - 1
+        if len(labels) > 1:
+            raise ValueError("BEA line identity changed between year chunks")
+        label = next(iter(labels), "")
+        title = recipe["title"] + (f": {label} ({param})" if recipe["kind"] == "bea_industry" and label else "")
+        query = {"Year": f"{first}-{last}", **({"Industry": param} if recipe["kind"] == "bea_industry" else {})}
+        return self._base(req, observations=[Observation(d, v) for d, v in points.items()], title=title,
+                          title_zh=recipe["title_zh"], units=recipe["units"], frequency=recipe["frequency"],
+                          seasonal_adjustment=recipe["seasonal_adjustment"], geography="USA",
+                          source_url=recipe["source_url"], api_url=recipe["api_url"] + "&" + urlencode(query),
+                          notes=recipe["notes"], provenance={"recipe": name, "parameter": param, "line": label,
+                                                             "chunks": chunks, "metadata_origin": "curated_recipe",
+                                                             "units_origin": "curated recipe (the BEA tool returns no units)",
+                                                             "native_complete": True})
+
+
+def _bea_period(value: Any, frequency: str) -> str:
+    """BEA periods: NIPA '2025Q1', GDP by Industry '2025QIV' (roman quarters), annual '2025'."""
+    roman = re.fullmatch(r"(\d{4})Q(I{1,3}|IV)", str(value or "").strip())
+    if roman and frequency == "Q":
+        return date(int(roman[1]), (_BEA_ROMAN_QUARTERS[roman[2]] - 1) * 3 + 1, 1).isoformat()
+    return _native_period(value, frequency)
+
 
 _SINGLETON: DataSources | None = None
 _SINGLETON_LOCK = threading.Lock()
@@ -1812,6 +3110,8 @@ def reset_data_sources_for_tests() -> None:
         if _SINGLETON is not None:
             _SINGLETON.close()
         _SINGLETON = None
+    with _KEY_LOCK:
+        _REJECTED_KEYS.clear()
 
 
 atexit.register(reset_data_sources_for_tests)

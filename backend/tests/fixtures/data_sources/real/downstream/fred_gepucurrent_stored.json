@@ -1,0 +1,194 @@
+{
+ "capture": "fred:GEPUCURRENT retrieved live 2026-10-11T21:30:58Z through the data hub (normalization policy 3); newest 30 observations kept, bulky provenance receipts dropped",
+ "row": {
+  "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=GEPUCURRENT&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+  "frequency": "M",
+  "geography": "",
+  "kiqs": [],
+  "last_updated": "",
+  "notes": "The Global Economic Policy Uncertainty Index is a GDP-weighted average of national EPU indices for 20 countries: Australia, Brazil, Canada, Chile, China, France, Germany, Greece, India, Ireland, Italy",
+  "observations": [
+   {
+    "date": "2024-02-01",
+    "flag": "",
+    "value": 165.0627596436648
+   },
+   {
+    "date": "2024-03-01",
+    "flag": "",
+    "value": 176.2217776782957
+   },
+   {
+    "date": "2024-04-01",
+    "flag": "",
+    "value": 168.6065823008674
+   },
+   {
+    "date": "2024-05-01",
+    "flag": "",
+    "value": 180.9289251401781
+   },
+   {
+    "date": "2024-06-01",
+    "flag": "",
+    "value": 171.6679948930546
+   },
+   {
+    "date": "2024-07-01",
+    "flag": "",
+    "value": 224.1873122274258
+   },
+   {
+    "date": "2024-08-01",
+    "flag": "",
+    "value": 189.1592035194477
+   },
+   {
+    "date": "2024-09-01",
+    "flag": "",
+    "value": 199.9963320790349
+   },
+   {
+    "date": "2024-10-01",
+    "flag": "",
+    "value": 202.388779669657
+   },
+   {
+    "date": "2024-11-01",
+    "flag": "",
+    "value": 279.0426805237499
+   },
+   {
+    "date": "2024-12-01",
+    "flag": "",
+    "value": 322.9773972361512
+   },
+   {
+    "date": "2025-01-01",
+    "flag": "",
+    "value": 306.562831668141
+   },
+   {
+    "date": "2025-02-01",
+    "flag": "",
+    "value": 328.7735912157621
+   },
+   {
+    "date": "2025-03-01",
+    "flag": "",
+    "value": 469.3794115840456
+   },
+   {
+    "date": "2025-04-01",
+    "flag": "",
+    "value": 620.8833819301921
+   },
+   {
+    "date": "2025-05-01",
+    "flag": "",
+    "value": 505.1684096720606
+   },
+   {
+    "date": "2025-06-01",
+    "flag": "",
+    "value": 365.6264776211516
+   },
+   {
+    "date": "2025-07-01",
+    "flag": "",
+    "value": 401.5236234164087
+   },
+   {
+    "date": "2025-08-01",
+    "flag": "",
+    "value": 338.5069720868458
+   },
+   {
+    "date": "2025-09-01",
+    "flag": "",
+    "value": 304.9854012596928
+   },
+   {
+    "date": "2025-10-01",
+    "flag": "",
+    "value": 397.5996561082139
+   },
+   {
+    "date": "2025-11-01",
+    "flag": "",
+    "value": 364.9750082862698
+   },
+   {
+    "date": "2025-12-01",
+    "flag": "",
+    "value": 332.4252251765477
+   },
+   {
+    "date": "2026-01-01",
+    "flag": "",
+    "value": 375.6302365321833
+   },
+   {
+    "date": "2026-02-01",
+    "flag": "",
+    "value": 350.9060943167703
+   },
+   {
+    "date": "2026-03-01",
+    "flag": "",
+    "value": 445.8538602646532
+   },
+   {
+    "date": "2026-04-01",
+    "flag": "",
+    "value": 342.4328935785323
+   },
+   {
+    "date": "2026-05-01",
+    "flag": "",
+    "value": 321.5902358773562
+   },
+   {
+    "date": "2026-06-01",
+    "flag": "",
+    "value": 282.7154703306027
+   },
+   {
+    "date": "2026-07-01",
+    "flag": "",
+    "value": 241.6904910005747
+   }
+  ],
+  "projection_from": "",
+  "provenance": {
+   "delivered_end": "2026-07-01",
+   "delivered_start": "2024-02-01",
+   "metadata_fields": {
+    "frequency": "provider",
+    "seasonal_adjustment": "provider",
+    "title": "provider",
+    "units": "provider"
+   },
+   "metadata_origin": "provider_and_curated_catalog",
+   "native_complete": true,
+   "native_count": 118,
+   "native_frequency": "M",
+   "normalization_policy_version": 3,
+   "requested_end": "2026-10-11",
+   "requested_start": "2016-10-11",
+   "retrieval_route": "mcp"
+  },
+  "provider": "fred",
+  "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+  "retrieved_at": "2026-10-11T21:30:58.423369+00:00",
+  "route": "mcp",
+  "seasonal_adjustment": "NSA",
+  "series": "fred:GEPUCURRENT",
+  "source_url": "https://fred.stlouisfed.org/series/GEPUCURRENT",
+  "title": "Global Economic Policy Uncertainty Index: Current Price Adjusted GDP",
+  "title_zh": "",
+  "transform": "",
+  "units": "Index",
+  "vintage": ""
+ }
+}

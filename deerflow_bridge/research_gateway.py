@@ -44,6 +44,7 @@ langchain, can import and exercise everything here with stand-in messages.
 from __future__ import annotations
 
 import asyncio
+import calendar
 import contextvars
 import copy
 import hashlib
@@ -61,6 +62,7 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterator, Mapping, Sequence, TypeVar
@@ -72,6 +74,10 @@ __all__ = [
     "AGENT_TOOLS_SCHEMA",
     "AGENT_TOOLS_WITH_DATA_SCHEMA",
     "CALL_KINDS",
+    "DATASET_CAPS",
+    "DATA_PROVIDERS",
+    "DATA_SEEDER",
+    "MAX_RUN_DATASETS",
     "BadRequest",
     "BudgetExhausted",
     "ContentFiltered",
@@ -94,6 +100,7 @@ __all__ = [
     "build_messages",
     "canonical_url",
     "classify_exception",
+    "dataset_cap",
     "delimit_untrusted",
     "detect_profile",
     "estimate_tokens",
@@ -2551,6 +2558,23 @@ class SourceLedger:
             self._touch()
             return dict(stored)
 
+    def forget_dataset(self, sid: int) -> bool:
+        """Drop a dataset row that was never marked fetched (its evidence write
+        failed before any agent saw the sid); True when a row was dropped.
+
+        Fetched rows and web rows are never dropped, and a sid is never handed
+        out twice in this process.
+        """
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None or not row.get("dataset") or row.get("fetched"):
+                return False
+            del self._rows[row["sid"]]
+            if self._by_canonical.get(row["canonical"]) == row["sid"]:
+                del self._by_canonical[row["canonical"]]
+            self._touch()
+            return True
+
     def get(self, sid: int) -> dict | None:
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
@@ -3303,6 +3327,41 @@ def select_passages(text: str, query_terms: Sequence[str], max_chars: int = 2600
 # 2.6 Research tools: search / fetch wrappers
 # ===========================================================================
 
+# Official data (fix contract §1.5): the run's stored-series cap per preset
+# depth; DATA_SOURCES_MAX_SERIES overrides it.  The manifest reader accepts at
+# most MAX_RUN_DATASETS rows.
+DATASET_CAPS: Mapping[str, int] = {"quick": 10, "standard": 16, "deep": 24}
+MAX_RUN_DATASETS = 200
+# The plan-phase agent that resolves planner data_needs and prefetches them.
+DATA_SEEDER = "data-seeder"
+# data_sources.PROVIDERS, kept here so the static tool schema needs no import.
+DATA_PROVIDERS = ("fred", "bls", "bis", "imf", "wb", "usgov")
+# Observations a stored series keeps (the newest): 20 years of a monthly series.
+DATA_MAX_OBSERVATIONS = 240
+# data_sources requests a publisher projection path (IMF WEO, World Bank GEP:
+# rows with projection_from) by default to the end of this many years after
+# the retrieval year.
+_DATA_PROJECTION_END_YEARS = 6
+# The last line of every data_search answer with results: the agent decides
+# there whether a result measures the statistic (no proxy of another concept
+# or place).
+DATA_SEARCH_RULE = ("Use a result only when its title, units and geography measure the statistic you need; when "
+                    "none does, no official series covers it: say so and use web sources.")
+
+
+def dataset_cap(depth: str, env: Mapping[str, Any]) -> int:
+    """Run dataset cap for a preset ``depth`` (unknown depths use "standard");
+    a valid integer ``DATA_SOURCES_MAX_SERIES`` in ``env`` overrides it."""
+    default = DATASET_CAPS.get(str(depth), DATASET_CAPS["standard"])
+    raw = str(env.get("DATA_SOURCES_MAX_SERIES") or "").strip()
+    if not raw:
+        return default
+    try:
+        return max(0, min(MAX_RUN_DATASETS, int(raw)))
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class ToolLimits:
     """Hard caps for the tool layer (0 means no calls allowed).
@@ -3310,6 +3369,12 @@ class ToolLimits:
     ``per_agent_overrides`` maps an agent id to ``(max_searches, max_fetches)``
     for agents whose role differs from a KIQ investigator (e.g. the planner's
     scout searches).
+
+    Official data: ``max_data_calls_total``/``max_data_calls_per_agent`` bound
+    the KIQ agents only.  ``max_datasets`` is the run's stored-series cap; the
+    plan-phase seeder (:data:`DATA_SEEDER`) may fill at most
+    :attr:`max_prefetch_datasets` of it and spends its own
+    :attr:`max_seeder_data_calls`, so prefetch never locks agents out.
     """
 
     max_searches_total: int = 60
@@ -3320,15 +3385,30 @@ class ToolLimits:
     per_agent_overrides: Mapping[str, tuple[int, int]] = field(default_factory=dict, hash=False)
     max_data_calls_total: int = 50
     max_data_calls_per_agent: int = 4
+    max_datasets: int = DATASET_CAPS["standard"]
 
     def __post_init__(self) -> None:
         for name in ("max_searches_total", "max_fetches_total",
                      "max_searches_per_agent", "max_fetches_per_agent",
-                     "max_data_calls_total", "max_data_calls_per_agent"):
+                     "max_data_calls_total", "max_data_calls_per_agent", "max_datasets"):
             if int(getattr(self, name)) < 0:
                 raise ValueError(f"ToolLimits.{name} must be >= 0")
+        if int(self.max_datasets) > MAX_RUN_DATASETS:
+            raise ValueError(f"ToolLimits.max_datasets must be <= {MAX_RUN_DATASETS}")
         if int(self.passage_chars) < 400:
             raise ValueError("ToolLimits.passage_chars must be >= 400")
+
+    @property
+    def max_prefetch_datasets(self) -> int:
+        """Datasets the plan-phase seeder may store (60 % of the run cap)."""
+        return int(self.max_datasets) * 3 // 5
+
+    @property
+    def max_seeder_data_calls(self) -> int:
+        """The seeder's own call allowance, outside the agents'
+        ``max_data_calls_total``: per prefetched series one resolving search,
+        one get and one spare (a search that matched nothing, a retry)."""
+        return 3 * self.max_prefetch_datasets
 
     def agent_limits(self, agent_id: str) -> tuple[int, int]:
         override = self.per_agent_overrides.get(agent_id)
@@ -3373,23 +3453,234 @@ AGENT_TOOLS_SCHEMA: list[dict] = [
 ]
 
 # Never mutate the web-only constant: one of these two objects is selected
-# once per run, and reused for retries, priming and final-note turns.
+# once per run, and reused for retries, priming and final-note turns.  The
+# data schema is static text (no dates, catalog or provider state), so the
+# cached tool prefix is identical in every data-enabled run.
 AGENT_TOOLS_WITH_DATA_SCHEMA: list[dict] = AGENT_TOOLS_SCHEMA + [
     {"type": "function", "function": {
-        "name": "data_search", "description": "Find official series identifiers. Search metadata is not fetched evidence.",
+        "name": "data_search",
+        "description": ("Find official statistical series IDs (FRED, BLS, BIS, IMF, World Bank Data360, "
+                        "US Treasury/USAspending/EIA/BEA). Returns IDs with title, geography, units and "
+                        "frequency. Search results are discovery metadata, not evidence: call data_get "
+                        "before citing a value, and only for a result whose title, units and geography "
+                        "measure the statistic you need (another concept or place is no proxy)."),
         "parameters": {"type": "object", "properties": {
-            "query": {"type": "string"}, "provider": {"type": "string"}}, "required": ["query"]}}},
+            "query": {"type": "string",
+                      "description": ("Concept and geography in English, e.g. 'unemployment rate United "
+                                      "States', 'policy rate China', 'GDP growth Germany'.")},
+            "provider": {"type": "string", "enum": list(DATA_PROVIDERS),
+                         "description": "Optional: search one provider only. Omit to search all."}},
+            "required": ["query"]}}},
     {"type": "function", "function": {
-        "name": "data_get", "description": "Retrieve a bounded official dataset with a citable stored page. Keep projection and estimate labels.",
+        "name": "data_get",
+        "description": ("Fetch one official series as a citable stored page tagged [S<n>]: values with "
+                        "units, periods and observation status. Quote value, unit, period and geography "
+                        "exactly; keep publisher projection and estimate labels. A series already "
+                        "fetched in this run is returned from storage at no cost, with its stored window."),
         "parameters": {"type": "object", "properties": {
-            "series": {"type": "string"}, "start": {"type": "string"}, "end": {"type": "string"},
-            "transform": {"type": "string", "enum": ["", "yoy", "pct"]}}, "required": ["series"]}}},
+            "series": {"type": "string",
+                       "description": ("Series ID 'provider:native' from data_search or an OFFICIAL DATA "
+                                       "list, e.g. fred:UNRATE, bls:CUSR0000SA0, bis:WS_CBPOL/M.US, "
+                                       "imf:WEO/USA.NGDP_RPCH.A, wb:WB_WDI_NY_GDP_MKTP_KD_ZG/CHN, "
+                                       "usgov:treasury/debt_to_penny.")},
+            "start": {"type": "string",
+                      "description": ("Optional first period: YYYY, YYYY-MM or YYYY-MM-DD. Default: about "
+                                      "10 years back (25 for annual series).")},
+            "end": {"type": "string",
+                    "description": ("Optional last period: YYYY, YYYY-MM or YYYY-MM-DD (a year means its "
+                                    "end). Default: today. A future year returns publisher projections "
+                                    "where they exist (IMF WEO, World Bank GEP).")},
+            "transform": {"type": "string", "enum": ["yoy", "pct"],
+                          "description": ("Optional: yoy = percent change from a year earlier, pct = "
+                                          "percent change from the previous period. Omit for levels.")}},
+            "required": ["series"]}}},
 ]
 
 
 def _data_api() -> Any:
     """Lazy, package/bare compatible import; never starts a provider."""
     return importlib.import_module(f"{__package__}.data_sources" if __package__ else "data_sources")
+
+
+_DATA_FAILURE_LOG_MAX = 40
+_DATA_CODE_RE = re.compile(r"DATA_UNAVAILABLE\[([a-z_]+)\]")
+_DATA_PERIOD_RE = re.compile(r"(\d{4})(?:-(\d{2})(?:-(\d{2}))?|[- ]?Q([1-4]))?", re.I)
+
+
+def _data_bound(text: str | None, *, end: bool) -> str | None:
+    """ISO date for a window bound (``None`` or blank: not given); a year,
+    month or quarter ``end`` means its last day (``end="2026"`` must keep
+    2026-09 of a monthly series).  ValueError for anything else."""
+    if text is None:
+        return None
+    if not isinstance(text, str):
+        raise ValueError("period must be text")
+    if not text.strip():
+        return None
+    match = _DATA_PERIOD_RE.fullmatch(text.strip())
+    if not match:
+        raise ValueError("unrecognized period")
+    year = int(match[1])
+    if match[3]:
+        return date(year, int(match[2]), int(match[3])).isoformat()
+    if match[2]:
+        first = last = int(match[2])
+    elif match[4]:
+        first, last = 3 * int(match[4]) - 2, 3 * int(match[4])
+    else:
+        first, last = 1, 12
+    if not end:
+        return date(year, first, 1).isoformat()
+    return date(year, last, calendar.monthrange(year, last)[1]).isoformat()
+
+
+def _data_window(start: str | None = None, end: str | None = None) -> tuple[str | None, str | None]:
+    """Normalized ``(start, end)``; ValueError for a malformed or reversed window."""
+    window = (_data_bound(start, end=False), _data_bound(end, end=True))
+    if window[0] and window[1] and window[0] > window[1]:
+        raise ValueError("start after end")
+    return window
+
+
+def _get_key(identity: str, window: tuple[str | None, str | None]) -> str:
+    """Cache key of one dataset request: identity and the requested window."""
+    return "get:" + identity + "|" + "|".join(bound or "" for bound in window)
+
+
+# Answers that are not provider failures: a budget stop and an empty search.
+_DATA_NON_FAILURES = ("budget", "no_match")
+
+
+def _output_code(output: str) -> str:
+    """Reason code of a data answer that carries no evidence ("budget" for a
+    budget stop, "no_match" for an empty search), or ``""`` for a stored page
+    or search lines."""
+    if output.startswith("DATA_BUDGET_EXHAUSTED"):
+        return "budget"
+    if output.startswith("NO_DATA_MATCH"):
+        return "no_match"
+    match = _DATA_CODE_RE.match(output)
+    return match.group(1) if match else ""
+
+
+def _data_cacheable(code: str, retryable: bool) -> bool:
+    """Only answers that a repeat would reproduce are remembered for the run:
+    successes and deterministic failures.  Retryable provider failures,
+    budget stops, local persistence failures and empty searches (a search
+    degrades to no hits when its providers fail) are asked again."""
+    return not code or not (retryable or code in (*_DATA_NON_FAILURES, "persistence_failed"))
+
+
+def _persistence_failure() -> str:
+    return ("DATA_UNAVAILABLE[persistence_failed]: the dataset could not be stored for citation in this "
+            "run; use other evidence or retry later.")
+
+
+_INVALID_STORED_TEXT = ("DATA_UNAVAILABLE[persistence_failed]: the stored copy of this series failed "
+                        "validation and cannot be cited; use other evidence.")
+_PREFETCH_LIMIT_TEXT = ("DATA_BUDGET_EXHAUSTED: prefetch limit reached; KIQ agents can still request this "
+                        "series with data_get.")
+
+
+def _data_hint(api: Any, request: str, code: str) -> str:
+    """The data layer's actionable hint for ``code`` (it names a curated
+    equivalent series for operational failures), or ``""``."""
+    hint = getattr(getattr(api, "DataSources", None), "_hint", None)
+    try:
+        return str(hint(request, code)) if callable(hint) else ""
+    except Exception:  # noqa: BLE001 — the hint is optional text
+        return ""
+
+
+def _data_failure(api: Any, request: str, result: Any) -> tuple[str, str, bool]:
+    """``(agent text, reason code, retryable)`` for a failed data request.
+
+    A DataError already carries a redacted, bounded reason with a hint and is
+    shown as ``DATA_UNAVAILABLE[<code>]: <message>``.  An exception or an
+    unexpected payload is classified, never echoed: its text is unredacted.
+    """
+    if isinstance(result, api.DataError):
+        code = str(getattr(result, "code", "") or "provider_error")
+        render = getattr(result, "unavailable_text", None)
+        text = render() if callable(render) else f"DATA_UNAVAILABLE[{code}]: {result.message}"
+        return text, code, bool(result.retryable)
+    if isinstance(result, BaseException):
+        classify = getattr(api, "_failure_class", None)
+        if callable(classify):
+            code, retryable = classify(result)
+        else:
+            code, retryable = ("timeout", True) if isinstance(result, TimeoutError) else ("provider_error", False)
+        reason = ("no provider answer within the data deadline" if code == "timeout"
+                  else f"the data request failed ({type(result).__name__})")
+    else:
+        code, retryable, reason = "provider_error", False, "the provider returned no usable dataset"
+    hint = _data_hint(api, request, code)
+    return f"DATA_UNAVAILABLE[{code}]: {reason}." + (" " + hint if hint else ""), code, bool(retryable)
+
+
+def _search_line(api: Any, hit: Any) -> str:
+    """One data_search answer: the ID first (the plan seeder reads it), then
+    the reader label with its geography, units, frequency, coverage and the
+    first 120 characters of the catalog note (pitfalls such as sign
+    conventions or "fetch before citing")."""
+    series = str(getattr(hit, "series", "") or "")
+    provider, _, native = series.partition(":")
+    geography = native.rsplit("/", 1)[-1] if provider == "wb" and "/" in native else ""
+    label = api.series_label({"series": series, "title": getattr(hit, "title", ""), "geography": geography})
+    note = " ".join(str(getattr(hit, "note", "") or "").split())
+    if note.lower() in ("undefined", "null", "none"):
+        note = ""
+    parts = [f"{series} — {label}", getattr(hit, "units", ""), getattr(hit, "frequency", ""),
+             getattr(hit, "coverage", ""), _collapse(note, 120)]
+    return _clean_web_text(" · ".join(str(part) for part in parts if part))[:600]
+
+
+def _window_note(series: Any, window: tuple[str | None, str | None]) -> str:
+    """One line when a request reaches outside the stored window: the first
+    stored window of a series is immutable evidence for the run.
+
+    A stored window that ran to its retrieval date holds every period
+    published by then, so a later end (a forecast horizon) is no gap; the
+    end side is noted only for a window cut short before retrieval (the
+    legacy engine's ``data_tools._window_note`` rule) or for a publisher
+    projection path stored past its retrieval date or ended before the end
+    the data layer requests such a path to by default (v3 prefetches IMF WEO
+    and World Bank GEP paths only to the forecast horizon, which can be the
+    retrieval year; the publisher's path may run further).
+    """
+    start, end = window
+    observations = getattr(series, "observations", None) or []
+    if not (start or end) or not observations:
+        return ""
+    provenance = series.provenance if isinstance(series.provenance, Mapping) else {}
+    first, last = observations[0].date, observations[-1].date
+    # The provider was asked for the requested window; rows the delivery
+    # bound (max_obs) dropped were never stored.
+    held_start = first if provenance.get("intentional_delivery_trim") else \
+        min(first, str(provenance.get("requested_start") or first))
+    held_end = max(last, str(provenance.get("requested_end") or last))
+    retrieved = str(getattr(series, "retrieved_at", "") or "")[:10]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", retrieved):
+        cut_short = True
+    else:
+        path_end = f"{int(retrieved[:4]) + _DATA_PROJECTION_END_YEARS}-12-31"
+        cut_short = (held_end < retrieved or last > retrieved
+                     or (bool(getattr(series, "projection_from", "")) and held_end < path_end))
+    if not ((start and start < held_start) or (end and end > held_end and cut_short)):
+        return ""
+    return (f"NOTE: this run already stores {series.series} for {observations[0].date} to "
+            f"{observations[-1].date}; the requested window {start or 'default'} to {end or 'default'} "
+            "was not refetched (one stored window per series per run). Longer history needs another series "
+            "that measures the statistic (a yoy or pct transform is a separate series).")
+
+
+def _merge_kiqs(current: Sequence[str] | str, added: Sequence[str] | str) -> list[str]:
+    """Requesting KIQ IDs, first-seen order, bounded like Series.kiqs."""
+    values = [*((current,) if isinstance(current, str) else current or ()),
+              *((added,) if isinstance(added, str) else added or ())]
+    merged = [" ".join(kiq.split())[:40] for kiq in values if isinstance(kiq, str) and kiq.strip()]
+    return list(dict.fromkeys(merged))[:20]
+
 
 SEARCH_RESULTS_PER_QUERY = 5
 SEARCH_SNIPPET_CHARS = 300
@@ -3532,14 +3823,24 @@ class ResearchTools:
         self._agents: dict[str, _AgentCounters] = {}
         self.data_sources = data_sources
         self._data_lock = threading.RLock()
+        # Model-visible answers by request key ("get:<id>|<start>|<end>",
+        # "search:<provider>:<query>").  Only successes and deterministic
+        # failures are kept; retryable ones are asked again (see _data_cacheable).
         self._data_cache: dict[str, str] = {}
         self._inflight_data: dict[str, threading.Event] = {}
         self._datasets: dict[str, tuple[Any, int]] = {}
         self._data_agents: dict[str, int] = {}
         self._data_calls = self._data_failures = self._data_cached = 0
+        self._seeder_calls = 0
+        # Series the seeder stored / is fetching: they fill the prefetch cap.
+        self._seeded: set[str] = set()
+        self._seeder_pending: set[str] = set()
         self._data_frozen = False
         self._data_routes: dict[str, int] = {}
         self._invalid_data_sids: set[int] = set()
+        self._failed_requests: list[dict[str, Any]] = []
+        # KIQ id -> outcome ("requested"/"stored"/"failed") -> series IDs.
+        self._kiq_data: dict[str, dict[str, list[str]]] = {}
 
     def freeze_data(self) -> None:
         """Close admission before synthesis. Stored evidence remains readable."""
@@ -3559,6 +3860,8 @@ class ResearchTools:
 
         A corrupt durable generation is unavailable, never a reason to query
         a provider for a replacement. Ledger source IDs here are pre-QA IDs.
+        A dataset row never marked fetched was never shown to an agent (its
+        write failed before exposure), so it is not evidence and not invalid.
         """
         api = _data_api()
         with self._data_lock:
@@ -3583,206 +3886,444 @@ class ResearchTools:
                 except (ValueError, TypeError, KeyError):
                     continue
                 self._datasets[series.series] = (series, sid)
+                if row.get("first_seen_by") == DATA_SEEDER:
+                    self._seeded.add(series.series)
             valid = {sid for _, sid in self._datasets.values()}
             self._invalid_data_sids = {row["sid"] for row in self.ledger.rows()
-                                       if row.get("dataset") and row["sid"] not in valid}
+                                       if row.get("dataset") and row.get("fetched") and row["sid"] not in valid}
 
     def data_stats(self) -> dict:
+        """Run telemetry for ``meta.data_sources``.
+
+        ``calls`` counts every provider request (agents and seeder);
+        ``failed_requests`` keeps the reason class of each failure (bounded);
+        ``per_kiq`` maps a KIQ to the series it requested, stored and failed.
+        """
         with self._data_lock:
+            per_kiq = {}
+            for kiq, outcomes in sorted(self._kiq_data.items()):
+                stored = list(outcomes.get("stored", []))
+                per_kiq[kiq] = {"requested": list(outcomes.get("requested", [])), "stored": stored,
+                                "failed": [identity for identity in outcomes.get("failed", [])
+                                           if identity not in stored]}
             return {"calls": self._data_calls, "failures": self._data_failures,
                     "cached": self._data_cached, "series_count": len(self._datasets),
-                    "route_counts": dict(self._data_routes), "per_agent": dict(self._data_agents)}
+                    "route_counts": dict(self._data_routes), "per_agent": dict(self._data_agents),
+                    "seeder_calls": self._seeder_calls, "dataset_cap": self.limits.max_datasets,
+                    "prefetch_cap": self.limits.max_prefetch_datasets,
+                    "failed_requests": [dict(row) for row in self._failed_requests], "per_kiq": per_kiq}
 
     def _reserve_data(self, agent_id: str) -> bool:
-        # Call under _data_lock, before any provider work. The bounded seeder
-        # shares the global cap but is not a KIQ and has no per-KIQ quota.
+        # Call under _data_lock, before any provider work. The plan-phase
+        # seeder spends its own allowance, never the KIQ agents' total, and
+        # has no per-KIQ quota.
+        if self._data_frozen:
+            return False
         used = self._data_agents.get(agent_id, 0)
-        if (self._data_frozen or self._data_calls >= self.limits.max_data_calls_total
-                or (agent_id != "data-seeder" and used >= self.limits.max_data_calls_per_agent)):
+        if agent_id == DATA_SEEDER:
+            if self._seeder_calls >= self.limits.max_seeder_data_calls:
+                return False
+            self._seeder_calls += 1
+        elif (self._data_calls - self._seeder_calls >= self.limits.max_data_calls_total
+                or used >= self.limits.max_data_calls_per_agent):
             return False
         self._data_calls += 1
         self._data_agents[agent_id] = used + 1
         return True
 
+    def _seeder_slots(self) -> int:
+        """Prefetch-cap slots in use: series the seeder stored or is fetching
+        (caller holds ``_data_lock``)."""
+        return len(self._seeded | self._seeder_pending)
+
     def data_search(self, query: Any, *, provider: str | None = None,
                     agent_id: str, deadline: Deadline | None = None) -> str:
         if not isinstance(query, str) or not query.strip() or (provider is not None and not isinstance(provider, str)):
-            return "DATA_UNAVAILABLE: invalid query or provider."
+            return "DATA_UNAVAILABLE[invalid_input]: data_search needs a non-empty query string; provider is optional."
+        # An empty optional argument means "not given" (models often send "").
+        provider = (provider or "").strip().lower() or None
+        if provider is not None and provider not in DATA_PROVIDERS:
+            return ("DATA_UNAVAILABLE[invalid_input]: unknown provider; use one of "
+                    f"{', '.join(DATA_PROVIDERS)} or omit it.")
         query = " ".join(query.split())[:MAX_QUERY_CHARS]
-        key = "search:" + str(provider or "").lower() + ":" + query.casefold()
-        return self._data_call(key, agent_id, lambda: self.data_sources.search(query, provider=provider, limit=6),
-                               deadline=deadline, search=True)
+        key = "search:" + (provider or "*") + ":" + query.casefold()
+        return self._data_call(key, key, agent_id,
+                               lambda seconds: self.data_sources.search(query, provider=provider, limit=6,
+                                                                        deadline_s=seconds),
+                               deadline=deadline, request=query)
 
     def data_get(self, series: Any, *, start: str | None = None, end: str | None = None,
-                 transform: str | None = None, agent_id: str, deadline: Deadline | None = None) -> str:
+                 transform: str | None = None, agent_id: str, deadline: Deadline | None = None,
+                 kiqs: Sequence[str] | None = None) -> str:
+        """One official series as a stored, citable page (or a reason).
+
+        ``kiqs`` are the KIQs the request serves (recorded on the stored
+        series); by default the requesting agent, whose ID is its KIQ.  The
+        seeder (:data:`DATA_SEEDER`) passes the KIQs whose data needs it
+        serves, and its gets count toward the prefetch cap.
+        """
         if not isinstance(series, str) or any(value is not None and not isinstance(value, str)
                                              for value in (start, end, transform)):
-            return "DATA_UNAVAILABLE: invalid series, period or transform."
+            return "DATA_UNAVAILABLE[invalid_input]: series, start, end and transform must be strings."
+        start, end, transform = ((value or "").strip() or None for value in (start, end, transform))
         try:
             api = _data_api()
-            base, _, suffix = series.strip().strip("`").partition("#")
-            parsed = api.parse_series_id(base)
-            transform = transform or suffix
-            if not parsed or transform not in ("", "yoy", "pct") or (suffix and suffix != transform):
-                return "DATA_UNAVAILABLE: invalid series or transform."
-            canonical = ":".join(parsed)
-            identity = canonical + ("#" + transform if transform else "")
         except ImportError:
-            return "DATA_UNAVAILABLE: data API unavailable."
-        # The first successful window is immutable evidence for this run.
-        # Subsequent requests use its displayed coverage, even with new bounds.
+            return "DATA_UNAVAILABLE[provider_unavailable]: the official data API is unavailable; use web sources."
+        base, _, suffix = series.strip().strip("`").partition("#")
+        parsed = api.parse_series_id(base)
+        transform = (transform or suffix).lower()
+        if not parsed:
+            if base.strip().lower().startswith("usgov:"):
+                return ("DATA_UNAVAILABLE[unknown_recipe]: not a usgov recipe ID; use an ID from data_search "
+                        "or the OFFICIAL DATA list, e.g. usgov:treasury/debt_to_penny.")
+            return ("DATA_UNAVAILABLE[unknown_series]: not a valid official series ID; use 'provider:native' "
+                    "from data_search or the OFFICIAL DATA list, e.g. fred:UNRATE.")
+        if transform not in ("", "yoy", "pct") or (suffix and suffix.lower() != transform):
+            return "DATA_UNAVAILABLE[unsupported_transform]: use transform yoy or pct, or omit it for levels."
+        try:
+            window = _data_window(start, end)
+        except ValueError:
+            return ("DATA_UNAVAILABLE[invalid_input]: start/end must be YYYY, YYYY-MM or YYYY-MM-DD "
+                    "with start before end.")
+        canonical = ":".join(parsed)
+        identity = canonical + ("#" + transform if transform else "")
+        seeder = agent_id == DATA_SEEDER
+        links = _merge_kiqs((), kiqs if kiqs is not None else (() if seeder else (str(agent_id),)))
         with self._data_lock:
-            stored = self._datasets.get(identity)
-            if stored:
-                if stored[1] in self._invalid_data_sids:
-                    return "DATA_UNAVAILABLE: stored evidence failed validation."
-                self._data_cached += 1
-                return self._render_dataset(*stored)
-            if len(self._datasets) >= 12:
-                return "DATA_BUDGET_EXHAUSTED: run dataset limit reached."
-        return self._data_call("get:" + identity, agent_id,
-                               lambda: self.data_sources.get(canonical, start=start, end=end,
-                                                             transform=transform or None, max_obs=240),
-                               deadline=deadline, search=False)
+            self._note_kiq_data(links, "requested", identity)
+            if identity not in self._datasets:
+                refusal = ""
+                if self._invalid_identity(identity):
+                    # A rejected stored generation is never replaced mid-run.
+                    refusal = _INVALID_STORED_TEXT
+                elif len(self._datasets) >= self.limits.max_datasets:
+                    refusal = (f"DATA_BUDGET_EXHAUSTED: the run already stores {self.limits.max_datasets} "
+                               "official series; cite stored series or use web sources.")
+                elif seeder and identity not in self._seeder_pending:
+                    if self._seeder_slots() >= self.limits.max_prefetch_datasets:
+                        refusal = _PREFETCH_LIMIT_TEXT
+                    else:
+                        self._seeder_pending.add(identity)
+                if refusal:
+                    self._note_kiq_data(links, "failed", identity)
+                    return refusal
+        try:
+            return self._data_call(
+                _get_key(identity, window), "get:" + identity, agent_id,
+                lambda seconds: self.data_sources.get(canonical, start=window[0], end=window[1],
+                                                      transform=transform or None, max_obs=DATA_MAX_OBSERVATIONS,
+                                                      deadline_s=seconds),
+                deadline=deadline, request=identity, identity=identity, window=window, kiqs=links)
+        finally:
+            if seeder:
+                with self._data_lock:
+                    self._seeder_pending.discard(identity)
 
-    def prefetch_data(self, identities: Sequence[str], *, deadline: Deadline) -> dict[str, str]:
-        """Plan-phase batch only: reserve every ID before get_many starts.
+    def prefetch_data(self, identities: Sequence[str], *, deadline: Deadline,
+                      kiqs: Mapping[str, Sequence[str]] | None = None,
+                      windows: Mapping[str, Sequence[str | None]] | None = None) -> dict[str, str]:
+        """Seeder batch only: reserve every ID before get_many starts.
 
-        The control plane calls this before any KIQ workers are launched.
+        The control plane calls this before KIQ workers are launched (the plan
+        phase, and a gap round before its follow-up workers start).
         Provider batching/concurrency lives in DataSources; only this caller
         can commit returned evidence, so timed-out workers cannot write it.
+        ``kiqs`` maps an ID to the KIQs that need it (recorded on the stored
+        series); ``windows`` maps an ID to ``(start, end)`` — a stored window
+        is immutable for the run, so long histories and projection horizons
+        must be requested here.  Answers are keyed by the IDs as passed.
         """
         outputs: dict[str, str] = {}
-        pending: list[str] = []
+        pending: dict[str, tuple[str, tuple[str | None, str | None]]] = {}
+        links: dict[str, list[str]] = {}
         api = _data_api()
         with self._data_lock:
             for identity in dict.fromkeys(identities):
-                parsed = api.parse_series_id(identity)
+                parsed = api.parse_series_id(identity) if isinstance(identity, str) else None
                 if not parsed:
                     continue
                 key = ":".join(parsed)
+                needed = _merge_kiqs((), (kiqs or {}).get(identity) or (kiqs or {}).get(key) or ())
+                links[key] = _merge_kiqs(links.get(key, ()), needed)
+                self._note_kiq_data(needed, "requested", key)
                 if key in pending:
                     continue
+                try:
+                    bounds = (windows or {}).get(identity) or (windows or {}).get(key) or (None, None)
+                    window = _data_window(*bounds)
+                except (TypeError, ValueError):
+                    window = None
                 if key in self._datasets:
-                    outputs[identity] = self._render_dataset(*self._datasets[key])
-                elif "get:" + key in self._data_cache:
-                    outputs[identity] = self._data_cache["get:" + key]
-                elif self._data_frozen or not self.data_sources or deadline.expired():
-                    outputs[identity] = "DATA_UNAVAILABLE: providers disabled or evidence frozen."
-                elif len(self._datasets) + len(pending) >= 12 or not self._reserve_data("data-seeder"):
-                    outputs[identity] = "DATA_BUDGET_EXHAUSTED: run data limit reached."
+                    outputs[identity] = self._stored_dataset(key, needed, window or (None, None))
+                    continue
+                cached = self._data_cache.get(_get_key(key, window)) if window else None
+                if window is None:
+                    outputs[identity] = ("DATA_UNAVAILABLE[invalid_input]: prefetch window must be "
+                                         "YYYY, YYYY-MM or YYYY-MM-DD with start before end.")
+                elif cached is not None:
+                    outputs[identity] = cached
+                elif self._invalid_identity(key):
+                    outputs[identity] = _INVALID_STORED_TEXT
+                elif self._data_frozen or not self.data_sources:
+                    outputs[identity] = ("DATA_UNAVAILABLE[provider_unavailable]: official data is disabled "
+                                         "or frozen for this run.")
+                elif deadline.expired():
+                    outputs[identity] = ("DATA_UNAVAILABLE[timeout]: the data deadline ended before this "
+                                         "series was requested; KIQ agents can request it with data_get.")
+                elif (len(self._datasets) + len(pending) >= self.limits.max_datasets
+                        or self._seeder_slots() + len(pending) >= self.limits.max_prefetch_datasets
+                        or not self._reserve_data(DATA_SEEDER)):
+                    outputs[identity] = _PREFETCH_LIMIT_TEXT
                 else:
-                    pending.append(key)
+                    pending[key] = (identity, window)
+                if not outputs.get(identity, "[S").startswith("[S"):
+                    self._note_kiq_data(needed, "failed", key)
             if not pending:
                 return outputs
+            self._seeder_pending |= set(pending)
+        groups: dict[tuple[str | None, str | None], list[str]] = {}
+        for key, (_, window) in pending.items():
+            groups.setdefault(window, []).append(key)
+
+        def batch(seconds: float) -> dict:
+            calls = [(ids, {name: value for name, value in zip(("start", "end"), window) if value})
+                     for window, ids in groups.items()]
+            if len(calls) == 1:
+                return self.data_sources.get_many(calls[0][0], deadline_s=seconds, max_obs=DATA_MAX_OBSERVATIONS,
+                                                  **calls[0][1])
+            merged: dict = {}
+            with ThreadPoolExecutor(max_workers=len(calls), thread_name_prefix="v3-prefetch") as pool:
+                jobs = [pool.submit(self.data_sources.get_many, ids, deadline_s=seconds,
+                                    max_obs=DATA_MAX_OBSERVATIONS, **bounds)
+                        for ids, bounds in calls]
+                for job in jobs:
+                    try:
+                        merged.update(job.result())
+                    except Exception:  # noqa: BLE001 — one window group never voids the others
+                        pass
+            return merged
         try:
             remaining = deadline.remaining()
             # get_many can finish at its own deadline with successful siblings.
             # Leave a bounded margin to receive and persist those results.
             provider_seconds = max(0.0, remaining - min(5.0, remaining * 0.2))
-            results = _call_within(lambda: self.data_sources.get_many(pending, deadline_s=provider_seconds,
-                                                                     max_obs=240), remaining)
+            results = _call_within(lambda: batch(provider_seconds), remaining)
         except Exception:  # noqa: BLE001 — bounded batch failure, no raw provider text
             results = {}
         with self._data_lock:
-            for identity in pending:
-                result = results.get(identity) if isinstance(results, Mapping) else None
-                output = "DATA_UNAVAILABLE: provider returned no usable dataset within the data deadline."
-                if not self._data_frozen and not deadline.expired() and isinstance(result, api.Series):
-                    try:
-                        if result.series == ":".join(api.parse_series_id(identity)):
-                            output = self._store_dataset(result, "data-seeder")
-                    except Exception:  # noqa: BLE001 — keep successfully committed sibling datasets
-                        pass
-                if output.startswith("DATA_UNAVAILABLE"):
-                    self._data_failures += 1
+            self._seeder_pending -= set(pending)
+            for key, (identity, window) in pending.items():
+                result = results.get(key) if isinstance(results, Mapping) else None
+                retryable, fresh = True, key not in self._datasets
+                if self._data_frozen or deadline.expired():
+                    output = ("DATA_UNAVAILABLE[timeout]: the data deadline ended before this series was "
+                              "stored; KIQ agents can request it with data_get.")
+                elif isinstance(result, api.Series) and result.series == key:
+                    retryable = False
+                    output = self._store_dataset(result, DATA_SEEDER, links.get(key, []))
+                else:
+                    # A missing answer means get_many reached its deadline.
+                    output, _, retryable = _data_failure(api, key, TimeoutError("data deadline")
+                                                         if result is None else result)
+                code = _output_code(output)
                 outputs[identity] = output
-                if output.startswith("[S"):
-                    self._data_cache["get:" + ":".join(api.parse_series_id(identity))] = output
+                if not code and fresh:
+                    self._seeded.add(key)
+                elif code and code not in _DATA_NON_FAILURES:
+                    self._data_failures += 1
+                    self._note_failure(key, code, retryable, DATA_SEEDER, output)
+                self._note_kiq_data(links.get(key, []), "failed" if code else "stored", key)
+                if _data_cacheable(code, retryable):
+                    self._data_cache[_get_key(key, window)] = output
         return outputs
 
-    def _data_call(self, key: str, agent_id: str, fetch: Callable[[], Any], *,
-                   deadline: Deadline | None, search: bool) -> str:
-        with self._singleflight(self._inflight_data, key,
+    def _data_call(self, key: str, flight: str, agent_id: str, fetch: Callable[[float], Any], *,
+                   deadline: Deadline | None, request: str, identity: str = "",
+                   window: tuple[str | None, str | None] = (None, None), kiqs: Sequence[str] = ()) -> str:
+        """One provider request for an agent: dedup, budget, bounded wait, then
+        commit under the data lock.  ``identity`` marks a dataset get (else a
+        search); ``flight`` is the singleflight key, shared by every window of
+        one series so concurrent agents never fetch it twice."""
+        with self._singleflight(self._inflight_data, flight,
                                 wait=deadline.remaining() if deadline else 90.0) as owner:
             with self._data_lock:
+                # The first stored window is immutable evidence for this run:
+                # later requests get its page, with a note for a wider window.
+                if identity and identity in self._datasets:
+                    self._data_cached += 1
+                    return self._stored_dataset(identity, kiqs, window)
                 if key in self._data_cache:
                     self._data_cached += 1
-                    return self._data_cache[key]
+                    output = self._data_cache[key]
+                    self._note_kiq_data(kiqs, "stored" if output.startswith("[S") else "failed", identity)
+                    return output
                 if not owner:
-                    return "DATA_UNAVAILABLE: request is still running."
+                    # The identical request of another agent is still running,
+                    # or ended with an answer that is not reused (retryable).
+                    return ("DATA_UNAVAILABLE[timeout]: an identical request by another agent returned no "
+                            "reusable answer in time; retry once or use stored evidence.")
                 if not self.data_sources or self._data_frozen:
-                    return "DATA_UNAVAILABLE: providers disabled or evidence frozen."
+                    return ("DATA_UNAVAILABLE[provider_unavailable]: official data is disabled or frozen for "
+                            "this run; use stored series or web sources.")
                 if deadline and deadline.expired():
-                    return "DATA_UNAVAILABLE: data deadline reached."
+                    return "DATA_UNAVAILABLE[timeout]: data deadline reached; write notes from stored evidence."
                 if not self._reserve_data(agent_id):
                     return "DATA_BUDGET_EXHAUSTED: write notes from stored evidence."
+            bound = min(90.0, deadline.remaining()) if deadline else 90.0
+            # The provider work bounds itself slightly inside the wait, so it
+            # returns its own reason and releases provider slots in time.
+            provider_seconds = max(0.0, bound - min(2.0, bound * 0.1))
+            api = _data_api()
             try:
                 # Only the API read runs in the daemon. Late returns cannot
                 # mutate the ledger, run datasets, pages or sealed exhibits.
-                result = _call_within(fetch, min(90.0, deadline.remaining()) if deadline else 90.0)
-                with self._data_lock:
-                    if self._data_frozen or (deadline and deadline.expired()):
-                        return "DATA_UNAVAILABLE: data deadline reached."
-                    api = _data_api()
-                    if search and isinstance(result, list):
-                        output = "\n".join(_clean_web_text(
-                            f"{hit.series} — {hit.title} · {hit.units} · {hit.frequency} · {hit.coverage}")
-                            [:600] for hit in result[:6]) or "NO_DATA_MATCH: try another concept or provider."
-                    elif not search and isinstance(result, api.Series):
-                        output = self._store_dataset(result, agent_id)
-                        if output.startswith("DATA_UNAVAILABLE"):
-                            self._data_failures += 1
-                    else:
-                        # Never echo an exception or provider error containing credentials.
-                        output = "DATA_UNAVAILABLE: provider returned no usable dataset."
-                        self._data_failures += 1
-                    self._data_cache[key] = output
-                    return output
+                result = _call_within(lambda: fetch(provider_seconds), bound)
             except Exception as exc:  # noqa: BLE001 — provider/file failures are optional enrichment
-                with self._data_lock:
+                result = exc
+            with self._data_lock:
+                if self._data_frozen or (deadline and deadline.expired()):
+                    return "DATA_UNAVAILABLE[timeout]: data deadline reached; write notes from stored evidence."
+                retryable, fresh = False, identity not in self._datasets
+                if not identity and isinstance(result, list):
+                    lines = [_search_line(api, hit) for hit in result[:6]]
+                    output = ("\n".join([*lines, DATA_SEARCH_RULE]) if lines else
+                              "NO_DATA_MATCH: try another concept, an English term or another provider.")
+                elif identity and isinstance(result, api.Series) and result.series == identity:
+                    output = self._store_dataset(result, agent_id, kiqs)
+                else:
+                    output, _, retryable = _data_failure(api, request, result)
+                code = _output_code(output)
+                if code and code not in _DATA_NON_FAILURES:
                     self._data_failures += 1
-                    output = f"DATA_UNAVAILABLE: {type(exc).__name__}; use another source."
+                    self._note_failure(request, code, retryable, agent_id, output)
+                if identity:
+                    self._note_kiq_data(kiqs, "failed" if code else "stored", identity)
+                    if not code and fresh and agent_id == DATA_SEEDER:
+                        self._seeded.add(identity)
+                if _data_cacheable(code, retryable):
                     self._data_cache[key] = output
-                self._log("warn", output)
-                return output
+            if code:
+                self._log("result", f"data {request[:80]} → {output.split(':', 1)[0]}")
+            return output
 
-    def _store_dataset(self, series: Any, agent_id: str) -> str:
-        """Persist the manifest and exact page before exposing a fetched ID."""
-        api = _data_api()
+    def _invalid_identity(self, identity: str) -> bool:
+        """True when ``identity``'s stored generation was rejected in this run
+        (caller holds ``_data_lock``)."""
+        return any(((self.ledger.get(sid) or {}).get("dataset") or {}).get("series") == identity
+                   for sid in self._invalid_data_sids)
+
+    def _store_dataset(self, series: Any, agent_id: str, kiqs: Sequence[str] = ()) -> str:
+        """Persist the manifest and exact page before exposing a fetched ID.
+
+        Caller holds ``_data_lock``; never raises.  The ledger row is
+        allocated first (the manifest records its source ID) and marked
+        fetched only after both writes succeed.  A failed write drops that
+        never-shown row again, so it can neither be cited nor block a resume
+        (:meth:`restore_data` also ignores unfetched rows a crash left).
+        """
         if series.series in self._datasets:
-            return self._render_dataset(*self._datasets[series.series])
-        if len(self._datasets) >= 12 or not series.observations:
-            return "DATA_UNAVAILABLE: empty dataset or run dataset limit reached."
-        page = api.render_series_page(series)
-        digest = hashlib.sha256(page.encode("utf-8")).hexdigest()
-        page_path = f"pages/{digest[:16]}.txt"
-        _atomic_write_text(self._page_file(page_path), page)
-        row = self.ledger.register_dataset(series.source_url, series.title, series.to_dict(), agent_id)
-        if row is None:
-            return "DATA_UNAVAILABLE: invalid source URL."
-        sid = row["sid"]
-        entries = [*self._datasets.values(), (series, sid)]
-        manifest = api.write_dataset_files([value for value, _ in entries], self.pages_dir.parent,
-                                           citations={value.series: source for value, source in entries})
-        persisted = next(row for row in manifest["series"] if row["series"] == series.series)
-        self.ledger.register_dataset(series.source_url, series.title,
-                                     {**series.to_dict(), "slug": persisted["slug"]}, agent_id)
-        self.ledger.mark_fetched(sid, content_sha256=digest, chars=len(page), page_path=page_path)
-        self.ledger.flush()
+            return self._stored_dataset(series.series, kiqs, (None, None))
+        if len(self._datasets) >= self.limits.max_datasets:
+            return (f"DATA_BUDGET_EXHAUSTED: the run already stores {self.limits.max_datasets} official "
+                    "series; cite stored series or use web sources.")
+        if not series.observations:
+            return "DATA_UNAVAILABLE[not_found]: the provider returned no observations; search for another series."
+        sid = None
+        try:
+            api = _data_api()
+            series.kiqs = _merge_kiqs(series.kiqs, kiqs)
+            page = api.render_series_page(series)
+            digest = hashlib.sha256(page.encode("utf-8")).hexdigest()
+            page_path = f"pages/{digest[:16]}.txt"
+            _atomic_write_text(self._page_file(page_path), page)
+            # The label names the geography ("… — China"): cross-country series
+            # from one publisher table must stay distinguishable in References.
+            title = api.series_label(series)
+            row = self.ledger.register_dataset(series.source_url, title, series.to_dict(), agent_id)
+            if row is None:
+                return "DATA_UNAVAILABLE[provider_error]: the dataset has no citable source URL; use another series."
+            sid = row["sid"]
+            entries = [*self._datasets.values(), (series, sid)]
+            manifest = api.write_dataset_files([value for value, _ in entries], self.pages_dir.parent,
+                                               citations={value.series: source for value, source in entries})
+            persisted = None if manifest.get("error") else next(
+                (item for item in manifest.get("series", []) if item.get("series") == series.series), None)
+            if persisted is None:
+                raise OSError("dataset manifest not written")
+            self.ledger.register_dataset(series.source_url, title,
+                                         {**series.to_dict(), "slug": persisted["slug"]}, agent_id)
+            self.ledger.mark_fetched(sid, content_sha256=digest, chars=len(page), page_path=page_path)
+            self.ledger.flush()
+        except Exception:  # noqa: BLE001 — a failed write never becomes evidence
+            if sid is not None:
+                self.ledger.forget_dataset(sid)
+            self._log("warn", f"data {str(series.series)[:80]} → dataset not stored")
+            return _persistence_failure()
         self._datasets[series.series] = (series, sid)
         self._data_routes[series.route] = self._data_routes.get(series.route, 0) + 1
         return self._render_dataset(series, sid)
 
-    def _render_dataset(self, series: Any, sid: int) -> str:
+    def _stored_dataset(self, identity: str, kiqs: Sequence[str],
+                        window: tuple[str | None, str | None]) -> str:
+        """The stored page of ``identity`` (caller holds ``_data_lock``), linking
+        the requesting KIQs and noting a requested window it does not cover."""
+        series, sid = self._datasets[identity]
+        if sid in self._invalid_data_sids:
+            self._note_kiq_data(kiqs, "failed", identity)
+            return _INVALID_STORED_TEXT
+        self._link_kiqs(series, sid, kiqs)
+        self._note_kiq_data(kiqs, "stored", identity)
+        return self._render_dataset(series, sid, note=_window_note(series, window))
+
+    def _link_kiqs(self, series: Any, sid: int, kiqs: Sequence[str]) -> None:
+        """Record more requesting KIQs on a stored series (caller holds the data lock).
+
+        KIQ links are routing metadata for reports and charts, never evidence:
+        the page and its hash are unchanged.  The run-local manifest is updated
+        best effort (the in-memory links stay when that write fails); nothing
+        changes once data admission is frozen, as the engine then publishes
+        the manifest.
+        """
+        merged = _merge_kiqs(series.kiqs, kiqs)
+        if merged == series.kiqs or self._data_frozen:
+            return
+        series.kiqs = merged
+        try:
+            manifest = _data_api().write_dataset_files([series], self.pages_dir.parent,
+                                                       citations={series.series: sid})
+        except Exception:  # noqa: BLE001 — links are advisory; the writer never raises by contract
+            manifest = {"error": "unavailable"}
+        if manifest.get("error"):
+            self._log("warn", f"data {series.series[:80]} → KIQ links not persisted")
+
+    def _note_kiq_data(self, kiqs: Sequence[str], outcome: str, identity: str) -> None:
+        """Per-KIQ requested/stored/failed series for telemetry (caller holds the lock)."""
+        if not identity:
+            return
+        for kiq in kiqs:
+            seen = self._kiq_data.setdefault(kiq, {}).setdefault(outcome, [])
+            if identity not in seen:
+                seen.append(identity)
+
+    def _note_failure(self, request: str, code: str, retryable: bool, agent_id: str, output: str) -> None:
+        """Bounded failure log for ``meta.data_sources`` (caller holds the lock)."""
+        if len(self._failed_requests) < _DATA_FAILURE_LOG_MAX:
+            reason = output.split(": ", 1)[1] if ": " in output else output
+            self._failed_requests.append({"request": request[:120], "code": code or "provider_error",
+                                          "retryable": bool(retryable), "by": str(agent_id)[:40],
+                                          "reason": reason[:200]})
+
+    def _render_dataset(self, series: Any, sid: int, *, note: str = "") -> str:
         row = self.ledger.get(sid) or {}
         page = self.page_text(sid)
         if page is None:
-            return "DATA_UNAVAILABLE: stored evidence failed validation."
+            return _INVALID_STORED_TEXT
+        # Line 1 is the row header the engine reads; a note never precedes it.
         header = (f"[S{sid}] {row.get('title', '')} — {row.get('domain', '')} (tier 1)"
                   f" — dataset {series.series}, {series.units}, {series.frequency}")
-        return header + "\n" + delimit_untrusted("official dataset", neutralize_citation_markers(page))
-
+        body = delimit_untrusted("official dataset", neutralize_citation_markers(page))
+        return "\n".join(part for part in (header, note, body) if part)
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
         if self.plog is None:
@@ -3942,15 +4483,17 @@ class ResearchTools:
         """Model-visible, query-focused excerpt of one page."""
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
-        # Dataset origins/identities always resolve to the pinned dataset page,
-        # even after corruption. Never fall through to fresh HTTP evidence.
-        dataset = next((row for row in self.ledger.rows() if row.get("dataset") and
-                        canonical_url(url) in (row["canonical"],
-                                              canonical_url(row["dataset"].get("source_url", "")))), None)
+        # A dataset identity, or the origin page of stored datasets, never
+        # falls through to fresh HTTP evidence, even after corruption: one
+        # series answers with its pinned page, several with a choice list.
+        dataset, choice = self._dataset_for_url(url)
+        if choice:
+            self._log("result", "web_fetch → DATASET_CHOICE")
+            return choice
         if dataset:
             page = self.page_text(dataset["sid"])
             if page is None:
-                return "DATA_UNAVAILABLE: stored evidence failed validation."
+                return _INVALID_STORED_TEXT
             return self._render_page(dataset, page, query_terms(focus), query_terms(kiq_text), cached=True)
         self._log("tool", f"web_fetch {url[:160]}")
         if not url or not self.ledger.valid_url(url):
@@ -3981,6 +4524,38 @@ class ResearchTools:
         if known is not None:
             return known
         return self._fetch_uncached(url, key, terms, context_terms, agent_id)
+
+    def _dataset_for_url(self, url: str) -> tuple[dict | None, str]:
+        """``(dataset row, "")`` when ``url`` names one stored dataset, or
+        ``(None, choice text)`` when it is the shared origin of several.
+
+        A dataset's identity URL (with ``drf_series``) names exactly its row.
+        A publisher page shared by several stored series (one IMF dataflow
+        page, one Data360 indicator page for every country, FRED levels and
+        their transforms) must never silently answer with one of them, so the
+        agent gets the stored series to choose from.  ``(None, "")`` lets the
+        URL be fetched from the web.
+        """
+        target = canonical_url(url) if url else ""
+        if not target:
+            return None, ""
+        rows = [row for row in self.ledger.rows() if row.get("dataset")]
+        exact = next((row for row in rows if row["canonical"] == target), None)
+        if exact is not None:
+            return exact, ""
+        # Never-fetched rows were never shown, so they claim no origin page.
+        shared = [row for row in rows if row.get("fetched")
+                  and canonical_url(row["dataset"].get("source_url", "")) == target]
+        if len(shared) <= 1:
+            return (shared[0] if shared else None), ""
+        lines = [f"DATASET_CHOICE: this page is the source of {len(shared)} official series stored in this run; "
+                 "read one with web_fetch of its marker (e.g. url \"S"
+                 f"{shared[0]['sid']}\") or call data_get with its series ID:"]
+        lines += [f"- [S{row['sid']}] {row['dataset'].get('series', '')} — {_collapse(row.get('title', ''), 160)}"
+                  for row in shared[:24]]
+        if len(shared) > 24:
+            lines.append(f"- … and {len(shared) - 24} more stored series from this page.")
+        return None, "\n".join(lines)
 
     def _known_failure(self, key: str, agent_id: str) -> str | None:
         """The FETCH_FAILED answer for a URL that already failed in this run

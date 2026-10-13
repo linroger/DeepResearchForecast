@@ -1,0 +1,240 @@
+{
+ "captured_at": "2026-10-12T14:36:09Z",
+ "clock": 1791815769.0,
+ "series": "usgov:bea/real_gdp_growth",
+ "request": {
+  "start": "2024-01-01"
+ },
+ "patches": {},
+ "env": {},
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "bea_gdp_national",
+   "args": {
+    "table_name": "T10101",
+    "frequency": "Q",
+    "year": "2025,2026"
+   },
+   "response": {
+    "summary": "BEA National GDP — Table T10101 (Q): 150 rows, 20 series",
+    "dataType": "table",
+    "data": {
+     "columns": [
+      "description",
+      "observations"
+     ],
+     "rows": [
+      [
+       "Gross domestic product",
+       "[{\"period\":\"2025Q1\",\"value\":0.1},{\"period\":\"2025Q2\",\"value\":4},{\"period\":\"2025Q3\",\"value\":3.9},{\"period\":\"2025Q4\",\"value\":0.2},{\"period\":\"2026Q1\",\"value\":2.5},{\"period\":\"2026Q2\",\"value\":2.2}]"
+      ],
+      [
+       "Personal consumption expenditures",
+       "[{\"period\":\"2025Q1\",\"value\":0.6},{\"period\":\"2025Q2\",\"value\":2.1},{\"period\":\"2025Q3\",\"value\":3.7},{\"period\":\"2025Q4\",\"value\":1.9},{\"period\":\"2026Q1\",\"value\":0.7},{\"period\":\"2026Q2\",\"value\":3.8}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2025Q1\",\"value\":-0.9},{\"period\":\"2025Q2\",\"value\":2.7},{\"period\":\"2025Q3\",\"value\":2.9},{\"period\":\"2025Q4\",\"value\":1},{\"period\":\"2026Q1\",\"value\":0.8},{\"period\":\"2026Q2\",\"value\":4.5}]"
+      ],
+      [
+       "Durable goods",
+       "[{\"period\":\"2025Q1\",\"value\":-5.2},{\"period\":\"2025Q2\",\"value\":3.9},{\"period\":\"2025Q3\",\"value\":1.6},{\"period\":\"2025Q4\",\"value\":2.2},{\"period\":\"2026Q1\",\"value\":1.7},{\"period\":\"2026Q2\",\"value\":7.4}]"
+      ],
+      [
+       "Nondurable goods",
+       "[{\"period\":\"2025Q1\",\"value\":1.4},{\"period\":\"2025Q2\",\"value\":2},{\"period\":\"2025Q3\",\"value\":3.7},{\"period\":\"2025Q4\",\"value\":0.4},{\"period\":\"2026Q1\",\"value\":0.3},{\"period\":\"2026Q2\",\"value\":3.1}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2025Q1\",\"value\":1.4},{\"period\":\"2025Q2\",\"value\":1.8},{\"period\":\"2025Q3\",\"value\":4},{\"period\":\"2025Q4\",\"value\":2.3},{\"period\":\"2026Q1\",\"value\":0.7},{\"period\":\"2026Q2\",\"value\":3.4}]"
+      ],
+      [
+       "Gross private domestic investment",
+       "[{\"period\":\"2025Q1\",\"value\":23.5},{\"period\":\"2025Q2\",\"value\":-11.9},{\"period\":\"2025Q3\",\"value\":0.7},{\"period\":\"2025Q4\",\"value\":1.1},{\"period\":\"2026Q1\",\"value\":7.2},{\"period\":\"2026Q2\",\"value\":4.6}]"
+      ],
+      [
+       "Fixed investment",
+       "[{\"period\":\"2025Q1\",\"value\":7.6},{\"period\":\"2025Q2\",\"value\":4.9},{\"period\":\"2025Q3\",\"value\":1.6},{\"period\":\"2025Q4\",\"value\":1.3},{\"period\":\"2026Q1\",\"value\":6.1},{\"period\":\"2026Q2\",\"value\":7.7}]"
+      ],
+      [
+       "Nonresidential",
+       "[{\"period\":\"2025Q1\",\"value\":10.7},{\"period\":\"2025Q2\",\"value\":7.6},{\"period\":\"2025Q3\",\"value\":3.8},{\"period\":\"2025Q4\",\"value\":2.1},{\"period\":\"2026Q1\",\"value\":9.9},{\"period\":\"2026Q2\",\"value\":9}]"
+      ],
+      [
+       "Structures",
+       "[{\"period\":\"2025Q1\",\"value\":0.9},{\"period\":\"2025Q2\",\"value\":-5.3},{\"period\":\"2025Q3\",\"value\":-7.7},{\"period\":\"2025Q4\",\"value\":-9.8},{\"period\":\"2026Q1\",\"value\":-9.4},{\"period\":\"2026Q2\",\"value\":0.1}]"
+      ],
+      [
+       "Equipment",
+       "[{\"period\":\"2025Q1\",\"value\":20.4},{\"period\":\"2025Q2\",\"value\":7.2},{\"period\":\"2025Q3\",\"value\":8.9},{\"period\":\"2025Q4\",\"value\":6.9},{\"period\":\"2026Q1\",\"value\":15.5},{\"period\":\"2026Q2\",\"value\":13.4}]"
+      ],
+      [
+       "Intellectual property products",
+       "[{\"period\":\"2025Q1\",\"value\":8},{\"period\":\"2025Q2\",\"value\":16.3},{\"period\":\"2025Q3\",\"value\":5.7},{\"period\":\"2025Q4\",\"value\":4.4},{\"period\":\"2026Q1\",\"value\":15.6},{\"period\":\"2026Q2\",\"value\":9.2}]"
+      ],
+      [
+       "Residential",
+       "[{\"period\":\"2025Q1\",\"value\":-2.7},{\"period\":\"2025Q2\",\"value\":-4.3},{\"period\":\"2025Q3\",\"value\":-6.3},{\"period\":\"2025Q4\",\"value\":-1.8},{\"period\":\"2026Q1\",\"value\":-7.6},{\"period\":\"2026Q2\",\"value\":2.8}]"
+      ],
+      [
+       "Exports",
+       "[{\"period\":\"2025Q1\",\"value\":2.5},{\"period\":\"2025Q2\",\"value\":-2},{\"period\":\"2025Q3\",\"value\":9.4},{\"period\":\"2025Q4\",\"value\":-4.2},{\"period\":\"2026Q1\",\"value\":13.9},{\"period\":\"2026Q2\",\"value\":5}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2025Q1\",\"value\":2.9},{\"period\":\"2025Q2\",\"value\":-3.3},{\"period\":\"2025Q3\",\"value\":6.9},{\"period\":\"2025Q4\",\"value\":-1.9},{\"period\":\"2026Q1\",\"value\":18.8},{\"period\":\"2026Q2\",\"value\":9.9}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2025Q1\",\"value\":1.8},{\"period\":\"2025Q2\",\"value\":0.1},{\"period\":\"2025Q3\",\"value\":13.8},{\"period\":\"2025Q4\",\"value\":-7.9},{\"period\":\"2026Q1\",\"value\":6},{\"period\":\"2026Q2\",\"value\":-3.2}]"
+      ],
+      [
+       "Imports",
+       "[{\"period\":\"2025Q1\",\"value\":34.7},{\"period\":\"2025Q2\",\"value\":-27.8},{\"period\":\"2025Q3\",\"value\":0.1},{\"period\":\"2025Q4\",\"value\":-1.5},{\"period\":\"2026Q1\",\"value\":11.5},{\"period\":\"2026Q2\",\"value\":12.6}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2025Q1\",\"value\":44.2},{\"period\":\"2025Q2\",\"value\":-33.3},{\"period\":\"2025Q3\",\"value\":-4},{\"period\":\"2025Q4\",\"value\":-1.2},{\"period\":\"2026Q1\",\"value\":17.2},{\"period\":\"2026Q2\",\"value\":15.3}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2025Q1\",\"value\":3.2},{\"period\":\"2025Q2\",\"value\":-2},{\"period\":\"2025Q3\",\"value\":15.7},{\"period\":\"2025Q4\",\"value\":-2.4},{\"period\":\"2026Q1\",\"value\":-6.8},{\"period\":\"2026Q2\",\"value\":2.6}]"
+      ],
+      [
+       "Government consumption expenditures and gross investment",
+       "[{\"period\":\"2025Q1\",\"value\":-0.6},{\"period\":\"2025Q2\",\"value\":2.3},{\"period\":\"2025Q3\",\"value\":1.6},{\"period\":\"2025Q4\",\"value\":-5.7},{\"period\":\"2026Q1\",\"value\":4.7},{\"period\":\"2026Q2\",\"value\":-0.1}]"
+      ]
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "meta": {
+     "table": "T10101",
+     "frequency": "Q",
+     "dataRows": 150,
+     "sources": [
+      {
+       "url": "https://apps.bea.gov/api/data/?ResultFormat=JSON&method=GetData&DataSetName=NIPA&TableName=T10101&Frequency=Q&Year=2025%2C2026",
+       "fetchedAt": "2026-10-12T14:36:11.316Z"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "bea_gdp_national",
+   "args": {
+    "table_name": "T10101",
+    "frequency": "Q",
+    "year": "2024"
+   },
+   "response": {
+    "summary": "BEA National GDP — Table T10101 (Q): 100 rows, 20 series",
+    "dataType": "table",
+    "data": {
+     "columns": [
+      "description",
+      "observations"
+     ],
+     "rows": [
+      [
+       "Gross domestic product",
+       "[{\"period\":\"2024Q1\",\"value\":1.4},{\"period\":\"2024Q2\",\"value\":3.6},{\"period\":\"2024Q3\",\"value\":3.2},{\"period\":\"2024Q4\",\"value\":2.4}]"
+      ],
+      [
+       "Personal consumption expenditures",
+       "[{\"period\":\"2024Q1\",\"value\":1.8},{\"period\":\"2024Q2\",\"value\":3.9},{\"period\":\"2024Q3\",\"value\":3.7},{\"period\":\"2024Q4\",\"value\":4.3}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2024Q1\",\"value\":-1.3},{\"period\":\"2024Q2\",\"value\":5.8},{\"period\":\"2024Q3\",\"value\":5.7},{\"period\":\"2024Q4\",\"value\":6.3}]"
+      ],
+      [
+       "Durable goods",
+       "[{\"period\":\"2024Q1\",\"value\":-1.3},{\"period\":\"2024Q2\",\"value\":9.1},{\"period\":\"2024Q3\",\"value\":8},{\"period\":\"2024Q4\",\"value\":12}]"
+      ],
+      [
+       "Nondurable goods",
+       "[{\"period\":\"2024Q1\",\"value\":-1.3},{\"period\":\"2024Q2\",\"value\":4.2},{\"period\":\"2024Q3\",\"value\":4.5},{\"period\":\"2024Q4\",\"value\":3.3}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2024Q1\",\"value\":3.2},{\"period\":\"2024Q2\",\"value\":3},{\"period\":\"2024Q3\",\"value\":2.8},{\"period\":\"2024Q4\",\"value\":3.3}]"
+      ],
+      [
+       "Gross private domestic investment",
+       "[{\"period\":\"2024Q1\",\"value\":-1.3},{\"period\":\"2024Q2\",\"value\":8.4},{\"period\":\"2024Q3\",\"value\":3.2},{\"period\":\"2024Q4\",\"value\":-4.8}]"
+      ],
+      [
+       "Fixed investment",
+       "[{\"period\":\"2024Q1\",\"value\":4.4},{\"period\":\"2024Q2\",\"value\":1.3},{\"period\":\"2024Q3\",\"value\":3.6},{\"period\":\"2024Q4\",\"value\":0.1}]"
+      ],
+      [
+       "Nonresidential",
+       "[{\"period\":\"2024Q1\",\"value\":2.9},{\"period\":\"2024Q2\",\"value\":2.6},{\"period\":\"2024Q3\",\"value\":6},{\"period\":\"2024Q4\",\"value\":-0.7}]"
+      ],
+      [
+       "Structures",
+       "[{\"period\":\"2024Q1\",\"value\":0.5},{\"period\":\"2024Q2\",\"value\":-2.4},{\"period\":\"2024Q3\",\"value\":3.4},{\"period\":\"2024Q4\",\"value\":-0.3}]"
+      ],
+      [
+       "Equipment",
+       "[{\"period\":\"2024Q1\",\"value\":-1.1},{\"period\":\"2024Q2\",\"value\":6.4},{\"period\":\"2024Q3\",\"value\":10.2},{\"period\":\"2024Q4\",\"value\":-3}]"
+      ],
+      [
+       "Intellectual property products",
+       "[{\"period\":\"2024Q1\",\"value\":8.3},{\"period\":\"2024Q2\",\"value\":2.1},{\"period\":\"2024Q3\",\"value\":3.6},{\"period\":\"2024Q4\",\"value\":1.4}]"
+      ],
+      [
+       "Residential",
+       "[{\"period\":\"2024Q1\",\"value\":9.9},{\"period\":\"2024Q2\",\"value\":-2.8},{\"period\":\"2024Q3\",\"value\":-4.5},{\"period\":\"2024Q4\",\"value\":2.7}]"
+      ],
+      [
+       "Exports",
+       "[{\"period\":\"2024Q1\",\"value\":2.8},{\"period\":\"2024Q2\",\"value\":3.1},{\"period\":\"2024Q3\",\"value\":6.9},{\"period\":\"2024Q4\",\"value\":-0.3}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2024Q1\",\"value\":-1.2},{\"period\":\"2024Q2\",\"value\":2.1},{\"period\":\"2024Q3\",\"value\":7.1},{\"period\":\"2024Q4\",\"value\":-4.1}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2024Q1\",\"value\":10.7},{\"period\":\"2024Q2\",\"value\":4.8},{\"period\":\"2024Q3\",\"value\":6.6},{\"period\":\"2024Q4\",\"value\":6.7}]"
+      ],
+      [
+       "Imports",
+       "[{\"period\":\"2024Q1\",\"value\":3},{\"period\":\"2024Q2\",\"value\":11.3},{\"period\":\"2024Q3\",\"value\":11.6},{\"period\":\"2024Q4\",\"value\":1}]"
+      ],
+      [
+       "Goods",
+       "[{\"period\":\"2024Q1\",\"value\":1.7},{\"period\":\"2024Q2\",\"value\":12.4},{\"period\":\"2024Q3\",\"value\":10.9},{\"period\":\"2024Q4\",\"value\":-2.3}]"
+      ],
+      [
+       "Services",
+       "[{\"period\":\"2024Q1\",\"value\":8.5},{\"period\":\"2024Q2\",\"value\":7.2},{\"period\":\"2024Q3\",\"value\":14.5},{\"period\":\"2024Q4\",\"value\":15.2}]"
+      ],
+      [
+       "Government consumption expenditures and gross investment",
+       "[{\"period\":\"2024Q1\",\"value\":3.5},{\"period\":\"2024Q2\",\"value\":3.6},{\"period\":\"2024Q3\",\"value\":5.2},{\"period\":\"2024Q4\",\"value\":3.6}]"
+      ]
+     ],
+     "total": 20,
+     "truncated": false
+    },
+    "meta": {
+     "table": "T10101",
+     "frequency": "Q",
+     "dataRows": 100,
+     "sources": [
+      {
+       "url": "https://apps.bea.gov/api/data/?ResultFormat=JSON&method=GetData&DataSetName=NIPA&TableName=T10101&Frequency=Q&Year=2024",
+       "fetchedAt": "2026-10-12T14:36:12.683Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

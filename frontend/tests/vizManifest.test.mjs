@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
+  chartAttribution,
   filterVizGalleryByMarkdown,
   localizeChartCaption,
   normalizeVizGallery,
@@ -16,6 +18,8 @@ test('preserves schema-v2 HTML-only Plotly artifacts', () => {
       imagePath: '',
       interactivePath: 'charts/timeline.html',
       caption: '',
+      sourceCaption: '',
+      sources: [],
     }],
   )
 })
@@ -31,6 +35,8 @@ test('folds legacy twins regardless of row ordering', () => {
     imagePath: 'charts/actors.png',
     interactivePath: 'charts/actors.html',
     caption: 'Actor network',
+    sourceCaption: '',
+    sources: [],
   }]
   assert.deepEqual(normalizeVizGallery(htmlFirst), expected)
   assert.deepEqual(normalizeVizGallery(pngFirst), expected)
@@ -117,4 +123,62 @@ test('localizes builder chart captions only for the Chinese view', () => {
   assert.equal(localizeChartCaption('Scenario Probabilities', ''), 'Scenario Probabilities')
   assert.equal(localizeChartCaption('A future chart', 'zh'), 'A future chart')
   assert.equal(localizeChartCaption(undefined, 'zh'), '')
+})
+
+// REAL GET /api/report/<id>/viz-manifest official-data items (EN and ZH publications).
+const manifestFixture = name => JSON.parse(
+  readFileSync(new URL(`./fixtures/official/${name}`, import.meta.url), 'utf8'),
+).data
+
+function captionFrom(entries, prefix) {
+  return prefix + entries.map(entry => `[${entry.label}](<${entry.href}>)`
+    + (entry.sourceId ? ` [${entry.sourceId}]` : '') + `; ${entry.detail}`).join(' · ')
+}
+
+test('gallery cards keep official-data attribution identical to the audited source caption', () => {
+  for (const [name, lang, prefix] of [
+    ['viz_manifest_official.en_report.json', 'en', 'Source: '],
+    ['viz_manifest_official.zh_report.json', 'zh', '来源：'],
+  ]) {
+    const manifest = manifestFixture(name)
+    const gallery = normalizeVizGallery(manifest)
+    assert.equal(gallery.length, manifest.length)
+    for (const [index, card] of gallery.entries()) {
+      assert.equal(card.sourceCaption, manifest[index].source_caption)
+      assert.equal(card.sources.length, manifest[index].provenance.length)
+      const fromProvenance = chartAttribution(card, lang)
+      assert.equal(captionFrom(fromProvenance, prefix), manifest[index].source_caption, `${name} ${card.id}`)
+      // Without provenance the parsed caption yields the same links, tags and details.
+      const fromCaption = chartAttribution({ ...card, sources: [] }, lang)
+      assert.deepEqual(fromCaption, fromProvenance.map(entry => ({ ...entry, title: '' })))
+    }
+  }
+  const [dashboard] = normalizeVizGallery(manifestFixture('viz_manifest_official.en_report.json'))
+  assert.deepEqual(chartAttribution(dashboard, 'en')[0], {
+    label: 'FRED (Federal Reserve Bank of St. Louis)',
+    href: 'https://fred.stlouisfed.org/series/UNRATE',
+    sourceId: 'S1',
+    title: 'Unemployment Rate',
+    detail: 'Percent; Monthly; SA',
+  })
+  // A zh view of an English report localizes frequency and unknown adjustment.
+  const bis = chartAttribution(dashboard, 'zh').find(entry => entry.sourceId === 'S7')
+  assert.equal(bis.detail, 'Per cent per year; 月度; 季节调整未知')
+})
+
+test('attribution is empty for non-official charts and unsafe links are dropped', () => {
+  const [plain] = normalizeVizGallery([{ type: 'png', path: 'charts/scenarios.png', caption: 'Scenario Probabilities' }])
+  assert.deepEqual(chartAttribution(plain, 'en'), [])
+  const [unsafe] = normalizeVizGallery([{
+    type: 'png',
+    path: 'charts/official_indicators.png',
+    source_caption: 'Source: [Evil](<javascript:alert(1)>) [S1]; Percent; Monthly; SA',
+    provenance: [{ provider_name: 'Evil', source_url: 'javascript:alert(1)', source_id: 'S1x', units: 'Percent',
+      frequency: 'M', seasonal_adjustment: 'SA' }],
+  }])
+  const [entry] = chartAttribution(unsafe, 'en')
+  assert.equal(entry.href, '')
+  assert.equal(entry.sourceId, '')
+  assert.equal(chartAttribution({ ...unsafe, sources: [] }, 'en')[0].href, '')
+  assert.deepEqual(chartAttribution(null, 'en'), [])
 })

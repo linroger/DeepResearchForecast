@@ -41,7 +41,7 @@ def test_unknown_values_never_receive_latest_observed_marker(renderer, tmp_path)
     assert item.latest_observed() is None
     bundle = renderer._series_bundle(item, "en")
     assert bundle["value"] == "" and bundle["period"] == ""
-    assert "unknown" in renderer._caption([item], "en", compare=False).lower()
+    assert "status not supplied" in renderer._caption([item], "en", compare=False).lower()
     assert "latest observation marked" not in renderer._caption([item], "en", compare=False).lower()
 
 
@@ -50,7 +50,7 @@ def test_unknown_trace_retains_exact_values_and_gap(renderer, tmp_path):
         pytest.skip("plotly unavailable")
     item = _item(renderer, tmp_path, _unknown())
     fig = renderer._plotly_series(item, renderer._series_bundle(item, "en"))
-    unknown = next((trace for trace in fig.data if trace.name == "Unknown status"), None)
+    unknown = next((trace for trace in fig.data if trace.name == "Status not supplied"), None)
     assert unknown is not None
     assert list(unknown.y) == [2.0, None, 3.25, 3.5]
     assert unknown.connectgaps is False
@@ -77,7 +77,7 @@ def test_unknown_comparison_retains_status_caption(renderer, tmp_path):
     groups = renderer._compare_groups(items)
     assert len(groups) == 1
     caption = renderer._caption(items, "en", compare=True).lower()
-    assert "unknown" in caption and "latest observations marked" not in caption
+    assert "status not supplied" in caption and "latest observations marked" not in caption
 
 
 def test_comparison_png_status_keys_show_distinct_markers(renderer, tmp_path):
@@ -94,18 +94,23 @@ def test_comparison_png_status_keys_show_distinct_markers(renderer, tmp_path):
         legend = figure.axes[0].get_legend()
         markers = {label.get_text(): handle.get_marker()
                    for label, handle in zip(legend.get_texts(), legend.legend_handles, strict=True)}
-        assert markers["Unknown status"] == "x"
+        keys = {label.get_text(): handle
+                for label, handle in zip(legend.get_texts(), legend.legend_handles, strict=True)}
+        # Status not supplied is a light solid line (never a projection-like dashed key).
+        assert markers["Status not supplied"] in ("None", None, "")
+        assert keys["Status not supplied"].get_linestyle() == "-"
+        assert keys["Status not supplied"].get_alpha() < 1
         assert markers["Preliminary"] == "^"
     finally:
         renderer.plt.close(figure)
 
 
 @pytest.mark.parametrize("flag,provider,expected", [
-    ("observed", "fred", "Observed"), ("unknown", "imf", "Unknown status"),
+    ("observed", "fred", "Observed"), ("unknown", "imf", "Status not supplied"),
     ("preliminary", "bls", "Preliminary"), ("estimate", "imf", "Estimate"),
     ("projection", "imf", "Projection"), ("P", "bls", "Preliminary"),
-    ("P", "bis", "Unknown status"),
-    ("projection", "wb", "Unknown status"), ("observed", "wb", "Unknown status"),
+    ("P", "bis", "Status not supplied"),
+    ("projection", "wb", "Status not supplied"), ("observed", "wb", "Status not supplied"),
 ])
 def test_status_survives_loading_and_controls_latest(renderer, tmp_path, flag, provider, expected):
     if not renderer._HAS_PLOTLY:
@@ -128,11 +133,11 @@ def test_explicit_flags_override_cutoff_without_splicing_statuses(renderer, tmp_
         fig = renderer._plotly_series(item, renderer._series_bundle(item, "en"))
         values = {t.name: list(t.y) for t in fig.data if t.showlegend}
         assert 4.0 in values["Preliminary"] and 5.0 in values["Estimate"]
-        assert 6.0 in values["Unknown status"] and 7.0 in values["Unknown status"]
+        assert 6.0 in values["Status not supplied"] and 7.0 in values["Status not supplied"]
         assert 4.0 not in values["Projection"] and 7.0 not in values["Observed"]
         styles = {t.name: t.marker.symbol for t in fig.data if t.showlegend}
-        assert styles["Unknown status"] != styles["Preliminary"]
-    assert "unknown" in renderer._caption([item], "en", compare=False).lower()
+        assert styles["Status not supplied"] != styles["Preliminary"]
+    assert "status not supplied" in renderer._caption([item], "en", compare=False).lower()
 
 
 def _fiscal():
@@ -195,7 +200,7 @@ def test_real_cli_renders_status_and_fiscal_pngs_without_replacing_siblings(rend
     assert rows[0] == sibling
     for row in rows[1:]:
         assert (run / row["path"]).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-        assert "unknown" in row["caption"].lower()
+        assert "status not supplied" in row["caption"].lower()
     assert "partial" in rows[2]["caption"].lower()
 
 

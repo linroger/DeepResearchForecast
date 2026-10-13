@@ -4,6 +4,7 @@ Run with main_offline_pytest.py. All values and sources below are synthetic;
 no provider, model, saved report or pipeline is consulted.
 """
 from copy import deepcopy
+import html
 import json
 import re
 
@@ -73,13 +74,14 @@ def test_constructor_context_and_viz_use_same_stored_carrier(monkeypatch, tmp_pa
     agent = _agent(monkeypatch, official_data)
     assert agent.official_data is official_data
     assert official_data == before
-    assert 0 < len(agent._data_pack) <= 3500
+    assert 0 < len(agent._data_pack) <= 5000
     assert "Official data snapshot" in agent._data_pack
-    assert "4.25%" in agent._data_pack and "2025-04-01" in agent._data_pack
+    # Periods read at the series frequency (monthly 2025-04), as in the indicator table.
+    assert "| 4.25% / 2025-04 |" in agent._data_pack and "2025-04-01" not in agent._data_pack
     assert "[S1]" in agent._data_pack and "[S99]" not in agent._data_pack
     assert "projection" in agent._data_pack.lower()
     assert "0.25 percentage points" in agent._data_pack
-    assert "4% (2024-04-01) to 4.25% (2025-04-01)" in agent._data_pack
+    assert "4% (2024-04) to 4.25% (2025-04)" in agent._data_pack
     assert agent._data_pack in agent._prepend_research_background("Write the report")
     assert agent._collect_viz_artifacts("fixture_report", str(tmp_path))["official_data"] is official_data
 
@@ -180,7 +182,10 @@ def test_build_all_renders_stored_values_gaps_projection_and_threshold(viz, monk
     assert fig.layout.xaxis.type == "date"
     assert fig.layout.yaxis.title.text == "Percent"
     assert any(s.type == "line" and s.y0 == 5.0 and s.y1 == 5.0 for s in fig.layout.shapes)
-    assert any("Model threshold" in a.text and "65%" in a.text for a in fig.layout.annotations)
+    # The full threshold label (comparator, period, P(yes)) lives in the legend; the plot
+    # area only carries a short value tag so it never covers observations.
+    assert any("Model threshold" in (t.name or "") and "65%" in (t.name or "") for t in fig.data)
+    assert any(html.unescape(a.text).startswith(">=") and "5" in a.text for a in fig.layout.annotations)
     assert any("Forecast horizon" in a.text for a in fig.layout.annotations)
     projection_rect = next(s for s in fig.layout.shapes if s.type == "rect" and s.fillcolor == "#f59e0b")
     assert projection_rect.x0 == "2025-05-01" and projection_rect.x1 == "2025-06-01"
@@ -384,7 +389,8 @@ def test_malformed_optional_metadata_does_not_lose_history_exhibits(viz, tmp_pat
     items = viz.build_all("fixture", str(tmp_path), {"official_data": official_data,
                                                    "forecast": {"horizon": "2026", "scenarios": {"name": "Baseline"}},
                                                    "sources": 1})
-    assert any(i["id"].startswith("official_series_") for i in items)
+    # RPT-8 contract: unanchored, unbanded series appear on the dashboard only.
+    assert any(i["id"] == "official_indicators" for i in items)
     official = [i for i in items if i["source"] == "official_data"]
     assert all("[S99]" not in i["source_caption"] for i in official)
     manifest = json.loads((tmp_path / "viz_manifest.json").read_text())
@@ -487,3 +493,50 @@ def test_annual_scenario_band_only_spans_named_year(viz, monkeypatch, tmp_path, 
     viz._build_official_plotly(panels, str(tmp_path), "fixture", "Official Indicators", forecast, detail=True)
     rect = next(s for s in captured["figure"].layout.shapes if s.type == "rect" and s.fillcolor == "#22c55e")
     assert rect.x0 == "2026-01-01" and rect.x1 == "2027-01-01"
+
+
+def test_executive_brief_values_carry_their_units():
+    """A level read without its units misleads ('58522249' is $58.5 billion in Thousands of U.S.
+    Dollars); percent series keep the bare percentage."""
+    from pathlib import Path
+    from app.services import exec_brief
+    from app.services.report_agent import official_indicator_rows
+    real = Path(__file__).parent / "fixtures" / "data_sources" / "real" / "agent_usage" / "carriers-2026-10-13.json"
+    questions = json.loads(real.read_text(encoding="utf-8"))["questions"]
+    semis = {"schema_version": 1, "series": questions["q5_semis"]["series"]}
+    block = exec_brief._build_indicators_block(official_indicator_rows(semis, lang="en"), exec_brief._LABELS["en"])
+    assert "| 58522249 Thousands of U.S. Dollars | 2024 |" in block
+    assert "| 190.0987 Index 2017=100 | 2026-08 |" in block
+    rates = {"schema_version": 1, "series": questions["q1_cpi_fed"]["series"]}
+    assert "| 3.75% | 2026-09 |" in exec_brief._build_indicators_block(
+        official_indicator_rows(rates, lang="en"), exec_brief._LABELS["en"])
+    zh = exec_brief._build_indicators_block(official_indicator_rows(semis, lang="zh"), exec_brief._LABELS["zh"])
+    assert "| 58522249 Thousands of U.S. Dollars | 2024 |" in zh
+    datacenter = {"schema_version": 1, "series": questions["q2_datacenter"]["series"]}
+    binary = fe._normalize_binaries([{
+        "statement": "US commercial-sector retail electricity sales are at least 160,000 million kilowatt-hours "
+                     "in July 2030.",
+        "probability": 0.3,
+        "resolution_criteria": "Resolves YES if usgov:eia/electricity_sales/US.COM >= 160000 Million kilowatt-hours "
+                               "in 2030-07 (source: EIA).",
+        "data_anchor": {"series": "usgov:eia/electricity_sales/US.COM", "comparator": ">=", "threshold": 160000,
+                        "observation": "2030-07", "units": "Million kilowatt-hours"}}], official_data=datacenter)[0]
+    line = exec_brief._anchor_watch_line(binary, exec_brief._LABELS["en"])[1]
+    assert ("latest 150578.728 Million kilowatt-hours (2026-07); "
+            "threshold >= 160000 Million kilowatt-hours (2030-07); historical base rate") in line
+
+
+@pytest.mark.parametrize("row, expected", [
+    # A usgov row without a stored provider_name names its publishing agency, as fresh rows do.
+    ({"provider": "usgov", "series": "usgov:eia/electricity_sales/US.COM"},
+     "U.S. Energy Information Administration (EIA)"),
+    ({"provider": "usgov", "series": "usgov:treasury/debt_to_penny"},
+     "U.S. Treasury Fiscal Data (Bureau of the Fiscal Service)"),
+    ({"provider": "fred", "series": "fred:UNRATE"}, "FRED (Federal Reserve Bank of St. Louis)"),
+    # A stored name is authoritative; an unknown provider falls back to its code.
+    ({"provider": "usgov", "series": "usgov:eia/electricity_sales/US.COM", "provider_name": "Stored name"},
+     "Stored name"),
+    ({"provider": "unknown", "series": "unknown:x"}, "unknown"),
+])
+def test_official_provider_label_falls_back_to_the_catalog_publisher(row, expected):
+    assert ReportAgent._official_provider_label(row) == expected

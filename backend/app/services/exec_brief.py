@@ -65,6 +65,15 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "sim_run": "simulation run",
         "organic": "organic actions",
         "gen_note": "Deterministically extracted from the full report — no model generation.",
+        "indicators": "Key official indicators",
+        "c_indicator": "Indicator",
+        "c_latest": "Latest observed",
+        "c_period": "Period",
+        "c_change": "Year-over-year change",
+        "c_source": "Source",
+        "w_latest": "latest",
+        "w_threshold": "threshold",
+        "w_base_rate": "historical base rate",
     },
     "zh": {
         "brief_title": "高管简报",
@@ -94,6 +103,15 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "sim_run": "模拟运行",
         "organic": "条有机行为",
         "gen_note": "全部从成稿确定性抽取——无模型生成。",
+        "indicators": "关键官方指标",
+        "c_indicator": "指标",
+        "c_latest": "最新观测值",
+        "c_period": "期间",
+        "c_change": "同比变化",
+        "c_source": "来源",
+        "w_latest": "最新",
+        "w_threshold": "阈值",
+        "w_base_rate": "历史基率",
     },
 }
 
@@ -524,15 +542,71 @@ def _build_scenarios_block(forecast: Dict[str, Any], L: Dict[str, str],
     return "\n".join(line for _p, line in items[:cap])
 
 
-def _build_watch_block(forecast: Dict[str, Any], L: Dict[str, str], n: int = 3) -> str:
+def _official_amount(value: Optional[float], units: str, zh: bool) -> str:
+    """A stored value as published plus its units (a level such as '58522249' Thousands of U.S.
+    Dollars is meaningless without them) and the data layer's magnitude companion."""
+    from .official_data import data_api, format_value
+    api = data_api()
+    text = format_value(value, units)
+    if api is None or value is None or api.is_percent_units(units):
+        return text
+    scaled = api.scaled_value(value, units, "zh" if zh else "en")
+    return f"{text} {units}".rstrip() + ((f"（{scaled}）" if zh else f" ({scaled})") if scaled else "")
+
+
+def _anchor_watch_line(b: Dict[str, Any], L: Dict[str, str],
+                       rows: Optional[Dict[str, Dict[str, Any]]] = None) -> Optional[Tuple[str, str]]:
+    """RPT-11: an officially anchored binary as '(period, line)': latest stored value vs the
+    threshold for the anchored period, plus the historical base rate when computed. ``rows``
+    (the report's stored series by id) names a US federal fiscal year by its label ('FY2026')."""
+    anchor = b.get("data_anchor")
+    if not isinstance(anchor, dict) or _to_float(anchor.get("threshold")) is None:
+        return None
+    period = str(anchor.get("period") or "")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", period) or anchor.get("comparator") not in (">", ">=", "<", "<="):
+        return None
+    from .forecast_extractor import official_fiscal_label
+    from .report_agent import official_period_label
+    units = str(anchor.get("units") or "")
+    grid = {"frequency": anchor.get("frequency")}
+    row = (rows or {}).get(str(anchor.get("series") or ""))
+
+    def period_text(day: str) -> str:
+        return official_fiscal_label(row, day) or official_period_label(grid, day)
+    zh = L is _LABELS["zh"]
+    parts = []
+    latest, latest_date = _to_float(anchor.get("latest_value")), str(anchor.get("latest_date") or "")
+    if latest is not None and re.fullmatch(r"\d{4}-\d{2}-\d{2}", latest_date):
+        parts.append(f"{L['w_latest']} {_official_amount(latest, units, zh)} ({period_text(latest_date)})")
+    parts.append(f"{L['w_threshold']} {anchor['comparator']} {_official_amount(_to_float(anchor['threshold']), units, zh)} "
+                 f"({period_text(period)})")
+    rate = anchor.get("empirical_base_rate")
+    if isinstance(rate, dict) and _to_float(rate.get("p")) is not None:
+        from .forecast_extractor import empirical_seasonal_note
+        note = empirical_seasonal_note(rate, zh)
+        parts.append(f"{L['w_base_rate']} {_fmt_pct(_to_float(rate.get('p')))}"
+                     + ((f"（{note}）" if zh else f" ({note})") if note else ""))
+    return period, f"- {_md_cell(b.get('statement'), 130)} — {'; '.join(_md_cell(part, 120) for part in parts)}"
+
+
+def _build_watch_block(forecast: Dict[str, Any], L: Dict[str, str], n: int = 3,
+                       rows: Optional[Dict[str, Dict[str, Any]]] = None) -> str:
     """3 个带日期的观察指标：从二元预测里挑「有可解析判定日期」的，优先 criteria_sharp（客观判定），
-    按日期升序（最近的最值得盯）取前 n 条，每行 '- 陈述 — 日期'。不足则用剩余带日期预测补足。"""
+    按日期升序（最近的最值得盯）取前 n 条，每行 '- 陈述 — 日期'。不足则用剩余带日期预测补足。
+
+    RPT-11: binaries anchored to a stored official series come first (earliest
+    anchored period first), shown as latest stored value vs threshold."""
     bfs = forecast.get("binary_forecasts")
     if not isinstance(bfs, list) or not bfs:
         return L["no_data"]
+    anchored: List[Tuple[str, str]] = []
     dated: List[Tuple[bool, Tuple[int, int, int], str, str]] = []
     for b in bfs:
         if not isinstance(b, dict):
+            continue
+        anchor_line = _anchor_watch_line(b, L, rows)
+        if anchor_line:
+            anchored.append(anchor_line)
             continue
         d = _extract_date(str(b.get("resolution_criteria") or ""),
                           str(b.get("resolution_source") or ""))
@@ -540,12 +614,51 @@ def _build_watch_block(forecast: Dict[str, Any], L: Dict[str, str], n: int = 3) 
             continue
         sort_key, disp = d
         dated.append((bool(b.get("criteria_sharp")), sort_key, _md_cell(b.get("statement"), 130), disp))
-    if not dated:
+    if not anchored and not dated:
         return L["no_data"]
     # 排序：客观判定优先（sharp True 在前），再按日期升序。
+    anchored.sort(key=lambda t: t[0])
     dated.sort(key=lambda t: (not t[0], t[1]))
-    lines = [f"- {stmt} — **{disp}**" for _sharp, _k, stmt, disp in dated[:n]]
+    lines = [line for _period, line in anchored[:n]]
+    lines += [f"- {stmt} — **{disp}**" for _sharp, _k, stmt, disp in dated[:max(0, n - len(lines))]]
     return "\n".join(lines)
+
+
+def _official_rows(report_dir: str) -> Dict[str, Dict[str, Any]]:
+    """Stored rows of the report-local official_data.json by series id ({} when absent)."""
+    from .forecast_extractor import official_series_rows
+    from .report_agent import ReportManager, read_report_official_data
+    record = read_report_official_data(os.path.join(report_dir, ReportManager.OFFICIAL_DATA_FILENAME))
+    return {row["series"]: row for row in official_series_rows(record["official_data"])} if record else {}
+
+
+def _official_summaries(report_dir: str, lang: str) -> List[Dict[str, Any]]:
+    """Indicator summaries from the report-local official_data.json ([] when absent)."""
+    from .report_agent import ReportManager, official_indicator_rows, read_report_official_data
+    record = read_report_official_data(os.path.join(report_dir, ReportManager.OFFICIAL_DATA_FILENAME))
+    if record is None:
+        return []
+    tags = record["source_tags"]
+    return [summary for summary in official_indicator_rows(
+        record["official_data"], lang=lang, tag_for=lambda row: tags.get(row["series"], ""))
+        if summary["latest"]]
+
+
+def _build_indicators_block(summaries: List[Dict[str, Any]], L: Dict[str, str], cap: int = 8) -> str:
+    """RPT-11: localized Key official indicators mini-table (latest observed values only)."""
+    if not summaries:
+        return ""
+    out = [f"| {L['c_indicator']} | {L['c_latest']} | {L['c_period']} | {L['c_change']} | {L['c_source']} |",
+           "|---|---|---|---|---|"]
+    zh = L is _LABELS["zh"]
+    for summary in summaries[:cap]:
+        change = summary["change"]["display"] if summary["change"] else "—"
+        source = summary["provider_name"] or summary["provider"] or "Source"
+        latest = _official_amount(summary["latest"]["value"], summary["units"], zh)
+        out.append(f"| {_md_cell(summary['label'], 90)} | {_md_cell(latest, 120)} "
+                   f"| {_md_cell(summary['latest']['period'], 16)} | {_md_cell(change, 60)} "
+                   f"| [{_md_cell(source, 60)}](<{summary['source_url']}>) |")
+    return "\n".join(out)
 
 
 # ─────────────────────────── 顶层构建器 ───────────────────────────
@@ -613,6 +726,8 @@ class ExecBriefBuilder:
         md_path = os.path.join(report_dir, "full_report.md")
         forecast_path = os.path.join(report_dir, "forecast.json")
         meta_path = os.path.join(report_dir, "meta.json")
+        from .report_agent import ReportManager
+        official_path = os.path.join(report_dir, ReportManager.OFFICIAL_DATA_FILENAME)
 
         meta = _read_json(meta_path) or {}
         md = _read_text(md_path)
@@ -625,7 +740,7 @@ class ExecBriefBuilder:
         # ① 主语言简报 + 速览
         brief_out = cls.brief_path(report_dir)
         digest_out = cls.digest_path(report_dir)
-        if force or cls._needs_rebuild(brief_out, md_path, forecast_path):
+        if force or cls._needs_rebuild(brief_out, md_path, forecast_path, official_path):
             forecast = _read_json(forecast_path)
             lang = _detect_lang(md)
             outline_summary = ""
@@ -635,7 +750,7 @@ class ExecBriefBuilder:
                                          lang, outline_summary)
             if _write_text_atomic(brief_out, brief_md):
                 produced["exec_brief"] = brief_out
-            digest_md = cls._render_digest(report_id, md, forecast, meta, lang)
+            digest_md = cls._render_digest(report_id, md, forecast, meta, lang, report_dir=report_dir)
             if _write_text_atomic(digest_out, digest_md):
                 produced["digest"] = digest_out
         else:
@@ -658,7 +773,7 @@ class ExecBriefBuilder:
                 if not tmd:
                     continue
                 tbrief_out = cls.brief_path(report_dir, tlang)
-                if force or cls._needs_rebuild(tbrief_out, tmd_path, forecast_path):
+                if force or cls._needs_rebuild(tbrief_out, tmd_path, forecast_path, official_path):
                     # 译文简报：论点从译文成稿抽取（不传 outline.summary——它是主语言）。
                     tbrief_md = cls._render_brief(report_id, report_dir, tmd, forecast, meta,
                                                   tlang, outline_summary="")
@@ -718,6 +833,14 @@ class ExecBriefBuilder:
         parts.append(_build_scenarios_block(fc, L) if fc else L["no_data"])
         parts.append("")
 
+        # RPT-11: stored official indicators (report-local carrier), when present.
+        indicators = _build_indicators_block(_official_summaries(report_dir, lang), L)
+        if indicators:
+            parts.append(f"## {L['indicators']}")
+            parts.append("")
+            parts.append(indicators)
+            parts.append("")
+
         # 最承重的图（scenario-bars PNG，若存在）
         chart = _find_scenario_chart(report_dir)
         if chart:
@@ -730,7 +853,7 @@ class ExecBriefBuilder:
         # 观察指标（3 个带日期）
         parts.append(f"## {L['watch']}")
         parts.append("")
-        parts.append(_build_watch_block(fc, L) if fc else L["no_data"])
+        parts.append(_build_watch_block(fc, L, rows=_official_rows(report_dir)) if fc else L["no_data"])
         parts.append("")
 
         # 一行诚实声明
@@ -746,8 +869,10 @@ class ExecBriefBuilder:
     # ── 速览渲染（~15 行 newsletter）──
     @classmethod
     def _render_digest(cls, report_id: str, md: str, forecast: Optional[Dict[str, Any]],
-                       meta: Dict[str, Any], lang: str) -> str:
-        """渲染 digest.md：标题 + 3 条要点（top 情景/驱动）+ 头号预测 + 最大市场分歧 + 链接路径。"""
+                       meta: Dict[str, Any], lang: str, report_dir: str = "") -> str:
+        """渲染 digest.md：标题 + 3 条要点（top 情景/驱动）+ 头号预测 + 最大市场分歧 + 链接路径。
+
+        RPT-11: plus one line of up to three stored official indicators."""
         L = _LABELS.get(lang, _LABELS["en"])
         fc = forecast if isinstance(forecast, dict) else {}
 
@@ -807,6 +932,14 @@ class ExecBriefBuilder:
                 lines.append(f"**{L['biggest_divergence']}:** {_md_cell(b.get('statement'), 140)} "
                              f"— {_md_cell(_market_delta_cell(b), 48)}")
                 lines.append("")
+
+        summaries = _official_summaries(report_dir, lang) if report_dir else []
+        if summaries:
+            facts = [f"{_md_cell(summary['label'], 70)} "
+                     f"{_md_cell(_official_amount(summary['latest']['value'], summary['units'], lang == 'zh'), 100)} "
+                     f"({summary['latest']['period']})" for summary in summaries[:3]]
+            lines.append(f"**{L['indicators']}:** " + "; ".join(facts))
+            lines.append("")
 
         # 链接路径（相对 API 路径，便于分享/嵌入）
         base = f"/api/report/{report_id}"

@@ -144,6 +144,20 @@ export const getForecast = (reportId, lang) => {
 }
 
 /**
+ * RPT-12：报告所依据的官方数据（报告目录内 official_data.json，摘要校验通过才返回；从不重新抓取）。
+ * 返回 { success, data: { report_id, available, sha256, saved_at, research_binding,
+ *   official_data, indicators: [official_indicator_summary…], lang } }；
+ * indicators 的展示文本按 lang（en|zh，缺省为报告语种）在服务端本地化。
+ * 降级路径（调用方一律按「无官方指标」处理）：无官方数据 → 200 + available:false；
+ * 报告不存在 → 404；未通过发布门 → 409。
+ * @param {string} reportId
+ * @param {string} [lang]
+ */
+export const getReportOfficialData = (reportId, lang) => {
+  return service.get(`/api/report/${reportId}/official-data`, lang ? { params: { lang } } : undefined)
+}
+
+/**
  * 把报告内相对可视化资源路径（如 'charts/xxx.png'）重写为可访问 URL。
  * 与 /charts 端点同源：/api/report/<id>/charts/<file>。用于 renderMarkdown 的 resolveUrl 及图表画廊。
  * @param {string} reportId

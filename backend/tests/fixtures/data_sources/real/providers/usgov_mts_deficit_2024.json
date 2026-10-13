@@ -1,0 +1,135 @@
+{
+ "captured_at": "2026-10-11T22:08:15Z",
+ "clock": 1791756495,
+ "series": "usgov:treasury/mts_deficit",
+ "request": {
+  "start": "2024-01-01",
+  "end": "2024-12-31"
+ },
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "treasury_query_fiscal_data",
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:520,record_date:gte:2024-01-01,record_date:lte:2024-12-31",
+    "sort": "-record_date",
+    "page_number": 1,
+    "page_size": 100
+   },
+   "response": {
+    "summary": "Query /v1/accounting/mts/mts_table_3: 12 returned, 12 total, page 1 of 1",
+    "dataType": "table",
+    "data": {
+     "columns": [
+      "record_date",
+      "line_code_nbr",
+      "src_line_nbr",
+      "classification_desc",
+      "current_month_rcpt_outly_amt"
+     ],
+     "rows": [
+      [
+       "2024-12-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-86731619013.29"
+      ],
+      [
+       "2024-11-30",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-366763064368.07"
+      ],
+      [
+       "2024-10-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-257450343191.91"
+      ],
+      [
+       "2024-09-30",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "64263008867.74"
+      ],
+      [
+       "2024-08-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-380080405434.50"
+      ],
+      [
+       "2024-07-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-243741087297.43"
+      ],
+      [
+       "2024-06-30",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-65965292476.34"
+      ],
+      [
+       "2024-05-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-347130893691.65"
+      ],
+      [
+       "2024-04-30",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "209529306625.33"
+      ],
+      [
+       "2024-03-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-236456823950.20"
+      ],
+      [
+       "2024-02-29",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-296274648079.89"
+      ],
+      [
+       "2024-01-31",
+       "520",
+       "55",
+       "Surplus (+) or Deficit (-)",
+       "-21930356331.02"
+      ]
+     ],
+     "total": 12,
+     "truncated": false
+    },
+    "meta": {
+     "endpoint": "/v1/accounting/mts/mts_table_3",
+     "recordsReturned": 12,
+     "totalPages": 1,
+     "sources": [
+      {
+       "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_3?format=json&fields=record_date%2Cline_code_nbr%2Csrc_line_nbr%2Cclassification_desc%2Ccurrent_month_rcpt_outly_amt&filter=line_code_nbr%3Aeq%3A520%2Crecord_date%3Agte%3A2024-01-01%2Crecord_date%3Alte%3A2024-12-31&sort=-record_date&page[number]=1&page[size]=100",
+       "fetchedAt": "2026-10-11T22:08:15.405Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

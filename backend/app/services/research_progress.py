@@ -4,7 +4,8 @@ The DeerFlow bridge already emits a rich append-only event stream, but its event
 do not carry numeric percentages.  This module keeps the numeric estimate tied to
 explicit research milestones and only uses tool/result activity (plus, for engine
 v3, announced work-unit completions) for movement *inside* the current milestone
-band; the legacy and v3 milestone vocabularies are disjoint.  It also exposes the
+band; the legacy and v3 milestone vocabularies are disjoint (v3 also has an
+official-data band between plan and gather when the run announces one).  It also exposes the
 active outer-track logs without reading multi-megabyte files in full on every
 frontend poll.  A separate
 explicit full-history snapshot is available for one-time hydration, completed-run
@@ -51,6 +52,11 @@ _LIFECYCLE_KINDS = frozenset({"init", "stage", "ok", "done", "resume"})
 _V3_PLAN_BAND = (6, 10)
 _V3_PLAN_DONE_BAND = (9, 10)
 _V3_GATHER_BAND = (10, 60)
+# The official-data prefetch (``research:v3:data start/done``) runs between plan
+# and gather in data-enabled runs only; once it was seen, gather starts above it.
+_V3_DATA_BAND = (10, 13)
+_V3_DATA_DONE_BAND = (12, 13)
+_V3_GATHER_AFTER_DATA_BAND = (13, 60)
 _V3_GAP_FIRST_FLOOR = 60
 _V3_GAP_SLOT = 4          # round 1 → 60..64, round ≥2 → 64..68
 _V3_GAP_CEILING = 68
@@ -106,13 +112,14 @@ def _parse_v3_event(line: str) -> _V3Event | None:
     )
 
 
-def _v3_milestone(event: _V3Event) -> tuple[int, int] | None:
+def _v3_milestone(event: _V3Event, *, data: bool = False) -> tuple[int, int] | None:
     """Map one v3 lifecycle event to its band, or None when it is not a boundary.
 
     Per-unit completions (``[ok] research:v3:gather K3 …``) are deliberately not
     boundaries: they move progress *inside* the gather band (see
     ``ResearchProgressEstimator``).  Unknown phases/shapes return None rather
-    than falling through to the legacy vocabulary.
+    than falling through to the legacy vocabulary.  ``data`` marks a stream
+    whose official-data phase was announced: gather then starts above it.
     """
     entering = event.kind in _V3_ENTER_KINDS
     finished = event.kind in _V3_FINISH_KINDS
@@ -121,8 +128,14 @@ def _v3_milestone(event: _V3Event) -> tuple[int, int] | None:
         if entering:
             return _V3_PLAN_BAND
         return _V3_PLAN_DONE_BAND if finished and is_done else None
+    if event.phase == "data":
+        if entering:
+            return _V3_DATA_BAND
+        return _V3_DATA_DONE_BAND if finished and is_done else None
     if event.phase == "gather":
-        return _V3_GATHER_BAND if entering else None
+        if not entering:
+            return None
+        return _V3_GATHER_AFTER_DATA_BAND if data else _V3_GATHER_BAND
     if event.phase == "gap":
         if not entering:
             return None
@@ -157,6 +170,10 @@ class ResearchProgressEstimator:
     (``[stage] research:v3:gather start (7 KIQs, …)``); each distinct unit
     completion (``[ok] research:v3:gather K3 …``) then advances progress by its
     share of the band, again keeping one point in reserve for the next milestone.
+    A data-enabled v3 run announces its official-data prefetch
+    (``[stage] research:v3:data start (N series)`` … ``[ok] research:v3:data
+    done (…)``) between plan and gather; that stream's gather band then starts
+    above the data band, while streams without it keep the original bands.
     """
 
     _ACTIVITY_SCALE = 80.0
@@ -169,6 +186,7 @@ class ResearchProgressEstimator:
         # Engine v3 state: whether this stream is a v3 run (affects only the
         # shared sources.json slot) and the unit ledger of the current band.
         self._v3_seen = False
+        self._v3_data_seen = False
         self._unit_phase: str | None = None
         self._units_total = 0
         self._units_done: set[str] = set()
@@ -220,11 +238,12 @@ class ResearchProgressEstimator:
         self._progress = max(self._progress, self._phase_floor + step)
 
     @staticmethod
-    def _milestone(line: str, *, v3: bool = False) -> tuple[int, int] | None:
+    def _milestone(line: str, *, v3: bool = False, data: bool = False) -> tuple[int, int] | None:
         """Classify one line into a ``(floor, ceiling)`` band, or None.
 
         ``v3`` marks a stream already identified as an engine-v3 run; it only
         moves the shared ``wrote sources.json`` milestone to v3's earlier slot.
+        ``data`` marks a v3 stream that announced its official-data phase.
         """
         text = line.lower()
         # Tool/result previews contain untrusted web and model text.  A page can
@@ -236,7 +255,7 @@ class ResearchProgressEstimator:
         # Engine v3 lines are classified only by the v3 vocabulary.
         v3_event = _parse_v3_event(line)
         if v3_event is not None:
-            return _v3_milestone(v3_event)
+            return _v3_milestone(v3_event, data=data)
 
         # Terminal and post-processing milestones (most specific first).
         if "research complete" in text:
@@ -348,7 +367,8 @@ class ResearchProgressEstimator:
         v3_event = _parse_v3_event(raw)
         if v3_event is not None:
             self._v3_seen = True
-        milestone = self._milestone(raw, v3=self._v3_seen)
+            self._v3_data_seen = self._v3_data_seen or v3_event.phase == "data"
+        milestone = self._milestone(raw, v3=self._v3_seen, data=self._v3_data_seen)
         if milestone is not None:
             if self._advance_phase(*milestone) and v3_event is not None:
                 self._arm_v3_units(v3_event)

@@ -1,0 +1,664 @@
+{
+ "captured": "2026-10-11",
+ "policy": "normalized by eac717b (normalization_policy_version 2); observations trimmed to the newest rows",
+ "series": [
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "The unemployment rate represents the number of unemployed as a percentage of the labor force. Labor force data are restricted to people 16 years of age and older, who currently reside in 1 of the 50 states or the District of Columbia, who do not reside in institutions (e.g., penal and mental facilit",
+   "observations": [
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "",
+     "value": 3.8
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": null
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 4.2
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "normalization_policy_version": 2,
+    "native_frequency": "M",
+    "native_complete": true,
+    "requested_start": "2016-10-11",
+    "requested_end": "2026-10-11",
+    "delivered_start": "2023-10-01",
+    "delivered_end": "2026-09-01",
+    "retrieval_route": "mcp",
+    "intentional_delivery_trim": true
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:09.042257+00:00",
+   "route": "mcp",
+   "seasonal_adjustment": "SA",
+   "series": "fred:UNRATE",
+   "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+   "title": "Unemployment Rate",
+   "title_zh": "美国失业率",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/M.US?startPeriod=2016-10-11&endPeriod=2026-10-11&format=csv&labels=both",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "For the United States BIS reports the midpoint of the federal funds target range; fred:DFEDTARU is the upper limit.",
+   "observations": [
+    {
+     "date": "2024-10-01",
+     "flag": "observed",
+     "value": 4.875
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "observed",
+     "value": 4.625
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "observed",
+     "value": 4.125
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "observed",
+     "value": 3.875
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "observed",
+     "value": 3.875
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "observed",
+     "value": 3.875
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "normalization_policy_version": 2,
+    "native_frequency": "M",
+    "requested_start": "2016-10-11",
+    "requested_end": "2026-10-11",
+    "delivered_start": "2024-10-01",
+    "delivered_end": "2026-09-01",
+    "retrieval_route": "mcp",
+    "intentional_delivery_trim": true
+   },
+   "provider": "bis",
+   "provider_name": "Bank for International Settlements (BIS)",
+   "retrieved_at": "2026-10-11T19:51:25.213642+00:00",
+   "route": "mcp",
+   "seasonal_adjustment": "",
+   "series": "bis:WS_CBPOL/M.US",
+   "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+   "title": "Central bank policy rates - United States - Monthly - End of period",
+   "title_zh": "美国央行政策利率",
+   "transform": "",
+   "units": "Per cent per year",
+   "vintage": ""
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Native Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+   "observations": [
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 2.945509
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 1.819587
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 2.457596
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 2.966663
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 2.583574
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": -2.081277
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 6.151865
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 2.524222
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": 2.934535
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": 2.793116
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 2.11733
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "unknown",
+     "value": 2.323695
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "normalization_policy_version": 2,
+    "native_frequency": "A",
+    "native_complete": true,
+    "resolution_safe": false,
+    "fidelity_policy_version": 2,
+    "projection_status": "not supplied",
+    "requested_start": "2001-10-11",
+    "requested_end": "2026-10-11",
+    "delivered_start": "2015-01-01",
+    "delivered_end": "2026-01-01",
+    "retrieval_route": "mcp",
+    "intentional_delivery_trim": true
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-11T19:51:39.641757+00:00",
+   "route": "mcp",
+   "seasonal_adjustment": "",
+   "series": "wb:IMF_WEO_NGDP_RPCH/USA",
+   "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change",
+   "title_zh": "美国实际GDP增长率（IMF WEO）",
+   "transform": "",
+   "units": "Percentage change",
+   "vintage": "latest published vintage (Data360 V_LST)"
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "DEU",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Native Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+   "observations": [
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 1.663115
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 2.217286
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 2.805625
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 1.133159
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 0.9729
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": -4.127492
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 3.912517
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 1.806885
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": -0.871931
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": -0.496036
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 0.239673
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "unknown",
+     "value": 0.790622
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "normalization_policy_version": 2,
+    "native_frequency": "A",
+    "native_complete": true,
+    "resolution_safe": false,
+    "fidelity_policy_version": 2,
+    "projection_status": "not supplied",
+    "requested_start": "2001-10-11",
+    "requested_end": "2026-10-11",
+    "delivered_start": "2015-01-01",
+    "delivered_end": "2026-01-01",
+    "retrieval_route": "mcp",
+    "intentional_delivery_trim": true
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-11T19:51:43.382996+00:00",
+   "route": "mcp",
+   "seasonal_adjustment": "",
+   "series": "wb:IMF_WEO_NGDP_RPCH/DEU",
+   "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change",
+   "title_zh": "德国实际GDP增长率（IMF WEO）",
+   "transform": "",
+   "units": "Percentage change",
+   "vintage": "latest published vintage (Data360 V_LST)"
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "CHN",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Native Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+   "observations": [
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 7.018399
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 6.775548
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 6.890957
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 6.758615
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 6.064729
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": 2.33658
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 8.555707
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 3.112082
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": 5.376818
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": 5.002785
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 4.958804
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "unknown",
+     "value": 4.41261
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "normalization_policy_version": 2,
+    "native_frequency": "A",
+    "native_complete": true,
+    "resolution_safe": false,
+    "fidelity_policy_version": 2,
+    "projection_status": "not supplied",
+    "requested_start": "2001-10-11",
+    "requested_end": "2026-10-11",
+    "delivered_start": "2015-01-01",
+    "delivered_end": "2026-01-01",
+    "retrieval_route": "mcp",
+    "intentional_delivery_trim": true
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-11T19:51:39.475821+00:00",
+   "route": "mcp",
+   "seasonal_adjustment": "",
+   "series": "wb:IMF_WEO_NGDP_RPCH/CHN",
+   "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change",
+   "title_zh": "中国实际GDP增长率（IMF WEO）",
+   "transform": "",
+   "units": "Percentage change",
+   "vintage": "latest published vintage (Data360 V_LST)"
+  }
+ ]
+}

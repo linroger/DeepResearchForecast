@@ -1,0 +1,6002 @@
+{
+ "captured": "2026-10-11 live FRED/BIS/World Bank Data360/IMF/US Treasury via the HEAD data layer (review/rpt/handoff3, review/vrpt/handoff_dex); trimmed history, values verbatim",
+ "series": [
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "The unemployment rate represents the number of unemployed as a percentage of the labor force. Labor force data are restricted to people 16 years of age and older, who currently reside in 1 of the 50 states or the District of Columbia, who d",
+   "observations": [
+    {
+     "date": "2019-01-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2019-02-01",
+     "flag": "",
+     "value": 3.8
+    },
+    {
+     "date": "2019-03-01",
+     "flag": "",
+     "value": 3.8
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2019-05-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2019-06-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2019-08-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2019-09-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2019-11-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2019-12-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2020-02-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2020-03-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "",
+     "value": 14.8
+    },
+    {
+     "date": "2020-05-01",
+     "flag": "",
+     "value": 13.2
+    },
+    {
+     "date": "2020-06-01",
+     "flag": "",
+     "value": 11.0
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "",
+     "value": 10.2
+    },
+    {
+     "date": "2020-08-01",
+     "flag": "",
+     "value": 8.4
+    },
+    {
+     "date": "2020-09-01",
+     "flag": "",
+     "value": 7.8
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "",
+     "value": 6.9
+    },
+    {
+     "date": "2020-11-01",
+     "flag": "",
+     "value": 6.7
+    },
+    {
+     "date": "2020-12-01",
+     "flag": "",
+     "value": 6.7
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "",
+     "value": 6.4
+    },
+    {
+     "date": "2021-02-01",
+     "flag": "",
+     "value": 6.2
+    },
+    {
+     "date": "2021-03-01",
+     "flag": "",
+     "value": 6.1
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "",
+     "value": 6.1
+    },
+    {
+     "date": "2021-05-01",
+     "flag": "",
+     "value": 5.8
+    },
+    {
+     "date": "2021-06-01",
+     "flag": "",
+     "value": 5.9
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "",
+     "value": 5.4
+    },
+    {
+     "date": "2021-08-01",
+     "flag": "",
+     "value": 5.1
+    },
+    {
+     "date": "2021-09-01",
+     "flag": "",
+     "value": 4.7
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2021-11-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2021-12-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2022-02-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2022-03-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2022-05-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2022-06-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2022-08-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2022-09-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2022-11-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2022-12-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2023-02-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2023-03-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "",
+     "value": 3.4
+    },
+    {
+     "date": "2023-05-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2023-06-01",
+     "flag": "",
+     "value": 3.6
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "",
+     "value": 3.5
+    },
+    {
+     "date": "2023-08-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2023-09-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "",
+     "value": 3.8
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": 3.7
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "",
+     "value": 3.9
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": null
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 4.4
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 4.3
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 4.2
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-09-01",
+    "delivered_start": "2016-11-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 120,
+    "native_frequency": "M",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "5006518420b95cdd877e4074c516d80950c87361b8491edf8ac85acc7de9be36",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2016-10-11",
+       "offset": 0,
+       "series_id": "UNRATE",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "bf76246241a0ffd839232c586cd9592f01fc87f9d17c85c9e2770bd5c4566fe7",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:09.042257+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "SA",
+   "series": "fred:UNRATE",
+   "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+   "title": "Unemployment Rate",
+   "title_zh": "美国失业率",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=GDPC1&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "Q",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "BEA Account Code: A191RX Real gross domestic product is the inflation adjusted value of the goods and services produced by labor and property located in the United States.For more information see the Guide to the National Income and Product",
+   "observations": [
+    {
+     "date": "2017-01-01",
+     "flag": "",
+     "value": 19398.343
+    },
+    {
+     "date": "2017-04-01",
+     "flag": "",
+     "value": 19506.949
+    },
+    {
+     "date": "2017-07-01",
+     "flag": "",
+     "value": 19660.766
+    },
+    {
+     "date": "2017-10-01",
+     "flag": "",
+     "value": 19882.352
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "",
+     "value": 20044.077
+    },
+    {
+     "date": "2018-04-01",
+     "flag": "",
+     "value": 20150.476
+    },
+    {
+     "date": "2018-07-01",
+     "flag": "",
+     "value": 20276.154
+    },
+    {
+     "date": "2018-10-01",
+     "flag": "",
+     "value": 20304.874
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "",
+     "value": 20431.641
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "",
+     "value": 20602.275
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "",
+     "value": 20843.322
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "",
+     "value": 20985.448
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "",
+     "value": 20709.212
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "",
+     "value": 19077.992
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "",
+     "value": 20558.879
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "",
+     "value": 20791.917
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "",
+     "value": 21106.619
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "",
+     "value": 21474.077
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "",
+     "value": 21641.672
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "",
+     "value": 22001.64
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "",
+     "value": 21945.682
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "",
+     "value": 21976.292
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "",
+     "value": 22124.384
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "",
+     "value": 22272.546
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "",
+     "value": 22456.938
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "",
+     "value": 22577.556
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "",
+     "value": 22828.796
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": 23033.25
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": 23115.975
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 23320.074
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": 23501.76
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 23641.759
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 23650.213
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 23884.563
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 24112.966
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 24125.479
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 24274.383
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 24408.011
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-04-01",
+    "delivered_start": "2017-01-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 39,
+    "native_frequency": "Q",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "36409ba833b45c68b9cc2b30cfddbcbb7c7cb05ffac65a9356afe2b5c746785b",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2016-10-11",
+       "offset": 0,
+       "series_id": "GDPC1",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "7f67694b95ead7e51d1347909585c51fe671093a4246260d78c5e4abd140deb6",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:05.698685+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "SAAR",
+   "series": "fred:GDPC1",
+   "source_url": "https://fred.stlouisfed.org/series/GDPC1",
+   "title": "Real Gross Domestic Product",
+   "title_zh": "美国实际国内生产总值",
+   "transform": "",
+   "units": "Billions of Chained 2017 Dollars",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Daily Federal Funds Rate from 1928-1954 (https://fred.stlouisfed.org/categories/33951). The federal funds rate is the interest rate at which depository institutions trade federal funds (balances held at Federal Reserve Banks) with each othe",
+   "observations": [
+    {
+     "date": "2019-01-01",
+     "flag": "",
+     "value": 2.4
+    },
+    {
+     "date": "2019-02-01",
+     "flag": "",
+     "value": 2.4
+    },
+    {
+     "date": "2019-03-01",
+     "flag": "",
+     "value": 2.41
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "",
+     "value": 2.42
+    },
+    {
+     "date": "2019-05-01",
+     "flag": "",
+     "value": 2.39
+    },
+    {
+     "date": "2019-06-01",
+     "flag": "",
+     "value": 2.38
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "",
+     "value": 2.4
+    },
+    {
+     "date": "2019-08-01",
+     "flag": "",
+     "value": 2.13
+    },
+    {
+     "date": "2019-09-01",
+     "flag": "",
+     "value": 2.04
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "",
+     "value": 1.83
+    },
+    {
+     "date": "2019-11-01",
+     "flag": "",
+     "value": 1.55
+    },
+    {
+     "date": "2019-12-01",
+     "flag": "",
+     "value": 1.55
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "",
+     "value": 1.55
+    },
+    {
+     "date": "2020-02-01",
+     "flag": "",
+     "value": 1.58
+    },
+    {
+     "date": "2020-03-01",
+     "flag": "",
+     "value": 0.65
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "",
+     "value": 0.05
+    },
+    {
+     "date": "2020-05-01",
+     "flag": "",
+     "value": 0.05
+    },
+    {
+     "date": "2020-06-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2020-08-01",
+     "flag": "",
+     "value": 0.1
+    },
+    {
+     "date": "2020-09-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2020-11-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2020-12-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2021-02-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2021-03-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2021-05-01",
+     "flag": "",
+     "value": 0.06
+    },
+    {
+     "date": "2021-06-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "",
+     "value": 0.1
+    },
+    {
+     "date": "2021-08-01",
+     "flag": "",
+     "value": 0.09
+    },
+    {
+     "date": "2021-09-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2021-11-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2021-12-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2022-02-01",
+     "flag": "",
+     "value": 0.08
+    },
+    {
+     "date": "2022-03-01",
+     "flag": "",
+     "value": 0.2
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "",
+     "value": 0.33
+    },
+    {
+     "date": "2022-05-01",
+     "flag": "",
+     "value": 0.77
+    },
+    {
+     "date": "2022-06-01",
+     "flag": "",
+     "value": 1.21
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "",
+     "value": 1.68
+    },
+    {
+     "date": "2022-08-01",
+     "flag": "",
+     "value": 2.33
+    },
+    {
+     "date": "2022-09-01",
+     "flag": "",
+     "value": 2.56
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "",
+     "value": 3.08
+    },
+    {
+     "date": "2022-11-01",
+     "flag": "",
+     "value": 3.78
+    },
+    {
+     "date": "2022-12-01",
+     "flag": "",
+     "value": 4.1
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2023-02-01",
+     "flag": "",
+     "value": 4.57
+    },
+    {
+     "date": "2023-03-01",
+     "flag": "",
+     "value": 4.65
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "",
+     "value": 4.83
+    },
+    {
+     "date": "2023-05-01",
+     "flag": "",
+     "value": 5.06
+    },
+    {
+     "date": "2023-06-01",
+     "flag": "",
+     "value": 5.08
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "",
+     "value": 5.12
+    },
+    {
+     "date": "2023-08-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2023-09-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "",
+     "value": 5.33
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "",
+     "value": 5.13
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 4.83
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 4.64
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 4.48
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 4.33
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 4.22
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 4.09
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 3.88
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 3.72
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 3.64
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 3.64
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 3.64
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 3.64
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 3.63
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 3.63
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 3.63
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 3.63
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 3.75
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-09-01",
+    "delivered_start": "2016-11-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 120,
+    "native_frequency": "M",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "2ef2881f9dcb430ddc13acd2a2133d902c8984c0a29810f69e6a50d6fd94632f",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2016-10-11",
+       "offset": 0,
+       "series_id": "FEDFUNDS",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "12b11c4e063ee27b2f91a7c1de562629faa0fa27cdc7072d43d058c2aea91eb4",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:10.897637+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "NSA",
+   "series": "fred:FEDFUNDS",
+   "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+   "title": "Federal Funds Effective Rate",
+   "title_zh": "联邦基金有效利率（月均）",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=T10Y3M&observation_start=2024-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Series is calculated as the spread between 10-Year Treasury Constant Maturity (BC_10YEAR) and 3-Month Treasury Constant Maturity (BC_3MONTH). Starting with the update on June 21, 2019, the Treasury bond data used in calculating interest rat",
+   "observations": [
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": -0.5321428571428571
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": -0.2642105263157895
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 0.00047619047619047494
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 0.28619047619047616
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 0.11894736842105265
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": -0.05523809523809523
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": -0.043333333333333335
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 0.062380952380952384
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": -0.0375
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": -0.020454545454545454
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": -0.04
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 0.054761904761904755
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 0.08409090909090909
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 0.15666666666666665
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 0.4636363636363637
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 0.548
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 0.4378947368421053
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 0.5268181818181819
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 0.6227272727272727
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 0.7985
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 0.6595238095238095
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 0.7327272727272728
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 0.8076190476190477
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 0.8961904761904762
+    },
+    {
+     "date": "2026-10-01",
+     "flag": "",
+     "value": 1.05
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "aggregation": "Arithmetic mean of available daily observations; partial months possible",
+    "delivered_end": "2026-10-01",
+    "delivered_start": "2024-10-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 521,
+    "native_frequency": "D",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "periods": {
+     "2024-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-10-31",
+      "covered_start": "2024-10-11",
+      "end": "2024-10-31",
+      "label": "2024-10",
+      "start": "2024-10-01"
+     },
+     "2024-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-11-30",
+      "covered_start": "2024-11-01",
+      "end": "2024-11-30",
+      "label": "2024-11",
+      "start": "2024-11-01"
+     },
+     "2024-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-12-31",
+      "covered_start": "2024-12-01",
+      "end": "2024-12-31",
+      "label": "2024-12",
+      "start": "2024-12-01"
+     },
+     "2025-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-01-31",
+      "covered_start": "2025-01-01",
+      "end": "2025-01-31",
+      "label": "2025-01",
+      "start": "2025-01-01"
+     },
+     "2025-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-02-28",
+      "covered_start": "2025-02-01",
+      "end": "2025-02-28",
+      "label": "2025-02",
+      "start": "2025-02-01"
+     },
+     "2025-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-03-31",
+      "covered_start": "2025-03-01",
+      "end": "2025-03-31",
+      "label": "2025-03",
+      "start": "2025-03-01"
+     },
+     "2025-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-04-30",
+      "covered_start": "2025-04-01",
+      "end": "2025-04-30",
+      "label": "2025-04",
+      "start": "2025-04-01"
+     },
+     "2025-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-05-31",
+      "covered_start": "2025-05-01",
+      "end": "2025-05-31",
+      "label": "2025-05",
+      "start": "2025-05-01"
+     },
+     "2025-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-06-30",
+      "covered_start": "2025-06-01",
+      "end": "2025-06-30",
+      "label": "2025-06",
+      "start": "2025-06-01"
+     },
+     "2025-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-07-31",
+      "covered_start": "2025-07-01",
+      "end": "2025-07-31",
+      "label": "2025-07",
+      "start": "2025-07-01"
+     },
+     "2025-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-08-31",
+      "covered_start": "2025-08-01",
+      "end": "2025-08-31",
+      "label": "2025-08",
+      "start": "2025-08-01"
+     },
+     "2025-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-09-30",
+      "covered_start": "2025-09-01",
+      "end": "2025-09-30",
+      "label": "2025-09",
+      "start": "2025-09-01"
+     },
+     "2025-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-10-31",
+      "covered_start": "2025-10-01",
+      "end": "2025-10-31",
+      "label": "2025-10",
+      "start": "2025-10-01"
+     },
+     "2025-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-11-30",
+      "covered_start": "2025-11-01",
+      "end": "2025-11-30",
+      "label": "2025-11",
+      "start": "2025-11-01"
+     },
+     "2025-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-12-31",
+      "covered_start": "2025-12-01",
+      "end": "2025-12-31",
+      "label": "2025-12",
+      "start": "2025-12-01"
+     },
+     "2026-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-01-31",
+      "covered_start": "2026-01-01",
+      "end": "2026-01-31",
+      "label": "2026-01",
+      "start": "2026-01-01"
+     },
+     "2026-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-02-28",
+      "covered_start": "2026-02-01",
+      "end": "2026-02-28",
+      "label": "2026-02",
+      "start": "2026-02-01"
+     },
+     "2026-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-03-31",
+      "covered_start": "2026-03-01",
+      "end": "2026-03-31",
+      "label": "2026-03",
+      "start": "2026-03-01"
+     },
+     "2026-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-04-30",
+      "covered_start": "2026-04-01",
+      "end": "2026-04-30",
+      "label": "2026-04",
+      "start": "2026-04-01"
+     },
+     "2026-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-05-31",
+      "covered_start": "2026-05-01",
+      "end": "2026-05-31",
+      "label": "2026-05",
+      "start": "2026-05-01"
+     },
+     "2026-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-06-30",
+      "covered_start": "2026-06-01",
+      "end": "2026-06-30",
+      "label": "2026-06",
+      "start": "2026-06-01"
+     },
+     "2026-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-07-31",
+      "covered_start": "2026-07-01",
+      "end": "2026-07-31",
+      "label": "2026-07",
+      "start": "2026-07-01"
+     },
+     "2026-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-08-31",
+      "covered_start": "2026-08-01",
+      "end": "2026-08-31",
+      "label": "2026-08",
+      "start": "2026-08-01"
+     },
+     "2026-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-09-30",
+      "covered_start": "2026-09-01",
+      "end": "2026-09-30",
+      "label": "2026-09",
+      "start": "2026-09-01"
+     },
+     "2026-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-10-11",
+      "covered_start": "2026-10-01",
+      "end": "2026-10-31",
+      "label": "2026-10",
+      "start": "2026-10-01"
+     }
+    },
+    "requested_end": "2026-10-11",
+    "requested_start": "2024-10-11",
+    "resolution_safe": false,
+    "response_sha256": "baf27d44c879241df2a28d57ca269b3c3607c32b16014500f4861e3d4aa3dcca",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2024-10-11",
+       "offset": 0,
+       "series_id": "T10Y3M",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "24acd72d9442fd3ac2eaded321c636c66e55708f1f3597185ccee20a9840294f",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:12.264562+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "NSA",
+   "series": "fred:T10Y3M",
+   "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+   "title": "10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity",
+   "title_zh": "美国10年期与3个月期国债利差",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=SAHMREALTIME&observation_start=2016-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Sahm Recession Indicator signals the start of a recession when the three-month moving average of the national unemployment rate (U3) (https://fred.stlouisfed.org/series/UNRATE) rises by 0.50 percentage points or more relative to the minimum",
+   "observations": [
+    {
+     "date": "2019-01-01",
+     "flag": "",
+     "value": 0.13
+    },
+    {
+     "date": "2019-02-01",
+     "flag": "",
+     "value": 0.17
+    },
+    {
+     "date": "2019-03-01",
+     "flag": "",
+     "value": 0.13
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2019-05-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2019-06-01",
+     "flag": "",
+     "value": -0.03
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "",
+     "value": 0.03
+    },
+    {
+     "date": "2019-08-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2019-09-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "",
+     "value": -0.03
+    },
+    {
+     "date": "2019-11-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2019-12-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2020-02-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2020-03-01",
+     "flag": "",
+     "value": 0.3
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2020-05-01",
+     "flag": "",
+     "value": 7.27
+    },
+    {
+     "date": "2020-06-01",
+     "flag": "",
+     "value": 9.5
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "",
+     "value": 8.0
+    },
+    {
+     "date": "2020-08-01",
+     "flag": "",
+     "value": 6.37
+    },
+    {
+     "date": "2020-09-01",
+     "flag": "",
+     "value": 5.3
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "",
+     "value": 4.2
+    },
+    {
+     "date": "2020-11-01",
+     "flag": "",
+     "value": 3.63
+    },
+    {
+     "date": "2020-12-01",
+     "flag": "",
+     "value": 3.23
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "",
+     "value": 3.03
+    },
+    {
+     "date": "2021-02-01",
+     "flag": "",
+     "value": 2.87
+    },
+    {
+     "date": "2021-03-01",
+     "flag": "",
+     "value": 2.33
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2021-05-01",
+     "flag": "",
+     "value": -0.13
+    },
+    {
+     "date": "2021-06-01",
+     "flag": "",
+     "value": -0.03
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "",
+     "value": -0.23
+    },
+    {
+     "date": "2021-08-01",
+     "flag": "",
+     "value": -0.2
+    },
+    {
+     "date": "2021-09-01",
+     "flag": "",
+     "value": -0.37
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "",
+     "value": -0.27
+    },
+    {
+     "date": "2021-11-01",
+     "flag": "",
+     "value": -0.33
+    },
+    {
+     "date": "2021-12-01",
+     "flag": "",
+     "value": -0.27
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "",
+     "value": -0.2
+    },
+    {
+     "date": "2022-02-01",
+     "flag": "",
+     "value": -0.13
+    },
+    {
+     "date": "2022-03-01",
+     "flag": "",
+     "value": -0.1
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "",
+     "value": -0.13
+    },
+    {
+     "date": "2022-05-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2022-06-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "",
+     "value": -0.03
+    },
+    {
+     "date": "2022-08-01",
+     "flag": "",
+     "value": 0.03
+    },
+    {
+     "date": "2022-09-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2022-11-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2022-12-01",
+     "flag": "",
+     "value": 0.03
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2023-02-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2023-03-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "",
+     "value": 0.0
+    },
+    {
+     "date": "2023-05-01",
+     "flag": "",
+     "value": 0.03
+    },
+    {
+     "date": "2023-06-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "",
+     "value": 0.1
+    },
+    {
+     "date": "2023-08-01",
+     "flag": "",
+     "value": 0.13
+    },
+    {
+     "date": "2023-09-01",
+     "flag": "",
+     "value": 0.2
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": 0.33
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "",
+     "value": 0.3
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "",
+     "value": 0.23
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": 0.2
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "",
+     "value": 0.3
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 0.37
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "",
+     "value": 0.37
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "",
+     "value": 0.43
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": 0.53
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "",
+     "value": 0.57
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "",
+     "value": 0.5
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 0.43
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 0.43
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 0.4
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 0.37
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 0.17
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 0.1
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 0.13
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 0.23
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": null
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 0.43
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 0.35
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 0.3
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 0.27
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 0.2
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 0.13
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 0.1
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 0.07
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": -0.03
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": -0.07
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 0.0
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-09-01",
+    "delivered_start": "2016-11-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 120,
+    "native_frequency": "M",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "3d21f7f558d919ddbe0dcea6580213fe2c355d2f6db75c0e5ae3a2a576b406e7",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2016-10-11",
+       "offset": 0,
+       "series_id": "SAHMREALTIME",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "36b1bab23fed3621392a8769d461fc07010df6299dfab638518aa42e08c2f594",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:10.383376+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "SA",
+   "series": "fred:SAHMREALTIME",
+   "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+   "title": "Real-time Sahm Rule Recession Indicator",
+   "title_zh": "萨姆规则衰退指标（实时）",
+   "transform": "",
+   "units": "Percentage Points",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&observation_start=2024-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "H.15 Statistical Release (https://www.federalreserve.gov/releases/h15/current/h15.pdf) notes and Treasury Yield Curve Methodology (https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/yieldmethod.aspx). For questi",
+   "observations": [
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 4.180000000000001
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 4.35578947368421
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 4.3914285714285715
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 4.629047619047618
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 4.451052631578947
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 4.2804761904761905
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 4.279047619047619
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 4.423809523809524
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 4.3835
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 4.391818181818182
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 4.2647619047619045
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 4.12047619047619
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 4.0618181818181816
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 4.0938888888888885
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 4.1431818181818185
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 4.2135
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 4.12578947368421
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 4.245909090909091
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 4.319090909090909
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 4.484
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 4.47047619047619
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 4.599545454545455
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 4.684285714285714
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 4.989047619047619
+    },
+    {
+     "date": "2026-10-01",
+     "flag": "",
+     "value": 5.266666666666667
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "aggregation": "Arithmetic mean of available daily observations; partial months possible",
+    "delivered_end": "2026-10-01",
+    "delivered_start": "2024-10-01",
+    "intentional_delivery_trim": false,
+    "metadata_fields": {
+     "frequency": "provider",
+     "seasonal_adjustment": "provider",
+     "title": "provider",
+     "units": "provider"
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 520,
+    "native_frequency": "D",
+    "normalization_policy_version": 2,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "periods": {
+     "2024-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-10-31",
+      "covered_start": "2024-10-11",
+      "end": "2024-10-31",
+      "label": "2024-10",
+      "start": "2024-10-01"
+     },
+     "2024-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-11-30",
+      "covered_start": "2024-11-01",
+      "end": "2024-11-30",
+      "label": "2024-11",
+      "start": "2024-11-01"
+     },
+     "2024-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-12-31",
+      "covered_start": "2024-12-01",
+      "end": "2024-12-31",
+      "label": "2024-12",
+      "start": "2024-12-01"
+     },
+     "2025-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-01-31",
+      "covered_start": "2025-01-01",
+      "end": "2025-01-31",
+      "label": "2025-01",
+      "start": "2025-01-01"
+     },
+     "2025-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-02-28",
+      "covered_start": "2025-02-01",
+      "end": "2025-02-28",
+      "label": "2025-02",
+      "start": "2025-02-01"
+     },
+     "2025-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-03-31",
+      "covered_start": "2025-03-01",
+      "end": "2025-03-31",
+      "label": "2025-03",
+      "start": "2025-03-01"
+     },
+     "2025-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-04-30",
+      "covered_start": "2025-04-01",
+      "end": "2025-04-30",
+      "label": "2025-04",
+      "start": "2025-04-01"
+     },
+     "2025-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-05-31",
+      "covered_start": "2025-05-01",
+      "end": "2025-05-31",
+      "label": "2025-05",
+      "start": "2025-05-01"
+     },
+     "2025-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-06-30",
+      "covered_start": "2025-06-01",
+      "end": "2025-06-30",
+      "label": "2025-06",
+      "start": "2025-06-01"
+     },
+     "2025-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-07-31",
+      "covered_start": "2025-07-01",
+      "end": "2025-07-31",
+      "label": "2025-07",
+      "start": "2025-07-01"
+     },
+     "2025-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-08-31",
+      "covered_start": "2025-08-01",
+      "end": "2025-08-31",
+      "label": "2025-08",
+      "start": "2025-08-01"
+     },
+     "2025-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-09-30",
+      "covered_start": "2025-09-01",
+      "end": "2025-09-30",
+      "label": "2025-09",
+      "start": "2025-09-01"
+     },
+     "2025-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-10-31",
+      "covered_start": "2025-10-01",
+      "end": "2025-10-31",
+      "label": "2025-10",
+      "start": "2025-10-01"
+     },
+     "2025-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-11-30",
+      "covered_start": "2025-11-01",
+      "end": "2025-11-30",
+      "label": "2025-11",
+      "start": "2025-11-01"
+     },
+     "2025-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-12-31",
+      "covered_start": "2025-12-01",
+      "end": "2025-12-31",
+      "label": "2025-12",
+      "start": "2025-12-01"
+     },
+     "2026-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-01-31",
+      "covered_start": "2026-01-01",
+      "end": "2026-01-31",
+      "label": "2026-01",
+      "start": "2026-01-01"
+     },
+     "2026-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-02-28",
+      "covered_start": "2026-02-01",
+      "end": "2026-02-28",
+      "label": "2026-02",
+      "start": "2026-02-01"
+     },
+     "2026-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-03-31",
+      "covered_start": "2026-03-01",
+      "end": "2026-03-31",
+      "label": "2026-03",
+      "start": "2026-03-01"
+     },
+     "2026-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-04-30",
+      "covered_start": "2026-04-01",
+      "end": "2026-04-30",
+      "label": "2026-04",
+      "start": "2026-04-01"
+     },
+     "2026-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-05-31",
+      "covered_start": "2026-05-01",
+      "end": "2026-05-31",
+      "label": "2026-05",
+      "start": "2026-05-01"
+     },
+     "2026-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-06-30",
+      "covered_start": "2026-06-01",
+      "end": "2026-06-30",
+      "label": "2026-06",
+      "start": "2026-06-01"
+     },
+     "2026-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-07-31",
+      "covered_start": "2026-07-01",
+      "end": "2026-07-31",
+      "label": "2026-07",
+      "start": "2026-07-01"
+     },
+     "2026-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-08-31",
+      "covered_start": "2026-08-01",
+      "end": "2026-08-31",
+      "label": "2026-08",
+      "start": "2026-08-01"
+     },
+     "2026-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-09-30",
+      "covered_start": "2026-09-01",
+      "end": "2026-09-30",
+      "label": "2026-09",
+      "start": "2026-09-01"
+     },
+     "2026-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-10-11",
+      "covered_start": "2026-10-01",
+      "end": "2026-10-31",
+      "label": "2026-10",
+      "start": "2026-10-01"
+     }
+    },
+    "requested_end": "2026-10-11",
+    "requested_start": "2024-10-11",
+    "resolution_safe": false,
+    "response_sha256": "7ff6d8db12a635fc4627b95197c319cda7a6e9bd29d29ca5177dd616d2c12512",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "limit": 5000,
+       "observation_end": "2026-10-11",
+       "observation_start": "2024-10-11",
+       "offset": 0,
+       "series_id": "DGS10",
+       "sort_order": "desc",
+       "units": "lin"
+      },
+      "sha256": "d2a7a795de5c05eeeed535a98b441076c4c326e6706485aefd92c93d923dd856",
+      "sources": [],
+      "tool": "fred_get_series"
+     }
+    ],
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-11T19:51:11.811635+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "NSA",
+   "series": "fred:DGS10",
+   "source_url": "https://fred.stlouisfed.org/series/DGS10",
+   "title": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis",
+   "title_zh": "美国10年期国债收益率",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/M.US?startPeriod=2016-10-11&endPeriod=2026-10-11&format=csv&labels=both",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "For the United States BIS reports the midpoint of the federal funds target range; fred:DFEDTARU is the upper limit.",
+   "observations": [
+    {
+     "date": "2019-01-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-02-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-03-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-05-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-06-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2019-08-01",
+     "flag": "observed",
+     "value": 2.125
+    },
+    {
+     "date": "2019-09-01",
+     "flag": "observed",
+     "value": 1.875
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2019-11-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2019-12-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2020-02-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2020-03-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-05-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-06-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-08-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-09-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-11-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2020-12-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-02-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-03-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-05-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-06-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-08-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-09-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-11-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2021-12-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2022-02-01",
+     "flag": "observed",
+     "value": 0.125
+    },
+    {
+     "date": "2022-03-01",
+     "flag": "observed",
+     "value": 0.375
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "observed",
+     "value": 0.375
+    },
+    {
+     "date": "2022-05-01",
+     "flag": "observed",
+     "value": 0.875
+    },
+    {
+     "date": "2022-06-01",
+     "flag": "observed",
+     "value": 1.625
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2022-08-01",
+     "flag": "observed",
+     "value": 2.375
+    },
+    {
+     "date": "2022-09-01",
+     "flag": "observed",
+     "value": 3.125
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "observed",
+     "value": 3.125
+    },
+    {
+     "date": "2022-11-01",
+     "flag": "observed",
+     "value": 3.875
+    },
+    {
+     "date": "2022-12-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2023-02-01",
+     "flag": "observed",
+     "value": 4.625
+    },
+    {
+     "date": "2023-03-01",
+     "flag": "observed",
+     "value": 4.875
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "observed",
+     "value": 4.875
+    },
+    {
+     "date": "2023-05-01",
+     "flag": "observed",
+     "value": 5.125
+    },
+    {
+     "date": "2023-06-01",
+     "flag": "observed",
+     "value": 5.125
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2023-08-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2023-09-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "observed",
+     "value": 5.375
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "observed",
+     "value": 4.875
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "observed",
+     "value": 4.875
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "observed",
+     "value": 4.625
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "observed",
+     "value": 4.375
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "observed",
+     "value": 4.125
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "observed",
+     "value": 3.875
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "observed",
+     "value": 3.875
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "observed",
+     "value": 3.625
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "observed",
+     "value": 3.875
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "attributes": {
+     "COMPILATION": [
+      "From 19 Dec 1985 onwards: mid-point of the Federal Reserve target rate; from 1 Jul 1954 to 18 Dec 1985: US Fed Funds effective rate."
+     ],
+     "DECIMALS": [
+      "4"
+     ],
+     "TITLE": [
+      "Central bank policy rates - United States - Monthly - End of period"
+     ],
+     "UNIT_MEASURE": [
+      "368"
+     ],
+     "UNIT_MEASURE_LABEL": [
+      "Per cent per year"
+     ],
+     "UNIT_MULT": [
+      "0"
+     ]
+    },
+    "delivered_end": "2026-09-01",
+    "delivered_start": "2016-11-01",
+    "dimensions": {
+     "FREQ": "M",
+     "REF_AREA": "US"
+    },
+    "flow_ref": "BIS,WS_CBPOL,1.0",
+    "intentional_delivery_trim": false,
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_frequency": "M",
+    "normalization_policy_version": 2,
+    "raw_status": {
+     "2019-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2019-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2020-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2021-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2022-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2023-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2024-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-10-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-11-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2025-12-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-01-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-02-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-03-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-04-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-05-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-06-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-07-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-08-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ],
+     "2026-09-01": [
+      {
+       "code": "A",
+       "text": "Normal value"
+      }
+     ]
+    },
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "d06203e1f9b5ba1a526e2bc9f67ecd4c339150af07e0a96e0ede99f6f50f7719",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "end_period": "2026-10-11",
+       "flow_ref": "BIS,WS_CBPOL,1.0",
+       "key": "M.US",
+       "limit": 5000,
+       "start_period": "2016-10-11"
+      },
+      "sha256": "1305f621ac887834f3d3737f9f3a44f23e3368a254b2833aef07d51a3fdd3077",
+      "sources": [],
+      "tool": "fetch_dataset"
+     }
+    ]
+   },
+   "provider": "bis",
+   "provider_name": "Bank for International Settlements (BIS)",
+   "retrieved_at": "2026-10-11T19:51:25.213642+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "bis:WS_CBPOL/M.US",
+   "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+   "title": "Central bank policy rates - United States - Monthly - End of period",
+   "title_zh": "美国央行政策利率",
+   "transform": "",
+   "units": "Per cent per year",
+   "vintage": ""
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Native Data360 strips observation status and may omit upstream metadata warnings.",
+   "observations": [
+    {
+     "date": "2002-01-01",
+     "flag": "unknown",
+     "value": 1.700447
+    },
+    {
+     "date": "2003-01-01",
+     "flag": "unknown",
+     "value": 2.795606
+    },
+    {
+     "date": "2004-01-01",
+     "flag": "unknown",
+     "value": 3.847772
+    },
+    {
+     "date": "2005-01-01",
+     "flag": "unknown",
+     "value": 3.48355
+    },
+    {
+     "date": "2006-01-01",
+     "flag": "unknown",
+     "value": 2.78454
+    },
+    {
+     "date": "2007-01-01",
+     "flag": "unknown",
+     "value": 2.003858
+    },
+    {
+     "date": "2008-01-01",
+     "flag": "unknown",
+     "value": 0.113587
+    },
+    {
+     "date": "2009-01-01",
+     "flag": "unknown",
+     "value": -2.5765
+    },
+    {
+     "date": "2010-01-01",
+     "flag": "unknown",
+     "value": 2.695193
+    },
+    {
+     "date": "2011-01-01",
+     "flag": "unknown",
+     "value": 1.564407
+    },
+    {
+     "date": "2012-01-01",
+     "flag": "unknown",
+     "value": 2.289113
+    },
+    {
+     "date": "2013-01-01",
+     "flag": "unknown",
+     "value": 2.11783
+    },
+    {
+     "date": "2014-01-01",
+     "flag": "unknown",
+     "value": 2.52382
+    },
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 2.94555
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 1.819451
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 2.457622
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 2.966505
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 2.583825
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": -2.081376
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 6.152022
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 2.524214
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": 2.934363
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": 2.793187
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 2.161382
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "attributes": {
+     "UNIT_MEASURE": [
+      "PC_A"
+     ],
+     "UNIT_MEASURE_NAME": [
+      "Percentage change per annum"
+     ],
+     "UNIT_MULT": [
+      "0"
+     ]
+    },
+    "country_code": "USA",
+    "database_id": "WB_WDI",
+    "delivered_end": "2025-01-01",
+    "delivered_start": "2002-01-01",
+    "fidelity_policy_version": 2,
+    "indicator_id": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+    "intentional_delivery_trim": false,
+    "metadata": {
+     "acknowledgement_statement": null,
+     "aggregation_method": "Weighted average",
+     "aggregation_method_references": [],
+     "aliases": [],
+     "alternate_identifiers": [
+      {
+       "database": "DCS",
+       "identifier": "NY.GDP.MKTP.KD.ZG",
+       "name": "DCS code",
+       "notes": "Identifier in DCS database",
+       "uri": null
+      }
+     ],
+     "api_documentation": [
+      {
+       "description": "Developer Information webpage (detailed documentation of the WDI API)",
+       "uri": "https://datahelpdesk.worldbank.org/knowledgebase/topics/125589-developer-information"
+      }
+     ],
+     "api_explorer_link": "http://datacatalog.worldbank.org/data360/api/execute?tab=Data&id=1&DATABASE_ID=WB_WDI&INDICATOR=WB_WDI_NY_GDP_MKTP_KD_ZG",
+     "api_link": "https://data360api.worldbank.org/data360/data?top=1000&skip=0&DATABASE_ID=WB_WDI&INDICATOR=WB_WDI_NY_GDP_MKTP_KD_ZG",
+     "apiservice_link": null,
+     "authoring_entity": [
+      {
+       "abbreviation": null,
+       "affiliation": null,
+       "email": null,
+       "name": "World Bank National Accounts Team",
+       "uri": null
+      }
+     ],
+     "base_period": null,
+     "citation_requirement": null
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_frequency": "A",
+    "native_periodicity": "A",
+    "native_rows": 25,
+    "normalization_policy_version": 2,
+    "pages": [
+     {
+      "count": 25,
+      "has_more": false,
+      "offset": 0,
+      "total_count": null
+     }
+    ],
+    "projection_status": "not supplied",
+    "requested_end": "2026-10-11",
+    "requested_start": "2001-10-11",
+    "resolution_safe": false,
+    "response_sha256": "3fa1d59d28d1fc0f844a788193e64612b3340c0e5b1e518652c4ea4137461a52",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "database_id": "WB_WDI",
+       "fetch_disaggregation": false,
+       "indicator_id": "WB_WDI_NY_GDP_MKTP_KD_ZG",
+       "required_country": "USA"
+      },
+      "sha256": "89500010e1c66d69368913772f785ffb0491b62964ea5701e25edcfb1c8daf4c",
+      "sources": [],
+      "tool": "data360_get_metadata"
+     }
+    ]
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-11T19:52:15.741268+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA",
+   "source_url": "https://data360.worldbank.org/en/indicator/WB_WDI_NY_GDP_MKTP_KD_ZG",
+   "title": "GDP (annual % growth)",
+   "title_zh": "美国GDP年增长率（世界发展指标）",
+   "transform": "",
+   "units": "Percentage change per annum",
+   "vintage": ""
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "WLD",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Observation status is unknown where not supplied; WEO mixes history, estimates and projections.",
+   "observations": [
+    {
+     "date": "2002-01-01",
+     "flag": "unknown",
+     "value": 2.832609
+    },
+    {
+     "date": "2003-01-01",
+     "flag": "unknown",
+     "value": 3.798842
+    },
+    {
+     "date": "2004-01-01",
+     "flag": "unknown",
+     "value": 5.263439
+    },
+    {
+     "date": "2005-01-01",
+     "flag": "unknown",
+     "value": 4.712692
+    },
+    {
+     "date": "2006-01-01",
+     "flag": "unknown",
+     "value": 5.286045
+    },
+    {
+     "date": "2007-01-01",
+     "flag": "unknown",
+     "value": 5.364044
+    },
+    {
+     "date": "2008-01-01",
+     "flag": "unknown",
+     "value": 2.930436
+    },
+    {
+     "date": "2009-01-01",
+     "flag": "unknown",
+     "value": -0.357571
+    },
+    {
+     "date": "2010-01-01",
+     "flag": "unknown",
+     "value": 5.252209
+    },
+    {
+     "date": "2011-01-01",
+     "flag": "unknown",
+     "value": 4.100359
+    },
+    {
+     "date": "2012-01-01",
+     "flag": "unknown",
+     "value": 3.387123
+    },
+    {
+     "date": "2013-01-01",
+     "flag": "unknown",
+     "value": 3.380306
+    },
+    {
+     "date": "2014-01-01",
+     "flag": "unknown",
+     "value": 3.559024
+    },
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 3.447288
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 3.22461
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 3.842261
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 3.642673
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 2.956766
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": -2.706997
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 6.653434
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 3.773925
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": 3.327812
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": 3.416268
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 3.441279
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "unknown",
+     "value": 3.055974
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "attributes": {},
+    "database_id": "WEO",
+    "delivered_end": "2026-01-01",
+    "delivered_start": "2002-01-01",
+    "dimensions": {
+     "country": "G001",
+     "frequency": "A",
+     "indicator": "NGDP_RPCH"
+    },
+    "intentional_delivery_trim": false,
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_frequency": "A",
+    "normalization_policy_version": 2,
+    "projection_status": "per-observation only; no inferred cutoff",
+    "raw_status": {},
+    "requested_end": "2026-10-11",
+    "requested_start": "2001-10-11",
+    "response_sha256": "c42d446b5538dd1bb0b7d9714d0bf2d6274d7520dca64d8fb1e2b4149918ddcb",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "params": {
+        "database_id": "WEO"
+       }
+      },
+      "sha256": "92da72ec5692bf8862e2e4a0c7c2a503063e16d8c7b743510b98ebe4f7b0e31e",
+      "tool": "imf_get_parameter_defs"
+     }
+    ],
+    "vintage_availability": "not supplied"
+   },
+   "provider": "imf",
+   "provider_name": "International Monetary Fund (IMF)",
+   "retrieved_at": "2026-10-11T19:53:36.864843+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "imf:WEO/G001.NGDP_RPCH.A",
+   "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change: World",
+   "title_zh": "世界实际GDP增长率（IMF WEO）",
+   "transform": "",
+   "units": "Percent change",
+   "vintage": ""
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Native Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+   "observations": [
+    {
+     "date": "2002-01-01",
+     "flag": "unknown",
+     "value": 1.70037
+    },
+    {
+     "date": "2003-01-01",
+     "flag": "unknown",
+     "value": 2.795781
+    },
+    {
+     "date": "2004-01-01",
+     "flag": "unknown",
+     "value": 3.847802
+    },
+    {
+     "date": "2005-01-01",
+     "flag": "unknown",
+     "value": 3.483384
+    },
+    {
+     "date": "2006-01-01",
+     "flag": "unknown",
+     "value": 2.784597
+    },
+    {
+     "date": "2007-01-01",
+     "flag": "unknown",
+     "value": 2.003876
+    },
+    {
+     "date": "2008-01-01",
+     "flag": "unknown",
+     "value": 0.113647
+    },
+    {
+     "date": "2009-01-01",
+     "flag": "unknown",
+     "value": -2.576498
+    },
+    {
+     "date": "2010-01-01",
+     "flag": "unknown",
+     "value": 2.695251
+    },
+    {
+     "date": "2011-01-01",
+     "flag": "unknown",
+     "value": 1.564196
+    },
+    {
+     "date": "2012-01-01",
+     "flag": "unknown",
+     "value": 2.289267
+    },
+    {
+     "date": "2013-01-01",
+     "flag": "unknown",
+     "value": 2.117782
+    },
+    {
+     "date": "2014-01-01",
+     "flag": "unknown",
+     "value": 2.523695
+    },
+    {
+     "date": "2015-01-01",
+     "flag": "unknown",
+     "value": 2.945509
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "unknown",
+     "value": 1.819587
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "unknown",
+     "value": 2.457596
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "unknown",
+     "value": 2.966663
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "unknown",
+     "value": 2.583574
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "unknown",
+     "value": -2.081277
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "unknown",
+     "value": 6.151865
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "unknown",
+     "value": 2.524222
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "unknown",
+     "value": 2.934535
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "unknown",
+     "value": 2.793116
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "unknown",
+     "value": 2.11733
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "unknown",
+     "value": 2.323695
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "attributes": {
+     "UNIT_MEASURE": [
+      "PC"
+     ],
+     "UNIT_MEASURE_NAME": [
+      "Percentage change"
+     ],
+     "UNIT_MULT": [
+      "0"
+     ]
+    },
+    "country_code": "USA",
+    "database_id": "IMF_WEO",
+    "delivered_end": "2026-01-01",
+    "delivered_start": "2002-01-01",
+    "fidelity_policy_version": 2,
+    "indicator_id": "IMF_WEO_NGDP_RPCH",
+    "intentional_delivery_trim": false,
+    "metadata": {
+     "acknowledgement_statement": null,
+     "aggregation_method": null,
+     "aggregation_method_references": [],
+     "aliases": [],
+     "alternate_identifiers": [
+      {
+       "database": null,
+       "identifier": "NGDP_RPCH",
+       "name": null,
+       "notes": "Gross domestic product (GDP), Constant prices, Percent change",
+       "uri": null
+      }
+     ],
+     "api_documentation": [],
+     "api_explorer_link": "http://datacatalog.worldbank.org/data360/api/execute?tab=Data&id=1&DATABASE_ID=IMF_WEO&INDICATOR=IMF_WEO_NGDP_RPCH",
+     "api_link": "https://data360api.worldbank.org/data360/data?top=1000&skip=0&DATABASE_ID=IMF_WEO&INDICATOR=IMF_WEO_NGDP_RPCH",
+     "apiservice_link": null,
+     "authoring_entity": [
+      {
+       "abbreviation": "IMF",
+       "affiliation": null,
+       "email": "publicaffairs@imf.org",
+       "name": "International Monetary Fund",
+       "uri": "https://www.imf.org/"
+      }
+     ],
+     "base_period": null,
+     "citation_requirement": "International Monetary Fund. World Economic Outlook (WEO), https://data.imf.org/en/datasets/IMF.RES:WEO. Accessed on [current date]."
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_frequency": "A",
+    "native_periodicity": "A",
+    "native_rows": 26,
+    "normalization_policy_version": 2,
+    "pages": [
+     {
+      "count": 26,
+      "has_more": false,
+      "offset": 0,
+      "total_count": null
+     }
+    ],
+    "projection_status": "not supplied",
+    "requested_end": "2026-10-11",
+    "requested_start": "2001-10-11",
+    "resolution_safe": false,
+    "response_sha256": "4df747b9c035bbd7177859208b8a08359257d510516d02d738c9fa34f4c001d2",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "database_id": "IMF_WEO",
+       "fetch_disaggregation": false,
+       "indicator_id": "IMF_WEO_NGDP_RPCH",
+       "required_country": "USA"
+      },
+      "sha256": "356ecbcfcfa3f16c563136610004587d0fc724a566e33ec7a044e6031db467b5",
+      "sources": [],
+      "tool": "data360_get_metadata"
+     }
+    ]
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-11T19:51:39.641757+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "wb:IMF_WEO_NGDP_RPCH/USA",
+   "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change",
+   "title_zh": "美国实际GDP增长率（IMF WEO）",
+   "transform": "",
+   "units": "Percentage change",
+   "vintage": "latest published vintage (Data360 V_LST)"
+  },
+  {
+   "api_url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?fields=record_date%2Ctot_pub_debt_out_amt&filter=record_date%3Agte%3A2024-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Business-day series; includes intragovernmental holdings (use debt_held_public for market debt). Daily data aggregated to monthly mean; partial months possible.",
+   "observations": [
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": 35798782683927.75
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 35982038510142.016
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 36162935625345.23
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 36195500195322.57
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 36219562256650.7
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 36216342936699.414
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 36214946151833.336
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 36214229572092.414
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 36214855354618.97
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 36618337399077.84
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 37104997455144.26
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 37480016357611.54
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 37961128592095.22
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 38209169292520.49
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 38388634843596.98
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 38471321721798.48
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 38672419608847.27
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 38947655725220.53
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 38967969317146.59
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 39016325057400.56
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 39275368478131.96
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 39557396511831.58
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 39974413944432.24
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 40093219044989.21
+    },
+    {
+     "date": "2026-10-01",
+     "flag": "",
+     "value": 40269094993348.984
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "aggregation": "Arithmetic mean of available daily observations; partial months possible",
+    "delivered_end": "2026-10-01",
+    "delivered_start": "2024-10-01",
+    "intentional_delivery_trim": false,
+    "metadata_origin": "curated_recipe",
+    "native_complete": true,
+    "native_frequency": "D",
+    "normalization_policy_version": 2,
+    "pages": 5,
+    "parameter": "",
+    "periods": {
+     "2024-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-10-31",
+      "covered_start": "2024-10-11",
+      "end": "2024-10-31",
+      "label": "2024-10",
+      "start": "2024-10-01"
+     },
+     "2024-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-11-30",
+      "covered_start": "2024-11-01",
+      "end": "2024-11-30",
+      "label": "2024-11",
+      "start": "2024-11-01"
+     },
+     "2024-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2024-12-31",
+      "covered_start": "2024-12-01",
+      "end": "2024-12-31",
+      "label": "2024-12",
+      "start": "2024-12-01"
+     },
+     "2025-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-01-31",
+      "covered_start": "2025-01-01",
+      "end": "2025-01-31",
+      "label": "2025-01",
+      "start": "2025-01-01"
+     },
+     "2025-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-02-28",
+      "covered_start": "2025-02-01",
+      "end": "2025-02-28",
+      "label": "2025-02",
+      "start": "2025-02-01"
+     },
+     "2025-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-03-31",
+      "covered_start": "2025-03-01",
+      "end": "2025-03-31",
+      "label": "2025-03",
+      "start": "2025-03-01"
+     },
+     "2025-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-04-30",
+      "covered_start": "2025-04-01",
+      "end": "2025-04-30",
+      "label": "2025-04",
+      "start": "2025-04-01"
+     },
+     "2025-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-05-31",
+      "covered_start": "2025-05-01",
+      "end": "2025-05-31",
+      "label": "2025-05",
+      "start": "2025-05-01"
+     },
+     "2025-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-06-30",
+      "covered_start": "2025-06-01",
+      "end": "2025-06-30",
+      "label": "2025-06",
+      "start": "2025-06-01"
+     },
+     "2025-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-07-31",
+      "covered_start": "2025-07-01",
+      "end": "2025-07-31",
+      "label": "2025-07",
+      "start": "2025-07-01"
+     },
+     "2025-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-08-31",
+      "covered_start": "2025-08-01",
+      "end": "2025-08-31",
+      "label": "2025-08",
+      "start": "2025-08-01"
+     },
+     "2025-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-09-30",
+      "covered_start": "2025-09-01",
+      "end": "2025-09-30",
+      "label": "2025-09",
+      "start": "2025-09-01"
+     },
+     "2025-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-10-31",
+      "covered_start": "2025-10-01",
+      "end": "2025-10-31",
+      "label": "2025-10",
+      "start": "2025-10-01"
+     },
+     "2025-11-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-11-30",
+      "covered_start": "2025-11-01",
+      "end": "2025-11-30",
+      "label": "2025-11",
+      "start": "2025-11-01"
+     },
+     "2025-12-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2025-12-31",
+      "covered_start": "2025-12-01",
+      "end": "2025-12-31",
+      "label": "2025-12",
+      "start": "2025-12-01"
+     },
+     "2026-01-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-01-31",
+      "covered_start": "2026-01-01",
+      "end": "2026-01-31",
+      "label": "2026-01",
+      "start": "2026-01-01"
+     },
+     "2026-02-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-02-28",
+      "covered_start": "2026-02-01",
+      "end": "2026-02-28",
+      "label": "2026-02",
+      "start": "2026-02-01"
+     },
+     "2026-03-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-03-31",
+      "covered_start": "2026-03-01",
+      "end": "2026-03-31",
+      "label": "2026-03",
+      "start": "2026-03-01"
+     },
+     "2026-04-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-04-30",
+      "covered_start": "2026-04-01",
+      "end": "2026-04-30",
+      "label": "2026-04",
+      "start": "2026-04-01"
+     },
+     "2026-05-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-05-31",
+      "covered_start": "2026-05-01",
+      "end": "2026-05-31",
+      "label": "2026-05",
+      "start": "2026-05-01"
+     },
+     "2026-06-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-06-30",
+      "covered_start": "2026-06-01",
+      "end": "2026-06-30",
+      "label": "2026-06",
+      "start": "2026-06-01"
+     },
+     "2026-07-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-07-31",
+      "covered_start": "2026-07-01",
+      "end": "2026-07-31",
+      "label": "2026-07",
+      "start": "2026-07-01"
+     },
+     "2026-08-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-08-31",
+      "covered_start": "2026-08-01",
+      "end": "2026-08-31",
+      "label": "2026-08",
+      "start": "2026-08-01"
+     },
+     "2026-09-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-09-30",
+      "covered_start": "2026-09-01",
+      "end": "2026-09-30",
+      "label": "2026-09",
+      "start": "2026-09-01"
+     },
+     "2026-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-10-11",
+      "covered_start": "2026-10-01",
+      "end": "2026-10-31",
+      "label": "2026-10",
+      "start": "2026-10-01"
+     }
+    },
+    "recipe": "treasury/debt_to_penny",
+    "requested_end": "2026-10-11",
+    "requested_start": "2024-10-11",
+    "resolution_safe": false,
+    "response_sha256": "afc044e1e7e901f7709271907cd3084f6193ef2b857ef334cc83b4fc938636c1",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "endpoint": "/v2/accounting/od/debt_to_penny",
+       "fields": "record_date,tot_pub_debt_out_amt",
+       "filter": "record_date:gte:2024-10-11,record_date:lte:2026-10-11",
+       "page_number": 1,
+       "page_size": 100,
+       "sort": "-record_date"
+      },
+      "sha256": "305f04846980091a2ea4518702bdfbc7748dd7625e23b9e281ee1659a70d32b0",
+      "sources": [
+       {
+        "cached": false,
+        "fetchedAt": "2026-10-11T19:52:28.884Z",
+        "method": "",
+        "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?format=json&fields=record_date%2Ctot_pub_debt_out_amt&filter=record_date%3Agte%3A2024-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date&page%5Bnumber%5D=1&page%5Bsize%5D=100"
+       }
+      ],
+      "tool": "treasury_query_fiscal_data"
+     }
+    ]
+   },
+   "provider": "usgov",
+   "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+   "retrieved_at": "2026-10-11T19:52:31.054290+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "usgov:treasury/debt_to_penny",
+   "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+   "title": "Debt to the Penny: Total Public Debt Outstanding",
+   "title_zh": "美国联邦公共债务总额（每日）",
+   "transform": "",
+   "units": "U.S. dollars",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_3?fields=record_date%2Cline_code_nbr%2Csrc_line_nbr%2Cclassification_desc%2Ccurrent_month_rcpt_outly_amt&filter=line_code_nbr%3Aeq%3A520%2Crecord_date%3Agte%3A2016-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date",
+   "frequency": "M",
+   "geography": "USA",
+   "kiqs": [],
+   "last_updated": "",
+   "notes": "Negative values are deficits. MTS Table 3 row selected by line_code_nbr (stable; src_line_nbr drifts between years). Strong monthly seasonality (April and September receipts); compare with the same month a year earlier or use fiscal-year-to",
+   "observations": [
+    {
+     "date": "2019-01-01",
+     "flag": "",
+     "value": 8682866610.98
+    },
+    {
+     "date": "2019-02-01",
+     "flag": "",
+     "value": -233977248826.8
+    },
+    {
+     "date": "2019-03-01",
+     "flag": "",
+     "value": -146945025329.54
+    },
+    {
+     "date": "2019-04-01",
+     "flag": "",
+     "value": 160304508909.86
+    },
+    {
+     "date": "2019-05-01",
+     "flag": "",
+     "value": -207768391346.66
+    },
+    {
+     "date": "2019-06-01",
+     "flag": "",
+     "value": -8476318454.22
+    },
+    {
+     "date": "2019-07-01",
+     "flag": "",
+     "value": -119695806193.46
+    },
+    {
+     "date": "2019-08-01",
+     "flag": "",
+     "value": -200344348929.13
+    },
+    {
+     "date": "2019-09-01",
+     "flag": "",
+     "value": 82767658464.78
+    },
+    {
+     "date": "2019-10-01",
+     "flag": "",
+     "value": -134467564933.81
+    },
+    {
+     "date": "2019-11-01",
+     "flag": "",
+     "value": -208838294456.74
+    },
+    {
+     "date": "2019-12-01",
+     "flag": "",
+     "value": -13272557316.42
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "",
+     "value": -32593280007.64
+    },
+    {
+     "date": "2020-02-01",
+     "flag": "",
+     "value": -235335213874.57
+    },
+    {
+     "date": "2020-03-01",
+     "flag": "",
+     "value": -119125164718.02
+    },
+    {
+     "date": "2020-04-01",
+     "flag": "",
+     "value": -737850621079.65
+    },
+    {
+     "date": "2020-05-01",
+     "flag": "",
+     "value": -398821413659.68
+    },
+    {
+     "date": "2020-06-01",
+     "flag": "",
+     "value": -864074068491.71
+    },
+    {
+     "date": "2020-07-01",
+     "flag": "",
+     "value": -62991726394.54
+    },
+    {
+     "date": "2020-08-01",
+     "flag": "",
+     "value": -200095015107.66
+    },
+    {
+     "date": "2020-09-01",
+     "flag": "",
+     "value": -124610558419.19
+    },
+    {
+     "date": "2020-10-01",
+     "flag": "",
+     "value": -284070537172.84
+    },
+    {
+     "date": "2020-11-01",
+     "flag": "",
+     "value": -145266263529.85
+    },
+    {
+     "date": "2020-12-01",
+     "flag": "",
+     "value": -143562327439.13
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "",
+     "value": -162832489467.54
+    },
+    {
+     "date": "2021-02-01",
+     "flag": "",
+     "value": -310921942504.67
+    },
+    {
+     "date": "2021-03-01",
+     "flag": "",
+     "value": -659591618440.58
+    },
+    {
+     "date": "2021-04-01",
+     "flag": "",
+     "value": -225579460325.77
+    },
+    {
+     "date": "2021-05-01",
+     "flag": "",
+     "value": -131953063168.21
+    },
+    {
+     "date": "2021-06-01",
+     "flag": "",
+     "value": -174160550262.16
+    },
+    {
+     "date": "2021-07-01",
+     "flag": "",
+     "value": -302050488343.5
+    },
+    {
+     "date": "2021-08-01",
+     "flag": "",
+     "value": -170634653661.87
+    },
+    {
+     "date": "2021-09-01",
+     "flag": "",
+     "value": -61544251212.68
+    },
+    {
+     "date": "2021-10-01",
+     "flag": "",
+     "value": -165055366933.25
+    },
+    {
+     "date": "2021-11-01",
+     "flag": "",
+     "value": -191335040521.97
+    },
+    {
+     "date": "2021-12-01",
+     "flag": "",
+     "value": -21303129425.23
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "",
+     "value": 118698858241.66
+    },
+    {
+     "date": "2022-02-01",
+     "flag": "",
+     "value": -216589752056.05
+    },
+    {
+     "date": "2022-03-01",
+     "flag": "",
+     "value": -192682386656.93
+    },
+    {
+     "date": "2022-04-01",
+     "flag": "",
+     "value": 308215060526.79
+    },
+    {
+     "date": "2022-05-01",
+     "flag": "",
+     "value": -66222561209.58
+    },
+    {
+     "date": "2022-06-01",
+     "flag": "",
+     "value": -88841512926.09
+    },
+    {
+     "date": "2022-07-01",
+     "flag": "",
+     "value": -211051760050.26
+    },
+    {
+     "date": "2022-08-01",
+     "flag": "",
+     "value": -219596240949.64
+    },
+    {
+     "date": "2022-09-01",
+     "flag": "",
+     "value": -429673478961.84
+    },
+    {
+     "date": "2022-10-01",
+     "flag": "",
+     "value": -87797836311.39
+    },
+    {
+     "date": "2022-11-01",
+     "flag": "",
+     "value": -248534880652.58
+    },
+    {
+     "date": "2022-12-01",
+     "flag": "",
+     "value": -85000736577.88
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "",
+     "value": -38783771839.22
+    },
+    {
+     "date": "2023-02-01",
+     "flag": "",
+     "value": -262433843194.23
+    },
+    {
+     "date": "2023-03-01",
+     "flag": "",
+     "value": -378076316471.74
+    },
+    {
+     "date": "2023-04-01",
+     "flag": "",
+     "value": 176180790349.12
+    },
+    {
+     "date": "2023-05-01",
+     "flag": "",
+     "value": -240348239658.37
+    },
+    {
+     "date": "2023-06-01",
+     "flag": "",
+     "value": -227768412538.05
+    },
+    {
+     "date": "2023-07-01",
+     "flag": "",
+     "value": -220782097353.6
+    },
+    {
+     "date": "2023-08-01",
+     "flag": "",
+     "value": 89255572693.73
+    },
+    {
+     "date": "2023-09-01",
+     "flag": "",
+     "value": -170982200874.78
+    },
+    {
+     "date": "2023-10-01",
+     "flag": "",
+     "value": -66563551129.73
+    },
+    {
+     "date": "2023-11-01",
+     "flag": "",
+     "value": -314012002287.09
+    },
+    {
+     "date": "2023-12-01",
+     "flag": "",
+     "value": -129365414919.79
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "",
+     "value": -21930356331.02
+    },
+    {
+     "date": "2024-02-01",
+     "flag": "",
+     "value": -296274648079.89
+    },
+    {
+     "date": "2024-03-01",
+     "flag": "",
+     "value": -236456823950.2
+    },
+    {
+     "date": "2024-04-01",
+     "flag": "",
+     "value": 209529306625.33
+    },
+    {
+     "date": "2024-05-01",
+     "flag": "",
+     "value": -347130893691.65
+    },
+    {
+     "date": "2024-06-01",
+     "flag": "",
+     "value": -65965292476.34
+    },
+    {
+     "date": "2024-07-01",
+     "flag": "",
+     "value": -243741087297.43
+    },
+    {
+     "date": "2024-08-01",
+     "flag": "",
+     "value": -380080405434.5
+    },
+    {
+     "date": "2024-09-01",
+     "flag": "",
+     "value": 64263008867.74
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "",
+     "value": -257450343191.91
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": -366763064368.07
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": -86731619013.29
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": -128640206673.49
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": -307017194699.27
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": -160530321499.36
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 258399949114.96
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": -316003761189.44
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 27010022077.77
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": -291142660287.67
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": -344791891858.12
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 197949630362.16
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": -284350050782.8
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": -173277175076.92
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": -144749235609.28
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": -94615162369.21
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": -307501433426.17
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": -164100338817.86
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 215024140197.77
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": -292648462083.74
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": -120305275586.37
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": -432307874621.48
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": -166796952277.38
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-08-01",
+    "delivered_start": "2016-11-01",
+    "intentional_delivery_trim": false,
+    "metadata_origin": "curated_recipe",
+    "native_complete": true,
+    "native_frequency": "M",
+    "normalization_policy_version": 2,
+    "pages": 2,
+    "parameter": "",
+    "recipe": "treasury/mts_deficit",
+    "requested_end": "2026-10-11",
+    "requested_start": "2016-10-11",
+    "response_sha256": "d90082192502241c38b4584b289e77d3a7fd477bb2de0b603c8ebe35fc05e182",
+    "retrieval_route": "mcp",
+    "tool_responses": [
+     {
+      "arguments": {
+       "endpoint": "/v1/accounting/mts/mts_table_3",
+       "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+       "filter": "line_code_nbr:eq:520,record_date:gte:2016-10-11,record_date:lte:2026-10-11",
+       "page_number": 1,
+       "page_size": 100,
+       "sort": "-record_date"
+      },
+      "sha256": "35bb0bda363f069bfcdd84b79ac95f0899951b2195658c21857d073ab7ef0022",
+      "sources": [
+       {
+        "cached": false,
+        "fetchedAt": "2026-10-11T19:52:29.210Z",
+        "method": "",
+        "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_3?format=json&fields=record_date%2Cline_code_nbr%2Csrc_line_nbr%2Cclassification_desc%2Ccurrent_month_rcpt_outly_amt&filter=line_code_nbr%3Aeq%3A520%2Crecord_date%3Agte%3A2016-10-11%2Crecord_date%3Alte%3A2026-10-11&sort=-record_date&page%5Bnumber%5D=1&page%5Bsize%5D=100"
+       }
+      ],
+      "tool": "treasury_query_fiscal_data"
+     }
+    ]
+   },
+   "provider": "usgov",
+   "provider_name": "U.S. Government Open Data (Treasury Fiscal Data, USAspending)",
+   "retrieved_at": "2026-10-11T19:52:29.700447+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "NSA",
+   "series": "usgov:treasury/mts_deficit",
+   "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+   "title": "Monthly Treasury Statement: Surplus (+) or Deficit (-) (current month)",
+   "title_zh": "美国联邦财政月度盈余（+）或赤字（-）",
+   "transform": "",
+   "units": "U.S. dollars",
+   "vintage": ""
+  }
+ ],
+ "sources": [
+  {
+   "source_id": "src_fred_UNRATE",
+   "url": "https://fred.stlouisfed.org/series/UNRATE",
+   "title": "Unemployment Rate",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 4.2% (2026-09-01); see observation status below.; Year earlier: 4.4% (2025-09-01); change -0.2% (-4.55%).; 5-year range: 3.4% (2023-04-01) to 4.7% (2021-09-01).",
+   "dataset": {
+    "series": "fred:UNRATE",
+    "provider": "fred",
+    "units": "Percent",
+    "frequency": "M",
+    "source_url": "https://fred.stlouisfed.org/series/UNRATE"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_fred_GDPC1",
+   "url": "https://fred.stlouisfed.org/series/GDPC1",
+   "title": "Real Gross Domestic Product",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 24408.011 (2026-04-01); see observation status below.; Year earlier: 23884.563 (2025-04-01); change 523.448 (2.19%).; 5-year range: 21474.077 (2021-04-01) to 24408.011 (2026-04-01).",
+   "dataset": {
+    "series": "fred:GDPC1",
+    "provider": "fred",
+    "units": "Billions of Chained 2017 Dollars",
+    "frequency": "Q",
+    "source_url": "https://fred.stlouisfed.org/series/GDPC1"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_fred_FEDFUNDS",
+   "url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+   "title": "Federal Funds Effective Rate",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 3.75% (2026-09-01); see observation status below.; Year earlier: 4.22% (2025-09-01); change -0.47% (-11.14%).; 5-year range: 0.08% (2021-09-01) to 5.33% (2023-08-01).",
+   "dataset": {
+    "series": "fred:FEDFUNDS",
+    "provider": "fred",
+    "units": "Percent",
+    "frequency": "M",
+    "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_fred_T10Y3M",
+   "url": "https://fred.stlouisfed.org/series/T10Y3M",
+   "title": "10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 1.05% (2026-10-01); see observation status below.; Year earlier: 0.08% (2025-10-01); change 0.97% (1148.65%).; 5-year range: -0.53% (2024-10-01) to 1.05% (2026-10-01).",
+   "dataset": {
+    "series": "fred:T10Y3M",
+    "provider": "fred",
+    "units": "Percent",
+    "frequency": "M",
+    "source_url": "https://fred.stlouisfed.org/series/T10Y3M"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_fred_SAHMREALTIME",
+   "url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+   "title": "Real-time Sahm Rule Recession Indicator",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 0 (2026-09-01); see observation status below.; Year earlier: 0.23 (2025-09-01); change -0.23 (-100%).; 5-year range: -0.37 (2021-09-01) to 0.57 (2024-08-01).",
+   "dataset": {
+    "series": "fred:SAHMREALTIME",
+    "provider": "fred",
+    "units": "Percentage Points",
+    "frequency": "M",
+    "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_fred_DGS10",
+   "url": "https://fred.stlouisfed.org/series/DGS10",
+   "title": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 5.27% (2026-10-01); see observation status below.; Year earlier: 4.06% (2025-10-01); change 1.2% (29.66%).; 5-year range: 4.06% (2025-10-01) to 5.27% (2026-10-01).",
+   "dataset": {
+    "series": "fred:DGS10",
+    "provider": "fred",
+    "units": "Percent",
+    "frequency": "M",
+    "source_url": "https://fred.stlouisfed.org/series/DGS10"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_bis_WS_CBPOL/M.US",
+   "url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+   "title": "Central bank policy rates - United States - Monthly - End of period",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 3.88% (2026-09-01); see observation status below.; Year earlier: 4.12% (2025-09-01); change -0.25% (-6.06%).; 5-year range: 0.12% (2021-09-01) to 5.38% (2023-07-01).",
+   "dataset": {
+    "series": "bis:WS_CBPOL/M.US",
+    "provider": "bis",
+    "units": "Per cent per year",
+    "frequency": "M",
+    "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_wb_WB_WDI_NY_GDP_MKTP_KD_ZG/USA",
+   "url": "https://data360.worldbank.org/en/indicator/WB_WDI_NY_GDP_MKTP_KD_ZG",
+   "title": "GDP (annual % growth)",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "",
+   "dataset": {
+    "series": "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA",
+    "provider": "wb",
+    "units": "Percentage change per annum",
+    "frequency": "A",
+    "source_url": "https://data360.worldbank.org/en/indicator/WB_WDI_NY_GDP_MKTP_KD_ZG"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_imf_WEO/G001.NGDP_RPCH.A",
+   "url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change: World",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "",
+   "dataset": {
+    "series": "imf:WEO/G001.NGDP_RPCH.A",
+    "provider": "imf",
+    "units": "Percent change",
+    "frequency": "A",
+    "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_wb_IMF_WEO_NGDP_RPCH/USA",
+   "url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+   "title": "Gross domestic product (GDP), Constant prices, Percent change",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "",
+   "dataset": {
+    "series": "wb:IMF_WEO_NGDP_RPCH/USA",
+    "provider": "wb",
+    "units": "Percentage change",
+    "frequency": "A",
+    "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_usgov_treasury/debt_to_penny",
+   "url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+   "title": "Debt to the Penny: Total Public Debt Outstanding",
+   "tier": "S1",
+   "date": null,
+   "source_origin": "official_data",
+   "reachable": true,
+   "excerpt": "Latest: 40269094993348.9844 (2026-10-01); see observation status below.; Year earlier: 37961128592095.2188 (2025-10-01); change 2307966401253.7656 (6.08%).; 5-year range: 35798782683927.75 (2024-10-01) to 40269094993348.9844 (2026-10-01).",
+   "dataset": {
+    "series": "usgov:treasury/debt_to_penny",
+    "provider": "usgov",
+    "units": "U.S. dollars",
+    "frequency": "M",
+    "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/"
+   },
+   "supports": [],
+   "independent": null
+  },
+  {
+   "source_id": "src_web",
+   "url": "https://www.example.org/outlook",
+   "title": "Outlook article",
+   "tier": "S2",
+   "source_origin": "fetched",
+   "reachable": true,
+   "excerpt": "Narrative evidence."
+  }
+ ],
+ "dexchus": {
+  "series": [
+   {
+    "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=DEXCHUS&observation_start=2024-10-11&observation_end=2026-10-11&units=lin&sort_order=desc&offset=0&limit=5000",
+    "frequency": "M",
+    "geography": "CHN",
+    "kiqs": [],
+    "last_updated": "",
+    "notes": "data source (https://www.federalreserve.gov/apps/ContactUs/feedback.aspx?refurl=/releases/h10/%). For questions on FRED functionality, please contact us here (https://fred.stlouisfed.org/contactus/).</p> Daily data aggregated to monthly mea",
+    "observations": [
+     {
+      "date": "2024-10-01",
+      "flag": "",
+      "value": 7.116457142857143
+     },
+     {
+      "date": "2024-11-01",
+      "flag": "",
+      "value": 7.206284210526316
+     },
+     {
+      "date": "2024-12-01",
+      "flag": "",
+      "value": 7.280695238095238
+     },
+     {
+      "date": "2025-01-01",
+      "flag": "",
+      "value": 7.2957
+     },
+     {
+      "date": "2025-02-01",
+      "flag": "",
+      "value": 7.273431578947369
+     },
+     {
+      "date": "2025-03-01",
+      "flag": "",
+      "value": 7.24925238095238
+     },
+     {
+      "date": "2025-04-01",
+      "flag": "",
+      "value": 7.2967818181818185
+     },
+     {
+      "date": "2025-05-01",
+      "flag": "",
+      "value": 7.216557142857143
+     },
+     {
+      "date": "2025-06-01",
+      "flag": "",
+      "value": 7.18035
+     },
+     {
+      "date": "2025-07-01",
+      "flag": "",
+      "value": 7.174086363636364
+     },
+     {
+      "date": "2025-08-01",
+      "flag": "",
+      "value": 7.172695238095238
+     },
+     {
+      "date": "2025-09-01",
+      "flag": "",
+      "value": 7.123457142857143
+     },
+     {
+      "date": "2025-10-01",
+      "flag": "",
+      "value": 7.119968181818181
+     },
+     {
+      "date": "2025-11-01",
+      "flag": "",
+      "value": 7.106883333333333
+     },
+     {
+      "date": "2025-12-01",
+      "flag": "",
+      "value": 7.0432
+     },
+     {
+      "date": "2026-01-01",
+      "flag": "",
+      "value": 6.9692300000000005
+     },
+     {
+      "date": "2026-02-01",
+      "flag": "",
+      "value": 6.906352631578947
+     },
+     {
+      "date": "2026-03-01",
+      "flag": "",
+      "value": 6.892077272727272
+     },
+     {
+      "date": "2026-04-01",
+      "flag": "",
+      "value": 6.837118181818181
+     },
+     {
+      "date": "2026-05-01",
+      "flag": "",
+      "value": 6.7996300000000005
+     },
+     {
+      "date": "2026-06-01",
+      "flag": "",
+      "value": 6.775828571428571
+     },
+     {
+      "date": "2026-07-01",
+      "flag": "",
+      "value": 6.775686363636364
+     },
+     {
+      "date": "2026-08-01",
+      "flag": "",
+      "value": 6.736076190476191
+     },
+     {
+      "date": "2026-09-01",
+      "flag": "",
+      "value": 6.708376190476191
+     },
+     {
+      "date": "2026-10-01",
+      "flag": "",
+      "value": 6.7038
+     }
+    ],
+    "projection_from": "",
+    "provenance": {
+     "aggregation": "Arithmetic mean of available daily observations; partial months possible",
+     "delivered_end": "2026-10-01",
+     "delivered_start": "2024-10-01",
+     "intentional_delivery_trim": false,
+     "metadata_fields": {
+      "frequency": "provider",
+      "seasonal_adjustment": "provider",
+      "title": "provider",
+      "units": "provider"
+     },
+     "metadata_origin": "provider_and_curated_catalog",
+     "native_complete": true,
+     "native_count": 516,
+     "native_frequency": "D",
+     "normalization_policy_version": 2,
+     "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+     "periods": {
+      "2024-10-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2024-10-31",
+       "covered_start": "2024-10-11",
+       "end": "2024-10-31",
+       "label": "2024-10",
+       "start": "2024-10-01"
+      },
+      "2024-11-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2024-11-30",
+       "covered_start": "2024-11-01",
+       "end": "2024-11-30",
+       "label": "2024-11",
+       "start": "2024-11-01"
+      },
+      "2024-12-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2024-12-31",
+       "covered_start": "2024-12-01",
+       "end": "2024-12-31",
+       "label": "2024-12",
+       "start": "2024-12-01"
+      },
+      "2025-01-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-01-31",
+       "covered_start": "2025-01-01",
+       "end": "2025-01-31",
+       "label": "2025-01",
+       "start": "2025-01-01"
+      },
+      "2025-02-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-02-28",
+       "covered_start": "2025-02-01",
+       "end": "2025-02-28",
+       "label": "2025-02",
+       "start": "2025-02-01"
+      },
+      "2025-03-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-03-31",
+       "covered_start": "2025-03-01",
+       "end": "2025-03-31",
+       "label": "2025-03",
+       "start": "2025-03-01"
+      },
+      "2025-04-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-04-30",
+       "covered_start": "2025-04-01",
+       "end": "2025-04-30",
+       "label": "2025-04",
+       "start": "2025-04-01"
+      },
+      "2025-05-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-05-31",
+       "covered_start": "2025-05-01",
+       "end": "2025-05-31",
+       "label": "2025-05",
+       "start": "2025-05-01"
+      },
+      "2025-06-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-06-30",
+       "covered_start": "2025-06-01",
+       "end": "2025-06-30",
+       "label": "2025-06",
+       "start": "2025-06-01"
+      },
+      "2025-07-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-07-31",
+       "covered_start": "2025-07-01",
+       "end": "2025-07-31",
+       "label": "2025-07",
+       "start": "2025-07-01"
+      },
+      "2025-08-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-08-31",
+       "covered_start": "2025-08-01",
+       "end": "2025-08-31",
+       "label": "2025-08",
+       "start": "2025-08-01"
+      },
+      "2025-09-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-09-30",
+       "covered_start": "2025-09-01",
+       "end": "2025-09-30",
+       "label": "2025-09",
+       "start": "2025-09-01"
+      },
+      "2025-10-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-10-31",
+       "covered_start": "2025-10-01",
+       "end": "2025-10-31",
+       "label": "2025-10",
+       "start": "2025-10-01"
+      },
+      "2025-11-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-11-30",
+       "covered_start": "2025-11-01",
+       "end": "2025-11-30",
+       "label": "2025-11",
+       "start": "2025-11-01"
+      },
+      "2025-12-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2025-12-31",
+       "covered_start": "2025-12-01",
+       "end": "2025-12-31",
+       "label": "2025-12",
+       "start": "2025-12-01"
+      },
+      "2026-01-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-01-31",
+       "covered_start": "2026-01-01",
+       "end": "2026-01-31",
+       "label": "2026-01",
+       "start": "2026-01-01"
+      },
+      "2026-02-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-02-28",
+       "covered_start": "2026-02-01",
+       "end": "2026-02-28",
+       "label": "2026-02",
+       "start": "2026-02-01"
+      },
+      "2026-03-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-03-31",
+       "covered_start": "2026-03-01",
+       "end": "2026-03-31",
+       "label": "2026-03",
+       "start": "2026-03-01"
+      },
+      "2026-04-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-04-30",
+       "covered_start": "2026-04-01",
+       "end": "2026-04-30",
+       "label": "2026-04",
+       "start": "2026-04-01"
+      },
+      "2026-05-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-05-31",
+       "covered_start": "2026-05-01",
+       "end": "2026-05-31",
+       "label": "2026-05",
+       "start": "2026-05-01"
+      },
+      "2026-06-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-06-30",
+       "covered_start": "2026-06-01",
+       "end": "2026-06-30",
+       "label": "2026-06",
+       "start": "2026-06-01"
+      },
+      "2026-07-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-07-31",
+       "covered_start": "2026-07-01",
+       "end": "2026-07-31",
+       "label": "2026-07",
+       "start": "2026-07-01"
+      },
+      "2026-08-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-08-31",
+       "covered_start": "2026-08-01",
+       "end": "2026-08-31",
+       "label": "2026-08",
+       "start": "2026-08-01"
+      },
+      "2026-09-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-09-30",
+       "covered_start": "2026-09-01",
+       "end": "2026-09-30",
+       "label": "2026-09",
+       "start": "2026-09-01"
+      },
+      "2026-10-01": {
+       "calendar": "calendar_month",
+       "complete": false,
+       "covered_end": "2026-10-11",
+       "covered_start": "2026-10-01",
+       "end": "2026-10-31",
+       "label": "2026-10",
+       "start": "2026-10-01"
+      }
+     },
+     "requested_end": "2026-10-11",
+     "requested_start": "2024-10-11",
+     "resolution_safe": false,
+     "response_sha256": "1de75ca596b246b3e1c06945d667d94802f8af2aefab36f4d2a0bfd530189107",
+     "retrieval_route": "mcp",
+     "tool_responses": [
+      {
+       "arguments": {
+        "limit": 5000,
+        "observation_end": "2026-10-11",
+        "observation_start": "2024-10-11",
+        "offset": 0,
+        "series_id": "DEXCHUS",
+        "sort_order": "desc",
+        "units": "lin"
+       },
+       "sha256": "b898761dfea58bbbe9178cb759c3ba59165fa3e22ae82012e94676bff7fa3513",
+       "sources": [],
+       "tool": "fred_get_series"
+      }
+     ],
+     "vintage_status": "not supplied by native handler"
+    },
+    "provider": "fred",
+    "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+    "retrieved_at": "2026-10-11T20:26:43.772675+00:00",
+    "route": "mcp",
+    "seasonal_adjustment": "NSA",
+    "series": "fred:DEXCHUS",
+    "source_url": "https://fred.stlouisfed.org/series/DEXCHUS",
+    "title": "Chinese Yuan Renminbi to U.S. Dollar Spot Exchange Rate",
+    "title_zh": "美元兑人民币即期汇率",
+    "transform": "",
+    "units": "Chinese Yuan Renminbi to One U.S. Dollar",
+    "vintage": ""
+   }
+  ],
+  "sources": [
+   {
+    "source_id": "src_fred_DEXCHUS",
+    "url": "https://fred.stlouisfed.org/series/DEXCHUS",
+    "title": "Chinese Yuan Renminbi to U.S. Dollar Spot Exchange Rate",
+    "tier": "S1",
+    "date": null,
+    "source_origin": "official_data",
+    "reachable": true,
+    "excerpt": "Latest: 6.7038 (2026-10-01); see observation status below.; Year earlier: 7.12 (2025-10-01); change -0.4162 (-5.85%).; 5-year range: 6.7038 (2026-10-01) to 7.2968 (2025-04-01).",
+    "dataset": {
+     "series": "fred:DEXCHUS",
+     "provider": "fred",
+     "units": "Chinese Yuan Renminbi to One U.S. Dollar",
+     "frequency": "M",
+     "source_url": "https://fred.stlouisfed.org/series/DEXCHUS"
+    },
+    "supports": [],
+    "independent": null
+   }
+  ]
+ }
+}

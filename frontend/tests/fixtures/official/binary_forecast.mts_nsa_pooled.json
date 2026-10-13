@@ -1,0 +1,58 @@
+{
+  "binary_forecasts": [
+    {
+      "id": "F1",
+      "statement": "The US federal monthly budget balance (Monthly Treasury Statement) is at least 0 U.S. dollars in September 2027.",
+      "probability": 0.6,
+      "resolution_criteria": "Resolves YES if usgov:treasury/mts_deficit >= 0 U.S. dollars in 2027-09 (source: Monthly Treasury Statement). Official resolution: usgov:treasury/mts_deficit >= 0 U.S. dollars for 2027-09.",
+      "resolution_source": "",
+      "theme": "general",
+      "horizon_year": null,
+      "base_rate_anchor": "",
+      "adjustment_rationale": "",
+      "source": "research-prior",
+      "proposition_id": "forecast-e4a886e36ca8",
+      "criteria_sharp": true,
+      "data_anchor": {
+        "series": "usgov:treasury/mts_deficit",
+        "period": "2027-09-01",
+        "observation": "2027-09",
+        "threshold": 0.0,
+        "comparator": ">=",
+        "units": "U.S. dollars",
+        "transform": "",
+        "frequency": "M",
+        "geography": "USA",
+        "vintage": "",
+        "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+        "latest_value": -166796952277.38,
+        "latest_date": "2026-08-01",
+        "auto_resolvable": true,
+        "empirical_base_rate": {
+          "p": 0.2373,
+          "n": 59,
+          "h": 13,
+          "window": {
+            "start": "2020-09-01",
+            "end": "2026-08-01"
+          },
+          "method": "empirical_h_step",
+          "latest": {
+            "date": "2026-08-01",
+            "value": -166796952277.38
+          },
+          "quantiles": {
+            "p10": -521913940284.99,
+            "p25": -328313160149.45996,
+            "p50": -166071744031.08002,
+            "p75": -15660074778.579987,
+            "p90": 203121772481.344
+          },
+          "historical_share": 0.1389,
+          "seasonal_basis": "all_start_months",
+          "sigma_distance": 0.56
+        }
+      }
+    }
+  ]
+}

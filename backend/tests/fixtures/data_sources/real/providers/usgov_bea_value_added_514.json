@@ -1,0 +1,87 @@
+{
+ "captured_at": "2026-10-12T14:36:12Z",
+ "clock": 1791815772.0,
+ "series": "usgov:bea/value_added_by_industry/514",
+ "request": {
+  "start": "2025-01-01"
+ },
+ "patches": {},
+ "env": {},
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "bea_gdp_by_industry",
+   "args": {
+    "table_id": "1",
+    "frequency": "Q",
+    "year": "2026",
+    "industry": "514"
+   },
+   "response": {
+    "summary": "BEA GDP by Industry — Table 1: 1 industries",
+    "dataType": "table",
+    "data": {
+     "columns": [
+      "industry",
+      "observations"
+     ],
+     "rows": [
+      [
+       "Data processing, internet publishing, and other information services",
+       "[{\"period\":\"2026QI\",\"value\":659.1},{\"period\":\"2026QII\",\"value\":694.7}]"
+      ]
+     ],
+     "total": 1,
+     "truncated": false
+    },
+    "meta": {
+     "tableId": "1",
+     "sources": [
+      {
+       "url": "https://apps.bea.gov/api/data/?ResultFormat=JSON&method=GetData&DataSetName=GDPbyIndustry&TableID=1&Frequency=Q&Year=2026&Industry=514",
+       "fetchedAt": "2026-10-12T14:05:03.446Z",
+       "cached": true
+      }
+     ]
+    }
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "bea_gdp_by_industry",
+   "args": {
+    "table_id": "1",
+    "frequency": "Q",
+    "year": "2025",
+    "industry": "514"
+   },
+   "response": {
+    "summary": "BEA GDP by Industry — Table 1: 1 industries",
+    "dataType": "table",
+    "data": {
+     "columns": [
+      "industry",
+      "observations"
+     ],
+     "rows": [
+      [
+       "Data processing, internet publishing, and other information services",
+       "[{\"period\":\"2025QI\",\"value\":560.6},{\"period\":\"2025QII\",\"value\":572.7},{\"period\":\"2025QIII\",\"value\":613.6},{\"period\":\"2025QIV\",\"value\":637.1}]"
+      ]
+     ],
+     "total": 1,
+     "truncated": false
+    },
+    "meta": {
+     "tableId": "1",
+     "sources": [
+      {
+       "url": "https://apps.bea.gov/api/data/?ResultFormat=JSON&method=GetData&DataSetName=GDPbyIndustry&TableID=1&Frequency=Q&Year=2025&Industry=514",
+       "fetchedAt": "2026-10-12T14:36:13.211Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

@@ -508,3 +508,16 @@ def data_brier_summary(d: Optional[str] = None) -> Dict[str, Any]:
     values = [float(value) for value in values if isinstance(value, (int, float))
               and not isinstance(value, bool) and math.isfinite(value)]
     return {"n_resolved": len(rows), "mean_brier": round(sum(values) / len(values), 4) if values else None}
+
+
+def official_data_track_record(d: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Binary track record of data-anchored forecasts, separate from the scenario Brier.
+
+    Returns None until at least one official outcome is recorded, so a consumer
+    (e.g. forecast.json ``official_data_track_record``) stays byte-identical
+    when no data-anchored forecast has resolved.
+    """
+    summary = data_brier_summary(d)
+    if not summary["n_resolved"]:
+        return None
+    return {**summary, "source": "data_resolutions.jsonl", "scoring": "binary Brier vs official observation"}

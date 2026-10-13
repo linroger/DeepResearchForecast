@@ -14,13 +14,15 @@
     </button>
     <!-- 宽表在自身容器内横向滚动，绝不撑破报告正文。 -->
     <div v-show="open" class="bft-scroll">
-      <table class="bft-table">
+      <table class="bft-table" :class="{ 'bft-wide': hasDataAnchors }">
         <thead>
           <tr>
             <th class="col-statement">{{ L('命题', 'Statement') }}</th>
             <th>{{ L('概率', 'Probability') }}</th>
             <th>{{ L('置信度', 'Confidence') }}</th>
             <th>{{ L('市场锚点', 'Market anchor') }}</th>
+            <!-- RPT-12：官方数据锚点列（任一预测带 data_anchor 时才出现；无锚点的报告表格不变）。 -->
+            <th v-if="hasDataAnchors">{{ L('数据锚点', 'Data anchor') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -67,6 +69,47 @@
                 >{{ L('市场影响', 'market-influenced') }}</span>
               </template>
             </td>
+            <td v-if="hasDataAnchors" class="cell-data" :title="row.dataAnchor ? dataAnchorTitle(row) : null">
+              <span v-if="!row.dataAnchor" class="cell-empty">—</span>
+              <template v-else>
+                <div class="da-series">
+                  <a
+                    v-if="row.dataAnchor.sourceUrl"
+                    class="da-link"
+                    :href="row.dataAnchor.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >{{ row.dataAnchor.label }} ↗</a>
+                  <span v-else class="da-label">{{ row.dataAnchor.label }}</span>
+                  <span v-if="row.dataAnchor.sourceId" class="da-sid">[{{ row.dataAnchor.sourceId }}]</span>
+                </div>
+                <div class="da-threshold">
+                  {{ row.dataAnchor.comparatorText }} {{ row.dataAnchor.thresholdText }}
+                  <span v-if="!row.dataAnchor.percentUnits && row.dataAnchor.units" class="da-units">{{ row.dataAnchor.units }}</span>
+                  <template v-if="row.dataAnchor.periodText"> · {{ row.dataAnchor.periodText }}</template>
+                </div>
+                <div v-if="row.dataAnchor.latestText" class="da-latest">
+                  {{ L('最新', 'Latest') }} {{ row.dataAnchor.latestText }}<template v-if="row.dataAnchor.latestPeriod"> ({{ row.dataAnchor.latestPeriod }})</template>
+                </div>
+                <div v-if="row.dataAnchor.latestText">
+                  <span
+                    class="da-state"
+                    :class="row.dataAnchor.met ? 'da-met' : 'da-unmet'"
+                  >{{ row.dataAnchor.met ? L('已达阈值', 'meets threshold') : L('距阈值', 'gap') + ' ' + row.dataAnchor.gapText }}</span>
+                </div>
+                <div
+                  v-if="row.dataAnchor.baseRate"
+                  class="da-base"
+                  :class="{ 'da-divergent': row.dataAnchor.baseRate.divergent }"
+                >
+                  {{ L('经验基率', 'Base rate') }} {{ row.dataAnchor.baseRate.pText }}<template v-if="row.dataAnchor.baseRate.n != null"> · n={{ row.dataAnchor.baseRate.n }}</template>
+                  <span v-if="row.dataAnchor.baseRate.divergence" class="da-gap">Δ {{ row.dataAnchor.baseRate.divergence.text }}</span>
+                </div>
+                <div v-if="row.dataAnchor.baseRate && row.dataAnchor.baseRate.seasonalBasis" class="da-season">
+                  {{ seasonalBasisText(row.dataAnchor.baseRate.seasonalBasis) }}
+                </div>
+              </template>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -81,12 +124,20 @@ import { L } from '../../i18n'
 
 // 薄模板：全部行模型/格式化在 utils/binaryForecasts.js（纯函数，可单测）；
 // 组件只负责双语标签与 tooltip 的拼装。
+// officialSeries：报告官方数据的 series → {label, sourceId, sourceUrl}（数据锚点的读者标签与 [S#]）；
+// lang：官方数据展示语种（大额数值的量级说明，如「≈45万亿美元」）。
 const props = defineProps({
   forecast: { type: Object, default: null },
+  officialSeries: { type: Object, default: null },
+  lang: { type: String, default: 'en' },
 })
 
 const open = ref(true)
-const rows = computed(() => binaryForecastRows(props.forecast))
+const rows = computed(() => binaryForecastRows(props.forecast, {
+  officialSeries: props.officialSeries,
+  lang: props.lang,
+}))
+const hasDataAnchors = computed(() => rows.value.some(row => row.dataAnchor))
 
 // 命题列：截断展示，原生 title 露出全文（附 anchor-and-adjust 理由，若有）。
 function statementTitle(row) {
@@ -117,6 +168,55 @@ function anchorTitle(row) {
   if (a.matchConfidenceText) lines.push(L('匹配置信度', 'Match confidence') + ': ' + a.matchConfidenceText)
   if (a.priceText) lines.push(L('研究时点价', 'Price at research') + ': ' + a.priceText)
   if (a.endDate) lines.push(L('截止', 'Ends') + ': ' + a.endDate)
+  return lines.join('\n')
+}
+
+// 未经季节调整的月度序列：经验基率样本的季节口径（与 forecast_extractor.EMPIRICAL_SEASONAL_BASIS_TEXT
+// 同文；凡展示该基率处都须披露）。合并各起始月份的基率不作为背离标记的参照。
+const SEASONAL_BASIS_TEXT = {
+  same_calendar_month: ['仅同月起点，未经季节调整', 'same-month starts only, not seasonally adjusted'],
+  seasonal_profile: ['同月季节均值加合并偏差，未经季节调整', 'same-month seasonal mean plus pooled deviations, not seasonally adjusted'],
+  all_start_months: ['合并所有起始月份，未经季节调整', 'start months pooled, not seasonally adjusted'],
+}
+function seasonalBasisText(basis) {
+  const pair = SEASONAL_BASIS_TEXT[basis]
+  return pair ? L(pair[0], pair[1]) : ''
+}
+
+// 数据锚点 tooltip：判定比较式、最新观测与差距、经验基率的样本/窗口/季节口径/σ 距离/历史结果区间。
+function dataAnchorTitle(row) {
+  const a = row.dataAnchor
+  if (!a) return ''
+  const lines = [a.series]
+  if (a.units) lines.push(L('单位', 'Units') + ': ' + a.units)
+  lines.push(L('判定', 'Resolves') + `: ${a.comparatorText} ${a.thresholdText}`
+    + (a.periodText ? ` · ${a.periodText}` : ''))
+  if (a.latestText) {
+    lines.push(L('最新观测', 'Latest observation') + `: ${a.latestText}`
+      + (a.latestPeriod ? ` (${a.latestPeriod})` : '')
+      + (a.met ? '' : ` · ${L('距阈值', 'gap to threshold')} ${a.gapText}`))
+  } else {
+    lines.push(L('尚无完整的历史观测值', 'No complete historical observation yet'))
+  }
+  const b = a.baseRate
+  if (b) {
+    const season = seasonalBasisText(b.seasonalBasis)
+    lines.push(L(
+      `经验基率 ${b.pText}：${b.n ?? '—'} 个历史 ${b.h ?? '—'} 期变化${b.windowText ? `（${b.windowText}）` : ''}`
+        + (season ? `；${season}` : ''),
+      `Empirical base rate ${b.pText}: ${b.n ?? '—'} historical ${b.h ?? '—'}-step changes`
+        + (b.windowText ? ` (${b.windowText})` : '') + (season ? `; ${season}` : ''),
+    ))
+    if (b.rangeText) {
+      lines.push(L('历史结果区间 p10–p90', 'Historical outcome range p10–p90') + `: ${b.rangeText}`
+        + (b.medianText ? ` · ${L('中位数', 'median')} ${b.medianText}` : ''))
+    }
+    if (b.sigmaText) lines.push(L('阈值距离', 'Distance to threshold') + `: ${b.sigmaText} σ`)
+    if (b.divergence) {
+      lines.push(L('模型 − 基率', 'Model − base rate') + `: ${b.divergence.text}`
+        + (b.divergent ? ` · ${L('超过 25pp，质量检查已标记', 'over 25pp, flagged by the quality check')}` : ''))
+    }
+  }
   return lines.join('\n')
 }
 
@@ -316,4 +416,71 @@ function influenceTitle(row) {
 }
 
 .cell-empty { color: var(--color-faint, #999); }
+
+/* ---------- RPT-12: official-data anchor column ---------- */
+/* Statement narrows so all five columns fit the 760px report column. */
+.bft-table.bft-wide { min-width: 740px; }
+.bft-wide .col-statement { min-width: 200px; }
+.bft-wide .statement-text { max-width: 200px; }
+.cell-data {
+  min-width: 180px;
+  max-width: 206px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs, 11px);
+  line-height: 1.55;
+  color: var(--color-muted, #666);
+  cursor: default;
+}
+.da-series {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  font-family: var(--font-sans, inherit);
+  font-size: var(--fs-sm, 12px);
+  font-weight: 600;
+  color: var(--color-ink, #0A0A0A);
+}
+.da-link,
+.da-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.da-link {
+  color: var(--color-ink, #0A0A0A);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border, #E5E5E5);
+  transition: border-color var(--dur-1, 120ms) var(--ease, ease), color var(--dur-1, 120ms) var(--ease, ease);
+}
+.da-link:hover { color: var(--color-accent, #FF4500); border-bottom-color: var(--color-accent, #FF4500); }
+.da-sid {
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-2xs, 10px);
+  font-weight: 400;
+  color: var(--color-muted, #666);
+}
+.da-threshold { color: var(--color-ink, #0A0A0A); }
+.da-units { color: var(--color-faint, #999); }
+.da-state {
+  display: inline-block;
+  margin: 1px 0;
+  font-size: var(--fs-2xs, 10px);
+  padding: 0 6px;
+  border: 1px solid var(--color-border, #E5E5E5);
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
+}
+.da-met { color: var(--color-ok, #16A34A); border-color: var(--color-ok, #16A34A); }
+.da-unmet { color: var(--color-muted, #666); }
+.da-gap {
+  margin-left: 6px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--color-muted, #666);
+}
+.da-divergent .da-gap { color: var(--color-warn, #D97706); }
+.da-season { color: var(--color-faint, #999); }
 </style>

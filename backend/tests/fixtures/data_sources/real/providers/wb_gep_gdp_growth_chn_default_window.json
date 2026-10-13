@@ -1,0 +1,130 @@
+{
+ "captured_at": "2026-10-11T22:08:13Z",
+ "clock": 1791756493,
+ "series": "wb:WB_GEP_NYGDPMKTPKDZ/CHN",
+ "request": {},
+ "calls": [
+  {
+   "provider": "wb",
+   "tool": "data360_get_metadata",
+   "args": {
+    "database_id": "WB_GEP",
+    "indicator_id": "WB_GEP_NYGDPMKTPKDZ",
+    "fetch_disaggregation": false,
+    "required_country": "CHN"
+   },
+   "response": {
+    "indicator_metadata": {
+     "idno": "WB_GEP_NYGDPMKTPKDZ",
+     "database_id": "WB_GEP",
+     "database_name": "Global Economic Prospects",
+     "name": "GDP growth, constant (average 2010-19 prices and market exchange rates)",
+     "measurement_unit": "Percentage change per annum",
+     "periodicity": "Annual",
+     "date_released": null,
+     "date_last_update": null,
+     "version_statement": {
+      "version": null,
+      "version_date": "2025-02-25",
+      "version_resp": null,
+      "version_notes": null
+     },
+     "time_periods": [
+      {
+       "start": "2022",
+       "end": "2026",
+       "notes": null
+      }
+     ]
+    },
+    "disaggregation_options": [],
+    "error": null,
+    "stale": false
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_get_data",
+   "args": {
+    "database_id": "WB_GEP",
+    "indicator_id": "WB_GEP_NYGDPMKTPKDZ",
+    "country_code": "CHN",
+    "start_year": 2001,
+    "end_year": 2032,
+    "limit": 100,
+    "offset": 0,
+    "ref_area_filter": "none"
+   },
+   "response": {
+    "count": 5,
+    "total_count": null,
+    "offset": 0,
+    "has_more": false,
+    "next_offset": null,
+    "data": [
+     {
+      "OBS_VALUE": "4",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2026",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "05cad420",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "4.5",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2025",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "3378406d",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "4.9",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2024",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "5b598d2d",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "5.2",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2023",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "da6ca1f8",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     },
+     {
+      "OBS_VALUE": "2.9",
+      "UNIT_MULT": 0,
+      "REF_AREA": "CHN",
+      "TIME_PERIOD": "2022",
+      "UNIT_MEASURE": "PC_A",
+      "claim_id": "f6159f4f",
+      "REF_AREA_NAME": "China",
+      "UNIT_MEASURE_NAME": "Percentage change per annum"
+     }
+    ],
+    "metadata": {
+     "idno": "WB_GEP_NYGDPMKTPKDZ",
+     "name": "GDP growth, constant (average 2010-19 prices and market exchange rates)",
+     "database_id": "WB_GEP",
+     "database_name": "Global Economic Prospects",
+     "measurement_unit": "Percentage change per annum",
+     "periodicity": "Annual",
+     "definition_short": null
+    },
+    "error": null,
+    "failed_validation": null
+   }
+  }
+ ]
+}

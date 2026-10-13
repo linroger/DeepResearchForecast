@@ -1,0 +1,202 @@
+{
+  "success": true,
+  "data": {
+    "report_id": "report_usaspending_fy",
+    "available": true,
+    "official_data": {
+      "schema_version": 1,
+      "series": [
+        {
+          "series": "usgov:spending/total",
+          "provider": "usgov",
+          "provider_name": "USAspending.gov (U.S. Department of the Treasury)",
+          "title": "USAspending: Federal Award Spending by Fiscal Year",
+          "title_zh": "美国联邦奖励支出（按财年）",
+          "units": "U.S. dollars",
+          "frequency": "A",
+          "seasonal_adjustment": "",
+          "observations": [
+            {
+              "date": "2022-10-01",
+              "value": 4832000501479.92,
+              "flag": "unknown"
+            },
+            {
+              "date": "2023-10-01",
+              "value": 4947316990218.29,
+              "flag": "unknown"
+            },
+            {
+              "date": "2024-10-01",
+              "value": 5315833520242.8,
+              "flag": "unknown"
+            },
+            {
+              "date": "2025-10-01",
+              "value": 5198258368866.829,
+              "flag": "unknown"
+            },
+            {
+              "date": "2026-10-01",
+              "value": 7897018783.040001,
+              "flag": "unknown"
+            }
+          ],
+          "source_url": "https://www.usaspending.gov/explorer",
+          "api_url": "https://api.usaspending.gov/api/v2/search/spending_over_time/",
+          "retrieved_at": "2026-10-11T22:08:20+00:00",
+          "last_updated": "",
+          "transform": "",
+          "projection_from": "",
+          "notes": "Fiscal-year award obligations; native handler converts missing amounts to zero. Missingness cannot be certified.",
+          "route": "mcp",
+          "geography": "USA",
+          "vintage": "",
+          "provenance": {
+            "resolution_safe": false,
+            "fiscal_start_month": 10,
+            "native_missingness": "lost; do not resolve",
+            "metadata_origin": "curated_recipe",
+            "periods": {
+              "2022-10-01": {
+                "calendar": "us_federal_fiscal_year",
+                "label": "FY2023",
+                "start": "2022-10-01",
+                "end": "2023-09-30",
+                "covered_start": "2022-10-01",
+                "covered_end": "2023-09-30",
+                "complete": true
+              },
+              "2023-10-01": {
+                "calendar": "us_federal_fiscal_year",
+                "label": "FY2024",
+                "start": "2023-10-01",
+                "end": "2024-09-30",
+                "covered_start": "2023-10-01",
+                "covered_end": "2024-09-30",
+                "complete": true
+              },
+              "2024-10-01": {
+                "calendar": "us_federal_fiscal_year",
+                "label": "FY2025",
+                "start": "2024-10-01",
+                "end": "2025-09-30",
+                "covered_start": "2024-10-01",
+                "covered_end": "2025-09-30",
+                "complete": true
+              },
+              "2025-10-01": {
+                "calendar": "us_federal_fiscal_year",
+                "label": "FY2026",
+                "start": "2025-10-01",
+                "end": "2026-09-30",
+                "covered_start": "2025-10-01",
+                "covered_end": "2026-09-30",
+                "complete": false
+              },
+              "2026-10-01": {
+                "calendar": "us_federal_fiscal_year",
+                "label": "FY2027",
+                "start": "2026-10-01",
+                "end": "2027-09-30",
+                "covered_start": "2026-10-01",
+                "covered_end": "2026-10-11",
+                "complete": false
+              }
+            },
+            "fidelity_policy_version": 3,
+            "native_frequency": "A",
+            "normalization_policy_version": 3,
+            "intentional_delivery_trim": false,
+            "requested_start": "2022-10-01",
+            "requested_end": "2026-10-11",
+            "tool_responses": [
+              {
+                "tool": "usa_spending_over_time",
+                "sha256": "fa9c91627cc7f7e1287155ee7b8a2de10b5eb61e770a696a7e291729ae236f83",
+                "arguments": {
+                  "group": "fiscal_year",
+                  "start_date": "2022-10-01",
+                  "end_date": "2026-10-11"
+                },
+                "sources": [
+                  {
+                    "url": "https://api.usaspending.gov/api/v2/search/spending_over_time/",
+                    "fetchedAt": "2026-10-11T22:08:20.566Z",
+                    "cached": false,
+                    "method": "POST"
+                  }
+                ]
+              }
+            ],
+            "response_sha256": "d0d2db9267c1919a001261a53c54a5d1cf10cba13aa10c4c201b30cca3bf0466",
+            "delivered_start": "2022-10-01",
+            "delivered_end": "2026-10-01",
+            "retrieval_route": "mcp"
+          },
+          "kiqs": []
+        }
+      ]
+    },
+    "indicators": [
+      {
+        "series": "usgov:spending/total",
+        "label": "USAspending: Federal Award Spending by Fiscal Year — United States",
+        "provider": "usgov",
+        "provider_name": "USAspending.gov (U.S. Department of the Treasury)",
+        "units": "U.S. dollars",
+        "frequency": "A",
+        "frequency_label": "Annual",
+        "seasonal_adjustment": "",
+        "transform": "",
+        "geography": "USA",
+        "source_url": "https://www.usaspending.gov/explorer",
+        "source_id": "S1",
+        "latest": null,
+        "previous_year": null,
+        "change": null,
+        "five_year": null,
+        "publisher_value": {
+          "date": "2026-10-01",
+          "period": "FY2027",
+          "value": 7897018783.040001,
+          "display": "7897018783.04 (≈ 7.9 billion U.S. dollars)",
+          "kind": "partial-period value"
+        },
+        "history": [],
+        "publisher_path": [
+          {
+            "date": "2022-10-01",
+            "period": "FY2023",
+            "value": 4832000501479.92,
+            "display": "4832000501479.92 (≈ 4.83 trillion U.S. dollars)",
+            "kind": "unclassified publisher value"
+          },
+          {
+            "date": "2023-10-01",
+            "period": "FY2024",
+            "value": 4947316990218.29,
+            "display": "4947316990218.29 (≈ 4.95 trillion U.S. dollars)",
+            "kind": "unclassified publisher value"
+          },
+          {
+            "date": "2024-10-01",
+            "period": "FY2025",
+            "value": 5315833520242.8,
+            "display": "5315833520242.8 (≈ 5.32 trillion U.S. dollars)",
+            "kind": "unclassified publisher value"
+          }
+        ],
+        "open_period": {
+          "date": "2026-10-01",
+          "period": "FY2027",
+          "value": 7897018783.040001,
+          "display": "7897018783.04 (≈ 7.9 billion U.S. dollars)",
+          "kind": "partial-period value"
+        },
+        "daily": null
+      }
+    ],
+    "lang": "en"
+  }
+}

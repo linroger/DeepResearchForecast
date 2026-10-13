@@ -1,0 +1,503 @@
+{
+ "binary_forecasts": [
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": ">=",
+    "empirical_base_rate": {
+     "h": 9,
+     "historical_share": 0.2174,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 4.2
+     },
+     "method": "empirical_h_step",
+     "n": 82,
+     "p": 0.3049,
+     "quantiles": {
+      "p10": 2.11,
+      "p25": 3.8,
+      "p50": 4.2,
+      "p75": 4.5,
+      "p90": 6.35
+     },
+     "sigma_distance": 0.11,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 4.2,
+    "observation": "2027-06",
+    "period": "2027-06-01",
+    "series": "fred:UNRATE",
+    "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+    "threshold": 4.5,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F1",
+   "probability": 0.55,
+   "proposition_id": "forecast-7d46e39c6153",
+   "resolution_criteria": "fred:UNRATE >= 4.5% in 2027-06 Official resolution: fred:UNRATE >= 4.5% for 2027-06.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "US unemployment rate >= 4.5% in June 2027",
+   "theme": "labor"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": ">=",
+    "empirical_base_rate": {
+     "h": 9,
+     "historical_share": 0.1848,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 4.2
+     },
+     "method": "empirical_h_step",
+     "n": 82,
+     "p": 0.122,
+     "quantiles": {
+      "p10": 2.11,
+      "p25": 3.8,
+      "p50": 4.2,
+      "p75": 4.5,
+      "p90": 6.35
+     },
+     "sigma_distance": 0.29,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 4.2,
+    "observation": "2027-06",
+    "period": "2027-06-01",
+    "series": "fred:UNRATE",
+    "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+    "threshold": 5.0,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F2",
+   "probability": 0.3,
+   "proposition_id": "forecast-50c8f5dbacd0",
+   "resolution_criteria": "fred:UNRATE >= 5% in 2027-06 Official resolution: fred:UNRATE >= 5% for 2027-06.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "US unemployment rate >= 5% in June 2027",
+   "theme": "policy"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": ">=",
+    "empirical_base_rate": {
+     "h": 15,
+     "historical_share": 0.1413,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 4.2
+     },
+     "method": "empirical_h_step",
+     "n": 77,
+     "p": 0.1818,
+     "quantiles": {
+      "p10": 1.36,
+      "p25": 3.6,
+      "p50": 4.4,
+      "p75": 4.7,
+      "p90": 7.34
+     },
+     "sigma_distance": 0.58,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 4.2,
+    "observation": "2027-12",
+    "period": "2027-12-01",
+    "series": "fred:UNRATE",
+    "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+    "threshold": 6.0,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F3",
+   "probability": 0.12,
+   "proposition_id": "forecast-b87acbcf8748",
+   "resolution_criteria": "fred:UNRATE >= 6% in 2027-12 Official resolution: fred:UNRATE >= 6% for 2027-12.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "US unemployment rate >= 6% in December 2027",
+   "theme": "macro"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": ">=",
+    "empirical_base_rate": {
+     "h": 9,
+     "historical_share": 0.163,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 0.0
+     },
+     "method": "empirical_h_step",
+     "n": 82,
+     "p": 0.1098,
+     "quantiles": {
+      "p10": -3.29,
+      "p25": -0.1675,
+      "p50": 0.06,
+      "p75": 0.24,
+      "p90": 2.677
+     },
+     "sigma_distance": 0.18,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 0.0,
+    "observation": "2027-06",
+    "period": "2027-06-01",
+    "series": "fred:SAHMREALTIME",
+    "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+    "threshold": 0.5,
+    "transform": "",
+    "units": "Percentage Points",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F4",
+   "probability": 0.35,
+   "proposition_id": "forecast-fb34dd41f88e",
+   "resolution_criteria": "fred:SAHMREALTIME >= 0.5 in 2027-06 Official resolution: fred:SAHMREALTIME >= 0.5 Percentage Points for 2027-06.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The Sahm rule recession indicator >= 0.5 in June 2027",
+   "theme": "labor"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": "<",
+    "empirical_base_rate": {
+     "h": 15,
+     "historical_share": 0.4839,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 3.75
+     },
+     "method": "empirical_h_step",
+     "n": 78,
+     "p": 0.3846,
+     "quantiles": {
+      "p10": 1.773,
+      "p25": 2.75,
+      "p50": 3.595,
+      "p75": 5.22,
+      "p90": 7.909
+     },
+     "sigma_distance": -0.35,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 3.75,
+    "observation": "2027-12",
+    "period": "2027-12-01",
+    "series": "fred:FEDFUNDS",
+    "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+    "threshold": 3.0,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F5",
+   "probability": 0.45,
+   "proposition_id": "forecast-87aedaf22c98",
+   "resolution_criteria": "fred:FEDFUNDS < 3% in 2027-12 Official resolution: fred:FEDFUNDS < 3% for 2027-12.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The effective federal funds rate < 3% in December 2027",
+   "theme": "policy"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": "<",
+    "empirical_base_rate": {
+     "h": 15,
+     "historical_share": 0.4731,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 3.75
+     },
+     "method": "empirical_h_step",
+     "n": 78,
+     "p": 0.2051,
+     "quantiles": {
+      "p10": 1.773,
+      "p25": 2.75,
+      "p50": 3.595,
+      "p75": 5.22,
+      "p90": 7.909
+     },
+     "sigma_distance": -0.58,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 3.75,
+    "observation": "2027-12",
+    "period": "2027-12-01",
+    "series": "fred:FEDFUNDS",
+    "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+    "threshold": 2.5,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F6",
+   "probability": 0.2,
+   "proposition_id": "forecast-e4291d03f0f9",
+   "resolution_criteria": "fred:FEDFUNDS < 2.5% in 2027-12 Official resolution: fred:FEDFUNDS < 2.5% for 2027-12.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The effective federal funds rate < 2.5% in December 2027",
+   "theme": "macro"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "horizon_year": 2027,
+   "id": "F7",
+   "probability": 0.18,
+   "proposition_id": "forecast-6538f2de4bd1",
+   "resolution_criteria": "fred:T10Y3M < 0% in 2027-06",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The 10-year minus 3-month Treasury spread < 0% in June 2027",
+   "theme": "labor"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": ">=",
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 4.989047619047619,
+    "observation": "2027-06",
+    "period": "2027-06-01",
+    "series": "fred:DGS10",
+    "source_url": "https://fred.stlouisfed.org/series/DGS10",
+    "threshold": 5.0,
+    "transform": "",
+    "units": "Percent",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F8",
+   "probability": 0.4,
+   "proposition_id": "forecast-8da028523efc",
+   "resolution_criteria": "fred:DGS10 >= 5% in 2027-06 Official resolution: fred:DGS10 >= 5% for 2027-06.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The 10-year Treasury yield >= 5% in June 2027",
+   "theme": "policy"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": "<=",
+    "empirical_base_rate": {
+     "h": 9,
+     "historical_share": 0.4731,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 3.875
+     },
+     "method": "empirical_h_step",
+     "n": 84,
+     "p": 0.1786,
+     "quantiles": {
+      "p10": 2.525,
+      "p25": 3.125,
+      "p50": 3.875,
+      "p75": 4.1875,
+      "p90": 6.3
+     },
+     "sigma_distance": -0.61,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 3.875,
+    "observation": "2027-06",
+    "period": "2027-06-01",
+    "series": "bis:WS_CBPOL/M.US",
+    "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+    "threshold": 3.0,
+    "transform": "",
+    "units": "Per cent per year",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F9",
+   "probability": 0.62,
+   "proposition_id": "forecast-6c56898a1755",
+   "resolution_criteria": "bis:WS_CBPOL/M.US <= 3% in 2027-06 Official resolution: bis:WS_CBPOL/M.US <= 3% for 2027-06.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The US central bank policy rate <= 3% in June 2027",
+   "theme": "macro"
+  },
+  {
+   "adjustment_rationale": "",
+   "base_rate_anchor": "",
+   "criteria_sharp": true,
+   "data_anchor": {
+    "comparator": "<=",
+    "empirical_base_rate": {
+     "h": 15,
+     "historical_share": 0.4731,
+     "latest": {
+      "date": "2026-09-01",
+      "value": 3.875
+     },
+     "method": "empirical_h_step",
+     "n": 78,
+     "p": 0.2051,
+     "quantiles": {
+      "p10": 2.05,
+      "p25": 2.875,
+      "p50": 3.75,
+      "p75": 5.375,
+      "p90": 8.125
+     },
+     "sigma_distance": -0.64,
+     "window": {
+      "end": "2026-09-01",
+      "start": "2019-01-01"
+     }
+    },
+    "frequency": "M",
+    "geography": "USA",
+    "latest_date": "2026-09-01",
+    "latest_value": 3.875,
+    "observation": "2027-12",
+    "period": "2027-12-01",
+    "series": "bis:WS_CBPOL/M.US",
+    "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+    "threshold": 2.5,
+    "transform": "",
+    "units": "Per cent per year",
+    "vintage": ""
+   },
+   "horizon_year": 2027,
+   "id": "F10",
+   "probability": 0.8,
+   "proposition_id": "forecast-b71618e9a52b",
+   "resolution_criteria": "bis:WS_CBPOL/M.US <= 2.5% in 2027-12 Official resolution: bis:WS_CBPOL/M.US <= 2.5% for 2027-12.",
+   "resolution_source": "FRED",
+   "scenario_membership": {
+    "derivable": false,
+    "yes_scenarios": []
+   },
+   "source": "research-prior",
+   "statement": "The US central bank policy rate <= 2.5% in December 2027",
+   "theme": "labor"
+  }
+ ]
+}

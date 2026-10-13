@@ -1222,6 +1222,8 @@ def _tag_parallel_evidence(text: str) -> str:
 # 提示词（让开场就带着「市场把 X 定在 NN%——去查为什么」的锚点搜）。空串 = 无块（默认，
 # 逐字节不改今日行为）。build_research_prompt 读取本值；INT-1 复用初始快照喂给结构化抽取。
 _MARKET_PRICING_BLOCK: str = ""
+# Official series the deterministic pre-pass stored for this brief (pass-0 prompts only).
+_OFFICIAL_DATA_BRIEF_BLOCK: str = ""
 _INITIAL_PM_MARKETS: list[dict] = []
 _PM_TRANSPORT_UNAVAILABLE: bool = False
 # TRANSPORT-DIAG: 前置快照失败时的错误类别计数（如 {"HTTPError:403": 16}），供
@@ -1261,6 +1263,11 @@ def _set_pinned_citation_index(entries: "list[dict]") -> None:
 def _set_market_pricing_block(text: str) -> None:
     global _MARKET_PRICING_BLOCK
     _MARKET_PRICING_BLOCK = text or ""
+
+
+def _set_official_data_brief_block(text: str) -> None:
+    global _OFFICIAL_DATA_BRIEF_BLOCK
+    _OFFICIAL_DATA_BRIEF_BLOCK = text or ""
 
 
 def _set_initial_pm_markets(markets: list[dict]) -> None:
@@ -1314,6 +1321,7 @@ def _reset_fetched_sources() -> None:
     _FETCHED_SOURCES.clear()
     _RESEARCH_FLAGS.clear()
     _set_market_pricing_block("")   # PM-4: 每 run 重置注入的市场定价块
+    _set_official_data_brief_block("")
     _set_initial_pm_markets([])
     _set_pm_transport_unavailable(False)
     _set_pinned_citation_index([])  # WAVE9-RQ2: 每 run 重置钉住的引注索引
@@ -1945,7 +1953,8 @@ def _copy_official_source_fields(source: dict, target: dict) -> None:
             for key in (*tools.SOURCE_FIELDS, "content_sha256", "content_chars", "receipt_id", "provider"):
                 if key in source:
                     target[key] = source[key]
-            target["title"] = source["dataset"]["snapshot"]["title"]
+            # Reader label (curated title plus geography) for indexes and References.
+            target["title"] = tools._api().series_label(source["dataset"]["snapshot"])
             for key in ("receipt_scopes", "thread_id", "lane", "purpose"):
                 target.pop(key, None)
     except Exception:
@@ -1966,18 +1975,29 @@ def _legacy_data_sources() -> list[dict]:
         return []
 
 
+def _strip_reference_collisions(mapping: dict, collided: set) -> None:
+    """An ambiguous provisional reference cites nothing rather than a guessed source."""
+    for number in collided:
+        mapping[number] = None
+    if collided:
+        logging.getLogger(__name__).warning(
+            "official data: %d provisional reference collision(s); markers stripped", len(collided))
+
+
 def _remap_data_citations(text: str, sources: list[dict], entries: list[dict]) -> str:
     """Single-pass remapping prevents a replacement from being remapped twice."""
     by_url = {_norm_url(e.get("url")): e.get("n") for e in entries}
     mapping: dict[int, int | None] = {}
+    collided: set[int] = set()
     for row in sources:
         number = row.get("provisional_source_number")
         if not isinstance(number, int):
             continue
         target = by_url.get(_norm_url(row.get("url")))
         if number in mapping and mapping[number] != target:
-            raise ValueError("official-data provisional reference collision")
+            collided.add(number)
         mapping[number] = target
+    _strip_reference_collisions(mapping, collided)
     def replace(match):
         number = int(match.group(1))
         if number not in mapping:
@@ -1986,6 +2006,69 @@ def _remap_data_citations(text: str, sources: list[dict], entries: list[dict]) -
         return f"[S{target}]" if target else ""
 
     return _CITATION_MARKER_RE.sub(replace, text)
+
+
+_OFFICIAL_BASELINE_SCOPE_RE = re.compile(
+    r"baseline|indicators?\b|statistic|quantitative|official data|基线|指标|量化|统计|官方数据", re.I)
+
+
+def _official_data_series_for(entries: list[dict], scope_text: str | None = None) -> list[tuple[dict, Any]]:
+    """Stored dataset rows citable in ``entries`` as (index entry, Series).
+
+    One generation per series (ledger order). With ``scope_text`` (a section
+    brief) only series whose label/id match the scope are kept, best first,
+    unless the scope is a quantitative-baseline section.
+    """
+    rows = _legacy_data_sources()
+    if not rows or not entries:
+        return []
+    api = _data_tools_module()._api()
+    by_url = {_norm_url(e.get("url")): e for e in entries if isinstance(e, dict) and e.get("n")}
+    found: list[tuple[dict, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        entry = by_url.get(_norm_url(row.get("url")))
+        try:
+            series = api.Series.from_dict(row["dataset"]["snapshot"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if entry is None or series.series in seen:
+            continue
+        seen.add(series.series)
+        found.append((entry, series))
+    if scope_text is None or _OFFICIAL_BASELINE_SCOPE_RE.search(scope_text):
+        return found[:12]
+    terms = _scope_terms(scope_text)
+    scored = []
+    for index, pair in enumerate(found):
+        series = pair[1]
+        text = " ".join((api.series_label(series), api.series_label(series, "zh"), series.series, series.units))
+        scored.append((score_block_for_scope(text, terms), index, pair))
+    return [pair for score, _, pair in sorted(scored, key=lambda row: (-row[0], row[1])) if score > 0][:6]
+
+
+def _official_data_synthesis_block(selected: list[tuple[dict, Any]], max_chars: int = 4000) -> str:
+    """OFFICIAL DATA SERIES payload block with the FINAL [S<n>] of each stored series.
+
+    Empty when no dataset is stored, so synthesis payloads stay byte-identical
+    when official data is disabled or unused.
+    """
+    if not selected:
+        return ""
+    api = _data_tools_module()._api()
+    briefs: list[str] = []
+    used = 0
+    for entry, series in selected:
+        brief = api.render_series_brief(series, int(entry["n"]))
+        if used + len(brief) > max_chars:
+            break
+        briefs.append(brief)
+        used += len(brief) + 2
+    if not briefs:
+        return ""
+    return ("OFFICIAL DATA SERIES (exact stored retrievals with their periods and statuses; "
+            "cite each with its [S<n>]; a publisher projection is not observed history):\n"
+            + "\n\n".join(briefs) + "\n\n")
 
 
 def _merge_shared_fetched_sources() -> int:
@@ -4780,9 +4863,15 @@ def build_citation_index(fetched: "list[dict]", cap: int = 100) -> "list[dict]":
     与 :func:`merge_fetched_into_sources` 的 fetched 主干同谓词/同顺序（合法 http URL、
     按规整化 URL 去重、剔除 ok=False 的死抓取），因此确定性参考节的编号顺序与
     sources.json 的 fetched 主干结构性对齐。行形态 {"n": 1 起的序号, "title", "url"}。
+
+    Stored official datasets stay citable past ``cap``: they are appended after
+    the capped web sources (at most 200), so a run with many web fetches never
+    strips the [S<n>] of an exact stored series. Final numbering is by URL.
     """
     entries: list[dict] = []
     seen: set[str] = set()
+    limit = max(1, int(cap))
+    overflow = 0
     for f in fetched or []:
         if not isinstance(f, dict):
             continue
@@ -4790,6 +4879,10 @@ def build_citation_index(fetched: "list[dict]", cap: int = 100) -> "list[dict]":
         if (not _is_valid_http_url(u) or u in seen or f.get("ok") is False
                 or _source_domain_denied(u)):
             continue
+        if len(entries) >= limit:
+            if f.get("source_origin") != "official_data" or overflow >= 200:
+                continue
+            overflow += 1
         seen.add(u)
         title = str(f.get("title") or "").strip() or _title_from_url(u)
         entries.append({
@@ -4799,8 +4892,6 @@ def build_citation_index(fetched: "list[dict]", cap: int = 100) -> "list[dict]":
             # Internal routing hint only; render_citation_index_block omits it.
             "excerpt": str(f.get("excerpt") or "")[:1200],
         })
-        if len(entries) >= max(1, int(cap)):
-            break
     return entries
 
 
@@ -5056,7 +5147,12 @@ def _register_legacy_data_tools(client, *, plog=None) -> dict[str, Any]:
                 marker = "OFFICIAL DATA TOOLS (runtime):"
                 if marker not in scoped.system_prompt:
                     guidance = ("\n\n" + marker + " Permitted here: " + ", ".join(allowed_names)
-                                + ". Preserve exact stored values, units, periods, dataset URLs and source references. "
+                                + ". When your focus needs an official statistic (rates, prices, labor, output, "
+                                "trade, fiscal, energy, outlooks) or base-rate history, retrieve the series (an "
+                                "early start for history, transform yoy for an index's year-over-year rate) "
+                                "rather than copying the number from a web page; a series "
+                                "id your brief names that the run already stored is returned free. "
+                                "Preserve exact stored values, units, periods, dataset URLs and source references. "
                                 "Search metadata is discovery only; retain publisher projection labels. "
                                 "Respect the configured tool and skill restrictions.")
                     scoped_updates.append((scoped, "system_prompt", scoped.system_prompt + guidance))
@@ -5076,13 +5172,242 @@ def _official_data_prompt_block() -> str:
     if not _env_flag("DATA_SOURCES_ENABLED", True) or _LEGACY_DATA_RUNTIME_READY is False:
         return ""
     return (
-        "OFFICIAL DATA: use data_search to discover series and data_get to retrieve "
-        "bounded observations. Read /mnt/skills/public/data-sources/SKILL.md with "
-        "read_file for provider selection. Keep exact values, units, periods, "
-        "source references and dataset URLs in notes; distinguish publisher "
+        "OFFICIAL DATA: When a claim needs an official statistic (rates, prices, labor, "
+        "output, trade, fiscal, energy, cross-country outlooks) or a historical base rate, "
+        "retrieve the series with data_get rather than copying the number from a web page; "
+        "data_search finds series ids (one short English query per measurable concept). "
+        "Give data_get an early start for base-rate history (it keeps the latest 240 "
+        "observations) and transform yoy for the year-over-year rate of an index; IMF WEO "
+        "and World Bank GEP outlooks come with their projection "
+        "years. When no provider covers a concept, note that once and use primary web "
+        "sources; a related series is context, never a stand-in for the measure asked "
+        "about. read_file of /mnt/skills/public/data-sources/SKILL.md is permitted for "
+        "provider selection. Keep exact values, units, periods, "
+        "source references and dataset URLs in notes, and cite a retrieved series "
+        "with the exact [S<n>] that data_get returns; distinguish publisher "
         "projections from observed history. Search metadata is not evidence. "
-        "Deterministic downstream tooling owns charts.\n\n"
+        "Each worker has a small data budget: search once per concept and get "
+        "each series once. Deterministic downstream tooling owns charts.\n\n"
     )
+
+
+def _official_data_brief_prompt_block() -> str:
+    """Pre-pass stored series (exact values + provisional [S<n>]) for the opening prompt."""
+    if not _official_data_prompt_block() or not _OFFICIAL_DATA_BRIEF_BLOCK.strip():
+        return ""
+    return _OFFICIAL_DATA_BRIEF_BLOCK.rstrip() + "\n\n"
+
+
+_OFFICIAL_STORED_INDEX_MAX = 12
+_OFFICIAL_STORED_LINE_MAX = 320
+_OFFICIAL_STORED_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
+
+
+def _official_data_stored_block(question: str = "") -> str:
+    """Series this run has stored, for prompts on threads that never saw the opening brief.
+
+    Parallel deep phases, fan-out workers and the top-up, gap-closing,
+    verification and refinement passes start after the pre-pass and earlier
+    agents stored series. One line per stored series from the run's candidate
+    journal: id, reader label, units, frequency and seasonal adjustment (SA
+    and NSA twins share a label), latest observed value, a newer value
+    whose status is not an observation, the publisher projection years with
+    the projected values for years the question names, where the stored
+    history starts (a stored window is immutable for the run) and, for an
+    index level, its year-over-year id. Whole parts that do not fit the line
+    bound are left out, so no value is ever cut. No citation marker: a worker
+    cites a series after data_get returns its page, free for a stored id.
+    Empty when official data is off, nothing is stored or the journal is
+    unreadable, so these prompts stay byte-identical.
+    """
+    if not _official_data_prompt_block():
+        return ""
+    try:
+        tools = _data_tools_module()
+        rows = tools.load_candidates(tools._root(), strict=True)
+        api = tools._api()
+        kinds = _BASELINE_TEXT["en"]["kinds"]
+        named = set(_OFFICIAL_STORED_YEAR_RE.findall(str(question or "")[:4000]))
+        stored = {row["series"] for row in rows}
+        lines = []
+        for row in rows[:_OFFICIAL_STORED_INDEX_MAX]:
+            series = row["value"]
+            observed, newer, projection = _official_points(api, series)
+            parts = []
+            if observed is not None:
+                parts.append(f"latest observed {api.format_series_value(observed.value, series)} "
+                             f"({_official_period_label(series, observed.date)})")
+            if newer is not None:
+                parts.append(f"{kinds.get(newer[1], newer[1])} {api.format_series_value(newer[0].value, series)} "
+                             f"({_official_period_label(series, newer[0].date)})")
+            if projection is not None:
+                last = series.observations[-1].date
+                outlook = [o for o in series.observations
+                           if o.value is not None and o.date >= projection.date and o.date[:4] in named
+                           and _official_point_kind(api, o, series) == "projection"][:3]
+                parts.append(f"publisher projections {_official_period_label(series, projection.date)} to "
+                             f"{_official_period_label(series, last)}"
+                             + (" (" + ", ".join(f"{_official_period_label(series, o.date)}: "
+                                                 f"{api.format_series_value(o.value, series)}" for o in outlook)
+                                + ")" if outlook else ""))
+            if series.observations:
+                parts.append(f"stored from {_official_period_label(series, series.observations[0].date)}")
+            if (_yoy_index_level(series.units, series.frequency) and not series.transform
+                    and f"{series.series}#yoy" not in stored):
+                parts.append(f"year-over-year rate: data_get {series.series}#yoy")
+            label = api.series_label(series)
+            label = label if len(label) <= 120 else label[:119].rstrip() + "…"
+            adjusted = f", {series.seasonal_adjustment}" if series.seasonal_adjustment in ("SA", "NSA", "SAAR") else ""
+            line = f"- {series.series} — {label} ({series.units}, {series.frequency}{adjusted})"
+            joiner = ": "
+            for part in parts:
+                if len(line) + len(joiner) + len(part) <= _OFFICIAL_STORED_LINE_MAX:
+                    line += joiner + part
+                    joiner = "; "
+            lines.append(line)
+    except Exception:  # noqa: BLE001 — the index is additive; a prompt never fails on it
+        return ""
+    if not lines:
+        return ""
+    return ("OFFICIAL SERIES ALREADY STORED IN THIS RUN (data_get of an id returns its stored page and "
+            "[S<n>] without using the budget; read the page before citing a value, and name the ids a "
+            "delegated task needs):\n" + "\n".join(lines) + "\n\n")
+
+
+_LEGACY_DATA_PREFETCH_S = 90.0
+_PREFETCH_CLAUSE_RE = re.compile(r"\.(?=\s|$)|[?!;。？！；：\n]+|:\s|,\s*(?:and|but|or|while|whereas)\s+|[，、]")
+# A clause asking for a price change rate: its index-level matches are stored as #yoy.
+_PREFETCH_RATE_RE = re.compile(r"inflation|deflation|year[\s-]*over[\s-]*year|\byoy\b|\by/y\b|12[\s-]*month|"
+                               r"(?:price|wage)s?\s+growth|通胀|通货膨胀|同比", re.I)
+# Pre-pass history: a stored window is immutable for the run and agents take
+# base rates from official history, so the pre-pass asks for this many years
+# (the data layer keeps the latest 240 observations).
+_LEGACY_PREFETCH_HISTORY_YEARS = 30
+
+
+def _yoy_index_level(units, frequency) -> bool:
+    """An index level whose year-over-year rate the data layer serves (never weekly)."""
+    return str(units or "").lower().startswith("index") and frequency != "W"
+
+
+def _legacy_prefetch_ids(question: str, limit: int) -> list[str]:
+    """Strong curated-catalog matches for the brief, each by its fastest equivalent route.
+
+    A catalog ``preferred`` route (e.g. a Data360 copy of an IMF WEO series) or a
+    BLS series' FRED mirror replaces the slower or quota-limited original; one
+    retrieval per underlying series. The IMF server answers one request at a
+    time in 30-60 s, so at most one native IMF series fits the pre-pass bound.
+    """
+    tools = _data_tools_module()
+    catalog, api = tools._catalog(), tools._api()
+    text = str(question or "")[:4000]
+    # A compound brief rarely matches one concept strongly as a whole; its
+    # clauses ("Will X exceed ...", "how will Y respond") usually do.
+    clauses = [clause.strip() for clause in _PREFETCH_CLAUSE_RE.split(text) if len(clause.strip()) >= 8]
+    queries = list(dict.fromkeys([text[:600], *clauses[:40]]))
+    hits = [(hit, query) for query in queries
+            for hit in catalog.search_catalog_scored(query[:600], limit=24) if hit.strong]
+    matched: dict[str, list[str]] = {}
+    for hit, query in hits:
+        matched.setdefault(hit.entry.series, []).append(query)
+    chosen: list[str] = []
+    for hit, _ in hits:
+        series = hit.entry.series
+        for route in (getattr(hit.entry, "preferred", ""), getattr(hit.entry, "fred_equivalent", "")):
+            route = str(route or "").strip()
+            route = route if ":" in route or not route else "fred:" + route
+            if route and api.parse_series_id(route):
+                series = ":".join(api.parse_series_id(route))
+                break
+        # An inflation question is about the index's year-over-year rate, not
+        # its level: store that rate (the measure a threshold is set on). The
+        # clauses an entry matches decide; the whole brief only when none does.
+        basis = [query for query in matched[hit.entry.series] if query != queries[0]] or matched[hit.entry.series]
+        if (any(_PREFETCH_RATE_RE.search(query) for query in basis) and "#" not in series
+                and _yoy_index_level(getattr(hit.entry, "units", ""), getattr(hit.entry, "frequency", ""))):
+            series += "#yoy"
+        if series in chosen or (series.startswith("imf:") and any(c.startswith("imf:") for c in chosen)):
+            continue
+        chosen.append(series)
+        if len(chosen) >= limit:
+            break
+    return chosen
+
+
+def _legacy_prefetch_starts(series_ids: list[str]) -> dict[str, str]:
+    """The base-rate history start of each pre-pass id one bounded request can serve.
+
+    FRED (long native-daily windows become monthly aggregates) and monthly,
+    quarterly or annual series of the other providers start
+    ``_LEGACY_PREFETCH_HISTORY_YEARS`` back. BLS answers long windows in
+    quota-charged chunks; BEA in one- or two-year chunks (one call each), and
+    its GDP-by-industry rows begin in 2005, so an earlier start fails the
+    request; other daily or weekly series (Treasury pages) would pass their
+    page bound. Those keep the default window.
+    """
+    tools = _data_tools_module()
+    catalog, api = tools._catalog(), tools._api()
+    start = str(_dt.datetime.now(_dt.timezone.utc).year - _LEGACY_PREFETCH_HISTORY_YEARS)
+    starts: dict[str, str] = {}
+    for sid in series_ids:
+        parsed = api.parse_series_id(sid)
+        if not parsed or parsed[0] == "bls" or (parsed[0] == "usgov" and parsed[1].startswith("bea/")):
+            continue
+        entry = catalog.lookup(f"{parsed[0]}:{parsed[1].partition('#')[0]}")
+        if parsed[0] == "fred" or getattr(entry, "frequency", "") in ("M", "Q", "A"):
+            starts[sid] = start
+    return starts
+
+
+def _prefetch_legacy_data(question: str, plog, meta: dict) -> None:
+    """Deterministic official-data pre-pass for the legacy engine.
+
+    Strong catalog matches for the brief are stored through the data tools'
+    own journal, budget and cache with base-rate history where one bounded
+    request serves it (:func:`_legacy_prefetch_starts`), so a later agent
+    data_get of the same id is answered from storage and synthesis can cite
+    them. Only the baseline lane runs it (other evidence lanes and the
+    global synthesis reuse transported rows), only when the tools are
+    registered, within DATA_SOURCES_PREFETCH_MAX (at most 6) and a fixed time
+    bound. The stored series are shown to the opening pass. Never raises.
+    """
+    if (not _official_data_prompt_block() or _LEGACY_DATA_RUNTIME_READY is not True
+            or os.environ.get("RESEARCH_BUDGET_LANE_ID", "").strip() not in ("", "outer-track-1")):
+        return
+    try:
+        limit = min(6, max(0, int(os.environ.get("DATA_SOURCES_PREFETCH_MAX", "6") or "6")))
+    except ValueError:
+        limit = 6
+    if limit <= 0:
+        return
+    try:
+        tools = _data_tools_module()
+        requested = _legacy_prefetch_ids(question, limit)
+        starts = _legacy_prefetch_starts(requested)
+        results = (tools.prefetch_impl(requested, deadline_s=_LEGACY_DATA_PREFETCH_S, starts=starts)
+                   if requested else {})
+        stored = [sid for sid in requested if str(results.get(sid, "")).startswith("[S")]
+        meta["data_prefetch"] = {"requested": requested, "stored": stored, "history_starts": starts,
+                                 "failed": {sid: str(results.get(sid) or "no answer within the prefetch bound")[:200]
+                                            for sid in requested if sid not in stored}}
+        api = tools._api()
+        rows = {row["series"]: row for row in tools.load_candidates(tools._root())}
+        briefs = [api.render_series_brief(rows[sid]["value"], rows[sid]["source_number"])
+                  for sid in stored if sid in rows]
+        block = ""
+        for brief in briefs:
+            if len(block) + len(brief) > 3600:
+                break
+            block += brief + "\n\n"
+        if block:
+            _set_official_data_brief_block(
+                "OFFICIAL DATA ALREADY STORED for this brief (exact retrieved values; cite each "
+                "with the [S<n>] shown; data_get of these ids returns the same stored page "
+                "without using the budget):\n" + block.rstrip())
+        plog.write("ok" if stored or not requested else "warn",
+                   f"official data pre-pass: stored {len(stored)}/{len(requested)} strong catalog series")
+    except Exception as exc:  # noqa: BLE001 — the pre-pass is additive
+        _data_diagnostic(plog, f"pre-pass unavailable ({type(exc).__name__})")
 
 
 def build_research_prompt(
@@ -5106,6 +5431,7 @@ def build_research_prompt(
             f"RESEARCH BRIEF:\n{question}\n\n"
             f"{_market_pricing_prompt_block()}"
             f"{_official_data_prompt_block()}"
+            f"{_official_data_brief_prompt_block()}"
             f"{evidence_guidance}\n\n"
             "Return dense, structured WORKING EVIDENCE NOTES, not an executive "
             "summary and not a client-facing report. Preserve concrete figures "
@@ -5135,6 +5461,7 @@ def build_research_prompt(
             f"RESEARCH BRIEF:\n{question}\n\n"
             f"{_market_pricing_prompt_block()}"
             f"{_official_data_prompt_block()}"
+            f"{_official_data_brief_prompt_block()}"
             f"{_agentic_delegation_block()}"
             f"{preset['guidance']}\n\n"
             "For this first pass, search broadly enough to understand the terrain and "
@@ -5173,6 +5500,7 @@ def build_research_prompt(
         f"RESEARCH BRIEF:\n{question}\n\n"
         f"{_market_pricing_prompt_block()}"
         f"{_official_data_prompt_block()}"
+        f"{_official_data_brief_prompt_block()}"
         f"{preset['guidance']}\n\n"
         "Then produce a single comprehensive Markdown report (your final message) that a "
         "downstream forecasting workflow will use as its evidence dossier. The report MUST "
@@ -5254,6 +5582,7 @@ def build_deep_phase_prompt(question: str, phase: dict[str, Any], index: int, to
         f"PASS OBJECTIVE:\n{phase['focus']}\n\n"
         f"{quantitative_line}"
         f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         f"{delegation}"
         "Use web search and full-text fetching as needed. Prefer primary sources and "
         "high-authority sources. Capture concrete numbers, dates, organizations, named "
@@ -5332,6 +5661,8 @@ def build_coverage_topup_prompt(question: str, gaps: list | None, have: int, tar
         "merely to raise it. Continue only on an under-evidenced named KIQ where a new "
         "independent S1/S2 origin can upgrade the ledger.\n\n"
         f"{gap_block}"
+        f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         f"{_agentic_delegation_block()}"
         "OBJECTIVE: find and FETCH NEW, high-quality sources that cover parts of the brief "
         "not yet evidenced — DIFFERENT actors, drivers, regions, mechanisms, numbers, and "
@@ -5367,6 +5698,8 @@ def build_gap_closing_prompt(question: str, gaps: list | None, target_language: 
         "The evidence base is wide enough, but these gaps are still unresolved and are the "
         "highest-value thing left to nail down:\n"
         f"{gap_block}\n\n"
+        f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         f"{_agentic_delegation_block()}"
         "OBJECTIVE: for EACH gap, run focused searches and FETCH the primary/high-authority "
         "pages that would actually close it (a specific number with its as-of date and unit, a "
@@ -5893,6 +6226,12 @@ def build_synthesis_outline_prompt(question: str, target_language: str | None) -
     )
 
 
+def _language_is_chinese(target_language: Any) -> bool:
+    """True for target-language values naming Chinese ('Chinese', 'zh', '中文' ...)."""
+    language = str(target_language or "").lower()
+    return any(tag in language for tag in ("chinese", "mandarin", "中文", "汉语", "zh"))
+
+
 def default_synthesis_outline(
         question: str, target_language: str | None) -> list[dict]:
     """Return a deterministic deep-dossier skeleton when outline JSON is malformed.
@@ -5903,8 +6242,7 @@ def default_synthesis_outline(
     bounded skeleton keeps section ownership, evidence routing, and the 15k-word
     contract alive without spending another planning call.
     """
-    language = str(target_language or "").lower()
-    chinese = any(tag in language for tag in ("chinese", "mandarin", "中文", "汉语", "zh"))
+    chinese = _language_is_chinese(target_language)
     rows = (
         [
             ("执行摘要与核心判断", "核心论点、基准情景、最重要的可证伪结论和决策含义"),
@@ -7081,22 +7419,29 @@ def synthesize_multipart(question: str, target_language: str | None, depth: str,
                 section_cap,
                 max_blocks=_synthesis_section_max_blocks(),
             )
-        section_citations = render_citation_index_block(
-            route_citation_index_for_scope(
-                citation_entries,
-                scope_text,
-                # The cast-wide owner can require one distinct admitted source
-                # for each of five families across as many as 20 actors. Its
-                # sealed blocks contain the exact source URLs, so expose the
-                # complete pinned allowance instead of the ordinary 32-source
-                # subset; the final gate must never demand a citation number
-                # that the writer could not see.
-                max_entries=(
-                    _citation_index_cap()
-                    if owns_cast_wide and actor_blocks else 32
-                ),
-                evidence_text=sec_ctx,
-            ))
+        routed_entries = route_citation_index_for_scope(
+            citation_entries,
+            scope_text,
+            # The cast-wide owner can require one distinct admitted source
+            # for each of five families across as many as 20 actors. Its
+            # sealed blocks contain the exact source URLs, so expose the
+            # complete pinned allowance instead of the ordinary 32-source
+            # subset; the final gate must never demand a citation number
+            # that the writer could not see.
+            max_entries=(
+                _citation_index_cap()
+                if owns_cast_wide and actor_blocks else 32
+            ),
+            evidence_text=sec_ctx,
+        )
+        # Stored official series routed to this section keep their pinned
+        # numbers visible in the section's index.
+        official = _official_data_series_for(citation_entries, scope_text)
+        routed_numbers = {entry.get("n") for entry in routed_entries}
+        routed_entries = sorted(
+            routed_entries + [entry for entry, _ in official if entry.get("n") not in routed_numbers],
+            key=lambda entry: int(entry.get("n") or 0))
+        section_citations = render_citation_index_block(routed_entries)
         governing = build_synthesis_section_prompt(
             question, outline, sec, i, len(outline), "", "", target_language,
             citation_block="")
@@ -7106,6 +7451,7 @@ def synthesize_multipart(question: str, target_language: str | None, depth: str,
         )
         if notes_digest:
             payload += "WORKING-NOTES DIGEST:\n" + notes_digest + "\n\n"
+        payload += _official_data_synthesis_block(official)
         payload += "GATHERED RESEARCH FOR THIS SECTION:\n" + sec_ctx
         prompt = Stage1ModelPrompt(
             governing,
@@ -7510,13 +7856,15 @@ def remap_lane_citations(
         for entry in local_entries
     }
 
+    collided: set[int] = set()
     for source in lane_sources:
         provisional = source.get("provisional_source_number")
         if isinstance(provisional, int):
             target = global_by_url.get(_norm_url(source.get("url")).casefold())
             if provisional in local_to_global and local_to_global[provisional] != target:
-                raise ValueError("official-data provisional reference collision")
+                collided.add(provisional)
             local_to_global[provisional] = target
+    _strip_reference_collisions(local_to_global, collided)
 
     def _replace(match: "re.Match[str]") -> str:
         try:
@@ -8374,6 +8722,9 @@ def synthesize_from_evidence_parts(
             ("GLOBAL SOURCE INDEX:\n" + _cit_block + "\n\n")
             if _cit_block else ""
         )
+        if _cit_block:
+            payload += _official_data_synthesis_block(
+                _official_data_series_for(_cit_entries))
         payload += "GATHERED RESEARCH:\n" + context
         resp, served_model = _invoke_tool_free_model(
             synth_model,
@@ -10701,6 +11052,8 @@ def build_scoped_worker_prompt(question: str, kiq: str, target_language: str | N
         "You are a scoped sub-investigator within a larger forecasting research effort.\n"
         f"OVERALL QUESTION: {question}\n\n"
         f"YOUR NARROW FOCUS — investigate ONLY this, in depth: {kiq}\n\n"
+        f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         "Use search/read tools only while they advance this KIQ: a new independent origin, "
         "a stronger evidence grade, a verified number, a resolved contradiction, or a real "
         "disconfirming result. Stop when its load-bearing claims are B2-or-better and the "
@@ -11811,6 +12164,8 @@ def build_report_refine_prompt(question: str, gaps: list, depth: str,
         "缺口做定向研究（必要时搜索/取证），补齐相应的参照类基率与历史类比、因→果机制链与二阶效应、"
         "带单位/日期/来源的量化事实、非共识/反证据、或缺失的来源归属，**不要**重写整份报告、不要偏离"
         "这些缺口。完成后把新发现以工作笔记形式给出，供随后重合成采纳。\n\n"
+        f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         f"{_agentic_delegation_block(chinese=True)}"
         f"{gap_block}\n\n=== 预测问题 ===\n{safe_question}{lang}\n"
     )
@@ -12511,6 +12866,8 @@ def build_triangulation_verification_prompt(question: str, claims: list,
         "document) that corroborate it, refute it, or materially qualify it. Record what you "
         "found and the resulting status (corroborated / contested / unverified).\n\n"
         f"SINGLE-ORIGIN LOAD-BEARING CLAIMS:\n{claim_block}\n\n"
+        f"{_official_data_prompt_block()}"
+        f"{_official_data_stored_block(question)}"
         "HARD RULES:\n"
         "- Only record sources you ACTUALLY FETCHED, with their real URL and on-page date.\n"
         "- A second copy of the SAME wire story is NOT independent corroboration — seek a "
@@ -16102,7 +16459,17 @@ def _visual_contract_audit(question: str, charts: Any) -> dict[str, Any]:
     data_ids = {cid for cid in ids if cid.startswith("data_")}
     decision_ids = sorted((ids & _DECISION_VISUAL_IDS) | data_ids)
     minimum = _research_charts_min() if explicit else 0
-    satisfied = ids | ({"quant_metrics", "metric_trajectories"} if data_ids else set())
+    # An official-data chart is a stored metric trajectory. Only a chart that
+    # compares several stored series (e.g. economies on one axis) stands in for
+    # the cross-region quant_metrics comparison.
+    compares = any(
+        str(row.get("id") or "").startswith("data_")
+        and (str(row.get("id")).startswith("data_compare_")
+             or (isinstance(row.get("series"), list) and len(set(map(str, row["series"]))) > 1))
+        for row in rows
+    )
+    satisfied = (ids | ({"metric_trajectories"} if data_ids else set())
+                 | ({"quant_metrics"} if compares else set()))
     missing = sorted(required - satisfied)
     shortfall = max(0, minimum - len(decision_ids))
     enabled = _research_charts_min() > 0
@@ -16196,12 +16563,59 @@ def embed_chart_refs(report_text: str, charts: "list[dict]") -> str:
     return (report_text or "").rstrip() + "\n\n" + "\n".join(lines).rstrip() + "\n"
 
 
+def _data_lang(target_language: Any, text: str = "") -> str:
+    """'zh' or 'en' for official-data presentation (charts, baseline table).
+
+    The API passes language names ('Chinese', 'English', 'auto'); an unset or
+    'auto' language follows the report's own script.
+    """
+    if _language_is_chinese(target_language):
+        return "zh"
+    if str(target_language or "").strip().lower() in ("", "auto"):
+        sample = str(text or "")[:200000]
+        visible = sum(1 for char in sample if not char.isspace())
+        if visible and len(re.findall(r"[一-鿿]", sample)) / visible >= 0.15:
+            return "zh"
+    return "en"
+
+
 def _data_diagnostic(plog, message: str) -> None:
     message = "official data: " + message[:240]
     if plog is not None:
         plog.write("warn", message)
     else:
         logging.getLogger(__name__).warning(message)
+
+
+def _materialize_data_evidence(tools, out_dir: Path, row: dict, *, snapshot_file: bool) -> None:
+    """Bind a validated dataset row to evidence files that exist in ``out_dir``.
+
+    Transported rows (global synthesis, synthesis recovery) still name their
+    lane-local candidate files. Two lanes can store different windows of one
+    series under the same lane-relative names, so missing or mismatched files
+    are written under content-addressed names instead: the exact page bytes
+    (already checked against content_sha256 by validated_source) and the
+    canonical snapshot JSON.
+    """
+    dataset = row["dataset"]
+
+    def held(relative, check) -> bool:
+        try:
+            path = tools.safe_path(out_dir, str(relative or ""))
+            return path.is_file() and not path.is_symlink() and check(path.read_bytes())
+        except (OSError, ValueError, TypeError):
+            return False
+
+    def write(relative: str, text: str) -> str:
+        tools.safe_path(out_dir, "data/candidates").mkdir(parents=True, exist_ok=True)
+        tools._write(tools.safe_path(out_dir, relative), text)
+        return relative
+
+    if not held(dataset.get("page"), lambda raw: hashlib.sha256(raw).hexdigest() == row["content_sha256"]):
+        dataset["page"] = write(f"data/candidates/{row['content_sha256']}.txt", row["content"])
+    if snapshot_file and not held(dataset.get("file"), lambda raw: json.loads(raw) == dataset["snapshot"]):
+        raw = json.dumps(dataset["snapshot"], sort_keys=True, ensure_ascii=False, allow_nan=False)
+        dataset["file"] = write(f"data/candidates/{hashlib.sha256(raw.encode('utf-8')).hexdigest()}.json", raw)
 
 
 def _finalize_data_series(out_dir: Path, *, plog=None) -> list[dict]:
@@ -16246,12 +16660,14 @@ def _finalize_data_series(out_dir: Path, *, plog=None) -> list[dict]:
                 citations[value.series] = position
         if not selected:
             return []
+        for position, row in enumerate(sources, 1):
+            if tools.validated_source(row):
+                # The selected generation's file becomes the published dataset below.
+                _materialize_data_evidence(tools, out_dir, row, snapshot_file=(
+                    citations.get(row["dataset"]["series"]) != position))
         # Establish positional source identities before publishing their dataset
         # manifest. A later write failure cannot leave a manifest referring to
         # source rows that were never committed.
-        entries = [{"n": i, "url": row.get("url"), "title": row.get("title")}
-                   for i, row in enumerate(sources, 1)]
-        _remap_data_citations("", [r for r in sources if tools.validated_source(r)], entries)
         _atomic_write_text(source_path, json.dumps(sources, ensure_ascii=False, indent=2))
         manifest = tools._api().write_dataset_files(list(selected.values()), out_dir, citations=citations)
         files = {r["series"]: r["file"] for r in manifest["series"]}
@@ -16281,14 +16697,31 @@ def _finalize_data_series(out_dir: Path, *, plog=None) -> list[dict]:
         return []
 
 
-def _render_data_charts(out_dir: Path, *, plog=None, question="", lang="en") -> list[dict]:
-    """Both engines use the existing renderer; only real flat data images escape."""
+def _render_data_charts(out_dir: Path, *, plog=None, question="", lang="en",
+                        deadline_s: float | None = None) -> list[dict]:
+    """Both engines use the existing renderer; only real flat data images escape.
+
+    ``deadline_s`` (seconds left in the caller's stage) bounds the renderer
+    subprocess; under 5 s the charts are skipped and the stored dataset table
+    remains the documented fallback.
+    """
     try:
         import subprocess
         tools = _data_tools_module()
         datasets = tools._api().load_datasets(out_dir)
         if not datasets:
             return []
+        timeout = _charts_timeout()
+        if deadline_s is not None:
+            try:
+                left = float(deadline_s)
+            except (TypeError, ValueError):
+                left = 0.0
+            if not left >= 5:
+                _data_diagnostic(plog, "chart deadline reached; use the stored dataset table")
+                return []
+            # Keep a little time for the manifest merge after the subprocess.
+            timeout = min(timeout, left - 2)
         base = Path(__file__).resolve().parent
         renderer = next((p for p in (
             base / "skills/data-visuals/scripts/render_data.py",
@@ -16298,8 +16731,8 @@ def _render_data_charts(out_dir: Path, *, plog=None, question="", lang="en") -> 
             _data_diagnostic(plog, "bundled chart renderer unavailable")
             return []
         proc = subprocess.run([_charts_python(), str(renderer), "--dir", str(out_dir),
-                               "--lang", "zh" if str(lang).lower().startswith("zh") else "en"],
-                              capture_output=True, text=True, timeout=_charts_timeout())
+                               "--lang", _data_lang(lang)],
+                              capture_output=True, text=True, timeout=timeout)
         if proc.returncode != 0:
             _data_diagnostic(plog, f"chart renderer exited {proc.returncode}; use the stored dataset table")
             return []
@@ -16353,44 +16786,258 @@ def _render_data_charts(out_dir: Path, *, plog=None, question="", lang="en") -> 
         return []
 
 
-def _prepare_legacy_data(out_dir: Path, meta: dict, plog, question="", lang="en") -> list[dict]:
+_BASELINE_TEXT = {
+    "en": {
+        "heading": "## Official Data Baseline",
+        "intro": ("Stored official series retrieved for this research. Latest observed excludes "
+                  "preliminary, estimated, partial-period and projected values; publisher "
+                  "projections are outlooks, not observed history."),
+        "columns": ("Series", "Latest observed", "Newer unconfirmed value", "Next publisher projection", "Source"),
+        "kinds": {"preliminary": "preliminary", "estimate": "estimate", "partial": "partial period",
+                  "unknown": "status not published", "projection": "projection"},
+    },
+    "zh": {
+        "heading": "## 官方数据基线",
+        "intro": ("本研究检索并存储的官方数据序列。“最新观测值”不含初值、估计值、不完整期和预测期；"
+                  "发布机构的预测是展望，不是历史观测。"),
+        "columns": ("序列", "最新观测值", "更新的未确认值", "发布机构下一期预测", "来源"),
+        "kinds": {"preliminary": "初值", "estimate": "估计值", "partial": "不完整期",
+                  "unknown": "状态未公布", "projection": "预测"},
+    },
+}
+_BASELINE_HEADINGS = tuple(text["heading"] for text in _BASELINE_TEXT.values())
+
+
+def _official_point_kind(api, observation, series) -> str:
+    """Observation status for presentation; a period after retrieval is never history."""
+    kind = api.observation_kind(observation, series)
+    retrieved = str(series.retrieved_at or "")[:10]
+    if (kind not in ("projection", "estimate") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", retrieved)
+            and observation.date > retrieved):
+        return "projection"
+    return kind
+
+
+def _official_period_label(series, period: str) -> str:
+    periods = series.provenance.get("periods") if isinstance(series.provenance, dict) else None
+    label = periods.get(period, {}).get("label") if isinstance(periods, dict) and isinstance(periods.get(period), dict) else None
+    if isinstance(label, str) and label.strip():
+        return label.strip()
+    if series.frequency == "A":
+        return period[:4]
+    if series.frequency == "Q":
+        return f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
+    return period[:7] if series.frequency == "M" else period
+
+
+def _official_period_end(series, period: str) -> str:
+    import calendar
+    periods = series.provenance.get("periods") if isinstance(series.provenance, dict) else None
+    end = periods.get(period, {}).get("end") if isinstance(periods, dict) and isinstance(periods.get(period), dict) else None
+    if isinstance(end, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end):
+        return end
+    year, month = int(period[:4]), int(period[5:7])
+    if series.frequency == "A":
+        return f"{year}-12-31"
+    if series.frequency in ("Q", "M"):
+        last = ((month - 1) // 3 + 1) * 3 if series.frequency == "Q" else month
+        return _dt.date(year, last, calendar.monthrange(year, last)[1]).isoformat()
+    return period
+
+
+def _official_points(api, series) -> tuple[Any, Any, Any]:
+    """(latest observed, newer non-projection point, next projection) of one stored series."""
+    points = [(o, _official_point_kind(api, o, series)) for o in series.observations if o.value is not None]
+    observed = next((o for o, kind in reversed(points) if kind == "observed"), None)
+    newer = next((pair for pair in reversed(points) if pair[1] not in ("observed", "projection")
+                  and (observed is None or pair[0].date > observed.date)), None)
+    anchor = (newer[0] if newer else observed)
+    projection = next((o for o, kind in points if kind == "projection"
+                       and (anchor is None or o.date > anchor.date)), None)
+    return observed, newer, projection
+
+
+def _official_baseline_table(api, datasets: list[dict], lang: str) -> str:
+    """Deterministic stored-value table with status-safe columns (one row per series)."""
+    text = _BASELINE_TEXT["zh" if lang == "zh" else "en"]
+
+    def cell(value) -> str:
+        return str(value).replace("|", "\\|").replace("\n", " ")
+
+    def point(series, observation, kind="") -> str:
+        if observation is None:
+            return "—"
+        value = api.format_value(observation.value, series.units)
+        notes = [_official_period_label(series, observation.date)]
+        if kind:
+            notes.append(text["kinds"].get(kind, kind))
+        scaled = api.scaled_value(observation.value, series.units, lang)
+        if scaled:
+            notes.append(scaled)
+        return f"{value} ({'; '.join(notes)})"
+
+    lines = [text["heading"], "", text["intro"], "",
+             "| " + " | ".join(text["columns"]) + " |", "|---|---|---|---|---|"]
+    for row in datasets:
+        try:
+            series = api.Series.from_dict(row)
+        except (ValueError, TypeError, KeyError):
+            continue
+        observed, newer, projection = _official_points(api, series)
+        if observed is None and newer is None and projection is None:
+            continue
+        source = f"[{row['source_id']}]" if row.get("source_id") else "—"
+        lines.append("| " + " | ".join(cell(part) for part in (
+            f"{api.series_label(series, lang)} ({series.units})",
+            point(series, observed),
+            point(series, newer[0], newer[1]) if newer else "—",
+            point(series, projection, "projection"),
+            source)) + " |")
+    return "\n".join(lines) + "\n\n" if len(lines) > 6 else ""
+
+
+def _record_legacy_data_telemetry(out_dir: Path, meta: dict, plog, series_count: int) -> None:
+    """meta.data_sources from the persisted tool state, journal and in-process providers.
+
+    Never starts a provider. When official data was enabled but nothing could
+    be stored after real attempts, the run records a degradation event.
+    """
+    if not _env_flag("DATA_SOURCES_ENABLED", True):
+        meta["data_sources"] = {"status": "disabled", "series_count": 0}
+        return
+    tools = _data_tools_module()
+    stats = tools.tool_stats(Path(out_dir))
+    record: dict[str, Any] = {"series_count": series_count, **stats}
+    registration = meta.get("data_tool_registration")
+    if isinstance(registration, dict):
+        record["registration"] = registration.get("code")
+    providers = tools.provider_states()
+    if providers:
+        record["providers"] = providers
+    attempts = int(stats.get("failed_requests") or 0) + int(stats.get("budget_denied") or 0)
+    if series_count:
+        record["status"] = "stored"
+    elif attempts:
+        record["status"] = "unavailable"
+        event = "official data was enabled but no requested dataset was available"
+        record["degradation"] = event
+        _flag_research_degradation(event)
+        degradation = meta.get("research_degradation")
+        meta["research_degradation"] = list(dict.fromkeys(
+            (degradation if isinstance(degradation, list) else []) + [event]))
+        _data_diagnostic(plog, event)
+    else:
+        record["status"] = "unused"
+    meta["data_sources"] = record
+
+
+def _prepare_legacy_data(out_dir: Path, meta: dict, plog, question="", lang=None) -> list[dict]:
     rows = _finalize_data_series(out_dir, plog=plog)
+    try:
+        _record_legacy_data_telemetry(out_dir, meta, plog, len(rows))
+    except Exception as exc:  # noqa: BLE001 — telemetry never fails a run
+        _data_diagnostic(plog, f"telemetry unavailable ({type(exc).__name__})")
     if not rows:
         return []
-    meta["data_sources"] = {"series_count": len(rows), "status": "stored"}
     sources = json.loads((Path(out_dir) / SOURCES_FILENAME).read_text(encoding="utf-8"))
     meta["sources_count"] = len(sources)
     meta["source_tiers"] = source_tier_histogram(sources)
-    charts = _render_data_charts(out_dir, plog=plog, question=question, lang=lang)
     path = Path(out_dir) / REPORT_FILENAME
+    report = path.read_text(encoding="utf-8") if path.is_file() else ""
+    lang = _data_lang(lang, report)
+    charts = _render_data_charts(out_dir, plog=plog, question=question, lang=lang)
     if path.is_file():
-        report = path.read_text(encoding="utf-8")
-        tools = _data_tools_module()
-        heading = "## 官方数据基线" if str(lang).lower().startswith("zh") else "## Official Data Baseline"
-        if heading not in report:
-            table = [heading, "", "| Series | Latest stored value | Period | Status | Source |",
-                     "|---|---|---|---|---|"]
-            for row in tools._api().load_datasets(out_dir):
-                observations = [o for o in row.get("observations", []) if o.get("value") is not None]
-                if not observations:
-                    continue
-                latest = observations[-1]
-                flag = str(latest.get("flag") or "").strip()
-                projection = (flag.lower() in {"p", "projection", "forecast"}
-                              or bool(row.get("projection_from") and latest["date"] >= row["projection_from"]))
-                status = "Publisher projection" if projection else (flag or "Status not supplied")
-                value = tools._api().format_value(latest["value"], row["units"])
-                def cell(value):
-                    return str(value).replace("|", "\\|").replace("\n", " ")
-                table.append(f"| {cell(row['title'])} ({cell(row['units'])}) | {cell(value)} | {latest['date']} | {cell(status)} | [{row['source_id']}] |")
-            block = "\n".join(table) + "\n\n"
-            match = re.search(r"^## (?:References|参考来源|参考文献)\s*$", report, re.M)
-            report = (report[:match.start()] + block + report[match.start():]
-                      if match else report.rstrip() + "\n\n" + block)
+        if not any(heading in report for heading in _BASELINE_HEADINGS):
+            api = _data_tools_module()._api()
+            block = _official_baseline_table(api, api.load_datasets(out_dir), lang)
+            if block:
+                match = re.search(r"^## (?:References|参考来源|参考文献)\s*$", report, re.M)
+                report = (report[:match.start()] + block + report[match.start():]
+                          if match else report.rstrip() + "\n\n" + block)
         report = embed_chart_refs(report, charts)
         _atomic_write_text(path, report)
         meta["report_chars"] = len(report)
     return charts
+
+
+def _official_quantitative_rows(api, datasets: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Fix-contract §1.6 rows: one 'actual' fact per stored series (latest observed
+    only), one 'forecast' fact per publisher projection period, and one
+    forecast_inputs indicator per series with an observed value."""
+    facts: list[dict] = []
+    indicators: list[dict] = []
+    for row in datasets:
+        try:
+            series = api.Series.from_dict(row)
+        except (ValueError, TypeError, KeyError):
+            continue
+        label = api.series_label(series)
+        source_ref = str(row.get("source_id") or "")
+        common = {"series": series.series, "unit": series.units, "as_of_date": str(series.retrieved_at or "")[:10],
+                  "geography": series.geography, "source": series.provider_name, "source_url": series.source_url,
+                  "source_ref": source_ref, "source_origin": "official_data", "dataset_file": str(row.get("file") or "")}
+        observed = api.latest_observed(series)
+        if observed is not None and _official_point_kind(api, observed, series) == "observed":
+            facts.append({"metric": label, "value": observed.value,
+                          "period_end": _official_period_end(series, observed.date),
+                          "value_type": "actual", **common})
+            indicators.append({"indicator": label, "series": series.series, "latest_value": observed.value,
+                               "latest_date": observed.date, "units": series.units,
+                               "frequency": series.frequency, "source_ref": source_ref})
+        projections = [o for o in series.observations
+                       if o.value is not None and _official_point_kind(api, o, series) == "projection"][:10]
+        for projection in projections:
+            facts.append({"metric": f"{label} — {series.provider_name} projection", "value": projection.value,
+                          "period_end": _official_period_end(series, projection.date),
+                          "value_type": "forecast", "analyst": series.provider_name, **common})
+    return facts, indicators
+
+
+def _attach_official_quantitative(out_dir: Path, expected_actor_sha256: str, meta: dict, plog) -> str:
+    """Join stored official observations to quantitative.json and actors.json (§1.6).
+
+    Runs after the research charts (so quantitative charts never re-plot a
+    stored series) and before the actor contract is sealed. Rows from an
+    earlier pass and model-transcribed rows naming the same series id are
+    replaced. actors.json changes only while it still holds the current
+    extraction (``expected_actor_sha256``); the returned fingerprint is the one
+    the sealing step must expect. Never raises.
+    """
+    try:
+        api = _data_tools_module()._api()
+        datasets = api.load_datasets(out_dir)
+        if not datasets:
+            return expected_actor_sha256
+        facts, indicators = _official_quantitative_rows(api, datasets)
+        replaced = {row["series"] for row in facts}
+        quant_path = Path(out_dir) / QUANTITATIVE_FILENAME
+        current = json.loads(quant_path.read_text(encoding="utf-8")) if quant_path.is_file() else []
+        current = current if isinstance(current, list) else []
+        kept = [row for row in current if not (isinstance(row, dict) and (
+            row.get("source_origin") == "official_data" or row.get("series") in replaced))]
+        if facts or len(kept) != len(current):
+            _atomic_write_text(quant_path, json.dumps(kept + facts, ensure_ascii=False, indent=2))
+            meta["quantitative_count"] = len(kept) + len(facts)
+            meta["official_quantitative_count"] = len(facts)
+        actors_path = Path(out_dir) / ACTORS_FILENAME
+        if not (indicators and expected_actor_sha256 and actors_path.is_file()):
+            return expected_actor_sha256
+        raw = actors_path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != expected_actor_sha256:
+            return expected_actor_sha256
+        obj = json.loads(raw.decode("utf-8"))
+        if not isinstance(obj, dict):
+            return expected_actor_sha256
+        inputs = obj.get("forecast_inputs") if isinstance(obj.get("forecast_inputs"), dict) else {}
+        listed = {item["series"] for item in indicators}
+        prior = [item for item in (inputs.get("indicators") if isinstance(inputs.get("indicators"), list) else [])
+                 if not (isinstance(item, dict) and item.get("series") in listed)]
+        obj["forecast_inputs"] = {**inputs, "indicators": prior + indicators}
+        _atomic_write_text(actors_path, json.dumps(obj, ensure_ascii=False, indent=2))
+        return hashlib.sha256(actors_path.read_bytes()).hexdigest()
+    except Exception as exc:  # noqa: BLE001 — the structured plane is additive
+        _data_diagnostic(plog, f"quantitative plane unavailable ({type(exc).__name__})")
+        return expected_actor_sha256
 
 
 def _render_research_charts(
@@ -16761,11 +17408,13 @@ def run_extract_only(question: str, out_dir: Path, args, meta: dict, plog: "Prog
     # WAVE9-RQ4: 打捞路径同样补渲染研究图表（结构化工件刚补出来；与正常 Stage 4 一致，
     # degrade-safe——渲染失败绝不令打捞失败）。
     try:
-        _prepare_legacy_data(out_dir, meta, plog, question, args.target_language or "en")
+        _prepare_legacy_data(out_dir, meta, plog, question, args.target_language)
         _render_research_charts(out_dir, meta, plog, question)
         write_meta()
     except Exception as _ch_err:  # noqa: BLE001 — 图表为可选增强
         plog.write("warn", f"extract-only: research charts skipped (non-fatal): {_ch_err}")
+    actor_extraction_sha256 = _attach_official_quantitative(
+        out_dir, actor_extraction_sha256, meta, plog)
 
     # Charts may append a Visual Annex to the report. Seal actor intelligence
     # only after that final possible report mutation so its provenance hashes
@@ -17432,6 +18081,16 @@ def main() -> int:
                     "thread instead of publishing empty evidence",
                 )
 
+        # Official-data pre-pass (baseline lane only): strong catalog series for the
+        # brief are stored while the market snapshot below runs, then shown to pass 0.
+        _data_prepass = None
+        if not args.synthesis_manifest:
+            import concurrent.futures as _prepass_futures
+            _prepass_pool = _prepass_futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="drf-data-prepass")
+            _data_prepass = _prepass_pool.submit(_prefetch_legacy_data, question, plog, meta)
+            _prepass_pool.shutdown(wait=False)
+
         # --- PM-4: 研究开跑前的初始市场快照（仅用问题派生检索词）---
         # 把一段紧凑「当前市场定价」块注入 pass-0 提示词，让开场就带着「市场把 X 定在
         # NN%——去查为什么」的锚点搜；同一批市场也在 Stage 2 喂给结构化抽取（INT-1）。
@@ -17448,6 +18107,12 @@ def main() -> int:
                     plog.write("ok", f"pre-pass market snapshot: injected {len(_init_markets)} market prices into pass-0 prompt")
         except Exception as _pm_pre_err:  # noqa: BLE001 — 初始快照为可选锚点
             plog.write("warn", f"pre-pass market snapshot skipped (non-fatal): {_pm_pre_err}")
+        if _data_prepass is not None:
+            try:
+                _data_prepass.result(timeout=_LEGACY_DATA_PREFETCH_S + 30)
+            except Exception as _data_pre_err:  # noqa: BLE001 — the data pre-pass is additive
+                plog.write("warn", f"official data pre-pass skipped (non-fatal): {type(_data_pre_err).__name__}")
+            write_meta()
 
         # --- Stage 1: research + report ---
         # 双轨：非 evidence-only 运行开启 DEERFLOW_DUAL_TRACK（默认开）时，Track A（广覆盖证据报告）与
@@ -17762,7 +18427,11 @@ def main() -> int:
                 return 2
             _atomic_write_text(out_dir / EVIDENCE_PACK_FILENAME, evidence_pack)
             persist_evidence_sources(out_dir, source_rows)
-            _finalize_data_series(out_dir, plog=plog)
+            _lane_data_rows = _finalize_data_series(out_dir, plog=plog)
+            try:
+                _record_legacy_data_telemetry(out_dir, meta, plog, len(_lane_data_rows))
+            except Exception as _data_tel_err:  # noqa: BLE001 — telemetry never fails a lane
+                _data_diagnostic(plog, f"telemetry unavailable ({type(_data_tel_err).__name__})")
             source_rows = json.loads((out_dir / SOURCES_FILENAME).read_text(encoding="utf-8"))
             actor_track_required = _env_flag("DEERFLOW_DUAL_TRACK", True)
             dossier_coverage = (
@@ -18356,7 +19025,7 @@ def main() -> int:
         # 渲染失败 → 一行日志跳过，绝不影响已产出的研究契约。
         _chart_audit: dict[str, Any] = _visual_contract_audit(question, [])
         try:
-            _data_charts = _prepare_legacy_data(out_dir, meta, plog, question, args.target_language or "en")
+            _data_charts = _prepare_legacy_data(out_dir, meta, plog, question, args.target_language)
             _chart_audit = _render_research_charts(
                 out_dir, meta, plog, question)
             if _data_charts:
@@ -18366,6 +19035,10 @@ def main() -> int:
         except Exception as _ch_err:  # noqa: BLE001 — 图表为可选增强
             plog.write("warn", f"research charts skipped (non-fatal): {_ch_err}")
         finally:
+            # Stored official observations join quantitative.json/actors.json
+            # after the research charts (never re-plotted) and before sealing.
+            actor_extraction_sha256 = _attach_official_quantitative(
+                out_dir, actor_extraction_sha256, meta, plog)
             if not _record_persisted_report_identity(out_dir, meta):
                 plog.write("warn", "research report identity unavailable after chart stage")
             write_meta()

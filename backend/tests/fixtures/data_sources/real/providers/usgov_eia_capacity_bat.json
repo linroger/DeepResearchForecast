@@ -1,0 +1,154 @@
+{
+ "captured_at": "2026-10-12T14:36:03Z",
+ "clock": 1791815763.0,
+ "series": "usgov:eia/generating_capacity/BAT",
+ "request": {
+  "start": "2019-01-01"
+ },
+ "patches": {},
+ "env": {},
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "eia_query",
+   "args": {
+    "route": "electricity/state-electricity-profiles/capability",
+    "data": "capability",
+    "frequency": "annual",
+    "facets": "stateId=US; producertypeid=TOT; energysourceid=BAT",
+    "start": "2019",
+    "end": "2026",
+    "length": 200,
+    "offset": 0
+   },
+   "response": {
+    "summary": "EIA electricity/state-electricity-profiles/capability: 6 of 6 rows (annual)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 6,
+     "min": 1014.8,
+     "max": 27020,
+     "mean": 9877.5,
+     "first": {
+      "date": "2019",
+      "value": 1014.8
+     },
+     "last": {
+      "date": "2024",
+      "value": 27020
+     },
+     "change": 26005.2,
+     "changePct": 2562.59,
+     "cagrPct": 92.8,
+     "trend": "increasing"
+    },
+    "data": {
+     "columns": [
+      "period",
+      "capability",
+      "stateId",
+      "stateDescription",
+      "producertypeid",
+      "producerTypeDescription",
+      "energysourceid",
+      "energySourceDescription",
+      "capability-units"
+     ],
+     "rows": [
+      [
+       "2024",
+       27020,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ],
+      [
+       "2023",
+       15994.9,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ],
+      [
+       "2022",
+       8980.4,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ],
+      [
+       "2021",
+       4746.7,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ],
+      [
+       "2020",
+       1508.2,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ],
+      [
+       "2019",
+       1014.8,
+       "US",
+       "United States",
+       "TOT",
+       "All sectors",
+       "BAT",
+       "Battery",
+       "megawatts"
+      ]
+     ],
+     "total": 6,
+     "truncated": false
+    },
+    "meta": {
+     "route": "electricity/state-electricity-profiles/capability",
+     "data": [
+      "capability"
+     ],
+     "facets": {
+      "stateId": [
+       "US"
+      ],
+      "producertypeid": [
+       "TOT"
+      ],
+      "energysourceid": [
+       "BAT"
+      ]
+     },
+     "sources": [
+      {
+       "url": "https://api.eia.gov/v2/electricity/state-electricity-profiles/capability/data/?data[]=capability&frequency=annual&start=2019&end=2026&sort[0][column]=period&sort[0][direction]=desc&length=200&offset=0&facets[stateId][]=US&facets[producertypeid][]=TOT&facets[energysourceid][]=BAT",
+       "fetchedAt": "2026-10-12T14:36:06.369Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

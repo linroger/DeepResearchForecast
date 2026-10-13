@@ -628,6 +628,63 @@ def get_report_forecast(report_id: str):
     })
 
 
+@report_bp.route('/<report_id>/official-data', methods=['GET'])
+def get_report_official_data(report_id: str):
+    """Return the stored official data a publishable report was written from.
+
+    RPT-12 (fix contract §1.7): ``official_data`` is the exact report-local
+    carrier (digest-checked) and ``indicators`` its deterministic summaries
+    (label, latest observed value and period, year-over-year change, five-year
+    range, newest publisher value, recent history, [S#] tag) in ``?lang=en|zh``
+    (default: the report's language). Reports without official data return
+    ``available: false``; nothing is fetched.
+    """
+    from ..services.exec_brief import _detect_lang
+    from ..services.report_agent import official_indicator_rows
+
+    report = ReportManager.get_report(report_id)
+    if report is None:
+        return jsonify({
+            "success": False,
+            "error": f"报告不存在: {report_id}",
+        }), 404
+    if not ReportManager.is_publishable(report_id):
+        return _publication_rejection(report_id)
+    lang = (request.args.get("lang") or "").strip().lower() or None
+    if lang is not None and lang not in ReportManager._TRANSLATION_LANGS:
+        return jsonify({
+            "success": False,
+            "error": f"不支持的语种: {lang}（仅 en / zh）",
+        }), 400
+    lang = lang or _detect_lang(report.markdown_content or "")
+    record = ReportManager.load_report_official_data(report_id)
+    if record is None:
+        return jsonify({
+            "success": True,
+            "data": {"report_id": report_id, "simulation_id": report.simulation_id,
+                     "available": False, "sha256": None, "official_data": None,
+                     "indicators": [], "lang": lang},
+        })
+    tags = record["source_tags"]
+    indicators = official_indicator_rows(record["official_data"], lang=lang,
+                                         tag_for=lambda row: tags.get(row["series"], ""))
+    binding = record.get("research_binding")
+    return jsonify({
+        "success": True,
+        "data": {
+            "report_id": report_id,
+            "simulation_id": report.simulation_id,
+            "available": bool(indicators),
+            "sha256": record.get("sha256"),
+            "saved_at": record.get("saved_at"),
+            "research_binding": binding if isinstance(binding, dict) else None,
+            "official_data": record["official_data"],
+            "indicators": indicators,
+            "lang": lang,
+        },
+    })
+
+
 @report_bp.route('/by-simulation/<simulation_id>', methods=['GET'])
 def get_report_by_simulation(simulation_id: str):
     """

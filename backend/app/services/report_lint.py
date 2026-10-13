@@ -570,6 +570,21 @@ def detect_language_contamination(md: str, lang: str) -> Dict[str, Any]:
     return {"lines": hits, "samples": samples}
 
 
+def _looks_like_title_cell(cell: str) -> bool:
+    """Title-style cell: mostly capitalized words and a capitalized final word.
+
+    Official-data tables paste verbatim series titles (e.g. the FRED U-6 label)
+    into cells. Those are complete by construction — they simply carry no
+    terminal punctuation — so the truncation sampler must leave them alone.
+    Truncated prose almost always ends in a lowercase word or mid-word cut.
+    """
+    words = re.findall(r"[A-Za-z][A-Za-z0-9&'’\-]*", cell)
+    if not words or not words[-1][0].isupper():
+        return False
+    capitalized = sum(1 for w in words if w[0].isupper())
+    return capitalized / len(words) >= 0.6
+
+
 def detect_table_cell_truncation(md: str, min_len: int = 160) -> List[str]:
     """表格单元疑似截断：超长且以字母/数字结尾（无句末标点）→ 采样标记（不改写）。"""
     out: List[str] = []
@@ -582,7 +597,8 @@ def detect_table_cell_truncation(md: str, min_len: int = 160) -> List[str]:
             continue                            # 分隔行
         for cell in ln.strip().strip("|").split("|"):
             c = cell.strip()
-            if len(c) >= min_len and c and (c[-1].isalnum()):
+            if (len(c) >= min_len and c and c[-1].isalnum()
+                    and not _looks_like_title_cell(c)):
                 out.append(c[-60:])
                 if len(out) >= 8:
                     return out

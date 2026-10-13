@@ -1,0 +1,64 @@
+{
+  "binary_forecasts": [
+    {
+      "id": "F1",
+      "statement": "US federal spending obligations total at least 7000000000000 U.S. dollars in FY2027.",
+      "probability": 0.35,
+      "resolution_criteria": "Resolves YES if usgov:spending/total >= 7000000000000 U.S. dollars for FY2027 (source: USAspending). Official resolution: usgov:spending/total >= 7000000000000 U.S. dollars (≈ 7 trillion U.S. dollars) for FY2027.",
+      "resolution_source": "",
+      "theme": "general",
+      "horizon_year": null,
+      "base_rate_anchor": "",
+      "adjustment_rationale": "",
+      "source": "research-prior",
+      "proposition_id": "forecast-c14913c760a3",
+      "criteria_sharp": true,
+      "data_anchor": {
+        "series": "usgov:spending/total",
+        "period": "2026-10-01",
+        "observation": "2026-10-01",
+        "threshold": 7000000000000.0,
+        "comparator": ">=",
+        "units": "U.S. dollars",
+        "transform": "",
+        "frequency": "A",
+        "geography": "USA",
+        "vintage": "",
+        "source_url": "https://www.usaspending.gov/explorer",
+        "latest_value": null,
+        "latest_date": "",
+        "auto_resolvable": false
+      }
+    },
+    {
+      "id": "F2",
+      "statement": "US federal spending obligations total at least 7000000000000 U.S. dollars in FY2028.",
+      "probability": 0.35,
+      "resolution_criteria": "Resolves YES if usgov:spending/total >= 7000000000000 U.S. dollars for FY2028 (source: USAspending). Official resolution: usgov:spending/total >= 7000000000000 U.S. dollars (≈ 7 trillion U.S. dollars) for FY2028.",
+      "resolution_source": "",
+      "theme": "general",
+      "horizon_year": null,
+      "base_rate_anchor": "",
+      "adjustment_rationale": "",
+      "source": "research-prior",
+      "proposition_id": "forecast-f61c9d864daa",
+      "criteria_sharp": true,
+      "data_anchor": {
+        "series": "usgov:spending/total",
+        "period": "2027-10-01",
+        "observation": "2027-10-01",
+        "threshold": 7000000000000.0,
+        "comparator": ">=",
+        "units": "U.S. dollars",
+        "transform": "",
+        "frequency": "A",
+        "geography": "USA",
+        "vintage": "",
+        "source_url": "https://www.usaspending.gov/explorer",
+        "latest_value": null,
+        "latest_date": "",
+        "auto_resolvable": false
+      }
+    }
+  ]
+}

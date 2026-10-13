@@ -442,3 +442,116 @@ def test_parent_traversal_cannot_hide_a_root_symlink(tmp_path):
         po._finalize_research_contract(supplied, {"report": "final evidence " * 60})
     assert not (base / "target").exists()
     assert _bytes(real) == before
+
+
+def test_non_global_track_merge_publishes_the_union_of_lane_datasets(tmp_path):
+    """L10 (orchestrator part): lanes merged without global synthesis keep their official
+    data. Validated lane generations are copied byte for byte, one manifest keeps the
+    first lane's row per series with the merged [S#], a lane page that collides with
+    another lane's bytes loses only its dataset reference, and a damaged lane degrades."""
+    from official_data_replay import publish, replay
+    handoff = tmp_path / "handoff"
+    first, second, third, broken = (handoff / f"track_{k}" for k in range(4))
+    _generation(first, 4.2, page=True)
+    _generation(second, 5.1, page=True)  # same candidate paths, different bytes
+    dgs10 = replay("fred_dgs10_daily", tmp_path)
+    publish([dgs10], third)
+    row = json.loads((third / "data/datasets.json").read_text())["series"][0]
+    (third / "sources.json").write_text(json.dumps([{
+        "url": "https://fred.stlouisfed.org/series/DGS10", "source_origin": "official_data",
+        "dataset": {"series": "fred:DGS10", "file": row["file"]}}]))
+    broken.mkdir(parents=True)
+    (broken / "sources.json").write_text(json.dumps([{"dataset": {"series": "fred:X", "file": "data/x.json"}}]))
+    lanes = [first, second, third, broken]
+    merged = po.merge_sources_union([json.loads((lane / "sources.json").read_text()) for lane in lanes])
+
+    sources, audit = po._merge_track_research_data([str(lane) for lane in lanes], str(handoff), merged)
+
+    assert audit == {"series": 2, "unavailable_lanes": 1, "dropped_references": 2}
+    assert [("dataset" in source) for source in sources] == [True, False, True, False]
+    assert sources[1]["content"] == merged[1]["content"]  # the colliding page text stays citable
+    (handoff / "sources.json").write_text(json.dumps(sources))
+    carrier = load_official_data(handoff)
+    assert {r["series"]: (r["source_id"], r["observations"][0]["value"]) for r in carrier["series"]} == {
+        "fred:UNRATE": ("S1", 4.2), "fred:DGS10": ("S3", dgs10.observations[0].value)}
+    artifacts = po._research_data_artifacts(str(handoff))  # the merged tree passes the seal reader
+    assert (handoff / row["file"]).read_bytes() == (third / row["file"]).read_bytes() == artifacts[row["file"]]
+
+
+def test_track_merge_without_lane_data_leaves_sources_untouched(tmp_path):
+    handoff = tmp_path / "handoff"
+    lane = handoff / "track_0"
+    lane.mkdir(parents=True)
+    sources = [{"url": "https://example.org/a", "content": "web page"}]
+    assert po._merge_track_research_data([str(lane)], str(handoff), sources) == (
+        sources, {"series": 0, "unavailable_lanes": 0, "dropped_references": 0})
+    assert not (handoff / "data").exists()
+
+
+def _merge_two_real_lanes(tmp_path, monkeypatch, metas=None):
+    """Run the deterministic K=2 lane merge on real FRED captures (one per lane)."""
+    from official_data_replay import publish, replay
+    for name, value in {"RESEARCH_GLOBAL_SYNTHESIS": False, "RESEARCH_TRACK_RECONCILE": False,
+                        "RESEARCH_COMPACT_MERGED_DOSSIER": False, "DEERFLOW_SUBAGENTS": False,
+                        "DEERFLOW_DUAL_TRACK": False, "DEERFLOW_MODEL": "claude"}.items():
+        monkeypatch.setattr(po.Config, name, value, raising=False)
+    monkeypatch.setattr(po, "_sync_deerflow_bridge_if_stale", lambda _path: None)
+    monkeypatch.setattr(po.PipelineManager, "save", classmethod(lambda cls, state: None))
+    captures = {1: "fred_unrate_2024", 2: "fred_dgs10_daily"}
+
+    def fake_run(prompt, handoff_dir, **kwargs):
+        folder = Path(handoff_dir)
+        lane = int(folder.name.split("_")[-1])
+        series = replay(captures[lane], tmp_path)
+        publish([series], folder)
+        if metas:
+            (folder / "meta.json").write_text(json.dumps(metas[lane]))
+        row = json.loads((folder / "data/datasets.json").read_text())["series"][0]
+        sources = [{"url": f"https://example.gov/lane-{lane}", "title": "Context", "tier": "S2"},
+                   {"url": series.source_url, "title": series.title, "tier": "S1", "source_origin": "official_data",
+                    "dataset": {"series": series.series, "file": row["file"]}}]
+        (folder / "sources.json").write_text(json.dumps(sources))
+        report = f"# Lane {lane}\n\n" + "Official baseline [S2] with context [S1]. " * 30
+        return {"report": report, "report_path": str(folder / "research_report.md"), "actor_dossier": "",
+                "actors": {"actors": [], "relationships": []}, "sources": sources, "timeline": None,
+                "exit_code": 0, "research_telemetry": {"model": "claude", "depth": "deep", "wall_s": 1}}
+
+    monkeypatch.setattr(po.DeerFlowResearchRunner, "run", staticmethod(fake_run))
+    handoff = tmp_path / "handoff"
+    state = po.PipelineState(pipeline_id="pipe_lane_merge", prompt="Forecast rates", handoff_dir=str(handoff),
+                             options={"depth": "deep", "research_language": "English", "research_model": "claude"})
+    result = po.PipelineOrchestrator()._run_parallel_research_tracks(state, str(handoff), lambda *_: None, 2)
+    return state, result, handoff
+
+
+def test_parallel_lanes_without_global_synthesis_hand_off_their_official_data(tmp_path, monkeypatch):
+    """L10 end to end: the deterministic K-lane merge leaves a handoff whose carrier holds
+    every lane's real dataset, cited by the merged [S#] numbering."""
+    state, result, handoff = _merge_two_real_lanes(tmp_path, monkeypatch)
+
+    carrier = load_official_data(handoff)
+    cited = {i + 1: s["dataset"]["series"] for i, s in enumerate(result["sources"]) if s.get("dataset")}
+    assert {r["series"]: r["source_id"] for r in carrier["series"]} == {
+        series: f"S{number}" for number, series in cited.items()}
+    assert sorted(cited.values()) == ["fred:DGS10", "fred:UNRATE"]
+    assert json.loads((handoff / "sources.json").read_text()) == result["sources"]
+    assert state.options["official_data_merge"] == {"series": 2, "unavailable_lanes": 0, "dropped_references": 0}
+
+
+def test_merged_lanes_keep_every_lane_capture_inside_the_run_window(tmp_path, monkeypatch):
+    """D5 across lanes: the merged meta spans the earliest lane start to the latest lane
+    finish, so a capture by a lane that outlived lane 1 past UTC midnight stays in the
+    snapshot (DGS10 was retrieved at 22:07:48Z, after lane 1 finished)."""
+    from app.services.official_data import historical_snapshot, research_run_window
+    metas = {1: {"status": "completed", "started_at": "2026-10-10T23:10:00+00:00",
+                 "finished_at": "2026-10-11T22:07:45+00:00"},
+             2: {"status": "completed", "started_at": "2026-10-10T23:00:00+00:00",
+                 "finished_at": "2026-10-11T22:30:00+00:00"}}
+    _, _, handoff = _merge_two_real_lanes(tmp_path, monkeypatch, metas)
+
+    window = research_run_window(handoff)
+    assert window == {"started_at": "2026-10-10T23:00:00+00:00", "finished_at": "2026-10-11T22:30:00+00:00"}
+    stats = {}
+    text = historical_snapshot(load_official_data(handoff), as_of="2026-10-10", research_window=window, stats=stats)
+    assert "Unemployment Rate" in text and "10-Year" in text
+    assert stats == {"shown": 2, "excluded": {}}

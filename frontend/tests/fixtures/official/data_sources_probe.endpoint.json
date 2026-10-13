@@ -1,0 +1,54 @@
+{
+ "data": {
+  "deadline_s": 75.0,
+  "elapsed_s": 61.26,
+  "enabled": true,
+  "providers": {
+   "bis": {
+    "detail": "MCP handshake ok (4 tools, ready in 0.374 s); sample bis:WS_CBPOL/M.US: 119 observations to 2026-09-01 (live via mcp)",
+    "keys": {},
+    "latency_s": 1.36,
+    "state": "ok"
+   },
+   "bls": {
+    "detail": "MCP handshake ok (6 tools, ready in 0.338 s); handshake only: no BLS data request, so the daily quota is untouched",
+    "keys": {
+     "BLS_API_KEY": "set"
+    },
+    "latency_s": 0.34,
+    "state": "ok"
+   },
+   "fred": {
+    "detail": "MCP handshake ok (3 tools, ready in 0.38 s); sample fred:UNRATE: 118 observations to 2026-09-01 (live via mcp)",
+    "keys": {
+     "FRED_API_KEY": "set"
+    },
+    "latency_s": 1.42,
+    "state": "ok"
+   },
+   "imf": {
+    "detail": "MCP handshake ok (5 tools, ready in 0.719 s); sample imf:WEO/G001.NGDP_RPCH.A: 30 observations to 2031-01-01 (live via mcp)",
+    "keys": {},
+    "latency_s": 60.96,
+    "state": "ok"
+   },
+   "usgov": {
+    "detail": "MCP handshake ok (56 tools, ready in 0.554 s); sample usgov:treasury/debt_to_penny: 25 observations to 2026-10-01 (live via mcp)",
+    "keys": {
+     "BEA_API_KEY": "set",
+     "CENSUS_API_KEY": "not set",
+     "EIA_API_KEY": "set"
+    },
+    "latency_s": 4.65,
+    "state": "ok"
+   },
+   "wb": {
+    "detail": "MCP handshake ok (16 tools, ready in 2.053 s); sample wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA: 24 observations to 2025-01-01 (live via mcp)",
+    "keys": {},
+    "latency_s": 6.9,
+    "state": "ok"
+   }
+  }
+ },
+ "success": true
+}

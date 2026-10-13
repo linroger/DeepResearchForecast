@@ -21,6 +21,36 @@ os.environ["DRF_TEST_PROCESS"] = "1"
 # Make `import app...` work when running pytest from the backend/ dir.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Test modules import shared fixtures as ``from tests.conftest import ...`` through the
+# implicit namespace package backend/tests.  A regular top-level ``tests`` package in
+# site-packages (yarg, pulled in by the pipreqs dev extra, ships one) always wins over a
+# namespace package, so bind ``tests`` to this directory before any test module imports it.
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_tests_package = sys.modules.get("tests")
+if _tests_package is None or _TESTS_DIR not in [os.path.abspath(p) for p in getattr(_tests_package, "__path__", [])]:
+    import types
+
+    _tests_package = types.ModuleType("tests")
+    _tests_package.__path__ = [_TESTS_DIR]
+    sys.modules["tests"] = _tests_package
+
+
+def pytest_collection_modifyitems(config, items):
+    """``@pytest.mark.guarded_runner`` tests need backend/scripts/main_offline_pytest.py.
+
+    That runner installs a CPython audit guard (no network, no saved-data or external
+    writes, hashed child scripts, -I -S -B) and sets MAIN_OFFLINE_EVIDENCE to its
+    evidence directory before pytest starts. Plain pytest — the CI path — skips these
+    tests with a reason instead of failing; under the runner they run unchanged.
+    """
+    if os.environ.get("MAIN_OFFLINE_EVIDENCE"):
+        return
+    skip = pytest.mark.skip(reason="guarded-runner test: run via backend/scripts/main_offline_pytest.py "
+                                   "(MAIN_OFFLINE_EVIDENCE unset)")
+    for item in items:
+        if item.get_closest_marker("guarded_runner") is not None:
+            item.add_marker(skip)
+
 
 class FakeLLMClient:
     """Drop-in stand-in for app.utils.llm_client.LLMClient.

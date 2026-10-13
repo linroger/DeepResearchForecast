@@ -89,10 +89,17 @@ def report_case(tmp_path, monkeypatch, request):
     agent._inject_visualizations(report.report_id, report)
     manifest = json.loads((folder / "viz_manifest.json").read_text())
     official = [item for item in manifest["items"] if item.get("source") == "official_data"]
-    assert len(official) == len(datasets) + 1 and report.markdown_content.count("[S1]") == 2
+    # Without a forecast anchor the visualizer renders only the dashboard (RPT-8).
+    assert [item["id"] for item in official] == ["official_indicators"]
+    assert report.markdown_content.count("[S1]") == _exhibits_citing(manifest, "S1") == 1
     assert all((folder / item["path"]).read_bytes().startswith(b"\x89PNG\r\n\x1a\n") for item in official)
     (folder / "before-publication.md").write_text(report.markdown_content)
     return agent, report, folder, manifest
+
+
+def _exhibits_citing(manifest, tag):
+    return sum(any(row.get("source_id") == tag for row in item["provenance"])
+               for item in manifest["items"] if item.get("source") == "official_data")
 
 
 def _finalize(agent, report, folder):
@@ -122,7 +129,8 @@ def test_real_chart_captions_survive_complete_publication_sequence(report_case):
         marker = f"<!-- viz:{item['path']} -->"
         block = report.markdown_content.split(marker, 1)[1].split("<!-- viz:", 1)[0].split("## References", 1)[0]
         assert "Source:" in block and "[S1]" in block, block
-    assert audit["citation_body_markers"]["counts"]["S1"] == 2
+        assert "*" + item["source_caption"] + "*" in block  # MISSED-4: one caption helper
+    assert audit["citation_body_markers"]["counts"]["S1"] == _exhibits_citing(manifest, "S1")
     citations = json.loads((folder / "citations.json").read_text())
     assert [row["tag"] for row in citations["markers"]] == ["S1"]
     assert (folder / "viz_manifest.json").read_bytes() == before_manifest
@@ -146,7 +154,7 @@ def test_missing_stabilization_rejects_unstable_prose(report_case):
 
 @pytest.mark.parametrize("marker", ["S999", "S2"])
 def test_invalid_chart_source_marker_is_not_admitted(report_case, marker):
-    agent, report, folder, _manifest = report_case
+    agent, report, folder, manifest = report_case
     if marker == "S2":
         source = deepcopy(agent.sources[0])
         source.update(url="https://fred.stlouisfed.org/series/INDPRO", title="Industrial Production")
@@ -158,13 +166,13 @@ def test_invalid_chart_source_marker_is_not_admitted(report_case, marker):
     assert not audit["hard_passed"]
     assert not ReportManager.is_publishable(report.report_id)
     if marker == "S2":
-        assert audit["semantic_citations"]["unsupported"] == 2
+        assert audit["semantic_citations"]["unsupported"] == _exhibits_citing(manifest, "S1")
     else:
         assert audit["citation_markers"]["dangling"] == ["S999"]
 
 
 def test_invalid_chart_attribution_cannot_be_laundered_by_finalization(report_case):
-    agent, report, folder, _manifest = report_case
+    agent, report, folder, manifest = report_case
     report.markdown_content = report.markdown_content.replace("[S1]", "[S999]")
     ReportManager.save_report(report)
     with pytest.raises(RuntimeError, match="官方数据图表来源"):
@@ -172,12 +180,12 @@ def test_invalid_chart_attribution_cannot_be_laundered_by_finalization(report_ca
     assert not ReportManager.is_publishable(report.report_id)
     audit = json.loads((folder / "final_audit.json").read_text())
     assert audit["official_chart_captions"]["passed"] is False
-    assert len(audit["official_chart_captions"]["issues"]) == 2
+    assert len(audit["official_chart_captions"]["issues"]) == _exhibits_citing(manifest, "S1")
 
 
 @pytest.mark.parametrize("before,after", [
     ("; Percent;", "; Dollars;"),
-    ("; M;", "; Q;"),
+    ("; Monthly;", "; Quarterly;"),
     ("/series/UNRATE>", "/series/INDPRO>"),
     ("; SA*", "; SA. GDP rose 99%*"),
 ])
@@ -208,7 +216,7 @@ def test_fenced_attribution_is_not_a_live_chart_caption(report_case, keep_live_c
     if keep_live_caption:
         audit = _finalize(agent, report, folder)
         assert audit["official_chart_captions"]["passed"]
-        assert audit["citation_body_markers"]["counts"] == {"S1": 2}
+        assert audit["citation_body_markers"]["counts"] == {"S1": _exhibits_citing(_manifest, "S1")}
         assert ReportManager.is_publishable(report.report_id)
     else:
         with pytest.raises(RuntimeError, match="官方数据图表来源"):
@@ -223,17 +231,20 @@ def test_multiple_sources_and_numeric_units_survive_publication(report_case):
                      for p in item["provenance"])
     audit = _finalize(agent, report, folder)
     assert audit["citation_body_markers"]["counts"] == dict(counts)
-    assert report.markdown_content.count("Billions of Chained 2017 Dollars") == 2
+    assert report.markdown_content.count("Billions of Chained 2017 Dollars") == _exhibits_citing(manifest, "S2")
     assert ReportManager.is_publishable(report.report_id)
 
 
 @pytest.mark.parametrize("report_case", ["mixed_unindexed"], indirect=True)
 def test_unindexed_series_does_not_strip_indexed_dashboard_source(report_case):
-    agent, report, folder, _manifest = report_case
+    agent, report, folder, manifest = report_case
     audit = _finalize(agent, report, folder)
-    assert audit["citation_body_markers"]["counts"] == {"S1": 2}
-    assert "[S2]" not in report.markdown_content
-    assert report.markdown_content.count("Billions of Chained 2017 Dollars") == 2
+    # RPT-16: the dataset no research source identifies is still citable, after
+    # the research positions; the indexed series keeps its own marker.
+    assert audit["citation_body_markers"]["counts"] == {"S1": 1, "S2": 1}
+    assert agent._citation_index["S2"]["dataset"]["series"] == "fred:GDPC1"
+    assert agent._citation_index["S2"]["source_origin"] == "official_data"
+    assert report.markdown_content.count("Billions of Chained 2017 Dollars") == _exhibits_citing(manifest, "S2")
 
 
 def test_structured_forecast_and_real_api_publish_without_bypass(report_case, monkeypatch):
@@ -268,7 +279,14 @@ def test_structured_forecast_and_real_api_publish_without_bypass(report_case, mo
     audit = _finalize(agent, report, folder)
     assert audit["structured_forecast"]["required"] and audit["structured_forecast"]["valid"]
     assert audit["publish_gate"]["passed"] is True
-    assert audit["citation_body_markers"]["counts"]["S1"] == 2
+    manifest = json.loads((folder / "viz_manifest.json").read_text())
+    # RPT-16: every anchored 'Official series to watch' row carries the series' [S#].
+    watch_rows = [line for line in report.markdown_content.split("\n") if line.startswith("| ")
+                  and "(fred:UNRATE)" in line]
+    assert len(watch_rows) == len(binaries) and all(row.endswith(" [S1] |") for row in watch_rows)
+    assert (audit["citation_body_markers"]["counts"]["S1"]
+            == _exhibits_citing(manifest, "S1") + len(watch_rows))
+    assert _exhibits_citing(manifest, "S1") >= 2
     assert ReportManager.is_publishable(report.report_id)
     from app import create_app
     app = create_app()

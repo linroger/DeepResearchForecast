@@ -1,0 +1,54 @@
+{
+ "success": true,
+ "data": {
+  "enabled": true,
+  "providers": {
+   "fred": {
+    "state": "ok",
+    "detail": "MCP handshake ok (3 tools, ready in 0.403 s); sample fred:UNRATE: 118 observations to 2026-09-01 (live via mcp)",
+    "latency_s": 1.66,
+    "keys": {
+     "FRED_API_KEY": "set"
+    }
+   },
+   "bls": {
+    "state": "ok",
+    "detail": "MCP handshake ok (6 tools, ready in 0.349 s); handshake only: no BLS data request, so the daily quota is untouched",
+    "latency_s": 0.35,
+    "keys": {
+     "BLS_API_KEY": "set"
+    }
+   },
+   "bis": {
+    "state": "ok",
+    "detail": "MCP handshake ok (4 tools, ready in 0.382 s); sample bis:WS_CBPOL/M.US: 119 observations to 2026-09-01 (live via mcp)",
+    "latency_s": 1.49,
+    "keys": {}
+   },
+   "imf": {
+    "state": "degraded",
+    "detail": "MCP handshake ok (5 tools, ready in 1.065 s); sample imf:WEO/G001.NGDP_RPCH.A: DATA_UNAVAILABLE[timeout]: Data request deadline exceeded. Retry later with a narrower window.",
+    "latency_s": 44.95,
+    "keys": {}
+   },
+   "wb": {
+    "state": "degraded",
+    "detail": "MCP handshake ok (16 tools, ready in 3.102 s); sample wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA: DATA_UNAVAILABLE[provider_error]: Data360 unit code and metadata disagree. Use another series or source.",
+    "latency_s": 7.85,
+    "keys": {}
+   },
+   "usgov": {
+    "state": "ok",
+    "detail": "MCP handshake ok (56 tools, ready in 0.582 s); sample usgov:treasury/debt_to_penny: 25 observations to 2026-10-01 (live via mcp)",
+    "latency_s": 4.42,
+    "keys": {
+     "EIA_API_KEY": "set",
+     "BEA_API_KEY": "set",
+     "CENSUS_API_KEY": "not set"
+    }
+   }
+  },
+  "deadline_s": 45.0,
+  "elapsed_s": 47.01
+ }
+}

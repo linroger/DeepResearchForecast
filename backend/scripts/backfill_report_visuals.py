@@ -131,6 +131,12 @@ def strip_generated_visuals(markdown: str) -> str:
             i += 1
         while i < len(without_annex) and not without_annex[i].strip():
             i += 1
+        # Official exhibits carry a second italic line, their source attribution
+        # (RPT-13): it belongs to the exhibit and must not survive as prose.
+        if i < len(without_annex) and re.match(r"^\*(?:Source: |来源：).*\*\s*$", without_annex[i].strip()):
+            i += 1
+            while i < len(without_annex) and not without_annex[i].strip():
+                i += 1
         if out and out[-1].strip():
             out.append("")
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip() + "\n"
@@ -339,8 +345,31 @@ def localized_manifest(
     return localized
 
 
-def _artifacts(report_dir: Path, handoff: Path, simulation_id: str) -> Dict[str, Any]:
+def _official_data(report_id: str, simulation_id: str) -> Optional[Dict[str, Any]]:
+    """The carrier the report was written from (RPT-13).
+
+    Prefer the report-local, digest-checked official_data.json; older reports
+    fall back to the simulation's verified research binding, never to an
+    unverified handoff read.
+    """
+    record = ReportManager.load_report_official_data(report_id)
+    if record is not None:
+        return record["official_data"]
+    if not simulation_id:
+        return None
+    from app.services.official_data import load_for_simulation
+    try:
+        carrier = load_for_simulation(simulation_id)
+    except Exception:  # noqa: BLE001 — official data is optional; never fail a backfill
+        return None
+    return carrier if isinstance(carrier, dict) else None
+
+
+def _artifacts(report_dir: Path, handoff: Path, simulation_id: str,
+               official_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     result: Dict[str, Any] = {"handoff_dir": str(handoff)}
+    if official_data:
+        result["official_data"] = official_data
     for key, path in (
         ("forecast", report_dir / "forecast.json"),
         ("ensemble", report_dir / "ensemble_forecast.json"),
@@ -372,6 +401,12 @@ def _offline_report_agent(
     agent.sources = sources
     agent._citation_index = {}
     agent.output_language = language
+    agent.official_data = artifacts.get("official_data")
+    if agent.official_data:
+        # Same [S#] identities as the live report: research positions plus the
+        # stored datasets no research source identifies (RPT-16).
+        agent._citation_index = agent._append_official_dataset_sources(
+            "", agent._citation_index_or_fallback())[1]
     agent.research_report = _read_text(handoff / "research_report.md")
     agent._outline_summary = ""
     agent._background_block = ""
@@ -466,7 +501,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         return plan
 
     backup = _backup(report_dir)
-    artifacts = _artifacts(report_dir, handoff, simulation_id)
+    artifacts = _artifacts(report_dir, handoff, simulation_id, _official_data(report_id, simulation_id))
     forecast_obj = artifacts.get("forecast")
     circular_ids: List[str] = []
     scenario_label_change: Optional[Tuple[str, str]] = None
@@ -542,9 +577,8 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     ungrounded_quotes_removed += removed_quotes
     cleaned, main_lint = lint_report(
         cleaned, primary_language, mode="final", spine=artifacts.get("forecast"))
-    placer = ReportAgent.__new__(ReportAgent)
-    placer.output_language = primary_language
-    updated = placer._place_visualizations(cleaned, str(report_dir), manifest)
+    main_agent._harmonize_official_manifest(str(report_dir), manifest)
+    updated = main_agent._place_visualizations(cleaned, str(report_dir), manifest)
     primary_report = _Report(updated)
     stabilization = main_agent._stabilize_publish_markdown(
         report_id, primary_report)
@@ -607,8 +641,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
             candidate = candidate.replace(*scenario_label_change)
         candidate, _ = strip_circular_binary_rows(
             candidate, circular_ids, quality=quality)
-        variant_placer = ReportAgent.__new__(ReportAgent)
-        variant_placer.output_language = language
+        variant_placer = _offline_report_agent(language, sources, handoff, artifacts, forecast_obj)
         candidate = variant_placer._place_visualizations(
             candidate, str(report_dir), localized_manifest(manifest, language))
 

@@ -192,3 +192,76 @@ def test_bridge_finalizer_to_validated_pack_to_shared_brief(produce_bundle, tmp_
     assert all(row["dimension"] == "current_actions" for row in rows)
     assert "knowledge_state evidence" not in brief + context
     assert "current_actions evidence" in brief and "current_actions evidence" in context
+
+
+@pytest.mark.parametrize("public", [True, False])
+def test_official_statistics_join_the_canonical_brief_without_reopening_denials(tmp_path, monkeypatch, public):
+    """G1: canonical v1 simulations receive the binding-verified official snapshot as
+    its own delimited block (even with no public actor rows); denied and private
+    claims stay out and the hash-bound packs are unchanged."""
+    from app.services import official_data
+    from official_data_replay import publish, replay
+    rows = [_claim("DENIED_MARKER", denial="top"), _claim("PRIVATE_MARKER", visibility="private")]
+    if public:
+        rows.append(_claim("ALLOWED_PUBLIC"))
+    dossier = _dossier()
+    # The run's as-of follows the official retrieval (2026-10-11), so no look-ahead cutoff applies.
+    dossier["as_of_date"] = "2026-10-12"
+    dossier["actors"][0]["intelligence"]["dimensions"]["knowledge_state"] = rows
+    dossier["actors"][1]["intelligence"]["dimensions"]["knowledge_state"] = [
+        _claim("Private supporting baseline", visibility="private")]
+    packs = _produce_and_validate(tmp_path, dossier, REPORT)
+    carrier = official_data.load_official_data(publish([replay("fred_unrate_2024", tmp_path)], tmp_path / "handoff"))
+    gen = object.__new__(scg.SimulationConfigGenerator)
+    monkeypatch.setattr(Config, "SIM_WORLD_BRIEF", True)
+    monkeypatch.setattr(gen, "_world_brief_max_chars", lambda: 3000)
+    monkeypatch.setattr(gen, "_english_output", lambda: True)
+    sealed = {key: dict(pack) for key, pack in packs.items()}
+    brief = gen._build_world_brief("Question", dossier, [], actor_context_packs=packs, official_data=carrier)
+    assert packs == sealed
+    assert ("ALLOWED_PUBLIC" in brief) is public
+    assert "DENIED_MARKER" not in brief and "PRIVATE_MARKER" not in brief
+    assert "Unemployment Rate — United States | 4.1% | 2024-12 |" in brief and "[S1]" in brief
+    assert brief.endswith("END UNTRUSTED RESEARCH DATA — official public historical statistics")
+    without = gen._build_world_brief("Question", dossier, [], actor_context_packs=packs)
+    assert ("ALLOWED_PUBLIC" in without) is public and "Official historical data" not in without
+    if not public:
+        assert without == ""  # unchanged fail-closed result without official data
+
+
+@pytest.mark.parametrize("english", [True, False])
+def test_official_snapshot_room_never_cuts_a_canonical_evidence_line(tmp_path, monkeypatch, english):
+    """Sharing the brief with the official snapshot drops whole canonical evidence lines,
+    never part of one: every shared row keeps its uncertainty label and its source binding
+    (a cut line read 'CLAIM … word37…' with neither), exactly as the whole-line selection
+    without official data does."""
+    from app.services import official_data
+    from official_data_replay import publish, replay
+    names = ("fred_unrate_2024", "fred_dgs10_daily", "fred_dfedtaru_daily_step", "wb_wdi_gdp_growth_usa",
+             "bis_ws_tc_us_770", "usgov_debt_to_penny_daily", "usgov_mts_deficit_2024")
+    carrier = official_data.load_official_data(
+        publish([replay(name, tmp_path) for name in names], tmp_path / "handoff"))
+    filler = " ".join(f"word{index}" for index in range(60))[:300]
+    rows = []
+    for index in range(6):
+        row = _claim(f"CLAIM{index} {filler}")
+        row["evidence_type"] = "contested"
+        rows.append(row)
+    dossier = _dossier()
+    dossier["as_of_date"] = "2026-10-12"
+    dossier["actors"][0]["intelligence"]["dimensions"]["knowledge_state"] = rows
+    dossier["actors"][1]["intelligence"]["dimensions"]["knowledge_state"] = [
+        _claim("Private supporting baseline", visibility="private")]
+    packs = _produce_and_validate(tmp_path, dossier, REPORT)
+    gen = object.__new__(scg.SimulationConfigGenerator)
+    monkeypatch.setattr(Config, "SIM_WORLD_BRIEF", True)
+    monkeypatch.setattr(gen, "_world_brief_max_chars", lambda: 1400)
+    monkeypatch.setattr(gen, "_english_output", lambda: english)
+    question = "Will US unemployment exceed 5% in 2027?"
+    brief = gen._build_world_brief(question, dossier, [], actor_context_packs=packs, official_data=carrier)
+    alone = gen._build_world_brief(question, dossier, [], actor_context_packs=packs)
+    assert len(brief) <= 1400 and "END UNTRUSTED RESEARCH DATA — official public historical statistics" in brief
+    shared = [line for line in brief.splitlines() if "CLAIM" in line]
+    assert shared, "some public evidence still shares the brief with the snapshot"
+    assert set(shared) <= {line for line in alone.splitlines() if "CLAIM" in line}
+    assert all("[contested; not established fact] [sources=" in line and line.endswith("]") for line in shared)

@@ -16,12 +16,15 @@ fit, prefer the simpler form.
 | How do economies compare now? | One period, same units and definition | Sorted horizontal bar or dot plot | Name the period in the caption; mixed latest periods need a footnote. |
 | How do economies compare over time? | Same flow/indicator, same units and frequency | Overlay (≤ 6 lines, direct end labels) or small multiples | Different units → separate charts; never two y-axes. |
 | Is it unusually high or low? | Level plus its own history | Line with the historical range or a long-run average as a reference line | The reference must come from the stored data; state the window. |
-| What does the official outlook say? | Explicitly classified publisher projections | Line with dashed projection segment | Respect canonical status before any `projection_from` fallback; label publisher and known vintage. Unknown WEO/GEP status stays unknown. |
+| What does the official outlook say? | Publisher projections as classified by the data tools | Line with dashed projection segment over a shaded band | WEO/GEP rows carry vintage-based status (projection from the vintage year, estimate the year before); label the publisher. Rows without status stay "status not supplied". |
 | How did the outlook change? | Same target year across vintages | Revision line or dumbbell | Needs at least three vintages from the same publisher; otherwise a table. |
 
 Frequency rules: plot at the native frequency (monthly as monthly). If daily
-data were aggregated to monthly averages, say so in the subtitle or caption.
-Do not mix frequencies on one axis. Keep SA and NSA series apart.
+data were aggregated to monthly averages or end-of-month values, say so in the
+subtitle or caption; the month still open at retrieval is a partial period.
+Do not mix frequencies on one axis. Keep SA and NSA series apart. A noisy NSA
+monthly flow may carry a derived twelve-month average over its stored values,
+labelled as derived.
 
 ## 2. Forecast overlays
 
@@ -39,10 +42,10 @@ back to a stored series, a stated binary threshold, or a published projection.
   same series and units, draw each as a light horizontal band between the
   horizon line and the axis edge, labelled with the scenario name and its
   probability. Never invent a range around a point estimate.
-- **Projection band.** Explicit publisher projections stay dashed. Use a
-  `projection_from` band only when compatible with the canonical point statuses.
-  Unknown, preliminary and estimated points keep their separate labels/markers.
-  The model's own forecast, when shown,
+- **Projection band.** Publisher projections stay dashed over a shaded band.
+  Use a `projection_from` band only when compatible with the stored point
+  statuses. Unknown, preliminary, estimated and partial points keep their
+  separate labels/markers. The model's own forecast, when shown,
   uses a different mark (for example a diamond at the horizon) and is labelled
   as the model forecast, never as the publisher's projection.
 - **Fan chart.** Only when quantiles are actually available (for example an
@@ -74,9 +77,9 @@ Run this before embedding any figure:
 1. The chart answers the one question written for it; otherwise drop it.
 2. Every mark comes from a stored observation or a published projection.
 3. Units, index base, currency year and seasonal adjustment are on the chart.
-4. Projection segments are explicitly supported by status/metadata; unknown or preliminary values were not reclassified by a cutoff.
+4. Projection segments are supported by stored status; unknown, preliminary, estimated or partial values were not reclassified by a cutoff.
 5. Gaps are visible as breaks, not bridged.
-6. Only the latest confirmed historical observation is marked; its period matches the data page. Fiscal labels and partial coverage come from keyed period metadata.
+6. Only the latest observed value is marked (never a partial month, estimate or projection); its period matches the data page. Fiscal labels and partial coverage come from keyed period metadata.
 7. One y-axis; overlaid series share units, frequency and definition.
 8. At most six lines; each line has a legend entry and a direct label.
 9. No label overlaps a line end, another label, the legend or the footer.

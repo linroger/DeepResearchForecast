@@ -1,0 +1,58 @@
+{
+  "binary_forecasts": [
+    {
+      "id": "F1",
+      "statement": "US commercial-sector retail electricity sales are at least 140,000 million kilowatt-hours in December 2026.",
+      "probability": 0.4,
+      "resolution_criteria": "Resolves YES if usgov:eia/electricity_sales/US.COM >= 140000 Million kilowatt-hours in 2026-12 (source: EIA). Official resolution: usgov:eia/electricity_sales/US.COM >= 140000 Million kilowatt-hours for 2026-12.",
+      "resolution_source": "",
+      "theme": "general",
+      "horizon_year": null,
+      "base_rate_anchor": "",
+      "adjustment_rationale": "",
+      "source": "research-prior",
+      "proposition_id": "forecast-2ee231440d58",
+      "criteria_sharp": true,
+      "data_anchor": {
+        "series": "usgov:eia/electricity_sales/US.COM",
+        "period": "2026-12-01",
+        "observation": "2026-12",
+        "threshold": 140000.0,
+        "comparator": ">=",
+        "units": "Million kilowatt-hours",
+        "transform": "",
+        "frequency": "M",
+        "geography": "USA",
+        "vintage": "",
+        "source_url": "https://www.eia.gov/electricity/data/browser/",
+        "latest_value": 150578.72802,
+        "latest_date": "2026-07-01",
+        "auto_resolvable": true,
+        "empirical_base_rate": {
+          "p": 0.0,
+          "n": 112,
+          "h": 5,
+          "window": {
+            "start": "2016-11-01",
+            "end": "2026-07-01"
+          },
+          "method": "empirical_h_step",
+          "latest": {
+            "date": "2026-07-01",
+            "value": 150578.72802
+          },
+          "quantiles": {
+            "p10": 125067.619676,
+            "p25": 127063.82509,
+            "p50": 128723.284762,
+            "p75": 130602.131903,
+            "p90": 131495.141152
+          },
+          "historical_share": 0.0342,
+          "seasonal_basis": "seasonal_profile",
+          "sigma_distance": -3.22
+        }
+      }
+    }
+  ]
+}

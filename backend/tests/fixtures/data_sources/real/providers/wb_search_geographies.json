@@ -1,0 +1,355 @@
+{
+ "captured_at": "2026-10-12T14:08:30Z",
+ "source": "data360_search_indicators live: 'battery storage capacity' with required_country WLD, 'urban population growth' with USA;CHN and with no country.",
+ "calls": [
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "battery storage capacity",
+    "limit": 6,
+    "required_country": "WLD"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 33,
+    "offset": 0,
+    "has_more": true,
+    "next_offset": 6,
+    "indicators": [
+     {
+      "idno": "WB_CSC_RES_REN_ENER_ENAB",
+      "database_id": "WB_CSC",
+      "database_name": "World Bank Group Corporate Scorecard",
+      "name": "Gigawatts of renewable energy capacity enabled",
+      "truncated_definition": "The number of gigawatts (GW) of the generation capacity of renewable energy enabled with direct supp",
+      "periodicity": null,
+      "latest_data": "2024",
+      "time_period_range": "2023-2024",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_SE4ALL_EG_EGEN_RNEW",
+      "database_id": "WB_SE4ALL",
+      "database_name": "Sustainable Energy For All (SE4ALL)",
+      "name": "Installed renewable electricity-generating capacity (watts per capita)",
+      "truncated_definition": "The indicator is defined as the installed capacity of power plants that generate electricity from re",
+      "periodicity": "Annual",
+      "latest_data": "2022",
+      "time_period_range": "2000-2022",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "OWID_CB_PRIMARY_ENERGY_CONSUMPTION",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Primary energy consumption",
+      "truncated_definition": "Primary energy consumption - Measured in terawatt-hours.",
+      "periodicity": "Annual",
+      "latest_data": "2023",
+      "time_period_range": "1750-2023",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_EG_USE_ELEC_KH_PC",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Electric power consumption (kWh per capita)",
+      "truncated_definition": "Electric power consumption measures the production of power plants and combined heat and power plant",
+      "periodicity": "Annual",
+      "latest_data": "2024",
+      "time_period_range": "1990-2024",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "OWID_CB_ENERGY_PER_CAPITA",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Primary energy consumption per capita",
+      "truncated_definition": "Primary energy consumption per capita - Measured in kilowatt-hours per person.",
+      "periodicity": "Annual",
+      "latest_data": "2023",
+      "time_period_range": "1750-2023",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "UNCTAD_MT_CONTAINER_CAPACITY",
+      "database_id": "UNCTAD_MT",
+      "database_name": "Maritime Transport",
+      "name": "Average container carrying capacity (TEU) per container ship - All ships",
+      "truncated_definition": "Average container carrying capacity (TEU) per container ship – All ships: The average capacity to ca",
+      "periodicity": "Annual",
+      "latest_data": "2023",
+      "time_period_range": "2018-2023",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD",
+      "dimensions": null,
+      "primary_source_of": null
+     }
+    ],
+    "required_country": "WLD",
+    "country_names": {
+     "WLD": "World"
+    },
+    "error": null
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "urban population growth",
+    "limit": 6,
+    "required_country": "USA;CHN"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 200,
+    "offset": 0,
+    "has_more": true,
+    "next_offset": 6,
+    "indicators": [
+     {
+      "idno": "WB_WDI_SP_URB_TOTL",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population",
+      "truncated_definition": "Urban population refers to people living in urban areas as defined by national statistical offices. ",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_SP_URB_GROW",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population growth (annual %)",
+      "truncated_definition": "Annual urban population growth rate for year t is the exponential rate of growth of midyear urban po",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1961-2025",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_SP_URB_TOTL_IN_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population (% of total population)",
+      "truncated_definition": "Urban population refers to people living in urban areas as defined by national statistical offices. ",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_EN_URB_LCTY_UR_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Population in the largest city (% of urban population)",
+      "truncated_definition": "Population in largest city is the percentage of a country's urban population living in that country'",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_EN_URB_LCTY",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Population in largest city",
+      "truncated_definition": "Population in largest city is the urban population living in the country's largest metropolitan area",
+      "periodicity": "Annual",
+      "latest_data": "2024",
+      "time_period_range": "1960-2024",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "FAO_AS_4116",
+      "database_id": "FAO_AS",
+      "database_name": "Aquastat",
+      "name": "Urban population with access to safe drinking-water (JMP)",
+      "truncated_definition": "Urban population with access to safe drinking-water (JMP)",
+      "periodicity": "Annual",
+      "latest_data": "2023",
+      "time_period_range": "1990-2023",
+      "covers_country": {
+       "USA": true,
+       "CHN": true
+      },
+      "requested_country": "USA;CHN",
+      "dimensions": null,
+      "primary_source_of": null
+     }
+    ],
+    "required_country": "USA;CHN",
+    "country_names": {
+     "USA": "United States",
+     "CHN": "China"
+    },
+    "error": null
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "urban population growth",
+    "limit": 6
+   },
+   "response": {
+    "count": 6,
+    "total_count": 200,
+    "offset": 0,
+    "has_more": true,
+    "next_offset": 6,
+    "indicators": [
+     {
+      "idno": "WB_WDI_SP_URB_TOTL",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population",
+      "truncated_definition": "Urban population refers to people living in urban areas as defined by national statistical offices. ",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_SP_URB_GROW",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population growth (annual %)",
+      "truncated_definition": "Annual urban population growth rate for year t is the exponential rate of growth of midyear urban po",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1961-2025",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_SP_URB_TOTL_IN_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Urban population (% of total population)",
+      "truncated_definition": "Urban population refers to people living in urban areas as defined by national statistical offices. ",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_EN_URB_LCTY_UR_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Population in the largest city (% of urban population)",
+      "truncated_definition": "Population in largest city is the percentage of a country's urban population living in that country'",
+      "periodicity": "Annual",
+      "latest_data": "2025",
+      "time_period_range": "1960-2025",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "FAO_AS_4116",
+      "database_id": "FAO_AS",
+      "database_name": "Aquastat",
+      "name": "Urban population with access to safe drinking-water (JMP)",
+      "truncated_definition": "Urban population with access to safe drinking-water (JMP)",
+      "periodicity": "Annual",
+      "latest_data": "2023",
+      "time_period_range": "1990-2023",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     },
+     {
+      "idno": "WB_WDI_EN_URB_LCTY",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Population in largest city",
+      "truncated_definition": "Population in largest city is the urban population living in the country's largest metropolitan area",
+      "periodicity": "Annual",
+      "latest_data": "2024",
+      "time_period_range": "1960-2024",
+      "covers_country": null,
+      "requested_country": null,
+      "dimensions": null,
+      "primary_source_of": null
+     }
+    ],
+    "required_country": null,
+    "country_names": null,
+    "error": null
+   }
+  }
+ ]
+}

@@ -1,0 +1,79 @@
+{
+ "captured_at": "2026-10-12T14:10:00Z",
+ "source": "get_multiple_series live: a keyed request for one valid and one invalid id over 2026-2027 (per-series messages), and a request with a syntactically valid but unregistered key (REQUEST_NOT_PROCESSED). Observation lists trimmed to the first two rows.",
+ "calls": [
+  {
+   "provider": "bls",
+   "tool": "get_multiple_series",
+   "args": {
+    "series_ids": [
+     "LNS14000000",
+     "NOSUCHSERIES1"
+    ],
+    "start_year": "2026",
+    "end_year": "2027"
+   },
+   "response": {
+    "status": "REQUEST_SUCCEEDED",
+    "responseTime": 73,
+    "message": [
+     "No Data Available for Series LNS14000000 Year: 2027",
+     "Invalid Series for Series NOSUCHSERIES1"
+    ],
+    "Results": {
+     "series": [
+      {
+       "seriesID": "LNS14000000",
+       "data": [
+        {
+         "year": "2026",
+         "period": "M09",
+         "periodName": "September",
+         "latest": "true",
+         "value": "4.2",
+         "footnotes": [
+          {}
+         ]
+        },
+        {
+         "year": "2026",
+         "period": "M08",
+         "periodName": "August",
+         "value": "4.1",
+         "footnotes": [
+          {}
+         ]
+        }
+       ]
+      },
+      {
+       "seriesID": "NOSUCHSERIES1",
+       "data": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "provider": "bls",
+   "tool": "get_multiple_series",
+   "args": {
+    "series_ids": [
+     "LNS14000000"
+    ],
+    "start_year": "2026",
+    "end_year": "2026"
+   },
+   "response": {
+    "status": "REQUEST_NOT_PROCESSED",
+    "responseTime": 0,
+    "message": [
+     "The key:[REDACTED] provided by the User is invalid. Please provide a proper key for the operation to be successful"
+    ],
+    "Results": {
+     "series": []
+    }
+   }
+  }
+ ]
+}

@@ -220,6 +220,99 @@
       </div>
     </section>
 
+    <!-- L22：官方数据（研究阶段经官方数据 MCP 服务取得并存储的序列，data/datasets.json）。 -->
+    <section v-show="activeTab === 'data'" class="panel" role="tabpanel">
+      <div class="panel-head"><span class="diamond">◇</span>{{ L('官方数据', 'Official Data') }}</div>
+      <div class="panel-body">
+        <template v-if="datasetRows.length">
+          <div class="sources-count">
+            {{ L('共', 'Total') }} {{ datasetRows.length }} {{ L('条官方序列', 'official series') }}
+          </div>
+          <p class="data-note">
+            {{ L('研究阶段经官方数据 MCP 服务（FRED、BLS、BIS、IMF、世界银行 Data360、美国政府开放数据）取得并存储的序列；报告与预测只读取这些存储值，从不重新抓取。',
+                 'Series retrieved through the official-data MCP servers (FRED, BLS, BIS, IMF, World Bank Data360, US Gov Open Data) and stored during research; the report and forecast read only these stored values and never re-fetch them.') }}
+          </p>
+          <div class="data-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ L('指标', 'Indicator') }}</th>
+                  <th>{{ L('最新观测值', 'Latest observed') }}</th>
+                  <th>{{ L('单位 / 频率', 'Units / frequency') }}</th>
+                  <th>{{ L('覆盖区间', 'Coverage') }}</th>
+                  <th>{{ L('来源', 'Source') }}</th>
+                  <th>{{ L('文件', 'Files') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in datasetRows" :key="row.key">
+                  <td class="dt-indicator">
+                    <div class="dt-label" :title="row.label">
+                      {{ row.label }}<span v-if="row.geography" class="dt-geo">{{ row.geography }}</span>
+                    </div>
+                    <div class="dt-sub">
+                      {{ row.series }}<span v-for="kiq in row.kiqs" :key="row.key + '-' + kiq" class="dt-kiq">{{ kiq }}</span>
+                    </div>
+                  </td>
+                  <td class="dt-num">
+                    <template v-if="row.latestText">{{ row.latestText }}</template>
+                    <span
+                      v-else
+                      :title="L('尚无完整期间的历史观测值（例如日度数据的当月尚未结束）', 'No complete-period historical observation yet (for example, the current month of daily data)')"
+                    >—</span>
+                    <div v-if="row.latestPeriod" class="dt-sub">{{ row.latestPeriod }}</div>
+                  </td>
+                  <td>
+                    {{ row.units || '—' }}
+                    <div v-if="row.frequencyLabel" class="dt-sub">{{ row.frequencyLabel }}</div>
+                  </td>
+                  <td class="dt-num">
+                    {{ row.coverage || '—' }}
+                    <div v-if="row.observationCount != null" class="dt-sub">
+                      {{ row.observationCount }} {{ L('个观测值', 'observations') }}
+                    </div>
+                  </td>
+                  <td class="dt-src">
+                    <a
+                      v-if="row.sourceUrl"
+                      class="source-link dt-source"
+                      :href="row.sourceUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ row.providerName || L('来源', 'Source') }} ↗</a>
+                    <span v-else>{{ row.providerName || '—' }}</span>
+                    <span v-if="row.sourceId" class="dt-sid">[{{ row.sourceId }}]</span>
+                  </td>
+                  <td class="dt-files">
+                    <a
+                      v-if="row.chartPath && pipelineId"
+                      class="dt-file"
+                      :href="researchChartUrl(pipelineId, row.chartPath)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      :aria-label="L(`打开${datasetFileNames[row.key]}图表`, `Open the ${datasetFileNames[row.key]} chart`)"
+                    >{{ L('图表', 'Chart') }} ↗</a>
+                    <button
+                      v-if="row.csvArtifact && pipelineId"
+                      type="button"
+                      class="dt-file"
+                      :disabled="csvBusy === row.key"
+                      :aria-label="csvBusy === row.key
+                        ? L(`正在下载${datasetFileNames[row.key]} CSV…`, `Downloading ${datasetFileNames[row.key]} as CSV…`)
+                        : L(`下载${datasetFileNames[row.key]} CSV`, `Download ${datasetFileNames[row.key]} as CSV`)"
+                      @click="downloadDatasetCsv(row)"
+                    >{{ csvBusy === row.key ? L('下载中…', 'Downloading…') : 'CSV' }}</button>
+                    <span v-if="!(row.chartPath && pipelineId) && !(row.csvArtifact && pipelineId)" class="dt-sub">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="csvError" class="edit-error" role="alert">{{ csvError }}</p>
+        </template>
+      </div>
+    </section>
+
     <!-- 信息来源 -->
     <section v-show="activeTab === 'sources'" class="panel" role="tabpanel">
       <div class="panel-head"><span class="diamond">◇</span>{{ L('信息来源', 'Sources') }}</div>
@@ -251,12 +344,14 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { renderMarkdown } from '../../utils/markdown'
-import { L } from '../../i18n'
+import { L, locale } from '../../i18n'
 import {
-  editDossier, researchChartUrl,
+  editDossier, researchChartUrl, getArtifact,
   requestResearchTranslation, getResearchTranslation, researchPdfUrl,
 } from '../../api/research'
 import { detectTranslationTarget } from '../../utils/researchTranslation'
+import { datasetManifestRows, distinctSeriesNames } from '../../utils/officialData'
+import { saveTextFile } from '../../utils/saveTextFile'
 
 const props = defineProps({
   dossier: {
@@ -265,7 +360,9 @@ const props = defineProps({
   },
   // T5.4: 可编辑（仅完成的 research_only）时传入 pipelineId + editable
   pipelineId: { type: String, default: '' },
-  editable: { type: Boolean, default: false }
+  editable: { type: Boolean, default: false },
+  // 管线状态登记的产物名（status.artifacts 的键）：决定官方数据集 CSV / 序列图能否经产物端点取得。
+  artifactNames: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['saved-continue'])
@@ -598,6 +695,80 @@ watch(
   },
 )
 
+// ---- L22: official-data datasets (handoff data/datasets.json) -------------
+// Requested through the research artifact endpoint only when the pipeline status
+// lists the 'datasets' artifact (runs without official data never issue a 404);
+// any failure simply hides the tab.
+const datasetManifest = ref(null)
+const csvBusy = ref('')
+const csvError = ref('')
+let datasetsVersion = 0
+
+const registeredArtifacts = computed(() => (Array.isArray(props.artifactNames) ? props.artifactNames : []))
+const datasetsArtifact = computed(() =>
+  ['datasets', 'datasets_partial'].find(name => registeredArtifacts.value.includes(name)) || ''
+)
+
+async function loadDatasets() {
+  const version = ++datasetsVersion
+  const pipelineId = props.pipelineId
+  const artifact = datasetsArtifact.value
+  csvBusy.value = ''
+  csvError.value = ''
+  if (!pipelineId || !artifact || !(props.dossier && props.dossier.has_report)) {
+    datasetManifest.value = null
+    return
+  }
+  try {
+    const res = await getArtifact(pipelineId, artifact)
+    if (version !== datasetsVersion) return
+    const content = res && res.data && res.data.content
+    datasetManifest.value = content && typeof content === 'object' ? content : null
+  } catch (e) {
+    if (version === datasetsVersion) datasetManifest.value = null
+  }
+}
+
+watch(
+  [() => props.pipelineId, () => !!(props.dossier && props.dossier.has_report), datasetsArtifact],
+  loadDatasets,
+  { immediate: true },
+)
+
+const datasetRows = computed(() => datasetManifestRows(datasetManifest.value, {
+  lang: locale.value,
+  artifactNames: registeredArtifacts.value,
+}))
+
+// Each row's chart link and CSV button is named after its series (label and geography as
+// shown in the row), so assistive technology never lists a column of identical 'CSV' controls.
+const datasetFileNames = computed(() => distinctSeriesNames(datasetRows.value.map(row => ({
+  key: row.key,
+  label: row.geography ? `${row.label} — ${row.geography}` : row.label,
+  series: row.series,
+}))))
+
+async function downloadDatasetCsv(row) {
+  const pipelineId = props.pipelineId
+  if (!pipelineId || !row.csvArtifact || csvBusy.value) return
+  const version = datasetsVersion
+  csvBusy.value = row.key
+  csvError.value = ''
+  try {
+    const res = await getArtifact(pipelineId, row.csvArtifact)
+    if (version !== datasetsVersion) return
+    const content = res && res.data && res.data.content
+    if (typeof content !== 'string' || !content) {
+      throw new Error(L('服务器未返回 CSV 内容', 'The server returned no CSV content'))
+    }
+    saveTextFile(content, row.csvFilename, 'text/csv;charset=utf-8')
+  } catch (e) {
+    if (version === datasetsVersion) csvError.value = (e && e.message) || L('CSV 下载失败', 'CSV download failed')
+  } finally {
+    if (version === datasetsVersion) csvBusy.value = ''
+  }
+}
+
 // ---- Tabs ----------------------------------------------------------------
 
 const tabs = computed(() => {
@@ -615,8 +786,17 @@ const tabs = computed(() => {
   if (marketContainer.value) {
     t.push({ key: 'markets', label: L('预测市场', 'Markets'), count: marketList.value.length })
   }
+  if (datasetRows.value.length) {
+    t.push({ key: 'data', label: L('官方数据', 'Official Data'), count: datasetRows.value.length })
+  }
   t.push({ key: 'sources', label: L('信息来源', 'Sources'), count: sourceList.value.length })
   return t
+})
+
+// A conditional tab (brief / relationships / markets / official data) disappears when
+// the dossier changes; fall back to the report instead of showing an empty panel.
+watch(tabs, list => {
+  if (!list.some(tab => tab.key === activeTab.value)) activeTab.value = 'report'
 })
 
 // 关系类型 → 中英文标签 + 情感色（与 actors.py REL_LABEL 对齐）
@@ -1394,6 +1574,134 @@ function formatUsd(value) {
 
 .source-link:hover {
   text-decoration: underline;
+}
+
+/* ---- L22: official-data series list ---- */
+.data-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #777;
+  margin: 0 0 14px;
+}
+
+.data-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  background: #FAFAFA;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.data-table tbody tr:first-child td {
+  border-top: none;
+}
+
+.dt-indicator {
+  min-width: 220px;
+}
+
+.dt-label {
+  font-weight: 600;
+  color: #000;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dt-geo,
+.dt-kiq {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: #666;
+  border: 1px solid var(--border);
+  padding: 0 5px;
+}
+
+.dt-sub {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #999;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.dt-num {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.dt-src {
+  min-width: 190px;
+}
+
+.dt-source {
+  font-size: 13px;
+}
+
+.dt-sid {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #666;
+}
+
+.dt-files {
+  white-space: nowrap;
+}
+
+.dt-file {
+  display: inline-block;
+  margin-right: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #666;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.dt-file:hover:not(:disabled) {
+  color: var(--orange);
+  border-color: var(--orange);
+}
+
+.dt-file:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 /* ---- Markdown body typography ---- */

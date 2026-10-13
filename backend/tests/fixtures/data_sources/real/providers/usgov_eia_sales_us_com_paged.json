@@ -1,0 +1,336 @@
+{
+ "captured_at": "2026-10-12T14:35:55Z",
+ "clock": 1791815755.0,
+ "series": "usgov:eia/electricity_sales/US.COM",
+ "request": {
+  "start": "2025-01-01",
+  "end": "2025-12-31"
+ },
+ "patches": {
+  "_EIA_PAGE_ROWS": 5
+ },
+ "env": {},
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "eia_query",
+   "args": {
+    "route": "electricity/retail-sales",
+    "data": "sales",
+    "frequency": "monthly",
+    "facets": "stateid=US; sectorid=COM",
+    "start": "2025-01",
+    "end": "2025-12",
+    "length": 5,
+    "offset": 0
+   },
+   "response": {
+    "summary": "EIA electricity/retail-sales: 5 of 12 rows (monthly)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 5,
+     "min": 114822,
+     "max": 142263,
+     "mean": 126815,
+     "first": {
+      "date": "2025-08",
+      "value": 142262.68351
+     },
+     "last": {
+      "date": "2025-12",
+      "value": 122521.59204
+     },
+     "change": -19741.1,
+     "changePct": -13.88,
+     "cagrPct": null,
+     "trend": "decreasing"
+    },
+    "data": {
+     "columns": [
+      "period",
+      "sales",
+      "stateid",
+      "stateDescription",
+      "sectorid",
+      "sectorName",
+      "sales-units"
+     ],
+     "rows": [
+      [
+       "2025-12",
+       122521.59204,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-11",
+       114821.61454,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-10",
+       124680.0319,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-09",
+       129791.09404,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-08",
+       142262.68351,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ]
+     ],
+     "total": 12,
+     "truncated": false
+    },
+    "meta": {
+     "route": "electricity/retail-sales",
+     "data": [
+      "sales"
+     ],
+     "facets": {
+      "stateid": [
+       "US"
+      ],
+      "sectorid": [
+       "COM"
+      ]
+     },
+     "sources": [
+      {
+       "url": "https://api.eia.gov/v2/electricity/retail-sales/data/?data[]=sales&frequency=monthly&start=2025-01&end=2025-12&sort[0][column]=period&sort[0][direction]=desc&length=5&offset=0&facets[stateid][]=US&facets[sectorid][]=COM",
+       "fetchedAt": "2026-10-12T14:35:59.528Z"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "eia_query",
+   "args": {
+    "route": "electricity/retail-sales",
+    "data": "sales",
+    "frequency": "monthly",
+    "facets": "stateid=US; sectorid=COM",
+    "start": "2025-01",
+    "end": "2025-12",
+    "length": 5,
+    "offset": 5
+   },
+   "response": {
+    "summary": "EIA electricity/retail-sales: 5 of 12 rows (monthly)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 5,
+     "min": 112436,
+     "max": 144363,
+     "mean": 124351,
+     "first": {
+      "date": "2025-03",
+      "value": 114426.90423
+     },
+     "last": {
+      "date": "2025-07",
+      "value": 144363.14666
+     },
+     "change": 29936.2,
+     "changePct": 26.16,
+     "cagrPct": null,
+     "trend": "increasing"
+    },
+    "data": {
+     "columns": [
+      "period",
+      "sales",
+      "stateid",
+      "stateDescription",
+      "sectorid",
+      "sectorName",
+      "sales-units"
+     ],
+     "rows": [
+      [
+       "2025-07",
+       144363.14666,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-06",
+       130589.00785,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-05",
+       119942.59622,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-04",
+       112435.61527,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-03",
+       114426.90423,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ]
+     ],
+     "total": 12,
+     "truncated": false
+    },
+    "meta": {
+     "route": "electricity/retail-sales",
+     "data": [
+      "sales"
+     ],
+     "facets": {
+      "stateid": [
+       "US"
+      ],
+      "sectorid": [
+       "COM"
+      ]
+     },
+     "sources": [
+      {
+       "url": "https://api.eia.gov/v2/electricity/retail-sales/data/?data[]=sales&frequency=monthly&start=2025-01&end=2025-12&sort[0][column]=period&sort[0][direction]=desc&length=5&offset=5&facets[stateid][]=US&facets[sectorid][]=COM",
+       "fetchedAt": "2026-10-12T14:36:00.617Z"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "eia_query",
+   "args": {
+    "route": "electricity/retail-sales",
+    "data": "sales",
+    "frequency": "monthly",
+    "facets": "stateid=US; sectorid=COM",
+    "start": "2025-01",
+    "end": "2025-12",
+    "length": 5,
+    "offset": 10
+   },
+   "response": {
+    "summary": "EIA electricity/retail-sales: 2 of 12 rows (monthly)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 2,
+     "min": 113204,
+     "max": 124447,
+     "mean": 118826,
+     "first": {
+      "date": "2025-01",
+      "value": 124447.35304
+     },
+     "last": {
+      "date": "2025-02",
+      "value": 113204.45431
+     },
+     "change": -11242.9,
+     "changePct": -9.03,
+     "cagrPct": null,
+     "trend": null
+    },
+    "data": {
+     "columns": [
+      "period",
+      "sales",
+      "stateid",
+      "stateDescription",
+      "sectorid",
+      "sectorName",
+      "sales-units"
+     ],
+     "rows": [
+      [
+       "2025-02",
+       113204.45431,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ],
+      [
+       "2025-01",
+       124447.35304,
+       "US",
+       "U.S. Total",
+       "COM",
+       "commercial",
+       "million kilowatt hours"
+      ]
+     ],
+     "total": 12,
+     "truncated": false
+    },
+    "meta": {
+     "route": "electricity/retail-sales",
+     "data": [
+      "sales"
+     ],
+     "facets": {
+      "stateid": [
+       "US"
+      ],
+      "sectorid": [
+       "COM"
+      ]
+     },
+     "sources": [
+      {
+       "url": "https://api.eia.gov/v2/electricity/retail-sales/data/?data[]=sales&frequency=monthly&start=2025-01&end=2025-12&sort[0][column]=period&sort[0][direction]=desc&length=5&offset=10&facets[stateid][]=US&facets[sectorid][]=COM",
+       "fetchedAt": "2026-10-12T14:36:03.107Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

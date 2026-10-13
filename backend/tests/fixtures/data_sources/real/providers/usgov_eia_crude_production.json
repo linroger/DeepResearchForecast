@@ -1,0 +1,253 @@
+{
+ "captured_at": "2026-10-12T14:36:06Z",
+ "clock": 1791815766.0,
+ "series": "usgov:eia/crude_production",
+ "request": {
+  "start": "2025-07-01"
+ },
+ "patches": {},
+ "env": {},
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "eia_query",
+   "args": {
+    "route": "petroleum/crd/crpdn",
+    "data": "value",
+    "frequency": "monthly",
+    "facets": "series=MCRFPUS2",
+    "start": "2025-07",
+    "end": "2026-10",
+    "length": 200,
+    "offset": 0
+   },
+   "response": {
+    "summary": "EIA petroleum/crd/crpdn: 13 of 13 rows (monthly)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 13,
+     "min": 13305,
+     "max": 13995,
+     "mean": 13810.3,
+     "first": {
+      "date": "2025-07",
+      "value": 13724
+     },
+     "last": {
+      "date": "2026-07",
+      "value": 13948
+     },
+     "change": 224,
+     "changePct": 1.63,
+     "cagrPct": null,
+     "trend": "stable"
+    },
+    "data": {
+     "columns": [
+      "period",
+      "value",
+      "duoarea",
+      "area-name",
+      "product",
+      "product-name",
+      "process",
+      "process-name",
+      "series",
+      "series-description",
+      "units"
+     ],
+     "rows": [
+      [
+       "2026-07",
+       13948,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-06",
+       13844,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-05",
+       13811,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-04",
+       13981,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-03",
+       13726,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-02",
+       13711,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2026-01",
+       13305,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-12",
+       13810,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-11",
+       13927,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-10",
+       13995,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-09",
+       13917,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-08",
+       13835,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ],
+      [
+       "2025-07",
+       13724,
+       "NUS",
+       "U.S.",
+       "EPC0",
+       "Crude Oil",
+       "FPF",
+       "Field Production",
+       "MCRFPUS2",
+       "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+       "MBBL/D"
+      ]
+     ],
+     "total": 13,
+     "truncated": false
+    },
+    "meta": {
+     "route": "petroleum/crd/crpdn",
+     "data": [
+      "value"
+     ],
+     "facets": {
+      "series": [
+       "MCRFPUS2"
+      ]
+     },
+     "sources": [
+      {
+       "url": "https://api.eia.gov/v2/petroleum/crd/crpdn/data/?data[]=value&frequency=monthly&start=2025-07&end=2026-10&sort[0][column]=period&sort[0][direction]=desc&length=200&offset=0&facets[series][]=MCRFPUS2",
+       "fetchedAt": "2026-10-12T14:36:09.419Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

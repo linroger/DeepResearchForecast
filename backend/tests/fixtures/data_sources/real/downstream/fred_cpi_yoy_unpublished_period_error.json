@@ -1,0 +1,16 @@
+{
+ "capture": "DataSources.get through the data hub (keyed FRED) at 2026-10-12T14:26:37+00:00 for the ended period 2026-09 of CPI yoy, which BLS/FRED had not published yet (release due mid-October); the DataError exactly as returned",
+ "error": {
+  "code": "invalid_window",
+  "message": "No observations in requested window. Use a narrower window inside the series coverage.",
+  "retryable": false,
+  "series": "fred:CPIAUCSL"
+ },
+ "request": {
+  "end": "2026-09-30",
+  "max_obs": 240,
+  "series": "fred:CPIAUCSL",
+  "start": "2026-09-01",
+  "transform": "yoy"
+ }
+}

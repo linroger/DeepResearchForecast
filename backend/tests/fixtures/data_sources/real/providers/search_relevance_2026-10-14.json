@@ -1,0 +1,803 @@
+{
+ "captured_at": "2026-10-13T18:05:18Z",
+ "source": "fred_search, data360_search_indicators, BIS search_dataflows and Treasury treasury_search_datasets live, as DataSources.search issued them (limit 6) for agent data_search queries of the six audit questions: 'global semiconductor sales', 'new energy vehicle sales share' (also with China), 'US electricity retail price', 'euro area deposit facility rate', 'fed funds rate history'. FRED rows keep id/title/units/frequency/seasonal_adjustment/observation_range/notes; Data360 rows keep idno/database/name/periodicity/coverage.",
+ "calls": [
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "global semiconductor sales",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 0,
+    "showing": "1-0",
+    "results": []
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "global semiconductor sales",
+    "limit": 6,
+    "required_country": "WLD"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 146,
+    "required_country": "WLD",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WB_WDI_MS_MIL_XPRT_KD",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Arms exports (SIPRI trend indicator values)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "T500_TL_SPR_CMPS",
+      "database_id": "T500_TL",
+      "database_name": "Top 500: The list",
+      "name": "Number of Top 500 supercomputers",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "WB_WDI_TX_VAL_TECH_CD",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "High-technology exports (current US$)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "WB_WDI_IT_CEL_SETS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Mobile cellular subscriptions",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "WB_WDI_MS_MIL_MPRT_KD",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Arms imports (SIPRI trend indicator values)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "UNCTAD_DE_DIG_SERVTRADE_ANN_EXP",
+      "database_id": "UNCTAD_DE",
+      "database_name": "Digital Economy and Technology",
+      "name": "International exports in digitally-deliverable services",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "global semiconductor sales",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "global semiconductor sales"
+   },
+   "response": {
+    "summary": "No datasets found matching \"global semiconductor sales\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "new energy vehicle sales share",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 0,
+    "showing": "1-0",
+    "results": []
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "new energy vehicle sales share",
+    "limit": 6,
+    "required_country": "WLD"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 200,
+    "required_country": "WLD",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WB_SE4ALL_EG_FEC_RNEW",
+      "database_id": "WB_SE4ALL",
+      "database_name": "Sustainable Energy For All (SE4ALL)",
+      "name": "Share in total final energy consumption (%)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "FAO_EMS_726313",
+      "database_id": "FAO_EMS",
+      "database_name": "Emissions Database",
+      "name": "Emissions Share (CO2eq) (AR5)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "OWID_CB_PRIMARY_ENERGY_CONSUMPTION",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Primary energy consumption",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "WB_WDI_EG_USE_COMM_CL_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Alternative and nuclear energy (% of total energy use)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "WB_WDI_EG_FEC_RNEW_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Renewable energy consumption (% of total final energy consumption)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     },
+     {
+      "idno": "OWID_CB_SHARE_GLOBAL_CO2",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Share of global annual CO2 emissions",
+      "periodicity": "Annual",
+      "covers_country": {
+       "WLD": true
+      },
+      "requested_country": "WLD"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "new energy vehicle sales share",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "new energy vehicle sales share"
+   },
+   "response": {
+    "summary": "No datasets found matching \"new energy vehicle sales share\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "China new energy vehicle sales share",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 0,
+    "showing": "1-0",
+    "results": []
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "China new energy vehicle sales share",
+    "limit": 6,
+    "required_country": "CHN"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 200,
+    "required_country": "CHN",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WB_SE4ALL_EG_FEC_RNEW",
+      "database_id": "WB_SE4ALL",
+      "database_name": "Sustainable Energy For All (SE4ALL)",
+      "name": "Share in total final energy consumption (%)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     },
+     {
+      "idno": "OWID_CB_SHARE_GLOBAL_CO2",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Share of global annual CO2 emissions",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     },
+     {
+      "idno": "WB_CLEAR_IRENA_SHDRPEG",
+      "database_id": "WB_CLEAR",
+      "database_name": "Climate and Economic Analyses for Resilience in Water (CLEAR Water)",
+      "name": "Share of hydropower from renewable electricity generation",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     },
+     {
+      "idno": "OWID_CB_SHARE_GLOBAL_CUMULATIVE_CO2",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Share of global cumulative CO2 emissions",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     },
+     {
+      "idno": "OWID_CB_SHARE_GLOBAL_COAL_CO2",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Share of global annual CO2 emissions from coal",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     },
+     {
+      "idno": "OWID_CB_SHARE_GLOBAL_GAS_CO2",
+      "database_id": "OWID_CB",
+      "database_name": "CO2 and Greenhouse Gas Emissions",
+      "name": "Share of global annual CO2 emissions from gas",
+      "periodicity": "Annual",
+      "covers_country": {
+       "CHN": true
+      },
+      "requested_country": "CHN"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "China new energy vehicle sales share",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "China new energy vehicle sales share"
+   },
+   "response": {
+    "summary": "No datasets found matching \"China new energy vehicle sales share\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "US electricity retail price",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 1505,
+    "showing": "1-6",
+    "results": [
+     {
+      "id": "APU0000703112",
+      "title": "Average Price: Ground Beef, 100% Beef (Cost per Pound/453.6 Grams) in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1984-01-01 to 2026-08-01",
+      "notes": "Fresh regular 100% ground beef excluding round, chuck, and sirloin. Includes organic and non-organic. Excludes pre-formed patties.\n\nAverage consumer prices are calculated for household fuel, motor fue..."
+     },
+     {
+      "id": "APU0000708111",
+      "title": "Average Price: Eggs, Grade A, Large (Cost per Dozen) in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1980-01-01 to 2026-08-01",
+      "notes": "Large white, Grade A chicken eggs, sold in a carton of a dozen. Includes organic, non-organic, cage free, free range, and traditional.\n\nAverage consumer prices are calculated for household fuel, motor..."
+     },
+     {
+      "id": "APU000072610",
+      "title": "Average Price: Electricity per Kilowatt-Hour in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1978-11-01 to 2026-08-01",
+      "notes": "All electricity.\n\nAverage consumer prices are calculated for household fuel, motor fuel, and food items from prices collected for the Consumer Price Index (CPI). Average prices are best used to measur..."
+     },
+     {
+      "id": "APU000074714",
+      "title": "Average Price: Gasoline, Unleaded Regular (Cost per Gallon/3.785 Liters) in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1976-01-01 to 2026-08-01",
+      "notes": "All unleaded regular gasoline.\n\nAverage consumer prices are calculated for household fuel, motor fuel, and food items from prices collected for the Consumer Price Index (CPI). Average prices are best ..."
+     },
+     {
+      "id": "APU0000709112",
+      "title": "Average Price: Milk, Fresh, Whole, Fortified (Cost per Gallon/3.8 Liters) in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1995-07-01 to 2026-08-01",
+      "notes": "Fresh whole milk, fortified, sold per gallon regardless of packaging type. Includes organic and non-organic milk.\n\nAverage consumer prices are calculated for household fuel, motor fuel, and food items..."
+     },
+     {
+      "id": "APU0000FF1101",
+      "title": "Average Price: Chicken Breast, Boneless (Cost per Pound/453.6 Grams) in U.S. City Average",
+      "units": "U.S. Dollars",
+      "frequency": "Monthly",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "2006-01-01 to 2026-08-01",
+      "notes": "All whole or half boneless, skinless chicken breasts. Includes organic, non-organic, fresh, and frozen, as well as other descriptive claims.\n\nAverage consumer prices are calculated for household fuel,..."
+     }
+    ]
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "US electricity retail price",
+    "limit": 6,
+    "required_country": "USA"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 200,
+    "required_country": "USA",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WEF_TTDI_FUELPRICE",
+      "database_id": "WEF_TTDI",
+      "database_name": "Travel & Tourism Development Index (TTDI)",
+      "name": "Fuel price levels, US$ /litre",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "WB_RISE_RE_ELEC",
+      "database_id": "WB_RISE",
+      "database_name": "Regulatory Indicators for Sustainable Energy (RISE)",
+      "name": "Electricity Sector Renewables",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_FFS_ECGFTET",
+      "database_id": "IMF_FFS",
+      "database_name": "Fossil Fuel Subsidies",
+      "name": "Explicit Fossil Fuel Subsidies - Electricity",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_FFS_ECGFTIT",
+      "database_id": "IMF_FFS",
+      "database_name": "Fossil Fuel Subsidies",
+      "name": "Implicit Fossil Fuel Subsidies - Electricity",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_FFS_ECGFTT",
+      "database_id": "IMF_FFS",
+      "database_name": "Fossil Fuel Subsidies",
+      "name": "Fossil Fuel Subsidies - Total Implicit and Explicit - Electricity",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "WB_CLEAR_AVWB",
+      "database_id": "WB_CLEAR",
+      "database_name": "Climate and Economic Analyses for Resilience in Water (CLEAR Water)",
+      "name": "Average water bill (US$/m3)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "US electricity retail price",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "US electricity retail price"
+   },
+   "response": {
+    "summary": "No datasets found matching \"US electricity retail price\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "euro area deposit facility rate",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 1,
+    "showing": "1-1",
+    "results": [
+     {
+      "id": "ECBDFR",
+      "title": "ECB Deposit Facility Rate for Euro Area",
+      "units": "Percent",
+      "frequency": "Daily, 7-Day",
+      "seasonal_adjustment": "Not Seasonally Adjusted",
+      "observation_range": "1999-01-01 to 2026-10-13",
+      "notes": "The rate on the deposit facility, which banks may use to make overnight deposits with the Eurosystem. Data refer to the changing composition of the Euro Area, taking into account the composition of th..."
+     }
+    ]
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "euro area deposit facility rate",
+    "limit": 6,
+    "required_country": "EMU"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 81,
+    "required_country": "EMU",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WB_GS_FIN1_T_A",
+      "database_id": "WB_GS",
+      "database_name": "Gender Statistics",
+      "name": "Financial institution account (% age 15+)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     },
+     {
+      "idno": "WB_WDI_FD_RES_LIQU_AS_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Bank liquid reserves to bank assets ratio (%)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     },
+     {
+      "idno": "WB_GS_FIN17A_T_A",
+      "database_id": "WB_GS",
+      "database_name": "Gender Statistics",
+      "name": "Saved at a financial institution (% age 15+)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     },
+     {
+      "idno": "WB_GS_FIN22A_T_A",
+      "database_id": "WB_GS",
+      "database_name": "Gender Statistics",
+      "name": "Borrowed from a financial institution (% age 15+)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     },
+     {
+      "idno": "WB_WDI_GC_NLD_TOTL_GD_ZS",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Net lending (+) / net borrowing (-) (% of GDP)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     },
+     {
+      "idno": "WB_WDI_PA_NUS_FCRF",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Official exchange rate (LCU per US$, period average)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "EMU": true
+      },
+      "requested_country": "EMU"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "euro area deposit facility rate",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "euro area deposit facility rate"
+   },
+   "response": {
+    "summary": "No datasets found matching \"euro area deposit facility rate\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  },
+  {
+   "provider": "fred",
+   "tool": "fred_search",
+   "args": {
+    "search_text": "fed funds rate history",
+    "limit": 6,
+    "offset": 0
+   },
+   "response": {
+    "total_results": 0,
+    "showing": "1-0",
+    "results": []
+   }
+  },
+  {
+   "provider": "wb",
+   "tool": "data360_search_indicators",
+   "args": {
+    "query": "fed funds rate history",
+    "limit": 6,
+    "required_country": "USA"
+   },
+   "response": {
+    "count": 6,
+    "total_count": 114,
+    "required_country": "USA",
+    "error": null,
+    "indicators": [
+     {
+      "idno": "WB_WITS_MFN_MNMN_RT",
+      "database_id": "WB_WITS",
+      "database_name": "World Integrated Trade Solution (WITS)",
+      "name": "MFN MinRate (%)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "WB_WDI_FR_INR_LEND",
+      "database_id": "WB_WDI",
+      "database_name": "World Development Indicators (WDI)",
+      "name": "Lending interest rate (%)",
+      "periodicity": "Annual",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_IFS_FPOLM",
+      "database_id": "IMF_IFS",
+      "database_name": "International Financial Statistics (IFS)",
+      "name": "Monetary and Financial Accounts, Interest Rates, Central Bank Policy Rates, Monetary Policy-Related Interest Rate",
+      "periodicity": "Annual, Monthly, Quarterly",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_IFS_FIMM",
+      "database_id": "IMF_IFS",
+      "database_name": "International Financial Statistics (IFS)",
+      "name": "Financial, Interest Rates, Money Market",
+      "periodicity": "Annual, Monthly, Quarterly",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_IFS_FICPR",
+      "database_id": "IMF_IFS",
+      "database_name": "International Financial Statistics (IFS)",
+      "name": "Financial, Interest Rates, Corporate Paper Rate",
+      "periodicity": "Annual, Monthly, Quarterly",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     },
+     {
+      "idno": "IMF_IFS_FILR",
+      "database_id": "IMF_IFS",
+      "database_name": "International Financial Statistics (IFS)",
+      "name": "Financial, Interest Rates, Lending Rate",
+      "periodicity": "Annual, Monthly, Quarterly",
+      "covers_country": {
+       "USA": true
+      },
+      "requested_country": "USA"
+     }
+    ]
+   }
+  },
+  {
+   "provider": "bis",
+   "tool": "search_dataflows",
+   "args": {
+    "query": "fed funds rate history",
+    "limit": 6
+   },
+   "response": {
+    "total_matched": 0,
+    "returned": 0,
+    "dataflows": []
+   }
+  },
+  {
+   "provider": "usgov",
+   "tool": "treasury_search_datasets",
+   "args": {
+    "query": "fed funds rate history"
+   },
+   "response": {
+    "summary": "No datasets found matching \"fed funds rate history\". Try a broader search term.",
+    "dataType": "empty",
+    "data": null
+   }
+  }
+ ]
+}

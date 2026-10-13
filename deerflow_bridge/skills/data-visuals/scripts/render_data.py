@@ -13,17 +13,24 @@
 输出（全部落在 <dir>/charts/ 下 + <dir>/charts.json 清单）：
 
     charts/data_<slug>.png           单序列图（matplotlib Agg，固定画幅，dpi 200，字节确定）
-    charts/data_<slug>.html          同图交互版（plotly 可导入时；plotly.js 内联、自包含）
-    charts/data_compare_<slug>.png   同单位+同频率、仅地域不同的序列叠加对比（≤ 2 张，每张 ≤ 6 线）
+    charts/data_<slug>.html          同图交互版（plotly 可导入时；引用同目录共享
+                                     charts/plotly.min.js，写不出共享包时回退内联）
+    charts/data_compare_<slug>.png   同单位+同频率、仅地域不同的序列叠加对比（≤ 2 张，每张 ≤ 6 线；
+                                     成员不再各出单图）
 
 图表语法（与 SKILL.md / design.md §8 一致）：
   * 每条序列一条线，原生日期轴；缺测（None）断线，绝不插值。
-  * 最新观测点加标记 + 按单位格式化的数值标签；projection_from 之后的预测段画虚线 +
-    浅色阴影带，图例标注 projection。
-  * y 轴标签 = 单位（折行）；标题 = 序列标题（--lang zh 且有 title_zh 时用中文）；
-    页脚 "Source: <provider_name> · <native id> · retrieved <YYYY-MM-DD>"。
+  * 观测状态分道（与 data_sources.observation_kind 同一判定）：实际值实线；状态未标注
+    浅色实线；初步值点线 + 三角；估计值点划线 + 方块；不完整期（日度聚合的当月、
+    尚未结束的期别）空心圆；发布方预测虚线 + 浅色阴影带。只有最新“实际值”加标记和标签。
+  * y 轴标签 = 单位（--lang zh 时用对照表译名，未收录者保留原文）；标题 = series_label
+    同一规则（策展标题 + 未出现在标题里的地域名）；页脚
+    "Source: <数据商/数据库> · <native id> · retrieved <YYYY-MM-DD>"。
   * 视觉主题复制自 report_visualizer（WAVE9 色板/画布/网格/字体栈），与研究端
     forecast-visuals 渲染器一致。
+
+选图：--max 限制数据图总数（单序列图 + 对比图）。对比图按成员中最高的优先级参与排序，
+入选后替代各成员的单序列图；其余序列按 KIQ 关联 > 已引用 > 目录顺序取单图。
 
 清单约定：charts.json 是 JSON 列表；本渲染器只拥有 id 以 ``data_`` 开头的条目，
 在 ``charts.json.lock`` 跨进程锁内“读旧 → 删本渲染器旧条目 → 按顺序追加本次条目 →
@@ -49,6 +56,7 @@ import logging
 import math
 import os
 import re
+import statistics
 import sys
 import tempfile
 import textwrap
@@ -140,10 +148,40 @@ _PAD_IN = 0.14               # 画布外边距（英寸）
 _GAP_IN = 0.10               # 标题区/页脚与绘图装饰之间的留白（英寸）
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _SLUG_RE = re.compile(r"^[a-z0-9_]{1,60}$")
-_PROJECTION_FLAGS = {"projection", "projected", "forecast"}
-_STATUS_STYLE = {"observed": ("-", "solid", "o"), "projection": ("--", "dash", "o"),
-                 "unknown": (":", "dot", "x"), "preliminary": (":", "dot", "^"),
-                 "estimate": ("-.", "dashdot", "s")}
+_PLOTLY_BUNDLE = "plotly.min.js"     # 同目录共享包；API 在服务时内联（backend utils/chart_html）
+
+# ---------------------------------------------------------------------------
+# 观测状态：与 data_sources.observation_kind 同一判定（本脚本不可 import bridge 模块，
+# 只能复制；tests/test_data_visuals_official.py 用真实数据逐点比对两边结果）。
+# ---------------------------------------------------------------------------
+_DISPLAY_POLICY_VERSION = 3          # data_sources._DISPLAY_POLICY_VERSION：此版本起信任存储状态
+_WEO_IMF_PREFIXES = ("imf:WEO/", "imf:WEO_")     # 空状态即“未标注”的 IMF WEO 精确前缀
+_CANONICAL_KINDS = ("unknown", "projection", "estimate", "preliminary", "observed")
+_FLAG_ALIASES = {"a": "observed", "r": "observed", "actual": "observed", "reported": "observed",
+                 "revised": "observed", "forecast": "projection", "projected": "projection",
+                 "estimated": "estimate", "provisional": "preliminary"}
+# 发布方展望（图例/图注署名）：精确前缀匹配，子串匹配会误伤 fred:GEPUCURRENT 之类的序列。
+_PROJECTION_PUBLISHERS = (("imf:WEO/", "IMF WEO", "IMF《世界经济展望》"),
+                          ("imf:WEO_", "IMF WEO", "IMF《世界经济展望》"),
+                          ("wb:IMF_WEO_", "IMF WEO", "IMF《世界经济展望》"),
+                          ("wb:WB_GEP_", "World Bank GEP", "世界银行《全球经济展望》"))
+# 状态 → (matplotlib 线型, plotly dash, 标记)。顺序即图例顺序。
+_STATUS_STYLE = {"observed": ("-", "solid", ""), "unknown": ("-", "solid", ""),
+                 "preliminary": (":", "dot", "^"), "partial": (":", "dot", "o"),
+                 "estimate": ("-.", "dashdot", "s"), "projection": ("--", "dash", "o")}
+# 相邻两点状态不同时，连接段归“更不确定”的一方（排名更高者）绘制，绝不把不确定值画成实线实际值。
+_STATUS_RANK = {"observed": 0, "unknown": 1, "preliminary": 2, "partial": 3, "estimate": 4,
+                "projection": 5}
+# 状态未标注 = 浅色实线（不是预测，也不是已核实的实际值）；不完整期 = 空心圆。
+_STATUS_ALPHA = {"unknown": 0.45}
+_HOLLOW_STATUSES = {"partial"}
+_PLOTLY_MARKERS = {"o": "circle", "^": "triangle-up", "s": "square"}
+_MAX_PROJECTION_MARKERS = 24         # 预测段点数不超过此值才逐点加标记（月度长预测只画虚线）
+# 噪声月度流量（如月度财政收支）：未季调、非百分比、点数足够且逐月波动远大于区间时，
+# 叠加推算的十二个月均值线；原始月度值保持原样，只是降为细线。
+_ROLLING_WINDOW = 12
+_ROLLING_MIN_POINTS = 36
+_ROLLING_MIN_ROUGHNESS = 0.2         # 月度变动中位数 / 第10–90百分位区间
 
 _FREQ_LABELS = {
     "en": {"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "A": "Annual"},
@@ -154,18 +192,26 @@ _SA_LABELS = {
            "SAAR": "Seasonally adjusted annual rate"},
     "zh": {"SA": "季节调整", "NSA": "未季调", "SAAR": "季调年率"},
 }
-_TRANSFORM_LABELS = {
-    "en": {"yoy": "year-over-year change", "pct": "period-over-period change"},
-    "zh": {"yoy": "同比变化", "pct": "环比变化"},
+# series_label 的变换后缀（与 data_sources.series_label 逐字一致）。
+_TRANSFORM_SUFFIX = {
+    "en": {"yoy": " (year-over-year % change)", "pct": " (% change from previous period)"},
+    "zh": {"yoy": "（同比）", "pct": "（环比）"},
+}
+# 日度聚合为月度时的口径说明（provenance.aggregation_method → 副标题）。
+_AGGREGATION_LABELS = {
+    "en": {"avg": "average of daily data", "eop": "end-of-month values"},
+    "zh": {"avg": "日度数据月均值", "eop": "月末值"},
 }
 # 图内固定文案（图像内文字不受报告数字审计约束，但仍保持简短）。
 _CHROME = {
     "en": {"observed": "Observed", "projection": "Projection", "source": "Source",
-           "retrieved": "retrieved", "latest": "latest", "unknown": "Unknown status",
-           "preliminary": "Preliminary", "estimate": "Estimate"},
+           "retrieved": "retrieved", "unknown": "Status not supplied",
+           "preliminary": "Preliminary", "estimate": "Estimate", "partial": "Partial period",
+           "rolling": "12-month average (derived)", "monthly": "Monthly values"},
     "zh": {"observed": "实际值", "projection": "预测", "source": "来源",
-           "retrieved": "获取于", "latest": "最新", "unknown": "状态未知",
-           "preliminary": "初步值", "estimate": "估计值"},
+           "retrieved": "获取于", "unknown": "状态未标注",
+           "preliminary": "初步值", "estimate": "估计值", "partial": "不完整期",
+           "rolling": "十二个月均值（推算）", "monthly": "月度值"},
 }
 _MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -177,6 +223,148 @@ _PROVIDER_SHORT = {
     "zh": {"fred": "FRED", "bls": "美国劳工统计局", "bis": "国际清算银行",
            "imf": "国际货币基金组织", "wb": "世界银行 Data360", "usgov": "美国政府开放数据"},
 }
+# 页脚数据来源：Data360 转载的 IMF/世行数据库与 usgov 各机构按 native id 前缀署名，
+# 其余回退 provider_name（中文页脚用 _PROVIDER_NAMES_ZH）。
+_SOURCE_PREFIXES = {
+    "wb": (("IMF_WEO_", "IMF World Economic Outlook via World Bank Data360",
+            "国际货币基金组织《世界经济展望》（经世界银行 Data360）"),
+           ("WB_GEP_", "World Bank Global Economic Prospects via Data360",
+            "世界银行《全球经济展望》（经 Data360）"),
+           ("WB_WDI_", "World Bank World Development Indicators via Data360",
+            "世界银行世界发展指标（经 Data360）")),
+    "usgov": (("treasury/", "U.S. Treasury Fiscal Data", "美国财政部财政数据"),
+              ("spending/", "USAspending.gov", "USAspending（美国联邦支出数据）"),
+              ("eia/", "U.S. Energy Information Administration", "美国能源信息署（EIA）"),
+              ("bea/", "U.S. Bureau of Economic Analysis", "美国经济分析局（BEA）")),
+}
+_PROVIDER_NAMES_ZH = {
+    "fred": "FRED（圣路易斯联邦储备银行）", "bls": "美国劳工统计局（BLS）",
+    "bis": "国际清算银行（BIS）", "imf": "国际货币基金组织（IMF）",
+    "wb": "世界银行 Data360", "usgov": "美国政府开放数据",
+}
+
+# ---------------------------------------------------------------------------
+# 地域显示名（series_label 同一规则）。SOURCE OF TRUTH: deerflow_bridge/data_catalog.py
+# GEOGRAPHIES（代码 → (英文名, 别名)）；中文名 = 首个含汉字的别名。本脚本不可 import
+# bridge 模块，只能复制；tests/test_data_visuals_official.py 逐项比对两份表并比对
+# data_sources.series_label 的输出，任何一侧变更都会让测试失败。
+# ---------------------------------------------------------------------------
+_GEOGRAPHIES = {
+    "USA": ("United States", ("united states", "america", "american", "usa", "federal reserve",
+                              "fed", "fomc", "美国", "美联储")),
+    "CHN": ("China", ("china", "chinese", "prc", "pboc", "中国", "人民银行", "人民币")),
+    "EMU": ("Euro area", ("euro area", "eurozone", "euro zone", "europe", "european", "ecb",
+                          "欧元区", "欧洲", "欧洲央行", "欧央行")),
+    "JPN": ("Japan", ("japan", "japanese", "boj", "日本", "日本央行")),
+    "GBR": ("United Kingdom", ("united kingdom", "britain", "british", "england", "boe",
+                               "英国", "英格兰银行")),
+    "DEU": ("Germany", ("germany", "german", "德国")),
+    "IND": ("India", ("india", "indian", "rbi", "印度")),
+    "BRA": ("Brazil", ("brazil", "brazilian", "巴西")),
+    "CAN": ("Canada", ("canada", "canadian", "加拿大")),
+    "KOR": ("Korea", ("korea", "korean", "south korea", "韩国")),
+    "AUS": ("Australia", ("australia", "australian", "rba", "澳大利亚", "澳洲")),
+    "CHE": ("Switzerland", ("switzerland", "swiss", "snb", "瑞士")),
+    "MEX": ("Mexico", ("mexico", "mexican", "banxico", "墨西哥")),
+    "FRA": ("France", ("france", "french", "法国")),
+    "ITA": ("Italy", ("italy", "italian", "意大利")),
+    "ESP": ("Spain", ("spain", "spanish", "西班牙")),
+    "NLD": ("Netherlands", ("netherlands", "dutch", "holland", "荷兰")),
+    "BEL": ("Belgium", ("belgium", "belgian", "比利时")),
+    "AUT": ("Austria", ("austria", "austrian", "奥地利")),
+    "IRL": ("Ireland", ("ireland", "irish", "爱尔兰")),
+    "PRT": ("Portugal", ("portugal", "portuguese", "葡萄牙")),
+    "GRC": ("Greece", ("greece", "greek", "希腊")),
+    "FIN": ("Finland", ("finland", "finnish", "芬兰")),
+    "SWE": ("Sweden", ("sweden", "swedish", "riksbank", "瑞典")),
+    "NOR": ("Norway", ("norway", "norwegian", "挪威")),
+    "DNK": ("Denmark", ("denmark", "danish", "丹麦")),
+    "POL": ("Poland", ("poland", "波兰")),
+    "CZE": ("Czechia", ("czechia", "czech republic", "czech", "捷克")),
+    "HUN": ("Hungary", ("hungary", "hungarian", "匈牙利")),
+    "ROU": ("Romania", ("romania", "romanian", "罗马尼亚")),
+    "UKR": ("Ukraine", ("ukraine", "ukrainian", "乌克兰")),
+    "RUS": ("Russia", ("russia", "russian federation", "russian", "俄罗斯")),
+    "TUR": ("Türkiye", ("türkiye", "turkiye", "turkey", "turkish", "土耳其")),
+    "ISR": ("Israel", ("israel", "israeli", "以色列")),
+    "IRN": ("Iran", ("iran", "iranian", "伊朗")),
+    "SAU": ("Saudi Arabia", ("saudi arabia", "saudi", "沙特阿拉伯", "沙特")),
+    "EGY": ("Egypt", ("egypt", "egyptian", "埃及")),
+    "NGA": ("Nigeria", ("nigeria", "nigerian", "尼日利亚")),
+    "ZAF": ("South Africa", ("south africa", "south african", "南非")),
+    "ARG": ("Argentina", ("argentina", "argentine", "argentinian", "阿根廷")),
+    "CHL": ("Chile", ("chile", "chilean", "智利")),
+    "COL": ("Colombia", ("colombia", "colombian", "哥伦比亚")),
+    "PAK": ("Pakistan", ("pakistan", "pakistani", "巴基斯坦")),
+    "BGD": ("Bangladesh", ("bangladesh", "bangladeshi", "孟加拉国", "孟加拉")),
+    "IDN": ("Indonesia", ("indonesia", "indonesian", "印度尼西亚", "印尼")),
+    "VNM": ("Vietnam", ("vietnam", "viet nam", "vietnamese", "越南")),
+    "THA": ("Thailand", ("thailand", "thai", "泰国")),
+    "MYS": ("Malaysia", ("malaysia", "malaysian", "马来西亚")),
+    "PHL": ("Philippines", ("philippines", "philippine", "filipino", "菲律宾")),
+    "SGP": ("Singapore", ("singapore", "singaporean", "新加坡")),
+    "TWN": ("Taiwan, China", ("taiwan, china", "taiwan", "taiwanese", "中国台湾", "台湾")),
+    "HKG": ("Hong Kong SAR, China", ("hong kong sar, china", "hong kong", "中国香港", "香港")),
+    "NZL": ("New Zealand", ("new zealand", "rbnz", "新西兰")),
+    "WLD": ("World", ("world", "global", "worldwide", "全球", "世界")),
+}
+_HAN_RE = re.compile(r"[㐀-鿿]")
+
+# ---------------------------------------------------------------------------
+# 中文 y 轴单位：精确对照（大小写/空白不敏感）+ 指数基期/链式美元规则；未收录 → 原文。
+# ---------------------------------------------------------------------------
+_UNITS_ZH = {
+    "percent": "百分比（%）", "percentage": "百分比（%）", "per cent": "百分比（%）",
+    "percent of labor force": "占劳动力比重（%）", "percent of total labor force": "占劳动力比重（%）",
+    "percent change": "变化率（%）", "percentage change": "变化率（%）",
+    "percent change per annum": "年变化率（%）", "percentage change per annum": "年变化率（%）",
+    "percent change, year over year": "同比变化率（%）", "per cent, year-on-year change": "同比变化率（%）",
+    "percent change over 12 months": "同比变化率（%）", "percent change from year ago": "同比变化率（%）",
+    "percent change from preceding period": "环比变化率（%）",
+    "percent change from previous period": "环比变化率（%）",
+    "percent change from preceding period (annual rate)": "环比折年率（%）",
+    "percent change from previous quarter at annual rate": "环比折年率（%）",
+    "percent of gdp": "占GDP比重（%）", "percentage of gdp": "占GDP比重（%）",
+    "percentage points of gdp": "占GDP百分点", "percentage points": "百分点",
+    "per cent per year": "年率（%）", "percent per annum": "年率（%）",
+    "per cent of income": "占收入比重（%）", "index": "指数",
+    "u.s. dollars": "美元", "us dollars": "美元", "dollars": "美元", "current u.s. dollars": "现价美元",
+    "billions of dollars": "十亿美元", "millions of dollars": "百万美元",
+    "millions of u.s. dollars": "百万美元", "us dollar, billions": "十亿美元",
+    "us dollar, millions": "百万美元", "euro, billions": "十亿欧元", "japanese yen, billions": "十亿日元",
+    "chinese yuan renminbi, billions": "十亿元人民币",
+    "billions of dollars (seasonally adjusted annual rate)": "十亿美元（季调年率）",
+    "millions of dollars (seasonally adjusted annual rate)": "百万美元（季调年率）",
+    "u.s. dollars (imf states no unit)": "美元（IMF 未注明单位）",
+    "dollars per hour": "美元/小时", "u.s. dollars per hour": "美元/小时",
+    "u.s. dollars per week": "美元/周", "dollars per barrel": "美元/桶",
+    "u.s. dollars per barrel": "美元/桶", "u.s. dollars per metric ton": "美元/公吨",
+    "u.s. dollars per pound": "美元/磅", "u.s. dollars per gallon": "美元/加仑",
+    "dollars per gallon": "美元/加仑", "u.s. dollars per troy ounce": "美元/金衡盎司",
+    "u.s. dollars per dozen": "美元/打", "u.s. dollars per kilowatt-hour": "美元/千瓦时",
+    "u.s. dollars per million british thermal units": "美元/百万英热单位",
+    "u.s. dollars per million metric british thermal unit": "美元/百万英热单位",
+    "dollars per million btu": "美元/百万英热单位", "cents per kilowatt-hour": "美分/千瓦时",
+    "foreign currency units per u.s. dollar": "每美元兑外币单位",
+    "yen per us dollar": "每美元兑日元", "renminbi per us dollar": "每美元兑人民币",
+    "euro per us dollar": "每美元兑欧元", "pounds sterling per us dollar": "每美元兑英镑",
+    "indian rupees per us dollar": "每美元兑印度卢比",
+    "u.s. dollars to one euro": "每欧元兑美元", "japanese yen to one u.s. dollar": "每美元兑日元",
+    "chinese yuan renminbi to one u.s. dollar": "每美元兑人民币",
+    "u.s. dollars to one u.k. pound sterling": "每英镑兑美元",
+    "mexican pesos to one u.s. dollar": "每美元兑墨西哥比索",
+    "indian rupees to one u.s. dollar": "每美元兑印度卢比",
+    "persons": "人", "thousands of persons": "千人", "thousands": "千", "level in thousands": "千",
+    "thousands of units": "千单位", "millions of units": "百万单位", "number": "数量", "hours": "小时",
+    "million kilowatt-hours": "百万千瓦时", "thousand megawatt-hours": "千兆瓦时",
+    "kilowatt-hours per capita": "人均千瓦时", "megawatts": "兆瓦",
+    "thousand barrels per day": "千桶/日", "mt co2 equivalent": "百万吨二氧化碳当量",
+    "millions of 1982-84 cpi adjusted dollars": "百万美元（按1982-84年CPI调整）",
+}
+_INDEX_BASE_RE = re.compile(r"^index[,:]?\s+(.+)$", re.IGNORECASE)
+_MONTH_BASE_RE = re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{4})(\s*=\s*100)$",
+                            re.IGNORECASE)
+_CHAINED_RE = re.compile(r"^(billions|millions) of chained (\d{4}) dollars$", re.IGNORECASE)
 
 # 标题地域识别（对比图分组用）：经济体名称 → 规范显示名。按长度降序匹配，
 # 仅在两条序列标题去掉唯一地域后完全一致时才判定“只差地域”。
@@ -391,7 +579,8 @@ _CURRENCY_SYMBOLS = (
 
 
 def _trim_number(text: str) -> str:
-    return text.rstrip("0").rstrip(".") if "." in text else text
+    text = text.rstrip("0").rstrip(".") if "." in text else text
+    return "0" if text == "-0" else text
 
 
 def _plain_number(value: float) -> str:
@@ -423,7 +612,7 @@ def _unit_profile(units: str) -> tuple[str, str, float]:
     low = str(units or "").casefold()
     if "percentage point" in low:
         return "pp", "", 1.0
-    if "percent" in low or "%" in low or "百分比" in low:
+    if re.search(r"per\s*cent|%", low) or "百分比" in low:     # data_sources.is_percent_units
         return "percent", "", 1.0
     scale = 1.0
     for word, factor in _SCALE_WORDS:
@@ -442,9 +631,9 @@ def _format_value(value: float, units: str) -> str:
     """Latest-point label text: '4.3%', '1.25 pp', '$71.24', '$27.6T', '159M', '312.2'."""
     kind, symbol, scale = _unit_profile(units)
     if kind == "percent":
-        return _trim_number(f"{value:.2f}") + "%"
+        return _trim_number(f"{value:.3f}") + "%"     # data_sources.format_value：最多三位小数
     if kind == "pp":
-        return _trim_number(f"{value:.2f}") + " pp"
+        return _trim_number(f"{value:.3f}") + " pp"
     absolute = value * scale
     sign = "-" if absolute < 0 else ""
     if kind == "currency":
@@ -495,6 +684,79 @@ def _wrap(text: str, width: int, max_lines: int) -> str:
     return "\n".join(lines)
 
 
+def _units_zh(units: str) -> str:
+    """Chinese axis label for *units*; unknown units stay exactly as published."""
+    text = re.sub(r"\s+", " ", str(units or "")).strip()
+    exact = _UNITS_ZH.get(text.casefold())
+    if exact:
+        return exact
+    chained = _CHAINED_RE.match(text)
+    if chained:
+        scale = "十亿" if chained.group(1).casefold() == "billions" else "百万"
+        return f"{scale}美元（{chained.group(2)}年链式美元）"
+    index = _INDEX_BASE_RE.match(text)
+    if index:
+        base = index.group(1).strip()
+        month = _MONTH_BASE_RE.match(base)
+        if month:
+            number = _MONTHS_EN.index(month.group(1)[:3].title()) + 1
+            base = f"{month.group(2)}年{number}月{month.group(3).replace(' ', '')}"
+        return f"指数（{base}）"
+    return text
+
+
+def _geo_name(code: str, lang: str) -> str:
+    """Display name for a geography code (series_label rule); unknown codes stay codes."""
+    name, aliases = _GEOGRAPHIES.get(str(code or "").upper(), (str(code or "").upper(), ()))
+    if lang == "zh":
+        return next((alias for alias in aliases if _HAN_RE.search(alias)), name)
+    return name
+
+
+# A US state names its geography for a US series (EIA state recipes: "Retail Sales of Electricity:
+# Virginia, commercial sector"; zh "弗吉尼亚州…"), so no " — United States" is appended.
+_US_STATE_RE = re.compile(
+    r"(?<![A-Za-z])(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|"
+    r"Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|"
+    r"Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|"
+    r"North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|"
+    r"Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia)"
+    r"(?![A-Za-z])|[㐀-鿿]{2,6}州")
+
+
+def _geography_named(title: str, code: str, name: str, aliases) -> bool:
+    """data_sources._geography_named verbatim: is the geography already named in *title*?"""
+    folded = title.casefold()
+    for term in (name, code, *aliases):
+        term = str(term or "").strip().casefold()
+        if not term:
+            continue
+        if _HAN_RE.search(term):
+            if term in folded:
+                return True
+        elif re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", folded):
+            return True
+    if code == "USA" and (re.search(r"(?<![A-Za-z])U\.?S\.?A?(?![A-Za-z])", title) or _US_STATE_RE.search(title)):
+        return True
+    return code == "GBR" and bool(re.search(r"(?<![A-Za-z])U\.?K\.?(?![A-Za-z])", title))
+
+
+def _series_label(title: str, title_zh: str, series: str, geography: str, lang: str) -> str:
+    """data_sources.series_label for a stored row: curated title, transform, then the
+    geography name when the title does not already name it."""
+    zh = lang == "zh"
+    transform = series.partition("#")[2]
+    label = ((title_zh if zh else "") or title or series).strip()
+    label += _TRANSFORM_SUFFIX["zh" if zh else "en"].get(transform, "")
+    code = str(geography or "").strip().upper()
+    if not code:
+        return label
+    name, aliases = _GEOGRAPHIES.get(code, (code, ()))
+    if zh:
+        name = next((alias for alias in aliases if _HAN_RE.search(alias)), name)
+    return label if _geography_named(label, code, name, aliases) else f"{label} — {name}"
+
+
 def _mpl_text(text) -> str:
     """Escape '$' so matplotlib never enters mathtext for prose/currency."""
     return str(text or "").replace("$", r"\$")
@@ -524,7 +786,8 @@ class _Series:
                  title: str, title_zh: str, units: str, frequency: str,
                  seasonal_adjustment: str, transform: str, retrieved: str,
                  points: list, projection_from: dt.date | None, kiqs: list,
-                 source_id: str, order: int, statuses=None, periods=None) -> None:
+                 source_id: str, order: int, statuses=None, periods=None,
+                 geography: str = "", aggregation: str = "") -> None:
         self.series = series
         self.slug = slug
         self.provider = provider
@@ -542,7 +805,9 @@ class _Series:
         self.source_id = source_id
         self.order = order
         self.statuses = statuses or {}
-        self.periods = periods or {}
+        self.periods = periods or {}          # 'YYYY-MM-DD' → 已校验的期别元数据（财年/日历月）
+        self.geography = geography            # ISO3 代码（Series.geography），可为空
+        self.aggregation = aggregation        # 日度→月度口径：'avg' | 'eop' | ''
 
     @property
     def native(self) -> str:
@@ -551,6 +816,10 @@ class _Series:
     @property
     def chart_id(self) -> str:
         return f"{_OWNED_PREFIX}{self.slug}"
+
+    @property
+    def fiscal(self) -> bool:
+        return any(period["calendar"] == "us_federal_fiscal_year" for period in self.periods.values())
 
     def numeric_points(self) -> list:
         return [(day, value) for day, value in self.points if value is not None]
@@ -563,10 +832,13 @@ class _Series:
 
     def period_label(self, day: dt.date, lang: str) -> str:
         metadata = self.periods.get(day.isoformat())
-        if metadata:
-            partial = ("（部分）" if lang == "zh" else " (partial)") if not metadata["complete"] else ""
-            return metadata["label"] + partial
-        return _period_label(day, self.frequency, lang)
+        if not metadata:
+            return _period_label(day, self.frequency, lang)
+        fiscal = metadata["calendar"] == "us_federal_fiscal_year"
+        label = metadata["label"] if fiscal else _period_label(day, self.frequency, lang)
+        if metadata["partial"]:
+            label += "（部分）" if lang == "zh" else " (partial)"
+        return label
 
     def latest_observed(self):
         for day, value in reversed(self.points):
@@ -574,53 +846,120 @@ class _Series:
                 return day, value
         return None
 
+    def publisher(self, lang: str) -> str:
+        """Short name of the publisher whose outlook the projection lane shows ('' if none)."""
+        for prefix, en, zh in _PROJECTION_PUBLISHERS:
+            if self.series.startswith(prefix):
+                return zh if lang == "zh" else en
+        return ""
 
-def _status(provider: str, series: str, flag: str, day: dt.date, cutoff: dt.date | None) -> str:
-    # The native WB/USAspending paths lose status/missingness. Even an older
-    # artifact's explicit status or cutoff cannot restore that lost authority.
-    if provider == "wb" or series.startswith("usgov:spending/"):
+
+def _status_flag(raw: str) -> str:
+    """data_sources._status_flag: ';'/','-separated tokens → one canonical kind by precedence."""
+    kinds = set()
+    for token in re.split(r"[;,]", str(raw or "").strip().lower()):
+        token = token.strip()
+        kinds.add(_FLAG_ALIASES.get(token, token))
+    if not kinds <= set(_CANONICAL_KINDS):
         return "unknown"
-    if flag in {"unknown", "preliminary", "estimate", "projection"}:
-        return flag
-    if flag == "p":
-        return "preliminary" if provider == "bls" else "unknown"
-    if flag in _PROJECTION_FLAGS:
-        return "projection"
-    if flag in {"e", "estimated"}:
-        return "estimate"
-    if flag in {"provisional", "prelim"}:
-        return "preliminary"
-    if flag in {"a", "actual", "observed", "reported", "r", "revised", "historical"}:
-        return "unknown" if cutoff and day >= cutoff else "observed"
+    return next((kind for kind in _CANONICAL_KINDS if kind in kinds), "unknown")
+
+
+def _policy_current(provenance) -> bool:
+    """data_sources._policy_current: rows fetched under the current normalization policy."""
+    version = provenance.get("normalization_policy_version") if isinstance(provenance, dict) else None
+    return isinstance(version, int) and not isinstance(version, bool) and version >= _DISPLAY_POLICY_VERSION
+
+
+def _status(*, provider: str, series: str, raw: str, day: dt.date, cutoff: dt.date | None,
+            current: bool, retrieved: dt.date | None, period: dict | None) -> str:
+    """Canonical status of one stored point — data_sources.observation_kind, step by step.
+
+    1. The flag Series.__post_init__ stores: feeds that lose status (World Bank Data360,
+       USAspending totals) are 'unknown' unless the row was fetched under the current
+       policy, whose stored flags already carry the deterministic WDI/WEO/GEP rules;
+       a blank IMF WEO flag is 'unknown'; BLS 'P' is preliminary.
+    2. data_sources._observation_kind: an 'observed' flag on/after projection_from is
+       'unknown'; a blank flag follows projection_from.
+    3. Current-policy rows: a period starting after the retrieval date is a projection;
+       a period that is not fully covered is 'partial' (unless projection/estimate).
+    """
+    lossy = provider == "wb" or series.split("#", 1)[0] == "usgov:spending/total"
+    weo = series.startswith(_WEO_IMF_PREFIXES)
+    if lossy and not current or (lossy or weo) and not raw:
+        flag = "unknown"
+    elif provider == "bls" and raw == "P":
+        flag = "preliminary"
+    else:
+        flag = _status_flag(raw) if raw else ""
     if flag:
-        return "unknown"
-    if series.startswith(("imf:WEO/", "imf:WEO_")):
-        return "unknown"
-    if cutoff:
-        return "projection" if day >= cutoff else "observed"
-    return "unknown" if re.search(r"WEO|GEP", series, re.I) else "observed"
+        kind = flag
+        if kind == "observed" and cutoff and day >= cutoff:
+            kind = "unknown"
+    else:
+        kind = "projection" if cutoff and day >= cutoff else "observed"
+    if kind != "projection" and current and retrieved and day > retrieved:
+        return "projection"
+    if kind not in ("projection", "estimate") and period and period["partial"]:
+        return "partial"
+    return kind
 
 
-def _fiscal_periods(payload: dict, days: list) -> dict:
+def _period_metadata(payload: dict, days: list, *, current: bool, retrieved: dt.date | None) -> dict:
+    """Validated provenance.periods for *days*: US federal fiscal years and calendar months.
+
+    Every record must match its own date identity; invalid records are ignored. 'partial'
+    follows data_sources._partial_period. Rows from before the current policy marked every
+    aggregated month incomplete, so an incomplete calendar month is re-judged by
+    data_sources._legacy_month_complete: complete when fully covered and settled, either by
+    a later stored period or by a retrieval more than a week after the month ended.
+    """
     provenance = payload.get("provenance") or {}
     periods = provenance.get("periods") if isinstance(provenance, dict) else None
     if not isinstance(periods, dict):
         return {}
+    # data_sources._legacy_month_complete re-judges no month of a row whose version is a bool.
+    legacy = not current and not isinstance(provenance.get("normalization_policy_version"), bool)
+    last = max(days, default=None)
     out = {}
     for day in days:
         record = periods.get(day.isoformat())
-        if not isinstance(record, dict) or record.get("calendar") != "us_federal_fiscal_year":
+        if not isinstance(record, dict):
             continue
+        calendar = record.get("calendar")
         start, end = _parse_date(record.get("start")), _parse_date(record.get("end"))
         low, high = _parse_date(record.get("covered_start")), _parse_date(record.get("covered_end"))
-        if (start != day or start.month != 10 or start.day != 1 or not end
-                or end != dt.date(start.year + 1, 9, 30) or not low or not high
-                or not start <= low <= high <= end or type(record.get("complete")) is not bool
-                or record.get("label") != f"FY{end.year}"
-                or record["complete"] != (low == start and high == end)):
+        complete = record.get("complete")
+        if (start != day or not end or not low or not high or not start <= low <= high <= end
+                or type(complete) is not bool or complete and (low, high) != (start, end)):
             continue
-        out[day.isoformat()] = dict(record)
+        if calendar == "us_federal_fiscal_year":
+            if (start.month, start.day) != (10, 1) or end != dt.date(start.year + 1, 9, 30) \
+                    or record.get("label") != f"FY{end.year}":
+                continue
+        elif calendar == "calendar_month":
+            year, month = divmod(start.year * 12 + start.month, 12)
+            if start.day != 1 or end != dt.date(year, month + 1, 1) - dt.timedelta(days=1):
+                continue
+            if legacy and complete is False:
+                settled = (last is not None and last > end
+                           or retrieved is not None and retrieved > end + dt.timedelta(days=7))
+                complete = (low, high) == (start, end) and settled
+        else:
+            continue
+        out[day.isoformat()] = {"calendar": calendar, "label": str(record.get("label") or ""),
+                                "partial": not complete or (low, high) != (start, end)}
     return out
+
+
+def _aggregation(payload: dict) -> str:
+    """'avg' | 'eop' when monthly values were aggregated from native daily data, else ''."""
+    provenance = payload.get("provenance") or {}
+    if not isinstance(provenance, dict) or str(provenance.get("native_frequency") or "").upper() != "D":
+        return ""
+    if str(payload.get("frequency") or "").upper() != "M":
+        return ""
+    return "eop" if provenance.get("aggregation_method") == "eop" else "avg"
 
 
 def _derive_slug(series: str) -> str:
@@ -681,15 +1020,20 @@ def _load_series(base: Path, row, order: int, used_slugs: set) -> tuple[_Series 
         if day is None:
             continue
         by_date[day] = _parse_value(obs.get("value"))   # 同日重复 → 后者覆盖（确定性）
-        flags[day] = str(obs.get("flag") or "").strip().casefold()
+        flags[day] = _clean_text(obs.get("flag"), 120)
     points = sorted(by_date.items())[-_MAX_POINTS:]
     cutoff = _parse_date(pick("projection_from", 40))
     provider = pick("provider", 20).casefold()
-    statuses = {day: _status(provider, series_id, flags[day], day, cutoff) for day, _ in points}
+    retrieved = _parse_date(pick("retrieved_at", 40))
+    current = _policy_current(payload.get("provenance"))
+    periods = _period_metadata(payload, [day for day, _ in points], current=current, retrieved=retrieved)
+    statuses = {day: _status(provider=provider, series=series_id, raw=flags[day], day=day, cutoff=cutoff,
+                             current=current, retrieved=retrieved, period=periods.get(day.isoformat()))
+                for day, _ in points}
     projected = [day for day, value in points if value is not None and statuses[day] == "projection"]
     projection_from = min(projected) if projected else None
-    periods = _fiscal_periods(payload, [day for day, _ in points])
-    if series_id.startswith("usgov:spending/") and len(periods) != len(points):
+    fiscal = sum(period["calendar"] == "us_federal_fiscal_year" for period in periods.values())
+    if series_id.startswith("usgov:spending/") and fiscal != len(points):
         return None, "missing or invalid date-keyed fiscal period metadata"
 
     slug = str(row.get("slug") or "").strip()
@@ -702,11 +1046,10 @@ def _load_series(base: Path, row, order: int, used_slugs: set) -> tuple[_Series 
         n += 1
 
     kiqs = row.get("kiqs")
-    retrieved = _parse_date(pick("retrieved_at", 40))
     item = _Series(
         series=series_id,
         slug=slug,
-        provider=pick("provider", 20).casefold(),
+        provider=provider,
         provider_name=pick("provider_name", 120),
         title=pick("title", 200),
         title_zh=pick("title_zh", 200),
@@ -722,6 +1065,8 @@ def _load_series(base: Path, row, order: int, used_slugs: set) -> tuple[_Series 
         order=order,
         statuses=statuses,
         periods=periods,
+        geography=pick("geography", 8).upper(),
+        aggregation=_aggregation(payload),
     )
     if len(item.numeric_points()) < _MIN_POINTS:
         return None, ("no numeric observations" if not item.numeric_points()
@@ -735,12 +1080,26 @@ def _priority(item: _Series) -> tuple:
     return (0 if item.kiqs else 1, 0 if item.source_id else 1, item.order)
 
 
-def _select(items: list, max_charts: int) -> tuple[list, list]:
-    ranked = sorted(items, key=_priority)
+def _plan(items: list, max_charts: int) -> tuple[list, list]:
+    """Choose ≤ *max_charts* charts. A comparison counts as one chart, competes with the
+    best priority among its members and, when chosen, replaces their single charts.
+
+    Returns (units, dropped): units are ('compare', [(item, label)]) or ('single', item),
+    in datasets.json catalog order (a comparison sits at its first member's position).
+    """
+    groups = _compare_groups(items)
+    grouped = {id(item) for group in groups for item, _label in group}
+    units = [("compare", group) for group in groups]
+    units += [("single", item) for item in items if id(item) not in grouped]
+
+    def members(unit) -> list:
+        return [item for item, _label in unit[1]] if unit[0] == "compare" else [unit[1]]
+
+    ranked = sorted(units, key=lambda unit: min(_priority(item) for item in members(unit)))
     keep = ranked[:max_charts]
     dropped = [{"series": item.series, "reason": f"over the chart cap (--max {max_charts})"}
-               for item in ranked[max_charts:]]
-    keep.sort(key=lambda item: item.order)       # 输出顺序 = datasets.json 目录顺序
+               for unit in ranked[max_charts:] for item in members(unit)]
+    keep.sort(key=lambda unit: min(item.order for item in members(unit)))
     return keep, dropped
 
 
@@ -834,15 +1193,17 @@ def _strip_cjk(text: str) -> str:
 # ---------------------------------------------------------------------------
 # 图内文案
 # ---------------------------------------------------------------------------
-def _subtitle(frequency: str, seasonal_adjustment: str, transform: str,
-              projection_from: dt.date | None, lang: str) -> str:
+def _subtitle(item: _Series, title: str, projection_from: dt.date | None, lang: str) -> str:
+    """Frequency (unless the title already names it), seasonal adjustment, daily→monthly
+    aggregation and the projection boundary. The transform lives in the title (series_label)."""
+    frequency = _FREQ_LABELS[lang].get(item.frequency, "")
     parts = [
-        _FREQ_LABELS[lang].get(frequency, ""),
-        _SA_LABELS[lang].get(seasonal_adjustment, ""),
-        _TRANSFORM_LABELS[lang].get(transform, ""),
+        frequency if frequency and frequency.casefold() not in title.casefold() else "",
+        _SA_LABELS[lang].get(item.seasonal_adjustment, ""),
+        _AGGREGATION_LABELS[lang].get(item.aggregation, ""),
     ]
     if projection_from is not None:
-        period = _period_label(projection_from, frequency, lang)
+        period = _period_label(projection_from, item.frequency, lang)
         parts.append(f"{period}起为预测" if lang == "zh" else f"projection from {period}")
     return " · ".join(part for part in parts if part)
 
@@ -858,37 +1219,85 @@ def _compact_natives(native_ids: list) -> str:
     return ", ".join([native_ids[0]] + [native[cut + 1:] for native in native_ids[1:]])
 
 
-def _footer(provider_name: str, provider: str, native_ids: list, retrieved: str, lang: str) -> str:
+def _source_name(item: _Series, lang: str) -> str:
+    """Publisher credit: the database Data360/usgov relays (by native id prefix), else the
+    provider (Chinese name in zh)."""
+    for prefix, english, chinese in _SOURCE_PREFIXES.get(item.provider, ()):
+        if item.native.startswith(prefix):
+            return chinese if lang == "zh" else english
+    if lang == "zh":
+        return _PROVIDER_NAMES_ZH.get(item.provider) or item.provider_name or "官方来源"
+    return item.provider_name or item.provider.upper() or "official source"
+
+
+def _footer(names: list, native_ids: list, retrieved: str, lang: str) -> str:
     chrome = _CHROME[lang]
     natives = _compact_natives(native_ids)
     if len(natives) > 72:
         natives = natives[:71].rstrip(", ") + "…"
-    name = provider_name or provider.upper() or "official source"
     sep = "：" if lang == "zh" else ": "
-    text = f"{chrome['source']}{sep}{name} · {natives}"
+    text = f"{chrome['source']}{sep}{' / '.join(dict.fromkeys(names))} · {natives}"
     if retrieved:
         text += f" · {chrome['retrieved']} {retrieved}"
-    return _clean_text(text, 150)
+    return _clean_text(text, 170)
+
+
+def _status_labels(items: list, lang: str) -> dict:
+    """Legend text per status; the projection names its publisher when one is known."""
+    labels = {status: _CHROME[lang][status] for status in _STATUS_STYLE}
+    publisher = next((item.publisher(lang) for item in items if item.publisher(lang)), "")
+    if publisher:
+        labels["projection"] += f"（{publisher}）" if lang == "zh" else f" ({publisher})"
+    return labels
+
+
+def _rolling(item: _Series) -> list | None:
+    """Derived twelve-month average [(date, value | nan)] for a noisy monthly flow, else None.
+
+    Only for not seasonally adjusted, non-percent monthly series with enough observed
+    months whose typical month-to-month move is large against their range (monthly
+    receipts, outlays, deficits). Each average needs twelve consecutive observed months;
+    anything else leaves a break. The stored monthly values are drawn unchanged.
+    """
+    if item.frequency != "M" or item.seasonal_adjustment != "NSA" \
+            or _unit_profile(item.units)[0] in ("percent", "pp"):
+        return None
+    observed = [(day, value) for day, value in item.points
+                if value is not None and item.status(day) == "observed"]
+    if len(observed) < _ROLLING_MIN_POINTS:
+        return None
+    values = [value for _day, value in observed]
+    ordered = sorted(values)
+    spread = ordered[int(0.9 * (len(ordered) - 1))] - ordered[int(0.1 * (len(ordered) - 1))]
+    moves = statistics.median(abs(later - earlier) for earlier, later in zip(values, values[1:]))
+    if spread <= 0 or moves / spread < _ROLLING_MIN_ROUGHNESS:
+        return None
+    by_month = {day.year * 12 + day.month: value for day, value in observed}
+    averages = []
+    for day, _value in observed:
+        window = [by_month.get(day.year * 12 + day.month - back) for back in range(_ROLLING_WINDOW)]
+        averages.append((day, sum(window) / _ROLLING_WINDOW if None not in window else math.nan))
+    return averages if any(not math.isnan(value) for _day, value in averages) else None
 
 
 def _series_bundle(item: _Series, lang: str) -> dict:
     chrome = _CHROME[lang]
-    title = (item.title_zh if lang == "zh" and item.title_zh else item.title) or item.native
+    title = _series_label(item.title, item.title_zh, item.series, item.geography, lang)
     cutoff = item.projection_from
     if cutoff and any(item.status(day) != "projection" for day, _ in item.points if day >= cutoff):
         cutoff = None
     bundle = {
         "lang": lang,
         "title": title,
-        "subtitle": _subtitle(item.frequency, item.seasonal_adjustment, item.transform,
-                              cutoff, lang),
-        "ylabel": item.units,
-        "footer": _footer(item.provider_name, item.provider, [item.native], item.retrieved, lang),
-        "observed": chrome["observed"],
-        **{status: chrome[status] for status in _STATUS_STYLE},
+        "subtitle": _subtitle(item, title, cutoff, lang),
+        "ylabel": _units_zh(item.units) if lang == "zh" else item.units,
+        "footer": _footer([_source_name(item, lang)], [item.native], item.retrieved, lang),
+        **_status_labels([item], lang),
         "value": "",
         "period": "",
     }
+    if _rolling(item) is not None:
+        bundle.update(rolling=chrome["rolling"], monthly=chrome["monthly"])
     latest = item.latest_observed()
     if latest is not None:
         bundle["value"] = _format_value(latest[1], item.units)
@@ -932,30 +1341,37 @@ def _with_fonts(build, lang: str, chart_id: str) -> tuple[dict, _Fonts]:
 def _segments(item: _Series) -> tuple[list, list, list, list]:
     """Compatibility view of the observed/projection segments only."""
     segments = _status_segments(item)
-    return (*segments.get("observed", ([], [])), *segments.get("projection", ([], [])))
+    observed = segments.get("observed", ([], [], []))
+    projection = segments.get("projection", ([], [], []))
+    return observed[0], observed[1], projection[0], projection[1]
 
 
 def _status_segments(item: _Series) -> dict:
+    """status → (xs, ys, own) in _STATUS_STYLE order; *own* indexes the lane's own points.
+
+    A step between two adjacent numeric points of different status belongs to the less
+    certain lane (_STATUS_RANK): the line stays continuous into an estimate, partial
+    period or projection without drawing an uncertain value as observed. Missing values
+    and points of other lanes are NaN, so gaps always break the line.
+    """
+    points = item.points
+    statuses = [item.status(day) for day, _value in points]
+    numeric = [value is not None for _day, value in points]
     segments = {}
     for status in _STATUS_STYLE:
-        indices = [i for i, (day, value) in enumerate(item.points) if item.status(day) == status]
-        if not any(item.points[i][1] is not None for i in indices):
+        own = [i for i, kind in enumerate(statuses) if kind == status and numeric[i]]
+        if not own:
             continue
-        first, last = indices[0], indices[-1]
-        # Only an adjacent actual point may bridge into a forecast. Never bridge
-        # an unknown/preliminary/estimate/missing interval.
-        bridge = (status == "projection" and first > 0
-                  and item.status(item.points[first - 1][0]) == "observed"
-                  and item.points[first - 1][1] is not None)
-        if bridge:
-            first -= 1
-        xs, ys = [], []
-        for i in range(first, last + 1):
-            day, value = item.points[i]
-            xs.append(day)
-            ys.append(value if value is not None and (item.status(day) == status or bridge and i == first)
-                      else math.nan)
-        segments[status] = (xs, ys)
+        include = set(own)
+        for i in own:
+            for j in (i - 1, i + 1):
+                if (0 <= j < len(points) and numeric[j] and statuses[j] != status
+                        and _STATUS_RANK[status] > _STATUS_RANK[statuses[j]]):
+                    include.add(j)
+        low, high = min(include), max(include)
+        xs = [points[i][0] for i in range(low, high + 1)]
+        ys = [points[i][1] if i in include else math.nan for i in range(low, high + 1)]
+        segments[status] = (xs, ys, [i - low for i in own])
     return segments
 
 
@@ -981,7 +1397,7 @@ def _projection_spans(item: _Series) -> list:
 
 
 def _fiscal_axis(ax, item: _Series, lang: str) -> None:
-    if not item.periods:
+    if not item.fiscal:
         return
     step = max(1, math.ceil(len(item.points) / 8))
     all_days = [day for day, _ in item.points]
@@ -990,15 +1406,18 @@ def _fiscal_axis(ax, item: _Series, lang: str) -> None:
 
 
 def _plotly_fiscal_axis(fig, item: _Series, lang: str) -> None:
-    if item.periods:
+    if item.fiscal:
         all_days = [day for day, _ in item.points]
         days = sorted(set(all_days[::max(1, math.ceil(len(all_days) / 8))] + all_days[-1:]))
         fig.update_xaxes(tickmode="array", tickvals=_iso(days),
                          ticktext=[item.period_label(day, lang) for day in days])
 
 
-def _status_hover(item: _Series) -> str:
-    return _hover(item.units).replace("%{x|%Y-%m-%d}", "%{customdata}") if item.periods else _hover(item.units)
+def _point_data(item: _Series, days: list, labels: dict) -> list:
+    """Plotly customdata per point: [period label, status label] (hover names the point's
+    own status, also on a bridge point drawn in a neighbouring lane)."""
+    lang = labels["lang"]
+    return [[item.period_label(day, lang), labels[item.status(day)]] for day in days]
 
 
 def _isolated(xs: list, ys: list) -> tuple[list, list]:
@@ -1078,6 +1497,12 @@ def _fit_text(artist, renderer, max_px: float) -> None:
     artist.set_text(full[:lo].rstrip().rstrip("\\") + "…")
 
 
+def _row_major(handles: list, labels: list, ncol: int) -> tuple[list, list]:
+    """Matplotlib fills legend columns first; reorder so entries read left to right."""
+    order = [index for column in range(ncol) for index in range(column, len(labels), ncol)]
+    return [handles[i] for i in order], [labels[i] for i in order]
+
+
 def _layout(fig, ax, bundle: dict, fonts: _Fonts, legend=None) -> None:
     """Title and subtitle top-left, optional legend at the right of the subtitle row (one row
     lower when they would collide), footer bottom-left; then position the axes so its tick
@@ -1104,7 +1529,7 @@ def _layout(fig, ax, bundle: dict, fonts: _Fonts, legend=None) -> None:
                               va="top", color=_INK_2, fontproperties=fonts.prop(subtitle, 9))
         row_height = 9 * 1.3 / 72
     if legend is not None:
-        handles, labels = legend
+        handles, labels = _row_major(*legend, min(3, len(legend[1])))
         leg = fig.legend(handles, labels, loc="upper right",
                          bbox_to_anchor=(right_x, 1 - (row_top - 0.02) / height_in),
                          ncol=min(3, len(labels)), frameon=False, borderaxespad=0.0, borderpad=0.0,
@@ -1140,42 +1565,101 @@ def _zero_line(ax) -> None:
         ax.axhline(0, color=_AXIS, linewidth=0.8, zorder=1)
 
 
-def _label_latest(ax, item: _Series, bundle: dict, fonts: _Fonts, color: str) -> None:
-    """Latest observed point: ringed marker + value/period label placed off the line."""
+def _label_latest(ax, item: _Series, bundle: dict, fonts: _Fonts, color: str) -> bool:
+    """Latest observed point: ringed marker; when it is the last point, the value/period
+    label goes into the right margin now (the layout then reserves room for it). Returns
+    True when a later point follows, i.e. _place_inside_label must label it after layout."""
     latest = item.latest_observed()
     if latest is None:
-        return
+        return False
     day, value = latest
-    ax.plot([day], [value], marker="o", markersize=6.5, markerfacecolor=color,
+    ax.plot([day], [value], marker="o", markersize=7, markerfacecolor=color,
             markeredgecolor=_SURFACE, markeredgewidth=1.6, linestyle="none",
             zorder=5, clip_on=False)
-    numeric = item.numeric_points()
-    later = [v for d, v in numeric if d > day]
+    if any(d > day for d, _v in item.numeric_points()):
+        return True
+    # 最新点即末点：数值在右侧边距，期别紧贴其下。
     value_text = _mpl_text(bundle["value"])
     period_text = _mpl_text(bundle["period"])
-    if not later:
-        # 最新点即末点：数值在右侧边距，期别紧贴其下。
-        ax.annotate(value_text, xy=(day, value), xytext=(7, 1), textcoords="offset points",
-                    ha="left", va="bottom", color=_INK, annotation_clip=False,
-                    fontproperties=fonts.prop(value_text, 9.5, "bold"))
-        ax.annotate(period_text, xy=(day, value), xytext=(7, -1), textcoords="offset points",
-                    ha="left", va="top", color=_INK_2, annotation_clip=False,
-                    fontproperties=fonts.prop(period_text, 7.5))
-        return
-    # 最新点之后还有预测段：标签放在线的上方或下方（远离后续走势），衬底防压线。
-    values = [v for _d, v in numeric]
+    ax.annotate(value_text, xy=(day, value), xytext=(7, 1), textcoords="offset points",
+                ha="left", va="bottom", color=_INK, annotation_clip=False,
+                fontproperties=fonts.prop(value_text, 9.5, "bold"))
+    ax.annotate(period_text, xy=(day, value), xytext=(7, -1), textcoords="offset points",
+                ha="left", va="top", color=_INK_2, annotation_clip=False,
+                fontproperties=fonts.prop(period_text, 7.5))
+    return False
+
+
+# 候选标签位置（偏移磅值, 水平对齐, 垂直对齐）：先正上/正下，再四角，再远一档，最后左右。
+_LABEL_SPOTS = ((0, 10, "center", "bottom"), (0, -10, "center", "top"),
+                (-9, 8, "right", "bottom"), (9, 8, "left", "bottom"),
+                (-9, -8, "right", "top"), (9, -8, "left", "top"),
+                (0, 26, "center", "bottom"), (0, -26, "center", "top"),
+                (-11, 0, "right", "center"), (11, 0, "left", "center"))
+
+
+def _crosses(box, x0: float, y0: float, x1: float, y1: float) -> bool:
+    """Does the segment (x0, y0)-(x1, y1) touch the display-space box? (Liang–Barsky)"""
+    low, high = 0.0, 1.0
+    dx, dy = x1 - x0, y1 - y0
+    for p, q in ((-dx, x0 - box.x0), (dx, box.x1 - x0), (-dy, y0 - box.y0), (dy, box.y1 - y0)):
+        if p == 0:
+            if q < 0:
+                return False
+            continue
+        t = q / p
+        if p < 0:
+            low = max(low, t)
+        else:
+            high = min(high, t)
+        if low > high:
+            return False
+    return True
+
+
+def _place_inside_label(fig, ax, item: _Series, bundle: dict, fonts: _Fonts) -> None:
+    """Label a latest observation that later points follow: the first spot (preferring the
+    side away from the following path) whose box stays inside the axes and touches no drawn
+    segment; failing that, the spot touching the fewest. Runs after layout (final pixels)."""
+    day, value = item.latest_observed()
+    later = [v for d, v in item.numeric_points() if d > day]
+    values = [v for _d, v in item.numeric_points()]
     low, high = min(values), max(values)
-    span = (high - low) or 1.0
-    frac = (value - low) / span
-    rising = max(later[:6]) > value
-    below = frac > 0.75 or (frac >= 0.25 and rising)
-    label = f"{bundle['value']} · {bundle['period']}"
-    ax.annotate(_mpl_text(label), xy=(day, value), xytext=(0, -10 if below else 10),
-                textcoords="offset points", ha="center", va="top" if below else "bottom",
-                color=_INK, annotation_clip=False, zorder=6,
-                fontproperties=fonts.prop(label, 8.5, "bold"),
-                bbox={"boxstyle": "round,pad=0.25", "facecolor": _SURFACE,
-                      "edgecolor": "none", "alpha": 0.9})
+    frac = (value - low) / ((high - low) or 1.0)
+    below = frac > 0.75 or (frac >= 0.25 and max(later[:6]) > value)
+    spots = sorted(_LABEL_SPOTS, key=lambda spot: (abs(spot[1]) > 10, (spot[1] > 0) == below))
+    renderer = fig.canvas.get_renderer()
+    segments = []
+    for line in ax.get_lines():
+        if str(line.get_linestyle()).lower() in ("none", "", " "):
+            continue                                  # marker-only artists draw no segments
+        points = line.get_transform().transform(line.get_xydata())
+        segments += [(a[0], a[1], b[0], b[1]) for a, b in zip(points, points[1:])
+                     if all(math.isfinite(v) for v in (*a, *b))]
+    frame = ax.get_window_extent(renderer)
+    text = _mpl_text(f"{bundle['value']} · {bundle['period']}")
+    label = ax.annotate(text, xy=(day, value), xytext=(0, 10), textcoords="offset points",
+                        ha="center", va="bottom", color=_INK, annotation_clip=False, zorder=6,
+                        fontproperties=fonts.prop(text, 8.5, "bold"),
+                        bbox={"boxstyle": "round,pad=0.25", "facecolor": _SURFACE,
+                              "edgecolor": "none", "alpha": 0.9})
+    best = None
+    for rank, (dx, dy, ha, va) in enumerate(spots):
+        label.set_position((dx, dy))
+        label.set_ha(ha)
+        label.set_va(va)
+        box = label.get_window_extent(renderer).expanded(1.04, 1.12)
+        inside = frame.x0 <= box.x0 and box.x1 <= frame.x1 and frame.y0 <= box.y0 and box.y1 <= frame.y1
+        hits = sum(_crosses(box, *segment) for segment in segments)
+        score = (0 if inside else 1, hits, rank)
+        if best is None or score < best[0]:
+            best = (score, dx, dy, ha, va)
+        if inside and not hits:
+            break
+    _score, dx, dy, ha, va = best
+    label.set_position((dx, dy))
+    label.set_ha(ha)
+    label.set_va(va)
 
 
 def _projection_handle(color: str) -> tuple:
@@ -1185,36 +1669,61 @@ def _projection_handle(color: str) -> tuple:
     return (band, dashed)
 
 
+def _plot_lane(ax, status: str, lane: tuple, color: str, *, linewidth: float, markersize: float,
+               fade: float = 1.0):
+    """Draw one status lane. Markers sit only on the lane's own points (never on a bridge
+    endpoint); lanes without markers still show isolated points."""
+    xs, ys, own = lane
+    style, _dash, marker = _STATUS_STYLE[status]
+    if status == "projection" and len(own) > _MAX_PROJECTION_MARKERS:
+        marker = ""
+    alpha = _STATUS_ALPHA.get(status, 1.0) * fade
+    size = markersize * 0.8 if status == "projection" else markersize
+    (line,) = ax.plot(xs, ys, color=color, alpha=alpha, linewidth=linewidth, linestyle=style,
+                      marker=marker or None, markevery=own if marker else None, markersize=size,
+                      markerfacecolor=_SURFACE if status in _HOLLOW_STATUSES else color,
+                      markeredgecolor=color, markeredgewidth=1.2, solid_joinstyle="round",
+                      solid_capstyle="round", dash_capstyle="round", zorder=3)
+    if not marker:
+        iso_x, iso_y = _isolated(xs, ys)
+        if iso_x:
+            ax.plot(iso_x, iso_y, marker="o", markersize=markersize, color=color, alpha=alpha,
+                    linestyle="none", zorder=3)
+    return line
+
+
 def _draw_series(item: _Series, bundle: dict, fonts: _Fonts):
     color = _PALETTE[0]
     fig, ax = _new_figure()
     _style_axes(ax, bundle["lang"], fonts, bundle["ylabel"])
+    rolling = _rolling(item) if "rolling" in bundle else None
     handles, labels = [], []
     segments = _status_segments(item)
-    for status, (xs, ys) in segments.items():
-        style, _, marker = _STATUS_STYLE[status]
-        (line,) = ax.plot(xs, ys, color=color, linewidth=1.8, linestyle=style,
-                          marker=marker if status != "observed" else None, markersize=4,
-                          solid_joinstyle="round", solid_capstyle="round", zorder=3)
-        iso_x, iso_y = _isolated(xs, ys)
-        if iso_x and status == "observed":
-            ax.plot(iso_x, iso_y, marker=marker, markersize=4, color=color,
-                    linestyle="none", zorder=3)
-        handles.append(line)
-        labels.append(bundle[status])
+    for status, lane in segments.items():
+        line = _plot_lane(ax, status, lane, color, linewidth=1.0 if rolling else 1.8, markersize=4,
+                          fade=0.55 if rolling else 1.0)
+        handles.append(_projection_handle(color) if status == "projection" else line)
+        labels.append(bundle["monthly"] if rolling and status == "observed" else bundle[status])
+    if rolling:
+        (average,) = ax.plot([day for day, _v in rolling], [value for _d, value in rolling],
+                             color=color, linewidth=2.4, solid_capstyle="round", zorder=4)
+        handles.append(average)
+        labels.append(bundle["rolling"])
     numeric = item.numeric_points()
     x_low, x_high = _x_limits(numeric[0][0], numeric[-1][0])
     for start, end in _projection_spans(item):
         ax.axvspan(max(start, x_low), min(end, x_high), facecolor=_BAND_COLOR,
                    alpha=_BAND_ALPHA, linewidth=0, zorder=0)
-    legend = (handles, labels) if set(segments) != {"observed"} else None
+    legend = (handles, labels) if set(segments) != {"observed"} or rolling else None
     ax.set_xlim(x_low, x_high)
     ax.margins(y=0.12)
     ax.autoscale_view()
     _zero_line(ax)
-    _label_latest(ax, item, bundle, fonts, color)
+    inside = _label_latest(ax, item, bundle, fonts, color)
     _fiscal_axis(ax, item, bundle["lang"])
     _layout(fig, ax, bundle, fonts, legend)
+    if inside:
+        _place_inside_label(fig, ax, item, bundle, fonts)
     return fig
 
 
@@ -1259,8 +1768,10 @@ def _nullable(values: list) -> list:
 
 
 def _hover(units: str) -> str:
+    """Hover: period label, exact stored value with units, the point's own status (customdata)."""
     unit = _plotly_text(units)
-    return "%{x|%Y-%m-%d}<br>%{y:,.4~g}" + (f" {unit}" if unit else "") + "<extra></extra>"
+    return ("%{customdata[0]}<br>%{y:,.6~g}" + (f" {unit}" if unit else "")
+            + "<br>%{customdata[1]}<extra></extra>")
 
 
 def _y_range(items: list) -> tuple[float, float]:
@@ -1272,13 +1783,20 @@ def _y_range(items: list) -> tuple[float, float]:
 
 def _plotly_layout(fig, bundle: dict, *, showlegend: bool, x_low: dt.date, x_high: dt.date,
                    right_margin: int) -> None:
-    title = _plotly_text(bundle["title"])
+    # Plotly titles do not wrap: break long titles like the PNG does and give the extra
+    # line, and a legend that wraps to a second row, their own room above the plot.
+    wrapped = _wrap(bundle["title"], 72, 2)
+    title = "<br>".join(_plotly_text(line) for line in wrapped.split("\n"))
     if bundle["subtitle"]:
         title += f"<br><sup>{_plotly_text(bundle['subtitle'])}</sup>"
+    top = 96 + 22 * wrapped.count("\n") + (24 if showlegend else 0)
+    height = 520 + top - 96
     _apply_wave9_layout(
-        fig, title, height=520, showlegend=showlegend, legend=dict(_WAVE9_LEGEND),
-        margin={"l": 10, "r": right_margin, "t": 96, "b": 86},
+        fig, title, height=height, showlegend=showlegend, legend=dict(_WAVE9_LEGEND),
+        margin={"l": 10, "r": right_margin, "t": top, "b": 86},
     )
+    # Pin the title block to the top edge so the extra margin goes to the legend rows.
+    fig.update_layout(title_yref="container", title_yanchor="top", title_y=1 - 12 / height)
     fig.update_xaxes(type="date", range=[x_low.isoformat(), x_high.isoformat()], showgrid=False)
     fig.update_yaxes(title_text=_plotly_text(_wrap(bundle["ylabel"], 34, 3)).replace("\n", "<br>"),
                      separatethousands=True)
@@ -1289,25 +1807,55 @@ def _plotly_layout(fig, bundle: dict, *, showlegend: bool, x_low: dt.date, x_hig
     )
 
 
+def _plotly_lane(fig, item: _Series, status: str, lane: tuple, bundle: dict, *, color: str, name: str,
+                 width: float, fade: float = 1.0, legendgroup=None, showlegend: bool = True) -> None:
+    """Plotly twin of _plot_lane: same lane, markers sized 0 on bridge endpoints."""
+    xs, ys, own = lane
+    _style, dash, marker = _STATUS_STYLE[status]
+    if status == "projection" and len(own) > _MAX_PROJECTION_MARKERS:
+        marker = ""
+    hover = _hover(bundle["ylabel"])
+    customdata = _point_data(item, xs, bundle)
+    own_set = set(own)
+    trace = {"x": _iso(xs), "y": _nullable(ys), "name": name, "connectgaps": False,
+             "opacity": _STATUS_ALPHA.get(status, 1.0) * fade, "showlegend": showlegend,
+             "hovertemplate": hover, "customdata": customdata,
+             "line": {"color": color, "width": width, "dash": dash},
+             "mode": "lines+markers" if marker else "lines"}
+    if legendgroup is not None:
+        trace["legendgroup"] = legendgroup
+    if marker:
+        trace["marker"] = {"symbol": _PLOTLY_MARKERS[marker],
+                           "size": [7 if i in own_set else 0 for i in range(len(xs))],
+                           "color": _SURFACE if status in _HOLLOW_STATUSES else color,
+                           "line": {"color": color, "width": 1.5}}
+    fig.add_trace(go.Scatter(**trace))
+    if not marker:
+        iso_x, iso_y = _isolated(xs, ys)
+        if iso_x:
+            fig.add_trace(go.Scatter(
+                x=_iso(iso_x), y=iso_y, mode="markers", showlegend=False, hovertemplate=hover,
+                legendgroup=legendgroup, customdata=_point_data(item, iso_x, bundle),
+                opacity=_STATUS_ALPHA.get(status, 1.0) * fade, marker={"color": color, "size": 6}))
+
+
 def _plotly_series(item: _Series, bundle: dict):
     color = _PALETTE[0]
+    rolling = _rolling(item) if "rolling" in bundle else None
     segments = _status_segments(item)
-    hover = _status_hover(item)
+    showlegend = set(segments) != {"observed"} or rolling is not None
     fig = go.Figure()
-    for status, (xs, ys) in segments.items():
+    for status, lane in segments.items():
+        label = bundle["monthly"] if rolling and status == "observed" else bundle[status]
+        _plotly_lane(fig, item, status, lane, bundle, color=color, name=_plotly_text(label),
+                     width=1.2 if rolling else 2, fade=0.55 if rolling else 1.0, showlegend=showlegend)
+    if rolling:
+        days = [day for day, _value in rolling]
         fig.add_trace(go.Scatter(
-            x=_iso(xs), y=_nullable(ys), mode="lines" if status == "observed" else "lines+markers",
-            name=_plotly_text(bundle[status]),
-            line={"color": color, "width": 2, "dash": _STATUS_STYLE[status][1]},
-            marker={"symbol": {"o": "circle", "x": "x", "^": "triangle-up", "s": "square"}[_STATUS_STYLE[status][2]], "size": 6},
-            connectgaps=False, hovertemplate=hover, customdata=[item.period_label(day, bundle["lang"]) for day in xs],
-            showlegend=set(segments) != {"observed"},
-        ))
-        iso_x, iso_y = _isolated(xs, ys)
-        if iso_x and status == "observed":
-            fig.add_trace(go.Scatter(x=_iso(iso_x), y=iso_y, mode="markers", showlegend=False,
-                                     marker={"color": color, "size": 6}, hovertemplate=hover,
-                                     customdata=[item.period_label(day, bundle["lang"]) for day in iso_x]))
+            x=_iso(days), y=_nullable([value for _day, value in rolling]), mode="lines",
+            name=_plotly_text(bundle["rolling"]), connectgaps=False, line={"color": color, "width": 3},
+            customdata=[[item.period_label(day, bundle["lang"]), bundle["rolling"]] for day in days],
+            hovertemplate=_hover(bundle["ylabel"])))
     numeric = item.numeric_points()
     x_low, x_high = _x_limits(numeric[0][0], numeric[-1][0])
     for start, end in _projection_spans(item):
@@ -1317,8 +1865,8 @@ def _plotly_series(item: _Series, bundle: dict):
     if latest is not None:
         day, value = latest
         fig.add_trace(go.Scatter(
-            x=[day.isoformat()], y=[value], mode="markers", showlegend=False, hovertemplate=hover,
-            customdata=[item.period_label(day, bundle["lang"])],
+            x=[day.isoformat()], y=[value], mode="markers", showlegend=False,
+            hovertemplate=_hover(bundle["ylabel"]), customdata=_point_data(item, [day], bundle),
             marker={"color": color, "size": 10, "line": {"color": _SURFACE, "width": 2}},
         ))
         later = any(d > day for d, _v in item.numeric_points())
@@ -1329,8 +1877,7 @@ def _plotly_series(item: _Series, bundle: dict):
             xshift=0 if later else 9, yshift=10 if later else 0, align="left",
             bgcolor=_SURFACE, font={"size": 11, "color": _INK},
         )
-    _plotly_layout(fig, bundle, showlegend=set(segments) != {"observed"}, x_low=x_low, x_high=x_high,
-                   right_margin=96)
+    _plotly_layout(fig, bundle, showlegend=showlegend, x_low=x_low, x_high=x_high, right_margin=96)
     _plotly_fiscal_axis(fig, item, bundle["lang"])
     return fig
 
@@ -1395,18 +1942,18 @@ def _compare_groups(items: list) -> list:
         units = re.sub(r"\s+", " ", item.units.casefold()).strip()
         if not units or not item.frequency:
             continue
-        if any(not period["complete"] for period in item.periods.values()):
+        if item.fiscal and any(period["partial"] for period in item.periods.values()):
             continue  # A partial fiscal aggregate is not a comparable annual total.
         title_geo = _title_geo(item.title)
         native = _native_geo(item)
         if native:
             key, code = native
-            label = title_geo[1] if title_geo else code
+            label = title_geo[1] if title_geo else _geo_name(code, "en")
         elif title_geo:
             key, code, label = ("title", title_geo[0], ""), title_geo[1].casefold(), title_geo[1]
         else:
             continue
-        calendar = "us_federal_fiscal_year" if item.periods else "calendar"
+        calendar = "us_federal_fiscal_year" if item.fiscal else "calendar"
         members = groups.setdefault((key, units, item.frequency, item.transform, item.seasonal_adjustment, calendar), [])
         if any(code.casefold() == seen.casefold() for _item, seen, _label in members):
             continue
@@ -1416,6 +1963,21 @@ def _compare_groups(items: list) -> list:
     eligible.sort(key=lambda members: (-len(members), min(item.order for item, _c, _l in members)))
     return [[(item, label) for item, _code, label in members]
             for members in eligible[:_MAX_COMPARE_CHARTS]]
+
+
+def _compare_labels(group: list, lang: str) -> list:
+    """Line labels: geography names from the stored ISO3 code (series_label names), else the
+    geography named in the title (zh: in title_zh), else the native code."""
+    labels = []
+    for item, label in group:
+        if item.geography in _GEOGRAPHIES:
+            labels.append(_geo_name(item.geography, lang))
+            continue
+        zh_geo = _ZH_GEO_RE.search(item.title_zh or "") if lang == "zh" else None
+        labels.append(zh_geo.group(0) if zh_geo else label)
+    if len(set(labels)) < len(labels):     # 地域代码重复（例如同一经济体的两条序列）→ 回退原标签
+        labels = [label for _item, label in group]
+    return [_clean_text(label, 24) for label in labels]
 
 
 def _compare_slug(group: list, used: set) -> str:
@@ -1432,39 +1994,45 @@ def _compare_slug(group: list, used: set) -> str:
 
 
 def _compare_projection_from(group: list) -> dt.date | None:
-    starts = [item.projection_from for item, _label in group
-              if item.projection_from is not None
-              and any(item.is_projection(day) for day, _value in item.points)]
-    return min(starts) if starts else None
+    """Shared projection boundary, stated only when every later point of every member is a
+    projection (otherwise the per-point styling carries the status)."""
+    starts = [item.projection_from for item, _label in group if item.projection_from is not None]
+    if not starts:
+        return None
+    cutoff = min(starts)
+    if any(item.status(day) != "projection" for item, _label in group
+           for day, _value in item.points if day >= cutoff):
+        return None
+    return cutoff
+
+
+def _compare_title(first: _Series, lang: str) -> str:
+    """Shared series name without the geography, with the series_label transform suffix."""
+    if lang == "zh" and first.title_zh:
+        title = _strip_geo(first.title_zh, _ZH_GEO_RE) or first.title_zh
+    else:
+        title = _strip_geo(first.title) or first.title or first.series
+        # BIS-style " - Monthly - " segments move to the subtitle (which names the frequency).
+        frequencies = {label.casefold() for label in _FREQ_LABELS["en"].values()}
+        title = " - ".join(part for part in title.split(" - ")
+                           if part.strip().casefold() not in frequencies) or title
+    return title + _TRANSFORM_SUFFIX["zh" if lang == "zh" else "en"].get(first.transform, "")
 
 
 def _compare_bundle(group: list, lang: str) -> dict:
     first = group[0][0]
-    chrome = _CHROME[lang]
-    if lang == "zh" and first.title_zh:
-        title = _strip_geo(first.title_zh, _ZH_GEO_RE) or first.title_zh
-    else:
-        title = _strip_geo(first.title) or first.title or first.native
-    labels = []
-    for item, label in group:
-        zh_geo = _ZH_GEO_RE.search(item.title_zh or "") if lang == "zh" else None
-        labels.append(_clean_text(zh_geo.group(0) if zh_geo else label, 24))
-    providers: list = []
-    for item, _label in group:
-        name = item.provider_name or item.provider.upper()
-        if name not in providers:
-            providers.append(name)
-    retrieved = max((item.retrieved for item, _label in group), default="")
+    items = [item for item, _label in group]
+    title = _compare_title(first, lang)
+    retrieved = max((item.retrieved for item in items), default="")
     return {
         "lang": lang,
         "title": title,
-        "subtitle": _subtitle(first.frequency, first.seasonal_adjustment, first.transform,
-                              None, lang),
-        "ylabel": first.units,
-        "footer": _footer(" / ".join(providers), first.provider,
-                          [item.native for item, _label in group], retrieved, lang),
-        **{status: chrome[status] for status in _STATUS_STYLE},
-        "labels": labels,
+        "subtitle": _subtitle(first, title, _compare_projection_from(group), lang),
+        "ylabel": _units_zh(first.units) if lang == "zh" else first.units,
+        "footer": _footer([_source_name(item, lang) for item in items],
+                          [item.native for item in items], retrieved, lang),
+        **_status_labels(items, lang),
+        "labels": _compare_labels(group, lang),
     }
 
 
@@ -1495,6 +2063,22 @@ def _end_positions(group: list, y_low: float, y_high: float) -> list:
     return _spread(natural, gap=0.075)
 
 
+def _group_spans(group: list) -> list:
+    """Projection bands of all members, each distinct span once (no double shading)."""
+    return sorted({span for item, _label in group for span in _projection_spans(item)})
+
+
+def _status_key(status: str):
+    """Neutral-ink legend key for a non-observed status in a comparison chart."""
+    if status == "projection":
+        return _projection_handle(_INK_2)
+    style, _dash, marker = _STATUS_STYLE[status]
+    return Line2D([], [], color=_INK_2, alpha=_STATUS_ALPHA.get(status, 1.0), linestyle=style,
+                  linewidth=1.6, marker=marker or None, markersize=4,
+                  markerfacecolor=_SURFACE if status in _HOLLOW_STATUSES else _INK_2,
+                  markeredgecolor=_INK_2)
+
+
 def _draw_compare(group: list, bundle: dict, fonts: _Fonts):
     fig, ax = _new_figure()
     _style_axes(ax, bundle["lang"], fonts, bundle["ylabel"])
@@ -1503,32 +2087,25 @@ def _draw_compare(group: list, bundle: dict, fonts: _Fonts):
     shown_statuses = set()
     for index, (item, _label) in enumerate(group):
         color = _PALETTE[index]
-        handle = None
-        for status, (xs, ys) in _status_segments(item).items():
+        lines = {}
+        for status, lane in _status_segments(item).items():
             shown_statuses.add(status)
-            (line,) = ax.plot(xs, ys, color=color, linewidth=1.6, zorder=3,
-                              linestyle=_STATUS_STYLE[status][0],
-                              marker=_STATUS_STYLE[status][2] if status != "observed" else None, markersize=3.5,
-                              solid_joinstyle="round", dash_capstyle="round")
-            iso_x, iso_y = _isolated(xs, ys)
-            if iso_x and status == "observed":
-                ax.plot(iso_x, iso_y, marker="o", markersize=3.5, color=color,
-                        linestyle="none", zorder=3)
-            handle = handle or line
+            lines[status] = _plot_lane(ax, status, lane, color, linewidth=1.6, markersize=3.5)
         latest = item.latest_observed()
         if latest is not None:
             ax.plot([latest[0]], [latest[1]], marker="o", markersize=5, markerfacecolor=color,
                     markeredgecolor=_SURFACE, markeredgewidth=1.2, linestyle="none",
                     zorder=5, clip_on=False)
-        handles.append(handle)
+        # The series key is a full-strength line in the series colour, whatever its status.
+        handles.append(Line2D([], [], color=color, linewidth=1.8) if "observed" not in lines
+                       else lines["observed"])
         labels.append(bundle["labels"][index])
-        for start, end in _projection_spans(item):
-            ax.axvspan(max(start, x_low), min(end, x_high), facecolor=_BAND_COLOR,
-                       alpha=_BAND_ALPHA, linewidth=0, zorder=0)
+    for start, end in _group_spans(group):
+        ax.axvspan(max(start, x_low), min(end, x_high), facecolor=_BAND_COLOR,
+                   alpha=_BAND_ALPHA, linewidth=0, zorder=0)
     for status in _STATUS_STYLE:
         if status in shown_statuses and status != "observed":
-            handles.append(Line2D([], [], color=_INK_2, linestyle=_STATUS_STYLE[status][0],
-                                  marker=_STATUS_STYLE[status][2], markersize=4))
+            handles.append(_status_key(status))
             labels.append(bundle[status])
     ax.set_xlim(x_low, x_high)
     y_low, y_high = _y_range([item for item, _l in group])
@@ -1546,6 +2123,7 @@ def _draw_compare(group: list, bundle: dict, fonts: _Fonts):
                     arrowprops={"arrowstyle": "-", "color": _PALETTE[index],
                                 "linewidth": 0.9, "shrinkA": 2, "shrinkB": 3})
     legend_text = " ".join(labels)
+    handles, labels = _row_major(handles, labels, min(len(labels), 4))
     ax.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.0, -0.12),
               ncol=min(len(labels), 4), frameon=False, borderaxespad=0.0, handlelength=2.4,
               columnspacing=1.4, handler_map={tuple: HandlerTuple(ndivide=1)},
@@ -1558,28 +2136,33 @@ def _plotly_compare(group: list, bundle: dict):
     fig = go.Figure()
     x_low, x_high = _group_x_limits(group)
     y_low, y_high = _y_range([item for item, _l in group])
+    shown_statuses = set()
     for index, (item, _label) in enumerate(group):
         color = _PALETTE[index]
         name = _plotly_text(bundle["labels"][index])
-        hover = _status_hover(item)
-        segments = _status_segments(item)
-        for status, (xs, ys) in segments.items():
-            label = name if set(segments) == {"observed"} else name + " — " + bundle[status]
-            fig.add_trace(go.Scatter(
-                x=_iso(xs), y=_nullable(ys), mode="lines+markers", name=label, legendgroup=name,
-                showlegend=True, connectgaps=False, hovertemplate=f"{_plotly_text(label)}<br>{hover}",
-                customdata=[item.period_label(day, bundle["lang"]) for day in xs],
-                line={"color": color, "width": 2, "dash": _STATUS_STYLE[status][1]},
-                marker={"symbol": {"o": "circle", "x": "x", "^": "triangle-up", "s": "square"}[_STATUS_STYLE[status][2]], "size": 5},
-            ))
+        for position, (status, lane) in enumerate(_status_segments(item).items()):
+            shown_statuses.add(status)
+            # One legend entry per economy (its first lane); statuses get neutral keys below.
+            _plotly_lane(fig, item, status, lane, bundle, color=color, name=name, width=2,
+                         legendgroup=name, showlegend=position == 0)
         latest = item.latest_observed()
         if latest is not None:
             fig.add_trace(go.Scatter(
                 x=[latest[0].isoformat()], y=[latest[1]], mode="markers", showlegend=False,
-                legendgroup=name, hovertemplate=f"{name}<br>{hover}",
-                customdata=[item.period_label(latest[0], bundle["lang"])],
+                legendgroup=name, hovertemplate=f"{name}<br>{_hover(bundle['ylabel'])}",
+                customdata=_point_data(item, [latest[0]], bundle),
                 marker={"color": color, "size": 8, "line": {"color": _SURFACE, "width": 2}},
             ))
+    for status in _STATUS_STYLE:
+        if status in shown_statuses and status != "observed":
+            _style, dash, marker = _STATUS_STYLE[status]
+            key = {"x": [None], "y": [None], "name": _plotly_text(bundle[status]), "hoverinfo": "skip",
+                   "mode": "lines+markers" if marker else "lines", "opacity": _STATUS_ALPHA.get(status, 1.0),
+                   "line": {"color": _INK_2, "width": 2, "dash": dash}}
+            if marker:
+                key["marker"] = {"symbol": _PLOTLY_MARKERS[marker], "size": 7, "line": {"color": _INK_2, "width": 1.5},
+                                 "color": _SURFACE if status in _HOLLOW_STATUSES else _INK_2}
+            fig.add_trace(go.Scatter(**key))
     positions = _end_positions(group, y_low, y_high)
     for index, text in enumerate(bundle["labels"]):
         fig.add_annotation(
@@ -1587,10 +2170,9 @@ def _plotly_compare(group: list, bundle: dict):
             yanchor="middle", xshift=6, showarrow=False, font={"size": 11, "color": _INK_2},
             text=f'<span style="color:{_PALETTE[index]}">━</span> {_plotly_text(text)}',
         )
-    for item, _ in group:
-        for start, end in _projection_spans(item):
-            fig.add_vrect(x0=max(start, x_low).isoformat(), x1=min(end, x_high).isoformat(),
-                          fillcolor=_BAND_COLOR, opacity=_BAND_ALPHA, line_width=0, layer="below")
+    for start, end in _group_spans(group):
+        fig.add_vrect(x0=max(start, x_low).isoformat(), x1=min(end, x_high).isoformat(),
+                      fillcolor=_BAND_COLOR, opacity=_BAND_ALPHA, line_width=0, layer="below")
     _plotly_layout(fig, bundle, showlegend=True, x_low=x_low, x_high=x_high, right_margin=130)
     fig.update_yaxes(range=[y_low, y_high])
     _plotly_fiscal_axis(fig, group[0][0], bundle["lang"])
@@ -1614,20 +2196,57 @@ def _save_png(fig, path: Path) -> None:
             os.unlink(tmp)
 
 
-def _write_html(fig, path: Path, title: str) -> bool:
-    """Self-contained HTML (plotly.js inline, document title + data favicon, no trailing
-    whitespace — same document contract as forecast-visuals). False on failure."""
+# 共享包没有随 HTML 一起送达（例如单独拷走一个 HTML）时，页顶给出可操作的提示而不是空白页
+# （与 report_visualizer._inject_plotly_load_guard 同文）。内联脚本本身不依赖外部资源。
+_PLOTLY_LOAD_GUARD = (
+    '<script>window.addEventListener("DOMContentLoaded",function(){'
+    'if(!window.Plotly){var d=document.createElement("div");'
+    'd.style.cssText="margin:16px;padding:12px 16px;border:1px solid #d03b3b;'
+    'border-radius:6px;font-family:system-ui,sans-serif;font-size:14px;'
+    'color:#0b0b0b;background:#fdf1f1";'
+    'd.textContent="Interactive chart could not load the shared plotly.min.js '
+    'that lives next to this file. Open this chart from the report\'s charts/ '
+    'folder (which contains plotly.min.js).";'
+    'document.body.insertBefore(d,document.body.firstChild);}});</script>'
+)
+
+
+def _ensure_plotly_bundle(charts_dir: Path) -> bool:
+    """One shared charts/plotly.min.js for every data HTML twin (~4.9 MB once instead of per
+    chart); the API inlines it at serve time (backend utils/chart_html). Rewritten when
+    missing, a symlink or a different plotly build. False → twins fall back to inline."""
+    path = charts_dir / _PLOTLY_BUNDLE
+    try:
+        from plotly.offline import get_plotlyjs  # type: ignore
+        bundle = get_plotlyjs()
+        if not path.is_symlink() and path.is_file() and path.read_text(encoding="utf-8") == bundle:
+            return True
+        if path.is_symlink() or path.exists() and not path.is_file():
+            path.unlink()
+        _atomic_write(path, bundle)
+        return True
+    except Exception as exc:  # noqa: BLE001 — 共享包写不出 → 逐图内联，离线自包含优先
+        _log(f"{_PLOTLY_BUNDLE}: shared bundle unavailable ({type(exc).__name__}: {exc}); inlining")
+        return False
+
+
+def _write_html(fig, path: Path, title: str, shared_bundle: bool) -> bool:
+    """Interactive twin: references the shared charts/plotly.min.js (with a load guard) or,
+    when that bundle is unavailable, inlines plotly.js. Document title + data favicon, no
+    trailing whitespace (same document contract as forecast-visuals). False on failure."""
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.stem}.", suffix=".html")
     os.close(fd)
     try:
         fig.update_layout(paper_bgcolor=_SURFACE, plot_bgcolor=_SURFACE)
-        fig.write_html(tmp, include_plotlyjs=True, full_html=True,
-                       div_id=f"data-visual-{path.stem}", config={"displaylogo": False})
-        raw = Path(tmp).read_text(encoding="utf-8")
+        raw = fig.to_html(include_plotlyjs="directory" if shared_bundle else True, full_html=True,
+                          div_id=f"data-visual-{path.stem}", config={"displaylogo": False})
         if "</head>" in raw.lower():
             metadata = (f"<title>{html_lib.escape(title)}</title>"
                         f'<link rel="icon" href="{_EMBEDDED_FAVICON}">')
             raw = re.sub(r"</head>", lambda _m: metadata + "</head>", raw, count=1,
+                         flags=re.IGNORECASE)
+        if shared_bundle:
+            raw = re.sub(r"</body>", lambda _m: _PLOTLY_LOAD_GUARD + "</body>", raw, count=1,
                          flags=re.IGNORECASE)
         clean = "\n".join(line.rstrip(" \t") for line in raw.splitlines()) + "\n"
         Path(tmp).write_text(clean, encoding="utf-8")
@@ -1651,42 +2270,139 @@ def _manifest_title(text: str, lang: str, suffix: str = "") -> str:
     return title + suffix
 
 
-def _caption(items: list, lang: str, *, compare: bool) -> str:
-    """Short, digit-free reader caption: source family + how to read the marks."""
-    short = _PROVIDER_SHORT[lang]
-    sources: list = []
-    for item in items:
-        name = short.get(item.provider) or _digit_free(item.provider_name) or \
-            ("官方来源" if lang == "zh" else "an official source")
-        if name not in sources:
-            sources.append(name)
-    has_projection = any(any(item.is_projection(day) for day, _v in item.points) for item in items)
+# 图注里的状态读法（与图例同义；只列出图中实际出现的状态）。
+_CAPTION_STATUS = {
+    "en": {"unknown": "light line = status not supplied by the publisher",
+           "preliminary": "triangles = preliminary values", "estimate": "squares = estimates",
+           "partial": "hollow marker = partial period"},
+    "zh": {"unknown": "浅色线为发布方未标注状态的数值", "preliminary": "三角为初步值",
+           "estimate": "方块为估计值", "partial": "空心点为不完整期"},
+}
+
+
+def _caption_source(item: _Series, lang: str) -> str:
+    for prefix, english, chinese in _SOURCE_PREFIXES.get(item.provider, ()):
+        if item.native.startswith(prefix):
+            return chinese if lang == "zh" else english
+    return _PROVIDER_SHORT[lang].get(item.provider) or _digit_free(item.provider_name) or \
+        ("官方来源" if lang == "zh" else "an official source")
+
+
+def _year_earlier(item: _Series, day: dt.date) -> float | None:
+    """Observed value one year before *day*: the same month/quarter/year, or the weekly
+    observation nearest to 52 weeks earlier (within three days)."""
+    observed = {d: v for d, v in item.points if v is not None and item.status(d) == "observed"}
+    if item.frequency in ("M", "Q", "A"):
+        try:
+            return observed.get(day.replace(year=day.year - 1))
+        except ValueError:
+            return None
+    if item.frequency == "W":
+        target = day - dt.timedelta(days=364)
+        near = sorted((abs((d - target).days), d) for d in observed if abs((d - target).days) <= 3)
+        return observed[near[0][1]] if near else None
+    return None
+
+
+def _takeaway(item: _Series, lang: str) -> str:
+    """Digit-free reading of the latest observation: change from a year earlier and its
+    place in the charted range."""
+    latest = item.latest_observed()
+    if latest is None:
+        return ""
+    day, value = latest
+    zh = lang == "zh"
+    words = []
+    prior = _year_earlier(item, day)
+    if prior is not None:
+        words.append(("高于一年前" if value > prior else "低于一年前" if value < prior else "与一年前持平") if zh
+                     else "up from a year earlier" if value > prior
+                     else "down from a year earlier" if value < prior else "unchanged from a year earlier")
+    values = [v for d, v in item.points if v is not None and item.status(d) == "observed"]
+    low, high = min(values), max(values)
+    if len(values) >= 3 and high > low:
+        if value == high:
+            words.append("为图示期间最高" if zh else "the highest in the charted period")
+        elif value == low:
+            words.append("为图示期间最低" if zh else "the lowest in the charted period")
+        elif value >= low + 0.8 * (high - low):
+            words.append("处于图示区间高位" if zh else "near the top of the charted range")
+        elif value <= low + 0.2 * (high - low):
+            words.append("处于图示区间低位" if zh else "near the bottom of the charted range")
+    if zh:
+        return "圆点标记最新实际值" + ("，" + "，".join(words) if words else "")
+    return "latest observation marked" + (": " + ", ".join(words) if words else "")
+
+
+def _projection_note(items: list, lang: str) -> str:
+    """How the publisher projection is drawn and, for one series, where it ends relative to
+    the latest observation."""
+    projected = [item for item in items if any(item.is_projection(day) for day, _v in item.points)]
+    if not projected:
+        return ""
+    zh = lang == "zh"
+    publisher = next((item.publisher(lang) for item in projected if item.publisher(lang)), "")
+    note = (f"虚线与阴影为{publisher or '发布方'}预测" if zh
+            else f"dashed shaded segment = {publisher + ' ' if publisher else ''}projection")
+    if len(items) == 1:
+        item = items[0]
+        latest = item.latest_observed()
+        final = [v for d, v in item.points if v is not None and item.is_projection(d)]
+        if latest is not None and final:
+            end = final[-1]
+            if zh:
+                note += "，预测终点" + ("低于" if end < latest[1] else "高于" if end > latest[1] else "持平于") + "最新实际值"
+            else:
+                note += (", ending below" if end < latest[1] else ", ending above" if end > latest[1]
+                         else ", ending level with") + " the latest observation"
+    return note
+
+
+def _comparison_note(items: list, labels: list, lang: str) -> str:
+    """Which economy has the highest and the lowest latest observed value."""
+    latest = [(item.latest_observed()[1], label) for item, label in zip(items, labels)
+              if item.latest_observed() is not None]
+    if len(latest) < 2 or len({value for value, _label in latest}) < 2:
+        return ""
+    top = max(latest, key=lambda pair: pair[0])[1]
+    bottom = min(latest, key=lambda pair: pair[0])[1]
+    return (f"最新实际值{top}最高、{bottom}最低" if lang == "zh"
+            else f"latest observed value highest for {top} and lowest for {bottom}")
+
+
+def _caption(items: list, lang: str, *, compare: bool, labels: list | None = None) -> str:
+    """Short, digit-free reader caption: source, a data-driven reading, how to read the marks."""
+    sources = list(dict.fromkeys(_caption_source(item, lang) for item in items))
     has_gaps = any(value is None for item in items for _day, value in item.points[1:-1])
-    latest = any(item.latest_observed() is not None for item in items)
     statuses = {item.status(day) for item in items for day, value in item.points if value is not None}
-    fiscal = [period for item in items for period in item.periods.values()]
+    fiscal = [period for item in items for period in item.periods.values()
+              if period["calendar"] == "us_federal_fiscal_year"]
     fiscal_labels = sorted({period["label"] for period in fiscal})
     fiscal_note = "–".join([fiscal_labels[0], fiscal_labels[-1]]) if fiscal_labels else ""
-    partial = any(not period["complete"] for period in fiscal)
+    partial_fiscal = any(period["partial"] for period in fiscal)
+    rolling = not compare and _rolling(items[0]) is not None
+    if compare:
+        reading = (("各经济体同轴对比" if lang == "zh" else "economies compared on one axis"),
+                   ("圆点标记最新实际值" if lang == "zh" else "latest observations marked")
+                   if any(item.latest_observed() is not None for item in items) else "",
+                   _comparison_note(items, labels or [], lang))
+    else:
+        reading = (_takeaway(items[0], lang),)
+    status_notes = [_CAPTION_STATUS[lang][status] for status in ("unknown", "preliminary", "estimate", "partial")
+                    if status in statuses]
     if lang == "zh":
-        parts = ["官方数据：" + "、".join(sources),
-                 "各经济体同轴对比" if compare else "",
-                 "圆点标记最新实际观测值" if latest else "",
-                 "、".join(_CHROME[lang][s] for s in ("unknown", "preliminary", "estimate") if s in statuses),
-                 fiscal_note, "含部分财政年度合计" if partial else "",
-                 "虚线段与阴影为预测" if has_projection else "",
-                 "断线处为缺测期" if has_gaps else ""]
+        parts = ["官方数据：" + "、".join(sources), *reading,
+                 "粗线为据月度值推算的十二个月均值" if rolling else "",
+                 *status_notes, fiscal_note, "含部分财政年度合计" if partial_fiscal else "",
+                 _projection_note(items, lang), "断线处为缺测期" if has_gaps else ""]
         text = "；".join(part for part in parts if part) + "。"
     else:
-        parts = ["Official series from " + " and ".join(sources),
-                 "economies compared on one axis" if compare else "",
-                 ("latest observations marked" if compare else "latest observation marked") if latest else "",
-                 ", ".join(_CHROME[lang][s] for s in ("unknown", "preliminary", "estimate") if s in statuses),
-                 fiscal_note, "partial fiscal aggregates labeled" if partial else "",
-                 "dashed shaded segment = projection" if has_projection else "",
-                 "breaks mark missing periods" if has_gaps else ""]
+        parts = ["Official series from " + " and ".join(sources), *reading,
+                 "bold line = derived twelve-month average of the monthly values" if rolling else "",
+                 *status_notes, fiscal_note, "partial fiscal aggregates labeled" if partial_fiscal else "",
+                 _projection_note(items, lang), "breaks mark missing periods" if has_gaps else ""]
         text = "; ".join(part for part in parts if part) + "."
-    text = _clean_text(_digit_free(text) if not _is_digit_free(text) else text, 240)
+    text = _clean_text(_digit_free(text) if not _is_digit_free(text) else text, 320)
     if not _is_digit_free(text):
         text = "官方数据序列；状态见图例。" if lang == "zh" else \
             "Official statistical series; see status labels."
@@ -1708,7 +2424,7 @@ def _entry(chart_id: str, title: str, caption: str, series: list, html_ok: bool)
     return row
 
 
-def _render_series(item: _Series, charts_dir: Path, lang: str) -> dict:
+def _render_series(item: _Series, charts_dir: Path, lang: str, shared_bundle: bool) -> dict:
     chart_id = item.chart_id
     if not _SAFE_NAME_RE.match(chart_id):
         raise ValueError(f"unsafe chart id {chart_id!r}")
@@ -1717,27 +2433,28 @@ def _render_series(item: _Series, charts_dir: Path, lang: str) -> dict:
         _save_png(_draw_series(item, bundle, fonts), charts_dir / f"{chart_id}.png")
     html_ok = _HAS_PLOTLY and _write_html(
         _plotly_series(item, _series_bundle(item, lang)), charts_dir / f"{chart_id}.html",
-        _clean_text(bundle["title"], 160))
-    title_text = item.title_zh if lang == "zh" and item.title_zh else item.title
-    return _entry(chart_id, _manifest_title(title_text, lang),
+        _clean_text(bundle["title"], 160), shared_bundle)
+    title = _series_label(item.title, item.title_zh, item.series, item.geography, lang)
+    return _entry(chart_id, _manifest_title(title, lang),
                   _caption([item], lang, compare=False), [item.series], html_ok)
 
 
-def _render_compare(group: list, charts_dir: Path, lang: str, used: set) -> dict:
+def _render_compare(group: list, charts_dir: Path, lang: str, used: set, shared_bundle: bool) -> dict:
     chart_id = f"{_OWNED_PREFIX}{_compare_slug(group, used)}"
     if not _SAFE_NAME_RE.match(chart_id):
         raise ValueError(f"unsafe chart id {chart_id!r}")
     bundle, fonts = _with_fonts(lambda candidate: _compare_bundle(group, candidate), lang, chart_id)
     with plt.rc_context(_rc()):
         _save_png(_draw_compare(group, bundle, fonts), charts_dir / f"{chart_id}.png")
-    html_ok = _HAS_PLOTLY and _write_html(
-        _plotly_compare(group, _compare_bundle(group, lang)), charts_dir / f"{chart_id}.html",
-        _clean_text(bundle["title"], 160))
     title_bundle = _compare_bundle(group, lang)
+    html_ok = _HAS_PLOTLY and _write_html(
+        _plotly_compare(group, title_bundle), charts_dir / f"{chart_id}.html",
+        _clean_text(bundle["title"], 160), shared_bundle)
     suffix = "：跨经济体对比" if lang == "zh" else ": cross-economy comparison"
     items = [item for item, _label in group]
     return _entry(chart_id, _manifest_title(title_bundle["title"], lang, suffix),
-                  _caption(items, lang, compare=True), [item.series for item in items], html_ok)
+                  _caption(items, lang, compare=True, labels=title_bundle["labels"]),
+                  [item.series for item in items], html_ok)
 
 
 # ---------------------------------------------------------------------------
@@ -1809,8 +2526,8 @@ def _parse_args(argv):
     ap.add_argument("--dir", required=True,
                     help="run directory holding data/datasets.json (charts land in <dir>/charts)")
     ap.add_argument("--max", type=int, default=None,
-                    help="max single-series charts (default: DATA_SOURCES_CHARTS_MAX or 8); "
-                         "comparison charts (≤ 2) are extra")
+                    help="max data charts, single-series and comparison together (default: "
+                         "DATA_SOURCES_CHARTS_MAX or 8); a comparison replaces its members' singles")
     ap.add_argument("--lang", choices=("en", "zh"), default="en",
                     help="chart and manifest language (zh uses title_zh when present)")
     args = ap.parse_args(argv)
@@ -1867,7 +2584,7 @@ def main(argv=None) -> int:
         _drop_stale_rows(manifest_path)
         return finish(2, "no series with at least two numeric observations")
 
-    selected, summary["dropped"] = _select(items, args.max)
+    units, summary["dropped"] = _plan(items, args.max)
     for dropped in summary["dropped"]:
         _log(f"{dropped['series']}: dropped ({dropped['reason']})")
 
@@ -1876,28 +2593,22 @@ def main(argv=None) -> int:
         _log("charts/ is a symlink or not a directory; refusing to write outside the run directory")
         return finish(2, "charts/ is not a plain directory inside the run directory")
     charts_dir.mkdir(exist_ok=True)
+    shared_bundle = _HAS_PLOTLY and _ensure_plotly_bundle(charts_dir)
 
     entries: list = []
-    charted: list = []
-    for item in selected:
-        try:
-            entries.append(_render_series(item, charts_dir, args.lang))
-            charted.append(item)
-            _log(f"{item.chart_id}: wrote {entries[-1]['path']}")
-        except Exception as exc:  # noqa: BLE001 — 单图失败绝不拖垮其余
-            _log(f"{item.chart_id}: render failed ({type(exc).__name__}: {exc})")
-            summary["skipped"].append({"series": item.series,
-                                       "reason": f"render failed ({type(exc).__name__})"})
     used_compare: set = set()
-    for group in _compare_groups(charted):
+    for kind, unit in units:
         try:
-            entries.append(_render_compare(group, charts_dir, args.lang, used_compare))
+            if kind == "compare":
+                entries.append(_render_compare(unit, charts_dir, args.lang, used_compare, shared_bundle))
+            else:
+                entries.append(_render_series(unit, charts_dir, args.lang, shared_bundle))
             _log(f"{entries[-1]['id']}: wrote {entries[-1]['path']}")
-        except Exception as exc:  # noqa: BLE001
-            members = ", ".join(item.series for item, _label in group)
-            _log(f"comparison of {members}: render failed ({type(exc).__name__}: {exc})")
-            summary["skipped"].append({"series": members,
-                                       "reason": f"comparison render failed ({type(exc).__name__})"})
+        except Exception as exc:  # noqa: BLE001 — 单图失败绝不拖垮其余
+            members = ", ".join(item.series for item, _label in unit) if kind == "compare" else unit.series
+            _log(f"{members}: {kind} render failed ({type(exc).__name__}: {exc})")
+            reason = "comparison render failed" if kind == "compare" else "render failed"
+            summary["skipped"].append({"series": members, "reason": f"{reason} ({type(exc).__name__})"})
 
     if not entries:
         _drop_stale_rows(manifest_path)

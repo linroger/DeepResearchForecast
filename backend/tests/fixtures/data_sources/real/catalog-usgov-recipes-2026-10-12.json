@@ -1,0 +1,1478 @@
+{
+ "captured": "2026-10-12",
+ "series": {
+  "usgov:bea/nominal_pce": {
+   "args": {
+    "frequency": "Q",
+    "table_name": "T10105",
+    "year": "2025,2026"
+   },
+   "n_match": 1,
+   "n_series": 20,
+   "observations": [
+    {
+     "period": "2025Q1",
+     "value": 20477435
+    },
+    {
+     "period": "2025Q2",
+     "value": 20706590
+    },
+    {
+     "period": "2025Q3",
+     "value": 21027703
+    },
+    {
+     "period": "2025Q4",
+     "value": 21268873
+    },
+    {
+     "period": "2026Q1",
+     "value": 21525983
+    },
+    {
+     "period": "2026Q2",
+     "value": 21993177
+    }
+   ]
+  },
+  "usgov:bea/personal_income": {
+   "args": {
+    "frequency": "Q",
+    "table_name": "T20100",
+    "year": "2025,2026"
+   },
+   "n_match": 1,
+   "n_series": 20,
+   "observations": [
+    {
+     "period": "2025Q1",
+     "value": 25868568
+    },
+    {
+     "period": "2025Q2",
+     "value": 26223211
+    },
+    {
+     "period": "2025Q3",
+     "value": 26494345
+    },
+    {
+     "period": "2025Q4",
+     "value": 26724216
+    },
+    {
+     "period": "2026Q1",
+     "value": 27057186
+    },
+    {
+     "period": "2026Q2",
+     "value": 27371916
+    }
+   ]
+  },
+  "usgov:bea/real_gdp_growth": {
+   "args": {
+    "frequency": "Q",
+    "table_name": "T10101",
+    "year": "2025,2026"
+   },
+   "n_match": 1,
+   "n_series": 20,
+   "observations": [
+    {
+     "period": "2025Q1",
+     "value": 0.1
+    },
+    {
+     "period": "2025Q2",
+     "value": 4
+    },
+    {
+     "period": "2025Q3",
+     "value": 3.9
+    },
+    {
+     "period": "2025Q4",
+     "value": 0.2
+    },
+    {
+     "period": "2026Q1",
+     "value": 2.5
+    },
+    {
+     "period": "2026Q2",
+     "value": 2.2
+    }
+   ]
+  },
+  "usgov:bea/real_pce_growth": {
+   "args": {
+    "frequency": "Q",
+    "table_name": "T10101",
+    "year": "2025,2026"
+   },
+   "n_match": 1,
+   "n_series": 20,
+   "observations": [
+    {
+     "period": "2025Q1",
+     "value": 0.6
+    },
+    {
+     "period": "2025Q2",
+     "value": 2.1
+    },
+    {
+     "period": "2025Q3",
+     "value": 3.7
+    },
+    {
+     "period": "2025Q4",
+     "value": 1.9
+    },
+    {
+     "period": "2026Q1",
+     "value": 0.7
+    },
+    {
+     "period": "2026Q2",
+     "value": 3.8
+    }
+   ]
+  },
+  "usgov:bea/value_added_by_industry/22": {
+   "args": {
+    "frequency": "Q",
+    "industry": "22",
+    "table_id": "1",
+    "year": "2025"
+   },
+   "industry": "Utilities",
+   "n_rows": 1,
+   "observations": [
+    {
+     "period": "2025QI",
+     "value": 492.9
+    },
+    {
+     "period": "2025QII",
+     "value": 496.1
+    },
+    {
+     "period": "2025QIII",
+     "value": 516.4
+    },
+    {
+     "period": "2025QIV",
+     "value": 525.5
+    }
+   ]
+  },
+  "usgov:bea/value_added_by_industry/334": {
+   "args": {
+    "frequency": "Q",
+    "industry": "334",
+    "table_id": "1",
+    "year": "2025"
+   },
+   "industry": "Computer and electronic products",
+   "n_rows": 1,
+   "observations": [
+    {
+     "period": "2025QI",
+     "value": 299.8
+    },
+    {
+     "period": "2025QII",
+     "value": 315.2
+    },
+    {
+     "period": "2025QIII",
+     "value": 321.5
+    },
+    {
+     "period": "2025QIV",
+     "value": 325.2
+    }
+   ]
+  },
+  "usgov:bea/value_added_by_industry/51": {
+   "args": {
+    "frequency": "Q",
+    "industry": "51",
+    "table_id": "1",
+    "year": "2025"
+   },
+   "industry": "Information",
+   "n_rows": 1,
+   "observations": [
+    {
+     "period": "2025QI",
+     "value": 1707.4
+    },
+    {
+     "period": "2025QII",
+     "value": 1735
+    },
+    {
+     "period": "2025QIII",
+     "value": 1794.6
+    },
+    {
+     "period": "2025QIV",
+     "value": 1828.6
+    }
+   ]
+  },
+  "usgov:bea/value_added_by_industry/514": {
+   "args": {
+    "frequency": "Q",
+    "industry": "514",
+    "table_id": "1",
+    "year": "2025"
+   },
+   "industry": "Data processing, internet publishing, and other information services",
+   "n_rows": 1,
+   "observations": [
+    {
+     "period": "2025QI",
+     "value": 560.6
+    },
+    {
+     "period": "2025QII",
+     "value": 572.7
+    },
+    {
+     "period": "2025QIII",
+     "value": 613.6
+    },
+    {
+     "period": "2025QIV",
+     "value": 637.1
+    }
+   ]
+  },
+  "usgov:eia/crude_production": {
+   "args": {
+    "data": "value",
+    "facets": "series=MCRFPUS2",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "petroleum/crd/crpdn",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "value",
+    "duoarea",
+    "area-name",
+    "product",
+    "product-name",
+    "process",
+    "process-name",
+    "series",
+    "series-description",
+    "units"
+   ],
+   "first": [
+    "2026-07",
+    13948,
+    "NUS",
+    "U.S.",
+    "EPC0",
+    "Crude Oil",
+    "FPF",
+    "Field Production",
+    "MCRFPUS2",
+    "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+    "MBBL/D"
+   ],
+   "last": [
+    "2025-01",
+    13167,
+    "NUS",
+    "U.S.",
+    "EPC0",
+    "Crude Oil",
+    "FPF",
+    "Field Production",
+    "MCRFPUS2",
+    "U.S. Field Production of Crude Oil (Thousand Barrels per Day)",
+    "MBBL/D"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "MBBL/D"
+   ]
+  },
+  "usgov:eia/electricity_price/US.ALL": {
+   "args": {
+    "data": "price",
+    "facets": "stateid=US; sectorid=ALL",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "price",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "price-units"
+   ],
+   "first": [
+    "2026-07",
+    14.99,
+    "US",
+    "U.S. Total",
+    "ALL",
+    "all sectors",
+    "cents per kilowatt-hour"
+   ],
+   "last": [
+    "2025-01",
+    13.09,
+    "US",
+    "U.S. Total",
+    "ALL",
+    "all sectors",
+    "cents per kilowatt-hour"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "cents per kilowatt-hour"
+   ]
+  },
+  "usgov:eia/electricity_price/US.COM": {
+   "args": {
+    "data": "price",
+    "facets": "stateid=US; sectorid=COM",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "price",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "price-units"
+   ],
+   "first": [
+    "2026-07",
+    14.53,
+    "US",
+    "U.S. Total",
+    "COM",
+    "commercial",
+    "cents per kilowatt-hour"
+   ],
+   "last": [
+    "2025-01",
+    12.82,
+    "US",
+    "U.S. Total",
+    "COM",
+    "commercial",
+    "cents per kilowatt-hour"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "cents per kilowatt-hour"
+   ]
+  },
+  "usgov:eia/electricity_price/US.IND": {
+   "args": {
+    "data": "price",
+    "facets": "stateid=US; sectorid=IND",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "price",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "price-units"
+   ],
+   "first": [
+    "2026-07",
+    9.77,
+    "US",
+    "U.S. Total",
+    "IND",
+    "industrial",
+    "cents per kilowatt-hour"
+   ],
+   "last": [
+    "2025-01",
+    8.34,
+    "US",
+    "U.S. Total",
+    "IND",
+    "industrial",
+    "cents per kilowatt-hour"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "cents per kilowatt-hour"
+   ]
+  },
+  "usgov:eia/electricity_price/US.RES": {
+   "args": {
+    "data": "price",
+    "facets": "stateid=US; sectorid=RES",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "price",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "price-units"
+   ],
+   "first": [
+    "2026-07",
+    18.31,
+    "US",
+    "U.S. Total",
+    "RES",
+    "residential",
+    "cents per kilowatt-hour"
+   ],
+   "last": [
+    "2025-01",
+    15.94,
+    "US",
+    "U.S. Total",
+    "RES",
+    "residential",
+    "cents per kilowatt-hour"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "cents per kilowatt-hour"
+   ]
+  },
+  "usgov:eia/electricity_sales/TX.COM": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=TX; sectorid=COM",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    17843.54539,
+    "TX",
+    "Texas",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    13423.90748,
+    "TX",
+    "Texas",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/electricity_sales/US.ALL": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=US; sectorid=ALL",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    415276.35652,
+    "US",
+    "U.S. Total",
+    "ALL",
+    "all sectors",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    361981.07068,
+    "US",
+    "U.S. Total",
+    "ALL",
+    "all sectors",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/electricity_sales/US.COM": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=US; sectorid=COM",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    150578.72802,
+    "US",
+    "U.S. Total",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    124447.35304,
+    "US",
+    "U.S. Total",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/electricity_sales/US.IND": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=US; sectorid=IND",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    94403.25684,
+    "US",
+    "U.S. Total",
+    "IND",
+    "industrial",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    84519.20513,
+    "US",
+    "U.S. Total",
+    "IND",
+    "industrial",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/electricity_sales/US.RES": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=US; sectorid=RES",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    169665.51973,
+    "US",
+    "U.S. Total",
+    "RES",
+    "residential",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    152328.58847,
+    "US",
+    "U.S. Total",
+    "RES",
+    "residential",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/electricity_sales/VA.COM": {
+   "args": {
+    "data": "sales",
+    "facets": "stateid=VA; sectorid=COM",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/retail-sales",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "sales",
+    "stateid",
+    "stateDescription",
+    "sectorid",
+    "sectorName",
+    "sales-units"
+   ],
+   "first": [
+    "2026-07",
+    8576.89041,
+    "VA",
+    "Virginia",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "last": [
+    "2025-01",
+    7169.8366,
+    "VA",
+    "Virginia",
+    "COM",
+    "commercial",
+    "million kilowatt hours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "million kilowatt hours"
+   ]
+  },
+  "usgov:eia/generating_capacity/ALL": {
+   "args": {
+    "data": "capability",
+    "facets": "stateId=US; producertypeid=TOT; energysourceid=ALL",
+    "frequency": "annual",
+    "length": 50,
+    "route": "electricity/state-electricity-profiles/capability",
+    "start": "2022"
+   },
+   "columns": [
+    "period",
+    "capability",
+    "stateId",
+    "stateDescription",
+    "producertypeid",
+    "producerTypeDescription",
+    "energysourceid",
+    "energySourceDescription",
+    "capability-units"
+   ],
+   "first": [
+    "2024",
+    1230416.3,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "ALL",
+    "All",
+    "megawatts"
+   ],
+   "last": [
+    "2022",
+    1161436.4,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "ALL",
+    "All",
+    "megawatts"
+   ],
+   "n_rows": 3,
+   "total": 3,
+   "units": [
+    "megawatts"
+   ]
+  },
+  "usgov:eia/generating_capacity/BAT": {
+   "args": {
+    "data": "capability",
+    "facets": "stateId=US; producertypeid=TOT; energysourceid=BAT",
+    "frequency": "annual",
+    "length": 50,
+    "route": "electricity/state-electricity-profiles/capability",
+    "start": "2022"
+   },
+   "columns": [
+    "period",
+    "capability",
+    "stateId",
+    "stateDescription",
+    "producertypeid",
+    "producerTypeDescription",
+    "energysourceid",
+    "energySourceDescription",
+    "capability-units"
+   ],
+   "first": [
+    "2024",
+    27020,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "BAT",
+    "Battery",
+    "megawatts"
+   ],
+   "last": [
+    "2022",
+    8980.4,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "BAT",
+    "Battery",
+    "megawatts"
+   ],
+   "n_rows": 3,
+   "total": 3,
+   "units": [
+    "megawatts"
+   ]
+  },
+  "usgov:eia/generating_capacity/SOL": {
+   "args": {
+    "data": "capability",
+    "facets": "stateId=US; producertypeid=TOT; energysourceid=SOL",
+    "frequency": "annual",
+    "length": 50,
+    "route": "electricity/state-electricity-profiles/capability",
+    "start": "2022"
+   },
+   "columns": [
+    "period",
+    "capability",
+    "stateId",
+    "stateDescription",
+    "producertypeid",
+    "producerTypeDescription",
+    "energysourceid",
+    "energySourceDescription",
+    "capability-units"
+   ],
+   "first": [
+    "2024",
+    123454.1,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "SOL",
+    "Solar",
+    "megawatts"
+   ],
+   "last": [
+    "2022",
+    72866.3,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "SOL",
+    "Solar",
+    "megawatts"
+   ],
+   "n_rows": 3,
+   "total": 3,
+   "units": [
+    "megawatts"
+   ]
+  },
+  "usgov:eia/generating_capacity/WND": {
+   "args": {
+    "data": "capability",
+    "facets": "stateId=US; producertypeid=TOT; energysourceid=WND",
+    "frequency": "annual",
+    "length": 50,
+    "route": "electricity/state-electricity-profiles/capability",
+    "start": "2022"
+   },
+   "columns": [
+    "period",
+    "capability",
+    "stateId",
+    "stateDescription",
+    "producertypeid",
+    "producerTypeDescription",
+    "energysourceid",
+    "energySourceDescription",
+    "capability-units"
+   ],
+   "first": [
+    "2024",
+    152097.3,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "WND",
+    "Wind",
+    "megawatts"
+   ],
+   "last": [
+    "2022",
+    141402.2,
+    "US",
+    "United States",
+    "TOT",
+    "All sectors",
+    "WND",
+    "Wind",
+    "megawatts"
+   ],
+   "n_rows": 3,
+   "total": 3,
+   "units": [
+    "megawatts"
+   ]
+  },
+  "usgov:eia/net_generation/ALL": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=ALL",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    453744.39758,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "ALL",
+    "all fuels",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    402345.40122,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "ALL",
+    "all fuels",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:eia/net_generation/COW": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=COW",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    75784.96018,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "COW",
+    "all coal products",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    83153.25455,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "COW",
+    "all coal products",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:eia/net_generation/NG": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=NG",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    205294.0875,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "NG",
+    "natural gas",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    157000.70122,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "NG",
+    "natural gas",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:eia/net_generation/NUC": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=NUC",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    71171.673,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "NUC",
+    "nuclear",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    71738.938,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "NUC",
+    "nuclear",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:eia/net_generation/SUN": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=SUN",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    41411.7763,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "SUN",
+    "solar",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    15453.50225,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "SUN",
+    "solar",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:eia/net_generation/WND": {
+   "args": {
+    "data": "generation",
+    "facets": "location=US; sectorid=99; fueltypeid=WND",
+    "frequency": "monthly",
+    "length": 50,
+    "route": "electricity/electric-power-operational-data",
+    "start": "2025-01"
+   },
+   "columns": [
+    "period",
+    "generation",
+    "location",
+    "stateDescription",
+    "sectorid",
+    "sectorDescription",
+    "fueltypeid",
+    "fuelTypeDescription",
+    "generation-units"
+   ],
+   "first": [
+    "2026-07",
+    32183.92818,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "WND",
+    "wind",
+    "thousand megawatthours"
+   ],
+   "last": [
+    "2025-01",
+    43600.06416,
+    "US",
+    "U.S. Total",
+    "99",
+    "All Sectors",
+    "WND",
+    "wind",
+    "thousand megawatthours"
+   ],
+   "n_rows": 19,
+   "total": 19,
+   "units": [
+    "thousand megawatthours"
+   ]
+  },
+  "usgov:treasury/mts_corporation_income_taxes": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:30,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Corporation Income Taxes",
+     "current_month_rcpt_outly_amt": "1947625910.82",
+     "line_code_nbr": "30",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "3"
+    },
+    {
+     "classification_desc": "Corporation Income Taxes",
+     "current_month_rcpt_outly_amt": "13568609811.21",
+     "line_code_nbr": "30",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "3"
+    },
+    {
+     "classification_desc": "Corporation Income Taxes",
+     "current_month_rcpt_outly_amt": "69536652912.03",
+     "line_code_nbr": "30",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "3"
+    }
+   ]
+  },
+  "usgov:treasury/mts_customs_duties": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:110,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Customs Duties",
+     "current_month_rcpt_outly_amt": "12835527290.42",
+     "line_code_nbr": "110",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "11"
+    },
+    {
+     "classification_desc": "Customs Duties",
+     "current_month_rcpt_outly_amt": "-8546441906.97",
+     "line_code_nbr": "110",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "11"
+    },
+    {
+     "classification_desc": "Customs Duties",
+     "current_month_rcpt_outly_amt": "-25555668440.83",
+     "line_code_nbr": "110",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "11"
+    }
+   ]
+  },
+  "usgov:treasury/mts_deficit": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:520,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Surplus (+) or Deficit (-)",
+     "current_month_rcpt_outly_amt": "-166796952277.38",
+     "line_code_nbr": "520",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "55"
+    },
+    {
+     "classification_desc": "Surplus (+) or Deficit (-)",
+     "current_month_rcpt_outly_amt": "-432307874621.48",
+     "line_code_nbr": "520",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "55"
+    },
+    {
+     "classification_desc": "Surplus (+) or Deficit (-)",
+     "current_month_rcpt_outly_amt": "-120305275586.37",
+     "line_code_nbr": "520",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "55"
+    }
+   ]
+  },
+  "usgov:treasury/mts_individual_income_taxes": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:20,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Individual Income Taxes",
+     "current_month_rcpt_outly_amt": "179040465653.06",
+     "line_code_nbr": "20",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "2"
+    },
+    {
+     "classification_desc": "Individual Income Taxes",
+     "current_month_rcpt_outly_amt": "173271094383.06",
+     "line_code_nbr": "20",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "2"
+    },
+    {
+     "classification_desc": "Individual Income Taxes",
+     "current_month_rcpt_outly_amt": "283146831936.70",
+     "line_code_nbr": "20",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "2"
+    }
+   ]
+  },
+  "usgov:treasury/mts_interest_gross": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:360,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Interest on Treasury Debt Securities (Gross)",
+     "current_month_rcpt_outly_amt": "97768569546.00",
+     "line_code_nbr": "360",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "33"
+    },
+    {
+     "classification_desc": "Interest on Treasury Debt Securities (Gross)",
+     "current_month_rcpt_outly_amt": "117573576107.24",
+     "line_code_nbr": "360",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "33"
+    },
+    {
+     "classification_desc": "Interest on Treasury Debt Securities (Gross)",
+     "current_month_rcpt_outly_amt": "185199785714.46",
+     "line_code_nbr": "360",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "33"
+    }
+   ]
+  },
+  "usgov:treasury/mts_outlays": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:490,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Total Outlays",
+     "current_month_rcpt_outly_amt": "526829688118.80",
+     "line_code_nbr": "490",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "52"
+    },
+    {
+     "classification_desc": "Total Outlays",
+     "current_month_rcpt_outly_amt": "766317750177.27",
+     "line_code_nbr": "490",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "52"
+    },
+    {
+     "classification_desc": "Total Outlays",
+     "current_month_rcpt_outly_amt": "616066757155.07",
+     "line_code_nbr": "490",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "52"
+    }
+   ]
+  },
+  "usgov:treasury/mts_receipts": {
+   "args": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "fields": "record_date,line_code_nbr,src_line_nbr,classification_desc,current_month_rcpt_outly_amt",
+    "filter": "line_code_nbr:eq:130,record_date:gte:2026-06-01",
+    "page_number": 1,
+    "page_size": 100,
+    "sort": "-record_date"
+   },
+   "meta": {
+    "endpoint": "/v1/accounting/mts/mts_table_3",
+    "recordsReturned": 3,
+    "totalPages": 1
+   },
+   "rows": [
+    {
+     "classification_desc": "Total Receipts",
+     "current_month_rcpt_outly_amt": "360032735841.42",
+     "line_code_nbr": "130",
+     "record_date": "2026-08-31",
+     "src_line_nbr": "13"
+    },
+    {
+     "classification_desc": "Total Receipts",
+     "current_month_rcpt_outly_amt": "334009875555.79",
+     "line_code_nbr": "130",
+     "record_date": "2026-07-31",
+     "src_line_nbr": "13"
+    },
+    {
+     "classification_desc": "Total Receipts",
+     "current_month_rcpt_outly_amt": "495761481568.70",
+     "line_code_nbr": "130",
+     "record_date": "2026-06-30",
+     "src_line_nbr": "13"
+    }
+   ]
+  }
+ },
+ "source": "Live usgov MCP responses (us-gov-open-data server with the eia and bea modules, keys from the deployment .env) for every Treasury MTS, EIA and BEA catalog entry, called with the arguments the recipe defines (slice B probe5/probe6). EIA rows are trimmed to the first and last row; BEA keeps the matched line's observations; Treasury keeps every returned row."
+}

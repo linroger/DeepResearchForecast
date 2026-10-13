@@ -3395,10 +3395,45 @@ _RESEARCH_DATA_TOTAL_LIMIT = 64 * 1024 * 1024
 _RESEARCH_DATA_MAX_SERIES = 200
 
 
+def _research_data_directory_traversal(path: str, *, create: bool) -> int:
+    """Pin an absolute root whose string still carries ``x/..`` pairs.
+
+    Config joins canonical roots as ``<app>/../uploads``, which must pin, but a
+    symlink hiding inside ``link/..`` must never resolve outside its parent.
+    Lexical normalization cannot tell those apart, so resolve ``..`` against
+    the pinned parent directory (kernel semantics) and open every component
+    with O_NOFOLLOW: the walk either pins the literal path or fails.
+    """
+    if not os.path.isabs(path):
+        raise ValueError("research root must not contain parent traversal")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(os.sep, flags)
+    try:
+        for part in path.split(os.sep)[1:]:
+            if part in ("", "."):
+                continue
+            if create and part != "..":
+                try:
+                    os.mkdir(part, dir_fd=directory)
+                except FileExistsError:
+                    pass
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        return directory
+    except OSError as exc:
+        os.close(directory)
+        raise ValueError("research root must not contain parent traversal") from exc
+    except BaseException:
+        os.close(directory)
+        raise
+
+
 def _research_data_directory(path: str, *, create: bool = False) -> int:
     """Pin a directory without resolving away symlink components."""
-    if ".." in os.fspath(path).split(os.sep):
-        raise ValueError("research root must not contain parent traversal")
+    path = os.fspath(path)
+    if ".." in path.split(os.sep):
+        return _research_data_directory_traversal(path, create=create)
     path = os.path.abspath(path)
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     if hasattr(os, "O_NOFOLLOW_ANY"):
@@ -3567,6 +3602,105 @@ def _copy_research_data(source: str, destination: str) -> None:
                 handle.write(raw)
         finally:
             os.close(directory)
+
+
+def _merge_track_research_data(track_dirs: list[str], handoff_dir: str,
+                               sources: list[Any]) -> tuple[list[Any], dict[str, Any]]:
+    """L10: publish the union of the lanes' dataset generations into a merged handoff.
+
+    Each lane sealed its own ``data/`` tree and the merged ledger still cites
+    those files by lane-relative path, so without this the merged handoff has no
+    datasets and every downstream consumer silently loses the official data.
+    Every lane generation is validated first; artifact bytes are copied as-is
+    (dataset generations are content-addressed, so equal paths carry equal
+    bytes), one manifest keeps the first lane's row per series with its source
+    id remapped to the merged ledger, and a source whose dataset files cannot be
+    backed byte for byte keeps its page text but loses the dataset reference.
+    Returns ``(sources, audit)`` and never raises: a data problem degrades to
+    "official data unavailable".
+    """
+    audit: dict[str, Any] = {"series": 0, "unavailable_lanes": 0, "dropped_references": 0}
+    artifacts: dict[str, bytes] = {}
+    rows: dict[str, dict] = {}
+    for track_dir in track_dirs:
+        try:
+            lane = _research_data_artifacts(track_dir)
+            manifest = json.loads(lane["data/datasets.json"]) if lane else {"series": []}
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            audit["unavailable_lanes"] += 1
+            logger.warning("并行研究轨 %s 的官方数据代际不可用（跳过）: %s", track_dir, exc)
+            continue
+        for relative, raw in lane.items():
+            if relative != "data/datasets.json":
+                artifacts.setdefault(relative, raw)
+        for row in manifest["series"]:
+            file_raw, csv_raw = artifacts.get(row.get("file")), artifacts.get(row.get("csv"))
+            if (row["series"] not in rows and file_raw is not None and csv_raw is not None
+                    and hashlib.sha256(file_raw).hexdigest() == row.get("sha256")
+                    and hashlib.sha256(csv_raw).hexdigest() == row.get("csv_sha256")):
+                rows[row["series"]] = dict(row)
+
+    def backed(source: dict) -> bool:
+        dataset = source["dataset"]
+        for key in ("file", "page"):
+            if dataset.get(key) and dataset[key] not in artifacts:
+                return False
+        try:
+            if dataset.get("file") and dataset.get("snapshot") is not None \
+                    and json.loads(artifacts[dataset["file"]]) != dataset["snapshot"]:
+                return False
+            if dataset.get("page") and (
+                    hashlib.sha256(artifacts[dataset["page"]]).hexdigest() != source.get("content_sha256")
+                    or source.get("content") is not None
+                    and artifacts[dataset["page"]].decode("utf-8") != source["content"]):
+                return False
+        except (ValueError, UnicodeDecodeError):
+            return False
+        return True
+
+    merged: list[Any] = []
+    for source in sources:
+        if isinstance(source, dict) and isinstance(source.get("dataset"), dict) and (
+                not rows or not backed(source)):
+            source = {key: value for key, value in source.items() if key != "dataset"}
+            audit["dropped_references"] += 1
+        merged.append(source)
+    if not rows:
+        return merged, audit
+    cited = [(i + 1, source["dataset"]) for i, source in enumerate(merged)
+             if isinstance(source, dict) and isinstance(source.get("dataset"), dict)]
+    for row in rows.values():
+        # Prefer the ledger row citing this exact generation, else any row for the series.
+        number = next((n for n, dataset in cited if dataset.get("file") == row["file"]), None) or next(
+            (n for n, dataset in cited if dataset.get("series") == row["series"]), None)
+        row["source_id"] = f"S{number}" if number else ""
+    try:
+        for relative, raw in sorted(artifacts.items()):
+            path = os.path.join(handoff_dir, relative)
+            directory = _research_data_directory(os.path.dirname(path), create=True)
+            try:
+                try:
+                    fd = os.open(os.path.basename(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o600, dir_fd=directory)
+                except FileExistsError:
+                    if _research_data_read(handoff_dir, relative, _RESEARCH_DATA_FILE_LIMIT) != raw:
+                        raise ValueError(f"merged research data path holds different bytes: {relative}")
+                    continue
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(raw)
+            finally:
+                os.close(directory)
+        from ..utils.atomic import write_json_atomic
+        write_json_atomic(os.path.join(handoff_dir, "data", "datasets.json"), {
+            "schema_version": 1, "generated_at": _utcnow(), "series": list(rows.values())})
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning("合并研究的官方数据发布失败，降级为「官方数据不可用」: %s", exc)
+        audit["dropped_references"] = sum(
+            1 for source in sources if isinstance(source, dict) and isinstance(source.get("dataset"), dict))
+        return [{key: value for key, value in source.items() if key != "dataset"}
+                if isinstance(source, dict) else source for source in sources], audit
+    audit["series"] = len(rows)
+    return merged, audit
 
 
 def _research_data_file_set(root: str) -> set[str]:
@@ -7095,9 +7229,11 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     try:
         from .official_data import load_official_data, simulation_research_binding
         binding = simulation_research_binding(simulation_id)
-        if binding["status"] == "invalid":
-            return out
         bound = binding["status"] == "valid"
+        if binding["status"] == "invalid":
+            # A changed or unreadable generation proof drops only the official
+            # data; the dossier keeps the pre-binding pipeline lookup.
+            logger.warning("模拟 %s 的研究代际绑定校验失败：官方数据不可用，研究档案按管线回退查找", simulation_id)
         entries = ([{"pipeline_id": binding["pipeline_id"]}] if bound
                    else PipelineManager.list_pipelines())
         for entry in entries:
@@ -9109,6 +9245,17 @@ class PipelineOrchestrator:
                 pass
             self._flush_run_telemetry(state)  # W9-3：集成窗口结束即落一版遥测
 
+    @staticmethod
+    def _record_official_data_unbound(state: "PipelineState", stage: str, exc: BaseException) -> None:
+        """D2: a failed research-generation capture or simulation binding never fails
+        the run. The simulation stays unbound, so every consumer resolves official
+        data to None (the dossier still loads through the pipeline lookup); the
+        reason is recorded for diagnosis."""
+        reason = f"{type(exc).__name__}: {' '.join(str(exc).split())[:240]}"
+        state.options["official_data_binding"] = {"status": "unavailable", "stage": stage, "reason": reason}
+        logger.warning("[%s] 官方数据绑定失败（%s 阶段），下游按「官方数据不可用」降级继续: %s",
+                       state.pipeline_id, stage, reason)
+
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
@@ -9941,13 +10088,13 @@ class PipelineOrchestrator:
     def _viz_artifact_specs(hd: str) -> list[tuple[str, str]]:
         """VIZ-2: 可视化产物通道的「索引文件」候选 (name, 绝对路径)——供 RESEARCH/REPORT 两阶段共用。
 
-        单文件锚点（与 charts/data 目录内动态命名的 png|svg|csv 一一对应地登记不现实，故以索引清单
-        为完整性/深链锚）：
+        固定名的索引清单作为本通道的完整性/深链锚（charts/ 与 data/ 下的文件名是动态的）：
           - charts    → handoff/charts.json（图表清单；兼容旧 handoff/charts/charts.json）
           - datasets  → handoff/data/datasets.json（数据集清单，与 charts.json 平行）
         二者均为可选、且在旧跑上不存在：调用方（登记/复用校验/临时产物发现）一律按「文件缺失即跳过」
-        自然降级，绝不误伤健康/完整性校验。原始 *.png|svg / *.csv 作为增量证据另经
-        _discover_partial_artifacts 目录扫描透出（见该方法）。关闭 PIPELINE_VIZ_ARTIFACTS 时整段返回空。
+        自然降级，绝不误伤健康/完整性校验。原始图表（_viz_dynamic_artifact_specs）与当前代际的
+        数据集 CSV（_dataset_artifact_specs）另行枚举：运行中经 _discover_partial_artifacts 透出，
+        完成时由 _record_stage_artifacts 正式登记。关闭 PIPELINE_VIZ_ARTIFACTS 时整段返回空。
         """
         if not bool(getattr(Config, "PIPELINE_VIZ_ARTIFACTS", True)):
             return []
@@ -9979,6 +10126,48 @@ class PipelineOrchestrator:
         except OSError:
             return []
         return out
+
+    @staticmethod
+    def _dataset_artifact_specs(hd: str) -> list[tuple[str, str]]:
+        """Official-data CSVs of the current dataset generation, as ``dataset_<file>``.
+
+        Only CSVs that ``data/datasets.json`` names are listed: older content
+        generations stay on disk next to the current one and must not get deep
+        links. The research dossier links a series CSV only when this key is
+        registered, so the completion boundary and the live scan share this one
+        list. A missing or unreadable manifest, a reference outside ``data/``,
+        a symlink or a non-regular file is skipped; this never raises.
+        """
+        data_dir = os.path.join(hd, "data")
+        manifest_path = os.path.join(data_dir, "datasets.json")
+        try:
+            if (os.path.islink(data_dir) or os.path.islink(manifest_path)
+                    or not os.path.isfile(manifest_path)
+                    or os.path.getsize(manifest_path) > _RESEARCH_DATA_FILE_LIMIT):
+                return []
+            with open(manifest_path, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            rows = manifest.get("series") if isinstance(manifest, dict) else None
+            if not isinstance(rows, list):
+                return []
+            out: list[tuple[str, str]] = []
+            seen: set[str] = set()
+            for row in rows[:_RESEARCH_DATA_MAX_SERIES]:
+                relative = row.get("csv") if isinstance(row, dict) else None
+                if not isinstance(relative, str) or not relative.startswith("data/"):
+                    continue
+                filename = relative[len("data/"):]
+                if (not filename.endswith(".csv") or filename in seen
+                        or filename != os.path.basename(filename)):
+                    continue
+                path = os.path.join(data_dir, filename)
+                if os.path.islink(path) or not os.path.isfile(path):
+                    continue
+                seen.add(filename)
+                out.append((f"dataset_{filename}", path))
+            return out
+        except (OSError, ValueError, TypeError, RecursionError):
+            return []
 
     @staticmethod
     def _report_viz_dynamic_artifact_specs(report_dir: str) -> list[tuple[str, str]]:
@@ -10092,10 +10281,14 @@ class PipelineOrchestrator:
 
         # Research charts are created at the very end of the subprocess. Register
         # them again at the completion boundary so deep links never depend on a
-        # lucky progress-poll scan occurring after rendering.
+        # lucky progress-poll scan occurring after rendering. Official-data CSVs
+        # get formal keys here too: live-scan ``_partial`` keys are dropped at
+        # PREPARE, and the dossier links a series CSV only while one is registered.
         if stage == STAGE_RESEARCH and bool(getattr(Config, "PIPELINE_VIZ_ARTIFACTS", True)):
             hd = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
             for name, path in self._viz_dynamic_artifact_specs(hd):
+                add_if(name, path)
+            for name, path in self._dataset_artifact_specs(hd):
                 add_if(name, path)
         elif (stage == STAGE_REPORT and state.report_id
               and bool(getattr(Config, "PIPELINE_VIZ_ARTIFACTS", True))):
@@ -10551,11 +10744,8 @@ class PipelineOrchestrator:
                 hd = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
                 for _name, _path in PipelineOrchestrator._viz_dynamic_artifact_specs(hd):
                     _stat(_name, _path)
-                _ddir = os.path.join(hd, "data")
-                if os.path.isdir(_ddir):
-                    for fn in sorted(os.listdir(_ddir)):
-                        if fn.endswith(".csv"):
-                            _stat(f"dataset_{fn}", os.path.join(_ddir, fn))
+                for _name, _path in PipelineOrchestrator._dataset_artifact_specs(hd):
+                    _stat(_name, _path)
             elif (stage == STAGE_REPORT and state.report_id
                   and bool(getattr(Config, "PIPELINE_VIZ_ARTIFACTS", True))):
                 _report_dir = ReportManager._get_report_folder(state.report_id)
@@ -12076,6 +12266,13 @@ class PipelineOrchestrator:
         # 为「取最小值」的合并块，并按合并后的 sources 重算 source_tiers/计数（诚实）。
         base_meta: dict = next((m for m in track_metas if m), {})
         merged_meta = dict(base_meta)
+        # The merged generation ran from the earliest lane start to the latest lane
+        # finish; official-data snapshots judge the lanes' captures against it.
+        for _key, _pick in (("started_at", min), ("finished_at", max)):
+            _stamps = [m[_key] for m in track_metas
+                       if isinstance(m, dict) and isinstance(m.get(_key), str) and _parse_iso(m[_key])]
+            if _stamps:
+                merged_meta[_key] = _pick(_stamps, key=_parse_iso)
         merged_meta["research_quality"] = merged_rq
         merged_meta["source_tiers"] = _source_tier_histogram(merged_sources)
         merged_meta["sources_count"] = len(merged_sources)
@@ -12127,6 +12324,12 @@ class PipelineOrchestrator:
         # marker has been remapped to merged_sources, so publish exactly one
         # global References section rather than K colliding local ledgers.
         merged_report = append_merged_references(merged_report, merged_sources)
+
+        # L10: lanes cite their own data/ trees; publish their union so the merged
+        # handoff keeps the official datasets (unbackable references are dropped).
+        merged_sources, _data_merge = _merge_track_research_data(track_dirs, handoff_dir, merged_sources)
+        if _data_merge["series"] or _data_merge["dropped_references"] or _data_merge["unavailable_lanes"]:
+            state.options["official_data_merge"] = _data_merge
 
         # 落盘合并产物到 handoff_dir（下游/resume 读的正是这些文件）
         report_path = os.path.join(handoff_dir, "research_report.md")
@@ -12646,8 +12849,12 @@ class PipelineOrchestrator:
                     handoff_dir=handoff_dir,
                 )
                 from .official_data import capture_research_generation
-                _consumed_research_generation = capture_research_generation(
-                    handoff_dir, report=report_md, sources=research.get("sources"))
+                try:
+                    _consumed_research_generation = capture_research_generation(
+                        handoff_dir, report=report_md, sources=research.get("sources"))
+                except Exception as _capture_err:  # noqa: BLE001 — binding is enrichment provenance only
+                    _consumed_research_generation = None
+                    self._record_official_data_unbound(state, STAGE_RESEARCH, _capture_err)
             self._complete_stage(
                 state,
                 STAGE_RESEARCH,
@@ -12859,11 +13066,16 @@ class PipelineOrchestrator:
                 # Even dossier-only graph ingestion can use the stored public
                 # statistical baseline. This remains modeler evidence; actor
                 # knowledge is still admitted through its context-pack policy.
-                from .official_data import historical_snapshot, load_official_data
+                from .official_data import historical_snapshot, load_official_data, research_run_window
+                _official_snapshot_stats: dict[str, Any] = {}
                 _official_snapshot = historical_snapshot(
                     load_official_data(handoff_dir),
                     as_of=actors.get("as_of_date") if isinstance(actors, dict) else None,
+                    research_window=research_run_window(handoff_dir),
+                    stats=_official_snapshot_stats,
                 )
+                if _official_snapshot_stats.get("excluded"):
+                    state.options["official_snapshot_excluded"] = _official_snapshot_stats["excluded"]
                 if _official_snapshot:
                     chunks = chunks + _graph_research_chunks(
                         _official_snapshot, "Official statistical observations",
@@ -13151,11 +13363,21 @@ class PipelineOrchestrator:
                 upd(5, "创建模拟…")
                 sim_state = sim_manager.create_simulation(project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
                 state.simulation_id = sim_state.simulation_id
-                from .official_data import bind_simulation_research
-                bind_simulation_research(
-                    sim_state.simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                    pipeline_id=state.pipeline_id, expected_generation=_consumed_research_generation,
-                    report=report_md, sources=research.get("sources"))
+                if _consumed_research_generation is not None:
+                    from .official_data import ResearchBindingConflict, bind_simulation_research
+                    try:
+                        bind_simulation_research(
+                            sim_state.simulation_id,
+                            state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                            pipeline_id=state.pipeline_id, expected_generation=_consumed_research_generation,
+                            report=report_md, sources=research.get("sources"))
+                        state.options.pop("official_data_binding", None)
+                    except ResearchBindingConflict:
+                        # A fresh simulation id that already pins another research
+                        # generation is a provenance violation, not a data outage.
+                        raise
+                    except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
+                        self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
                 # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的
                 # *_partial 临时产物指针（扫描器会为新 attempt 重新登记）。
                 for _pk in [k for k in list(state.artifacts) if k.endswith("_partial")]:

@@ -14,16 +14,19 @@
 #
 # EXECPLAN2 I-8-2: opt-in `--deep` adds the bounded, expensive checks the fast
 # path deliberately skips, so the costliest first-run / stale-credential
-# failures surface in a deliberate ~15s gate instead of ~30 min into a run:
+# failures surface in a deliberate gate (~15s; up to ~2 min with the data probe) instead of ~30 min into a run:
 #   * a 1-token live completion against the configured LLM_PROVIDER (and the
 #     DEERFLOW_MODEL credential) to catch bad / expired keys;
 #   * verify the GRAPHITI_EMBED_MODEL (~470MB) is present in the HF cache, so an
 #     offline first run fails at the gate instead of deep inside the graph build
 #     (add `--pull` to pre-download it when absent and online);
-#   * a free-disk check against GRAPHITI_DATA_DIR / uploads.
+#   * a free-disk check against GRAPHITI_DATA_DIR / uploads;
+#   * a live official-data probe (advisory, up to ~90s): every enabled data
+#     MCP server's handshake plus one cache-first catalog sample (BLS handshake
+#     only, so its keyless daily quota is never spent); key names, never values.
 #
 #   bash scripts/doctor.sh            # fast, offline, free  (default)
-#   bash scripts/doctor.sh --deep     # + live key / model-cache / disk probes
+#   bash scripts/doctor.sh --deep     # + live key / model-cache / disk / data probes
 #   bash scripts/doctor.sh --deep --pull   # also pre-pull a missing embed model
 #
 # Exit code: 0 = ready to run; 1 = at least one blocking problem; 2 = no
@@ -44,9 +47,9 @@ for arg in "$@"; do
     --deep)        DEEP=1 ;;
     --pull)        PULL=1 ;;
     -h|--help)
-      # Print the header doc block (lines 3-31, between the rule lines) verbatim,
+      # Print the header doc block (lines 3-34, between the rule lines) verbatim,
       # stripping the leading "# " so it reads as plain help text.
-      sed -n '3,31p' "$SCRIPT_SOURCE" | sed 's/^# \{0,1\}//'
+      sed -n '3,34p' "$SCRIPT_SOURCE" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) printf 'doctor.sh: unknown option %s (try --deep, --pull, --help)\n' "$arg" >&2; exit 64 ;;
   esac
@@ -588,6 +591,41 @@ PY
     # problem so a broken deep probe never masquerades as "all clear".
     if [ "$DEEP_LINES" -eq 0 ]; then
       bad "deep probes produced no output — the backend Python child likely crashed; re-run: $BE_PY $PREFLIGHT_PY --deep --json"
+    fi
+
+    # I4: live official-data probe — the same probe_data_sources() that serves
+    # POST /api/settings/data-sources/test. Per enabled provider: MCP initialize +
+    # list_tools, then one cache-first catalog sample (BLS: handshake only). Advisory
+    # by contract (an unavailable source never fails a run), so problems are deep
+    # warnings (exit 2), never ✗. The app logger writes to stdout, so the probe
+    # prints its level<TAB>message lines on the original stdout and parks
+    # sys.stdout on stderr (discarded here) before importing the backend.
+    if [ "${DS_ENABLED:-true}" = "true" ]; then
+      DOCTOR_DATA_PROBE='import os, sys
+out = sys.stdout
+sys.stdout = sys.stderr
+def emit(level, message):
+    out.write(level + "\t" + " ".join(str(message).split()) + "\n")
+    out.flush()
+sys.path.insert(0, os.environ["DOCTOR_BACKEND_DIR"])
+try:
+    from app.api.settings import probe_data_sources
+    result = probe_data_sources()
+except Exception as exc:
+    emit("warn", "official-data probe unavailable (" + type(exc).__name__ + ")")
+    raise SystemExit(0)
+for name, row in result["providers"].items():
+    keys = ", ".join(key + " " + status for key, status in row["keys"].items())
+    emit("ok" if row["state"] in ("ok", "disabled") else "warn",
+         "data " + name + ": " + row["state"] + " (" + str(row["latency_s"]) + "s) — " + row["detail"]
+         + (" [" + keys + "]" if keys else ""))'
+      DATA_LINES_BEFORE=$DEEP_LINES
+      render_deep_lines < <(DOCTOR_BACKEND_DIR="$ROOT_DIR/backend" "$BE_PY" -c "$DOCTOR_DATA_PROBE" 2>/dev/null)
+      if [ "$DEEP_LINES" -eq "$DATA_LINES_BEFORE" ]; then
+        dwarn "official-data probe produced no output — the backend Python child likely crashed (advisory; runs continue without official data)"
+      fi
+    else
+      ok "official-data probe skipped (DATA_SOURCES_ENABLED=${DS_ENABLED:-})"
     fi
   fi
 fi

@@ -1,0 +1,125 @@
+{
+ "capture": {
+  "cache_file": "17232627215412640e8f1d9d96aa4a6c36b94e9c45a4e76c633507b91b93ee6d.json",
+  "retrieved_at": "2026-10-11T19:51:39.475821+00:00",
+  "source": "normalized live series cache (scratchpad/fix/cache)",
+  "trimmed": "newest 12 observations; provenance without ['chunks', 'metadata', 'pages', 'tool_responses']"
+ },
+ "head_brief": "[S3] wb:IMF_WEO_NGDP_RPCH/CHN — Gross domestic product (GDP), Constant prices, Percent change (Percentage change, A)\n2019: 6.06% [unknown]\n2020: 2.34% [unknown]\n2021: 8.56% [unknown]\n2022: 3.11% [unknown]\n2023: 5.38% [unknown]\n2024: 5% [unknown]\n2025: 4.96% [unknown]\n2026: 4.41% [unknown]\nNative Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+ "head_page": "# Gross domestic product (GDP), Constant prices, Percent change\nProvider: World Bank Data360 · Series: wb:IMF_WEO_NGDP_RPCH/CHN · Units: Percentage change · Frequency: A · Seasonal adjustment: unknown\nSource: https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH · Retrieved: 2026-10-11T19:51:39.475821+00:00 · Coverage shown: 2015-01-01 to 2026-01-01 (12 observations)\nGeography: CHN · Vintage: latest published vintage (Data360 V_LST) · Route: mcp\nNotes: Native Data360 strips observation status; historical/estimate/projection boundary is unknown.\n## Summary\n## Observations (Percentage change)\nValues in Percentage change.\n| Period | Value | Status |\n|---|---|---|\n| 2015 | 7.02% | unknown |\n| 2016 | 6.78% | unknown |\n| 2017 | 6.89% | unknown |\n| 2018 | 6.76% | unknown |\n| 2019 | 6.06% | unknown |\n| 2020 | 2.34% | unknown |\n| 2021 | 8.56% | unknown |\n| 2022 | 3.11% | unknown |\n| 2023 | 5.38% | unknown |\n| 2024 | 5% | unknown |\n| 2025 | 4.96% | unknown |\n| 2026 | 4.41% | unknown |",
+ "row": {
+  "api_url": "",
+  "frequency": "A",
+  "geography": "CHN",
+  "kiqs": [],
+  "last_updated": "",
+  "notes": "Native Data360 strips observation status; historical/estimate/projection boundary is unknown.",
+  "observations": [
+   {
+    "date": "2015-01-01",
+    "flag": "unknown",
+    "value": 7.018399
+   },
+   {
+    "date": "2016-01-01",
+    "flag": "unknown",
+    "value": 6.775548
+   },
+   {
+    "date": "2017-01-01",
+    "flag": "unknown",
+    "value": 6.890957
+   },
+   {
+    "date": "2018-01-01",
+    "flag": "unknown",
+    "value": 6.758615
+   },
+   {
+    "date": "2019-01-01",
+    "flag": "unknown",
+    "value": 6.064729
+   },
+   {
+    "date": "2020-01-01",
+    "flag": "unknown",
+    "value": 2.33658
+   },
+   {
+    "date": "2021-01-01",
+    "flag": "unknown",
+    "value": 8.555707
+   },
+   {
+    "date": "2022-01-01",
+    "flag": "unknown",
+    "value": 3.112082
+   },
+   {
+    "date": "2023-01-01",
+    "flag": "unknown",
+    "value": 5.376818
+   },
+   {
+    "date": "2024-01-01",
+    "flag": "unknown",
+    "value": 5.002785
+   },
+   {
+    "date": "2025-01-01",
+    "flag": "unknown",
+    "value": 4.958804
+   },
+   {
+    "date": "2026-01-01",
+    "flag": "unknown",
+    "value": 4.41261
+   }
+  ],
+  "projection_from": "",
+  "provenance": {
+   "attributes": {
+    "UNIT_MEASURE": [
+     "PC"
+    ],
+    "UNIT_MEASURE_NAME": [
+     "Percentage change"
+    ],
+    "UNIT_MULT": [
+     "0"
+    ]
+   },
+   "country_code": "CHN",
+   "database_id": "IMF_WEO",
+   "delivered_end": "2026-01-01",
+   "delivered_start": "2002-01-01",
+   "fidelity_policy_version": 2,
+   "indicator_id": "IMF_WEO_NGDP_RPCH",
+   "intentional_delivery_trim": false,
+   "metadata_origin": "provider_and_curated_catalog",
+   "native_complete": true,
+   "native_frequency": "A",
+   "native_periodicity": "A",
+   "native_rows": 26,
+   "normalization_policy_version": 2,
+   "projection_status": "not supplied",
+   "requested_end": "2026-10-11",
+   "requested_start": "2001-10-11",
+   "resolution_safe": false,
+   "response_sha256": "54219e72476f42e9f8230bade129508bc6c4ceccf49ecda01047efc4d4fe8388",
+   "retrieval_route": "mcp"
+  },
+  "provider": "wb",
+  "provider_name": "World Bank Data360",
+  "retrieved_at": "2026-10-11T19:51:39.475821+00:00",
+  "route": "mcp",
+  "seasonal_adjustment": "",
+  "series": "wb:IMF_WEO_NGDP_RPCH/CHN",
+  "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+  "title": "Gross domestic product (GDP), Constant prices, Percent change",
+  "title_zh": "中国实际GDP增长率（IMF WEO）",
+  "transform": "",
+  "units": "Percentage change",
+  "vintage": "latest published vintage (Data360 V_LST)"
+ }
+}

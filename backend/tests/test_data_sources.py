@@ -1,11 +1,16 @@
-"""Common producer acceptance with source-derived synthetic MCP payloads.
+"""Common producer acceptance with trimmed real MCP payloads (captured 2026-10-11).
 
-Run under backend/scripts/main_offline_pytest.py, before application imports.
-No vendor imports, built servers, provider calls, or populated runs are used.
+``provider_responses.json`` holds one real tool payload per provider; tests that
+need a contradiction or a failure mutate a copy of it. Runs under plain pytest
+(the CI path) and the guarded offline runner. Bridge modules load by bare name
+from deerflow_bridge/, as the deployed bridge does. No vendor imports, built
+servers, provider calls, or populated runs are used.
 """
 import copy
 import hashlib
 import json
+import os
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -13,12 +18,23 @@ from pathlib import Path
 
 import pytest
 
-from deerflow_bridge import data_sources as ds
-from deerflow_bridge.data_mcp import CallResult
+_BRIDGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "deerflow_bridge")
+if _BRIDGE_DIR not in sys.path:
+    sys.path.insert(0, _BRIDGE_DIR)
+
+import data_sources as ds  # noqa: E402
+from data_mcp import CallResult  # noqa: E402
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "data_sources" / "provider_responses.json"
-NOW = 1791763200.0  # fixed UTC clock; no vintage inference from this value
+REAL = Path(__file__).parent / "fixtures" / "data_sources" / "real" / "providers"
+NOW = 1791763200.0  # fixed UTC clock (2026-10-12T00:00:00Z)
+
+
+def real_response(name, tool):
+    """The real payload one captured call returned (fixtures/data_sources/real/providers)."""
+    capture = json.loads((REAL / f"{name}.json").read_text())
+    return next(c["response"] for c in capture["calls"] if c["tool"] == tool)
 
 
 class Hub:
@@ -52,7 +68,7 @@ def api(tmp_path, payloads, handler=None, **kw):
         if tool == "imf_get_parameter_defs":
             return payloads["imf_defs"]
         if tool == "data360_get_metadata":
-            return {"indicator_metadata": payloads["wb"]["metadata"], "error": None}
+            return {"indicator_metadata": payloads["wb_metadata"], "error": None, "stale": False}
         return payloads["treasury" if provider == "usgov" else provider]
     hub = Hub(handler or default)
     env = {"DATA_SOURCES_ENABLED": "true", "FRED_API_KEY": "synthetic-key"}
@@ -80,27 +96,38 @@ def test_ids(text, expected):
     assert ds.parse_series_id(text) == expected
 
 
-@pytest.mark.parametrize("sid,provider,tool", [
-    ("fred:UNRATE", "fred", "fred_get_series"), ("bls:LNS14000000", "bls", "get_multiple_series"),
-    ("bis:WS_CBPOL/M.US", "bis", "fetch_dataset"), ("imf:PCPS/G001.POILBRE.USD.M", "imf", "imf_fetch_data"),
-    ("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", "wb", "data360_get_data"),
-    ("usgov:treasury/mts_deficit", "usgov", "treasury_query_fiscal_data"),
-])
-def test_six_native_handlers_to_persisted_pack(tmp_path, payloads, sid, provider, tool):
+# (series, provider, tool, window, first and last normalized points) for the real payloads.
+_REAL_HANDLERS = [
+    ("fred:UNRATE", "fred", "fred_get_series", ("2024-01-01", "2024-12-31"), ("2024-01-01", 3.7), ("2024-12-01", 4.1)),
+    ("bls:LNS14000000", "bls", "get_multiple_series", ("2025-01-01", "2026-12-31"), ("2025-01-01", 4.0), ("2026-09-01", 4.2)),
+    ("bis:WS_CBPOL/M.US", "bis", "fetch_dataset", ("2024-01-01", "2024-12-31"), ("2024-01-01", 5.375), ("2024-12-01", 4.375)),
+    ("imf:PCPS/G001.POILBRE.USD.M", "imf", "imf_fetch_data", ("2024-01-01", "2024-12-31"),
+     ("2024-01-01", 79.11), ("2024-12-01", 73.22772727272726)),
+    ("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", "wb", "data360_get_data", ("2015-01-01", "2025-12-31"),
+     ("2015-01-01", 2.94555), ("2025-01-01", 2.161382)),
+    ("usgov:treasury/mts_deficit", "usgov", "treasury_query_fiscal_data", ("2024-01-01", "2024-12-31"),
+     ("2024-01-01", -21930356331.02), ("2024-12-01", -86731619013.29)),
+]
+
+
+@pytest.mark.parametrize("sid,provider,tool,window,first,last", _REAL_HANDLERS)
+def test_six_native_handlers_to_persisted_pack(tmp_path, payloads, sid, provider, tool, window, first, last):
     source, hub = api(tmp_path, payloads)
-    result = source.get(sid, start="2022-01-01", end="2024-12-31")
+    result = source.get(sid, start=window[0], end=window[1])
     assert isinstance(result, ds.Series), result
     assert result.series == sid and result.provider == provider
     assert result.observations == sorted(result.observations, key=lambda o: o.date)
-    assert result.observations[1].value is None
+    assert (result.observations[0].date, result.observations[0].value) == first
+    assert (result.observations[-1].date, result.observations[-1].value) == last
     assert result.route == "mcp" and result.retrieved_at and result.source_url.startswith("https://")
     assert result.vintage == "" and result.provenance["response_sha256"]
     args = next(a for p, t, a in hub.calls if t == tool)
     if provider == "fred":
         assert args["units"] == "lin" and "frequency" not in args
     if provider == "bls":
-        assert args["series_ids"] == ["LNS14000000"] and args["start_year"] == "2022"
-        assert result.observations[-1].flag == "preliminary"
+        assert args["series_ids"] == ["LNS14000000"] and args["start_year"] == "2025"
+        gap = next(o for o in result.observations if o.date == "2025-10-01")  # 2025 lapse in appropriations
+        assert gap.value is None and "lapse in appropriations" in result.provenance["raw_status"]["2025-10-01"][0]["text"]
     if provider == "bis":
         assert args["flow_ref"] == "BIS,WS_CBPOL,1.0" and args["key"] == "M.US"
     if provider == "imf":
@@ -176,6 +203,7 @@ def test_fred_fallback_rejects_wrong_header_and_oversize(tmp_path, payloads):
 def test_exact_calendar_transform_gaps_and_warmup(tmp_path, payloads):
     payloads["fred"]["data"] = [{"date": "2023-03-01", "value": 100}, {"date": "2024-01-01", "value": 110},
                                 {"date": "2024-03-01", "value": 120}]
+    payloads["fred"]["total_observations"] = 3
     source, hub = api(tmp_path, payloads)
     result = source.get("fred:UNRATE", start="2024-01-01", end="2024-03-31", transform="yoy")
     assert isinstance(result, ds.Series) and result.series == "fred:UNRATE#yoy"
@@ -207,18 +235,24 @@ def test_bls_batch_chunking_and_quota(tmp_path, payloads):
     assert not second_hub.calls
 
 
-def test_wb_paging_and_no_invented_projection_boundary(tmp_path, payloads):
+def test_wb_paging_and_vintage_projection_boundary(tmp_path, payloads):
+    metadata = real_response("wb_imf_weo_ngdp_rpch_chn_default_window", "data360_get_metadata")
+    rows = real_response("wb_imf_weo_ngdp_rpch_chn_default_window", "data360_get_data")["data"]
     def pages(provider, tool, args):
         if tool == "data360_get_metadata":
-            return {"indicator_metadata": {"idno": "IMF_WEO_NGDP_RPCH", "database_id": "IMF_WEO", "indicator_name": "WEO GDP", "periodicity": "Annual", "measurement_unit": "Percent change"}, "error": None}
-        return {"data": [{"REF_AREA": "CHN", "TIME_PERIOD": str(2024 + args["offset"]), "OBS_VALUE": 4.0, "UNIT_MEASURE": "PT", "UNIT_MEASURE_NAME": "Percent"}],
-                "metadata": {}, "count": 1, "offset": args["offset"], "total_count": 2,
-                "has_more": args["offset"] == 0, "next_offset": 1 if args["offset"] == 0 else None}
+            return metadata
+        page = rows[:20] if args["offset"] == 0 else rows[20:]
+        return {"data": page, "metadata": {}, "count": len(page), "offset": args["offset"], "total_count": len(rows),
+                "has_more": args["offset"] == 0, "next_offset": 20 if args["offset"] == 0 else None, "error": None}
     source, hub = api(tmp_path, payloads, pages)
-    result = source.get("wb:IMF_WEO_NGDP_RPCH/CHN", start="2024-01-01", end="2026-12-31")
-    assert isinstance(result, ds.Series) and len(result.observations) == 2
-    assert result.projection_from == "" and all(o.flag == "unknown" for o in result.observations)
+    result = source.get("wb:IMF_WEO_NGDP_RPCH/CHN", start="2020-01-01", end="2031-12-31")
+    assert isinstance(result, ds.Series) and len(result.observations) == 12
     assert len([c for c in hub.calls if c[1] == "data360_get_data"]) == 2
+    # Data360 strips status; the vintage year comes from the real metadata version date 2026-10-06.
+    assert result.provenance["vintage_year"] == 2026 and result.projection_from == "2026-01-01"
+    flags = {o.date[:4]: o.flag for o in result.observations}
+    assert flags["2024"] == "observed" and flags["2025"] == "estimate" and flags["2026"] == flags["2031"] == "projection"
+    assert result.vintage == "latest published (V_LST)" and result.provenance["resolution_safe"] is False
 
 
 def test_cache_singleflight_and_ttl(tmp_path, payloads):
@@ -385,7 +419,7 @@ def test_treasury_pagination_reordered_columns_and_native_source_receipts(tmp_pa
         return payload
     source, hub = api(tmp_path, payloads, handler)
     result = source.get("usgov:treasury/mts_deficit", start="2024-01-01", end="2024-12-31")
-    assert isinstance(result, ds.Series) and len(result.observations) == 3
+    assert isinstance(result, ds.Series) and len(result.observations) == 12
     assert len(hub.calls) == 2
     receipt = result.provenance["tool_responses"][0]
     assert receipt["sources"][0]["fetchedAt"] == "2025-01-01T00:00:00Z"
@@ -402,8 +436,8 @@ def test_wb_periodicity_conflict_is_unavailable(tmp_path, payloads):
 def test_spending_and_sec_expose_source_limitations(tmp_path, payloads):
     source, hub = api(tmp_path, payloads, lambda *a: payloads["spending"])
     result = source.get("usgov:spending/total", start="2023-01-01", end="2025-12-31")
-    assert isinstance(result, ds.Series) and result.observations[0].date == "2023-10-01"
-    anchor = {"series": result.series, "observation": "2023-10-01", "comparator": ">", "threshold": 1}
+    assert isinstance(result, ds.Series) and result.observations[0].date == "2022-10-01"
+    anchor = {"series": result.series, "observation": "2022-10-01", "comparator": ">", "threshold": 1}
     assert ds.resolve_data_anchor(anchor, result)["status"] == "manual"
     calls = len(hub.calls)
     result = source.get("usgov:sec/AAPL/Assets")
@@ -455,17 +489,19 @@ def test_nonfinite_and_malformed_provider_values_never_become_zero(tmp_path, pay
     assert isinstance(source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31"), ds.DataError)
 
 
-def test_imf_weo_vintage_and_status_are_not_inferred(tmp_path, payloads):
+def test_imf_weo_status_is_inferred_from_the_vintage_flow(tmp_path, payloads):
+    defs = real_response("imf_weo_usa_ngdp_rpch_default_window", "imf_get_parameter_defs")
+    data = real_response("imf_weo_usa_ngdp_rpch_default_window", "imf_fetch_data")
     def handler(provider, tool, args):
-        if tool == "imf_get_parameter_defs":
-            return [{"parameter": "country"}, {"parameter": "indicator"}, {"parameter": "frequency"}]
-        return {"database_id": "WEO_2026_APR_VINTAGE", "rows": [
-            {"country": "USA", "indicator": "NGDP_RPCH", "frequency": "A", "time_period": "2024", "obs_value": 2.0},
-            {"country": "USA", "indicator": "NGDP_RPCH", "frequency": "A", "time_period": "2027", "obs_value": 3.0}], "truncated": False}
+        return defs if tool == "imf_get_parameter_defs" else {**data, "database_id": "WEO_2026_APR_VINTAGE"}
     source, hub = api(tmp_path, payloads, handler)
-    result = source.get("imf:WEO_2026_APR_VINTAGE/USA.NGDP_RPCH.A", start="2024-01-01", end="2027-12-31")
+    result = source.get("imf:WEO_2026_APR_VINTAGE/USA.NGDP_RPCH.A", start="2023-01-01", end="2027-12-31")
     assert isinstance(result, ds.Series) and result.vintage == "WEO_2026_APR_VINTAGE"
-    assert result.projection_from == "" and all(o.flag == "unknown" for o in result.observations)
+    assert result.provenance["vintage_year"] == 2026 and result.provenance["vintage_basis"] == "vintage flow WEO_2026_APR_VINTAGE"
+    assert [(o.date[:4], o.flag) for o in result.observations] == [
+        ("2023", "observed"), ("2024", "observed"), ("2025", "estimate"), ("2026", "projection"), ("2027", "projection")]
+    assert result.projection_from == "2026-01-01" and result.provenance["resolution_safe"] is False
+    assert ds.series_stats(result)["latest"] == {"date": "2024-01-01", "value": 2.793116}
     assert hub.calls[-1][2]["params"]["database_id"] == result.vintage
 
 
@@ -485,8 +521,8 @@ def test_wb_repeated_page_and_wrong_geography_are_errors(tmp_path, payloads):
     payloads["wb"]["has_more"] = True
     def repeated(provider, tool, args):
         if tool == "data360_get_metadata":
-            return {"indicator_metadata": payloads["wb"]["metadata"], "error": None}
-        return {**payloads["wb"], "offset": args["offset"], "total_count": None, "next_offset": args["offset"] + 3}
+            return {"indicator_metadata": payloads["wb_metadata"], "error": None}
+        return {**payloads["wb"], "offset": args["offset"], "total_count": None, "next_offset": args["offset"] + payloads["wb"]["count"]}
     source, _ = api(tmp_path, payloads, repeated)
     assert "repeated" in source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA").message
     payloads["wb"]["has_more"] = False
@@ -512,22 +548,19 @@ def test_cache_returned_metadata_cannot_mutate_next_reader(tmp_path, payloads):
     second.provenance["metadata_origin"] = "forged"
     second.observations[0].value = 999
     third = source.get("fred:UNRATE", **args)
-    assert third.provenance["metadata_origin"] != "forged" and third.observations[0].value == 4
+    assert third.provenance["metadata_origin"] != "forged" and third.observations[0].value == 3.7
     assert len(hub.calls) == 1
 
 
 def test_lazy_import_modes_and_reset_never_start_hub(monkeypatch):
     import importlib
-    import sys
-    monkeypatch.syspath_prepend(str(Path(ds.__file__).parent))
     bare = importlib.import_module("data_sources")
-    for module in (ds, bare):
-        module.reset_data_sources_for_tests()
-        monkeypatch.setattr(module, "get_hub", lambda **k: pytest.fail("Lazy singleton must not initialize hub"))
-        source = module.get_data_sources(env={"DATA_SOURCES_ENABLED": "false"})
-        assert not source.enabled() and source.search("unemployment") == []
-        module.reset_data_sources_for_tests()
-    assert "data_sources" in sys.modules
+    assert bare is ds and sys.modules["data_sources"] is ds
+    ds.reset_data_sources_for_tests()
+    monkeypatch.setattr(ds, "get_hub", lambda **k: pytest.fail("Lazy singleton must not initialize hub"))
+    source = ds.get_data_sources(env={"DATA_SOURCES_ENABLED": "false"})
+    assert not source.enabled() and source.search("unemployment") == []
+    ds.reset_data_sources_for_tests()
 
 
 @pytest.mark.parametrize("failure", ["invalid_later_series", "csv_write", "manifest_write"])
@@ -590,7 +623,7 @@ def test_overlapping_bls_batches_share_one_provider_request(tmp_path, payloads):
         release.wait(1)
         return payloads["bls"]
     source, hub = api(tmp_path, payloads, handler)
-    args = {"deadline_s": 2, "start": "2024-01-01", "end": "2024-12-31"}
+    args = {"deadline_s": 2, "start": "2025-01-01", "end": "2026-12-31"}
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(source.get_many, ["bls:LNS14000000"], **args)
         assert entered.wait(0.5)
@@ -639,13 +672,18 @@ def test_parent_swap_during_replace_cannot_redirect_write(tmp_path, monkeypatch)
     assert (displaced / "evidence.json").read_bytes() == b"authorized output"
 
 
-def test_sdmx_recognized_units_valid_control(tmp_path, payloads):
-    for row in payloads["bis"]["rows"]:
-        row["UNIT_MEASURE"], row["UNIT_MULT"] = "PCT", "0"
+def test_sdmx_real_pinned_units_valid_control(tmp_path, payloads):
     source, _ = api(tmp_path, payloads)
     result = source.get("bis:WS_CBPOL/M.US", start="2024-01-01", end="2024-12-31")
     assert isinstance(result, ds.Series) and result.units == "Per cent per year"
-    assert ds.format_value(4.25, result.units) == "4.25%"
+    assert result.provenance["native_unit"] == {"code": "368", "label": "Per cent per year", "multiplier": 0,
+                                                "basis": "verified catalog pin"}
+    assert ds.format_value(result.observations[-1].value, result.units) == "4.375%"
+    for row in payloads["bis"]["rows"]:
+        row["UNIT_MEASURE"] = "PCT"
+    source, _ = api(tmp_path, payloads)
+    drifted = source.get("bis:WS_CBPOL/M.US", start="2024-02-01", end="2024-12-31")
+    assert isinstance(drifted, ds.DataError) and "pin" in drifted.message
 
 
 @pytest.mark.parametrize("provider,tool,payload,expected", [
@@ -763,12 +801,14 @@ def test_public_resolution_instant_matches_private_contract():
 
 
 def test_bls_preliminary_is_not_projection(tmp_path, payloads):
-    source, _ = api(tmp_path, payloads)
-    result = source.get("bls:LNS14000000", start="2024-01-01", end="2024-12-31")
-    assert result.observations[-1].flag == "preliminary"
+    payload = real_response("bls_ces_lns_2025_2026", "get_multiple_series")
+    payload["Results"]["series"] = [s for s in payload["Results"]["series"] if s["seriesID"] == "CES0000000001"]
+    source, _ = api(tmp_path, payloads, lambda *a: payload)
+    result = source.get("bls:CES0000000001", start="2025-01-01", end="2026-12-31")
+    assert [o.flag for o in result.observations[-3:]] == ["observed", "preliminary", "preliminary"]
     assert ds.series_stats(result)["projection_count"] == 0
     assert "preliminary" in ds.render_series_page(result) and "preliminary" in ds.render_series_brief(result)
-    assert result.provenance["raw_status"]["2024-03-01"] == [{"code": "P", "text": "Preliminary"}]
+    assert result.provenance["raw_status"]["2026-09-01"] == [{"code": "P", "text": "preliminary"}]
 
 
 def test_bls_omitted_chunk_is_not_successful_partial_history(tmp_path, payloads):
@@ -817,15 +857,39 @@ def test_weekly_yoy_is_explicitly_unsupported_without_alignment_policy(tmp_path,
     assert isinstance(result, ds.DataError) and "weekly" in result.message.lower()
 
 
-@pytest.mark.parametrize("error", ["FRED API error (429): rate limit for this API key", "FRED timeout checking API key", "FRED API key server HTTP 503 unavailable"])
-def test_fred_operational_error_does_not_switch_to_csv(tmp_path, payloads, error):
+@pytest.mark.parametrize("error,code", [("FRED API error (429): rate limit for this API key", "rate_limited"),
+                                        ("FRED timeout checking API key", "timeout"),
+                                        ("FRED API key server HTTP 503 unavailable", "provider_unavailable")])
+def test_fred_operational_error_uses_csv_only_for_curated_ids(tmp_path, payloads, error, code):
+    """P-FRED429 (verifier correction): curated ids fall back to the keyless CSV with the reason
+    recorded; uncurated ids (no curated title/units) fail retryable without a CSV call."""
     csv_calls = []
-    def csv_get(*a, **kw):
-        csv_calls.append(a)
-        return b"observation_date,UNRATE\n2024-01-01,4\n"
-    source, _ = api(tmp_path, payloads, lambda *a: CallResult(False, "", error, 0), http_get=csv_get)
-    assert isinstance(source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31"), ds.DataError)
-    assert csv_calls == []
+    def csv_get(url, **kw):
+        csv_calls.append(url)
+        native = url.split("id=")[1].split("&")[0]
+        return f"observation_date,{native}\n2024-01-01,4\n".encode()
+    source, hub = api(tmp_path, payloads, lambda *a: CallResult(False, "", error, 0), http_get=csv_get)
+    curated = source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31")
+    assert isinstance(curated, ds.Series) and curated.route == "fred_csv" and len(csv_calls) == 1
+    assert curated.provenance["fallback_reason"] == code and curated.provenance["retrieval_route"] == "fred_csv"
+    assert curated.units == "Percent" and [r["tool"] for r in curated.provenance["tool_responses"]] == ["fred_csv"]
+    uncurated = source.get("fred:IPN31152S", start="2024-01-01", end="2024-12-31")
+    assert isinstance(uncurated, ds.DataError) and uncurated.code == code and uncurated.retryable is True
+    assert len(csv_calls) == 1 and source.providers()["fred"] == "ready"
+
+
+def test_fred_rate_limit_with_failed_csv_is_retryable_and_never_cached(tmp_path, payloads):
+    calls = []
+    def csv_get(url, **kw):
+        calls.append(url)
+        raise OSError("connection reset by peer")
+    source, hub = api(tmp_path, payloads, lambda *a: CallResult(False, "", "FRED API error (429): Too Many Requests", 0),
+                      http_get=csv_get)
+    first = source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31")
+    assert isinstance(first, ds.DataError) and first.code == "rate_limited" and first.retryable is True
+    assert "CSV fallback failed too" in first.message
+    second = source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31")
+    assert isinstance(second, ds.DataError) and len(hub.calls) == 2 and len(calls) == 2
 
 
 def test_midmonth_daily_window_keeps_explicit_partial_month(tmp_path, payloads):
@@ -838,17 +902,21 @@ def test_midmonth_daily_window_keeps_explicit_partial_month(tmp_path, payloads):
     assert result.provenance["periods"]["2024-01-01"]["complete"] is False
 
 
-def test_wdi_status_loss_survives_roundtrip_as_unknown(tmp_path, payloads):
+def test_wdi_history_is_observed_by_policy_and_survives_roundtrip(tmp_path, payloads):
     source, _ = api(tmp_path, payloads)
-    result = source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", start="2022-01-01", end="2024-12-31")
-    assert isinstance(result, ds.Series) and all(o.flag == "unknown" for o in result.observations)
+    result = source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", start="2022-01-01", end="2025-12-31")
+    assert isinstance(result, ds.Series) and all(o.flag == "observed" for o in result.observations)
+    assert result.provenance["status_basis"] == "WDI publishes history only"
+    assert result.provenance["resolution_safe"] is False
     ds.write_dataset_files([result], tmp_path / "run")
-    assert all(o["flag"] == "unknown" for o in ds.load_datasets(tmp_path / "run")[0]["observations"])
+    row = ds.load_datasets(tmp_path / "run")[0]
+    assert all(o["flag"] == "observed" for o in row["observations"])
+    assert ds.latest_observed(row).date == "2025-01-01"
 
 
 @pytest.mark.parametrize("field,value", [("periodicity", None), ("periodicity", "Unexpected frequency"), ("idno", None), ("database_id", "OTHER")])
 def test_wb_metadata_absence_or_identity_conflict_is_unavailable(tmp_path, payloads, field, value):
-    payloads["wb"]["metadata"][field] = value
+    payloads["wb_metadata"][field] = value
     source, _ = api(tmp_path, payloads)
     assert isinstance(source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", start="2022-01-01", end="2024-12-31"), ds.DataError)
 
@@ -865,7 +933,7 @@ def test_wb_units_require_joint_scale_and_code_validation(tmp_path, payloads):
         row.pop("UNIT_MEASURE")
         row.pop("UNIT_MEASURE_NAME")
         row["UNIT_MULT"] = "6"
-    payloads["wb"]["metadata"]["measurement_unit"] = "Persons"
+    payloads["wb_metadata"]["measurement_unit"] = payloads["wb"]["metadata"]["measurement_unit"] = "Persons"
     source, _ = api(tmp_path, payloads)
     assert isinstance(source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", start="2022-01-01", end="2024-12-31"), ds.DataError)
 
@@ -984,20 +1052,18 @@ def test_uncatalogued_fred_placeholder_metadata_remains_unknown(tmp_path, payloa
     assert result.provenance["metadata_fields"]["units"] == "unknown"
 
 
-def test_wb_qualified_multiplier_keeps_raw_values_exactly_once(tmp_path, payloads):
-    payloads["wb"]["metadata"]["measurement_unit"] = "Persons"
+def test_wb_pinned_entry_fails_closed_when_rows_drift_from_the_pin(tmp_path, payloads):
     for row in payloads["wb"]["data"]:
         row.update(UNIT_MEASURE="PS", UNIT_MEASURE_NAME="Million people", UNIT_MULT="6", OBS_VALUE=2)
     source, _ = api(tmp_path, payloads)
     result = source.get("wb:WB_WDI_NY_GDP_MKTP_KD_ZG/USA", start="2022-01-01", end="2024-12-31")
-    assert isinstance(result, ds.Series) and result.units == "Million people"
-    assert all(o.value == 2 for o in result.observations)
+    assert isinstance(result, ds.DataError) and "PS x10^6 differs from the verified catalog pin PC_A x10^0" in result.message
 
 
 def test_wb_empty_continuing_page_and_unknown_total_are_valid(tmp_path, payloads):
     def pages(provider, tool, args):
         if tool == "data360_get_metadata":
-            return {"indicator_metadata": payloads["wb"]["metadata"], "error": None}
+            return {"indicator_metadata": payloads["wb_metadata"], "error": None}
         if args["offset"] == 0:
             return {"data": [], "count": 0, "offset": 0, "total_count": None, "has_more": True, "next_offset": 2}
         return {**payloads["wb"], "offset": 2, "total_count": None}
@@ -1007,6 +1073,7 @@ def test_wb_empty_continuing_page_and_unknown_total_are_valid(tmp_path, payloads
 
 def test_fiscal_full_growth_preserves_keyed_period_after_trim(tmp_path, payloads):
     payloads["spending"]["data"]["rows"] = [["2023-10", 100, "FY2024"], ["2024-10", 120, "FY2025"]]
+    payloads["spending"]["data"]["total"] = 2
     source, _ = api(tmp_path, payloads, lambda *a: payloads["spending"])
     result = source.get("usgov:spending/total", start="2024-10-01", end="2025-09-30", transform="yoy", max_obs=1)
     assert isinstance(result, ds.Series) and result.observations[0].value == pytest.approx(20)
@@ -1060,7 +1127,7 @@ def test_bounded_call_propagates_same_absolute_deadline(tmp_path, payloads):
 @pytest.mark.parametrize("error,uses_csv", [
     ("Failed to retrieve series data: FRED API error (400): Bad Request. The value for variable api_key is not registered.", True),
     ("FRED API error (400): Bad Request. The value for variable observation_start is invalid.", False),
-    ("FRED API error (429): rate limit; api_key is not registered.", False),
+    ("FRED API error (429): rate limit; api_key is not registered.", True),
 ])
 def test_fred_documented_unregistered_key_is_narrow_auth_fallback(tmp_path, payloads, error, uses_csv):
     calls = []
@@ -1071,6 +1138,9 @@ def test_fred_documented_unregistered_key_is_narrow_auth_fallback(tmp_path, payl
     result = source.get("fred:UNRATE", start="2024-01-01", end="2024-12-31")
     assert bool(calls) is uses_csv
     assert isinstance(result, ds.Series if uses_csv else ds.DataError)
+    if uses_csv:
+        # A 429 that mentions the key is a rate limit, not a rejected key.
+        assert result.provenance["fallback_reason"] == ("rate_limited" if "429" in error else "key_invalid")
 
 
 @pytest.mark.parametrize("sid", ["imf:WEO/USA.NGDP_RPCH.A", "imf:WEO_2026_APR_VINTAGE/USA.NGDP_RPCH.A"])
@@ -1088,7 +1158,7 @@ def test_legacy_weo_missing_status_is_unknown_on_admission(tmp_path, sid):
 
 
 def test_wb_cannot_borrow_sibling_multiplier(tmp_path, payloads):
-    payloads["wb"]["metadata"]["measurement_unit"] = "Persons"
+    payloads["wb_metadata"]["measurement_unit"] = payloads["wb"]["metadata"]["measurement_unit"] = "Persons"
     for row in payloads["wb"]["data"]:
         row.update(UNIT_MEASURE="PS", UNIT_MEASURE_NAME="Million people", UNIT_MULT="6", OBS_VALUE=2)
     payloads["wb"]["data"][1].pop("UNIT_MEASURE_NAME")
@@ -1100,7 +1170,7 @@ def test_wb_cannot_borrow_sibling_multiplier(tmp_path, payloads):
 def test_wb_page_units_cannot_contradict_separate_metadata(tmp_path, payloads):
     def handler(provider, tool, args):
         if tool == "data360_get_metadata":
-            return {"indicator_metadata": payloads["wb"]["metadata"]}
+            return {"indicator_metadata": payloads["wb_metadata"]}
         page = copy.deepcopy(payloads["wb"])
         page["metadata"]["measurement_unit"] = "US dollars"
         return page

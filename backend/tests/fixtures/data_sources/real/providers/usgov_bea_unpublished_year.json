@@ -1,0 +1,7 @@
+{
+ "captured_at": "2026-10-12T14:05:04Z",
+ "source": "bea_gdp_by_industry live for a year BEA has not published (hub error text).",
+ "errors": {
+  "invalid_year": "Tool 'bea_gdp_by_industry' execution failed: bea: Error retrieving GDP by Industry data. — Invalid year: 2027"
+ }
+}

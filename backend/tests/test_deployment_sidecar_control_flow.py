@@ -57,6 +57,7 @@ def test_owned_finally_cannot_suppress_system_exit(sidecar, monkeypatch, tmp_pat
     assert raised.value.code == 23
 
 
+@pytest.mark.guarded_runner  # sidecar main() refuses an interpreter started without -I -S -B
 @pytest.mark.parametrize("suite", ["transport", "integration"])
 def test_parent_supervisor_cannot_accept_failed_owned_worker(sidecar, monkeypatch, tmp_path, suite):
     """Run actual main/worker control flow; fake only native process dispatch."""

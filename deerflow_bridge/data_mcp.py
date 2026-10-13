@@ -25,6 +25,11 @@ consumer — v3 engine, legacy tools, report side, resolver, all through
   circuit stays open for the life of the hub.  :meth:`McpHub.call` never
   raises: it returns a :class:`CallResult` whose ``error`` is short and
   redacted.
+* **Pacing and key rejection.**  A spec may cap its tool calls per rolling
+  minute (FRED: each ``fred_get_series`` costs two upstream requests against
+  the key's 120/min); a call that cannot be admitted within its own deadline
+  fails fast with a rate-limit reason.  :meth:`McpHub.restart_without` respawns
+  a server without a rejected API key (BLS then serves keyless).
 * **Hygiene.**  A child gets a small base environment plus its spec's
   allowlisted keys — never the whole parent environment.  It runs in a
   DRF-owned working directory, never the repository root (the us-gov server
@@ -48,9 +53,11 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import collections
 import concurrent.futures
 import contextlib
 import contextvars
+import dataclasses
 import logging
 import math
 import os
@@ -81,11 +88,19 @@ IMF_MIN_CALL_TIMEOUT_S = 120.0
 #: fetch (FRED) and tsx 4 (BIS) need node >= 18; the us-gov server declares engines node >= 22.
 NODE_MIN_MAJOR = 18
 USGOV_NODE_MIN_MAJOR = 22
+#: Per-address TCP connect attempt (ms) for the node servers' fetch. Node's default of 250 ms
+#: ("happy eyeballs") times out every address of a host farther away than that round trip:
+#: on 2026-10-14 api.eia.gov and api.fiscaldata.treasury.gov failed with ETIMEDOUT on all four
+#: addresses from this machine while curl connected in ~1.5 s, so 43 of 51 us-gov recipes failed.
+NODE_CONNECT_ATTEMPT_MS = 2500
 USGOV_BASE_MODULES: tuple[str, ...] = ("treasury", "usaspending", "sec", "fdic", "federal-register")
 #: Keyed us-gov modules, loaded only when their key is non-empty (a keyless call only yields 401/503 noise).
 USGOV_KEYED_MODULES: tuple[tuple[str, str], ...] = (
     ("eia", "EIA_API_KEY"), ("bea", "BEA_API_KEY"), ("census", "CENSUS_API_KEY"))
 USGOV_MAX_RESPONSE_BYTES = "40000"
+#: FRED tool calls admitted per rolling minute and hub (one hub per process); a fred_get_series
+#: costs two upstream requests, so 50 calls stay under the API key's 120 requests a minute.
+FRED_CALLS_PER_MINUTE = 50
 DATA360_API_BASE_URL = "https://data360api.worldbank.org"
 IMF_APP_NAME = "DeepResearchForecast"
 
@@ -146,6 +161,7 @@ class ServerSpec:
     call_timeout: float = 60.0
     max_concurrency: int = 4
     unavailable_reason: str | None = None   # set by default_server_specs when not runnable
+    max_calls_per_minute: int = 0           # tool calls admitted per rolling minute; 0 = unpaced
 
 
 @dataclass
@@ -237,6 +253,16 @@ _LAYOUTS: dict[str, _Layout] = {
 
 _NODE_VERSION_CACHE: dict[tuple[str, int, int], tuple[int, int, int]] = {}
 _NODE_VERSION_LOCK = threading.Lock()
+
+
+def _fred_calls_per_minute(source: Mapping[str, str]) -> int:
+    raw = (source.get("DATA_SOURCES_FRED_PER_MINUTE") or "").strip()
+    if not raw:
+        return FRED_CALLS_PER_MINUTE
+    if not re.fullmatch(r"\d{1,3}", raw) or not 1 <= int(raw) <= 120:
+        logger.warning("DATA_SOURCES_FRED_PER_MINUTE=%r must be 1-120; using %d", raw, FRED_CALLS_PER_MINUTE)
+        return FRED_CALLS_PER_MINUTE
+    return int(raw)
 
 
 def _source_path(source: Mapping[str, str], key: str, default: Path) -> Path:
@@ -345,6 +371,14 @@ def _node_version(node: str) -> tuple[tuple[int, int, int] | None, str | None]:
     return version, None
 
 
+def _node_connect_flags(version: tuple[int, int, int]) -> tuple[str, ...]:
+    """The connect-attempt flag (:data:`NODE_CONNECT_ATTEMPT_MS`) on the node versions that
+    accept it (20.13+, 22.1+); older nodes keep their default rather than fail on the flag."""
+    if version >= (22, 1, 0) or (20, 13, 0) <= version < (21, 0, 0):
+        return (f"--network-family-autoselection-attempt-timeout={NODE_CONNECT_ATTEMPT_MS}",)
+    return ()
+
+
 def _stale_venv_reason(executable: Path) -> str | None:
     """A console script whose shebang interpreter is gone (a copied/moved venv) cannot start."""
     try:
@@ -422,6 +456,7 @@ def default_server_specs(*, env: Mapping[str, str] | None = None,
     node_reason: str | None = None
     node_major = 0
     node_text = ""
+    node_flags: tuple[str, ...] = ()
     # node is probed only when a node server could actually run (no probing of an absent tree).
     if cwd_reason is None and root.is_dir() and any(_LAYOUTS[name].runtime == "node" for name in usable):
         node, node_reason = _resolve_node(source)
@@ -432,6 +467,7 @@ def default_server_specs(*, env: Mapping[str, str] | None = None,
             else:
                 node_major = version[0]
                 node_text = "v%d.%d.%d" % version
+                node_flags = _node_connect_flags(version)
 
     specs: dict[str, ServerSpec] = {}
     for name in PROVIDERS:
@@ -441,7 +477,7 @@ def default_server_specs(*, env: Mapping[str, str] | None = None,
         args: tuple[str, ...] = layout.args
         if layout.runtime == "node":
             command = node or "node"
-            args = (str(entry), *args)
+            args = (*node_flags, str(entry), *args)
             if name == "usgov":
                 args = (*args, "--modules", ",".join(_usgov_modules(source)))
         else:
@@ -481,6 +517,7 @@ def default_server_specs(*, env: Mapping[str, str] | None = None,
             call_timeout=call_timeout,
             max_concurrency=layout.max_concurrency,
             unavailable_reason=reason,
+            max_calls_per_minute=_fred_calls_per_minute(source) if name == "fred" else 0,
         )
     return specs
 
@@ -710,6 +747,30 @@ class _Server:
         return self.owner.info.pid if self.owner is not None else None
 
 
+class _RateWindow:
+    """At most ``limit`` admissions in any rolling 60-second window (thread-safe)."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self._admitted: collections.deque[float] = collections.deque()
+        self._lock = threading.Lock()
+
+    def admit(self, wait_until: float) -> bool:
+        """Take a slot, sleeping until one frees; False when that would pass ``wait_until``."""
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._admitted and now - self._admitted[0] >= 60.0:
+                    self._admitted.popleft()
+                if len(self._admitted) < self.limit:
+                    self._admitted.append(now)
+                    return True
+                free_at = self._admitted[0] + 60.0
+            if free_at > wait_until:
+                return False
+            time.sleep(max(0.0, free_at - time.monotonic()))
+
+
 class _Owner:
     """One start attempt: its owner task, its child and what close() needs to end them."""
 
@@ -750,6 +811,9 @@ class McpHub:
                 raise ValueError(f"spec key {name!r} does not match spec.name {spec.name!r}")
             servers[name] = _Server(spec, _spec_refusal(spec))
         self._servers = servers
+        # Per server name, so a respawn (restart_without) keeps the same budget.
+        self._rates = {name: _RateWindow(int(spec.max_calls_per_minute))
+                       for name, spec in specs.items() if int(spec.max_calls_per_minute or 0) > 0}
         self._errlog_dir = Path(errlog_dir) if errlog_dir else None
         self._clock = clock
         self._lock = threading.RLock()
@@ -803,6 +867,37 @@ class McpHub:
         with self._lock:
             srv = self._servers.get(name)
             return list(srv.tools) if srv is not None else []
+
+    def restart_without(self, name: str, keys: Iterable[str]) -> bool:
+        """Respawn ``name`` without the child env ``keys`` (e.g. an API key the provider rejected).
+
+        Returns True when the spec carried one of them: the current session is closed and the
+        next call starts a fresh child from the reduced spec with a fresh restart circuit (a
+        configuration change, not a crash).  False for an unknown server, a closed hub or a
+        spec without any of the keys.  A call racing the swap fails once as not ready.
+        """
+        drop = {key for key in keys if isinstance(key, str)} if not isinstance(keys, str) else {keys}
+        with self._lock:
+            srv = self._servers.get(name) if isinstance(name, str) else None
+            if self._closed or srv is None or not drop & set(srv.spec.env):
+                return False
+            spec = dataclasses.replace(srv.spec, env={k: v for k, v in srv.spec.env.items() if k not in drop})
+            replacement = _Server(spec, _spec_refusal(spec))
+            replacement.calls, replacement.failures = srv.calls, srv.failures
+            self._servers[name] = replacement
+            owner, loop = srv.owner, self._loop
+            step = None
+            if owner is not None and not owner.done.is_set():
+                step = owner.close_event.set if owner.reached_ready and owner.close_event is not None else owner.cancel
+            srv.owner = None  # a launch still queued on the loop sees it was superseded and never spawns
+            if srv.state != "unavailable":
+                srv.state = "closed"
+            srv.session = None
+            srv.ready.set()
+        logger.warning("data MCP %s: respawning without %s", name, ", ".join(sorted(drop & set(srv.spec.env))))
+        if loop is not None:
+            self._threadsafe(loop, step)
+        return True
 
     def call(self, name: str, tool: str, args: Mapping[str, Any], *,
              timeout: float | None = None, deadline: float | None = None) -> CallResult:
@@ -1229,6 +1324,12 @@ class McpHub:
             refusal = self._admit(srv, deadline)
         if refusal:
             return fail(refusal)
+        # After admission, so a refused call (closed hub, unavailable server, open circuit) neither
+        # spends one of the minute's slots nor waits for a freed one.
+        rate = self._rates.get(name)
+        if rate is not None and not rate.admit(started + limit if deadline is None else min(deadline, started + limit)):
+            return fail(f"local rate limit of {rate.limit} {name} calls per minute reached within the call "
+                        "deadline; retry later")
         start_budget = srv.spec.start_timeout + _START_GRACE_S
         if deadline is not None:
             start_budget = min(start_budget, max(0.0, deadline - time.monotonic()))

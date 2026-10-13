@@ -1,4 +1,9 @@
-"""Actual-operation controls; executable with --self-test before pytest imports."""
+"""Actual-operation controls; executable with --self-test before pytest imports.
+
+These controls exercise the audit guard installed by backend/scripts/main_offline_pytest.py.
+Under plain pytest (the CI path) they skip; the runner sets MAIN_OFFLINE_EVIDENCE, and a
+run that sets it without the guard fails loudly instead of skipping.
+"""
 import os
 import json
 import contextlib
@@ -19,7 +24,10 @@ class MainOfflineControls(unittest.TestCase):
     def setUp(self):
         self.guard = sys.modules.get("main_offline_guard")
         if self.guard is None:
-            self.fail("run via backend/scripts/main_offline_pytest.py")
+            if not os.environ.get("MAIN_OFFLINE_EVIDENCE"):
+                self.skipTest("guarded-runner control: run via backend/scripts/main_offline_pytest.py")
+            self.fail("MAIN_OFFLINE_EVIDENCE is set but the main_offline_guard is not installed; "
+                      "run via backend/scripts/main_offline_pytest.py")
         self.work = Path(tempfile.mkdtemp(prefix="control-"))
 
     def test_network(self):
@@ -28,8 +36,17 @@ class MainOfflineControls(unittest.TestCase):
         with self.assertRaisesRegex(PermissionError, "network"):
             socket.getaddrinfo("offline.invalid", 443)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            with self.assertRaisesRegex(PermissionError, "network"):
-                sock.bind(str(self.work / "blocked.sock"))
+            # AF_UNIX addresses cap at 104 bytes and CPython checks that before the
+            # audit event, so bind a relative name: long evidence roots must still
+            # reach the guard's network denial.
+            cwd = os.getcwd()
+            os.chdir(self.work)
+            try:
+                with self.assertRaisesRegex(PermissionError, "network"):
+                    sock.bind("blocked.sock")
+            finally:
+                os.chdir(cwd)
+            self.assertFalse((self.work / "blocked.sock").exists())
 
     def test_external_write_and_temporary_write(self):
         allowed = self.work / "allowed.txt"

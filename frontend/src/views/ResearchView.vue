@@ -194,7 +194,8 @@
               <ResearchConsole v-show="activeTab==='log'" :log-lines="logLines"
                 :history-meta="logHistoryMeta" @refresh="refreshFullResearchLog" />
               <DossierViewer v-show="activeTab==='dossier'" :dossier="dossier"
-                :pipeline-id="pipelineId" :editable="canContinue" @saved-continue="continueToFull" />
+                :pipeline-id="pipelineId" :editable="canContinue" :artifact-names="artifactNames"
+                @saved-continue="continueToFull" />
               <div v-show="activeTab==='graph'" class="graph-wrap" :class="{ max: graphMax }">
                 <GraphPanel v-if="graphData" :graph-data="graphData" :loading="graphLoading"
                   :seed-actors="seedActorNames"
@@ -348,6 +349,9 @@ const logFinalSnapshotAttempts = ref(0)
 const logHistoryLoading = ref(false)
 const logHistoryError = ref('')
 const dossier = ref(null)
+// Registered artifact names from the status poll (state.artifacts keys): the dossier
+// offers an official-data CSV / series chart only when the artifact endpoint can serve it.
+const artifactNames = ref([])
 const showHistory = ref(false)
 
 // OBS-1/I-7: computed `live` block from the same status poll (may be absent —
@@ -696,6 +700,10 @@ async function poll(generation) {
     if (d.graph_id) graphId.value = d.graph_id
     if (d.simulation_id) simulationId.value = d.simulation_id
     if (d.report_id) reportId.value = d.report_id
+    const names = d.artifacts && typeof d.artifacts === 'object' && !Array.isArray(d.artifacts)
+      ? Object.keys(d.artifacts).sort()
+      : []
+    if (names.join('\n') !== artifactNames.value.join('\n')) artifactNames.value = names
     const researchStatus = stages.value.research && stages.value.research.status
     const researchDone = researchStatus === 'completed'
     // An initial full hydration is exact only at the instant it was read. Never
@@ -823,7 +831,7 @@ function resetState() {
   logHistoryHydrated.value = false; logHistoryFinalized.value = false
   logInitialSnapshotAttempted.value = false; logFinalSnapshotAttempts.value = 0
   logHistoryLoading.value = false; logHistoryError.value = ''
-  dossier.value = null; dossierFetched = false
+  dossier.value = null; dossierFetched = false; artifactNames.value = []
   graphData.value = null; graphLoading.value = false; graphMax.value = false
   activeTab.value = 'log'; userPickedTab.value = false; error.value = ''
 }

@@ -1,0 +1,87 @@
+{
+ "captured_at": "2026-10-11T22:08:20Z",
+ "clock": 1791756500,
+ "series": "usgov:spending/total",
+ "request": {
+  "start": "2022-10-01"
+ },
+ "calls": [
+  {
+   "provider": "usgov",
+   "tool": "usa_spending_over_time",
+   "args": {
+    "group": "fiscal_year",
+    "start_date": "2022-10-01",
+    "end_date": "2026-10-11"
+   },
+   "response": {
+    "summary": "Federal spending over time: 5 periods, grouped by fiscal_year (fiscal periods; periodStart is the calendar month each begins)",
+    "dataType": "timeseries",
+    "stats": {
+     "count": 5,
+     "min": 7897020000,
+     "max": 5315830000000,
+     "mean": 4060260000000,
+     "first": {
+      "date": "2022-10",
+      "value": 4832000501479.92
+     },
+     "last": {
+      "date": "2026-10",
+      "value": 7897018783.040001
+     },
+     "change": -4824100000000,
+     "changePct": -99.84,
+     "cagrPct": -79.89,
+     "trend": "decreasing"
+    },
+    "data": {
+     "columns": [
+      "periodStart",
+      "amount",
+      "fiscalPeriod"
+     ],
+     "rows": [
+      [
+       "2022-10",
+       4832000501479.92,
+       "FY2023"
+      ],
+      [
+       "2023-10",
+       4947316990218.29,
+       "FY2024"
+      ],
+      [
+       "2024-10",
+       5315833520242.8,
+       "FY2025"
+      ],
+      [
+       "2025-10",
+       5198258368866.829,
+       "FY2026"
+      ],
+      [
+       "2026-10",
+       7897018783.040001,
+       "FY2027"
+      ]
+     ],
+     "total": 5,
+     "truncated": false
+    },
+    "meta": {
+     "group": "fiscal_year",
+     "sources": [
+      {
+       "url": "https://api.usaspending.gov/api/v2/search/spending_over_time/",
+       "method": "POST",
+       "fetchedAt": "2026-10-11T22:08:20.566Z"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

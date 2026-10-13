@@ -1,0 +1,724 @@
+{
+ "captured": "2026-10-12",
+ "policy": "normalization_policy_version 3 (fix contract §1.4)",
+ "series": [
+  {
+   "api_url": "https://api.stlouisfed.org/fred/series/observations?series_id=DFEDTARU&observation_start=2024-10-01&observation_end=2026-10-12&units=lin&sort_order=desc&offset=0&limit=5000",
+   "frequency": "M",
+   "geography": "USA",
+   "last_updated": "",
+   "notes": "This series represents upper limit of the federal funds target range established by the Federal Open Market Committee. The data updated each day is the data effective as of that day. Daily data aggregated to monthly end-of-month values (last available daily observation); the open month is partial.",
+   "observations": [
+    {
+     "date": "2024-11-01",
+     "flag": "",
+     "value": 4.75
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "",
+     "value": 4.5
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "",
+     "value": 4.25
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "",
+     "value": 3.75
+    },
+    {
+     "date": "2026-09-01",
+     "flag": "",
+     "value": 4.0
+    },
+    {
+     "date": "2026-10-01",
+     "flag": "preliminary",
+     "value": 4.0
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "aggregation": "Monthly end-of-month values (last available daily observation); a month still open at retrieval is partial",
+    "aggregation_method": "eop",
+    "delivered_end": "2026-10-01",
+    "delivered_start": "2024-10-01",
+    "intentional_delivery_trim": false,
+    "latest_daily": {
+     "date": "2026-10-12",
+     "value": 4.0
+    },
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_count": 742,
+    "native_frequency": "D",
+    "normalization_policy_version": 3,
+    "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text",
+    "periods": {
+     "2024-11-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2024-11-30",
+      "covered_start": "2024-11-01",
+      "end": "2024-11-30",
+      "label": "2024-11",
+      "start": "2024-11-01"
+     },
+     "2024-12-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2024-12-31",
+      "covered_start": "2024-12-01",
+      "end": "2024-12-31",
+      "label": "2024-12",
+      "start": "2024-12-01"
+     },
+     "2025-01-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-01-31",
+      "covered_start": "2025-01-01",
+      "end": "2025-01-31",
+      "label": "2025-01",
+      "start": "2025-01-01"
+     },
+     "2025-02-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-02-28",
+      "covered_start": "2025-02-01",
+      "end": "2025-02-28",
+      "label": "2025-02",
+      "start": "2025-02-01"
+     },
+     "2025-03-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-03-31",
+      "covered_start": "2025-03-01",
+      "end": "2025-03-31",
+      "label": "2025-03",
+      "start": "2025-03-01"
+     },
+     "2025-04-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-04-30",
+      "covered_start": "2025-04-01",
+      "end": "2025-04-30",
+      "label": "2025-04",
+      "start": "2025-04-01"
+     },
+     "2025-05-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-05-31",
+      "covered_start": "2025-05-01",
+      "end": "2025-05-31",
+      "label": "2025-05",
+      "start": "2025-05-01"
+     },
+     "2025-06-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-06-30",
+      "covered_start": "2025-06-01",
+      "end": "2025-06-30",
+      "label": "2025-06",
+      "start": "2025-06-01"
+     },
+     "2025-07-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-07-31",
+      "covered_start": "2025-07-01",
+      "end": "2025-07-31",
+      "label": "2025-07",
+      "start": "2025-07-01"
+     },
+     "2025-08-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-08-31",
+      "covered_start": "2025-08-01",
+      "end": "2025-08-31",
+      "label": "2025-08",
+      "start": "2025-08-01"
+     },
+     "2025-09-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-09-30",
+      "covered_start": "2025-09-01",
+      "end": "2025-09-30",
+      "label": "2025-09",
+      "start": "2025-09-01"
+     },
+     "2025-10-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-10-31",
+      "covered_start": "2025-10-01",
+      "end": "2025-10-31",
+      "label": "2025-10",
+      "start": "2025-10-01"
+     },
+     "2025-11-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-11-30",
+      "covered_start": "2025-11-01",
+      "end": "2025-11-30",
+      "label": "2025-11",
+      "start": "2025-11-01"
+     },
+     "2025-12-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2025-12-31",
+      "covered_start": "2025-12-01",
+      "end": "2025-12-31",
+      "label": "2025-12",
+      "start": "2025-12-01"
+     },
+     "2026-01-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-01-31",
+      "covered_start": "2026-01-01",
+      "end": "2026-01-31",
+      "label": "2026-01",
+      "start": "2026-01-01"
+     },
+     "2026-02-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-02-28",
+      "covered_start": "2026-02-01",
+      "end": "2026-02-28",
+      "label": "2026-02",
+      "start": "2026-02-01"
+     },
+     "2026-03-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-03-31",
+      "covered_start": "2026-03-01",
+      "end": "2026-03-31",
+      "label": "2026-03",
+      "start": "2026-03-01"
+     },
+     "2026-04-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-04-30",
+      "covered_start": "2026-04-01",
+      "end": "2026-04-30",
+      "label": "2026-04",
+      "start": "2026-04-01"
+     },
+     "2026-05-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-05-31",
+      "covered_start": "2026-05-01",
+      "end": "2026-05-31",
+      "label": "2026-05",
+      "start": "2026-05-01"
+     },
+     "2026-06-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-06-30",
+      "covered_start": "2026-06-01",
+      "end": "2026-06-30",
+      "label": "2026-06",
+      "start": "2026-06-01"
+     },
+     "2026-07-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-07-31",
+      "covered_start": "2026-07-01",
+      "end": "2026-07-31",
+      "label": "2026-07",
+      "start": "2026-07-01"
+     },
+     "2026-08-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-08-31",
+      "covered_start": "2026-08-01",
+      "end": "2026-08-31",
+      "label": "2026-08",
+      "start": "2026-08-01"
+     },
+     "2026-09-01": {
+      "calendar": "calendar_month",
+      "complete": true,
+      "covered_end": "2026-09-30",
+      "covered_start": "2026-09-01",
+      "end": "2026-09-30",
+      "label": "2026-09",
+      "start": "2026-09-01"
+     },
+     "2026-10-01": {
+      "calendar": "calendar_month",
+      "complete": false,
+      "covered_end": "2026-10-12",
+      "covered_start": "2026-10-01",
+      "end": "2026-10-31",
+      "label": "2026-10",
+      "start": "2026-10-01"
+     }
+    },
+    "requested_end": "2026-10-12",
+    "requested_start": "2024-10-01",
+    "resolution_safe": false,
+    "response_sha256": "bf32a4b07882714d04b30446bbb91ef148539c0fd8c725dbd63150381534ac68",
+    "retrieval_route": "mcp",
+    "vintage_status": "not supplied by native handler"
+   },
+   "provider": "fred",
+   "provider_name": "FRED (Federal Reserve Bank of St. Louis)",
+   "retrieved_at": "2026-10-12T14:19:06.635803+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "NSA",
+   "series": "fred:DFEDTARU",
+   "source_url": "https://fred.stlouisfed.org/series/DFEDTARU",
+   "title": "Federal Funds Target Range - Upper Limit",
+   "title_zh": "联邦基金目标利率区间上限",
+   "transform": "",
+   "units": "Percent",
+   "vintage": ""
+  },
+  {
+   "api_url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_LONG_CPI/1.0/M.US.771?startPeriod=2016-10-12&endPeriod=2026-10-12&format=csv&labels=both",
+   "frequency": "M",
+   "geography": "USA",
+   "last_updated": "",
+   "notes": "",
+   "observations": [
+    {
+     "date": "2024-09-01",
+     "flag": "observed",
+     "value": 2.440633
+    },
+    {
+     "date": "2024-10-01",
+     "flag": "observed",
+     "value": 2.597905
+    },
+    {
+     "date": "2024-11-01",
+     "flag": "observed",
+     "value": 2.74938
+    },
+    {
+     "date": "2024-12-01",
+     "flag": "observed",
+     "value": 2.888057
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "observed",
+     "value": 3.000483
+    },
+    {
+     "date": "2025-02-01",
+     "flag": "observed",
+     "value": 2.821549
+    },
+    {
+     "date": "2025-03-01",
+     "flag": "observed",
+     "value": 2.390725
+    },
+    {
+     "date": "2025-04-01",
+     "flag": "observed",
+     "value": 2.311289
+    },
+    {
+     "date": "2025-05-01",
+     "flag": "observed",
+     "value": 2.354897
+    },
+    {
+     "date": "2025-06-01",
+     "flag": "observed",
+     "value": 2.669213
+    },
+    {
+     "date": "2025-07-01",
+     "flag": "observed",
+     "value": 2.704902
+    },
+    {
+     "date": "2025-08-01",
+     "flag": "observed",
+     "value": 2.916174
+    },
+    {
+     "date": "2025-09-01",
+     "flag": "observed",
+     "value": 3.012677
+    },
+    {
+     "date": "2025-10-01",
+     "flag": "unknown",
+     "value": null
+    },
+    {
+     "date": "2025-11-01",
+     "flag": "observed",
+     "value": 2.735084
+    },
+    {
+     "date": "2025-12-01",
+     "flag": "observed",
+     "value": 2.677081
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "observed",
+     "value": 2.386431
+    },
+    {
+     "date": "2026-02-01",
+     "flag": "observed",
+     "value": 2.414113
+    },
+    {
+     "date": "2026-03-01",
+     "flag": "observed",
+     "value": 3.25642
+    },
+    {
+     "date": "2026-04-01",
+     "flag": "observed",
+     "value": 3.810845
+    },
+    {
+     "date": "2026-05-01",
+     "flag": "observed",
+     "value": 4.248674
+    },
+    {
+     "date": "2026-06-01",
+     "flag": "observed",
+     "value": 3.531425
+    },
+    {
+     "date": "2026-07-01",
+     "flag": "observed",
+     "value": 3.364825
+    },
+    {
+     "date": "2026-08-01",
+     "flag": "observed",
+     "value": 3.396548
+    }
+   ],
+   "projection_from": "",
+   "provenance": {
+    "delivered_end": "2026-08-01",
+    "delivered_start": "2016-11-01",
+    "flow_ref": "BIS,WS_LONG_CPI,1.0",
+    "intentional_delivery_trim": false,
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_frequency": "M",
+    "native_unit": {
+     "basis": "verified catalog pin",
+     "code": "771",
+     "label": "Year-on-year changes, in per cent",
+     "multiplier": 0
+    },
+    "normalization_policy_version": 3,
+    "requested_end": "2026-10-12",
+    "requested_start": "2016-10-12",
+    "response_sha256": "c84982b476cd9c9917bbc25e6b539387dd80d073370479b5f84a7426ccb319b7",
+    "retrieval_route": "mcp"
+   },
+   "provider": "bis",
+   "provider_name": "Bank for International Settlements (BIS)",
+   "retrieved_at": "2026-10-12T14:19:07.154766+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "bis:WS_LONG_CPI/M.US.771",
+   "source_url": "https://data.bis.org/topics/CPI/BIS,WS_LONG_CPI,1.0/M.US.771",
+   "title": "Consumer prices: United States - Year-on-year changes, in per cent",
+   "title_zh": "美国CPI同比（BIS）",
+   "transform": "",
+   "units": "Per cent, year-on-year change",
+   "vintage": ""
+  },
+  {
+   "api_url": "",
+   "frequency": "A",
+   "geography": "USA",
+   "last_updated": "",
+   "notes": "Publisher feed strips observation status; inferred from the vintage year V: periods from V are publisher projections, V-1 an estimate, earlier periods history (revisable).",
+   "observations": [
+    {
+     "date": "2004-01-01",
+     "flag": "observed",
+     "value": 2.667572
+    },
+    {
+     "date": "2005-01-01",
+     "flag": "observed",
+     "value": 3.36583
+    },
+    {
+     "date": "2006-01-01",
+     "flag": "observed",
+     "value": 3.222089
+    },
+    {
+     "date": "2007-01-01",
+     "flag": "observed",
+     "value": 2.87055
+    },
+    {
+     "date": "2008-01-01",
+     "flag": "observed",
+     "value": 3.814953
+    },
+    {
+     "date": "2009-01-01",
+     "flag": "observed",
+     "value": -0.320358
+    },
+    {
+     "date": "2010-01-01",
+     "flag": "observed",
+     "value": 1.63657
+    },
+    {
+     "date": "2011-01-01",
+     "flag": "observed",
+     "value": 3.139652
+    },
+    {
+     "date": "2012-01-01",
+     "flag": "observed",
+     "value": 2.073191
+    },
+    {
+     "date": "2013-01-01",
+     "flag": "observed",
+     "value": 1.465972
+    },
+    {
+     "date": "2014-01-01",
+     "flag": "observed",
+     "value": 1.615463
+    },
+    {
+     "date": "2015-01-01",
+     "flag": "observed",
+     "value": 0.121137
+    },
+    {
+     "date": "2016-01-01",
+     "flag": "observed",
+     "value": 1.267361
+    },
+    {
+     "date": "2017-01-01",
+     "flag": "observed",
+     "value": 2.131445
+    },
+    {
+     "date": "2018-01-01",
+     "flag": "observed",
+     "value": 2.439
+    },
+    {
+     "date": "2019-01-01",
+     "flag": "observed",
+     "value": 1.813259
+    },
+    {
+     "date": "2020-01-01",
+     "flag": "observed",
+     "value": 1.252937
+    },
+    {
+     "date": "2021-01-01",
+     "flag": "observed",
+     "value": 4.681243
+    },
+    {
+     "date": "2022-01-01",
+     "flag": "observed",
+     "value": 7.990821
+    },
+    {
+     "date": "2023-01-01",
+     "flag": "observed",
+     "value": 4.126963
+    },
+    {
+     "date": "2024-01-01",
+     "flag": "observed",
+     "value": 2.95211
+    },
+    {
+     "date": "2025-01-01",
+     "flag": "estimate",
+     "value": 2.729506
+    },
+    {
+     "date": "2026-01-01",
+     "flag": "projection",
+     "value": 3.22791
+    },
+    {
+     "date": "2027-01-01",
+     "flag": "projection",
+     "value": 2.141324
+    }
+   ],
+   "projection_from": "2026-01-01",
+   "provenance": {
+    "country_code": "USA",
+    "database_id": "IMF_WEO",
+    "delivered_end": "2027-01-01",
+    "delivered_start": "2002-01-01",
+    "fidelity_policy_version": 3,
+    "indicator_id": "IMF_WEO_PCPIPCH",
+    "intentional_delivery_trim": false,
+    "metadata_origin": "provider_and_curated_catalog",
+    "native_complete": true,
+    "native_frequency": "A",
+    "native_periodicity": "A",
+    "native_rows": 27,
+    "native_unit": {
+     "basis": "verified catalog pin",
+     "code": "PC",
+     "label": "Percentage change",
+     "metadata_unit": "Percentage change",
+     "multiplier": 0
+    },
+    "normalization_policy_version": 3,
+    "projection_status": "inferred from the vintage year",
+    "provider_title": "All Items, Consumer price index (CPI), Period average, percent change",
+    "requested_end": "2027-12-31",
+    "requested_start": "2001-10-12",
+    "resolution_safe": false,
+    "response_sha256": "c138c7de2bcb4f437dd4b7f559ac9c3cda091a82d382d01c42d7a982abc05b7c",
+    "retrieval_route": "mcp",
+    "status_basis": "inferred_from_vintage",
+    "vintage_basis": "Data360 version_statement.version_date 2026-10-06",
+    "vintage_year": 2026
+   },
+   "provider": "wb",
+   "provider_name": "World Bank Data360",
+   "retrieved_at": "2026-10-12T14:19:14.789331+00:00",
+   "route": "cache",
+   "seasonal_adjustment": "",
+   "series": "wb:IMF_WEO_PCPIPCH/USA",
+   "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_PCPIPCH",
+   "title": "All Items, Consumer price index (CPI), Period average, percent change: United States",
+   "title_zh": "美国CPI通胀率（IMF WEO）",
+   "transform": "",
+   "units": "Percent change",
+   "vintage": "latest published (V_LST)"
+  }
+ ]
+}

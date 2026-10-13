@@ -1,0 +1,293 @@
+{
+ "captured_at": "2026-10-11T22:10:04Z",
+ "clock": 1791756604,
+ "series": "imf:WEO/USA.NGDP_RPCH.A",
+ "request": {},
+ "calls": [
+  {
+   "provider": "imf",
+   "tool": "imf_get_parameter_defs",
+   "args": {
+    "params": {
+     "database_id": "WEO"
+    }
+   },
+   "response": [
+    {
+     "parameter": "country",
+     "description": "World Economic Outlook (WEO) Country"
+    },
+    {
+     "parameter": "indicator",
+     "description": "World Economic Outlook (WEO) Indicator"
+    },
+    {
+     "parameter": "frequency",
+     "description": "Frequency"
+    }
+   ]
+  },
+  {
+   "provider": "imf",
+   "tool": "imf_fetch_data",
+   "args": {
+    "params": {
+     "database_id": "WEO",
+     "start_year": 2001,
+     "end_year": 2032,
+     "filters": {
+      "country": [
+       "USA"
+      ],
+      "indicator": [
+       "NGDP_RPCH"
+      ],
+      "frequency": [
+       "A"
+      ]
+     },
+     "max_rows": 5000
+    }
+   },
+   "response": {
+    "database_id": "WEO",
+    "columns": [
+     "country",
+     "indicator",
+     "frequency",
+     "time_period",
+     "obs_value"
+    ],
+    "row_count": 32,
+    "total_rows_before_cap": 32,
+    "truncated": false,
+    "rows": [
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2000",
+      "obs_value": 4.077519
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2001",
+      "obs_value": 0.955589
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2002",
+      "obs_value": 1.70037
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2003",
+      "obs_value": 2.795781
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2004",
+      "obs_value": 3.847802
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2005",
+      "obs_value": 3.483384
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2006",
+      "obs_value": 2.784597
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2007",
+      "obs_value": 2.003876
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2008",
+      "obs_value": 0.113647
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2009",
+      "obs_value": -2.576498
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2010",
+      "obs_value": 2.695251
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2011",
+      "obs_value": 1.564196
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2012",
+      "obs_value": 2.289267
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2013",
+      "obs_value": 2.117782
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2014",
+      "obs_value": 2.523695
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2015",
+      "obs_value": 2.945509
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2016",
+      "obs_value": 1.819587
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2017",
+      "obs_value": 2.457596
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2018",
+      "obs_value": 2.966663
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2019",
+      "obs_value": 2.583574
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2020",
+      "obs_value": -2.081277
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2021",
+      "obs_value": 6.151865
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2022",
+      "obs_value": 2.524222
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2023",
+      "obs_value": 2.934535
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2024",
+      "obs_value": 2.793116
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2025",
+      "obs_value": 2.11733
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2026",
+      "obs_value": 2.323695
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2027",
+      "obs_value": 2.1
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2028",
+      "obs_value": 2.1
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2029",
+      "obs_value": 1.880588
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2030",
+      "obs_value": 1.753132
+     },
+     {
+      "country": "USA",
+      "indicator": "NGDP_RPCH",
+      "frequency": "A",
+      "time_period": "2031",
+      "obs_value": 1.755
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -6,6 +6,7 @@ import * as vue from 'vue'
 
 import * as markdown from '../src/utils/markdown.js'
 import * as i18n from '../src/i18n.js'
+import * as officialData from '../src/utils/officialData.js'
 import * as researchTranslation from '../src/utils/researchTranslation.js'
 
 // Execute the actual SFC setup and its methods with real Vue reactivity. Only
@@ -49,6 +50,7 @@ function dossier(t, { get, post } = {}) {
   const unexpected = () => { throw new Error('Unexpected API call') }
   const api = {
     editDossier: unexpected,
+    getArtifact: unexpected,
     researchChartUrl: () => null,
     researchPdfUrl: (id, lang) => `/api/research/${id}/dossier/pdf${lang ? `?lang=${lang}` : ''}`,
     getResearchTranslation: (id, lang) => {
@@ -66,6 +68,8 @@ function dossier(t, { get, post } = {}) {
     '../../i18n': i18n,
     '../../api/research': api,
     '../../utils/researchTranslation': researchTranslation,
+    '../../utils/officialData': officialData,
+    '../../utils/saveTextFile': { saveTextFile: unexpected },
   }, (callback, delay) => {
     const id = ++timerId
     timers.set(id, { callback, delay })

@@ -221,6 +221,11 @@ def create_simulation():
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
         )
+        # 项目归属于已完成研究的管线时，把手动模拟绑定到该管线的研究代际，
+        # 使世界简报、手动报告与对话获得同一份研究档案与官方数据（失败仅记日志）。
+        from ..services.official_data import bind_project_simulation
+        binding = bind_project_simulation(state.simulation_id, project_id)
+        logger.info(f"手动模拟 {state.simulation_id} 研究绑定: {binding}")
         
         return jsonify({
             "success": True,

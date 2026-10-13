@@ -187,16 +187,49 @@ def test_wp_12_prevents_fork_seed_shared_mutation():
 
 
 # ─────────────── 7. structured_spine_omissions (owner: WP6) ───────────────────
-def test_characterizes_structured_spine_omissions():
-    """derive_forecast_spine supports base_distribution and quantitative_facts,
-    but the production caller never passes them — structured inputs are
-    silently absent from probability generation."""
+def test_characterizes_structured_spine_omissions(monkeypatch):
+    """derive_forecast_spine supports base_distribution and quantitative_facts.
+    The production caller never passes base_distribution — that structured input
+    is silently absent from probability generation. Since the official-data
+    integration it does pass quantitative_facts: the stored official-data pack
+    (empty when no official data is bound, so the spine prompt is unchanged)."""
     sig = inspect.signature(fe.derive_forecast_spine)
     assert "base_distribution" in sig.parameters
     assert "quantitative_facts" in sig.parameters
     call_src = _src(ra.ReportAgent._derive_and_pin_forecast_spine)
     assert "base_distribution=" not in call_src
-    assert "quantitative_facts=" not in call_src
+    assert "quantitative_facts=" in call_src
+
+    seen = []
+
+    def capture(llm, **kwargs):
+        seen.append(kwargs)
+        return None  # no spine: the caller falls back to post-prose extraction
+
+    monkeypatch.setattr(fe, "derive_forecast_spine", capture)
+    monkeypatch.setattr(ra.ReportAgent, "_define_tools", lambda self: {})
+    monkeypatch.setattr(ra.ReportAgent, "_locate_timeline", lambda self: None)
+    monkeypatch.setattr(ra.ReportAgent, "_locate_handoff_dir", lambda self: None)
+    official = {"schema_version": 1, "series": [{
+        "series": "fred:UNRATE", "provider": "fred", "provider_name": "FRED",
+        "title": "Unemployment Rate", "title_zh": "失业率", "units": "Percent",
+        "frequency": "M", "seasonal_adjustment": "SA", "geography": "USA",
+        "transform": "", "vintage": "", "projection_from": "",
+        "source_url": "https://fred.stlouisfed.org/series/UNRATE", "source_id": "S7",
+        "retrieved_at": "2025-06-01T00:00:00Z", "sha256": "a" * 64, "csv_sha256": "b" * 64,
+        "observations": [{"date": "2025-03-01", "value": 4.2, "flag": ""},
+                         {"date": "2025-04-01", "value": 4.25, "flag": ""}]}]}
+    for carrier in (official, None):
+        agent = ra.ReportAgent(
+            "fixture_graph", "fixture_simulation", "Forecast unemployment in 2026",
+            llm_client=FakeLLMClient(), zep_tools=object(), official_data=carrier,
+            sources=[{"title": "Unemployment Rate",
+                      "url": "https://fred.stlouisfed.org/series/UNRATE"}])
+        agent._derive_and_pin_forecast_spine("fixture_report")
+    assert len(seen) == 2 and all("base_distribution" not in call for call in seen)
+    with_data, without_data = (call["quantitative_facts"] for call in seen)
+    assert "4.25" in with_data and "[S1]" in with_data  # stored value + its source marker
+    assert without_data == ""
 
 
 @pytest.mark.xfail(strict=True, reason="WP6: every enabled input flows through a "
