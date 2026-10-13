@@ -205,6 +205,7 @@
       "Admit only eligible historical context and exact-period anchors, preserving actor authority and immutable resolution outcomes.",
       "Verify disabled/unavailable behavior, deployment wiring, reviewed source hashes, end-to-end transport and report artifact delivery without live model or saved-run mutations."
     ],
-    "passes": true
+    "passes": true,
+    "note": "Reset 2026-10-12 by the data-sources review (the eac717b evidence was offline only); passing again 2026-10-14 on live evidence. Plain pytest is green apart from the 2 pre-existing demo-asset failures (6008 passed), and the guarded runner end-to-end passes. Live catalog smoke: fred 83, bls 45, bis 50, imf 6 (capped), wb 54, usgov 51. Owner-approved three-question live v3 eval: every run exited 0, with a data baseline, 5, 7 and 8 official-data figures, official sources, quantitative rows and forecast indicators. See docs/handoff/data-sources-mcp/eval/results-2026-10-14.md. The forecast-report stage is verified offline only."
   }
 ]

@@ -330,3 +330,30 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - Commits: d48552c actor digest;6372005 dossier translation; eac717b six-provider quantitative integration and source/verification artifacts. All requested feature entries now pass with recorded offline evidence.
 - Final implementation hashes unchanged after acceptance; current owned files committed, no unrelated deletion staged. Closing documentation records this state.
 - No coding follow-up remains in scope. Optional live-provider/deployment validation and remote publication remain separate; previous GitHub authentication was rejected and not retried unchanged. Preserve the64unrelated missing assets and all other baseline work.
+
+### 2026-10-14T06:20+08:00 (CST) — branch `main` — official-data MCP integration: review, fixes, live eval
+
+- **User requests (2026-10-11 to 10-14):**
+  - Study the six data MCPs in `datamcps/` and integrate them throughout deep research and the rest of the workflow.
+  - Check and fix Codex's implementation (eac717b).
+  - Make sure the agents actually use the data whenever it is relevant.
+  - Owner approved a three-question live eval.
+- **Work (rounds 1–7 of reviewer → fixer → independent-verifier workflows, plus lead fixes):**
+  - Data layer: unit pins, EIA/BEA recipes, FRED pacing with a CSV fallback, BLS invalid-key fallback, status policies, a 10-year default for FRED daily series, per-recipe publisher names, and a Node connect-attempt flag.
+  - Both research engines: planning, prefetch, per-KIQ hints and coverage, base-rate history, window notes, resume with stored data, and parity of the legacy per-thread budgets.
+  - Report and forecast: Key official indicators, anchor matcher recall with sibling qualifiers, FY anchors, an empirical base rate with seasonal bases including `seasonal_profile`, and units in the exec brief.
+  - Downstream: Chinese world-brief snapshot, canonical brief trimming, resolution monitor and track record, Settings and doctor probes.
+  - Frontend: indicator tiles, the data-anchor column with its seasonal disclosure, the dossier Official Data panel, accessibility.
+  - Records: every finding and verdict in `docs/handoff/data-sources-mcp/review/`.
+- **Live eval:** results and gaps in `docs/handoff/data-sources-mcp/eval/results-2026-10-14.md` (GLM-5.3, quick v3).
+  - us_inflation: 5 series, 5 figures. cn_gdp (中文): 7 series, 7 figures, 24 official quant rows. dc_power: 8 EIA series, 8 figures. All exit 0, with a baseline section and official sources and indicators.
+  - Fixed during the eval: KIQs without needs now get series for the statistics they name; QA data-check false positives; Node 250 ms connect timeout (US Gov smoke 8/51 → 51/51); US state titles.
+- **Verification:**
+  - Backend plain pytest: 6008 passed, 2 failed (the pre-existing `test_export_demo_site_data` demo-asset failures caused by another session's deletions), 22 skipped, 11 xfailed.
+  - Frontend: 140/140 and the build pass.
+  - ruff (F, E9), compileall, `check_env_drift --strict`, `init.sh` and the guarded-runner end-to-end all pass.
+  - Live smoke over the whole catalog passes.
+- **Follow-ups:**
+  - Run the forecast-report stage live: a paid pipeline run, which needs owner approval.
+  - Treasury daily series keep a 2-year default, so they have no empirical base rate.
+  - The QA data check stays advisory; writers still mix scenario numbers into sentences that cite datasets.
