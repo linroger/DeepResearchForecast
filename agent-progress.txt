@@ -357,3 +357,25 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
   - Run the forecast-report stage live: a paid pipeline run, which needs owner approval.
   - Treasury daily series keep a 2-year default, so they have no empirical base rate.
   - The QA data check stays advisory; writers still mix scenario numbers into sentences that cite datasets.
+
+### 2026-10-16T03:50+08:00 (CST) — branch `main` — research method skills for the deep research phase
+
+- **User request (2026-10-16 00:04 CST):** create novel, project-tailored industry research and industry forecast skills (plus macro and other skills) for the deep research phase, using `newskills/` only as inspiration, and make sure the agents use them when relevant.
+- **Work:**
+  - Design contract `docs/handoff/research-skills/design.md` (format, caps, sector keys, engine integration, §5.5 review amendments).
+  - Nine skills in `deerflow_bridge/skills/`: industry-research (with 21 sector adapters), industry-forecasting, competitive-landscape-forecasting, macro-research, policy-and-trade-forecasting, geopolitical-forecasting, election-forecasting, financial-markets-forecasting, reference-class-forecasting. Each has fixed Plan / Investigate / Synthesize / Gaps sections plus references.
+  - `deerflow_bridge/research_skills.py`: registry, section parser, deterministic bilingual router (CJK/ASCII-normalised text, reference-year future test), KIQ and writer selection, prompt blocks. Knob `RESEARCH_SKILLS=auto|off` (+ `RESEARCH_SKILLS_DIR`).
+  - v3: planner suffix and optional `skills` key (saved in plan.json, resume-stable), KIQ Investigate methods and sector adapters, gap checks, section-writer and executive-summary contracts, `meta.research_skills`, and a skill-gated forecast-frame extraction that fills `actors.json` `forecast_inputs.base_rates` / `drivers`.
+  - Legacy: lead whitelist adds the routed skills, read_file pointers in planning passes, worker Investigate cards, synthesis Synthesize cards.
+  - Deployment lists (setup.sh, `_DEPLOYED_BRIDGE_MODULES`), `.env.example`, README EN/ZH section, init.sh compiles the router.
+  - Four-reviewer adversarial review (industry, economic, political, integration), recorded in `docs/handoff/research-skills/review-results.md`; lead follow-ups applied (engine patches, router superlatives and Chinese commodity prices, flagged skill fixes, drf2 guard `-uall`).
+- **Verification:**
+  - All 9 skills and both sector-adapter files pass `docs/handoff/research-skills/check_skill.py`.
+  - `tests/test_research_skills.py` 133 passed. Skill and engine suites (v3 ×9 files, official-data, legacy, drf2 skills config, runtime skill sync, sync guard, hygiene, research skills) 909 passed; after the last engine edit, 263 passed on the core trio.
+  - The scripted full-run test with skills on and off passes, and the guarded-runner end-to-end passes.
+  - Backend plain pytest: 2 failed, 6142 passed, 22 skipped, 11 xfailed (5:47). The only failures are the 2 pre-existing `test_export_demo_site_data` demo-asset failures caused by another session's deletions.
+  - ruff F,E9 on the changed files, compileall, `check_env_drift --strict` and `init.sh` all pass. No frontend change.
+  - Commit 0b78ef4 (code).
+- **Follow-ups:**
+  - Live validation (a paid run; needs owner approval): confirm the agents' notes and reports follow the routed methods. `feature_research_method_skills` stays `passes: false` until then.
+  - `_BASE_RATE_RE` treats any 历史 as a base-rate KIQ; narrow it only if live runs show casual uses.

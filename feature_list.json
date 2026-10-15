@@ -207,5 +207,20 @@
     ],
     "passes": true,
     "note": "Reset 2026-10-12 by the data-sources review (the eac717b evidence was offline only); passing again 2026-10-14 on live evidence. Plain pytest is green apart from the 2 pre-existing demo-asset failures (6008 passed), and the guarded runner end-to-end passes. Live catalog smoke: fred 83, bls 45, bis 50, imf 6 (capped), wb 54, usgov 51. Owner-approved three-question live v3 eval: every run exited 0, with a data baseline, 5, 7 and 8 official-data figures, official sources, quantitative rows and forecast indicators. See docs/handoff/data-sources-mcp/eval/results-2026-10-14.md. The forecast-report stage is verified offline only."
+  },
+  {
+    "id": "feature_research_method_skills",
+    "category": "research",
+    "description": "Nine project-tailored research method skills (industry research, industry forecasting, competitive landscape, macro, policy and trade, geopolitics, elections, financial markets, reference-class forecasting, plus 21 sector adapters) that a deterministic bilingual router injects into the planning, KIQ, gap and writing phases of both research engines.",
+    "steps": [
+      "Ask an industry, macro, policy, geopolitical, election, market or ranking question in English or Chinese and confirm the router picks the matching method skills (meta.research_skills).",
+      "Confirm the v3 planner gets the skills' Plan sections, each KIQ task its Investigate method and sector adapters, the gap review the Gaps checks and the writers the Synthesize contract, with the method text only at the end of the last message.",
+      "Confirm plan.json keeps the chosen skills so a resumed run rebuilds identical tasks, and that actors.json forecast_inputs carries the extracted base rates and drivers.",
+      "Confirm the legacy engine names the routed skills with read_file pointers and gives its workers and synthesis the same method cards.",
+      "Confirm RESEARCH_SKILLS=off leaves every prompt, tool, artifact and meta key byte-identical and that a missing or malformed skill never fails a run.",
+      "In a live run, confirm the agents' notes and the report follow the routed method (base-rate KIQ, method exhibits, signposts)."
+    ],
+    "passes": false,
+    "note": "Steps 1-5 verified offline 2026-10-16: tests/test_research_skills.py (133 cases incl. 40+ real EN/ZH routing cases and false-positive guards), the scripted full-run test test_e2e_method_skills_reach_every_phase_and_fill_the_forecast_frame (skills on and off), the guarded-runner end-to-end and the full backend suite. Step 6 needs a paid live run, which needs owner approval. Design and review records: docs/handoff/research-skills/ (design.md, review-results.md)."
   }
 ]
