@@ -1363,6 +1363,7 @@ _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
+    "research_skills.py",
 )
 
 

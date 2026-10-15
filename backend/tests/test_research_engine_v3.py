@@ -41,7 +41,8 @@ SystemMessage, HumanMessage, AIMessage, ToolMessage = rg._msg_classes()
 
 _ENV_EXACT = ("DEERFLOW_RESEARCH_TIMEOUT", "RESEARCH_MODEL_CONCURRENCY_GLOBAL", "DEERFLOW_FALLBACK_MODEL",
               "ACTOR_CAST_MAX", "RESEARCH_STALE_DAYS", "RESEARCH_DEFAULT_SOURCE_TIER", "ACTOR_EXCLUDE_MEDIA",
-              "RESEARCH_ENGINE", "RESEARCH_LINEAR_MODE", "RESEARCH_SOURCE_DENY_DOMAINS")
+              "RESEARCH_ENGINE", "RESEARCH_LINEAR_MODE", "RESEARCH_SOURCE_DENY_DOMAINS",
+              "RESEARCH_SKILLS", "RESEARCH_SKILLS_DIR")
 
 
 @pytest.fixture(autouse=True)
@@ -143,7 +144,8 @@ def ai(text: str = "", tool_calls=None, invalid=None, *, inp: int = 1000, cached
 
 TASK_MARKERS = ("SCOPE TASK", "PLANNING TASK", "KIQ INVESTIGATION TASK", "GAP REVIEW TASK",
                 "SECTION WRITING TASK", "EXECUTIVE SUMMARY TASK", "CRITIQUE TASK",
-                "ACTOR EXTRACTION TASK", "FACT EXTRACTION TASK", "CACHE WARM-UP")
+                "ACTOR EXTRACTION TASK", "FACT EXTRACTION TASK", "FORECAST FRAME EXTRACTION TASK",
+                "CACHE WARM-UP")
 
 
 def role_of(call: dict) -> str:
@@ -206,6 +208,7 @@ class World:
             "GAP REVIEW TASK": self.gap, "SECTION WRITING TASK": self.writer,
             "EXECUTIVE SUMMARY TASK": self.exec_summary, "CRITIQUE TASK": self.critique,
             "ACTOR EXTRACTION TASK": self.actors, "FACT EXTRACTION TASK": self.facts,
+            "FORECAST FRAME EXTRACTION TASK": self.frame,
         }[role]
         return handler(call)
 
@@ -369,6 +372,15 @@ class World:
                               {"source": "Nobody", "target": "Grid operator", "type": "OPPOSES"}],
             "hot_topics": ["grid queues"],
             "actor_intelligence_contract": {"schema_version": "actor-intelligence/v1"},
+        }))
+
+    def frame(self, call):
+        """The forecast-frame extraction of a run with method skills (research_skills)."""
+        return ai(json.dumps({
+            "base_rates": [{"reference_class": "Regions whose grid connection queues exceeded 36 months",
+                            "outcome_frequency": "several regions", "basis": "national energy agency survey [S1]"}],
+            "drivers": [{"variable": "Grid connection queues", "direction": "longer queues slow capacity growth",
+                         "why_it_matters": "queues exceed 40 months in several regions [S1]"}],
         }))
 
     def facts(self, call):
@@ -800,6 +812,66 @@ def test_e2e_happy_path_writes_every_artifact(tmp_path, bridge):
         assert needle in log, needle
     progress = _progress(plog)
     assert progress == sorted(progress) and progress[-1] == 99
+
+
+def _task_text(call: dict) -> str:
+    """The engine task of a call: the KIQ task (third message) of an agent call, else the last message."""
+    return call["messages"][2][1] if role_of(call) == "agent" else call["messages"][-1][1]
+
+
+def test_e2e_method_skills_reach_every_phase_and_fill_the_forecast_frame(tmp_path, bridge, monkeypatch):
+    """RESEARCH_SKILLS=auto (the default): the routed method skills are recorded in plan.json
+    and meta, their sections ride at the end of the planner, KIQ, gap and writer tasks, and
+    the forecast-frame extraction fills actors.json forecast_inputs (research_skills.py,
+    docs/handoff/research-skills/design.md §5).  With RESEARCH_SKILLS=off none of it runs."""
+    import research_skills as rs
+    rc, meta, plog, model, out = run_engine(tmp_path, bridge, World())
+    assert rc == 0, meta.get("error")
+    expected = ["industry-forecasting", "industry-research", rs.CROSS_CUTTING]
+    plan = json.loads((out / "v3" / "plan.json").read_text(encoding="utf-8"))
+    assert plan["skills"] == expected
+    record = json.loads((out / "meta.json").read_text(encoding="utf-8"))["research_skills"]
+    assert record["status"] == "enabled" and record["skills"] == expected and record["source"] == "router"
+    assert set(record["hashes"]) == set(expected) and record["sectors"] == ["ai-compute-datacenters"]
+    assert all(call["messages"][0] == ("system", lr.ENGINE_CORE) for call in model.calls)
+
+    library = rs.load_library()
+    planner = _task_text(calls_of(model, "PLANNING TASK")[0])
+    assert rs.PLAN_HEADER in planner and library.skills["industry-forecasting"].section("Plan") in planner
+    kiq_tasks = [_task_text(call) for call in calls_of(model, "agent")]
+    assert kiq_tasks and all(rs.KIQ_HEADER in task for task in kiq_tasks)
+    # Each KIQ gets the sector adapter its own words name ("grid" → power), else the question's.
+    adapters = {re.search(r"Investigate (\S+):", task).group(1): re.findall(r"^\[sector: (\S+)\]$", task, re.M)
+                for task in kiq_tasks}
+    assert adapters == {"K1": ["ai-compute-datacenters"], "K2": ["ai-compute-datacenters"],
+                        "K3": ["ai-compute-datacenters"], "K4": ["power-utilities"]}, adapters
+    assert all(library.sectors[adapters[re.search(r"Investigate (\S+):", task).group(1)][0]] in task
+               for task in kiq_tasks)
+    assert all(task.index(rs.KIQ_HEADER) > task.index("Investigate K") for task in kiq_tasks)
+    assert all(rs.GAP_HEADER in _task_text(call) for call in calls_of(model, "GAP REVIEW TASK"))
+    writers = [_task_text(call) for call in calls_of(model, "SECTION WRITING TASK")]
+    assert writers and all(rs.WRITER_HEADER in task for task in writers)
+    scenario_writer = [task for task in writers if "Scenarios and Probabilities" in task]
+    assert scenario_writer and library.skills[rs.CROSS_CUTTING].section("Synthesize") in scenario_writer[0]
+    summary = _task_text(calls_of(model, "EXECUTIVE SUMMARY TASK")[0])
+    assert rs.SUMMARY_HEADER in summary and rs.WRITER_HEADER not in summary
+
+    assert len(calls_of(model, "FORECAST FRAME EXTRACTION TASK")) == 1
+    fi = json.loads((out / "actors.json").read_text(encoding="utf-8"))["forecast_inputs"]
+    assert fi["base_rates"] == [{"reference_class": "Regions whose grid connection queues exceeded 36 months",
+                                 "outcome_frequency": "several regions",
+                                 "basis": "national energy agency survey [S1]"}]
+    assert [row["variable"] for row in fi["drivers"]] == ["Grid connection queues"]
+
+    monkeypatch.setenv("RESEARCH_SKILLS", "off")
+    rc, meta, _, model, out = run_engine(tmp_path, bridge, World(), out_dir=tmp_path / "off")
+    assert rc == 0, meta.get("error")
+    assert "skills" not in json.loads((out / "v3" / "plan.json").read_text(encoding="utf-8"))
+    assert "research_skills" not in json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert not calls_of(model, "FORECAST FRAME EXTRACTION TASK")
+    assert not any("METHOD" in _task_text(call) for call in model.calls if role_of(call) != "prime")
+    fi = json.loads((out / "actors.json").read_text(encoding="utf-8"))["forecast_inputs"]
+    assert not fi.get("base_rates") and not fi.get("drivers")
 
 
 def test_e2e_prefix_cache_invariants(tmp_path, bridge, monkeypatch):

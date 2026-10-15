@@ -491,6 +491,20 @@ Field rules:
 - contested_claims: at most $max_contested claims on which the report shows sources disagreeing; status is contested, resolved or single-origin; sources are the markers of each position.
 - Write text values in $language.""")
 
+# Runs with method skills only (research_skills): the forecast stage reads these as
+# actors.json forecast_inputs.base_rates / .drivers (backend/app/utils/actors.py).
+_T_FRAME = string.Template("""FORECAST FRAME EXTRACTION TASK
+From the research report above, extract the outside-view base rates and the causal drivers the report itself states, for the forecasting stage. Use only the report; copy counts and numbers exactly as written; never invent a reference class, a number or a source.
+Reply with ONE JSON object only, in exactly this shape:
+{"base_rates": [{"reference_class": "...", "outcome_frequency": "...", "basis": "..."}],
+ "drivers": [{"variable": "...", "direction": "...", "why_it_matters": "..."}]}
+Field rules:
+- base_rates: at most $max_rates. reference_class names the comparable cases and the counting rule (which cases, threshold, horizon, period); outcome_frequency is the count or share exactly as the report states it (for example "2 of 3 episodes" or "about 7% of years"); basis names the series, dataset or study and keeps its [S<n>] marker. An empty list when the report states no base rate.
+- drivers: at most $max_drivers variables that move the outcome, most important first; direction says which way the variable pushes the forecast outcome; why_it_matters is one clause with the mechanism and the [S<n>] marker of its evidence when the report gives one.
+- Write text values in $language.""")
+MAX_FRAME_BASE_RATES = 6
+MAX_FRAME_DRIVERS = 8
+
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
     "scope": _T_SCOPE,
@@ -500,6 +514,7 @@ _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "exec_summary": _T_EXEC,
     "critique": _T_CRITIQUE,
     "actors": _T_ACTORS,
+    "frame": _T_FRAME,
     "facts": _T_FACTS,
 }
 
@@ -1356,6 +1371,9 @@ class Plan:
     key_entities: list[str]
     scout_queries: list[str]
     fallback: dict = field(default_factory=dict)
+    # Method skills (research_skills) chosen for this run; written only when set, so a
+    # plan of a run without method skills stays byte-identical.
+    skills: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -1366,6 +1384,7 @@ class Plan:
             "scenarios": [s.to_dict() for s in self.scenarios],
             "actors": list(self.actors), "key_entities": list(self.key_entities),
             "scout_queries": list(self.scout_queries), "fallback": dict(self.fallback),
+            **({"skills": list(self.skills)} if self.skills else {}),
         }
 
     @classmethod
@@ -1397,7 +1416,8 @@ class Plan:
             scenarios=scenarios, actors=[a for a in data.get("actors") or [] if isinstance(a, dict)],
             key_entities=_as_str_list(data.get("key_entities")),
             scout_queries=_as_str_list(data.get("scout_queries")),
-            fallback=dict(data.get("fallback") or {}))
+            fallback=dict(data.get("fallback") or {}),
+            skills=_as_str_list(data.get("skills"), limit=3, item_chars=64))
 
 
 def _short_query_base(question: str, language: str) -> str:
@@ -4243,6 +4263,26 @@ def _data_catalog() -> Any:
     return importlib.import_module(f"{__package__}.data_catalog" if __package__ else "data_catalog")
 
 
+def _research_skills() -> Any:
+    """The method-skill router and section parser (lazy, package/bare compatible)."""
+    return importlib.import_module(f"{__package__}.research_skills" if __package__ else "research_skills")
+
+
+def _frame_rows(frame: Any, key: str, fields: Sequence[str], limit: int) -> list[dict]:
+    """Rows of an extracted forecast frame list with string fields only; a row needs
+    its first field (the reference class or the variable).  [] without a frame."""
+    rows = []
+    for item in (frame or {}).get(key) or [] if isinstance(frame, Mapping) else []:
+        if not isinstance(item, Mapping):
+            continue
+        row = {name: _collapse(item.get(name), 400) for name in fields if isinstance(item.get(name), (str, int, float))}
+        if row.get(fields[0]):
+            rows.append(row)
+        if len(rows) >= limit:
+            break
+    return rows
+
+
 def _data_statistic(entry: Any) -> str:
     """The statistic a catalog entry's title names without its geography
     ("GDP (annual % growth): World" → "GDP (annual % growth)")."""
@@ -4691,6 +4731,10 @@ class _Engine:
         self._data_baseline_after: str | None = None
         self._configure_data()
         self.agent_tools = rg.AGENT_TOOLS_WITH_DATA_SCHEMA if self.data_enabled else AGENT_TOOLS
+        # Method skills (research_skills): None when RESEARCH_SKILLS=off or no skill can
+        # be read; every method text below is appended only when a library is loaded.
+        self.skill_library: Any = None
+        self._configure_skills()
         for name in ("data_search", "data_get"):
             if callable(getattr(self.tools, name, None)):
                 setattr(self.tools, name, self._watch_tool(getattr(self.tools, name), name))
@@ -4753,6 +4797,89 @@ class _Engine:
             self.meta["data_sources"]["status"] = "unavailable"
         if self.resumed and not self.data_enabled and self.meta["data_sources"]["status"] == "unavailable":
             self._keep_stored_data()
+
+    def _configure_skills(self) -> None:
+        """Load the method-skill library once per attempt (RESEARCH_SKILLS=auto, the
+        default).  ``off`` leaves every prompt, artifact and meta key as without
+        method skills; an unreadable library is recorded and skipped."""
+        try:
+            skills = _research_skills()
+            if skills.skills_mode(self.env) == "off":
+                return
+            self.skill_library = skills.load_library(self.env)
+        except Exception as exc:  # noqa: BLE001 — methodology is optional; it never fails research
+            self.log("warn", f"v3: method skills unavailable ({type(exc).__name__})")
+            self.skill_library = None
+        if self.skill_library is None:
+            self.meta["research_skills"] = {"status": "unavailable"}
+
+    def _skill_text(self) -> str:
+        """The question text the router reads: question, restated question, key entities."""
+        plan = self.plan
+        parts = [self.question] + ([plan.restated_question, " ".join(plan.key_entities)] if plan else [])
+        return "\n".join(part for part in parts if part)
+
+    def _skill_candidates(self, scope: Mapping[str, Any] | None) -> list[str]:
+        """Router candidates for the planner (deterministic for a question and scope)."""
+        scope = scope or {}
+        text = "\n".join(part for part in (self.question, _collapse(scope.get("restated_question"), 400),
+                                            " ".join(_as_str_list(scope.get("key_entities"), limit=12)))
+                         if part)
+        skills = _research_skills()
+        return [r.name for r in skills.route(text, year=self._skill_year()) if self.skill_library.get(r.name)]
+
+    def _skill_year(self) -> int | None:
+        """The router's reference year for "future" years: the plan's as-of year, so a
+        resumed attempt rebuilds the same method text (today's before a plan exists)."""
+        year = str(self.plan.as_of if self.plan else _utc_date())[:4]
+        return int(year) if year.isdigit() else None
+
+    def _assign_skills(self, plan: Plan, raw_plan: Mapping[str, Any] | None,
+                       scope: Mapping[str, Any] | None) -> None:
+        """Set ``plan.skills``: the planner's valid choice, else the router's candidates.
+        ``plan`` becomes the engine's plan first: the router reads its as-of year, restated
+        question and key entities (without method skills nothing changes)."""
+        if self.skill_library is None:
+            return
+        self.plan = plan
+        skills = _research_skills()
+        chosen, source = skills.choose_plan_skills((raw_plan or {}).get("skills"), self._skill_candidates(scope),
+                                                   self.skill_library.names)
+        plan.skills = chosen
+        self._record_skills(plan, source)
+
+    def _record_skills(self, plan: Plan, source: str) -> None:
+        if self.skill_library is None:
+            return
+        skills = _research_skills()
+        self.meta["research_skills"] = skills.describe(
+            self.skill_library, plan.skills, source, skills.detect_sectors(self._skill_text()))
+        if plan.skills:
+            self.log("ok", f"v3: method skills {', '.join(plan.skills)} ({source})")
+
+    def _plan_skills(self) -> list[str]:
+        return list(self.plan.skills) if self.skill_library is not None and self.plan else []
+
+    def _kiq_skill_text(self, kiq: Kiq) -> str:
+        """The method part of a KIQ task: the Investigate sections of at most two plan
+        skills that fit this KIQ and, for an industry skill, its sector adapters."""
+        plan_skills = self._plan_skills()
+        if not plan_skills:
+            return ""
+        skills = _research_skills()
+        chosen = skills.kiq_skills(plan_skills, kiq.question, kind=kiq.kind,
+                                   base_rate=bool(_BASE_RATE_RE.search(kiq.question)), year=self._skill_year())
+        sectors = skills.detect_sectors(kiq.question) or skills.detect_sectors(self._skill_text())
+        return skills.kiq_block(self.skill_library, chosen, sectors,
+                                data_enabled=bool(getattr(self, "data_enabled", False)))
+
+    def _writer_skill_text(self, *, scenario: bool, summary: bool = False) -> str:
+        plan_skills = self._plan_skills()
+        if not plan_skills:
+            return ""
+        skills = _research_skills()
+        return skills.writer_block(self.skill_library, skills.writer_skills(plan_skills, scenario=scenario),
+                                   summary=summary)
 
     def _keep_stored_data(self) -> None:
         """A resumed attempt whose providers are unavailable keeps the official
@@ -5384,6 +5511,7 @@ class _Engine:
         if plan and brief and not self._discard_outage_plan(plan):
             self.plan, self.brief, self.kiqs = plan, brief, list(plan.kiqs)
             self.meta["plan_fallback"] = sorted(plan.fallback)
+            self._record_skills(plan, "plan.json")
             self.log("resume", f"research:v3:plan reused ({len(plan.kiqs)} KIQs, {len(plan.sections)} sections)")
             return
         self.log("stage", "research:v3:plan start")
@@ -5399,6 +5527,7 @@ class _Engine:
             if plan.fallback:
                 self.log("warn", "v3: plan uses deterministic defaults for: "
                                  + ", ".join(sorted(plan.fallback)))
+            self._assign_skills(plan, raw_plan, scope)
             brief = render_brief(plan)
             self.write_json(self.work / "plan.json", plan.to_dict())
             self._write_internal(self.work / "brief.md", brief)
@@ -5461,6 +5590,7 @@ class _Engine:
             self.log("warn", "v3: re-planning failed as well; researching the template plan")
             return
         new = build_plan(self.question, self.language, plan.as_of, self.preset, self.actor_cap, scope, raw_plan)
+        self._assign_skills(new, raw_plan, scope)
         brief = render_brief(new)
         self.write_json(self.work / "plan.json", new.to_dict())
         self._write_internal(self.work / "brief.md", brief)
@@ -5535,6 +5665,8 @@ class _Engine:
                                             _data_catalog().catalog_digest(self.question, env=self.env))
             except ImportError:
                 pass
+        if self.skill_library is not None:
+            task += _research_skills().planning_block(self.skill_library, self._skill_candidates(scope))
         raw_plan: dict | None = None
         outage = False
         try:
@@ -5856,9 +5988,11 @@ class _Engine:
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
             max_steps=self.preset.agent_max_steps, language=self.language)
-        if not getattr(self, "data_enabled", False):
-            return task
-        return task + self._kiq_data_text(kiq)
+        if getattr(self, "data_enabled", False):
+            task += self._kiq_data_text(kiq)
+        if getattr(self, "skill_library", None) is not None:
+            task += self._kiq_skill_text(kiq)
+        return task
 
     def _kiq_data_text(self, kiq: Kiq) -> str:
         """The official-data part of a KIQ task (data-enabled runs only; it is
@@ -6097,6 +6231,8 @@ class _Engine:
                      "needs longer history, name a series not stored yet (or the #yoy form of a stored index) "
                      "and ask for base rates or historical precedents in the question, which fetches "
                      f"{self._data_history_text()}.")
+        if self._plan_skills():
+            task += _research_skills().gaps_block(self.skill_library, self._plan_skills())
         data = self.json_call([self.brief], task, label=f"gap:r{round_no}", required=("follow_ups",),
                               deadline=deadline)
         verdict = str(data.get("verdict") or "").strip().lower()
@@ -6394,6 +6530,10 @@ class _Engine:
         if rows:
             lines.append(_DATA_SECTION_RULE)
             lines += self._section_data_lines(sections, rows)
+        if getattr(self, "skill_library", None) is not None:
+            method = self._writer_skill_text(scenario=any(section.is_scenario for section in sections))
+            if method:
+                lines.append(method)
         if current:
             lines += ["", "Current version of this section (rewrite it to fix the problem below and "
                           "keep every correct citation):", current]
@@ -6632,6 +6772,8 @@ class _Engine:
         length = "500 to 1000 Chinese characters" if self.language == CHINESE else "300 to 600 words"
         task = _render(_T_EXEC, heading=heading, length=length, language=self.language) + self._data_headlines(
             _DATA_EXEC_RULE)
+        if getattr(self, "skill_library", None) is not None:
+            task += self._writer_skill_text(scenario=False, summary=True)
         try:
             result = self._write_call(rg.build_messages(ENGINE_CORE, [self.brief, leads_block], task),
                                       label="synth:exec", deadline=deadline)
@@ -7386,7 +7528,10 @@ class _Engine:
         report_sha = _sha256(report_body)
         results: dict[str, dict] = {}
         truncated: list[str] = []
-        for kind in ("actors", "facts"):
+        # The forecast frame (base rates and drivers) is extracted only in runs with
+        # method skills: without them the extraction calls stay exactly as before.
+        kinds = ("actors", "facts", "frame") if self._plan_skills() else ("actors", "facts")
+        for kind in kinds:
             cached = _read_json(self.work / "extract" / f"{kind}.json")
             if isinstance(cached, dict) and cached.get("report_sha256") == report_sha \
                     and isinstance(cached.get("result"), dict):
@@ -7394,7 +7539,7 @@ class _Engine:
                 if cached.get("truncated"):
                     truncated.append(kind)
         skip_actors = bool(getattr(self.args, "no_actors", False))
-        todo = [k for k in ("actors", "facts") if k not in results and not (k == "actors" and skip_actors)]
+        todo = [k for k in kinds if k not in results and not (k == "actors" and skip_actors)]
         if todo:
             shared = [self.brief, self.delimit(LABEL_REPORT, report_body)]
             tasks = {
@@ -7403,6 +7548,8 @@ class _Engine:
                 "facts": (_render(_T_FACTS, max_events=MAX_TIMELINE_ROWS, max_quant=MAX_QUANT_ROWS,
                                   max_contested=MAX_CONTESTED_ROWS, language=self.language),
                           ("quantitative_facts",)),
+                "frame": (_render(_T_FRAME, max_rates=MAX_FRAME_BASE_RATES, max_drivers=MAX_FRAME_DRIVERS,
+                                  language=self.language), ("base_rates", "drivers")),
             }
             if len(todo) >= 2:
                 self.gateway.prime(rg.build_messages(ENGINE_CORE, shared, PRIME_TASK), kind="json",
@@ -7421,6 +7568,7 @@ class _Engine:
                     truncated.append(kind)
                 self.write_json(self.work / "extract" / f"{kind}.json",
                                 {"report_sha256": report_sha, "result": results[kind], "truncated": cut})
+        self._frame = results.get("frame")
         for kind in truncated:
             self.meta[f"{kind}_truncated"] = True
             self.log("warn", f"v3: the {kind} extraction reply was truncated at its output cap even with the "
@@ -7551,9 +7699,14 @@ class _Engine:
                 "_actors_obj": obj}
 
     def forecast_inputs(self) -> dict:
+        frame = getattr(self, "_frame", None)
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
                                "narrative": s.thesis} for s in self.plan.scenarios],
-                "base_rates": [], "drivers": [], "indicators": self._official_indicators()}
+                "base_rates": _frame_rows(frame, "base_rates", ("reference_class", "outcome_frequency", "basis"),
+                                          MAX_FRAME_BASE_RATES),
+                "drivers": _frame_rows(frame, "drivers", ("variable", "direction", "why_it_matters"),
+                                       MAX_FRAME_DRIVERS),
+                "indicators": self._official_indicators()}
 
     def _official_refs(self) -> tuple[list[tuple[Any, int]], dict[int, int], dict[str, str]]:
         """Stored series (cited ones first, in report order), the positional

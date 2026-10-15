@@ -560,6 +560,39 @@ Native daily series are delivered monthly (frequency `M`): prices and yields as 
 
 **Disabled and unavailable modes.** On fresh runs, `DATA_SOURCES_ENABLED=false` omits data planning/guidance and tools; status remains visible in metadata. v3 resumes reuse frozen captured data in `stored_only` mode without prewarming or refreshing providers. An unbuilt server, missing capability/key, timeout, quota or crash leaves an explicit evidence gap; other sources and web research can continue. Invalid captured evidence is rejected, and v3 can stop publication when required evidence fails validation. `SETUP_DATAMCPS=0` skips builds only; it does not disable retrieval. `DATA_SOURCES_CHARTS_MAX=0` disables research data charts, while `REPORT_DATA_CHARTS=false` skips forecast official-data figures; neither disables stored-data writing context. The renderer's zero-cap path runs before dataset loading and its matplotlib requirement, returns exit code 2 (no data charts), and removes only renderer-owned manifest rows. See [configuration](#configuration-env).
 
+#### Research method skills (v3 and legacy)
+
+Nine method skills under `deerflow_bridge/skills/` give the research agents domain methodology for the question types this project forecasts. Each `SKILL.md` carries fixed `Plan`, `Investigate`, `Synthesize` and `Gaps` sections that both engines inject into their own prompts, plus on-demand references; the industry skills add 21 sector adapters (semiconductors, AI compute and data centres, batteries and storage, EVs, power, oil and gas, biopharma and others).
+
+| Skill | Leads on |
+|---|---|
+| `industry-research` | An industry's present state: perimeter and value chain, demand, staged capacity, costs and prices, profit pools, shares, cycle phase, policy architecture |
+| `industry-forecasting` | An industry by a target year: the "by YEAR" contract, outside view, adoption, learning-curve and stock-flow drivers, supply feasibility, milestones, a target-year state table and anchorable signposts |
+| `competitive-landscape-forecasting` | Who will lead, dominate or rank by a date: an operational leadership metric, leader-persistence base rates, evidence scorecards, rank probabilities that sum to 100 |
+| `macro-research` | Growth, inflation, labour, central-bank reaction functions, fiscal and financial conditions, nowcasting with official data, China macro |
+| `policy-and-trade-forecasting` | Laws, rules, rulings, tariffs, export controls and sanctions: legal pathways, stage base rates, veto players, implementation lags, effective-tariff measurement |
+| `geopolitical-forecasting` | Wars, ceasefires, escalation and crises: termination base rates, escalation ladders, negotiation analysis, evidence under information war |
+| `election-forecasting` | Elections and chamber control: fundamentals, polls, ratings, markets, correlated seat errors, certification rules |
+| `financial-markets-forecasting` | Prices, yields, FX, commodities, market caps and IPOs: settlement definitions, market-implied and empirical distributions, listing pipelines |
+| `reference-class-forecasting` | The outside view for every dated forecast: reference classes, base rates from long official history, hazard-to-deadline conversion, scenario/binary consistency, market anchoring |
+
+**Routing.** A deterministic bilingual router reads the question (in v3 also the restated question and key entities). It picks at most two domain skills, plus `reference-class-forecasting` for any dated forecast. Sector terms select at most two sector adapters per question. A sector noun alone does not make an industry question: "Which US AI lab will lead", "tariffs on Chinese EVs" or "Brent above 90 USD" lead with their own domain skill, and ranking or superlative questions ("remain the world's largest", 市值最高的企业) bring `competitive-landscape-forecasting`.
+
+**v3.**
+- The planner receives the matched skills' `Plan` sections and a menu of all nine. It may return `"skills"`, which is saved in `plan.json`; with the plan's as-of year as the router's reference year, a resumed attempt rebuilds identical tasks.
+- Each KIQ task, actor KIQs included, gets the `Investigate` section of its best-matching plan skill and at most one more. Base-rate KIQs are led by `reference-class-forecasting`. An industry skill brings the sector adapters the KIQ names (else the question's); beside another method it brings only the adapters.
+- The gap review gets the `Gaps` checks. Section writers get the `Synthesize` contract for their own sections; the executive summary gets only its conventions, no exhibits.
+- Method text is appended only to the last message, so the cached prompt prefix and the tools object are unchanged.
+- With method skills active, finalization also extracts the report's base rates and drivers into `actors.json` `forecast_inputs`, which the forecast spine reads.
+
+**Legacy.**
+- The lead agent's skill whitelist adds only the routed skills.
+- Planning passes name them with `read_file` pointers.
+- Workers receive their `Investigate` cards, and synthesis writers their `Synthesize` contracts.
+- The scoped-researcher whitelist is unchanged, because whitelisted skills are injected in full into every subagent call.
+
+**Off and degraded modes.** `RESEARCH_SKILLS=off` leaves every prompt, tool, artifact and meta key byte-identical. A missing or malformed skill is skipped, never failing a run. `meta.research_skills` records the chosen skills, their source (`planner`, `router` or `plan.json`), the matched sectors and content hashes. See the [design contract](docs/handoff/research-skills/design.md).
+
 #### Legacy engine (`RESEARCH_ENGINE=legacy`)
 
 ```mermaid
@@ -1410,6 +1443,7 @@ Research models (`DEERFLOW_MODEL`), as defined by the stanzas in `deerflow_bridg
 | `DEERFLOW_RESEARCH_LANGUAGE` | *(auto)* | Force `Chinese` or `English` output; otherwise it is detected from the question |
 | `DEERFLOW_RESEARCH_TIMEOUT` | *(depth-aware)* | Watchdog override, in seconds |
 | `RESEARCH_ENGINE` | `v3` | `v3` (alias `linear`) or `legacy` (aliases `deerflow`, `agentic`) |
+| `RESEARCH_SKILLS` | `auto` | Research method skills: `auto` routes and injects them, `off` leaves every prompt byte-identical; `RESEARCH_SKILLS_DIR` overrides the skills directory |
 | `RESEARCH_LINEAR_*` | *(per depth)* | v3 engine limits: questions, agent steps, searches, fetches, workers, time, output caps, GLM reasoning effort (see `.env.example`) |
 | `RESEARCH_PARALLEL_TRACKS` | `3` | Number of parallel evidence lanes (legacy engine only; v3 runs one lane) |
 | `RESEARCH_GLOBAL_SYNTHESIS` | `true` | Seal the lanes and run a single global synthesis |

@@ -177,7 +177,7 @@ def _dirty_bridge_skill_files() -> set[Path]:
     干净 checkout 里该集合为空，两层守卫保持全强度。"""
     try:
         out = subprocess.run(
-            ["git", "status", "--porcelain", "-z", "--", "deerflow_bridge/skills"],
+            ["git", "status", "--porcelain", "-z", "-uall", "--", "deerflow_bridge/skills"],
             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=15)
     except (OSError, subprocess.SubprocessError):
         return set()

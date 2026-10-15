@@ -5198,6 +5198,83 @@ def _official_data_brief_prompt_block() -> str:
     return _OFFICIAL_DATA_BRIEF_BLOCK.rstrip() + "\n\n"
 
 
+def _research_skills_module():
+    import importlib
+    return (importlib.import_module(".research_skills", __package__) if __package__
+            else importlib.import_module("research_skills"))
+
+
+_SKILL_BASE_RATE_RE = re.compile(
+    r"base[- ]?rates?|reference class|historical(?:ly)? (?:frequency|precedent|episodes?)|precedents?|"
+    r"how often|基准率|历史上|先例|历史经验", re.I)
+
+
+def _method_skills(question: str) -> "tuple[Any, Any, list[str]]":
+    """(research_skills module, library, skills routed for ``question``); empty when
+    RESEARCH_SKILLS=off, no method skill is readable, or nothing matches."""
+    try:
+        skills = _research_skills_module()
+        if skills.skills_mode() == "off":
+            return None, None, []
+        library = skills.load_library()
+        if library is None:
+            return None, None, []
+        return skills, library, [r.name for r in skills.route(question) if library.get(r.name)]
+    except Exception:  # noqa: BLE001 — methodology is optional; it never fails research
+        return None, None, []
+
+
+def _method_skill_names(question: str) -> list[str]:
+    return _method_skills(question)[2]
+
+
+def _method_skills_meta(question: str) -> "dict | None":
+    """meta record of the routed method skills; None when they are off or unreadable."""
+    skills, library, names = _method_skills(question)
+    if skills is None:
+        return None
+    return skills.describe(library, names, "router", skills.detect_sectors(question))
+
+
+def _method_skills_plan_block(question: str) -> str:
+    """Planning passes: which routed method skills to load with read_file."""
+    skills, library, names = _method_skills(question)
+    if not names:
+        return ""
+    return skills.read_file_pointers(library, names) + "\n\n"
+
+
+def _method_skills_worker_block(question: str, focus: str) -> str:
+    """Working passes and workers: the Investigate cards of the routed skills that fit
+    ``focus`` (a pass objective, a KIQ or the open gaps) plus sector adapters."""
+    skills, library, names = _method_skills(question)
+    if not names:
+        return ""
+    focus = str(focus or "")
+    chosen = skills.kiq_skills(names, focus or question, kind="general",
+                               base_rate=bool(_SKILL_BASE_RATE_RE.search(focus)))
+    sectors = skills.detect_sectors(focus) or skills.detect_sectors(question)
+    block = skills.kiq_block(library, chosen, sectors, data_enabled=bool(_official_data_prompt_block()))
+    return block.strip() + "\n\n" if block else ""
+
+
+def _method_skills_synthesis_block(question: str, *, scenario: bool = True, summary: bool = False) -> str:
+    """Final synthesis writers: the Synthesize sections of the routed skills (``summary``:
+    framed for the executive summary, conventions only)."""
+    skills, library, names = _method_skills(question)
+    if not names:
+        return ""
+    block = skills.writer_block(library, skills.writer_skills(names, scenario=scenario), summary=summary)
+    return block.strip() + "\n\n" if block else ""
+
+
+def _scenario_section(section: Any) -> bool:
+    """A synthesis outline section about the scenarios (title or scope)."""
+    text = " ".join(str(section.get(key) or "") for key in ("title", "scope", "focus")) \
+        if isinstance(section, dict) else str(section or "")
+    return bool(re.search(r"scenario|情景|场景", text, re.I))
+
+
 _OFFICIAL_STORED_INDEX_MAX = 12
 _OFFICIAL_STORED_LINE_MAX = 320
 _OFFICIAL_STORED_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
@@ -5432,6 +5509,7 @@ def build_research_prompt(
             f"{_market_pricing_prompt_block()}"
             f"{_official_data_prompt_block()}"
             f"{_official_data_brief_prompt_block()}"
+            f"{_method_skills_plan_block(question)}"
             f"{evidence_guidance}\n\n"
             "Return dense, structured WORKING EVIDENCE NOTES, not an executive "
             "summary and not a client-facing report. Preserve concrete figures "
@@ -5462,6 +5540,7 @@ def build_research_prompt(
             f"{_market_pricing_prompt_block()}"
             f"{_official_data_prompt_block()}"
             f"{_official_data_brief_prompt_block()}"
+            f"{_method_skills_plan_block(question)}"
             f"{_agentic_delegation_block()}"
             f"{preset['guidance']}\n\n"
             "For this first pass, search broadly enough to understand the terrain and "
@@ -5501,6 +5580,7 @@ def build_research_prompt(
         f"{_market_pricing_prompt_block()}"
         f"{_official_data_prompt_block()}"
         f"{_official_data_brief_prompt_block()}"
+        f"{_method_skills_plan_block(question)}"
         f"{preset['guidance']}\n\n"
         "Then produce a single comprehensive Markdown report (your final message) that a "
         "downstream forecasting workflow will use as its evidence dossier. The report MUST "
@@ -5583,6 +5663,7 @@ def build_deep_phase_prompt(question: str, phase: dict[str, Any], index: int, to
         f"{quantitative_line}"
         f"{_official_data_prompt_block()}"
         f"{_official_data_stored_block(question)}"
+        f"{_method_skills_worker_block(question, str(phase.get('focus') or ''))}"
         f"{delegation}"
         "Use web search and full-text fetching as needed. Prefer primary sources and "
         "high-authority sources. Capture concrete numbers, dates, organizations, named "
@@ -5663,6 +5744,7 @@ def build_coverage_topup_prompt(question: str, gaps: list | None, have: int, tar
         f"{gap_block}"
         f"{_official_data_prompt_block()}"
         f"{_official_data_stored_block(question)}"
+        f"{_method_skills_worker_block(question, ' '.join(str(g) for g in (gaps or [])))}"
         f"{_agentic_delegation_block()}"
         "OBJECTIVE: find and FETCH NEW, high-quality sources that cover parts of the brief "
         "not yet evidenced — DIFFERENT actors, drivers, regions, mechanisms, numbers, and "
@@ -5700,6 +5782,7 @@ def build_gap_closing_prompt(question: str, gaps: list | None, target_language: 
         f"{gap_block}\n\n"
         f"{_official_data_prompt_block()}"
         f"{_official_data_stored_block(question)}"
+        f"{_method_skills_worker_block(question, ' '.join(str(g) for g in (gaps or [])))}"
         f"{_agentic_delegation_block()}"
         "OBJECTIVE: for EACH gap, run focused searches and FETCH the primary/high-authority "
         "pages that would actually close it (a specific number with its as-of date and unit, a "
@@ -5771,6 +5854,7 @@ def build_synthesis_prompt(question: str, target_language: str | None, depth: st
         "Using ONLY the research and sources you have already collected above, write "
         "the FINAL comprehensive Markdown report NOW, as your immediate reply.\n\n"
         f"RESEARCH BRIEF (what the report must answer):\n{question}\n\n"
+        f"{_method_skills_synthesis_block(question)}"
         "The report MUST be self-contained and include, where applicable:\n"
         "  1. An executive summary of the situation.\n"
         "  2. A dedicated ACTOR INTELLIGENCE section covering every Tier-1/2 outcome-mover "
@@ -6192,6 +6276,7 @@ def build_synthesis_outline_prompt(question: str, target_language: str | None) -
         "You are planning a LONG multi-section research dossier that will be written "
         "one section at a time by parallel writers. Do NOT write the dossier now.\n\n"
         f"RESEARCH BRIEF (what the dossier must answer):\n{question}\n\n"
+        f"{_method_skills_synthesis_block(question)}"
         "From the gathered research below, emit ONLY a JSON object (no prose, no "
         "markdown fence commentary) with this exact shape:\n"
         '{"sections": [{"title": string, "scope": string, "target_words": int, "covers": [string]}]}\n\n'
@@ -6707,6 +6792,7 @@ def build_synthesis_section_prompt(question: str, outline: list[dict], section: 
         f"You are writing SECTION {index + 1} of {total} of a long research dossier. "
         "Other writers handle the other sections in parallel — write ONLY yours.\n\n"
         f"RESEARCH BRIEF (the dossier's overall requirement):\n{question}\n\n"
+        f"{_method_skills_synthesis_block(question, scenario=_scenario_section(section))}"
         f"FULL DOSSIER OUTLINE (for coherence — do not write the other sections):\n{outline_lines}\n\n"
         f"YOUR SECTION: {section['title']}\n"
         f"SCOPE: {section['scope']}\n"
@@ -6788,6 +6874,7 @@ def build_synthesis_summary_prompt(question: str, leads: list[tuple[str, str]],
         f"{_dossier_style_rules_block()}"
         f"{lang_line}\n\n"
         f"RESEARCH BRIEF:\n{question}\n\n"
+        f"{_method_skills_synthesis_block(question, scenario=False, summary=True)}"
         f"=== SECTION OPENINGS ===\n{lead_block}"
     )
 
@@ -11054,6 +11141,7 @@ def build_scoped_worker_prompt(question: str, kiq: str, target_language: str | N
         f"YOUR NARROW FOCUS — investigate ONLY this, in depth: {kiq}\n\n"
         f"{_official_data_prompt_block()}"
         f"{_official_data_stored_block(question)}"
+        f"{_method_skills_worker_block(question, kiq)}"
         "Use search/read tools only while they advance this KIQ: a new independent origin, "
         "a stronger evidence grade, a verified number, a resolved contradiction, or a real "
         "disconfirming result. Stop when its load-bearing claims are B2-or-better and the "
@@ -18042,9 +18130,14 @@ def main() -> int:
                 "forecast-visuals",
                 "data-sources",
                 "data-visuals",
+                # The method skills routed for this question (none when RESEARCH_SKILLS=off).
+                *_method_skill_names(question),
             },
         )
         meta["data_tool_registration"] = _register_legacy_data_tools(client, plog=plog)
+        _skills_meta = _method_skills_meta(question)
+        if _skills_meta is not None:
+            meta["research_skills"] = _skills_meta
         write_meta()
         plog.write("init", "client ready; available skills will load on demand (deep-research)")
 

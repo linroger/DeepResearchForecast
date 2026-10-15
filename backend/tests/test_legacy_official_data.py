@@ -222,7 +222,7 @@ def test_source_export_synthesis_global_merge_and_finalization(tools_api, legacy
     tools, api, provider = tools_api
     legacy._FETCHED_SOURCES[:] = [{"url": "https://example.org/other", "title": "Other", "ok": True}]
     monkeypatch.setattr(legacy, "_research_budget", None)
-    response = tools.data_get_impl("fred:UNRATE")
+    assert tools.data_get_impl("fred:UNRATE").startswith("[S")
     provisional = tools.load_candidates(tmp_path)[0]["source_number"]
     lane = legacy.export_fetched_sources_for_manifest()
     data_row = next(r for r in lane if r.get("dataset"))
@@ -541,7 +541,9 @@ def _execute_native_client_construction(legacy, client):
     namespace = dict(legacy.__dict__)
     namespace.update(DeerFlowClient=lambda **kwargs: client,
         args=SimpleNamespace(config=None, model="synthetic", subagents=True),
-        plog=SimpleNamespace(write=lambda *a: None), meta={}, write_meta=lambda: None)
+        plog=SimpleNamespace(write=lambda *a: None), meta={}, write_meta=lambda: None,
+        # The block reads the run question: the method skills it routes join the lead whitelist.
+        question="What is the US macro baseline?")
     exec(compile(ast.Module(body=block, type_ignores=[]), "<native-client-construction>", "exec"), namespace)
     return namespace
 

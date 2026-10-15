@@ -599,9 +599,11 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     data_sources.py (unified official-data API) and data_tools.py (the
   #     legacy engine's data_search/data_get tools) are imported by bare name by
   #     both engines and by config.yaml (`use: data_tools:...`).
+  #   - research_skills.py (method-skill router and SKILL.md section parser) is
+  #     imported by bare name by both engines.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -611,6 +613,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
         data_mcp.py|data_catalog.py|data_sources.py|data_tools.py)
           ok "Installed $_tool_mod (official-data sources)" ;;
+        research_skills.py)
+          ok "Installed $_tool_mod (research method skills)" ;;
         *)
           ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
       esac

@@ -560,6 +560,39 @@ v3 的时间规划取预设时间与看门狗预算 × 0.85 中较小的一个�
 
 **关闭与不可用模式。** 新运行设置 `DATA_SOURCES_ENABLED=false` 后不加入数据规划／指引与工具，元数据仍记录状态。v3 续跑在 `stored_only` 模式下复用冻结的已捕获数据，不预热或刷新提供方。服务未构建、能力／Key 缺失、超时、配额耗尽或崩溃会留下明确的证据缺口；其他来源与网页研究可继续。无效的已捕获证据会被拒绝，必需证据验证失败时 v3 可停止发布。`SETUP_DATAMCPS=0` 只跳过构建，不关闭检索。`DATA_SOURCES_CHARTS_MAX=0` 关闭研究数据图，`REPORT_DATA_CHARTS=false` 跳过预测报告官方数据图；两者均不关闭落盘数据的写作上下文。渲染器的零上限路径在加载数据及检查 matplotlib 依赖之前执行，返回退出码 2（无数据图），只清理该渲染器拥有的清单行。见[配置](#配置env)。
 
+#### 研究方法技能（v3 与旧版）
+
+`deerflow_bridge/skills/` 下的 9 个方法技能，为研究智能体提供本项目常见预测问题类型的领域方法。每个 `SKILL.md` 都有固定的 `Plan`、`Investigate`、`Synthesize`、`Gaps` 四段，由两个引擎注入各自的提示，另附按需读取的参考文件；行业技能另带 21 个行业适配块（半导体、AI 算力与数据中心、电池与储能、电动汽车、电力、油气、生物医药等）。
+
+| 技能 | 主导的问题 |
+|---|---|
+| `industry-research` | 行业现状：边界与价值链、需求、分阶段的产能、成本与价格、利润池、份额、周期阶段、政策格局 |
+| `industry-forecasting` | 目标年份的行业状态：「到某年」口径约定、外部视角、扩散、学习曲线与存量-流量驱动、供给可行性、里程碑、目标年份状态表及可锚定的信号 |
+| `competitive-landscape-forecasting` | 某时点谁领先、主导或排名靠前：可操作的领先度指标、领先者延续性基准率、证据记分卡、合计为 100 的排名概率 |
+| `macro-research` | 增长、通胀、就业、央行反应函数、财政与金融条件、用官方数据做即时预测、中国宏观 |
+| `policy-and-trade-forecasting` | 法律、规则、裁决、关税、出口管制与制裁：法定路径、各阶段基准率、否决方、实施滞后、有效关税率测算 |
+| `geopolitical-forecasting` | 战争、停火、升级与危机：终结基准率、升级阶梯、谈判分析、信息战下的证据评估 |
+| `election-forecasting` | 选举与议会控制权：基本面、民调、评级、市场、席位误差的相关性、结果认证规则 |
+| `financial-markets-forecasting` | 价格、收益率、汇率、大宗商品、市值与 IPO：结算口径、市场隐含分布与经验分布、上市流程 |
+| `reference-class-forecasting` | 所有带时点预测的外部视角：参考类、基于长期官方历史的基准率、风险率换算到截止期、情景与二元预测的一致性、市场锚 |
+
+**路由。** 确定性的中英双语路由器读取问题（v3 还读取改写后的问题与关键实体），至多选出两个领域技能；凡带时点的预测都附加 `reference-class-forecasting`。问题中的行业词每题至多选出两个行业适配块。仅出现行业名词并不构成行业问题：“Which US AI lab will lead”、“对中国电动车加征关税”或“布伦特原油高于 90 美元”会以各自领域的技能为首；排名或最高级问题（“remain the world's largest”、市值最高的企业）会加入 `competitive-landscape-forecasting`。
+
+**v3。**
+- 规划器收到命中技能的 `Plan` 段及全部 9 个技能的菜单，可返回 `"skills"`；该选择写入 `plan.json`，且路由器以计划的 as-of 年份为参照年，续跑时据此重建完全相同的任务。
+- 每个 KIQ 任务（含行为体类 KIQ）附上与其最匹配的计划技能的 `Investigate` 段，至多再加一个：基准率类 KIQ 以 `reference-class-forecasting` 为首；行业技能附上该 KIQ 点名的行业适配块（否则用问题的），与其他方法并列时只附适配块。
+- 缺口评审获得 `Gaps` 检查；各节写作获得针对本节的 `Synthesize` 契约，执行摘要只获得其约定，不含图表。
+- 方法文本只追加在最后一条消息，缓存的提示前缀与工具对象均不变。
+- 启用方法技能时，定稿还会把报告中的基准率与驱动因素抽取到 `actors.json` 的 `forecast_inputs`，供预测主干读取。
+
+**旧版。**
+- 主智能体的技能白名单只加入路由命中的技能。
+- 规划 pass 用 `read_file` 指针点名这些技能。
+- 工作智能体收到其 `Investigate` 卡，综合写作收到其 `Synthesize` 契约。
+- 限定范围研究者的白名单不变，因为白名单中的技能会在每次子代理调用时全文注入。
+
+**关闭与降级。** `RESEARCH_SKILLS=off` 时，所有提示、工具、产物与 meta 键均逐字节不变；缺失或格式不合格的技能会被跳过，不会使运行失败。`meta.research_skills` 记录选中的技能、其来源（`planner`、`router` 或 `plan.json`）、命中的行业及内容哈希。见[设计契约](docs/handoff/research-skills/design.md)。
+
 #### 旧版引擎 (`RESEARCH_ENGINE=legacy`)
 
 ```mermaid
@@ -1410,6 +1443,7 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 | `DEERFLOW_RESEARCH_LANGUAGE` | （自动） | 强制输出 `Chinese` 或 `English`；否则根据问题自动判断 |
 | `DEERFLOW_RESEARCH_TIMEOUT` | （随深度而定） | 看门狗时长覆盖值，单位为秒 |
 | `RESEARCH_ENGINE` | `v3` | `v3`（别名 `linear`）或 `legacy`（别名 `deerflow`、`agentic`） |
+| `RESEARCH_SKILLS` | `auto` | 研究方法技能：`auto` 路由并注入，`off` 时所有提示逐字节不变；`RESEARCH_SKILLS_DIR` 可覆盖技能目录 |
 | `RESEARCH_LINEAR_*` | （按深度） | v3 引擎的限额：问题数、智能体步数、搜索、抓取、并行数、时间、输出上限、GLM 推理强度（见 `.env.example`） |
 | `RESEARCH_PARALLEL_TRACKS` | `3` | 并行证据轨的数量（仅旧版引擎；v3 只跑一条轨） |
 | `RESEARCH_GLOBAL_SYNTHESIS` | `true` | 封存各证据轨，并只运行一次全局综合 |
