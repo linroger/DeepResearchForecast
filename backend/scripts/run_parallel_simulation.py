@@ -64,6 +64,16 @@ if sys.platform == 'win32':
     
     builtins.open = _utf8_open
 
+# stdout 按行刷新（所有平台）：后端把本进程的 stdout/stderr 捕获进 simulation.log（与主日志
+# 记录器 SimulationLogManager 同一文件），每条 print 整行即时落盘，而不是 8 KiB 块——块边界会
+# 切断多字节字符，且模拟结束后 runner 空闲等待命令期间最后一块（含每轮 world 决策/提交行）
+# 一直留在缓冲区里。
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (OSError, ValueError):
+        pass
+
 # XRUN-14: transformers tokenizers 在 fork 后会逐条刷 "The current process just got forked"
 # 警告（曾把 simulation.log 的整个可见尾部淹没，掩盖真实错误）。必须在任何 huggingface
 # 相关 import 之前显式禁用 tokenizers 并行才能静音。

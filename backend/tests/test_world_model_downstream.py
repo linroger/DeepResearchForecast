@@ -289,3 +289,62 @@ def test_decision_channel_outcome_logs_world_model(tmp_path, monkeypatch):
     assert summary["world_model"]["rounds_committed"] == 3 and summary["world_model"]["arbiter_failed_rounds"] == 1
     assert summary["world_headline"].startswith("2027-Q1")
     assert summary["trajectory_produced"] is False                              # no trajectory file written here
+
+
+def test_world_variable_series_seed_at_as_of_and_one_point_per_period():
+    from app.services.report_visualizer import world_variable_series
+    world = {
+        "as_of_date": "2026-07-11", "round": 4, "committed_round": 4,
+        "period_labels": {"1": "2026-Q3", "2": "2026-Q4", "3": "2027-Q1", "4": "2027-Q2"},
+        "variables": [
+            {"id": "tariff_rate", "name": "Tariff rate", "unit": "%", "kind": "numeric", "history": [
+                {"round": 0, "value": 10.0, "cause": "seed", "source": "research"},
+                {"round": 2, "value": 25.0, "cause": "effect fired", "source": "effect"},
+                {"round": 2, "value": 30.0, "cause": "decree", "source": "arbiter"},     # same period: last wins
+                {"round": 4, "value": 40.0, "cause": "snapback", "source": "arbiter"},
+                {"round": 4, "value": "bad", "cause": "ignored"}]},
+            {"id": "licences", "name": "Licences issued", "unit": "count", "kind": "numeric", "history": [
+                {"round": 3, "value": 5, "cause": "arbiter created the fact", "source": "arbiter"},
+                {"round": 4, "value": 6, "cause": "more", "source": "arbiter"}]},
+            {"id": "permit", "name": "Permit", "unit": "", "kind": "categorical",
+             "history": [{"round": 0, "value": "pending"}, {"round": 1, "value": "granted"}]},
+            {"id": "flat", "name": "Seed only", "unit": "%", "kind": "numeric",
+             "history": [{"round": 0, "value": 3.0, "cause": "seed"}]},
+            "garbage",
+        ],
+    }
+    rows = world_variable_series(world)
+    assert [r["id"] for r in rows] == ["tariff_rate", "licences"]              # categorical / seed-only / junk skipped
+    tariff = rows[0]
+    assert tariff["x"] == ["2026-07-11", "2026-Q3", "2026-Q4", "2027-Q1", "2027-Q2"]   # seed at the as-of date
+    assert tariff["rounds"] == [0, 1, 2, 3, 4] and len(set(tariff["x"])) == len(tariff["x"])
+    assert tariff["y"] == [100.0, 100.0, 300.0, 300.0, 400.0]                 # last value of the period, carried
+    assert tariff["raw"] == [10.0, 10.0, 30.0, 30.0, 40.0]
+    assert tariff["hover"] == ["10 % — seed (research, as of 2026-07-11)", "10 % — unchanged", "30 % — decree",
+                               "30 % — unchanged", "40 % — snapback"]
+    created = rows[1]                                                          # an arbiter-created variable starts later
+    assert created["x"] == ["2027-Q1", "2027-Q2"] and created["y"] == [100.0, 120.0]
+    assert created["hover"][0] == "5 count — arbiter created the fact"
+    # no committed round recorded → the history's last round bounds the axis; no as-of → "seed"
+    bare = world_variable_series({"variables": [{"kind": "numeric", "history": [
+        {"round": 0, "value": 2}, {"round": 2, "value": 1}]}]})
+    assert bare[0]["x"] == ["seed", "period 1", "period 2"] and bare[0]["y"] == [100.0, 100.0, 50.0]
+    assert world_variable_series("garbage") == [] and world_variable_series({"variables": []}) == []
+
+
+def test_world_variables_chart_starts_at_seed_without_duplicates(tmp_path):
+    from app.services.report_visualizer import ReportVisualizer
+    viz = ReportVisualizer()
+    if not viz._interactive_ok():
+        pytest.skip("plotly unavailable")
+    payload = _world_state_payload()
+    payload["world"]["variables"][0]["history"].append(
+        {"round": 2, "value": 30.0, "cause": "second row of the period", "source": "arbiter"})
+    charts = str(tmp_path / "charts")
+    rel = viz.build_world_variables_html(payload, charts)
+    assert rel is not None
+    html = open(os.path.join(str(tmp_path), rel), encoding="utf-8").read()
+    assert '"2026-07-11"' in html and '"2026-Q3"' in html and '"2027-Q1"' in html   # seed at as-of, one x per period
+    assert '"categoryarray":["2026-07-11","2026-Q3","2026-Q4","2027-Q1"]' in html
+    assert "300" in html and "second row of the period" in html and "unchanged" in html
+    assert html.count('"2026-Q4"') == 2                                       # one point + the axis order, no duplicate

@@ -920,9 +920,8 @@ class SimulationRunner:
             if resume_active:
                 cmd.append("--resume")
             
-            # 创建主日志文件，避免 stdout/stderr 管道缓冲区满导致进程阻塞
-            main_log_path = os.path.join(sim_dir, "simulation.log")
-            main_log_file = open(main_log_path, 'w', encoding='utf-8')
+            # 创建主日志文件，避免 stdout/stderr 管道缓冲区满导致进程阻塞（追加模式，见 _open_main_log）
+            main_log_file = cls._open_main_log(sim_dir)
             
             # 设置子进程环境变量，确保 Windows 上使用 UTF-8 编码
             # 这可以修复第三方库（如 OASIS）读取文件时未指定编码的问题
@@ -984,6 +983,22 @@ class SimulationRunner:
             raise
         
         return state
+
+    @staticmethod
+    def _open_main_log(sim_dir: str):
+        """``simulation.log`` as the runner subprocess's stdout/stderr sink: truncated for this
+        launch, then opened append-only.
+
+        The child's ``SimulationLogManager`` (scripts/action_logger.py) writes the same file
+        through its own handle.  Two non-appending handles each write at a private offset and
+        overwrite each other's bytes (torn multi-byte characters, a log that greps as binary, the
+        world-model round lines missing); with O_APPEND every write of either handle lands at the
+        current end of file, so the runner's records stay intact next to the captured console
+        output."""
+        path = os.path.join(sim_dir, "simulation.log")
+        with open(path, "w", encoding="utf-8"):
+            pass
+        return open(path, "a", encoding="utf-8")
 
     @staticmethod
     def _read_log_tail(path: str, max_bytes: int = 2000) -> str:
