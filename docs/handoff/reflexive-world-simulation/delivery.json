@@ -3,7 +3,7 @@
   "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
   "implementation_commit": "e902aedb1a8307c024da950060c4d7bb30f34220",
   "phase": "Trade/protocol repairs and reruns delivered; semantic behavior release blockers remain",
-  "updatedUtc": "2026-10-16T20:16:40.483730+00:00",
+  "updatedUtc": "2026-10-16T20:20:48.467781+00:00",
   "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
   "application_tests_run": true,
   "live_provider_calls_run": true,
@@ -85,5 +85,7 @@
   "behaviorV2Commit": "37b43161c75d6b64b98bbcbf007053fd7b447ff1",
   "latestOfflineTestsPassed": 537,
   "latestSummaryTestsPassed": 1,
-  "latestReport": "behavior-rerun/public-grammar/REPORT.md"
+  "latestReport": "behavior-rerun/public-grammar/REPORT.md",
+  "latestImplementationCommit": "095b9ef94ca83cab43491b1d32497e186937dda2",
+  "worktreeCleanAtImplementationCommit": true
 }

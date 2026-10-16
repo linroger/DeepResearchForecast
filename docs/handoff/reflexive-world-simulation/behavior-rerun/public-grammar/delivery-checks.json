@@ -28,5 +28,9 @@
       "diagnostic": "new blank line at EOF",
       "reason": "Preserve exact independently reviewed evidence bytes and closure hashes; exclude only this archived file from whitespace gate."
     }
-  ]
+  ],
+  "implementationCommit": "095b9ef94ca83cab43491b1d32497e186937dda2",
+  "postCommitSourceHashesUnchanged": 523,
+  "postCommitPriorArtifactsUnchanged": 273,
+  "worktreeCleanAtImplementationCommit": true
 }
