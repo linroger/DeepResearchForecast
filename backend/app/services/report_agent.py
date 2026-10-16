@@ -27,6 +27,7 @@ from enum import Enum
 from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
+from . import report_filter_safe as _filter_safe
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -552,6 +553,9 @@ class Report:
     # 部分完成（partial）信息：生成失败（写入占位符）的章节标题。报告整体仍标记 completed，
     # 但前端据此把卡片标注为「部分完成」。默认空列表 → to_dict 输出 partial=False，与历史一致。
     failed_sections: List[str] = field(default_factory=list)
+    # FILTER-SAFE：提供方内容审查后仍成稿的章节标题 → 处置层级：0=采纳仅因工具下限被退回的合格草稿，
+    # 1=机构称谓模式（工具下限 1、回包截断）重写，2=无检索工具重写。仅在非空时写入 to_dict（向后兼容）。
+    filter_safe_sections: Dict[str, int] = field(default_factory=dict)
     # EXECPLAN2 I-5-4: 报告级 LLM 成本/时延/工具调用紧凑汇总（per-section + totals）。
     # 仅在 LLM_TELEMETRY_ENABLED 且 REPORT_TELEMETRY 同时开启时填充；否则为 None，
     # to_dict 输出与历史完全一致（向后兼容，前端可据此显示「本报告耗费 ~$X / Y秒 / Z章」）。
@@ -579,6 +583,9 @@ class Report:
             "failed_sections": list(self.failed_sections),
             "partial": len(self.failed_sections) > 0
         }
+        # FILTER-SAFE：仅在有章节走过内容合规写作模式时附加该键（如实披露，向后兼容）
+        if self.filter_safe_sections:
+            d["filter_safe_sections"] = dict(self.filter_safe_sections)
         # EXECPLAN2 I-5-4: 仅在有遥测数据时附加该键，避免给历史 reader 引入空字段
         if self.telemetry is not None:
             d["telemetry"] = self.telemetry
@@ -2347,6 +2354,8 @@ class ReportAgent:
         # EXECPLAN2 I-5-4: 当前章节的工具调用计数器（_execute_tool 单一汇聚点累加），
         # 用于 per-section 遥测；未开遥测时该计数依旧无害地维护，开销可忽略。
         self._section_tool_calls = 0
+        # FILTER-SAFE：走过内容合规写作模式的章节 → 阶梯层级（并发章节线程共享，写入加锁）。
+        self._filter_safe_sections: Dict[str, int] = {}
 
         # RQ-1(4): 依据需求书 page_budget 收敛/展开本次报告的每章工具预算——小 page_budget 报告回到
         # 紧凑 8 次，无/大预算用展开默认（Config.REPORT_AGENT_MAX_TOOL_CALLS=12）。以实例属性覆盖类
@@ -11407,6 +11416,15 @@ class ReportAgent:
                     call_data["name"] = call_data.pop("tool")
                 if "params" in call_data and "parameters" not in call_data:
                     call_data["parameters"] = call_data.pop("params")
+                if ("arguments" in call_data and "parameters" not in call_data
+                        and isinstance(call_data["arguments"], dict)):
+                    call_data["parameters"] = call_data.pop("arguments")
+                if "parameters" not in call_data:
+                    # report_62e8219d3990 实测：模型把参数平铺在顶层 {"name": "quick_search",
+                    # "query": "...", "limit": 10} → 旧解析得到空参数、白烧一次检索。顶层非保留键视作参数。
+                    _flat = {k: v for k, v in call_data.items() if k not in ("name", "tool")}
+                    if _flat:
+                        call_data["parameters"] = _flat
                 if not call_data.get("name"):
                     continue
                 tool_calls.append(call_data)
@@ -11786,18 +11804,99 @@ class ReportAgent:
         previous_sections: List[str],
         progress_callback: Optional[Callable] = None,
         section_index: int = 0,
+        filter_safe: int = 0,
     ) -> str:
-        """T4.5: 章节生成调度——原生 tool calling 可用时走结构化路径，否则回退手搓 ReAct。"""
+        """T4.5: 章节生成调度——原生 tool calling 可用时走结构化路径，否则回退手搓 ReAct。
+
+        FILTER-SAFE：filter_safe>0 时两条路径都以机构称谓写作模式生成；原生路径遇提供方
+        内容审查**不**回退 ReAct（同样的请求内容必被同样拒绝，只会白烧一轮），直接抛给
+        _generate_section_with_retry 升级阶梯。"""
         if self.llm.supports_native_tools():
             try:
                 return self._generate_section_native(
-                    section, outline, previous_sections, progress_callback, section_index
+                    section, outline, previous_sections, progress_callback, section_index,
+                    filter_safe=filter_safe,
                 )
             except Exception as e:  # noqa: BLE001 — 原生路径异常时优雅回退 ReAct，绝不让章节失败
+                if _filter_safe.is_content_filter(e):
+                    raise
                 logger.warning(f"原生 tool calling 章节生成失败，回退 ReAct: {e}")
         return self._generate_section_react(
-            section, outline, previous_sections, progress_callback, section_index
+            section, outline, previous_sections, progress_callback, section_index,
+            filter_safe=filter_safe,
         )
+
+    # ---- FILTER-SAFE: content-filter retry ladder helpers ----
+    _FILTER_SAFE_LOCK = threading.Lock()
+
+    @staticmethod
+    def _filter_safe_ladder_enabled() -> bool:
+        return bool(getattr(Config, "REPORT_FILTER_SAFE_LADDER", True))
+
+    def _accept_draft_under_filter(
+        self, section: "ReportSection", section_index: int, draft: Optional[str],
+        tool_calls_count: int, exc: BaseException,
+    ) -> Optional[str]:
+        """FILTER-SAFE：检索补足阶段被提供方内容审查拒绝，而此前已有一份仅因工具调用不足被退回、
+        且通过污染检测的完整草稿 → 采纳该草稿（记 filter_safe_sections=0）；否则返回 None 让异常照常
+        传播。pipe_d569f211eb14 实测：13k 字草稿先被工具下限退回，随后累积 70k 检索回包触发输入侧
+        审查，整章被钉成占位符、整份报告被拒发。工具下限是质量助推，不是正确性门。"""
+        if (not draft or not self._filter_safe_ladder_enabled()
+                or not _filter_safe.is_content_filter(exc)):
+            return None
+        logger.warning(
+            f"章节 {section.title} 在检索补足阶段触发提供方内容审查，采纳此前已通过审查的完整草稿"
+            f"（工具调用 {tool_calls_count} 次）: {str(exc)[:160]}"
+        )
+        self._record_filter_safe_section(section.title, _filter_safe.LEVEL_DRAFT_ACCEPTED)
+        if self.report_logger:
+            self.report_logger.log_section_content(
+                section_title=section.title, section_index=section_index,
+                content=draft, tool_calls_count=tool_calls_count,
+            )
+        return draft
+
+    def _record_filter_safe_section(self, title: str, level: int) -> None:
+        """FILTER-SAFE：记下以内容合规写作模式生成的章节（并发安全；无 __init__ 的测试替身也可用）。"""
+        with self._FILTER_SAFE_LOCK:
+            table = getattr(self, "_filter_safe_sections", None)
+            if table is None:
+                table = {}
+                self._filter_safe_sections = table
+            table[title] = max(int(level), int(table.get(title, 0) or 0))
+
+    def _filter_safe_direct_answer(
+        self, section: "ReportSection", section_index: int, messages: List[Dict[str, Any]]
+    ) -> str:
+        """FILTER-SAFE L2：无工具单次直出。检索回包是提供方输入侧审查的触发源（静态词表无法
+        预判），而背景档案/来源索引/前文已在提示词内；输出仍过污染检测，绝不写入污染正文。"""
+        messages = list(messages)
+        messages[-1] = dict(messages[-1])
+        messages[-1]["content"] = (
+            str(messages[-1].get("content") or "")
+            + "\n\n本次请勿调用任何工具；直接以 \"Final Answer:\" 开头输出本章完整 Markdown 正文。"
+        )
+        response = self.llm.chat(
+            messages=messages,
+            temperature=Config.REPORT_AGENT_TEMPERATURE,
+            max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS,
+        )
+        if response is None:
+            raise RuntimeError(f"章节 {section.title} 过滤安全直出时 LLM 返回空响应")
+        final_answer = (
+            response.split("Final Answer:")[-1].strip() if "Final Answer:" in response
+            else response.strip()
+        )
+        if _looks_contaminated(final_answer):
+            logger.error(f"章节 {section.title} 过滤安全直出输出被污染/过短，写入失败占位符")
+            return SECTION_FAILURE_PLACEHOLDER
+        logger.info(f"章节 {section.title} 以过滤安全模式 L2（无工具）生成完成")
+        if self.report_logger:
+            self.report_logger.log_section_content(
+                section_title=section.title, section_index=section_index,
+                content=final_answer, tool_calls_count=0,
+            )
+        return final_answer
 
     def _generate_section_with_retry(
         self,
@@ -11808,7 +11907,13 @@ class ReportAgent:
         section_index: int = 0,
     ) -> str:
         """RPT-2: 章节异常先退避重试，再落占位符。瞬时故障（限流/超时/单次 5xx）不应
-        直接把章节钉死成占位符。REPORT_SECTION_RETRY_MAX=0 时与直接调用逐字节等价。"""
+        直接把章节钉死成占位符。REPORT_SECTION_RETRY_MAX=0 时与直接调用逐字节等价。
+
+        FILTER-SAFE：提供方内容审查（HTTP 400 code 1301 / 422 等）是对请求内容的确定性拒绝，
+        原样重发只会再被拒（pipe_d569f211eb14 的章节六次全拒，LLM 缓存还让重试逐字节重放）。
+        审查类异常不退避，立即升一级重试：L1 机构称谓写作指令 + 工具下限 1 + 检索回包截断；
+        L2 另不提供检索工具。非审查异常与 level 0 请求的行为逐字节不变（REPORT_FILTER_SAFE_LADDER=false
+        时全部回到旧的原样退避重试）。"""
         try:
             retries = int(getattr(Config, "REPORT_SECTION_RETRY_MAX", 1) or 0)
         except (TypeError, ValueError):
@@ -11818,22 +11923,35 @@ class ReportAgent:
         except (TypeError, ValueError):
             backoff = 8.0
         attempt = 0
+        filter_level = 0  # FILTER-SAFE：内容审查重试阶梯层级（0=常规请求）
         while True:
             try:
+                _gen_kwargs = {"filter_safe": filter_level} if filter_level else {}
                 content = self._generate_section(
-                    section, outline, previous_sections, progress_callback, section_index
+                    section, outline, previous_sections, progress_callback, section_index,
+                    **_gen_kwargs,
                 )
                 break
             except Exception as e:  # noqa: BLE001 — 重试耗尽后重抛，由调用方落占位符
                 if attempt >= retries:
                     raise
                 attempt += 1
+                if (self._filter_safe_ladder_enabled() and _filter_safe.is_content_filter(e)
+                        and filter_level < _filter_safe.FILTER_SAFE_MAX_LEVEL):
+                    filter_level += 1
+                    logger.warning(
+                        f"章节 {section.title} 触发提供方内容审查，立即以内容合规写作模式 "
+                        f"{_filter_safe.level_label(filter_level)} 重试 {attempt}/{retries}: {e}"
+                    )
+                    continue
                 wait_s = min(backoff * attempt, 60.0)
                 logger.warning(
                     f"章节 {section.title} 生成异常，{wait_s:.0f}s 后重试 "
                     f"{attempt}/{retries}: {e}"
                 )
                 time.sleep(wait_s)
+        if filter_level:
+            self._record_filter_safe_section(section.title, filter_level)
         # WAVE9：章节语言验收（一次重写重申 _lang_override）——先于反思，让反思与
         # 后续修复都在目标语言的稿件上进行。degrade-safe：任何失败返回原草稿。
         try:
@@ -12173,8 +12291,13 @@ class ReportAgent:
         previous_sections: List[str],
         progress_callback: Optional[Callable] = None,
         section_index: int = 0,
+        filter_safe: int = 0,
     ) -> str:
-        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries/无污染检测）。"""
+        """T4.5: 用原生 tool calling 生成章节（无正则解析/无 conflict_retries/无污染检测）。
+
+        FILTER-SAFE：filter_safe=1 时加机构称谓写作指令、工具下限降为 1、工具回包截断；
+        filter_safe=2 时另不提供工具，单次直出。仅因工具下限被退回的合格正文留作草稿：其后的
+        检索补足若被提供方内容审查拒绝，采纳该草稿。level 0 行为逐字节不变。"""
         logger.info(f"原生 tool calling 生成章节: {section.title}")
         if self.report_logger:
             self.report_logger.log_section_start(section.title, section_index)
@@ -12184,6 +12307,10 @@ class ReportAgent:
             _section_heading = f"{section.title}\n本章内容定位（大纲规划）: {section.description}"
         # LOOP-015: 与 ReAct 路径同源的有效工具调用下限（padding=0 / 证据预注入=1 / 其余=配置值）。
         _eff_min = self._effective_min_tool_calls(section)
+        if filter_safe >= _filter_safe.LEVEL_NO_TOOLS:
+            _eff_min = 0
+        elif filter_safe >= _filter_safe.LEVEL_REGISTER:
+            _eff_min = min(_eff_min, 1)  # FILTER-SAFE L1：一次检索即可成文，少累积输入侧审查面
         _prompt_kwargs = self._section_prompt_kwargs()  # RQ-1: 篇幅+工具调用范围槽位（随形状伸缩）
         _prompt_kwargs["min_tool_calls"] = _eff_min
         system_prompt = self._lang_override() + SECTION_SYSTEM_PROMPT_TEMPLATE.format(
@@ -12204,11 +12331,15 @@ class ReportAgent:
             "不要输出 JSON 工具包裹）。撰写正文前至少调用 "
             f"{_eff_min} 次工具以获取实证。"
         )
+        if filter_safe:
+            system_prompt += _filter_safe.register_directive(filter_safe)
 
         if previous_sections:
             # RQ-7: 前序章节切片从固定 [:8000] 升级为按提供方窗口预算化（大窗口携带全量前文，
             # 小窗口守住 8000 floor）。ADAPTIVE_CONTEXT 关闭时 _cap 恒为 8000（行为不变）。
             _cap = self._prior_section_char_budget(8000, len(previous_sections))
+            if filter_safe >= 2:
+                _cap = min(_cap, _filter_safe.PRIOR_SECTION_CHARS_AT_LEVEL_2)  # FILTER-SAFE L2：收紧前文切片
             previous_content = "\n\n---\n\n".join(
                 (sec[:_cap] + "..." if len(sec) > _cap else sec) for sec in previous_sections
             )
@@ -12223,10 +12354,13 @@ class ReportAgent:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+        if filter_safe >= 2:
+            return self._filter_safe_direct_answer(section, section_index, messages)
         schemas = self._to_openai_tool_schemas()
         max_iterations = 14  # RQ-1: 10→14，支撑更多工具轮次 + 更长章节的收尾
         max_tool_calls = self.MAX_TOOL_CALLS_PER_SECTION
         tool_calls_count = 0
+        draft_answer: Optional[str] = None  # FILTER-SAFE：仅因工具下限被退回的合格正文
 
         for _ in range(max_iterations):
             # REPORT-9: 工具调用未达下限时，本回合的正文会被拒绝（强制继续检索）→ 必为「工具决策回合」，
@@ -12237,10 +12371,17 @@ class ReportAgent:
                 if tool_calls_count >= _eff_min
                 else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
             )
-            resp = self.llm.chat_with_tools(
-                messages, schemas, temperature=Config.REPORT_AGENT_TEMPERATURE,
-                max_tokens=_turn_max_tokens
-            )
+            try:
+                resp = self.llm.chat_with_tools(
+                    messages, schemas, temperature=Config.REPORT_AGENT_TEMPERATURE,
+                    max_tokens=_turn_max_tokens
+                )
+            except Exception as _tool_exc:  # noqa: BLE001 — FILTER-SAFE：内容审查且已有合格草稿 → 采纳草稿
+                _accepted = self._accept_draft_under_filter(
+                    section, section_index, draft_answer, tool_calls_count, _tool_exc)
+                if _accepted is not None:
+                    return _accepted
+                raise
             calls = resp.get("tool_calls") or []
             content = resp.get("content") or ""
 
@@ -12278,7 +12419,8 @@ class ReportAgent:
                             )
                         except Exception:
                             pass
-                    messages.append({"role": "tool", "tool_call_id": c["id"], "content": str(result)[:8000]})
+                    messages.append({"role": "tool", "tool_call_id": c["id"],
+                                     "content": _filter_safe.cap_observation(str(result)[:8000], filter_safe)})
                     # RPT-11: 原生路径此前从不写 log_tool_result，agent_log.jsonl 丢失整条证据链。
                     if self.report_logger:
                         try:
@@ -12296,6 +12438,8 @@ class ReportAgent:
             if content.strip():
                 # EXECPLAN2 F-7-2 工具调用不足且仍可继续检索 → 拒绝过早出正文，强制补足实证（对齐 ReAct 路径）
                 if tool_calls_count < _eff_min and tool_calls_count < max_tool_calls:
+                    if not _looks_contaminated(content.strip()):
+                        draft_answer = content.strip()  # FILTER-SAFE：留作内容审查时的兜底草稿
                     messages.append({"role": "assistant", "content": content})
                     messages.append({
                         "role": "user",
@@ -12311,10 +12455,17 @@ class ReportAgent:
             messages.append({"role": "user", "content": "请基于以上工具结果直接输出本章完整 Markdown 正文。"})
 
         # 兜底：迭代用尽仍无正文 → 末次无工具强制出文
-        final = self.llm.chat(messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt + "\n\n请直接输出本章 Markdown 正文。"},
-        ], temperature=Config.REPORT_AGENT_TEMPERATURE, max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS)
+        try:
+            final = self.llm.chat(messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt + "\n\n请直接输出本章 Markdown 正文。"},
+            ], temperature=Config.REPORT_AGENT_TEMPERATURE, max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS)
+        except Exception as _final_exc:  # noqa: BLE001 — FILTER-SAFE：内容审查且已有合格草稿 → 采纳草稿
+            _accepted = self._accept_draft_under_filter(
+                section, section_index, draft_answer, tool_calls_count, _final_exc)
+            if _accepted is not None:
+                return _accepted
+            raise
         return final
 
     def _generate_section_react(
@@ -12323,10 +12474,15 @@ class ReportAgent:
         outline: ReportOutline,
         previous_sections: List[str],
         progress_callback: Optional[Callable] = None,
-        section_index: int = 0
+        section_index: int = 0,
+        filter_safe: int = 0,
     ) -> str:
         """
         使用ReACT模式生成单个章节内容
+
+        FILTER-SAFE：filter_safe=1 时加机构称谓写作指令、工具下限降为 1、Observation 截断；
+        filter_safe=2 时另不调用工具，单次直出。仅因工具下限被退回的合格 Final Answer 留作草稿：
+        其后的检索补足若被提供方内容审查拒绝，采纳该草稿。level 0 行为逐字节不变。
         
         ReACT循环：
         1. Thought（思考）- 分析需要什么信息
@@ -12359,6 +12515,10 @@ class ReportAgent:
         # LOOP-015: 有效工具调用下限先于提示词计算——padding / 证据预注入章节的更低下限
         # 直接写进提示词槽位，与循环闸门保持一致（提示词不再逼模型凑满配置下限）。
         min_tool_calls = self._effective_min_tool_calls(section)
+        if filter_safe >= _filter_safe.LEVEL_NO_TOOLS:
+            min_tool_calls = 0
+        elif filter_safe >= _filter_safe.LEVEL_REGISTER:
+            min_tool_calls = min(min_tool_calls, 1)  # FILTER-SAFE L1：一次检索即可成文
         _prompt_kwargs = self._section_prompt_kwargs()  # RQ-1: 篇幅+工具调用范围槽位（随形状伸缩）
         _prompt_kwargs["min_tool_calls"] = min_tool_calls
         system_prompt = self._lang_override() + SECTION_SYSTEM_PROMPT_TEMPLATE.format(
@@ -12373,6 +12533,8 @@ class ReportAgent:
         # T4.1: 钉入研究背景档案 + 来源索引，让每章撰写复用真实角色/关系/时间线并按 [S#] 引用。
         system_prompt = self._prepend_research_background(system_prompt,
                                                           section_title=section.title)
+        if filter_safe:
+            system_prompt += _filter_safe.register_directive(filter_safe)
 
         # 构建用户prompt - 每个已完成章节各传入最大4000字
         if previous_sections:
@@ -12381,6 +12543,8 @@ class ReportAgent:
             # 模型携带全量前文（避免长研究报告被切碎），小窗口守住 8000 floor（避免重复、保持连贯）。
             # ADAPTIVE_CONTEXT 关闭时 _cap 恒为 8000（行为与历史逐字节一致）。
             _cap = self._prior_section_char_budget(8000, len(previous_sections))
+            if filter_safe >= 2:
+                _cap = min(_cap, _filter_safe.PRIOR_SECTION_CHARS_AT_LEVEL_2)  # FILTER-SAFE L2：收紧前文切片
             for sec in previous_sections:
                 truncated = sec[:_cap] + "..." if len(sec) > _cap else sec
                 previous_parts.append(truncated)
@@ -12398,6 +12562,8 @@ class ReportAgent:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
+        if filter_safe >= 2:
+            return self._filter_safe_direct_answer(section, section_index, messages)
 
         # ReACT循环（min_tool_calls 在提示词构建前经 _effective_min_tool_calls 计算，
         # T4.4 配置下限 + LOOP-015 padding/证据预注入下调）
@@ -12407,6 +12573,9 @@ class ReportAgent:
         contamination_retries = 0  # 输出被污染（系统提示泄漏/工具调用残留）的连续重试次数
         MAX_CONTAMINATION_RETRIES = 2  # 污染输出最多纠正重试次数
         used_tools = set()  # 记录已调用过的工具名
+        # FILTER-SAFE：仅因工具调用不足被退回、且通过污染检测的完整 Final Answer。检索补足阶段若被
+        # 提供方内容审查拒绝，采纳该草稿而非把章节钉成占位符（见 _accept_draft_under_filter）。
+        draft_answer: Optional[str] = None
         # REPORT-8: interview_agents 仍可用（保留在 self.tools / 提示词中），但不再进入
         # 「未使用工具」推荐集——采访依赖 OASIS 在线、延迟高且易超时，不应被反复 nudge 去尝试。
         all_tools = {"insight_forge", "panorama_search", "quick_search",
@@ -12436,11 +12605,18 @@ class ReportAgent:
                 if tool_calls_count >= min_tool_calls
                 else getattr(Config, "REPORT_AGENT_TOOL_TURN_MAX_TOKENS", 8192)
             )
-            response = self.llm.chat(
-                messages=messages,
-                temperature=Config.REPORT_AGENT_TEMPERATURE,
-                max_tokens=_turn_max_tokens
-            )
+            try:
+                response = self.llm.chat(
+                    messages=messages,
+                    temperature=Config.REPORT_AGENT_TEMPERATURE,
+                    max_tokens=_turn_max_tokens
+                )
+            except Exception as _chat_exc:  # noqa: BLE001 — FILTER-SAFE：内容审查且已有合格草稿 → 采纳草稿
+                _accepted = self._accept_draft_under_filter(
+                    section, section_index, draft_answer, tool_calls_count, _chat_exc)
+                if _accepted is not None:
+                    return _accepted
+                raise
 
             # 检查 LLM 返回是否为 None（API 异常或内容为空）
             if response is None:
@@ -12511,6 +12687,9 @@ class ReportAgent:
             if has_final_answer:
                 # 工具调用次数不足，拒绝并要求继续调工具
                 if tool_calls_count < min_tool_calls:
+                    _candidate = response.split("Final Answer:")[-1].strip()
+                    if not _looks_contaminated(_candidate):
+                        draft_answer = _candidate  # FILTER-SAFE：留作内容审查时的兜底草稿
                     messages.append({"role": "assistant", "content": response})
                     unused_tools = all_tools - used_tools
                     unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
@@ -12598,11 +12777,11 @@ class ReportAgent:
                         iteration=iteration + 1
                     )
 
-                result = self._execute_tool(
+                result = _filter_safe.cap_observation(self._execute_tool(
                     call["name"],
                     call.get("parameters", {}),
                     report_context=report_context
-                )
+                ), filter_safe)
 
                 if self.report_logger:
                     self.report_logger.log_tool_result(
@@ -12691,11 +12870,18 @@ class ReportAgent:
 
         # REPORT-9: 这是强制收尾的「最终答案回合」，保留完整 SECTION_MAX_TOKENS 预算以免截断正文。
         # REPORT-10: 温度读 Config.REPORT_AGENT_TEMPERATURE（默认 0.5，行为不变）。
-        response = self.llm.chat(
-            messages=messages,
-            temperature=Config.REPORT_AGENT_TEMPERATURE,
-            max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS
-        )
+        try:
+            response = self.llm.chat(
+                messages=messages,
+                temperature=Config.REPORT_AGENT_TEMPERATURE,
+                max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS
+            )
+        except Exception as _force_exc:  # noqa: BLE001 — FILTER-SAFE：内容审查且已有合格草稿 → 采纳草稿
+            _accepted = self._accept_draft_under_filter(
+                section, section_index, draft_answer, tool_calls_count, _force_exc)
+            if _accepted is not None:
+                return _accepted
+            raise
 
         # 检查强制收尾时 LLM 返回是否为 None
         if response is None:
@@ -13160,6 +13346,8 @@ class ReportAgent:
             # failed_sections / partial。状态仍为 completed（前端以 status==='completed' 判定终态），
             # 由 partial 标记区分「完整」与「部分完成」。无失败章节时为空列表 → 与历史一致。
             report.failed_sections = list(failed_section_titles)
+            # FILTER-SAFE：如实披露哪些章节在提供方内容审查后以机构称谓模式重写（meta.json 可见）。
+            report.filter_safe_sections = dict(getattr(self, "_filter_safe_sections", None) or {})
 
             # EXECPLAN2 I-3-0/I-9-1/I-3-1 + NEXTSTEPS P0-1/P2-1/P2-3: 最终化结构化预测。
             # 优先采用先于叙事推导的骨架（P0-1），否则从成稿抽取；随后红队自校准（P2-1）+

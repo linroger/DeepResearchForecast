@@ -630,6 +630,9 @@ class Config:
     REPORT_ABORT_ON_LLM_OUTAGE = os.environ.get('REPORT_ABORT_ON_LLM_OUTAGE', 'true').strip().lower() == 'true'
     REPORT_SECTION_RETRY_MAX = int(os.environ.get('REPORT_SECTION_RETRY_MAX', '2') or '2')  # RQ-1 1→2；0=旧的无重试
     REPORT_SECTION_RETRY_BACKOFF_S = float(os.environ.get('REPORT_SECTION_RETRY_BACKOFF_S', '8.0') or '8.0')
+    # FILTER-SAFE：章节被提供方内容审查拒绝后的处置——采纳仅因工具下限被退回的合格草稿；无草稿时不退避、
+    # 立即升级重试阶梯（L1 机构称谓写作指令+工具下限 1+检索回包截断；L2 无检索工具）。false=旧的原样退避重试。
+    REPORT_FILTER_SAFE_LADDER = os.environ.get('REPORT_FILTER_SAFE_LADDER', 'true').strip().lower() == 'true'
     REPORT_CRITIQUE_BEFORE_PROSE = os.environ.get('REPORT_CRITIQUE_BEFORE_PROSE', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
     FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
