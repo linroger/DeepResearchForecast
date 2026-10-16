@@ -379,3 +379,21 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Follow-ups:**
   - Live validation (a paid run; needs owner approval): confirm the agents' notes and reports follow the routed methods. `feature_research_method_skills` stays `passes: false` until then.
   - `_BASE_RATE_RE` treats any 历史 as a base-rate KIQ; narrow it only if live runs show casual uses.
+
+### 2026-10-16T22:45+08:00 (CST) — branch `claude-reflexive-world-state-model` — reflexive world-state simulation
+
+- **User request (2026-10-16 21:34 CST):** make the multi-agent simulation realistic, dynamic and reflexive: an explicit world state every round that changes in response to the agents' actions and that agents observe and respond to; realistic option sets motivated by goals, incentives, alliances, competition and constraints; new agent steps (world-state update); ontology improvements; new branch off main.
+- **Work (design and ledger in `docs/handoff/reflexive-world-state/`):**
+  - Kernel `backend/app/services/world_model.py`: state variables with causal history and change-ratio clamp, actor states (capacity, plans, red lines, commitments), valenced relationships, delayed effects with a seeded RNG, events, public/private briefs (no scenario shares ever), JSON round-trip.
+  - Decision step `agent_decision.py`: 18 agency classes with word-boundary inference, an action catalogue per class, world-grounded option menus (responses → documented plans → class levers → hold), a JSON decision contract with typed `invalid`/`failed` holds, memory notes.
+  - World update `world_update.py`: deterministic step, arbiter prompt/validation/application, agent-facing digest, round record.
+  - Runner `backend/scripts/run_parallel_simulation.py`: `_ReflexiveWorldCoordinator` (asyncio barrier so no platform starts round r+1 before update r commits; one shared decision per actor per round; statements published as tagged ManualAction posts; USER memory notes; resume guards), loop wiring in both platforms, WORLD STATE section in the WORLD CLOCK note; `action_logger.log_world_update`.
+  - PREPARE `world_model_seed.py` + `simulation_config_generator.py` (`world_model` block sealed into the config; `AgentActivityConfig.agency_class/archetype/outcome_power`), `ontology_generator.py` (`agency_class`/`levers` metadata + normalisation), config flags `SIM_WORLD_MODEL`, `SIM_WORLD_ARBITER`, `SIM_WORLD_BARRIER_TIMEOUT_S`, `SIM_WORLD_DECISION_MAX_ACTORS`, `SIM_WORLD_DECISION_CONCURRENCY`, `SIM_WORLD_MAX_VARIABLES`, `SIM_WORLD_MAX_CHANGE_RATIO`.
+  - Downstream: run-state `options.world_model`, `run_summary.world_model`, `GET /api/simulation/<id>/world-state`, report `_world_evolution_block` + `world_variables` chart (EN/ZH titles), orchestrator summary, frontend `WorldStatePanel.vue` + `utils/worldState.js`, `.env.example`, README EN/ZH (line-aligned).
+- **Verification:**
+  - New offline tests: world_model 18, agent_decision 27, world_update 6, world_model_seed 9, world_model_downstream 10, world_model_loop 6 (real round loop with FakeEnv + scripted LLM: reflexivity, two-platform barrier, arbiter failure, off switches, resume). Legacy calendar loop 7 and reaction phase 20 unchanged and green.
+  - Frontend: 145/145 unit tests, build OK. ruff (F,E9), `check_env_drift --strict`, compileall and `init.sh` pass.
+  - Full backend suite: only the 2 pre-existing `test_export_demo_site_data` demo-asset failures (deleted docs/demos files in this working tree) remain; totals recorded in the handoff after the final rerun.
+- **Follow-ups:**
+  - Live validation run (paid; owner approval) before `feature_reflexive_world_state_model` can pass.
+  - Codex is drafting a plan for the same topic on `codex/reflexive-world-simulation` (separate worktree); do not merge blindly.

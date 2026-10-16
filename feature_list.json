@@ -222,5 +222,20 @@
     ],
     "passes": false,
     "note": "Steps 1-5 verified offline 2026-10-16: tests/test_research_skills.py (133 cases incl. 40+ real EN/ZH routing cases and false-positive guards), the scripted full-run test test_e2e_method_skills_reach_every_phase_and_fill_the_forecast_frame (skills on and off), the guarded-runner end-to-end and the full backend suite. Step 6 needs a paid live run, which needs owner approval. Design and review records: docs/handoff/research-skills/ (design.md, review-results.md)."
+  },
+  {
+    "id": "feature_reflexive_world_state_model",
+    "category": "simulation",
+    "description": "The multi-agent simulation evolves an explicit world state every calendar round: actors observe the committed world, make one structured, motivated decision from a realistic option set (goals, incentives, alliances, constraints, capacity), publish it, and a single world update (deterministic kernel + bounded arbiter) changes facts, relationships and pending consequences that every agent observes next round.",
+    "steps": [
+      "Start a calendar-mode run; PREPARE seals a world_model block (state variables from quantitative facts and official data, actor agency classes, valenced relationships) into simulation_config.json.",
+      "In round 1 every deciding actor receives the WORLD STATE brief plus a grounded option menu and returns a structured decision; its public statement appears as its post on both platforms (one decision per actor per round).",
+      "After both platforms deliver the round, exactly one world update commits: facts change with recorded causes, commitments register, relationships shift, scheduled events fire; world_state.json and world_state_history.jsonl are written and a world_update row lands in actions.jsonl.",
+      "In round 2 the WORLD CLOCK note and every decision prompt show the round-1 consequences (changed facts with their previous values, moves, events, alliance shifts, pending commitments) and no scenario probabilities.",
+      "A failed arbiter call still commits the round mechanically with arbiter_status=failed; SIM_WORLD_MODEL=false and hours mode produce no world artifacts and run the legacy path unchanged.",
+      "The dashboard simulation tab shows the World State panel, run_summary.json carries a world_model block, and the report's diagnostic pack renders the world evolution and a world-variables chart.",
+      "A live run (real LLM) shows actors reacting to world changes across rounds; a human review confirms the moves are realistic for each actor's agency class."
+    ],
+    "passes": false
   }
 ]
