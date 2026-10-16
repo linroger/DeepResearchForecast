@@ -80,6 +80,7 @@ CHART_TITLES_ZH: Dict[str, str] = {
     "Comparable Forecast Benchmarks": "可比预测基准",
     "Forecast Revisions Across Published Vintages": "历次发布版本的预测修订",
     "Forecast Outcome-Share Trajectory": "预测结果份额轨迹",
+    "Simulated World Variables (indexed, seed = 100)": "推演世界变量（指数化，种子值 = 100）",
     "Baseline vs Scenario": "基线与情景对比",
     "Calibration Curve": "校准曲线",
     "Market-Implied P(yes) History vs Model": "市场隐含 P(是) 历史与模型对比",
@@ -3106,6 +3107,57 @@ class ReportVisualizer:
             logger.debug("build_model_vs_market_html 失败（跳过该图）：%s", exc)
             return None
 
+    def build_world_variables_html(self, world_state: Any, charts_dir: str) -> Optional[str]:
+        """REFLEXIVE WORLD: one line per numeric world variable with ≥2 history points, indexed
+        to its seed value (= 100) so variables of different units share one axis; hover shows
+        the raw value + unit and the cause recorded for that period.  Fewer than one qualifying
+        variable → None (degrade-safe).  Labeled simulated, never observed."""
+        if not self._interactive_ok():
+            return None
+        try:
+            world = world_state.get("world") if isinstance(world_state, dict) else None
+            if not isinstance(world, dict):
+                return None
+            labels: Dict[int, str] = {}
+            for k, v in (world.get("period_labels") or {}).items() if isinstance(world.get("period_labels"), dict) else []:
+                try:
+                    labels[int(k)] = str(v)
+                except (TypeError, ValueError):
+                    continue
+            fig = go.Figure()
+            plotted = 0
+            for var in (world.get("variables") or [])[:12]:
+                if not isinstance(var, dict) or var.get("kind") != "numeric":
+                    continue
+                hist = [h for h in (var.get("history") or []) if isinstance(h, dict)
+                        and isinstance(h.get("value"), (int, float)) and not isinstance(h.get("value"), bool)]
+                if len(hist) < 2:
+                    continue
+                seed = float(hist[0]["value"])
+                xs, ys, hover = [], [], []
+                for h in hist:
+                    rnd = int(h.get("round") or 0)
+                    xs.append(labels.get(rnd) or (f"period {rnd}" if rnd else "seed"))
+                    raw = float(h["value"])
+                    ys.append(raw / seed * 100.0 if seed not in (0.0, -0.0) else raw)
+                    unit = str(var.get("unit") or "")
+                    hover.append(f"{raw:g} {unit}".strip() + (f" — {h.get('cause')}" if h.get("cause") else ""))
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, mode="lines+markers",
+                    name=_html_text(str(var.get("name") or var.get("id")), max_len=40),
+                    text=hover, hovertemplate="%{x}: %{text}<extra>"
+                                               + _html_text(str(var.get("name") or ""), max_len=40) + "</extra>",
+                ))
+                plotted += 1
+            if plotted == 0:
+                return None
+            _apply_layout(fig, "Simulated World Variables (indexed, seed = 100)", height=460)
+            fig.update_layout(xaxis_title="Simulated period", yaxis_title="Index (seed value = 100)")
+            return self._save_pair(fig, charts_dir, "world_variables", "world_variables")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("build_world_variables_html 失败（跳过该图）：%s", exc)
+            return None
+
     def build_worldstate_area_html(self, trajectory: Any, charts_dir: str) -> Optional[str]:
         """(C3) 结果世界态堆叠面积的交互式 HTML（对应 build_worldstate_area）。
 
@@ -4984,6 +5036,7 @@ class ReportVisualizer:
           graph_priors          graph_priors.json（{entity: weight}）
           graph_priors_structural  结构先验（graph_priors 缺失时的回退）
           world_state_trajectory  world_state_trajectory.json（dict）
+          world_state           world_state.json（dict，reflexive world：变量历史 → 指数化折线）
           comparison            comparison.json（dict，matplotlib 专属）
           calibration           校准统计（matplotlib 专属）
           market_price_history  {market_id:[{t,p}]}（缺则回退读 reports/{id}/ 与 handoff/ 同名文件）
@@ -5146,6 +5199,12 @@ class ReportVisualizer:
                      "Forecast Outcome-Share Trajectory", "scenarios",
                      bool(wst),
                      lambda: self.build_worldstate_area_html(wst, charts_dir))
+            # REFLEXIVE WORLD: simulated world variables indexed to their seed value.
+            wsm = artifacts.get("world_state")
+            _attempt("world_variables", "world_state",
+                     "Simulated World Variables (indexed, seed = 100)", "scenarios",
+                     isinstance(wsm, dict) and bool((wsm.get("world") or {}).get("variables")),
+                     lambda: self.build_world_variables_html(wsm, charts_dir))
 
             # 市场价格历史折线（多图族，逐图登记）。
             if not self._price_hist_ok():

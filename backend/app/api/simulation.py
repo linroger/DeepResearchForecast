@@ -2106,6 +2106,132 @@ def get_simulation_trajectory(simulation_id: str):
         }), 500
 
 
+WORLD_STATE_MAX_BYTES = 8 * 1024 * 1024
+WORLD_STATE_MAX_HISTORY = 200
+WORLD_STATE_MAX_EVENTS = 40
+
+
+def _contained_sim_dir(simulation_id: str):
+    """realpath containment under OASIS_SIMULATION_DATA_DIR (same posture as the trajectory route)."""
+    raw_id = str(simulation_id or "")
+    if (not raw_id or raw_id in (".", "..") or "/" in raw_id or "\\" in raw_id
+            or any(ord(char) < 32 or ord(char) == 127 for char in raw_id)):
+        return None
+    sim_root = os.path.realpath(Config.OASIS_SIMULATION_DATA_DIR)
+    sim_dir = os.path.realpath(os.path.join(sim_root, raw_id))
+    if os.path.commonpath([sim_dir, sim_root]) != sim_root or sim_dir == sim_root:
+        return None
+    return sim_dir
+
+
+@simulation_bp.route('/<simulation_id>/world-state', methods=['GET'])
+def get_simulation_world_state(simulation_id: str):
+    """REFLEXIVE WORLD: the latest committed world (facts, actors, relationships, events)
+    plus a bounded per-round history for the live World State panel.
+
+    404 while the world has not committed a round yet (early rounds, hours mode, legacy
+    runs); path containment + symlink refusal + size bounds as for the trajectory route.
+    ``?rows=N`` bounds the history (default 24, max 200).
+    """
+    try:
+        sim_dir = _contained_sim_dir(simulation_id)
+        if sim_dir is None:
+            return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+        path = os.path.join(sim_dir, "world_state.json")
+        if os.path.islink(path) or not os.path.isfile(path):
+            return jsonify({"success": False,
+                            "error": "世界状态尚未生成（非反身世界模式或模拟尚在早期轮次）"}), 404
+        if os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+            return jsonify({"success": False, "error": "世界状态文件超出大小上限"}), 413
+        import json
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        except ValueError:
+            return jsonify({"success": False, "error": "世界状态文件解析失败"}), 500
+        if not isinstance(payload, dict):
+            return jsonify({"success": False, "error": "世界状态文件解析失败"}), 500
+        world = payload.get("world") if isinstance(payload.get("world"), dict) else {}
+        try:
+            rows_wanted = max(1, min(WORLD_STATE_MAX_HISTORY, int(request.args.get("rows", 24))))
+        except (TypeError, ValueError):
+            rows_wanted = 24
+        history = []
+        hist_path = os.path.join(sim_dir, "world_state_history.jsonl")
+        if os.path.isfile(hist_path) and not os.path.islink(hist_path) \
+                and os.path.getsize(hist_path) <= WORLD_STATE_MAX_BYTES:
+            try:
+                with open(hist_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                for line in lines[-rows_wanted:]:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(row, dict):
+                        history.append({
+                            "round": row.get("round"), "period_label": row.get("period_label"),
+                            "headline": str(row.get("headline") or "")[:300],
+                            "narrative": str(row.get("narrative") or "")[:700],
+                            "arbiter_status": row.get("arbiter_status"),
+                            "decisions": row.get("decisions"),
+                            "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
+                            "scenario_pressure": row.get("scenario_pressure") or {},
+                            "deterministic": row.get("deterministic") or {},
+                        })
+            except OSError:
+                history = []
+        variables = []
+        for v in (world.get("variables") or [])[:64]:
+            if not isinstance(v, dict):
+                continue
+            hist = [h for h in (v.get("history") or []) if isinstance(h, dict)][-12:]
+            variables.append({"id": v.get("id"), "name": v.get("name"), "value": v.get("value"),
+                              "unit": v.get("unit"), "kind": v.get("kind"), "provenance": v.get("provenance"),
+                              "as_of": v.get("as_of"), "history": hist})
+        actors = []
+        for a in (world.get("actors") or [])[:64]:
+            if not isinstance(a, dict):
+                continue
+            commitments = [c for c in (a.get("commitments") or []) if isinstance(c, dict)]
+            actors.append({"agent_id": a.get("agent_id"), "name": a.get("name"),
+                           "agency_class": a.get("agency_class"), "archetype": a.get("archetype"),
+                           "capacity_per_round": a.get("capacity_per_round"),
+                           "reputation": a.get("reputation"), "last_action": a.get("last_action"),
+                           "pending_commitments": [c for c in commitments if c.get("status") in ("pending", "due")][:6]})
+        relationships = []
+        for r in (world.get("relationships") or [])[:200]:
+            if isinstance(r, dict):
+                relationships.append({k: r.get(k) for k in ("source", "target", "kind", "valence", "polarity",
+                                                              "strength", "last_changed_round")})
+        events = [e for e in (world.get("events") or []) if isinstance(e, dict)][-WORLD_STATE_MAX_EVENTS:]
+        data = {
+            "simulation_id": str(simulation_id),
+            "committed_round": payload.get("committed_round"),
+            "headline": str(payload.get("headline") or "")[:300],
+            "brief": str(payload.get("brief") or "")[:4000],
+            "digest": str(payload.get("digest") or "")[:2000],
+            "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
+            "question": world.get("question"),
+            "as_of_date": world.get("as_of_date"),
+            "horizon_date": world.get("horizon_date"),
+            "period": world.get("period"),
+            "variables": variables,
+            "actors": actors,
+            "relationships": relationships,
+            "pending_effects": [fx for fx in (world.get("pending_effects") or []) if isinstance(fx, dict)][:20],
+            "recent_events": events,
+            "history": history,
+        }
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        logger.error(f"读取世界状态失败: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @simulation_bp.route('/<simulation_id>/agent-stats', methods=['GET'])
 def get_agent_stats(simulation_id: str):
     """

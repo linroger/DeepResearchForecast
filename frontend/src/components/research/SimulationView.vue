@@ -70,6 +70,9 @@
       </div>
     </section>
 
+    <!-- ===== World state (reflexive simulation) ===== -->
+    <WorldStatePanel :simulation-id="props.simulationId" :refresh-token="refreshToken" />
+
     <!-- ===== Two columns ===== -->
     <div class="sv-columns">
       <!-- LEFT: Personas -->
@@ -187,6 +190,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { L } from '../../i18n'
+import WorldStatePanel from './WorldStatePanel.vue'
 import {
   getSimulationProfilesRealtime,
   getSimulationPosts,
@@ -209,6 +213,7 @@ const runState = ref({})
 const userMap = ref({})
 const loading = ref(false)
 const error = ref('')
+const refreshToken = ref(0) // bumps on every loadAll so the world-state panel reloads with the feed
 
 // ===== Defensive helpers =====
 function asArray(v) {
@@ -507,6 +512,7 @@ async function loadAll() {
 
   loading.value = true
   error.value = ''
+  refreshToken.value += 1
   const simId = props.simulationId
   const plat = platform.value
 

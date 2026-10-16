@@ -11317,6 +11317,20 @@ class PipelineOrchestrator:
             "leader_share": (outcome.get("leader_share") if isinstance(outcome, dict) else None),
             "converged_at": converged_at,
         }
+        # REFLEXIVE WORLD: did the world actually evolve (rounds committed, variables moved,
+        # arbiter failures)?  Read from world_state.json; absent for legacy / hours runs.
+        _wm = _read_json(os.path.join(sim_dir, "world_state.json"))
+        if isinstance(_wm, dict) and isinstance(_wm.get("summary"), dict):
+            _wms = _wm["summary"]
+            summary["world_model"] = {
+                key: _wms.get(key) for key in (
+                    "rounds_committed", "variables", "events", "relationships",
+                    "arbiter_enabled", "arbiter_failed_rounds")
+            }
+            summary["world_headline"] = str(_wm.get("headline") or "")[:200]
+            logger.info("[%s] 反身世界模型：已提交 %s 个时段，%s 个变量，%s 条事件，仲裁失败 %s 轮——%s",
+                        state.pipeline_id, _wms.get("rounds_committed"), _wms.get("variables"),
+                        _wms.get("events"), _wms.get("arbiter_failed_rounds"), summary["world_headline"])
         state.options["decision_channel_summary"] = summary
         try:
             PipelineManager.save(state)

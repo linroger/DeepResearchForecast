@@ -143,6 +143,14 @@ export const getSimulationComments = (simulationId, platform = 'reddit', limit =
  * @param {number} startRound - 起始轮次
  * @param {number} endRound - 结束轮次
  */
+/**
+ * Reflexive world model: latest committed world state + bounded per-round history.
+ * 404 while the world has not committed a round yet (hours mode / legacy runs).
+ */
+export const getWorldState = (simulationId, rows = 24) => {
+  return service.get(`/api/simulation/${simulationId}/world-state`, { params: { rows } })
+}
+
 export const getSimulationTimeline = (simulationId, startRound = 0, endRound = null) => {
   const params = { start_round: startRound }
   if (endRound !== null) {

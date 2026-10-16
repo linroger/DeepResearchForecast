@@ -1,0 +1,228 @@
+"""PREPARE-time ``world_model`` seed (design §2.7, acceptance A8) and ontology agency metadata.
+
+Offline.  Pins: variables from quantitative facts + official series (as-of cutoff, cap),
+agency class resolution order, canonical dossiers read only validated pack rows (no
+analyst inference), relationships restricted to the cast with allies/rivals, audience
+excluded, config emission + sealing, agent-config additive fields, ontology normalisation.
+"""
+
+import json
+from dataclasses import asdict
+
+import pytest
+
+from app.services import world_model_seed as wms
+from app.services.agent_decision import AGENCY_CLASSES
+from app.services.ontology_generator import OntologyGenerator
+from app.services.simulation_config_generator import AgentActivityConfig, SimulationParameters
+from app.services.world_model import WorldModel
+
+
+def _legacy_actors():
+    return {
+        "as_of_date": "2026-07-01",
+        "central_question": "Will the grid permit unlock deployment by 2027?",
+        "actors": [
+            {"name": "Alpha Systems", "type": "Organization", "role": "grid developer", "aliases": ["Alpha"],
+             "stance": "supportive", "influence": "high", "goals": ["Shape the permit timetable"],
+             "future_plans": ["Build the Aurora line by 2027"], "likely_actions": ["File a permit response"],
+             "red_lines": ["No unfinanced mandate"], "outcome_power": 1.5},
+            {"name": "Beta Union", "type": "Organization", "role": "workers union", "stance": "opposing",
+             "incentives": [{"gains_if": "members keep jobs", "loses_if": "automation accelerates"}]},
+            {"name": "Grid Regulator", "type": "GovernmentAgency", "role": "state regulator", "stance": "neutral"},
+            {"name": "Daily Wire", "type": "MediaOutlet", "role": "newspaper"},
+        ],
+        "relationships": [
+            {"source": "Alpha Systems", "target": "Beta Union", "type": "OPPOSES", "strength": "high", "basis": "timetable"},
+            {"source": "Grid Regulator", "target": "Alpha Systems", "type": "REGULATES"},
+            {"source": "Alpha Systems", "target": "Unknown Co", "type": "PARTNERS_WITH"},
+        ],
+        "quantitative_facts": [
+            {"metric": "Alpha planned investment", "value": "US$2 billion", "as_of_date": "2026-06-30",
+             "source": "10-K", "definition": "capex guidance"},
+            {"metric": "Permit status", "value": "pending"},
+            {"metric": "", "value": "9"},
+        ],
+        "forecast_inputs": {
+            "scenarios": [{"name": "Permit granted", "probability_band": "55-65%"}, {"name": "Permit delayed"}],
+            "indicators": [{"indicator": "Permit docket activity", "direction": "up = granted"}],
+        },
+    }
+
+
+def _official():
+    return {"series": [
+        {"title": "Regional capacity", "units": "MW", "provider_name": "EIA", "observations": [
+            {"date": "2026-03-31", "value": 110}, {"date": "2026-06-30", "value": 120}, {"date": "2026-09-30", "value": 999}]},
+        {"title": "No numbers", "units": "x", "observations": [{"date": "2026-01-01", "value": None}]},
+        {"series": "ignored-no-units", "observations": [{"date": "2026-01-01", "value": 1}]},
+    ]}
+
+
+def _cfgs(include_audience=True):
+    rows = [
+        {"agent_id": 0, "entity_name": "Alpha Systems", "entity_type": "Organization", "stance": "supportive",
+         "gains_if": "timetable holds", "loses_if": ""},
+        {"agent_id": 1, "entity_name": "Beta Union", "entity_type": "Organization", "stance": "opposing"},
+        {"agent_id": 2, "entity_name": "Grid Regulator", "entity_type": "GovernmentAgency", "stance": "neutral"},
+        {"agent_id": 3, "entity_name": "Daily Wire", "entity_type": "MediaOutlet", "stance": "neutral"},
+    ]
+    if include_audience:
+        rows.append({"agent_id": 4, "entity_name": "Audience 1", "entity_type": "Audience", "stance": "neutral"})
+    return rows
+
+
+class _Timeline:
+    as_of_date = "2026-07-01"
+    horizon_date = "2027-03-31"
+
+
+def test_state_variables_from_research_and_official_with_cutoff():
+    rows = wms.state_variables_from_research(_legacy_actors(), _official(), max_variables=24)
+    by_id = {r["id"]: r for r in rows}
+    inv = by_id["alpha_planned_investment"]
+    assert inv["value"] == 2e9 and inv["unit"] == "US$" and inv["kind"] == "numeric"
+    assert inv["as_of"] == "2026-06-30" and inv["provenance"] == "research"
+    assert "capex guidance; 10-K" == inv["rationale"]
+    assert by_id["permit_status"]["kind"] == "text" and by_id["permit_status"]["value"] == "pending"
+    cap = by_id["regional_capacity"]
+    assert cap["value"] == 120.0 and cap["as_of"] == "2026-06-30"          # 2026-09-30 is after the as-of cutoff
+    assert cap["provenance"] == "official" and cap["rationale"] == "EIA" and cap["unit"] == "MW"
+    assert "no_numbers" not in by_id and len(rows) == 3
+    assert wms.state_variables_from_research(_legacy_actors(), _official(), max_variables=1)[0]["id"] == "alpha_planned_investment"
+    assert wms.state_variables_from_research(None, None) == []
+
+
+def test_resolve_agency_class_order():
+    assert wms.resolve_agency_class({"agency_class": "labor_union"}, "Organization") == "labor_union"
+    assert wms.resolve_agency_class({"name": "X"}, "Organization", ontology_class="central_bank") == "central_bank"
+    assert wms.resolve_agency_class({"name": "Grid Regulator", "role": "state regulator"}, "GovernmentAgency") == "regulator_agency"
+    assert wms.resolve_agency_class({"name": "Daily Wire"}, "MediaOutlet") == "media_outlet"
+    assert wms.resolve_agency_class(None, "Person") == "individual_leader"
+    assert wms.resolve_agency_class({"agency_class": "bogus"}, "Organization") == "firm"
+
+
+def test_build_seed_from_legacy_dossier():
+    block = wms.build_world_model_seed(_legacy_actors(), _cfgs(), question="Will the permit unlock deployment?",
+                                       official_data=_official(), temporal_timeline=_Timeline())
+    assert block["schema_version"] == wms.WORLD_MODEL_SEED_VERSION
+    assert block["as_of_date"] == "2026-07-01" and block["horizon_date"] == "2027-03-31"
+    assert block["scenarios"] == ["Permit granted", "Permit delayed"]
+    assert block["scenario_indicators"] == [{"indicator": "Permit docket activity", "direction": "up = granted"}]
+    actors = {a["agent_id"]: a for a in block["actors"]}
+    assert set(actors) == {0, 1, 2, 3}                                     # audience excluded
+    alpha = actors[0]
+    assert alpha["agency_class"] == "firm" and alpha["capacity_per_round"] == 2
+    assert alpha["outcome_power"] == 1.5 and actors[1]["outcome_power"] is None
+    assert alpha["documented_plans"] == ["Build the Aurora line by 2027", "File a permit response"]
+    assert alpha["red_lines"] == ["No unfinanced mandate"] and alpha["goals"] == ["Shape the permit timetable"]
+    assert alpha["incentives"] == {"gains_if": "timetable holds"} and alpha["aliases"] == ["Alpha"]
+    assert alpha["rivals"] == ["Beta Union"] and actors[1]["rivals"] == ["Alpha Systems"]
+    assert actors[2]["agency_class"] == "regulator_agency" and actors[2]["capacity_per_round"] == 2
+    assert actors[3]["agency_class"] == "media_outlet" and actors[3]["capacity_per_round"] == 1
+    rels = block["relationships"]
+    assert [(r["source"], r["target"], r["valence"]) for r in rels] == [
+        ("Alpha Systems", "Beta Union", "adversarial"), ("Grid Regulator", "Alpha Systems", "directional")]
+    assert rels[0]["polarity"] == -0.4 and rels[0]["source_agent_id"] == 0
+    assert block["settings"] == {"arbiter_enabled": True, "max_change_ratio": 0.5, "barrier_timeout_s": 1800.0}
+    # the block seeds a working world
+    world = WorldModel.from_seed(block, _cfgs())
+    assert world.variables["regional_capacity"].value == 120.0
+    assert world.relationships[(0, 1)].valence == "adversarial"
+    assert world.actors[0].documented_plans[0].startswith("Build the Aurora")
+    assert world.actors[4].agency_class == "other_actor"                    # audience agent still has a state
+
+
+def test_canonical_dossier_uses_only_validated_pack_rows():
+    from test_actor_context_runtime import REPORT, _dossier
+    from app.services import actor_context as ac
+    dossier = _dossier()
+    packs = {}
+    for row in dossier["actors"]:
+        pack = ac.build_actor_context_pack(dossier, row, REPORT)
+        packs[row["actor_id"]] = pack
+    cfgs = [{"agent_id": 0, "entity_name": "Alpha Systems", "entity_type": "Actor"},
+            {"agent_id": 1, "entity_name": "Beta Union", "entity_type": "Actor"}]
+    block = wms.build_world_model_seed(dossier, cfgs, actor_context_packs=packs, temporal_timeline=None)
+    alpha = block["actors"][0]
+    assert alpha["documented_plans"] == [
+        "Alpha Systems plans a 2027 multi-site Project Aurora expansion.",
+        "Alpha Systems is likely to file a permit response.",
+        "Alpha Systems is executing Project Aurora now.",
+        "Alpha Systems plans a $2 billion Project Aurora investment.",
+    ]
+    assert alpha["red_lines"] == ["Alpha Systems will not accept an unfinanced immediate mandate."]
+    # motivations are analyst inference in the fixture → skipped; values remain
+    assert alpha["goals"] == ["Alpha Systems values operational reliability."]
+    assert alpha["agency_class"] == "firm"
+    # the flat legacy fields of a canonical actor are not read
+    dossier2 = _dossier()
+    dossier2["actors"][0]["future_plans"] = ["FLAT LEAK"]
+    block2 = wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=packs)
+    assert "FLAT LEAK" not in json.dumps(block2)
+    # without a pack a canonical actor gets no plans at all (never the flat fields)
+    block3 = wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=None)
+    assert block3["actors"][0]["documented_plans"] == []
+
+
+def test_seed_degrades_on_garbage():
+    block = wms.build_world_model_seed("not a dict", [{"agent_id": "x"}, None, {"agent_id": 1, "entity_name": "Z"}])
+    assert block["actors"][0]["name"] == "Z" and block["state_variables"] == [] and block["relationships"] == []
+    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships"
+
+
+def test_agent_activity_config_additive_fields_and_parameters_emit_block():
+    cfg = AgentActivityConfig(agent_id=0, entity_uuid="u", entity_name="X", entity_type="Org",
+                              agency_class="firm", archetype="actor", outcome_power=2.0)
+    d = asdict(cfg)
+    assert d["agency_class"] == "firm" and d["archetype"] == "actor" and d["outcome_power"] == 2.0
+    d0 = asdict(AgentActivityConfig(agent_id=1, entity_uuid="u", entity_name="Y", entity_type="Org"))
+    assert d0["agency_class"] == "" and d0["archetype"] == "" and d0["outcome_power"] is None
+    params = SimulationParameters(simulation_id="s", project_id="p", graph_id="g", simulation_requirement="q")
+    assert "world_model" not in params.to_dict()                           # omitted when absent (legacy bytes)
+    params.world_model = {"schema_version": wms.WORLD_MODEL_SEED_VERSION, "actors": [{"agent_id": 0}]}
+    assert params.to_dict()["world_model"]["actors"][0]["agent_id"] == 0
+    assert json.loads(params.to_json())["world_model"]["schema_version"] == wms.WORLD_MODEL_SEED_VERSION
+
+
+def test_ontology_normalization_fills_agency_class():
+    result = {
+        "entity_types": [
+            {"name": "GovernmentMinistry", "description": "Ministries that set trade policy", "archetype": "actor"},
+            {"name": "LaborUnion", "description": "", "archetype": "collective", "agency_class": "labor_union"},
+            {"name": "NewsOutlet", "description": "", "archetype": "source"},
+            {"name": "Chipmaker", "description": "Semiconductor manufacturers", "agency_class": "bogus"},
+        ],
+        "edge_types": [{"name": "SANCTIONS"}],
+    }
+    OntologyGenerator._normalize_rich_schema(result)
+    ents = {e["name"]: e for e in result["entity_types"]}
+    assert ents["GovernmentMinistry"]["agency_class"] == "sovereign_government"
+    assert ents["LaborUnion"]["agency_class"] == "labor_union"
+    assert "agency_class" not in ents["NewsOutlet"]                       # sources are not agents
+    assert ents["Chipmaker"]["archetype"] == "actor" and ents["Chipmaker"]["agency_class"] == "firm"
+    assert all(e.get("agency_class") in AGENCY_CLASSES for e in result["entity_types"] if "agency_class" in e)
+    assert result["edge_types"][0]["family"] == "antagonism"
+
+
+def test_sealed_config_carries_world_model_block(tmp_path):
+    from app.services.simulation_manager import build_simulation_config_seal, validate_simulation_config_seal
+    block = wms.build_world_model_seed(_legacy_actors(), _cfgs(False), temporal_timeline=_Timeline())
+    cfg = {"simulation_id": "sim_wm", "agent_configs": _cfgs(False),
+           "temporal_config": {"mode": "calendar", "unit": "quarter", "n_rounds": 3, "round_dates": []},
+           "world_model": block}
+    (tmp_path / "simulation_config.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    config_sha, manifest_sha = build_simulation_config_seal(
+        str(tmp_path), simulation_id="sim_wm", actor_cast_manifest_sha256=None,
+        actor_context_manifest_sha256=None, actor_role_manifest_sha256={})
+    validate_simulation_config_seal(str(tmp_path), expected_manifest_sha256=manifest_sha,
+                                    expected_config_sha256=config_sha, expected_simulation_id="sim_wm", require=True)
+    reloaded = json.loads((tmp_path / "simulation_config.json").read_text(encoding="utf-8"))
+    assert reloaded["world_model"]["actors"][0]["agency_class"] == "firm"
+    # tampering with the block breaks the seal
+    reloaded["world_model"]["actors"][0]["agency_class"] = "sovereign_government"
+    (tmp_path / "simulation_config.json").write_text(json.dumps(reloaded, ensure_ascii=False, indent=2), encoding="utf-8")
+    with pytest.raises(ValueError):
+        validate_simulation_config_seal(str(tmp_path), expected_manifest_sha256=manifest_sha,
+                                        expected_config_sha256=config_sha, expected_simulation_id="sim_wm",
+                                        require=True)

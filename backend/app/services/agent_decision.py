@@ -1,0 +1,728 @@
+"""Structured per-round strategic decisions for simulation actors (design §2.4).
+
+An actor's round used to be one free-text post.  This module gives every
+deciding actor a realistic, motivated option set and elicits ONE structured
+decision per round:
+
+* ``AGENCY_CLASSES`` and ``infer_agency_class`` map a researched actor
+  (government, regulator, firm, union, NGO, individual leader…) to the levers it
+  realistically holds.
+* ``ACTION_CATALOG`` lists the catalogued action templates per agency class
+  (kind, capacity cost, lag until the effect lands, reversibility).
+* ``build_option_menu`` grounds the menu in the world: responses to moves aimed
+  at the actor, the actor's own documented plans, class options filtered by the
+  capacity it has left, and ``hold_position``.
+* ``build_decision_prompt`` / ``parse_decision`` turn the menu into a bounded
+  JSON contract and validate the model's answer; any failure degrades to
+  ``hold_position`` with a typed status (``failed`` / ``invalid``) so a dead
+  decision step is never mistaken for strategic patience.
+
+Pure except for the injected ``llm.chat_json`` call in ``elicit_decision``.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import unicodedata
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+from .world_model import ActorState, WorldModel, _text, normalize_label
+
+logger = logging.getLogger(__name__)
+
+DECISION_CONTRACT_VERSION = "world-decision/v1"
+ABSTAIN = "abstain"
+HOLD_OPTION_ID = "hold_position"
+MAX_OPTIONS = 10
+STATEMENT_MAX_CHARS = 480
+RATIONALE_MAX_CHARS = 320
+
+ACTION_KINDS = ("policy", "economic", "coalition", "communication", "legal", "coercive",
+                "operational", "wait")
+
+AGENCY_CLASSES: Tuple[str, ...] = (
+    "sovereign_government", "regulator_agency", "legislature", "central_bank", "judiciary",
+    "political_party", "firm", "state_owned_enterprise", "financial_institution",
+    "industry_coalition", "labor_union", "ngo_advocacy", "international_org",
+    "research_institution", "individual_leader", "public_collective", "media_outlet",
+    "other_actor",
+)
+
+DEFAULT_CAPACITY_BY_CLASS: Dict[str, int] = {
+    "sovereign_government": 3, "regulator_agency": 2, "legislature": 2, "central_bank": 2,
+    "judiciary": 1, "political_party": 2, "firm": 2, "state_owned_enterprise": 2,
+    "financial_institution": 2, "industry_coalition": 2, "labor_union": 2, "ngo_advocacy": 1,
+    "international_org": 2, "research_institution": 1, "individual_leader": 2,
+    "public_collective": 1, "media_outlet": 1, "other_actor": 2,
+}
+
+# (keywords, class) — first match wins; order from specific to generic.
+_AGENCY_HINTS: Tuple[Tuple[Tuple[str, ...], str], ...] = (
+    (("central bank", "federal reserve", "the fed", "fed", "fomc", "ecb", "people's bank", "pboc", "boj",
+      "bank of england", "monetary authority", "央行", "中央银行", "人民银行", "联储"), "central_bank"),
+    (("supreme court", "court of", "tribunal", "judiciary", "judge", "法院", "法官", "仲裁"), "judiciary"),
+    (("regulator", "regulatory", "commission", "authority", "agency", "administration", "fcc", "sec ",
+      "ftc", "doj", "antitrust", "watchdog", "监管", "管理局", "委员会", "总局", "监察"), "regulator_agency"),
+    (("parliament", "congress", "senate", "senator", "congressman", "congresswoman", "lawmaker",
+      "house of representatives", "legislature", "legislator", "assembly", "bundestag", "diet",
+      "议会", "国会", "参议院", "众议院", "立法", "议员"), "legislature"),
+    (("government", "ministry", "minister", "president", "prime minister", "cabinet", "white house",
+      "administration of", "state council", "kremlin", "treasury", "department of", "政府", "国务院",
+      "部长", "总统", "总理", "内阁", "财政部", "外交部", "商务部"), "sovereign_government"),
+    (("party", "campaign", "candidate", "coalition government", "政党", "候选人", "竞选"), "political_party"),
+    (("imf", "world bank", "united nations", " un ", "wto", "oecd", "nato", "european union",
+      "european commission", "asean", "opec", "g7", "g20", "国际组织", "联合国", "世贸", "欧盟", "欧佩克"),
+     "international_org"),
+    (("union", "workers", "labor", "labour", "federation of", "guild", "工会", "工人"), "labor_union"),
+    (("association", "alliance", "industry group", "chamber of commerce", "consortium", "trade group",
+      "lobby", "协会", "商会", "联盟", "行业组织"), "industry_coalition"),
+    (("ngo", "non-profit", "nonprofit", "foundation", "advocacy", "watch", "activist", "rights group",
+      "greenpeace", "amnesty", "非政府", "基金会", "公益", "维权"), "ngo_advocacy"),
+    (("university", "institute", "laboratory", "lab ", "research", "think tank", "academy", "大学",
+      "研究所", "研究院", "实验室", "智库"), "research_institution"),
+    (("newspaper", "news", "media", "broadcaster", "journalist", "reporter", "press", "times",
+      "post", "journal", "媒体", "报", "新闻", "记者", "电视台"), "media_outlet"),
+    (("bank", "fund", "capital", "asset management", "investors", "insurer", "exchange", "brokerage",
+      "银行", "基金", "资本", "投资者", "交易所", "保险"), "financial_institution"),
+    (("state-owned", "state owned", "soe", "national oil", "国企", "国有", "中石", "国家电网"),
+     "state_owned_enterprise"),
+    (("corporation", "company", "inc", "ltd", "llc", "plc", "group", "holdings", "technologies",
+      "motors", "semiconductor", "manufacturer", "supplier", "startup", "firm", "enterprise",
+      "公司", "集团", "企业", "厂商", "制造商"), "firm"),
+    (("ceo", "founder", "chairman", "executive", "governor", "mayor", "senator", "secretary",
+      "leader", "director", "spokesperson", "influencer", "commentator", "person",
+      "首席执行官", "创始人", "董事长", "州长", "市长", "参议员", "领导人", "个人"), "individual_leader"),
+    (("public", "consumers", "voters", "citizens", "residents", "community", "fans", "users",
+      "households", "farmers", "patients", "students", "公众", "消费者", "选民", "市民", "居民",
+      "用户", "农民", "学生", "网民"), "public_collective"),
+)
+
+_INDIVIDUAL_TYPES = {"person", "individual", "politician", "executive", "leader", "official",
+                     "professor", "expert", "ceo", "founder", "candidate", "个人", "人物"}
+_COLLECTIVE_TYPES = {"collective", "group", "community", "public", "audience", "群体", "公众"}
+
+
+class ActionTemplate:
+    """One catalogued action an agency class can realistically take."""
+
+    __slots__ = ("id", "label", "kind", "cost", "lag", "reversibility", "targets_actor")
+
+    def __init__(self, id: str, label: str, kind: str, cost: int = 1, lag: int = 0,
+                 reversibility: str = "reversible", targets_actor: bool = False) -> None:
+        self.id = id
+        self.label = label
+        self.kind = kind if kind in ACTION_KINDS else "communication"
+        self.cost = max(0, int(cost))
+        self.lag = max(0, int(lag))
+        self.reversibility = reversibility if reversibility in ("reversible", "sticky", "irreversible") else "reversible"
+        self.targets_actor = bool(targets_actor)
+
+    def to_option(self, **extra: Any) -> Dict[str, Any]:
+        d = {"id": self.id, "label": self.label, "kind": self.kind, "cost": self.cost,
+             "lag": self.lag, "reversibility": self.reversibility, "targets_actor": self.targets_actor}
+        d.update(extra)
+        return d
+
+
+def _t(id: str, label: str, kind: str, cost: int = 1, lag: int = 0, rev: str = "reversible",
+       targets: bool = False) -> ActionTemplate:
+    return ActionTemplate(id, label, kind, cost, lag, rev, targets)
+
+
+_COMMON: Tuple[ActionTemplate, ...] = (
+    _t("public_statement", "Issue a public statement or warning", "communication", 1, 0),
+    _t("open_talks", "Open or join negotiations with another actor", "coalition", 1, 1, "reversible", True),
+    _t("form_alliance", "Form or deepen an alliance / joint initiative", "coalition", 2, 1, "sticky", True),
+    _t("break_alliance", "Withdraw from an alliance or agreement", "coalition", 2, 0, "sticky", True),
+    _t("signal_concession", "Offer a concession or compromise", "communication", 1, 0, "reversible", True),
+    _t("escalate_pressure", "Escalate pressure on another actor (campaign, threat, retaliation)",
+       "coercive", 2, 1, "sticky", True),
+)
+
+ACTION_CATALOG: Dict[str, Tuple[ActionTemplate, ...]] = {
+    "sovereign_government": _COMMON + (
+        _t("impose_measure", "Impose or raise a tariff, sanction, export control or restriction",
+           "policy", 3, 1, "sticky", True),
+        _t("lift_measure", "Lift, delay or soften a restriction", "policy", 2, 1, "sticky", True),
+        _t("subsidize", "Announce subsidies, procurement or an investment programme", "economic", 3, 2, "sticky"),
+        _t("legislate", "Introduce legislation, decree or regulation", "policy", 3, 2, "sticky"),
+        _t("sign_agreement", "Sign a bilateral or multilateral agreement", "coalition", 3, 1, "irreversible", True),
+        _t("security_action", "Deploy security, enforcement or military-adjacent measures", "coercive", 3, 1, "sticky", True),
+    ),
+    "regulator_agency": _COMMON + (
+        _t("open_inquiry", "Open an investigation, review or inquiry", "legal", 2, 1, "sticky", True),
+        _t("issue_ruling", "Issue a ruling, approval, fine or licence decision", "legal", 3, 1, "irreversible", True),
+        _t("propose_rule", "Propose or finalise a rule / standard", "policy", 2, 2, "sticky"),
+        _t("grant_waiver", "Grant an exemption, waiver or extension", "policy", 1, 0, "reversible", True),
+    ),
+    "legislature": _COMMON + (
+        _t("introduce_bill", "Introduce or advance a bill", "policy", 2, 2, "sticky"),
+        _t("hold_hearing", "Hold a hearing or demand testimony", "legal", 1, 0, "reversible", True),
+        _t("pass_vote", "Hold a decisive vote (budget, confirmation, resolution)", "policy", 3, 1, "irreversible"),
+        _t("block_measure", "Block, delay or condition a measure", "policy", 2, 0, "reversible", True),
+    ),
+    "central_bank": _COMMON + (
+        _t("rate_move", "Change the policy rate or guidance", "policy", 3, 1, "sticky"),
+        _t("liquidity_tool", "Deploy or withdraw a liquidity / balance-sheet tool", "economic", 2, 1, "sticky"),
+        _t("macroprudential", "Tighten or ease macroprudential rules", "policy", 2, 2, "sticky"),
+    ),
+    "judiciary": (
+        _t("public_statement", "Publish an opinion or procedural order", "communication", 1, 0),
+        _t("issue_ruling", "Issue a ruling or injunction", "legal", 1, 0, "irreversible", True),
+        _t("schedule_review", "Schedule or expedite a review", "legal", 1, 1, "reversible", True),
+    ),
+    "political_party": _COMMON + (
+        _t("campaign_push", "Launch a campaign push or mobilisation", "communication", 2, 0),
+        _t("platform_shift", "Shift a platform position or policy pledge", "policy", 2, 1, "sticky"),
+        _t("endorse_oppose", "Endorse or oppose a measure or candidate", "communication", 1, 0, "sticky", True),
+    ),
+    "firm": _COMMON + (
+        _t("invest_capex", "Commit capital: new plant, capacity, R&D programme", "economic", 3, 2, "sticky"),
+        _t("cut_or_delay", "Cut, delay or divest a project", "economic", 2, 1, "sticky"),
+        _t("price_move", "Change pricing, terms or supply allocation", "economic", 1, 0, "reversible", True),
+        _t("product_launch", "Launch a product, service or technology milestone", "operational", 2, 1, "irreversible"),
+        _t("partnership_deal", "Sign a partnership, supply or licensing deal", "economic", 2, 1, "sticky", True),
+        _t("lobby", "Lobby or petition policymakers", "communication", 1, 1, "reversible", True),
+        _t("litigate", "File or threaten litigation", "legal", 2, 1, "sticky", True),
+        _t("relocate_supply", "Shift sourcing, production or markets", "operational", 3, 2, "sticky"),
+    ),
+    "state_owned_enterprise": _COMMON + (
+        _t("invest_capex", "Commit capital under state direction", "economic", 3, 2, "sticky"),
+        _t("price_move", "Change pricing, output or allocation", "economic", 1, 0, "reversible", True),
+        _t("partnership_deal", "Sign a supply or partnership deal", "economic", 2, 1, "sticky", True),
+        _t("relocate_supply", "Shift sourcing, production or markets", "operational", 3, 2, "sticky"),
+    ),
+    "financial_institution": _COMMON + (
+        _t("reprice_risk", "Reprice risk: lending terms, ratings, exposure limits", "economic", 1, 0, "reversible", True),
+        _t("fund_or_withdraw", "Provide or withdraw financing / investment", "economic", 2, 1, "sticky", True),
+        _t("market_call", "Publish a market view or forecast", "communication", 1, 0),
+    ),
+    "industry_coalition": _COMMON + (
+        _t("industry_position", "Publish an industry position or standard", "communication", 1, 0),
+        _t("lobby", "Lobby or petition policymakers", "communication", 1, 1, "reversible", True),
+        _t("coordinate_members", "Coordinate member action (pledge, boycott, standard adoption)", "coalition", 2, 1, "sticky"),
+    ),
+    "labor_union": _COMMON + (
+        _t("strike_action", "Call or threaten a strike / work stoppage", "coercive", 3, 0, "sticky", True),
+        _t("bargain", "Enter or escalate collective bargaining", "coalition", 2, 1, "reversible", True),
+        _t("mobilize", "Mobilise members or allies", "communication", 1, 0),
+    ),
+    "ngo_advocacy": _COMMON + (
+        _t("publish_report", "Publish a report, exposé or scorecard", "communication", 1, 0),
+        _t("campaign", "Launch a public campaign or petition", "communication", 1, 0, "reversible", True),
+        _t("legal_challenge", "File a legal or regulatory complaint", "legal", 2, 1, "sticky", True),
+    ),
+    "international_org": _COMMON + (
+        _t("issue_assessment", "Issue an assessment, forecast or recommendation", "communication", 1, 0),
+        _t("convene", "Convene members or mediate", "coalition", 2, 1, "reversible", True),
+        _t("program_decision", "Approve, condition or suspend a programme / financing", "economic", 3, 1, "sticky", True),
+    ),
+    "research_institution": (
+        _t("publish_findings", "Publish findings or a forecast", "communication", 1, 0),
+        _t("advise", "Advise or brief a decision-maker", "communication", 1, 0, "reversible", True),
+        _t("launch_program", "Launch a research programme or pilot", "operational", 2, 2, "sticky"),
+    ),
+    "individual_leader": _COMMON + (
+        _t("set_agenda", "Set the agenda: announce a priority or plan", "communication", 1, 0),
+        _t("broker_deal", "Broker a deal or meeting between actors", "coalition", 2, 1, "reversible", True),
+        _t("commit_resources", "Commit resources or make a binding pledge", "economic", 2, 1, "sticky"),
+    ),
+    "public_collective": (
+        _t("public_statement", "Voice collective sentiment", "communication", 1, 0),
+        _t("mobilize", "Mobilise: protest, boycott or turnout", "coercive", 1, 0, "reversible", True),
+        _t("shift_behavior", "Shift behaviour: demand, adoption, savings", "economic", 1, 1, "sticky"),
+    ),
+    "media_outlet": (
+        _t("publish_report", "Publish an investigation or editorial", "communication", 1, 0),
+    ),
+    "other_actor": _COMMON,
+}
+
+HOLD_TEMPLATE = _t(HOLD_OPTION_ID, "Hold position: wait, observe, keep current course", "wait", 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# agency class inference
+# ---------------------------------------------------------------------------
+
+_CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _hay(*texts: Any) -> str:
+    """Searchable haystack: camelCase/underscore type names are split into words
+    (``MediaOutlet`` → ``media outlet``) so word-boundary hints can see them."""
+    parts = []
+    for t in texts:
+        if not t:
+            continue
+        raw = str(t).replace("_", " ").replace("-", " ")
+        parts.append(_CAMEL_RE.sub(" ", raw))
+    joined = unicodedata.normalize("NFKC", " ".join(parts)).casefold()
+    return f" {' '.join(joined.split())} "
+
+
+_HINT_CACHE: Dict[str, "re.Pattern[str]"] = {}
+
+
+def _hint_matches(hay: str, hint: str) -> bool:
+    """ASCII hints match on word boundaries ("nato" must not hit "senator");
+    CJK hints (no word boundaries in Chinese) match as substrings."""
+    if any(ord(ch) > 127 for ch in hint):
+        return hint in hay
+    pattern = _HINT_CACHE.get(hint)
+    if pattern is None:
+        pattern = re.compile(r"(?<![a-z0-9])" + re.escape(hint.strip()) + r"(?![a-z0-9])")
+        _HINT_CACHE[hint] = pattern
+    return pattern.search(hay) is not None
+
+
+def infer_agency_class(type_name: Any = "", *texts: Any, archetype: str = "") -> str:
+    """Deterministic agency class from an entity type, role text and archetype.
+
+    Explicit values that already name a class win.  The archetype ``collective``
+    without a stronger hint maps to ``public_collective``; media stays
+    ``media_outlet`` (not an agent); anything else falls back to ``firm`` for
+    organisation-like types, ``individual_leader`` for person types and
+    ``other_actor`` otherwise.  Never raises.
+    """
+    try:
+        for candidate in (type_name, *texts):
+            c = str(candidate or "").strip().casefold()
+            if c in AGENCY_CLASSES:
+                return c
+        hay = _hay(type_name, *texts)
+        for hints, klass in _AGENCY_HINTS:
+            if any(_hint_matches(hay, h) for h in hints):
+                return klass
+        tname = str(type_name or "").strip().casefold()
+        if tname in _INDIVIDUAL_TYPES:
+            return "individual_leader"
+        if str(archetype or "").casefold() == "collective" or tname in _COLLECTIVE_TYPES:
+            return "public_collective"
+        if tname in ("organization", "organisation", "company", "org", "机构", "组织"):
+            return "firm"
+        return "other_actor"
+    except Exception:  # noqa: BLE001
+        return "other_actor"
+
+
+def default_capacity(agency_class: str) -> int:
+    return DEFAULT_CAPACITY_BY_CLASS.get(str(agency_class or ""), DEFAULT_CAPACITY_BY_CLASS["other_actor"])
+
+
+def catalog_for(agency_class: str) -> Tuple[ActionTemplate, ...]:
+    return ACTION_CATALOG.get(str(agency_class or ""), ACTION_CATALOG["other_actor"])
+
+
+# ---------------------------------------------------------------------------
+# option menu
+# ---------------------------------------------------------------------------
+
+_PLAN_KIND_HINTS = (
+    (("invest", "capex", "plant", "factory", "capacity", "fund", "acquire", "acquisition", "spend",
+      "投资", "扩产", "建厂", "收购", "融资"), "economic", 3, 2),
+    (("tariff", "sanction", "ban", "restrict", "control", "regulat", "rule", "law", "bill", "policy",
+      "关税", "制裁", "禁令", "限制", "法规", "政策", "立法"), "policy", 3, 1),
+    (("alliance", "partner", "agreement", "deal", "coalition", "cooperat", "joint", "treaty",
+      "联盟", "合作", "协议", "伙伴", "合资"), "coalition", 2, 1),
+    (("sue", "lawsuit", "litig", "court", "appeal", "complaint", "permit", "licen", "filing", "file a",
+      "file an", "petition", "ruling", "inquiry", "诉讼", "起诉", "上诉", "许可", "申诉", "备案"), "legal", 2, 1),
+    (("strike", "protest", "boycott", "pressure", "retaliat", "罢工", "抗议", "抵制", "报复"), "coercive", 2, 0),
+    (("launch", "ship", "deploy", "roll out", "produce", "build", "expand", "发布", "部署", "投产", "量产"),
+     "operational", 2, 1),
+)
+
+
+def _plan_kind(text: str) -> Tuple[str, int, int]:
+    low = unicodedata.normalize("NFKC", text).casefold()
+    for hints, kind, cost, lag in _PLAN_KIND_HINTS:
+        if any(h in low for h in hints):
+            return kind, cost, lag
+    return "communication", 1, 0
+
+
+def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
+                      *, max_options: int = MAX_OPTIONS) -> List[Dict[str, Any]]:
+    """Deterministic, world-grounded option menu for one actor in one round.
+
+    Order of priority: responses to moves aimed at the actor last period,
+    documented plans, agency-class options the actor can still afford, and
+    always ``hold_position`` last.  Irreversible moves already taken are not
+    offered again; options above the remaining capacity are dropped (the actor
+    may still take cheap moves).
+    """
+    options: List[Dict[str, Any]] = []
+    seen: set = set()
+    remaining = actor.capacity_remaining
+    last_round = max(0, int(round_num) - 1)
+
+    def push(opt: Dict[str, Any]) -> None:
+        if opt["id"] in seen or len(options) >= max_options:
+            return
+        seen.add(opt["id"])
+        options.append(opt)
+
+    # 1) responses to what was aimed at this actor last period
+    aimed = [e for e in world.events_in_round(last_round) if actor.name in e.targets] if last_round > 0 else []
+    for idx, ev in enumerate(aimed[:3]):
+        who = ev.actors[0] if ev.actors else "another actor"
+        who_id = world.resolve_actor(who)
+        for tmpl_id, label, kind, cost in (
+            (f"respond_{idx + 1}_counter", f"Counter {who}'s move ({_text(ev.description, 80)})", "coercive", 2),
+            (f"respond_{idx + 1}_negotiate", f"Seek talks with {who} over its move", "coalition", 1),
+            (f"respond_{idx + 1}_accommodate", f"Accommodate or publicly answer {who}'s move", "communication", 1),
+        ):
+            if cost <= remaining:
+                push({"id": tmpl_id, "label": label, "kind": kind, "cost": cost, "lag": 0,
+                      "reversibility": "reversible", "targets_actor": True,
+                      "suggested_targets": [who] if who_id is not None else [],
+                      "why": "responds to a move aimed at you last period"})
+    # 2) documented plans (research-grounded)
+    for idx, plan in enumerate(actor.documented_plans[:4]):
+        kind, cost, lag = _plan_kind(plan)
+        if cost > remaining:
+            cost = min(cost, max(1, remaining)) if remaining else cost
+        push({"id": f"plan_{idx + 1}", "label": f"Advance your documented plan: {_text(plan, 120)}",
+              "kind": kind, "cost": cost, "lag": lag, "reversibility": "sticky", "targets_actor": False,
+              "why": "a plan or likely action documented in your dossier"})
+    # 3) class catalogue filtered by capacity and prior irreversible moves
+    taken_irreversible = {c.get("option_id") for c in [actor.last_action or {}]
+                          if c.get("reversibility") == "irreversible"}
+    for tmpl in catalog_for(actor.agency_class):
+        if tmpl.id in taken_irreversible:
+            continue
+        if tmpl.cost > max(remaining, 0):
+            continue
+        push(tmpl.to_option())
+    if len(options) >= max_options:
+        options = options[: max_options - 1]
+    options.append(HOLD_TEMPLATE.to_option(why="strategic patience is a legitimate choice"))
+    return options
+
+
+def deciding_roster(agent_configs: Sequence[Dict[str, Any]], active_ids: Iterable[int], *,
+                    max_actors: int = 24, audience_type: str = "Audience") -> List[int]:
+    """Who decides this round: principals always, then active named actors by influence."""
+    principals: List[Tuple[float, int]] = []
+    sampled: List[Tuple[float, int]] = []
+    active = set(int(a) for a in active_ids)
+    for cfg in agent_configs or []:
+        if not isinstance(cfg, dict) or cfg.get("agent_id") is None:
+            continue
+        try:
+            aid = int(cfg["agent_id"])
+            infl = float(cfg.get("influence_weight", 1.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if str(cfg.get("entity_type") or "") == audience_type:
+            continue
+        if str(cfg.get("cadence") or "sampled") == "principal":
+            principals.append((-infl, aid))
+        elif aid in active:
+            sampled.append((-infl, aid))
+    ordered = [aid for _, aid in sorted(principals)] + [aid for _, aid in sorted(sampled)]
+    out: List[int] = []
+    for aid in ordered:
+        if aid not in out:
+            out.append(aid)
+        if len(out) >= max(1, int(max_actors)):
+            break
+    return out
+
+
+# ---------------------------------------------------------------------------
+# prompt and parsing
+# ---------------------------------------------------------------------------
+
+def _render_options(options: List[Dict[str, Any]]) -> str:
+    lines = []
+    for o in options:
+        bits = [f"[{o['id']}] {o['label']}", f"kind={o['kind']}", f"cost={o['cost']}"]
+        if o.get("lag"):
+            bits.append(f"effect lands in {o['lag']} period(s)")
+        if o.get("reversibility") and o["reversibility"] != "reversible":
+            bits.append(o["reversibility"])
+        if o.get("targets_actor"):
+            bits.append("needs a target actor")
+        if o.get("why"):
+            bits.append(o["why"])
+        lines.append("- " + " · ".join(bits))
+    return "\n".join(lines)
+
+
+def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: str,
+                          private_brief: str, options: List[Dict[str, Any]],
+                          scenarios: Sequence[str], cast_names: Sequence[str],
+                          language: str = "", recent_discourse: str = "") -> str:
+    """User-turn prompt for the structured decision (the actor's role brief is the system turn)."""
+    sc = "; ".join(str(s) for s in scenarios) or "(none)"
+    cast = ", ".join(str(n) for n in cast_names[:30]) or "(the other actors in this simulation)"
+    goals = "; ".join(actor.goals) if actor.goals else ""
+    inc = []
+    if actor.incentives.get("gains_if"):
+        inc.append(f"you gain if: {actor.incentives['gains_if']}")
+    if actor.incentives.get("loses_if"):
+        inc.append(f"you lose if: {actor.incentives['loses_if']}")
+    lang_rule = f"Write public_statement in {language}." if language else ""
+    parts = [
+        world_clock.strip(),
+        public_brief.strip(),
+        private_brief.strip(),
+    ]
+    if recent_discourse.strip():
+        parts.append(recent_discourse.strip())
+    parts.append(
+        f"# DECIDE YOUR MOVE FOR THIS PERIOD — {actor.name}\n"
+        "Act strictly as this real-world actor. Choose the ONE most consequential move you actually "
+        "take over the whole period, grounded in your documented goals, incentives, capabilities, "
+        "constraints, alliances and red lines. Realistic options for you:\n"
+        f"{_render_options(options)}\n"
+        + (f"Your documented goals: {goals}\n" if goals else "")
+        + (("Your incentives: " + "; ".join(inc) + "\n") if inc else "")
+        + "Rules: pick an option id from the list (or \"custom\" with a kind from "
+        f"{', '.join(ACTION_KINDS)} when none fits); name real targets from the cast when the option "
+        "needs one; magnitude 0-1 is how far you go; public_statement is what you publicly say or "
+        "announce this period (1-3 sentences, concrete: decision, numbers, dates, conditions); "
+        "private_rationale is for your own record; commitment is what you bind yourself to and when "
+        "(due_periods ≥ 1) or null; alliance_moves lists any alliance you propose/strengthen/break; "
+        "scenario_commitment names which candidate scenario your move pushes toward, or \"abstain\" "
+        f"if your move has no real bearing on the outcome. Candidate scenarios: {sc}.\n"
+        f"Cast: {cast}.\n"
+        f"{lang_rule}\n"
+        "Return ONLY JSON:\n"
+        '{"option_id": "<id or custom>", "custom_action": {"kind": "...", "label": "..."} | null, '
+        '"targets": ["<actor name>", ...], "magnitude": 0.0-1.0, '
+        '"public_statement": "...", "private_rationale": "...", '
+        '"commitment": {"description": "...", "due_periods": 1} | null, '
+        '"alliance_moves": [{"target": "<actor name>", "move": "propose|strengthen|break|oppose"}], '
+        '"expected_reactions": [{"actor": "<actor name>", "reaction": "..."}], '
+        '"scenario_commitment": {"scenario": "<candidate or abstain>", "confidence": 0.0-1.0}}'
+    )
+    return "\n\n".join(p for p in parts if p)
+
+
+class AgentDecision:
+    """A validated structured decision (or a typed non-decision)."""
+
+    def __init__(self, agent_id: int, actor_name: str, option: Dict[str, Any], *, targets: List[str],
+                 magnitude: float, public_statement: str, private_rationale: str = "",
+                 commitment: Optional[Dict[str, Any]] = None,
+                 alliance_moves: Optional[List[Dict[str, str]]] = None,
+                 expected_reactions: Optional[List[Dict[str, str]]] = None,
+                 scenario: Optional[str] = None, scenario_confidence: float = 0.0,
+                 status: str = "ok", round_num: int = 0, period_end: Optional[str] = None,
+                 raw_option_id: str = "") -> None:
+        self.agent_id = int(agent_id)
+        self.actor_name = actor_name
+        self.option = dict(option)
+        self.targets = list(targets)
+        self.magnitude = max(0.0, min(1.0, float(magnitude)))
+        self.public_statement = public_statement
+        self.private_rationale = private_rationale
+        self.commitment = commitment
+        self.alliance_moves = list(alliance_moves or [])
+        self.expected_reactions = list(expected_reactions or [])
+        self.scenario = scenario
+        self.scenario_confidence = max(0.0, min(1.0, float(scenario_confidence)))
+        self.status = status
+        self.round = int(round_num)
+        self.period_end = period_end
+        self.raw_option_id = raw_option_id
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "ok"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "schema_version": DECISION_CONTRACT_VERSION,
+            "round": self.round, "period_end": self.period_end,
+            "agent_id": self.agent_id, "actor_name": self.actor_name,
+            "option": dict(self.option), "targets": list(self.targets),
+            "magnitude": round(self.magnitude, 3),
+            "public_statement": self.public_statement, "private_rationale": self.private_rationale,
+            "commitment": self.commitment, "alliance_moves": list(self.alliance_moves),
+            "expected_reactions": list(self.expected_reactions),
+            "scenario": self.scenario, "scenario_confidence": round(self.scenario_confidence, 3),
+            "status": self.status, "raw_option_id": self.raw_option_id,
+        }
+
+    def scenario_commitment(self, outcome_power: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        """Row for ``worldstate.commitments_from_decisions`` (None when abstaining)."""
+        if not self.ok or not self.scenario or self.scenario == ABSTAIN:
+            return None
+        row: Dict[str, Any] = {"agent_id": self.agent_id, "scenario": self.scenario,
+                               "magnitude": round(max(0.1, self.magnitude), 3),
+                               "confidence": round(self.scenario_confidence or 0.6, 3), "round": self.round}
+        if outcome_power is not None:
+            row["outcome_power"] = outcome_power
+        if self.period_end:
+            row["period_end"] = self.period_end
+        return row
+
+
+def hold_decision(actor: ActorState, *, status: str, round_num: int, period_end: Optional[str],
+                  raw_option_id: str = "") -> AgentDecision:
+    return AgentDecision(actor.agent_id, actor.name, HOLD_TEMPLATE.to_option(), targets=[], magnitude=0.0,
+                         public_statement="", status=status, round_num=round_num, period_end=period_end,
+                         raw_option_id=raw_option_id)
+
+
+def _match_scenario(raw: Any, scenarios: Sequence[str]) -> Optional[str]:
+    text = normalize_label(raw)
+    if not text:
+        return None
+    if text in (ABSTAIN, "弃权", "none", "no bearing"):
+        return ABSTAIN
+    for s in scenarios:
+        if normalize_label(s) == text:
+            return str(s)
+    for s in scenarios:
+        ns = normalize_label(s)
+        if len(ns) >= 4 and (ns in text or text in ns):
+            return str(s)
+    return None
+
+
+def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: List[Dict[str, Any]],
+                   scenarios: Sequence[str], round_num: int, period_end: Optional[str] = None) -> AgentDecision:
+    """Validate the model's JSON against the menu, the cast and the scenario set.
+
+    Unknown option ids, missing payloads or malformed structures degrade to a
+    ``hold_position`` decision with ``status="invalid"``.  Targets are resolved
+    to cast names; unknown names are dropped.  A ``custom`` option must carry a
+    catalogued kind and a label.
+    """
+    if not isinstance(raw, dict):
+        return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end)
+    by_id = {o["id"]: o for o in options}
+    raw_option = _text(raw.get("option_id") or raw.get("option"), 64)
+    option: Optional[Dict[str, Any]] = None
+    if raw_option in by_id:
+        option = dict(by_id[raw_option])
+    elif raw_option.casefold() == "custom":
+        custom = raw.get("custom_action") if isinstance(raw.get("custom_action"), dict) else {}
+        kind = _text(custom.get("kind"), 24).casefold()
+        label = _text(custom.get("label"), 140)
+        if kind in ACTION_KINDS and label:
+            option = {"id": "custom", "label": label, "kind": kind, "cost": 2 if kind != "wait" else 0,
+                      "lag": 1 if kind in ("economic", "policy", "legal") else 0,
+                      "reversibility": "sticky" if kind in ("economic", "policy", "legal", "coercive") else "reversible",
+                      "targets_actor": kind in ("coalition", "coercive", "legal")}
+    else:
+        # tolerate the model echoing the label instead of the id
+        wanted = normalize_label(raw_option)
+        for o in options:
+            if wanted and normalize_label(o["label"]).startswith(wanted[:40]):
+                option = dict(o)
+                break
+    if option is None:
+        return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end,
+                             raw_option_id=raw_option)
+    targets: List[str] = []
+    for t in (raw.get("targets") or [])[:6] if isinstance(raw.get("targets"), list) else []:
+        aid = world.resolve_actor(t)
+        if aid is not None and aid != actor.agent_id:
+            name = world.actor_name(aid)
+            if name not in targets:
+                targets.append(name)
+    if not targets and option.get("suggested_targets"):
+        targets = list(option["suggested_targets"])[:2]
+    try:
+        magnitude = float(raw.get("magnitude", 0.5))
+    except (TypeError, ValueError):
+        magnitude = 0.5
+    statement = _text(raw.get("public_statement"), STATEMENT_MAX_CHARS)
+    rationale = _text(raw.get("private_rationale"), RATIONALE_MAX_CHARS)
+    commitment = None
+    rc = raw.get("commitment")
+    if isinstance(rc, dict) and _text(rc.get("description"), 220):
+        try:
+            due = max(1, int(rc.get("due_periods", 1) or 1))
+        except (TypeError, ValueError):
+            due = 1
+        commitment = {"description": _text(rc["description"], 220), "due_periods": min(due, 12)}
+    moves: List[Dict[str, str]] = []
+    for m in (raw.get("alliance_moves") or [])[:4] if isinstance(raw.get("alliance_moves"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        aid = world.resolve_actor(m.get("target"))
+        verb = _text(m.get("move"), 16).casefold()
+        if aid is not None and aid != actor.agent_id and verb in ("propose", "strengthen", "break", "oppose",
+                                                                 "join", "support", "distance", "sanction"):
+            moves.append({"target": world.actor_name(aid), "move": verb})
+    reactions: List[Dict[str, str]] = []
+    for r in (raw.get("expected_reactions") or [])[:4] if isinstance(raw.get("expected_reactions"), list) else []:
+        if isinstance(r, dict) and _text(r.get("actor"), 80) and _text(r.get("reaction"), 160):
+            reactions.append({"actor": _text(r["actor"], 80), "reaction": _text(r["reaction"], 160)})
+    scenario = None
+    confidence = 0.0
+    sc_raw = raw.get("scenario_commitment")
+    if isinstance(sc_raw, dict):
+        scenario = _match_scenario(sc_raw.get("scenario"), scenarios)
+        try:
+            confidence = float(sc_raw.get("confidence", 0.6))
+        except (TypeError, ValueError):
+            confidence = 0.6
+    elif isinstance(sc_raw, str):
+        scenario = _match_scenario(sc_raw, scenarios)
+        confidence = 0.6
+    if option["id"] != HOLD_OPTION_ID and not statement:
+        # a move without any public trace is still a move, but we need something to publish
+        statement = f"{actor.name}: {option['label']}" + (f" ({', '.join(targets)})" if targets else "")
+    return AgentDecision(actor.agent_id, actor.name, option, targets=targets, magnitude=magnitude,
+                         public_statement=statement, private_rationale=rationale, commitment=commitment,
+                         alliance_moves=moves, expected_reactions=reactions, scenario=scenario,
+                         scenario_confidence=confidence, status="ok", round_num=round_num,
+                         period_end=period_end, raw_option_id=raw_option)
+
+
+def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: ActorState,
+                    world: WorldModel, options: List[Dict[str, Any]], scenarios: Sequence[str],
+                    round_num: int, period_end: Optional[str] = None,
+                    temperature: float = 0.4, max_tokens: int = 1200) -> AgentDecision:
+    """One structured LLM call → validated decision; failures become typed holds."""
+    if llm is None:
+        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end)
+    messages: List[Dict[str, str]] = []
+    if system_message:
+        messages.append({"role": "system", "content": str(system_message)})
+    messages.append({"role": "user", "content": user_prompt})
+    try:
+        raw = llm.chat_json(messages=messages, temperature=temperature, max_tokens=max_tokens)
+    except Exception as exc:  # noqa: BLE001 — the round loop must survive a failed decision
+        logger.warning("decision step failed for %s (status=failed): %s", actor.name, exc)
+        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end)
+    return parse_decision(raw, actor=actor, world=world, options=options, scenarios=scenarios,
+                          round_num=round_num, period_end=period_end)
+
+
+def decision_memory_note(decision: AgentDecision, period_label: str = "") -> str:
+    """Private USER memory note so later rounds and the reaction step stay consistent."""
+    if not decision.ok:
+        return ""
+    head = f"# YOUR MOVE THIS PERIOD{(' — ' + period_label) if period_label else ''}"
+    lines = [head, f"You chose: {decision.option.get('label') or decision.option.get('id')}"]
+    if decision.targets:
+        lines.append("Directed at: " + ", ".join(decision.targets))
+    if decision.public_statement:
+        lines.append(f'You announced: "{decision.public_statement}"')
+    if decision.commitment:
+        lines.append(f"You committed to: {decision.commitment.get('description')} "
+                     f"(within {decision.commitment.get('due_periods')} period(s))")
+    if decision.private_rationale:
+        lines.append(f"Your private reasoning: {decision.private_rationale}")
+    lines.append("In the response step, defend or build on this move; do not contradict it.")
+    return "\n".join(lines)
+
+
+def summarize_decisions(decisions: Iterable[AgentDecision]) -> Dict[str, int]:
+    counts = {"ok": 0, "invalid": 0, "failed": 0, "hold": 0}
+    for d in decisions:
+        if d.status in counts:
+            counts[d.status] += 1
+        if d.option.get("id") == HOLD_OPTION_ID:
+            counts["hold"] += 1
+    return counts
+

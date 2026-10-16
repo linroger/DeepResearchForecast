@@ -147,6 +147,7 @@ const ZH_CHART_CAPTIONS = Object.freeze({
   'Comparable Forecast Benchmarks': '可比预测基准',
   'Forecast Revisions Across Published Vintages': '历次发布版本的预测修订',
   'Forecast Outcome-Share Trajectory': '预测结果份额轨迹',
+  'Simulated World Variables (indexed, seed = 100)': '推演世界变量（指数化，种子值 = 100）',
   'Baseline vs Scenario': '基线与情景对比',
   'Calibration Curve': '校准曲线',
   'Market-Implied P(yes) History vs Model': '市场隐含 P(是) 历史与模型对比',

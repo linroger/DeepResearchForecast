@@ -1000,11 +1000,13 @@ sequenceDiagram
   - 在 Twitter 上：发帖、点赞、转发、引用、评论、关注、搜索帖子、查看趋势、什么都不做。
   - 在 Reddit 上：发帖、评论、给帖子点赞或点踩、给评论点赞或点踩、搜索帖子、搜索用户、查看趋势、刷新、关注、屏蔽、什么都不做。
   - 信息流由免模型的推荐器生成，不产生额外的 LLM 调用。
-- **世界态。** 共享的 WorldState 每对齐一轮前进一次。两个平台都提交第 *i* 轮之后：
-  - 一次批量 LLM 调用读取智能体的承诺；
-  - 世界态随之推进一步，其惯性按日历单位缩放，并设有基率熵下限。
+- **反身世界态**（`SIM_WORLD_MODEL=true`，日历模式）。每一轮都是观察 → 决策 → 行动 → 世界更新的循环，两个平台共享：
+  - *观察。* 每个活跃智能体收到已提交的「世界状态」简报：追踪事实（由档案定量事实与官方数据快照播种，带单位、截止日与来源）、上一时段的行动及其后果、结盟与对立的变动、以及未兑现的承诺。情景概率绝不展示给智能体。
+  - *决策。* 每个决策角色（主角优先，其后为活跃具名角色，受 `SIM_WORLD_DECISION_MAX_ACTORS` 约束）从一份基于其封印角色简报与当前世界生成的菜单中做出**一次**结构化决策：对针对自己的行动的回应、档案记载的计划、其行动杠杆类别（政府、监管机构、立法机关、央行、企业、工会、NGO、联盟、个人领导者……）在剩余容量内的目录动作，以及 `hold_position`。答案携带目标、力度、公开声明、带期限的承诺、结盟动作与该行动所推向的情景。无效或失败的回答降级为有类型标注的观望，而非沉默。
+  - *行动。* 声明作为该角色的帖子在两个平台发布（每轮每个角色一次决策，跨平台共享），回应步骤让所有人回复。
+  - *世界更新。* 两个平台都交付本轮后，只运行**一次**更新：确定性内核消耗容量、登记承诺（到期时以行动兑现，否则失效）、推移关系、触发到期的延迟效应与研究事件；随后一次有界的仲裁调用裁决争议行动、移动状态变量（受 `SIM_WORLD_MAX_CHANGE_RATIO` 钳制）、产生涌现事件与延迟效应。情景份额 WorldState 依据角色的情景承诺、按日历惯性与熵下限推进。任一平台在第 *i* 轮更新提交前绝不开始第 *i+1* 轮。
 
-  轨迹保存在 `world_state_trajectory.json`，并在报告中绘成图表。
+  保存 `world_state.json`（最新世界）、`world_state_history.jsonl`、`world_actions.jsonl`、`world_state_trajectory.json` 与 `decisions.jsonl`；报告的诊断信号包渲染世界演化与世界变量图，仪表盘的模拟页显示实时「世界状态」面板。`SIM_WORLD_MODEL=false` 时旧的环内情景演化原样运行。
 - **监控与完成判定。**
   - 后端的一个监控线程每 2 秒把行为日志汇总进 `run_state.json`。
   - 管线每 5 秒轮询一次；连续 30 分钟没有回合进展的模拟会被停止。
@@ -1019,6 +1021,7 @@ sequenceDiagram
 - `simulation_config.json` 及其封印；
 - `twitter/actions.jsonl` 与 `reddit/actions.jsonl`，以及两个平台的 SQLite 数据库；
 - `world_state_trajectory.json` 与 `decisions.jsonl`；
+- `world_state.json`、`world_state_history.jsonl` 与 `world_actions.jsonl`（反身世界模型）；
 - `run_summary.json` 与 `simulation.log`。
 
 设置 `SIM_TEMPORAL_MODE=hours` 可恢复旧式的新闻周期模式，由 LLM 选定 24–168 个模拟小时。
@@ -1491,6 +1494,8 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 | 设置 | 默认值 | 作用 |
 |---|---|---|
 | `SIM_TEMPORAL_MODE` | `calendar` | `calendar`，或旧式的 `hours` |
+| `SIM_WORLD_MODEL` · `SIM_WORLD_ARBITER` | `true` · `true` | 反身世界模型（结构化角色决策、每轮一次世界更新）及其仲裁调用；`false` 保留旧的情景份额演化 |
+| `SIM_WORLD_DECISION_MAX_ACTORS` · `SIM_WORLD_MAX_CHANGE_RATIO` | `24` · `0.5` | 每轮决策角色数；仲裁数值变动的单轮钳制 |
 | `SIM_CALENDAR_TARGET_MAX_ROUNDS` · `OASIS_DEFAULT_MAX_ROUNDS` | `36` · `36` | 选择日历单位时使用的回合预算 |
 | `ACTOR_CAST_MAX` | `20` | 研究阵容的最大规模 |
 | `SIM_AUDIENCE_AGENTS` | `0` | 额外按规则生成的受众智能体数量 |

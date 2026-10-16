@@ -246,6 +246,14 @@ class AgentActivityConfig:
     # 不改变旧行为）。
     cadence: str = "sampled"
 
+    # REFLEXIVE WORLD (design §2.7): the realistic lever set of this actor and its ontology
+    # archetype, resolved deterministically at PREPARE (dossier value → ontology → type/role
+    # inference).  ``outcome_power`` is only ever an explicitly declared value (I-3: visibility
+    # is never reused as power); None stays None so the decision channel treats it as unknown.
+    agency_class: str = ""
+    archetype: str = ""
+    outcome_power: Optional[float] = None
+
 
 @dataclass
 class TimeSimulationConfig:
@@ -366,6 +374,11 @@ class SimulationParameters:
     # 世界简报用对应语言的标题。空串 → to_dict() 省略字段（旧配置逐字节不变）。
     output_language: str = ""
 
+    # REFLEXIVE WORLD (design §2.7): sealed ``world_model`` block (state variables, actor agency,
+    # relationships, settings).  None → to_dict() omits the field and the runner keeps the legacy
+    # in-band evolution path; hours mode never carries it.
+    world_model: Optional[Dict[str, Any]] = None
+
     # 生成元数据
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     generation_reasoning: str = ""  # LLM的推理说明
@@ -400,6 +413,8 @@ class SimulationParameters:
             data["temporal_config"] = self.temporal_config
         if self.output_language:
             data["output_language"] = self.output_language
+        if self.world_model:
+            data["world_model"] = self.world_model
         return data
     
     def to_json(self, indent: int = 2) -> str:
@@ -756,6 +771,25 @@ class SimulationConfigGenerator:
         except Exception as e:
             logger.warning(f"同温层关注构建失败（降级跳过，不影响模拟）: {e}")
 
+        # ========== Reflexive world model seed (design §2.7) ==========
+        # Calendar mode + SIM_WORLD_MODEL: deterministic ``world_model`` block from the research
+        # artifacts already in hand (quantitative facts, official snapshot, actor intelligence,
+        # relationships).  Hours mode / flag off / any failure → None (field omitted, legacy path).
+        world_model_block = None
+        if temporal_timeline is not None and getattr(Config, "SIM_WORLD_MODEL", True):
+            try:
+                world_model_block = self._build_world_model_block(
+                    simulation_requirement, actors, all_agent_configs, actor_context_packs,
+                    temporal_timeline, simulation_id,
+                )
+                if world_model_block:
+                    from .world_model_seed import world_model_seed_summary
+                    reasoning_parts.append(world_model_seed_summary(world_model_block))
+                    logger.info(world_model_seed_summary(world_model_block))
+            except Exception as e:
+                logger.warning(f"world model seed failed (legacy evolution path keeps running): {e}")
+                world_model_block = None
+
         # ========== 最后一步: 生成平台配置 ==========
         report_progress(total_steps, "生成平台配置...")
         twitter_config = None
@@ -795,6 +829,7 @@ class SimulationConfigGenerator:
             as_of_date=(str((actors or {}).get("as_of_date")) if isinstance(actors, dict) and actors.get("as_of_date") else None),
             world_brief=world_brief,
             output_language=getattr(self, "_output_language", "") or "",
+            world_model=world_model_block,
             # TEMPORAL spec §3: beyond_horizon_events/warnings 已在 _build_scheduled_events
             # 中回填到 timeline，此处一次性序列化（None → to_dict 省略字段）。
             temporal_config=(asdict(temporal_timeline) if temporal_timeline is not None else None),
@@ -2092,6 +2127,46 @@ class SimulationConfigGenerator:
             else "## 市场定价（预测市场隐含概率——可引用/可争论的校准先验，非真值）"
         )
         return header + "\n" + "\n".join(lines)
+
+    def _build_world_model_block(
+        self,
+        simulation_requirement: str,
+        actors: Optional[Dict[str, Any]],
+        agent_configs: List[AgentActivityConfig],
+        actor_context_packs: Optional[Dict[str, Dict[str, Any]]],
+        temporal_timeline: Any,
+        simulation_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """REFLEXIVE WORLD (design §2.7): the sealed ``world_model`` seed block.
+
+        Deterministic: quantitative facts + the bound official snapshot become state
+        variables; every non-audience agent gets an agency class, archetype, class
+        capacity, declared outcome power, documented plans / red lines / goals (canonical
+        dossiers: validated context-pack rows only) and its valenced relationships.
+        Returns None when there is nothing to seed (no actors)."""
+        from .world_model_seed import build_world_model_seed
+        official_data = None
+        try:
+            from .official_data import load_for_simulation
+            official_data = load_for_simulation(simulation_id) if simulation_id else None
+        except Exception:  # noqa: BLE001 — official enrichment is optional
+            official_data = None
+        block = build_world_model_seed(
+            actors,
+            [asdict(c) for c in (agent_configs or [])],
+            question=simulation_requirement,
+            actor_context_packs=actor_context_packs,
+            official_data=official_data,
+            temporal_timeline=temporal_timeline,
+            audience_entity_type=self.AUDIENCE_ENTITY_TYPE,
+            max_variables=int(getattr(Config, "SIM_WORLD_MAX_VARIABLES", 24) or 24),
+            arbiter_enabled=bool(getattr(Config, "SIM_WORLD_ARBITER", True)),
+            max_change_ratio=float(getattr(Config, "SIM_WORLD_MAX_CHANGE_RATIO", 0.5) or 0.5),
+            barrier_timeout_s=float(getattr(Config, "SIM_WORLD_BARRIER_TIMEOUT_S", 1800) or 1800),
+        )
+        if not block.get("actors"):
+            return None
+        return block
 
     def _build_world_brief(
         self,
@@ -3409,6 +3484,22 @@ class SimulationConfigGenerator:
                         config.stance = bucket
                         if config.sentiment_bias == 0.0 and bucket in ("supportive", "opposing"):
                             config.sentiment_bias = 0.3 if bucket == "supportive" else -0.3
+            # REFLEXIVE WORLD: agency class / archetype / declared outcome power (deterministic).
+            try:
+                from .world_model_seed import resolve_agency_class as _resolve_agency
+                from ..utils.actors import entity_archetype as _entity_archetype
+                _actor_row = matched_actors.get(agent_id)
+                config.agency_class = _resolve_agency(
+                    _actor_row if isinstance(_actor_row, dict) else None,
+                    config.entity_type if not canonical_v1 else (
+                        str((_actor_row or {}).get("type") or "") if isinstance(_actor_row, dict) else ""),
+                )
+                config.archetype = _entity_archetype(_actor_row) if isinstance(_actor_row, dict) else "actor"
+                _declared = (_actor_row or {}).get("outcome_power") if isinstance(_actor_row, dict) else None
+                if isinstance(_declared, (int, float)) and not isinstance(_declared, bool) and float(_declared) >= 0:
+                    config.outcome_power = float(_declared)
+            except Exception:  # noqa: BLE001 — classification is additive metadata
+                pass
             configs.append(config)
 
         return configs

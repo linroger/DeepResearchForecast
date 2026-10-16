@@ -102,6 +102,24 @@ class PlatformActionLogger:
         with open(self.log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
+    def log_world_update(self, round_num: int, headline: str, **fields: Any):
+        """REFLEXIVE WORLD: one row per committed world update (round is 1-based).
+
+        The backend monitor projects ``headline``/``period_label``/``arbiter_status``
+        into run_state.options["world_model"]; hours mode never emits this event."""
+        entry: Dict[str, Any] = {
+            "round": round_num,
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "world_update",
+            "headline": str(headline or ""),
+        }
+        for key, value in fields.items():
+            if value is not None:
+                entry[key] = value
+
+        with open(self.log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
     def log_simulation_start(self, config: Dict[str, Any], total_rounds: int):
         """记录模拟开始。total_rounds 由调用方显式给出——旧实现按
         total_simulation_hours*2 硬编码推算，早已与真实轮数公式

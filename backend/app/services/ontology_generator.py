@@ -193,7 +193,7 @@ ONTOLOGY_GENERAL_FORECAST_PROMPT = """你是一个专业的知识图谱本体设
 
 ## 核心任务背景
 
-我们正在围绕一个具体的**预测问题（central question）**构建知识图谱与推演系统。该问题可能属于任意领域：
+我们正在围绕一个具体的**预测问题（central question）**构建知识图谱与推演系统。推演是一个**随时间演化的多主体世界**：每个能动主体在每个日历时段做出有代价、有约束、有时滞的真实行动（政策/投资/结盟/诉讼/施压/观望），世界状态随之改变并反馈给所有主体。因此能动实体类型要体现其**行动杠杆、决策权与约束**，而非只体现「会发声」。该问题可能属于任意领域：
 - 市场/资产价格走势（如某资产、汇率、商品价格在某时点的区间）
 - 地缘政治/政策（如某项谈判、选举、制裁、监管裁决的结果）
 - 产品/技术发布与采用（如某产品能否如期发布、市场反应、份额变化）
@@ -318,6 +318,8 @@ ONTOLOGY_RICH_SCHEMA_ADDENDUM = """
 - `role_class`: 默认角色类（可选）：`principal`（主事方）、`arbiter`（裁决方）、`stakeholder`（利益相关方）、`amplifier`（放大/传播方）、`intermediary`（中介方）。
 - `selection_rule`: 一句话判定规则，说明何种实体应归入此类型（用于抽取阶段消歧）。
 - `anti_examples`: 反例数组，列出**不应**被实例化为此类型的对象。**特别强调**：被引用的媒体/报刊/榜单/数据库是 `source`（archetype=source, tier=3），不是能动 actor——除非它本身就是推动结局的当事方，否则不要把它设成一个独立的能动实体类型。
+- `agency_class`（仅 archetype=actor/collective 需填）：该类主体在演化世界中真实握有的**行动杠杆类别**，必须取自——`sovereign_government`（主权政府/部委）、`regulator_agency`（监管/执法机构）、`legislature`（立法机关/议员）、`central_bank`、`judiciary`、`political_party`、`firm`（企业）、`state_owned_enterprise`、`financial_institution`、`industry_coalition`（行业协会/联盟）、`labor_union`、`ngo_advocacy`、`international_org`、`research_institution`、`individual_leader`（以个人身份行动的领导者/意见人物）、`public_collective`（公众/消费者/选民群体）、`media_outlet`。
+- `levers`（可选，≤5 项）：该类主体可以采取的典型可执行动作（如「加征关税」「开启调查」「追加资本开支」「罢工」），供多智能体推演生成**有约束、有代价、有时滞**的行动选项。
 
 为**每个 edge_type** 额外标注：
 - `family`: 边的语义家族，取自——`alignment`（结盟/支持，正向）、`antagonism`（对抗/制裁/批评，负向）、`economic`（供应/出资/持股/消费，交易性）、`governance`（监管/裁决）、`dependency`（依赖）、`influence`（影响）、`information`（报道/披露）、`causal`（因果/机制传导，如 CAUSES/ENABLES/CONSTRAINS/TRIGGERS/ACCELERATES，有向）。
@@ -908,6 +910,20 @@ class OntologyGenerator:
             arch = entity.get("archetype")
             if not (isinstance(arch, str) and arch.strip()):
                 entity["archetype"] = cls._infer_archetype_from_name(entity.get("name", ""))
+            # REFLEXIVE WORLD: agency class for agent archetypes (LLM value kept when valid).
+            if str(entity.get("archetype") or "").strip().lower() in ("actor", "collective"):
+                klass = entity.get("agency_class")
+                try:
+                    from .agent_decision import AGENCY_CLASSES, infer_agency_class
+                    if not (isinstance(klass, str) and klass.strip().lower() in AGENCY_CLASSES):
+                        entity["agency_class"] = infer_agency_class(
+                            entity.get("name", ""), entity.get("description", ""),
+                            archetype=str(entity.get("archetype") or ""),
+                        )
+                    else:
+                        entity["agency_class"] = klass.strip().lower()
+                except Exception:  # noqa: BLE001 — additive metadata only
+                    pass
 
         for edge in result.get("edge_types", []):
             if not isinstance(edge, dict):

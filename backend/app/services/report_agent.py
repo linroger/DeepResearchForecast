@@ -3720,6 +3720,15 @@ class ReportAgent:
                 parts.append(ws_blk)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"信号包 world_state 读取失败（忽略）: {e}")
+        # 0a) REFLEXIVE WORLD: the committed world's evolution (variable trajectories, decisive
+        # moves, alliance shifts) — elicited model projection like the shares above; it can
+        # ground mechanism analysis but never probabilities (diagnostic_only).
+        try:
+            we_blk = self._world_evolution_block()
+            if we_blk:
+                parts.append(we_blk)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"信号包 world_evolution 读取失败（忽略）: {e}")
         # 0b) NEXTSTEPS P3-8: 关系演化投影到预测时点（保守模型先验，显式标注=非证据）。
         # 默认关（REPORT_PROJECTED_EDGES）；标注 contingent 的纽带是情景分叉支点。
         if getattr(Config, "REPORT_PROJECTED_EDGES", False):
@@ -3863,6 +3872,112 @@ class ReportAgent:
         else:
             lines.append("稳定性诊断：已趋稳" if ca else "稳定性诊断：尚未趋稳（应降低信心）")
         lines.append("注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。")
+        return "\n".join(lines)
+
+    def _world_evolution_block(self, max_variables: int = 6, max_moves: int = 8) -> str:
+        """REFLEXIVE WORLD (design §2.9): render ``world_state.json`` / ``world_state_history.jsonl``
+        as a bounded diagnostic block — variable trajectories per period, the decisive moves,
+        alliance shifts and arbiter failures.  Labeled an elicited model projection; absent
+        artifacts → "" (hours mode / legacy runs are byte-identical)."""
+        try:
+            sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
+                                   str(self.simulation_id or ""))
+            state_path = os.path.join(sim_dir, "world_state.json")
+            if not os.path.exists(state_path):
+                return ""
+            with open(state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+        except Exception:  # noqa: BLE001
+            return ""
+        if not isinstance(state, dict) or not isinstance(state.get("world"), dict):
+            return ""
+        world = state["world"]
+        summary = state.get("summary") if isinstance(state.get("summary"), dict) else {}
+        rounds = int(state.get("committed_round") or 0)
+        if rounds <= 0:
+            return ""
+        labels = {}
+        raw_labels = world.get("period_labels")
+        if isinstance(raw_labels, dict):
+            for k, v in raw_labels.items():
+                try:
+                    labels[int(k)] = str(v)
+                except (TypeError, ValueError):
+                    continue
+
+        def _lab(r):
+            try:
+                return labels.get(int(r)) or f"第{int(r)}期"
+            except (TypeError, ValueError):
+                return str(r)
+
+        def _fmt(value, unit):
+            if isinstance(value, bool):
+                return "是" if value else "否"
+            if isinstance(value, (int, float)):
+                av = abs(float(value))
+                if av >= 1e9:
+                    s = f"{float(value) / 1e9:.2f}B"
+                elif av >= 1e6:
+                    s = f"{float(value) / 1e6:.2f}M"
+                elif float(value).is_integer():
+                    s = f"{int(value)}"
+                else:
+                    s = f"{float(value):.2f}".rstrip("0").rstrip(".")
+            else:
+                s = str(value)[:60]
+            u = str(unit or "")
+            return f"{s}{u}" if u == "%" else (f"{u}{s}" if u and (u[0] in "$€£¥￥") else (f"{s} {u}".strip()))
+
+        lines = ["【世界演化轨迹（elicited model projection——模型引出的推演投影，非观察证据；"
+                 "仅供机制分析，不得据此调整概率）】",
+                 f"已推演 {rounds} 个时段；追踪变量 {summary.get('variables', len(world.get('variables') or []))} 个，"
+                 f"世界事件 {summary.get('events', len(world.get('events') or []))} 条"]
+        failed = int(summary.get("arbiter_failed_rounds") or 0)
+        if failed:
+            lines.append(f"⚠️ 其中 {failed} 个时段的仲裁更新失败（仅机械推进），该段轨迹可信度下调")
+        shown = 0
+        for var in world.get("variables") or []:
+            if not isinstance(var, dict) or shown >= max_variables:
+                continue
+            hist = [h for h in (var.get("history") or []) if isinstance(h, dict)]
+            if len(hist) < 2:
+                continue
+            path = " → ".join(f"{_fmt(h.get('value'), var.get('unit'))}（{_lab(h.get('round'))}）"
+                              if int(h.get("round") or 0) > 0 else _fmt(h.get("value"), var.get("unit"))
+                              for h in hist[-6:])
+            lines.append(f"· {var.get('name')}: {path}")
+            shown += 1
+        moves: List[str] = []
+        shifts: List[str] = []
+        try:
+            hist_path = os.path.join(sim_dir, "world_state_history.jsonl")
+            if os.path.exists(hist_path):
+                with open(hist_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue
+                        if not isinstance(row, dict):
+                            continue
+                        label = str(row.get("period_label") or _lab(row.get("round")))
+                        for act in ((row.get("deterministic") or {}).get("actions") or [])[:3]:
+                            if "holds position" in str(act) or "no recorded move" in str(act):
+                                continue
+                            moves.append(f"{label}: {str(act)[:120]}")
+                        for rc in ((row.get("diff") or {}).get("relationships_changed") or [])[:2]:
+                            if isinstance(rc, dict):
+                                shifts.append(f"{label}: {rc.get('source')} — {rc.get('target')} → {rc.get('to')}")
+        except OSError:
+            pass
+        if moves:
+            lines.append("决定性行动：")
+            lines.extend(f"· {m}" for m in moves[:max_moves])
+        if shifts:
+            lines.append("联盟/对立变动：")
+            lines.extend(f"· {s}" for s in shifts[:6])
+        lines.append("注：世界变量由推演仲裁逐期更新并有界钳制，不是观察到的现实指标；现实世界的定量声明只能来自研究来源。")
         return "\n".join(lines)
 
     def _temporal_horizon_date(self) -> str:
@@ -10470,6 +10585,16 @@ class ReportAgent:
             wst = _rj(wst_path)
             if wst:
                 arts["world_state_trajectory"] = wst
+        except Exception:  # noqa: BLE001
+            pass
+        # REFLEXIVE WORLD: world_state.json（committed world + variable histories）→ world-variables chart
+        try:
+            ws_path = os.path.join(
+                getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
+                str(self.simulation_id or ""), "world_state.json")
+            wsj = _rj(ws_path)
+            if isinstance(wsj, dict) and isinstance(wsj.get("world"), dict):
+                arts["world_state"] = wsj
         except Exception:  # noqa: BLE001
             pass
         # timeline.json（研究 handoff；best-effort，找不到即不画时间线）

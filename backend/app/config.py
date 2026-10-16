@@ -1077,6 +1077,26 @@ class Config:
     SIM_DECISION_CHANNEL_INBAND = os.environ.get('SIM_DECISION_CHANNEL_INBAND', 'true').strip().lower() == 'true'
     # WorldState.step 熵地板：按时段天数向种子基率先验混合，防止长时域份额锁死（仅日历模式生效）。
     WORLDSTATE_ENTROPY_MIX = os.environ.get('WORLDSTATE_ENTROPY_MIX', 'true').strip().lower() == 'true'
+    # —— Reflexive world model (docs/handoff/reflexive-world-state/design.md) ——
+    # Calendar mode only. PREPARE emits a sealed ``world_model`` block (state variables from
+    # research + official data, actor agency classes, valenced relationships); the runner then
+    # runs one structured decision per deciding actor per round, publishes the statement, and
+    # commits ONE world update per paired round (deterministic kernel + bounded arbiter LLM call)
+    # that every agent observes next round. false → legacy in-band scenario evolution, byte-identical.
+    SIM_WORLD_MODEL = os.environ.get('SIM_WORLD_MODEL', 'true').strip().lower() == 'true'
+    # Arbiter LLM call that resolves contested moves / moves state variables; false = mechanical
+    # updates only (capacity, commitments, relationship nudges, due effects, scheduled events).
+    SIM_WORLD_ARBITER = os.environ.get('SIM_WORLD_ARBITER', 'true').strip().lower() == 'true'
+    # Seconds a platform waits for the other platform's round before committing with what it has.
+    SIM_WORLD_BARRIER_TIMEOUT_S = float(os.environ.get('SIM_WORLD_BARRIER_TIMEOUT_S', '1800') or '1800')
+    # Cap on deciding actors per round (principals first, then active named actors by influence).
+    SIM_WORLD_DECISION_MAX_ACTORS = int(os.environ.get('SIM_WORLD_DECISION_MAX_ACTORS', '24') or '24')
+    # Concurrent decision LLM calls per round.
+    SIM_WORLD_DECISION_CONCURRENCY = int(os.environ.get('SIM_WORLD_DECISION_CONCURRENCY', '6') or '6')
+    # Seeded state variables cap (quantitative facts first, then official series).
+    SIM_WORLD_MAX_VARIABLES = int(os.environ.get('SIM_WORLD_MAX_VARIABLES', '24') or '24')
+    # Per-round clamp on arbiter numeric changes as a fraction of the current magnitude (I-2).
+    SIM_WORLD_MAX_CHANGE_RATIO = float(os.environ.get('SIM_WORLD_MAX_CHANGE_RATIO', '0.5') or '0.5')
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
 
     # —— OASIS 并发上限（每轮在飞 LLM 请求数）单一真源（EXECPLAN2 I-8-4）——

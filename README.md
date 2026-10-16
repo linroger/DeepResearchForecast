@@ -1000,11 +1000,13 @@ sequenceDiagram
   - On Twitter: create post, like, repost, quote, comment, follow, search posts, trend, do nothing.
   - On Reddit: create post, comment, like or dislike a post, like or dislike a comment, search posts, search users, trend, refresh, follow, mute, do nothing.
   - Recommendations come from a model-free recommender, which makes no extra LLM calls.
-- **World state.** A shared WorldState advances once per paired round. After both platforms have delivered round *i*:
-  - one batched LLM call reads the agents' commitments;
-  - the state steps forward, with inertia scaled to the calendar unit and a base-rate entropy floor.
+- **Reflexive world state** (`SIM_WORLD_MODEL=true`, calendar mode). Every round is a cycle of observe → decide → act → world update, shared by both platforms:
+  - *Observe.* Each active agent receives the committed WORLD STATE brief: tracked facts (seeded from the dossier's quantitative facts and the official-data snapshot, each with unit, as-of date and provenance), last period's moves and their consequences, alliance and rivalry shifts, and open commitments. Scenario probabilities are never shown to agents.
+  - *Decide.* Each deciding actor (principals first, then active named actors, capped by `SIM_WORLD_DECISION_MAX_ACTORS`) makes ONE structured decision from a menu grounded in its sealed role brief and the current world: responses to moves aimed at it, its documented plans, its agency class's catalogued levers (government, regulator, legislature, central bank, firm, union, NGO, coalition, individual leader…) filtered by remaining capacity, and `hold_position`. The answer carries targets, magnitude, a public statement, a dated commitment, alliance moves and the scenario the move pushes toward. Invalid or failed answers degrade to a typed hold, never to silence.
+  - *Act.* The statement is published as that actor's post on both platforms (one decision per actor per round, shared across platforms) and the reaction step lets everybody reply.
+  - *World update.* When both platforms have delivered the round, ONE update runs: the deterministic kernel consumes capacity, registers commitments (honoured by acting when due, lapsing otherwise), nudges relationships, fires due delayed effects and research events; then a single bounded arbiter call resolves contested moves, moves state variables (clamped by `SIM_WORLD_MAX_CHANGE_RATIO`), emits emergent events and delayed effects. The scenario-share WorldState steps from the actors' scenario commitments with the calendar inertia and entropy floor. A platform never starts round *i+1* before update *i* is committed.
 
-  The trajectory is saved to `world_state_trajectory.json` and charted in the report.
+  `world_state.json` (latest world), `world_state_history.jsonl`, `world_actions.jsonl`, `world_state_trajectory.json` and `decisions.jsonl` are saved; the report's diagnostic pack renders the evolution and a world-variables chart, and the dashboard's simulation tab shows a live World State panel. With `SIM_WORLD_MODEL=false` the legacy in-band scenario evolution runs unchanged.
 - **Monitoring and completion.**
   - A monitor thread in the backend tails the action logs every 2 s into `run_state.json`.
   - The pipeline polls every 5 s and stops a run that makes no round progress for 30 minutes.
@@ -1019,6 +1021,7 @@ Output, in `backend/uploads/simulations/<sim_id>/`:
 - `simulation_config.json` and its seal;
 - `twitter/actions.jsonl` and `reddit/actions.jsonl`, plus the two platform SQLite databases;
 - `world_state_trajectory.json` and `decisions.jsonl`;
+- `world_state.json`, `world_state_history.jsonl` and `world_actions.jsonl` (reflexive world model);
 - `run_summary.json` and `simulation.log`.
 
 `SIM_TEMPORAL_MODE=hours` restores the legacy news-cycle mode, in which an LLM picks 24–168 simulated hours.
@@ -1491,6 +1494,8 @@ Provider credentials are optional environment inputs, passed only to the relevan
 | Setting | Default | Purpose |
 |---|---|---|
 | `SIM_TEMPORAL_MODE` | `calendar` | `calendar` or the legacy `hours` |
+| `SIM_WORLD_MODEL` · `SIM_WORLD_ARBITER` | `true` · `true` | Reflexive world model (structured actor decisions, one world update per round) and its arbiter call; `false` keeps the legacy scenario-share evolution |
+| `SIM_WORLD_DECISION_MAX_ACTORS` · `SIM_WORLD_MAX_CHANGE_RATIO` | `24` · `0.5` | Deciding actors per round; per-round clamp on arbiter numeric changes |
 | `SIM_CALENDAR_TARGET_MAX_ROUNDS` · `OASIS_DEFAULT_MAX_ROUNDS` | `36` · `36` | Round budget used to choose the calendar unit |
 | `ACTOR_CAST_MAX` | `20` | Maximum researched cast size |
 | `SIM_AUDIENCE_AGENTS` | `0` | Extra rule-generated audience agents |

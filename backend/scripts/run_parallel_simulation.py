@@ -1939,7 +1939,7 @@ def _observe_agent_dynamics(tracker, actual_actions, name_to_id):
 
 def _inject_period_context(env, active_ids, round_num, period, timeline,
                            fired_events, world_delta, response_step: bool = False,
-                           language: str = "") -> None:
+                           language: str = "", world_state_brief: str = "") -> None:
     """CAL-TEMPORAL: env.step 前给每个活跃 agent 追加一条本轮「世界时钟」记忆。
 
     以 USER 角色写入（关键）：camel-ai 0.2.78 的 ScoreBasedContextCreator 只保留
@@ -2004,6 +2004,10 @@ def _inject_period_context(env, active_ids, round_num, period, timeline,
         "## CONFIRMED EVENTS THIS PERIOD",
         events_block,
     ]
+    if str(world_state_brief or "").strip():
+        # REFLEXIVE WORLD: the shared WORLD STATE brief (facts, moves, consequences, alliances,
+        # pending items) every agent observes before acting; never carries scenario shares.
+        lines.append(str(world_state_brief).strip())
     if _flag_true("SIM_WORLD_DELTA", "true"):
         lines.append("## WHAT CHANGED LAST PERIOD")
         lines.append(str(world_delta or "").strip() or "(first period)")
@@ -3735,6 +3739,767 @@ def _finalize_inband_world_evolution(simulation_dir: str, log_info) -> bool:
 
 
 # ============================================================================
+# ============================================================================
+# REFLEXIVE WORLD MODEL (docs/handoff/reflexive-world-state/design.md §2).
+# ----------------------------------------------------------------------------
+# One shared coordinator per simulation directory turns the two independently
+# advancing platform loops into a lockstep world:
+#   begin_round(r)  → barrier: waits until world update r-1 is committed, then hands
+#                     out the WORLD STATE brief + WHAT CHANGED digest for round r;
+#   decide(r)       → ONE structured decision per deciding actor per round, shared by
+#                     both platforms (the second platform awaits the same future);
+#   deliver(r)      → when every live platform delivered r (or heartbeat for a dead
+#                     round) the world update runs once (deterministic kernel step +
+#                     bounded arbiter LLM call), the scenario-share WorldState is
+#                     stepped from the actors' scenario commitments, artifacts are
+#                     written and the barrier for r is released.
+# Presence-keyed: only when simulation_config carries a ``world_model`` block AND
+# SIM_WORLD_MODEL (default true) is on; hours mode / flag off / block absent → the
+# legacy in-band evolution path runs byte-identically.  Every method is degrade-safe:
+# a failure logs, commits what it has and never blocks the round loop beyond
+# SIM_WORLD_BARRIER_TIMEOUT_S.
+# ============================================================================
+_WORLD_COORDINATORS: Dict[str, "_ReflexiveWorldCoordinator"] = {}
+_WORLD_TRAJ_WRITTEN: Dict[str, bool] = {}
+WORLD_STATE_FILE = "world_state.json"
+WORLD_HISTORY_FILE = "world_state_history.jsonl"
+WORLD_ACTIONS_FILE = "world_actions.jsonl"
+
+
+def _world_model_enabled(config: Dict[str, Any]) -> bool:
+    """World mode is presence-keyed on the sealed ``world_model`` block plus the flag."""
+    return (isinstance(config, dict) and isinstance(config.get("world_model"), dict)
+            and _flag_true("SIM_WORLD_MODEL", "true"))
+
+
+def _append_jsonl(path: str, row: Dict[str, Any]) -> None:
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+class _ReflexiveWorldCoordinator:
+    """Shared per-simulation world: barrier, decision step, world update, artifacts."""
+
+    def __init__(self, config: Dict[str, Any], simulation_dir: str, expected_platforms: int, log_info) -> None:
+        from app.services import decision_channel as _dc_mod
+        from app.services.world_model import WorldModel
+        from app.services.worldstate import WorldState
+        self._dc = _dc_mod
+        self._log = log_info
+        self._dir = simulation_dir
+        self._config = config
+        self._expected = max(1, int(expected_platforms or 1))
+        tc = config.get("temporal_config") or {}
+        self._tc = tc if isinstance(tc, dict) else {}
+        block = config.get("world_model") or {}
+        self._block = block if isinstance(block, dict) else {}
+        seed = config.get("world_state_seed") or {}
+        self._seed = seed if isinstance(seed, dict) else {}
+        self._scenarios = [str(x) for x in (self._seed.get("scenarios") or self._block.get("scenarios") or [])
+                           if str(x).strip()]
+        settings = self._block.get("settings") if isinstance(self._block.get("settings"), dict) else {}
+        self._arbiter_on = _flag_true("SIM_WORLD_ARBITER", "true") and settings.get("arbiter_enabled", True) is not False
+        try:
+            self._barrier_timeout = float(_cfg_flag("SIM_WORLD_BARRIER_TIMEOUT_S", "1800") or 1800)
+        except (TypeError, ValueError):
+            self._barrier_timeout = 1800.0
+        try:
+            self.decision_max = int(_cfg_flag("SIM_WORLD_DECISION_MAX_ACTORS", "24") or 24)
+        except (TypeError, ValueError):
+            self.decision_max = 24
+        try:
+            self._decision_conc = max(1, int(_cfg_flag("SIM_WORLD_DECISION_CONCURRENCY", "6") or 6))
+        except (TypeError, ValueError):
+            self._decision_conc = 6
+        self._language = _sim_output_language(config)
+        self._agent_configs = [c for c in (config.get("agent_configs") or []) if isinstance(c, dict)]
+        self._power = self._dc._outcome_power_map(self._agent_configs)
+        # scenario-share WorldState: same knobs/semantics as the in-band evolution
+        try:
+            self._inertia = float(os.environ.get("SIM_DECISION_INERTIA", "0.7") or "0.7")
+        except ValueError:
+            self._inertia = 0.7
+        try:
+            self._conv_eps = float(os.environ.get("SIM_CONVERGENCE_EPS", "0.02") or "0.02")
+        except ValueError:
+            self._conv_eps = 0.02
+        self._conv_window = max(1, int(self._dc._cfg("SIM_CONVERGENCE_WINDOW", 3) or 3))
+        self._entropy_on = _flag_true("WORLDSTATE_ENTROPY_MIX", "true")
+        unit = str(self._tc.get("unit") or "").strip() or self._dc._infer_calendar_unit(self._tc.get("round_dates"))
+        self._unit = unit
+        self._avg_gap = dict(self._dc._UNIT_NOMINAL_DAYS).get(unit or "", 0.0)
+        try:
+            self._n_rounds = int(self._tc.get("n_rounds") or 0) or None
+        except (TypeError, ValueError):
+            self._n_rounds = None
+        self._horizon_date = self._tc.get("horizon_date") or self._seed.get("horizon_date")
+        self._horizon_source = self._tc.get("horizon_source") or self._seed.get("horizon_source")
+        self._horizon_defaulted = self._tc.get("horizon_defaulted")
+        if self._horizon_defaulted is None:
+            self._horizon_defaulted = self._seed.get("horizon_defaulted")
+        self._as_of_date = str(self._tc.get("as_of_date") or self._seed.get("as_of_date") or "") or None
+        self._ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
+                    if self._scenarios else None)
+        self._period_by_round: Dict[int, Dict[str, Any]] = {}
+        for i, rp in enumerate(self._tc.get("round_dates") or []):
+            if isinstance(rp, dict):
+                try:
+                    self._period_by_round[int(rp.get("round", i))] = rp
+                except (TypeError, ValueError):
+                    self._period_by_round[i] = rp
+        # world model: resume from the last committed state when present, else from the seed
+        self._world = None
+        self._resumed_round = 0  # number of loop rounds (0-based count) already committed on disk
+        self._brief = ""
+        self._digest = ""
+        state_path = os.path.join(simulation_dir, WORLD_STATE_FILE)
+        if os.path.exists(state_path):
+            try:
+                with open(state_path, "r", encoding="utf-8") as handle:
+                    saved = json.load(handle)
+                if isinstance(saved, dict) and isinstance(saved.get("world"), dict):
+                    self._world = WorldModel.from_dict(saved["world"])
+                    self._resumed_round = int(saved.get("committed_round") or 0)
+                    self._brief = str(saved.get("brief") or "")
+                    self._digest = str(saved.get("digest") or "")
+                    self._resumed_committed_round = self._resumed_round
+                    log_info(f"reflexive world: resumed world_state.json at committed round {self._resumed_round}")
+            except Exception as _load_err:  # noqa: BLE001 — a corrupt state file falls back to the seed
+                self._world = None
+                log_info(f"reflexive world: could not load world_state.json ({_load_err}); rebuilding from seed")
+        if self._world is None:
+            self._world = WorldModel.from_seed(self._block, self._agent_configs, scenarios=self._scenarios)
+            try:
+                ratio = settings.get("max_change_ratio", float(_cfg_flag("SIM_WORLD_MAX_CHANGE_RATIO", "0.5") or 0.5))
+            except (TypeError, ValueError):
+                ratio = 0.5
+            self._world.settings.setdefault("max_change_ratio", ratio)
+            self._brief = self._world.render_public_brief(upto_round=0, previous=None)
+            self._digest = ""
+        if self._ws is not None and self._world.scenario_shares:
+            # keep the mirrored scenario shares of a resumed run (the WorldState itself restarts from seed)
+            pass
+        try:
+            self._world.set_period_labels({i + 1: rp.get("label") for i, rp in self._period_by_round.items()
+                                           if isinstance(rp, dict) and rp.get("label")})
+        except Exception:  # noqa: BLE001
+            pass
+        self._base_shares = dict(self._ws.shares) if self._ws is not None else {}
+        row0: Dict[str, Any] = {"round": 0, **(self._ws.outcome() if self._ws is not None else {})}
+        if self._as_of_date:
+            row0["as_of"] = self._as_of_date
+        self._trajectory: List[Dict[str, Any]] = [row0]
+        self._scenario_decisions: List[Dict[str, Any]] = []
+        self._world_decisions: Dict[int, Dict[int, Any]] = {}
+        self._decision_futures: Dict[int, "asyncio.Future"] = {}
+        self._pending: Dict[int, Dict[str, Any]] = {}
+        self._watermark: Dict[str, int] = {}
+        self._done: set = set()
+        self._stalled: set = set()
+        self._started_rounds: set = set()
+        self._committed_done: set = set(range(self._resumed_round))
+        self._events: Dict[int, "asyncio.Event"] = {}
+        self._loggers: Dict[str, Any] = {}
+        self._lock = asyncio.Lock()
+        self._next_commit = self._resumed_round
+        self._stepped = 0
+        # a resumed run reports the rounds already committed on disk (artifacts stay honest)
+        self._max_round = int(getattr(self, "_resumed_committed_round", 0) or 0)
+        self._converged_at: Optional[int] = None
+        self._stable_streak = 0
+        self._prev_date = self._as_of_date
+        self._finalized = False
+        try:
+            self._seed_value = int(os.environ.get("SIM_SEED", "0") or "0")
+        except ValueError:
+            self._seed_value = 0
+        try:
+            from app.utils.llm_client import LLMClient
+            self._llm = _wrap_llm_client_usage(LLMClient())
+        except Exception as _llm_err:  # noqa: BLE001 — without an LLM the world still advances mechanically
+            self._llm = None
+            log_info(f"reflexive world: LLM unavailable ({_llm_err}); decisions hold, arbiter skipped")
+
+    # ------------------------------------------------------------------ helpers
+    @property
+    def world(self):
+        return self._world
+
+    @property
+    def scenarios(self) -> List[str]:
+        return list(self._scenarios)
+
+    def _event_for(self, round_num: int) -> "asyncio.Event":
+        ev = self._events.get(round_num)
+        if ev is None:
+            ev = asyncio.Event()
+            if round_num in self._committed_done:
+                ev.set()
+            self._events[round_num] = ev
+        return ev
+
+    def _is_committed(self, round_num: int) -> bool:
+        return round_num in self._committed_done
+
+    def _known_platforms(self) -> set:
+        return set(self._watermark) | self._done | self._stalled
+
+    def _period_for(self, round_num: int) -> Optional[Dict[str, Any]]:
+        return self._period_by_round.get(round_num)
+
+    def register_logger(self, platform: str, action_logger: Any) -> None:
+        if action_logger is not None:
+            self._loggers[str(platform)] = action_logger
+
+    # ------------------------------------------------------------------ round API
+    async def begin_round(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
+                          action_logger: Any = None) -> Tuple[str, str]:
+        """Barrier on round ``round_num-1`` then hand out this round's brief + digest."""
+        self.register_logger(platform, action_logger)
+        try:
+            if round_num > 0 and not self._is_committed(round_num - 1):
+                ev = self._event_for(round_num - 1)
+                try:
+                    await asyncio.wait_for(ev.wait(), timeout=self._barrier_timeout)
+                except asyncio.TimeoutError:
+                    missing = [p for p in self._known_platforms()
+                               if p != str(platform) and p not in self._done
+                               and self._watermark.get(p, -1) < round_num - 1]
+                    self._stalled.update(missing)
+                    self._log(f"reflexive world: barrier timeout before round {round_num + 1}; "
+                              f"platform(s) {missing or '?'} marked stalled, committing with available deliveries")
+                    await self._try_commit(flush_upto=round_num - 1)
+            if round_num not in self._started_rounds:
+                self._started_rounds.add(round_num)
+                self._world.start_round(round_num + 1, period or self._period_for(round_num))
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: begin_round failed (continuing with last brief): {_e}")
+        return self._brief, self._digest
+
+    async def decide(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
+                     roster_ids: List[int], system_message_lookup, fired_events: List[Dict[str, Any]]) -> Dict[int, Any]:
+        """One structured decision per roster actor for this round, shared across platforms."""
+        if self._is_committed(round_num):
+            # resume: this round's world update is already on disk (an older checkpoint replays it);
+            # actors post organically instead of re-deciding a committed period
+            return {}
+        fut = self._decision_futures.get(round_num)
+        if fut is not None:
+            try:
+                return dict(await asyncio.wait_for(asyncio.shield(fut), timeout=self._barrier_timeout))
+            except Exception as _e:  # noqa: BLE001
+                self._log(f"reflexive world: waiting for shared decisions of round {round_num + 1} failed: {_e}")
+                return {}
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._decision_futures[round_num] = fut
+        result: Dict[int, Any] = {}
+        try:
+            result = await self._run_decisions(round_num, period or self._period_for(round_num), roster_ids,
+                                               system_message_lookup, fired_events)
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: decision step failed in round {round_num + 1} (actors hold): {_e}")
+            result = {}
+        self._world_decisions[round_num] = result
+        if not fut.done():
+            fut.set_result(result)
+        return dict(result)
+
+    async def _run_decisions(self, round_num: int, period: Optional[Dict[str, Any]], roster_ids: List[int],
+                             system_message_lookup, fired_events: List[Dict[str, Any]]) -> Dict[int, Any]:
+        from app.services.agent_decision import (
+            build_decision_prompt, build_option_menu, elicit_decision, hold_decision,
+        )
+        rnd = round_num + 1
+        world = self._world
+        p = period or {}
+        label = str(p.get("label") or f"round {rnd}")
+        n_rounds = self._n_rounds or len(self._period_by_round) or rnd
+        remaining = max(0, int(n_rounds) - rnd)
+        clock = (f"# WORLD CLOCK — {label} ({p.get('period_start', '?')} → {p.get('period_end', '?')}) | "
+                 f"round {rnd}/{n_rounds} | one {self._unit or 'period'} per round | "
+                 f"forecast horizon {self._horizon_date or '?'} ({remaining} periods remain)")
+        events_block = "\n".join(
+            f"- {str(ev.get('content') or '').strip()}" for ev in (fired_events or [])
+            if isinstance(ev, dict) and str(ev.get("content") or "").strip())
+        if events_block:
+            clock += "\n## CONFIRMED EVENTS THIS PERIOD\n" + events_block
+        cast_names = [a.name for a in world.actors.values()]
+        period_end = str(p.get("period_end") or "") or None
+        sem = asyncio.Semaphore(self._decision_conc)
+        decisions: Dict[int, Any] = {}
+
+        async def _one(aid: int) -> None:
+            actor = world.actors.get(aid)
+            if actor is None:
+                return
+            try:
+                options = build_option_menu(actor, world, rnd)
+                prompt = build_decision_prompt(
+                    actor, world_clock=clock, public_brief=self._brief,
+                    private_brief=world.render_private_brief(aid, upto_round=rnd - 1),
+                    options=options, scenarios=self._scenarios, cast_names=cast_names,
+                    language=self._language)
+                try:
+                    system_message = str(system_message_lookup(aid) or "") if system_message_lookup else ""
+                except Exception:  # noqa: BLE001
+                    system_message = ""
+                async with sem:
+                    decision = await asyncio.to_thread(
+                        elicit_decision, self._llm, system_message=system_message, user_prompt=prompt,
+                        actor=actor, world=world, options=options, scenarios=self._scenarios,
+                        round_num=rnd, period_end=period_end)
+            except Exception as _e:  # noqa: BLE001
+                self._log(f"reflexive world: decision for {actor.name} failed (holds): {_e}")
+                decision = hold_decision(actor, status="failed", round_num=rnd, period_end=period_end)
+            decisions[aid] = decision
+
+        await asyncio.gather(*(_one(int(aid)) for aid in roster_ids))
+        try:
+            for aid in roster_ids:
+                d = decisions.get(int(aid))
+                if d is not None:
+                    _append_jsonl(os.path.join(self._dir, WORLD_ACTIONS_FILE),
+                                  {**d.to_dict(), "period_label": label})
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: writing world_actions.jsonl failed: {_e}")
+        counts: Dict[str, int] = {}
+        for d in decisions.values():
+            key = d.status if d.status != "ok" else ("hold" if d.option.get("id") == "hold_position" else "move")
+            counts[key] = counts.get(key, 0) + 1
+        self._log(f"round {rnd} decisions: {len(decisions)} actors → {counts}")
+        return decisions
+
+    async def deliver(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
+                      round_actions: List[Dict[str, Any]], fired_events: List[Dict[str, Any]]) -> None:
+        """Hand this platform's round to the world; commits once every live platform delivered."""
+        try:
+            if self._is_committed(round_num):
+                self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
+                return
+            buf = self._pending.get(round_num)
+            if buf is None:
+                buf = {"period": None, "actions": [], "events": [], "event_keys": set(), "platforms": set()}
+                self._pending[round_num] = buf
+            if isinstance(period, dict) and period:
+                buf["period"] = period
+            for a in round_actions or []:
+                if isinstance(a, dict):
+                    buf["actions"].append(a)
+            for ev in fired_events or []:
+                if not isinstance(ev, dict):
+                    continue
+                key = (str(ev.get("date", "") or ""), str(ev.get("content", "") or ""))
+                if key in buf["event_keys"]:
+                    continue
+                buf["event_keys"].add(key)
+                buf["events"].append(ev)
+            buf["platforms"].add(str(platform))
+            self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
+            await self._try_commit()
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: deliver failed in round {round_num + 1} (isolated): {_e}")
+
+    async def heartbeat(self, platform: str, round_num: int) -> None:
+        """Dead / failed round on this platform: advance its watermark without actions."""
+        try:
+            if self._is_committed(round_num):
+                self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
+                return
+            buf = self._pending.get(round_num)
+            if buf is None:
+                buf = {"period": self._period_for(round_num), "actions": [], "events": [], "event_keys": set(),
+                       "platforms": set()}
+                self._pending[round_num] = buf
+            self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
+            await self._try_commit()
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: heartbeat failed in round {round_num + 1} (isolated): {_e}")
+
+    async def platform_done(self, platform: str) -> None:
+        try:
+            self._done.add(str(platform))
+            await self._try_commit()
+            if len(self._done | self._stalled) >= self._expected:
+                await self.finalize()
+                _WORLD_COORDINATORS.pop(os.path.abspath(self._dir), None)
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: platform_done failed (isolated): {_e}")
+
+    async def finalize(self) -> None:
+        """Flush pending rounds, write the scenario trajectory and the final world state (idempotent)."""
+        if self._finalized:
+            return
+        try:
+            await self._try_commit(flush_all=True)
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: final flush failed (isolated): {_e}")
+        self._finalized = True
+        try:
+            self._write_world_state()
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: final world_state.json write failed: {_e}")
+        if self._ws is None or self._stepped <= 0:
+            return
+        try:
+            from app.utils.atomic import write_json_atomic
+            self._ws.converged_at = self._converged_at
+            out = self._ws.outcome()
+            result: Dict[str, Any] = {
+                "outcome": out,
+                "trajectory": self._trajectory,
+                "decisions": self._scenario_decisions,
+                "converged_at": self._converged_at,
+                "n_rounds": self._max_round,
+                "scenarios": self._scenarios,
+                "schema_version": 3,
+                "mode": "calendar",
+                "world_model": self._world_summary(),
+            }
+            if self._unit:
+                result["calendar_unit"] = self._unit
+            for fk, fv in (("horizon_date", self._horizon_date), ("horizon_source", self._horizon_source),
+                           ("horizon_defaulted", self._horizon_defaulted)):
+                if fv is not None:
+                    result[fk] = fv
+            write_json_atomic(os.path.join(self._dir, "world_state_trajectory.json"), result)
+            with open(os.path.join(self._dir, "decisions.jsonl"), "w", encoding="utf-8") as _df:
+                for _d in self._scenario_decisions:
+                    _df.write(json.dumps(_d, ensure_ascii=False) + "\n")
+            _WORLD_TRAJ_WRITTEN[os.path.abspath(self._dir)] = True
+            self._log(f"reflexive world complete: leader={out.get('leader')} share={out.get('leader_share')} "
+                      f"rounds={self._max_round} arbiter_failed={self._world_summary().get('arbiter_failed_rounds')}")
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: trajectory write failed (isolated): {_e}")
+
+    # ------------------------------------------------------------------ commit
+    async def _try_commit(self, flush_upto: Optional[int] = None, flush_all: bool = False) -> None:
+        async with self._lock:
+            while True:
+                r = self._next_commit
+                pending = r in self._pending
+                if not pending and not flush_all:
+                    break
+                if flush_all and not self._pending:
+                    break
+                if flush_all and not pending:
+                    # commit the lowest pending round instead of a hole
+                    r = min(self._pending)
+                    self._next_commit = r
+                    pending = True
+                forced = flush_all or (flush_upto is not None and r <= flush_upto)
+                if not forced:
+                    if len(self._known_platforms()) < self._expected:
+                        break
+                    live = [p for p in self._known_platforms() if p not in self._done and p not in self._stalled]
+                    if any(self._watermark.get(p, -1) < r for p in live):
+                        break
+                buf = self._pending.pop(r, None) or {"period": None, "actions": [], "events": []}
+                await self._commit_round(r, buf)
+                self._next_commit = r + 1
+
+    async def _commit_round(self, round_num: int, buf: Dict[str, Any]) -> None:
+        from app.services.world_update import run_world_round
+        from app.services.worldstate import (
+            ROUND_STATUS_ABSTAINED, ROUND_STATUS_COMMITTED, ROUND_STATUS_MISSING, ROUND_STATUS_SILENT,
+            commitments_from_decisions,
+        )
+        rnd = round_num + 1
+        period = buf.get("period") if isinstance(buf.get("period"), dict) else self._period_for(round_num)
+        period_end = str(period.get("period_end")) if period and period.get("period_end") else None
+        label = str((period or {}).get("label") or f"round {rnd}")
+        decisions = list((self._world_decisions.get(round_num) or {}).values())
+        record: Dict[str, Any] = {}
+        try:
+            before = self._world.snapshot()
+            rng = random.Random(self._seed_value * 1000003 + rnd)
+            record = await asyncio.to_thread(
+                run_world_round, self._world, rnd, period, decisions, buf.get("events") or [],
+                llm=self._llm, rng=rng, scenarios=self._scenarios, arbiter_enabled=self._arbiter_on,
+                language=self._language)
+            self._brief = self._world.render_public_brief(upto_round=rnd, previous=before)
+            self._digest = str(record.get("digest") or "")
+        except Exception as _e:  # noqa: BLE001 — the barrier must still release
+            self._log(f"reflexive world: update failed in round {rnd} (state frozen, barrier released): {_e}")
+            try:
+                self._world.commit_round(rnd)
+            except Exception:  # noqa: BLE001
+                pass
+            record = {"round": rnd, "arbiter_status": "failed", "error": str(_e)[:200], "digest": self._digest,
+                      "decisions": {"total": len(decisions)}, "diff": {}, "headline": f"{label}: update failed"}
+        # scenario-share WorldState (unchanged downstream contract)
+        shares_row: Dict[str, Any] = {}
+        round_status = ROUND_STATUS_MISSING
+        if self._ws is not None:
+            try:
+                rows = []
+                abstained = 0
+                for d in decisions:
+                    if not getattr(d, "ok", False):
+                        continue
+                    if getattr(d, "scenario", None) == "abstain":
+                        abstained += 1
+                        continue
+                    row = d.scenario_commitment(self._power.get(d.agent_id))
+                    if row is not None:
+                        rows.append(row)
+                conv = commitments_from_decisions(rows)
+                if conv:
+                    round_status = ROUND_STATUS_COMMITTED
+                elif abstained:
+                    round_status = ROUND_STATUS_ABSTAINED
+                elif decisions:
+                    round_status = ROUND_STATUS_SILENT
+                else:
+                    round_status = ROUND_STATUS_MISSING
+                eff_inertia = self._dc._inertia_for_gap(self._inertia, self._prev_date, period_end, self._avg_gap)
+                entropy_days = self._dc._period_days(period) if (self._entropy_on and period) else None
+                prev_shares = dict(self._ws.shares)
+                self._ws.step(conv, inertia=eff_inertia, entropy_mix_days=entropy_days, round_status=round_status)
+                self._world.scenario_shares = dict(self._ws.shares)
+                out = self._ws.outcome()
+                leader = out.get("leader")
+                for row in rows:
+                    self._scenario_decisions.append(dict(row))
+                snap: Dict[str, Any] = {"round": rnd, **out, "round_status": round_status}
+                if period_end:
+                    snap["as_of"] = period_end
+                if period:
+                    for fk in ("period_start", "period_end", "label"):
+                        if period.get(fk):
+                            snap[fk] = str(period[fk])
+                self._trajectory.append(snap)
+                shares_row = {"shares": dict(self._ws.shares), "leader": leader,
+                              "delta": {k: round(float(self._ws.shares.get(k, 0.0)) - float(prev_shares.get(k, 0.0)), 6)
+                                        for k in self._ws.shares}}
+                _append_jsonl(os.path.join(self._dir, "world_digest.jsonl"), {
+                    "round": rnd,
+                    "period_start": str(period.get("period_start")) if period and period.get("period_start") else None,
+                    "period_end": period_end,
+                    "digest": self._digest,
+                    **shares_row,
+                })
+                if self._ws.converged(self._conv_eps):
+                    self._stable_streak += 1
+                    if self._converged_at is None and self._stable_streak >= self._conv_window and rnd >= 2:
+                        self._converged_at = rnd
+                else:
+                    self._stable_streak = 0
+                if period_end:
+                    self._prev_date = period_end
+            except Exception as _e:  # noqa: BLE001
+                self._log(f"reflexive world: scenario-share step failed in round {rnd} (isolated): {_e}")
+        self._stepped += 1
+        self._max_round = max(self._max_round, rnd)
+        self._committed_done.add(round_num)
+        # artifacts
+        try:
+            history_row = {
+                "round": rnd, "period": period, "period_label": label,
+                "decisions": record.get("decisions"),
+                "deterministic": {k: v for k, v in (record.get("deterministic") or {}).items()
+                                  if k in ("scheduled_events", "actions", "commitments_lapsed")} | {
+                    "effects_fired": [fx.get("description") for fx in (record.get("deterministic") or {}).get("effects_fired", [])]
+                },
+                "arbiter_status": record.get("arbiter_status"),
+                "arbiter_problems": record.get("arbiter_problems") or [],
+                "arbiter": record.get("arbiter") or {},
+                "narrative": record.get("narrative") or "",
+                "diff": record.get("diff") or {},
+                "scenario_pressure": record.get("scenario_pressure") or {},
+                "scenario_round_status": round_status,
+                "headline": record.get("headline") or "",
+                **shares_row,
+            }
+            if record.get("error"):
+                history_row["error"] = record["error"]
+            _append_jsonl(os.path.join(self._dir, WORLD_HISTORY_FILE), history_row)
+            self._write_world_state(headline=record.get("headline") or "")
+        except Exception as _e:  # noqa: BLE001
+            self._log(f"reflexive world: artifact write failed in round {rnd} (isolated): {_e}")
+        for plat, logger_obj in list(self._loggers.items()):
+            try:
+                log_fn = getattr(logger_obj, "log_world_update", None)
+                if callable(log_fn):
+                    log_fn(rnd, record.get("headline") or "", period_label=label,
+                           arbiter_status=record.get("arbiter_status"),
+                           decisions=(record.get("decisions") or {}).get("total"),
+                           facts_changed=len(((record.get("diff") or {}).get("variables_changed")) or []))
+            except Exception:  # noqa: BLE001
+                continue
+        self._event_for(round_num).set()
+        self._log(f"world update committed: {record.get('headline') or label}")
+
+    def _world_summary(self) -> Dict[str, Any]:
+        world = self._world
+        failed = 0
+        try:
+            hist = os.path.join(self._dir, WORLD_HISTORY_FILE)
+            if os.path.exists(hist):
+                with open(hist, "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue
+                        if isinstance(row, dict) and row.get("arbiter_status") in ("failed", "invalid"):
+                            failed += 1
+        except OSError:
+            failed = 0
+        return {
+            "schema_version": "world-model-summary/v1",
+            "rounds_committed": self._max_round,
+            "variables": len(world.variables),
+            "actors": len(world.actors),
+            "relationships": len(world.relationships),
+            "events": len(world.events),
+            "pending_effects": len(world.pending_effects),
+            "arbiter_enabled": bool(self._arbiter_on),
+            "arbiter_failed_rounds": failed,
+            "decision_actors_max": self.decision_max,
+        }
+
+    def _write_world_state(self, headline: str = "") -> None:
+        from app.utils.atomic import write_json_atomic
+        payload = {
+            "schema_version": "world-state-file/v1",
+            "simulation_id": str(self._config.get("simulation_id") or ""),
+            "committed_round": self._max_round,
+            "brief": self._brief,
+            "digest": self._digest,
+            "headline": headline,
+            "summary": self._world_summary(),
+            "world": self._world.to_dict(),
+        }
+        write_json_atomic(os.path.join(self._dir, WORLD_STATE_FILE), payload)
+
+
+def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected_platforms: int,
+                           log_info) -> Optional[_ReflexiveWorldCoordinator]:
+    """Shared coordinator per sim dir; None when world mode is off or construction fails."""
+    try:
+        if not _world_model_enabled(config):
+            return None
+        key = os.path.abspath(simulation_dir)
+        coord = _WORLD_COORDINATORS.get(key)
+        if coord is None:
+            _WORLD_TRAJ_WRITTEN.pop(key, None)
+            coord = _ReflexiveWorldCoordinator(config, simulation_dir, int(expected_platforms or 1), log_info)
+            _WORLD_COORDINATORS[key] = coord
+            log_info(f"reflexive world model enabled (SIM_WORLD_MODEL, platforms={coord._expected}, "
+                     f"variables={len(coord.world.variables)}, actors={len(coord.world.actors)}, "
+                     f"scenarios={len(coord.scenarios)}, arbiter={'on' if coord._arbiter_on else 'off'})")
+        return coord
+    except Exception as _e:  # noqa: BLE001
+        log_info(f"reflexive world model init failed (falling back to legacy evolution): {_e}")
+        return None
+
+
+async def _finalize_world_coordinator(simulation_dir: str, log_info) -> bool:
+    """main() safety net after both platform loops: flush and write artifacts."""
+    key = os.path.abspath(simulation_dir)
+    coord = _WORLD_COORDINATORS.pop(key, None)
+    if coord is not None:
+        try:
+            await coord.finalize()
+        except Exception as _e:  # noqa: BLE001
+            log_info(f"reflexive world: finalize failed (isolated): {_e}")
+    return bool(_WORLD_TRAJ_WRITTEN.get(key))
+
+
+async def _world_decision_step(coord: _ReflexiveWorldCoordinator, env, db_path: str, config: Dict[str, Any],
+                               active_agents: List[Tuple[int, Any]], round_num: int, period: Optional[Dict[str, Any]],
+                               due_events: List[Dict[str, Any]], agent_names: Dict[int, str], action_logger,
+                               last_rowid: int, language: str, platform: str, log_info
+                               ) -> Tuple[Dict[int, Any], int, int]:
+    """Run (or join) the shared decision step and publish statements on this platform.
+
+    Returns ``(decisions, last_rowid, posted)``.  Never raises.
+    """
+    try:
+        from app.services.agent_decision import deciding_roster
+        active_map = {int(aid): agent for aid, agent in active_agents}
+        roster = [aid for aid in deciding_roster(config.get("agent_configs") or [], list(active_map),
+                                                 max_actors=coord.decision_max) if aid in active_map]
+
+        def _lookup(aid: int) -> str:
+            agent = active_map.get(aid)
+            if agent is None:
+                agent = env.agent_graph.get_agent(aid)
+            msg = getattr(agent, "system_message", None) or getattr(agent, "_system_message", None)
+            return str(getattr(msg, "content", "") or "")
+
+        decisions = await coord.decide(platform, round_num, period, roster, _lookup, due_events)
+        posted, last_rowid = await _publish_world_decisions(
+            env, db_path, decisions, active_map, round_num, str((period or {}).get("label") or ""),
+            agent_names, action_logger, last_rowid, log_info)
+        return decisions, last_rowid, posted
+    except Exception as _e:  # noqa: BLE001
+        log_info(f"reflexive world: decision step failed on {platform} (agents post organically): {_e}")
+        return {}, last_rowid, 0
+
+
+async def _publish_world_decisions(env, db_path: str, decisions: Dict[int, Any], active_map: Dict[int, Any],
+                                   round_num: int, period_label: str, agent_names: Dict[int, str], action_logger,
+                                   last_rowid: int, log_info) -> Tuple[int, int]:
+    """Publish each ok, non-hold decision as a CREATE_POST and write private memory notes."""
+    from app.services.agent_decision import HOLD_OPTION_ID, decision_memory_note
+    actions: Dict[Any, Any] = {}
+    rows: List[Tuple[int, Any]] = []
+    for aid, d in decisions.items():
+        if not getattr(d, "ok", False) or d.option.get("id") == HOLD_OPTION_ID or not d.public_statement:
+            continue
+        agent = active_map.get(int(aid))
+        if agent is None:
+            try:
+                agent = env.agent_graph.get_agent(int(aid))
+            except Exception:  # noqa: BLE001
+                continue
+        actions[agent] = ManualAction(action_type=ActionType.CREATE_POST,
+                                      action_args={"content": d.public_statement})
+        rows.append((int(aid), d))
+    try:
+        from camel.messages import BaseMessage
+        from camel.types import OpenAIBackendRole
+        for aid, d in decisions.items():
+            note = decision_memory_note(d, period_label)
+            agent = active_map.get(int(aid))
+            if not note or agent is None or not hasattr(agent, "update_memory"):
+                continue
+            try:
+                agent.update_memory(BaseMessage.make_user_message(role_name="WorldDecision", content=note),
+                                    OpenAIBackendRole.USER)
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001 — camel absent in some test harnesses
+        pass
+    if not actions:
+        return 0, last_rowid
+    try:
+        await env.step(actions)
+    except Exception as _e:  # noqa: BLE001
+        log_info(f"reflexive world: publishing {len(actions)} decision posts failed (continuing): {_e}")
+        return 0, last_rowid
+    posted = 0
+    for aid, d in rows:
+        if action_logger:
+            try:
+                action_logger.log_action(
+                    round_num=round_num + 1, agent_id=aid,
+                    agent_name=(agent_names or {}).get(aid, f"Agent_{aid}"),
+                    action_type="CREATE_POST",
+                    action_args={"content": d.public_statement, "is_world_decision": True,
+                                 "option_id": d.option.get("id"), "action_kind": d.option.get("kind"),
+                                 "targets": list(d.targets), "magnitude": round(d.magnitude, 3)})
+            except Exception:  # noqa: BLE001
+                pass
+        posted += 1
+    # the statements are already logged with their decision tags: drop their trace rows
+    _, last_rowid = fetch_new_actions_from_db(db_path, last_rowid, agent_names)
+    log_info(f"round {round_num + 1}: published {posted} decision statements")
+    return posted, last_rowid
+
+
 # RUN-7: 轮级检查点与断点续跑（默认关，SIM_RESUME=true 开启）。
 # 每轮 ~32 次 LLM 调用，崩溃/被杀/后端重启曾意味着 100% 花费作废并从第 0 轮重烧。
 # 检查点只记「已完成轮次 + trace 游标 + 累计动作数」；续跑保留模拟 DB——OASIS 的
@@ -4986,8 +5751,14 @@ async def run_twitter_simulation(
     # CAL-TEMPORAL: in-band 世界演化器（SIM_DECISION_CHANNEL_INBAND，默认开，仅日历模式；
     # world_state_seed.scenarios 为空 → None，静默关闭）。双平台共享同一实例（按 sim 目录
     # 注册，expected=semaphore_platforms），凑齐两平台本轮水位后才按轮序步进一次。
+    # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
+    # world update and the scenario-share stepping; when it is active the legacy in-band
+    # evolution stays off so the WorldState is stepped exactly once per round.
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info)
+                    if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
-                   if calendar else None)
+                   if (calendar and _world_coord is None) else None)
+    _wc_brief = ""
 
     def _write_ckpt(completed_round: int) -> None:
         # 闭包按调用时读取 last_rowid / total_actions 的当前值；ITEM 3: 附带 config_hash 与实时 RNG 状态
@@ -5068,12 +5839,22 @@ async def run_twitter_simulation(
                     round_num + 1, 0,
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
+            if _world_coord is not None:
+                # REFLEXIVE WORLD: a dead round still advances the world (due effects, events)
+                await _world_coord.heartbeat(_ckpt_platform, round_num)
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
+
+        # REFLEXIVE WORLD: barrier on last round's world update → this round's WORLD STATE brief
+        # and WHAT CHANGED digest (both platforms observe the same committed world).
+        if _world_coord is not None:
+            _wc_brief, _wc_digest = await _world_coord.begin_round(
+                _ckpt_platform, round_num, _period, action_logger)
+            world_delta_text = _wc_digest
 
         # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
@@ -5089,17 +5870,31 @@ async def run_twitter_simulation(
                     world_delta_text,
                     response_step=_reaction_on,
                     language=_sim_language,
+                    world_state_brief=_wc_brief,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
 
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
+        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
+        # the organic LLMAction post so a dead decision step never silences the cast.
+        _wc_decisions: Dict[int, Any] = {}
+        _wc_posted = 0
+        if _world_coord is not None:
+            _wc_decisions, last_rowid, _wc_posted = await _world_decision_step(
+                _world_coord, result.env, db_path, config, active_agents, round_num, _period,
+                _scheduled_events_due(event_config, round_num), agent_names, action_logger,
+                last_rowid, _sim_language, _ckpt_platform, log_info)
+            total_actions += _wc_posted
+        actions = {agent: LLMAction() for aid, agent in active_agents
+                   if not (aid in _wc_decisions and getattr(_wc_decisions[aid], 'ok', False))}
         # 健壮性：单次 env.step 内的某个 agent LLM 调用失败（超时/降级/异常）不应中断整场模拟。
         # 记录并跳过本轮，让模拟继续，保住此前所有轮次的进度。
         try:
-            await result.env.step(actions)
+            if actions:
+                await result.env.step(actions)
             consec_step_failures = 0  # XRUN-4: 成功轮清零连续失败计数
             last_step_err_cls = None
         except Exception as step_err:
@@ -5115,6 +5910,9 @@ async def run_twitter_simulation(
                     round_num + 1, 0,
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
+            if _world_coord is not None:
+                # REFLEXIVE WORLD: the decisions already made still shape the world this round
+                await _world_coord.heartbeat(_ckpt_platform, round_num)
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
@@ -5132,7 +5930,7 @@ async def run_twitter_simulation(
             db_path, last_rowid, agent_names
         )
 
-        round_action_count = 0
+        round_action_count = _wc_posted
         for action_data in actual_actions:
             if action_logger:
                 action_logger.log_action(
@@ -5176,6 +5974,11 @@ async def run_twitter_simulation(
         # CAL-TEMPORAL in-band 世界演化（spec §4）：有机动作 + 参与度注入落账后，交付本轮
         # 动作/到期事件给共享 WorldState；产出的定性摘要喂下一轮 WORLD CLOCK 头。deliver
         # 内部全隔离——任何失败 → 告警 + 下一轮空摘要，绝不中断轮循环。
+        if _world_coord is not None:
+            # REFLEXIVE WORLD: hand this platform's round to the shared world; the update runs
+            # once every live platform delivered and the next begin_round observes it.
+            await _world_coord.deliver(_ckpt_platform, round_num, _period, actual_actions,
+                                       _scheduled_events_due(event_config, round_num))
         if _inband_evo is not None:
             _inband_evo.deliver(_ckpt_platform, round_num, _period, actual_actions,
                                 _scheduled_events_due(event_config, round_num))
@@ -5196,6 +5999,8 @@ async def run_twitter_simulation(
 
     # CAL-TEMPORAL: 本平台回路结束 → 通知 in-band 演化；全部平台完成时冲刷剩余轮并落
     # world_state_trajectory.json（schema v3）+ decisions.jsonl（main() 另有兜底收尾）。
+    if _world_coord is not None:
+        await _world_coord.platform_done(_ckpt_platform)
     if _inband_evo is not None:
         _inband_evo.platform_done(_ckpt_platform)
 
@@ -5537,8 +6342,14 @@ async def run_reddit_simulation(
     # CAL-TEMPORAL: in-band 世界演化器（SIM_DECISION_CHANNEL_INBAND，默认开，仅日历模式；
     # world_state_seed.scenarios 为空 → None，静默关闭）。双平台共享同一实例（按 sim 目录
     # 注册，expected=semaphore_platforms），凑齐两平台本轮水位后才按轮序步进一次。
+    # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
+    # world update and the scenario-share stepping; when it is active the legacy in-band
+    # evolution stays off so the WorldState is stepped exactly once per round.
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info)
+                    if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
-                   if calendar else None)
+                   if (calendar and _world_coord is None) else None)
+    _wc_brief = ""
 
     def _write_ckpt(completed_round: int) -> None:
         # 闭包按调用时读取 last_rowid / total_actions 的当前值；ITEM 3: 附带 config_hash 与实时 RNG 状态
@@ -5619,12 +6430,22 @@ async def run_reddit_simulation(
                     round_num + 1, 0,
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
+            if _world_coord is not None:
+                # REFLEXIVE WORLD: a dead round still advances the world (due effects, events)
+                await _world_coord.heartbeat(_ckpt_platform, round_num)
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
                 world_delta_text = _inband_evo.latest_delta()
             _write_ckpt(round_num + 1)  # RUN-7: 死轮也推进检查点
             continue
+
+        # REFLEXIVE WORLD: barrier on last round's world update → this round's WORLD STATE brief
+        # and WHAT CHANGED digest (both platforms observe the same committed world).
+        if _world_coord is not None:
+            _wc_brief, _wc_digest = await _world_coord.begin_round(
+                _ckpt_platform, round_num, _period, action_logger)
+            world_delta_text = _wc_digest
 
         # I-2-1: 注入本轮动态情感状态到各活跃 agent 的系统提示（默认关 → no-op）
         _inject_agent_dynamics(active_agents, dynamics_tracker, log_info)
@@ -5640,17 +6461,31 @@ async def run_reddit_simulation(
                     world_delta_text,
                     response_step=_reaction_on,
                     language=_sim_language,
+                    world_state_brief=_wc_brief,
                 )
             except Exception as _pc_err:  # noqa: BLE001
                 log_info(f"世界时钟注入失败，跳过（不中断模拟）: {_pc_err}")
 
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
+        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
+        # the organic LLMAction post so a dead decision step never silences the cast.
+        _wc_decisions: Dict[int, Any] = {}
+        _wc_posted = 0
+        if _world_coord is not None:
+            _wc_decisions, last_rowid, _wc_posted = await _world_decision_step(
+                _world_coord, result.env, db_path, config, active_agents, round_num, _period,
+                _scheduled_events_due(event_config, round_num), agent_names, action_logger,
+                last_rowid, _sim_language, _ckpt_platform, log_info)
+            total_actions += _wc_posted
+        actions = {agent: LLMAction() for aid, agent in active_agents
+                   if not (aid in _wc_decisions and getattr(_wc_decisions[aid], 'ok', False))}
         # 健壮性：单次 env.step 内的某个 agent LLM 调用失败（超时/降级/异常）不应中断整场模拟。
         # 记录并跳过本轮，让模拟继续，保住此前所有轮次的进度。
         try:
-            await result.env.step(actions)
+            if actions:
+                await result.env.step(actions)
             consec_step_failures = 0  # XRUN-4: 成功轮清零连续失败计数
             last_step_err_cls = None
         except Exception as step_err:
@@ -5666,6 +6501,9 @@ async def run_reddit_simulation(
                     round_num + 1, 0,
                     simulated_hours=round((round_num + 1) * minutes_per_round / 60, 2),
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
+            if _world_coord is not None:
+                # REFLEXIVE WORLD: the decisions already made still shape the world this round
+                await _world_coord.heartbeat(_ckpt_platform, round_num)
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
@@ -5683,7 +6521,7 @@ async def run_reddit_simulation(
             db_path, last_rowid, agent_names
         )
         
-        round_action_count = 0
+        round_action_count = _wc_posted
         for action_data in actual_actions:
             if action_logger:
                 action_logger.log_action(
@@ -5727,6 +6565,11 @@ async def run_reddit_simulation(
         # CAL-TEMPORAL in-band 世界演化（spec §4）：有机动作 + 参与度注入落账后，交付本轮
         # 动作/到期事件给共享 WorldState；产出的定性摘要喂下一轮 WORLD CLOCK 头。deliver
         # 内部全隔离——任何失败 → 告警 + 下一轮空摘要，绝不中断轮循环。
+        if _world_coord is not None:
+            # REFLEXIVE WORLD: hand this platform's round to the shared world; the update runs
+            # once every live platform delivered and the next begin_round observes it.
+            await _world_coord.deliver(_ckpt_platform, round_num, _period, actual_actions,
+                                       _scheduled_events_due(event_config, round_num))
         if _inband_evo is not None:
             _inband_evo.deliver(_ckpt_platform, round_num, _period, actual_actions,
                                 _scheduled_events_due(event_config, round_num))
@@ -5747,6 +6590,8 @@ async def run_reddit_simulation(
 
     # CAL-TEMPORAL: 本平台回路结束 → 通知 in-band 演化；全部平台完成时冲刷剩余轮并落
     # world_state_trajectory.json（schema v3）+ decisions.jsonl（main() 另有兜底收尾）。
+    if _world_coord is not None:
+        await _world_coord.platform_done(_ckpt_platform)
     if _inband_evo is not None:
         _inband_evo.platform_done(_ckpt_platform)
 
@@ -5973,6 +6818,10 @@ async def main():
     # 强制冲刷滞留轮并落 world_state_trajectory.json（schema v3）。返回值 = 本次运行 in-band
     # 是否已写出轨迹（True 时下方 post-hoc 决策通道跳过，避免覆盖轮内演化结果；spec §4）。
     _inband_traj_written = _finalize_inband_world_evolution(simulation_dir, log_manager.info)
+    # REFLEXIVE WORLD: same safety net for the shared coordinator (flush + artifacts); when it
+    # wrote the trajectory the post-hoc decision channel must not overwrite it.
+    if await _finalize_world_coordinator(simulation_dir, log_manager.info):
+        _inband_traj_written = True
 
     # NEXTSTEPS P1-1/P1-2/P1-4: 模拟结束后演化"结果世界态"——按轮 elicit 各活跃 agent 的承诺
     # （朝哪个 forecast 情景），资源加权步进 WorldState，落 world_state_trajectory.json +

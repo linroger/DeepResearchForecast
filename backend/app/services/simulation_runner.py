@@ -1253,6 +1253,25 @@ class SimulationRunner:
                                                     or _pe > state.current_period_end):
                                                 state.current_period_end = _pe
 
+                                # REFLEXIVE WORLD: one committed world update per round (both
+                                # platforms log the same row); keep the latest for the live UI.
+                                elif event_type == "world_update":
+                                    try:
+                                        _wm_round = int(action_data.get("round") or 0)
+                                    except (TypeError, ValueError):
+                                        _wm_round = 0
+                                    with state._lock:
+                                        _prev = state.options.get("world_model") if isinstance(state.options, dict) else None
+                                        if not isinstance(_prev, dict) or int(_prev.get("round") or 0) <= _wm_round:
+                                            state.options["world_model"] = {
+                                                "round": _wm_round,
+                                                "headline": str(action_data.get("headline") or "")[:300],
+                                                "period_label": action_data.get("period_label"),
+                                                "arbiter_status": action_data.get("arbiter_status"),
+                                                "decisions": action_data.get("decisions"),
+                                                "facts_changed": action_data.get("facts_changed"),
+                                            }
+
                                 continue
 
                             action = AgentAction(
@@ -1293,6 +1312,12 @@ class SimulationRunner:
         "run_summary.json",
         "world_state_trajectory.json",
         "decisions.jsonl",
+        # REFLEXIVE WORLD: the committed world, its per-round history/decisions and the
+        # scenario digest are per-run artifacts; a rerun must not append to or reuse them.
+        "world_state.json",
+        "world_state_history.jsonl",
+        "world_actions.jsonl",
+        "world_digest.jsonl",
         "emergent_metrics.json",
         "twitter_emergent_metrics.json",
         "reddit_emergent_metrics.json",
@@ -2267,6 +2292,21 @@ class SimulationRunner:
             summary["llm_health"] = llm_health  # RUN-2: 平台级 llm_calls/llm_errors/error_rate
         if agent_dynamics:
             summary["agent_dynamics"] = agent_dynamics  # RUN-9: 报告端可据 active=false 抑制情绪叙事
+        # REFLEXIVE WORLD: the committed world's summary (rounds, variables, events, arbiter
+        # failures, headline) so the report/health gate can see whether the world actually
+        # evolved; absent in hours mode / legacy runs (key omitted).
+        try:
+            _wsp = os.path.join(cls.RUN_STATE_DIR, simulation_id, "world_state.json")
+            if os.path.exists(_wsp):
+                with open(_wsp, encoding="utf-8") as _wf:
+                    _wsj = json.load(_wf)
+                if isinstance(_wsj, dict) and isinstance(_wsj.get("summary"), dict):
+                    _wm = dict(_wsj["summary"])
+                    _wm["headline"] = str(_wsj.get("headline") or "")[:300]
+                    _wm["committed_round"] = _wsj.get("committed_round")
+                    summary["world_model"] = _wm
+        except (OSError, ValueError, TypeError):
+            pass
         if communities:
             summary["communities"] = communities
         if organic_ratio_warnings:
