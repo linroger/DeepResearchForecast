@@ -104,7 +104,8 @@ The acceptance matrix (A1–A10) lives in [design.md §3](design.md#3-acceptance
 
 - **Resume #2 of `pipe_d569f211eb14`: done** (status `completed`, gate passed; §6 i / §7). The report-stage fixes (`forecast_binary_resilience.py`, `report_filter_safe.py`, the `report_lint.py` parenthetical refinement) are on the branch.
 - **Follow-up (own session):** harden the bilingual translation pass against the provider filter — on this run 16 translation calls failed with provider errors and the Chinese version was rejected (`translation_status.zh.json`); candidates: route content-filtered chunks through the same no-backoff rewording ladder, retry when the provider is healthy, or publish the EN report with a clearly labelled partial translation.
-- **Owner decision, still open:** a fallback provider (`LLM_FALLBACK_PROVIDER`, empty today; the gateway on :8320 is down) would remove the whole class of filter-caused degradations at the cost of spend on another provider.
+- **Owner decision (2026-10-17 04:05 +08): no fallback provider for now.** `LLM_FALLBACK_PROVIDER` stays empty; the filter-safe ladder is judged enough for the moment. Revisit if filter-caused degradations recur (a fallback would remove the whole class at the cost of spend on another provider; the gateway on :8320 is down).
+- **Translation follow-up started by the owner** as its own session ("Harden bilingual translation against provider content filter", 2026-10-17 04:05 +08); its result lands on a separate worktree branch.
 
 ## 10) Updates to This File (append-only)
 - 2026-10-16T13:50Z: created with request, constraints, plan and the survey findings.
@@ -116,3 +117,4 @@ The acceptance matrix (A1–A10) lives in [design.md §3](design.md#3-acceptance
 - 2026-10-16T17:45Z: live run finished (sim 9/9 rounds, report publish gate failed for provider-filter reasons); evidence recorded in §7 "Live run" and §8; live findings (§5) and open issues (§6) added; §9 rewritten as follow-ups; ledger item closed; status set to Complete, feature flag set to true in feature_list.json.
 - 2026-10-16T19:40Z: resume #1 of the live pipeline failed on one content-filtered chapter; root cause, live probes, the FILTER-SAFE fix and its tests recorded (§6 i, §8); §9 now tracks resume #2; header focus updated.
 - 2026-10-16T20:05Z: resume #2 completed with a published report; outcome recorded (§6 i, §7, §8), §9 rewritten (translation follow-up, fallback-provider decision), header status/focus updated.
+- 2026-10-16T20:10Z: owner decided against a fallback provider for now; translation follow-up session started by the owner (§9).
