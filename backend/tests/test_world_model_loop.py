@@ -378,14 +378,32 @@ def test_resume_skips_committed_world_rounds(tmp_path, monkeypatch):
 
 
 def test_resume_restores_partial_trajectory_and_continues_remaining_rounds(tmp_path, monkeypatch):
+    """A run interrupted after round 1 resumes with the committed world AND the scenario-share
+    trajectory restored, then commits the remaining rounds without re-deciding round 1.
+    (Calendar mode ignores max_rounds by design, so the interruption is the runner's shutdown
+    signal, raised right after the first world update commits.)"""
     sim_dir = str(tmp_path)
     envs = []
     _patch_world(monkeypatch, sim_dir, envs)
     cfg = _world_config()
-    _run(cfg, sim_dir, max_rounds=1)
+    orig_commit = rps._ReflexiveWorldCoordinator._commit_round
+    stop = asyncio.Event()
+
+    async def _commit_then_stop(self, round_num, buf):
+        await orig_commit(self, round_num, buf)
+        if round_num == 0:
+            stop.set()                                   # the loop checks this before round 2
+
+    monkeypatch.setattr(rps._ReflexiveWorldCoordinator, "_commit_round", _commit_then_stop)
+    monkeypatch.setattr(rps, "_shutdown_event", stop)
+    _run(cfg, sim_dir)
     traj_before = json.load(open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8"))
     assert [r["round"] for r in traj_before["trajectory"]] == [0, 1]
+    assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 1
     round1_decisions_before = len([c for c in _WorldLLM.calls if c["kind"] == "decision" and c["round"] == 1])
+    # second process: no shutdown signal, fresh coordinator, checkpoint says round 1 is complete
+    monkeypatch.setattr(rps._ReflexiveWorldCoordinator, "_commit_round", orig_commit)
+    monkeypatch.setattr(rps, "_shutdown_event", None)
     rps._WORLD_COORDINATORS.clear()
     _run(cfg, sim_dir, resume=True)
     traj_after = json.load(open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8"))
