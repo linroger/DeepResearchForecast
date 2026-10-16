@@ -585,8 +585,50 @@ def _looks_like_title_cell(cell: str) -> bool:
     return capitalized / len(words) >= 0.6
 
 
+# Terminal tokens that cannot close a clause: a cell ending on one of these was
+# cut mid-phrase by a width limit (same for the Chinese function words).
+_DANGLING_TAIL_WORDS = frozenset((
+    "a", "an", "the", "and", "or", "nor", "but", "of", "at", "by", "for", "from",
+    "in", "on", "to", "with", "without", "as", "is", "are", "was", "were", "be",
+    "been", "being", "has", "have", "had", "will", "would", "shall", "should",
+    "may", "might", "must", "can", "could", "than", "below", "above", "across",
+    "through", "near", "over", "under", "into", "onto", "upon", "per", "via",
+    "vs", "versus", "including", "excluding", "before", "after", "during",
+    "between", "against", "if", "then", "else", "when", "while", "where",
+    "的", "与", "及", "和", "或", "在", "对", "从", "由", "为", "于", "其",
+))
+
+
+def _ends_mid_clause(cell: str) -> bool:
+    """Width-cut signature: unbalanced brackets, an orphan tail after the last
+    clause boundary, a dangling function word, or a machine-length final token.
+
+    Complete clause lists written without terminal punctuation (LLM table prose
+    like "(f) the envelope is confirmed at or near the £3.5 billion") end on a
+    content word after a full segment — not truncation, whatever the length.
+    """
+    if cell.count("(") != cell.count(")") or cell.count("[") != cell.count("]"):
+        return True
+    # Balanced parentheticals belong to the clause around them: "pillar (soybeans,
+    # licences) demonstrably incomplete" ends on a full clause, not a two-word orphan
+    # after ")". Strip them before locating the final clause segment.
+    body = re.sub(r"\([^()]*\)|\[[^\[\]]*\]|（[^（）]*）|【[^【】]*】", " ", cell)
+    # A period between digits is a decimal ("£3.5"), not a clause boundary.
+    seg = re.split(r"(?:(?<!\d)\.(?!\d))|[;:；：—–]", body)[-1].strip()
+    words = seg.split()
+    if len(words) <= 2:
+        return True
+    last = words[-1].strip(".,;:!?\"'”’«»")
+    if last.lower() in _DANGLING_TAIL_WORDS:
+        return True
+    if len(last) > 24:
+        return True
+    return False
+
+
 def detect_table_cell_truncation(md: str, min_len: int = 160) -> List[str]:
-    """表格单元疑似截断：超长且以字母/数字结尾（无句末标点）→ 采样标记（不改写）。"""
+    """表格单元疑似截断：超长、以字母/数字结尾（无句末标点）且呈中断签名
+    （悬垂虚词／孤段／括号失衡／超长尾词）→ 采样标记（不改写）。"""
     out: List[str] = []
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
@@ -598,7 +640,7 @@ def detect_table_cell_truncation(md: str, min_len: int = 160) -> List[str]:
         for cell in ln.strip().strip("|").split("|"):
             c = cell.strip()
             if (len(c) >= min_len and c and c[-1].isalnum()
-                    and not _looks_like_title_cell(c)):
+                    and not _looks_like_title_cell(c) and _ends_mid_clause(c)):
                 out.append(c[-60:])
                 if len(out) >= 8:
                     return out

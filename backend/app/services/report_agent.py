@@ -4494,8 +4494,12 @@ class ReportAgent:
                 from .forecast_extractor import (
                     _binary_quality as _binary_quality_score,
                     apply_horizon_consistency as _apply_horizon_consistency,
-                    extract_binary_forecasts as _ebf,
                     reconcile_forecast_contract as _reconcile_forecast_contract,
+                )
+                # Content-filter-safe extraction (chunked retry → scenario-partition
+                # fallback); see forecast_binary_resilience for the live failure it fixes.
+                from .forecast_binary_resilience import (
+                    extract_binary_forecasts_resilient as _ebf,
                 )
                 _lang = (getattr(self, "output_language", None)
                          or getattr(Config, "DEERFLOW_RESEARCH_LANGUAGE", None) or "English")
@@ -4566,6 +4570,17 @@ class ReportAgent:
                         themes_expected=_themes,
                     )
                     _quality["proposition_consistency"] = _contract
+                    if isinstance(_bres.get("recovery"), dict):
+                        # Provenance of a recovered extraction (chunked retry or the
+                        # deterministic scenario-partition fallback) survives the
+                        # scorecard recomputation above and lands in forecast.json.
+                        _quality["recovery"] = dict(_bres["recovery"])
+                        forecast["binary_extraction_recovery"] = dict(_bres["recovery"])
+                        if _bres["recovery"].get("mode") == "scenario_partition_fallback":
+                            _quality["passed"] = False
+                            _quality["issues"] = list(_quality.get("issues") or []) + [
+                                "二元预测由情景分区确定性派生（提供方内容过滤了全部抽取尝试）"
+                            ]
                     forecast["binary_quality"] = _quality
                     # RQ-6：校验二元预测结算年份与真实判定期一致——目标年份集合（需求书 +
                     # 日历 horizon_date.year）与二元结算年份集合非空且无交集时，把
