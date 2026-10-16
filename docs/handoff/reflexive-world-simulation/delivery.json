@@ -1,9 +1,42 @@
 {
   "branch": "codex/reflexive-world-simulation",
   "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
-  "phase": "Reviewed planning only; application implementation awaits user approval",
+  "implementation_commit": "e902aedb1a8307c024da950060c4d7bb30f34220",
+  "phase": "Opt-in implementation delivered; live behavior gate did not pass; default promotion withheld",
+  "updatedUtc": "2026-10-16T18:24:07.820714+00:00",
   "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
-  "application_source_changes": 0,
-  "application_tests_run": false,
-  "live_provider_calls_run": false
+  "application_tests_run": true,
+  "live_provider_calls_run": true,
+  "default_engine": "oasis-legacy",
+  "opt_in_engine": "world-v1",
+  "feature_promotion_passes": false,
+  "finalCombinedTestsPassed": 691,
+  "finalListClosureTestsPassed": 73,
+  "testCountsAreSeparateRuns": true,
+  "liveCasesCompleted": 30,
+  "liveCasesPlanned": 36,
+  "liveContrasts": {
+    "passed": 7,
+    "failed": 7,
+    "incomplete": 4
+  },
+  "conservativeConsumedUsd": "9.222150955664",
+  "remainingOriginalAuthorizationUsd": "15.777849044336",
+  "activeProviderBatch": null,
+  "reports": [
+    "ARCHITECTURE.md",
+    "DELIVERY.md",
+    "offline-verification.json",
+    "final-review.json",
+    "live-evidence/report.json"
+  ],
+  "priorPlanningRecord": {
+    "branch": "codex/reflexive-world-simulation",
+    "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "phase": "Reviewed planning only; application implementation awaits user approval",
+    "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
+    "application_source_changes": 0,
+    "application_tests_run": false,
+    "live_provider_calls_run": false
+  }
 }
