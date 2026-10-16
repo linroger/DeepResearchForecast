@@ -2,13 +2,14 @@
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
 import json
+from pathlib import Path
 import threading
 from types import SimpleNamespace
 
 import pytest
 
 from app.services.world_simulation import evaluation
-from app.services.world_simulation.contracts import WorldError, clone, digest, initial_snapshot
+from app.services.world_simulation.contracts import WorldError, clone, digest, initial_snapshot, parse_time
 from app.services.world_simulation.controller import PolicyResponse, run_round
 from app.services.world_simulation.examples import ExamplePolicy
 from app.services.world_simulation.observations import build_observation
@@ -16,6 +17,74 @@ from app.services.world_simulation.store import WorldStore
 
 pytestmark = pytest.mark.guarded_runner
 PRICING = {'mode': 'scripted', 'policyId': 'm5-scripted-proof/v1'}
+V2 = evaluation.VERSION_V2
+
+
+def test_all_v1_case_digests_match_original_frozen_preregistration():
+    fixture = json.loads((Path(__file__).parent / 'fixtures/world_evaluation_v1_compatibility.json').read_text())
+    actual = {}
+    for case in evaluation.build_cases():
+        normalized = clone(case)
+        normalized['spec'] = evaluation._physical_spec(normalized['spec'])
+        actual[case['evaluationId']] = digest(normalized)
+    assert len(actual) == 36
+    assert actual == fixture['caseHashes']
+    assert evaluation.build_cases() == evaluation.build_cases(evaluation_version=evaluation.VERSION)
+    assert all('interactionQueuePolicy' not in c['spec'] for c in evaluation.build_cases())
+
+
+def test_original_archived_v1_scoring_controls_preserve_receipt_points():
+    fixture = json.loads((Path(__file__).parent / 'fixtures/world_evaluation_v1_compatibility.json').read_text())
+    for control in fixture['scoringControls']:
+        score = evaluation._score(control['case'], control['trace'])
+        assert score['points'] == control['expectedPoints']
+        assert score['observedActions'] == control['expectedActions']
+        assert score['evidenceRefs'] == control['expectedEvidenceRefs']
+        assert 'goalMatches' not in score and 'pendingGoalEvidence' not in score
+
+
+@pytest.mark.parametrize('version', ['m5-behavior/v3', '', None])
+def test_unknown_evaluation_version_rejects_before_factory(tmp_path, version):
+    factory = ScriptedFactory()
+    with pytest.raises(WorldError, match='Unknown evaluation version'):
+        evaluation.build_cases(evaluation_version=version)
+    with pytest.raises(WorldError, match='Unknown evaluation version'):
+        evaluation.preregister(PRICING, evaluation_version=version)
+    with pytest.raises(WorldError, match='Unknown evaluation version'):
+        evaluation.run_evaluation(tmp_path, factory, PRICING, evaluation_version=version)
+    assert factory.specs == []
+    assert not list(tmp_path.iterdir())
+
+
+def test_v2_version_and_operational_changes_preserve_mechanisms_and_thresholds():
+    v1, v2 = evaluation.build_cases(), evaluation.build_cases(evaluation_version=V2)
+    assert len(v2) == len({c['evaluationId'] for c in v2}) == 36
+    assert {c['evaluationId'] for c in v1}.isdisjoint(c['evaluationId'] for c in v2)
+    for original, revised in zip(v1, v2, strict=True):
+        assert revised['comparison'] == original['comparison']
+        assert revised['spec']['initialState'] == original['spec']['initialState']
+        assert revised['spec']['interactionQueuePolicy'] == 'presented-v1'
+        assert revised['spec']['limits']['maxConcurrentCalls'] == 2
+        assert original['spec']['limits']['maxConcurrentCalls'] == 4
+        old = {t['templateId']: t for t in original['spec']['actionCatalog']}
+        for template in revised['spec']['actionCatalog']:
+            if template['templateId'] != 'communicate':
+                assert template == old[template['templateId']]
+        assert 'Development-informed' in revised['spec']['assumptions'][-1]['description']
+    for active, ablated in zip(v2[::2], v2[1::2], strict=True):
+        unmasked = clone(ablated['spec'])
+        unmasked.pop('evaluationObservationMask')
+        assert active['spec'] == unmasked
+    manifest = evaluation.preregister(PRICING, evaluation_version=V2)
+    assert manifest['schemaVersion'] == V2 and manifest['domainThresholdPercent'] == 80
+    assert manifest['maxPointsPerCase'] == 8
+    assert manifest['rubric']['consequenceResponse'] == evaluation.RUBRIC['consequenceResponse']
+    assert manifest['rubric']['feasibility'] == evaluation.RUBRIC['feasibility']
+    predicate = manifest['experimentDesign']['behaviorActionPredicate']
+    assert predicate['excludeOnlySealedCatalogKind'] == 'message'
+    assert predicate['appliesTo'] == ['goalConsistency', 'consequenceResponse', 'observedActions']
+    assert 'more than one consequential intent is no match' in predicate['unknownAndOtherKinds']
+    assert 'behaviorActionPredicate' not in evaluation.preregister(PRICING).get('experimentDesign', {})
 
 
 class ScriptedPolicy(ExamplePolicy):
@@ -44,6 +113,338 @@ class ScriptedFactory:
         self.specs.append(clone(spec))
         domain = next(domain for domain in evaluation.DOMAINS if spec['simulationId'].startswith('m5-' + domain))
         return self.policy_type(domain)
+
+
+class DelayedDisclosurePolicy(ScriptedPolicy):
+    text = 'A nonbinding statement whose original contents must survive delivery.'
+
+    def decide(self, observation):
+        decision = super().decide(observation)
+        sender = {'investment': 'producer', 'trade': 'regulator', 'coalition': 'org_a'}[self.domain]
+        if observation['round'] == 1 and observation['phase'] == 'proposal' and observation['actorId'] == sender:
+            decision['intents'].append({'templateId': 'communicate', 'parameters': {'text': self.text}})
+        return decision
+
+
+class V2Factory(ScriptedFactory):
+    def __call__(self, spec):
+        self.specs.append(clone(spec))
+        domain = next(domain for domain in evaluation.DOMAINS if f'-{domain}-' in spec['simulationId'])
+        return self.policy_type(domain)
+
+
+def _message_projection_static_trace(domain, make_intents):
+    """Small scoring fixture; causal controller coverage follows separately."""
+    case = next(c for c in evaluation.build_cases(evaluation_version=V2)
+                if c['domain'] == domain and c['arm'] == 'reflexive')
+    comparison, spec = case['comparison'], case['spec']
+    history = []
+    for epoch in range(5):
+        snapshot = initial_snapshot(spec)
+        snapshot['round'] = epoch
+        if epoch >= comparison['afterRound'] - 1:
+            snapshot[comparison['section']][comparison['recordId']]['value'] = comparison['changed']
+        history.append(snapshot)
+    records, rounds = [], []
+    for epoch, target in ((comparison['beforeRound'], comparison['before']),
+                          (comparison['afterRound'], comparison['after'])):
+        observation = build_observation(spec, history[epoch - 1], comparison['actorId'], epoch)
+        if domain == 'investment':
+            action = {'templateId': 'purchase', 'operation': 'propose',
+                      'parameters': {'quantity': target, 'price': target}}
+        elif domain == 'trade':
+            action = {'templateId': target, 'operation': 'propose', 'parameters': {}}
+        else:
+            action = None if target == 'wait' else {
+                'templateId': 'program_vote', 'operation': 'execute', 'parameters': {'support': False}}
+        intents = make_intents(action, epoch == comparison['afterRound'])
+        for index, intent in enumerate(intents):
+            intent.update(intentId=f'projection-{epoch}-{index}', actorId=comparison['actorId'], phase='proposal')
+        decision = {'actorId': comparison['actorId'], 'observationId': observation['observationId'],
+                    'decisionId': f'projection-decision-{epoch}', 'round': epoch, 'phase': 'proposal', 'intents': intents}
+        records.append({'slot': f'{epoch}:proposal:{comparison["actorId"]}',
+                        'observation': observation, 'decision': decision})
+        rounds.append({'round': epoch, 'resolutions': [{'intentId': i['intentId'], 'accepted': True} for i in intents]})
+    return case, {'history': history, 'records': records, 'rounds': rounds}
+
+
+def _nonbinding_message(text='A nonbinding statement.'):
+    return {'templateId': 'communicate', 'operation': 'execute', 'parameters': {'text': text}}
+
+
+@pytest.mark.parametrize('domain', ['investment', 'trade', 'coalition'])
+@pytest.mark.parametrize('count', [1, 2])
+def test_v2_message_projection_static_correct_actions_and_communicative_wait(domain, count):
+    case, trace = _message_projection_static_trace(domain, lambda action, after:
+        ([action] if action else []) + [_nonbinding_message() for _ in range(count)])
+    original = clone(trace)
+    score = evaluation._score(case, trace)
+    assert score['observedActions'] == [case['comparison']['before'], case['comparison']['after']]
+    assert score['points']['goalConsistency'] == score['points']['consequenceResponse'] == 2
+    assert score['points']['feasibility'] == 2
+    assert score['totalIntents'] == sum(len(r['decision']['intents']) for r in trace['records'])
+    assert trace == original
+    # The original v1 predicate and its archived behavior remain strict/exact.
+    assert evaluation._score_v1(case, trace)['observedActions'] == [None, None]
+
+
+@pytest.mark.parametrize('domain,extra', [
+    ('investment', 'duplicate'), ('trade', 'conflict'), ('coalition', 'conflict'),
+    ('investment', 'unknown'), ('investment', 'other_kind'),
+    ('investment', 'claim'), ('trade', 'claim'), ('coalition', 'claim'),
+])
+def test_v2_message_projection_never_selects_favorable_or_claimed_action(domain, extra):
+    def intents(action, after):
+        if not after:
+            return ([action] if action else []) + [_nonbinding_message()]
+        if extra == 'claim':
+            return [_nonbinding_message('I purchased the goods and cast the opposing vote.')]
+        second = clone(action)
+        if extra == 'conflict':
+            if domain == 'trade':
+                second['templateId'] = 'order_a'
+            else:
+                second['parameters']['support'] = True
+        elif extra == 'unknown':
+            second['templateId'] = 'unknown_template'
+        elif extra == 'other_kind':
+            second = {'templateId': 'expand', 'operation': 'execute', 'parameters': {}}
+        return [action, second, _nonbinding_message()]
+    case, trace = _message_projection_static_trace(domain, intents)
+    score = evaluation._score(case, trace)
+    assert score['observedActions'][1] == ('wait' if extra == 'claim' and domain == 'coalition' else None)
+    assert score['points']['consequenceResponse'] == 0
+
+
+@pytest.mark.parametrize('domain', ['investment', 'trade', 'coalition'])
+@pytest.mark.parametrize('count', [1, 2])
+def test_v2_message_projection_real_controller_pairs_keep_required_contrast(tmp_path, domain, count):
+    cases = [c for c in evaluation.preregister(PRICING, evaluation_version=V2)['cases']
+             if c['domain'] == domain and c['variant'] == 1 and c['seed'] == 0]
+    actor = cases[0]['comparison']['actorId']
+
+    class CommunicativePolicy(ScriptedPolicy):
+        def decide(self, observation):
+            decision = super().decide(observation)
+            if observation['actorId'] == actor and observation['phase'] == 'proposal':
+                decision['intents'].extend(_nonbinding_message() for _ in range(count))
+            return decision
+
+    receipts = {}
+    for case in cases:
+        receipt = evaluation._execute(tmp_path, case, lambda spec: CommunicativePolicy(domain), 'scripted')
+        assert receipt['status'] == 'completed'
+        receipts[case['evaluationId']] = receipt
+        comparison = case['comparison']
+        expected_after = comparison['after'] if case['arm'] == 'reflexive' else comparison['before']
+        assert receipt['score']['observedActions'] == [comparison['before'], expected_after]
+        assert receipt['score']['points']['goalConsistency'] == receipt['score']['points']['consequenceResponse'] == 2
+        trace = json.loads((tmp_path / case['evaluationId'] / 'trace.json').read_text())
+        original_score = evaluation._score_v1(case, trace)
+        rejected = [r for period in trace['rounds'] for r in period['resolutions'] if not r['accepted']]
+        if domain == 'trade' and case['arm'] == 'external-feedback-ablation':
+            expected_feasibility = 1
+            # The scripted supplier blindly accepts route A after it becomes
+            # physically ineligible, including its still-pending offer in round 4.
+            assert [(r['actorId'], r['round'], r['code']) for r in rejected] == [
+                ('supplier_a', 3, 'rule_ineligible'), ('supplier_a', 4, 'rule_ineligible')]
+            intents = {i['intentId']: i for record in trace['records'] for i in record['decision']['intents']}
+            assert all(intents[r['intentId']]['templateId'] == 'order_a'
+                       and intents[r['intentId']]['operation'] == 'accept' for r in rejected)
+        else:
+            expected_feasibility = 2
+            assert rejected == []
+        assert receipt['score']['points']['feasibility'] == original_score['points']['feasibility'] == expected_feasibility
+        assert receipt['score']['rejectedIntents'] == original_score['rejectedIntents'] == len(rejected)
+        assert receipt['score']['totalIntents'] == original_score['totalIntents'] == sum(
+            len(record['decision']['intents']) for record in trace['records'])
+    assert evaluation._contrasts(cases, receipts)[0]['status'] == 'passed'
+
+
+def test_v2_message_projection_pending_communicative_wait_is_goal_only(tmp_path):
+    case = next(c for c in evaluation.preregister(PRICING, evaluation_version=V2)['cases']
+                if c['domain'] == 'investment' and c['arm'] == 'external-feedback-ablation')
+
+    class PendingCommunicativePolicy(ScriptedPolicy):
+        def decide(self, observation):
+            decision = super().decide(observation)
+            if observation['round'] == 2 and observation['phase'] == 'response':
+                decision['intents'][0]['operation'] = 'defer'
+            if observation['actorId'] == 'buyer' and observation['phase'] == 'proposal':
+                if observation['round'] == 3:
+                    decision['intents'] = []
+                decision['intents'].append(_nonbinding_message('Awaiting exact consent; no purchase is claimed.'))
+            return decision
+
+    receipt = evaluation._execute(tmp_path, case, lambda spec: PendingCommunicativePolicy('investment'), 'scripted')
+    assert receipt['status'] == 'completed'
+    assert receipt['score']['points']['goalConsistency'] == 2
+    assert receipt['score']['pendingGoalEvidence'][1]['pendingWaitCredited'] is True
+    assert receipt['score']['observedActions'][1] is None
+    assert receipt['score']['points']['consequenceResponse'] == 0
+
+
+@pytest.mark.parametrize('bundle', [False, True])
+def test_v2_message_projection_retains_invalid_message_and_bundle_feasibility(tmp_path, bundle):
+    case = evaluation.preregister(PRICING, evaluation_version=V2)['cases'][0]
+
+    class InvalidMessagePolicy(ScriptedPolicy):
+        def decide(self, observation):
+            decision = super().decide(observation)
+            if observation['actorId'] == 'buyer' and observation['phase'] == 'proposal':
+                decision['intents'].append(_nonbinding_message('x' * (case['spec']['limits']['maxMessageChars'] + 1)))
+                if bundle:
+                    for intent in decision['intents']:
+                        intent['bundleId'] = 'same-bundle'
+            return decision
+
+    receipt = evaluation._execute(tmp_path, case, lambda spec: InvalidMessagePolicy('investment'), 'scripted')
+    assert receipt['status'] == 'completed'
+    trace = json.loads((tmp_path / case['evaluationId'] / 'trace.json').read_text())
+    original = clone(trace)
+    score, raw = evaluation._score(case, trace), evaluation._score_v1(case, trace)
+    assert score['observedActions'] == [case['comparison']['before'], case['comparison']['after']]
+    assert score['points']['feasibility'] == raw['points']['feasibility'] == 0
+    assert score['rejectedIntents'] == raw['rejectedIntents'] == (8 if bundle else 4)
+    assert score['totalIntents'] == raw['totalIntents'] == receipt['operations']['totalCommittedIntents']
+    assert all(r['code'] == ('bundle_rejected' if bundle else 'invalid_input')
+               for period in trace['rounds'] for r in period['resolutions'] if not r['accepted'])
+    assert trace == original
+
+
+@pytest.fixture(scope='module')
+def completed_v2(tmp_path_factory):
+    root = tmp_path_factory.mktemp('m5-v2-scripted')
+    factory = V2Factory(DelayedDisclosurePolicy)
+    report = evaluation.run_evaluation(root, factory, PRICING, evaluation_version=V2)
+    return root, factory, report
+
+
+def test_full_v2_matrix_saved_version_and_unwaived_gates(completed_v2, completed):
+    root, factory, report = completed_v2
+    assert len(factory.specs) == 36 and set(report['cases'].values()) == {'completed'}
+    assert report['schemaVersion'] == V2
+    assert report['contrastGate'] == 'passed' and len(report['requiredContrasts']) == 18
+    assert report['rubricGate'] == 'incomplete'  # Independent qualitative review remains required.
+    assert all(d['denominatorPoints'] == 96 and d['thresholdPercent'] == 80 for d in report['domains'].values())
+    assert evaluation.summarize_evaluation(root) == report
+    assert evaluation.summarize_evaluation(completed[0]) == completed[2]
+    replay = V2Factory()
+    assert evaluation.run_evaluation(root, replay, PRICING, evaluation_version=V2) == report
+    assert replay.specs == []
+
+
+def test_v2_delays_preserve_disclosure_content_and_immediate_protocol(completed_v2):
+    root, _, _ = completed_v2
+    for case in evaluation.build_cases(evaluation_version=V2):
+        comparison, spec = case['comparison'], case['spec']
+        with WorldStore(root / case['evaluationId'] / 'world.sqlite3', read_only=True) as store:
+            spec = store.spec
+            snapshot = store.history()[comparison['afterRound'] - 1]
+            for phase in ('proposal', 'response'):
+                observation = build_observation(spec, snapshot, comparison['actorId'], comparison['afterRound'], phase)
+                assert not observation['messages']
+                assert DelayedDisclosurePolicy.text not in json.dumps(observation['privateState'])
+                assert observation['privateState'] == snapshot['actorStates'][comparison['actorId']]
+            statements = [i for i in snapshot['interactions'].values() if i.get('kind') == 'message']
+            assert statements
+            statement_ids = {i['interactionId'] for i in statements}
+            assert all(event['details'].get('interactionId') not in statement_ids
+                       for event in observation['privateState']['lastObservedEvents'])
+            assert all(parse_time(i['deliverAt']) > parse_time(spec['periods'][comparison['afterRound'] - 1]['start'])
+                       for i in statements)
+            later = store.observation(f'{comparison["afterRound"] + 1}:proposal:{comparison["actorId"]}')
+            assert any(i['terms']['text'] == DelayedDisclosurePolicy.text for i in later['messages'])
+            # The nonbinding delay does not delay actual agreement consent.
+            recipient = {'investment': 'producer', 'trade': 'supplier_a', 'coalition': 'org_b'}[case['domain']]
+            consent = store.observation(f'1:response:{recipient}')
+            assert consent['inbox']
+            assert all(i['deliverAt'] == i['createdAt'] for i in consent['inbox'])
+            for account_id, account in later['world']['accounts'].items():
+                if account['ownerId'] == comparison['actorId']:
+                    assert account == store.history()[comparison['afterRound']]['accounts'][account_id]
+
+
+def test_v2_focal_opportunities_remain_affordable_supplied_and_authorized(completed_v2):
+    root, _, _ = completed_v2
+    for case in evaluation.build_cases(evaluation_version=V2):
+        with WorldStore(root / case['evaluationId'] / 'world.sqlite3', read_only=True) as store:
+            comparison = case['comparison']
+            for epoch in (comparison['beforeRound'], comparison['afterRound']):
+                state = store.history()[epoch - 1]
+                if case['domain'] == 'trade':
+                    route = 'a' if state['rules']['route_a_eligible']['value'] else 'b'
+                    cost = case['variant'] + (1 if route == 'a' else 2)
+                    assert state['rules'][f'route_{route}_eligible']['value'] is True
+                    assert Decimal(state['accounts']['importer_cash']['balance']) >= cost
+                    assert Decimal(state['accounts'][f'supplier_{route}_stock']['balance']) >= 1
+                elif case['domain'] == 'investment':
+                    desired = Decimal(state['metrics']['capacity']['value']) - 1
+                    assert state['rules']['permit']['value'] is True
+                    assert Decimal(state['accounts']['buyer_cash']['balance']) >= desired
+                    assert Decimal(state['accounts']['producer_stock']['balance']) >= desired
+                else:
+                    assert state['rules']['mandate']['value'] is True
+                    assert Decimal(state['accounts']['institution_budget']['balance']) >= 60
+
+
+def test_v2_pending_wait_credits_only_goals_and_never_consequence_or_contrast(tmp_path):
+    case = next(c for c in evaluation.preregister(PRICING, evaluation_version=V2)['cases']
+                if c['domain'] == 'investment' and c['arm'] == 'external-feedback-ablation')
+
+    class PendingPolicy(ScriptedPolicy):
+        def decide(self, observation):
+            decision = super().decide(observation)
+            if observation['round'] == 2 and observation['phase'] == 'response':
+                decision['intents'][0]['operation'] = 'defer'
+            if observation['round'] == 3 and observation['actorId'] == 'buyer' and observation['phase'] == 'proposal':
+                decision['intents'] = []
+            return decision
+
+    receipt = evaluation._execute(tmp_path, case, lambda spec: PendingPolicy('investment'), 'scripted')
+    assert receipt['status'] == 'completed'
+    trace = json.loads((tmp_path / case['evaluationId'] / 'trace.json').read_text())
+    score, raw = receipt['score'], evaluation._score_v1(case, trace)
+    assert score['points']['goalConsistency'] == 2 and raw['points']['goalConsistency'] == 1
+    assert score['pendingGoalEvidence'][1]['pendingWaitCredited'] is True
+    assert score['points']['consequenceResponse'] == raw['points']['consequenceResponse'] == 0
+    assert score['observedActions'] == raw['observedActions']
+    active = clone(case)
+    active['arm'] = 'reflexive'
+    active['evaluationId'] = case['pairId'] + '-reflexive'
+    fake_active = clone(receipt)
+    fake_active['score']['observedActions'] = [case['comparison']['before'], case['comparison']['after']]
+    assert evaluation._contrasts([active], {active['evaluationId']: fake_active, case['evaluationId']: receipt})[0]['status'] == 'failed'
+
+
+@pytest.mark.parametrize('defect', ['none', 'historical', 'expired', 'rejected', 'withdrawn', 'accepted', 'poor', 'duplicate', 'wrong_terms'])
+def test_v2_trade_pending_guard_uses_current_period_evidence_only(defect):
+    case = next(c for c in evaluation.build_cases(evaluation_version=V2) if c['domain'] == 'trade')
+    spec = case['spec']
+    observation = build_observation(spec, initial_snapshot(spec), 'importer', 2)
+    now = observation['simulatedAt']
+    offer = {'interactionId': 'current-period-offer', 'proposerId': 'importer', 'recipientIds': ['supplier_a'],
+             'templateId': 'order_a', 'terms': {}, 'status': 'pending', 'acceptedBy': [], 'createdRound': 2,
+             'createdAt': now, 'deliverAt': now, 'expiresAt': spec['periods'][2]['end']}
+    if defect == 'historical':
+        offer.update(createdRound=1, createdAt=spec['asOf'], deliverAt=spec['asOf'])
+    elif defect == 'expired':
+        offer['expiresAt'] = now
+    elif defect in {'rejected', 'withdrawn', 'accepted'}:
+        offer['status'] = defect
+    elif defect == 'poor':
+        observation['world']['accounts']['importer_cash']['balance'] = '0'
+    elif defect == 'wrong_terms':
+        offer['terms'] = {'quantity': '2'}
+    observation['ownOffers'] = [offer]
+    if defect == 'duplicate':
+        observation['ownOffers'].append({**offer, 'interactionId': 'duplicate'})
+    matches = evaluation._matching_pending_offers(case, {'observation': observation}, 'order_a')
+    assert (len(matches) == 1) is (defect == 'none')
+    # Prior inventory/settlement alone never becomes pending-order evidence.
+    observation['ownOffers'] = []
+    observation['world']['accounts']['importer_stock']['balance'] = '1'
+    assert evaluation._matching_pending_offers(case, {'observation': observation}, 'order_a') == []
 
 
 @pytest.fixture(scope='module')

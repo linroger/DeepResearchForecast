@@ -63,10 +63,27 @@
       "reportSha256": "8c1a3e5df850152d2cb6b6876f230a4823c3d0548c53b1a3f131e6fbee975cea",
       "originalManifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
       "reason": "All36 cases terminal;30completed and independently reviewed,6transport/stoppage failures retained. Strict contrast gate has7passed,7failed,4incomplete. No default promotion or further dispatch."
+    },
+    {
+      "phase": "development-informed-behavior-v2",
+      "output": "/private/tmp/drf-world-behavior-v2-20261016",
+      "status": "closed_evaluated_temporal_and_grammar_followup",
+      "limitUsd": "15.777849044336",
+      "evaluationVersion": "m5-behavior/v2",
+      "policyFile": "behavior-rerun/live-policy.json",
+      "recordDirectory": "behavior-rerun",
+      "reason": "36completed/36reviewed; rubricpassed,17/18contrasts,one temporal-grounding failure retained. Further public-grammar/time repair is separately versioned; no case replacement.",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-closure-20261016T185206Z-mnx62v88",
+      "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+      "settledCeilingUsd": "4.492024",
+      "reportedActualUpperUsd": "4.492024",
+      "unknownCeilingUsd": "0",
+      "reportSha256": "142663291e9d1df9a42f8578a9b6004f57362e409616f8ede35e9af205212e08",
+      "originalManifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850"
     }
   ],
-  "status": "closed",
-  "conservativeConsumedUsd": "9.222150955664",
-  "remainingAuthorizedUsd": "15.777849044336",
+  "status": "closed_after_behavior_v2",
+  "conservativeConsumedUsd": "13.714174955664",
+  "remainingAuthorizedUsd": "11.285825044336",
   "billingClaim": false
 }

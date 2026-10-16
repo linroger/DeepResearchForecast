@@ -64,5 +64,17 @@
     "status": "outside_current_validation",
     "problem": "Synthetic mechanics and live behavior do not establish empirical forecasting accuracy or calibrated probabilities.",
     "evidence": "Safe report boundaries enforced; a dated uncontaminated historical/prospective dataset is required before predictive claims."
+  },
+  {
+    "id": "WORLD-BEHAVIOR-V2",
+    "status": "rerun_complete_followup_needed",
+    "problem": "User requested recurring-demand evaluation repair and general protocol/grounding improvements, then a new study preserving original results.",
+    "evidence": "behavior-rerun/REPORT.md and live-evidence:36completed,17/18contrasts; recurring objective repaired, remaining temporal interpretation failure and nonfocal invalid inputs retained."
+  },
+  {
+    "id": "WORLD-ACTOR-PUBLIC-GRAMMAR",
+    "status": "design_reviewed_implementation_next",
+    "problem": "Fresh HTTP decisions can violate visible input bounds; one actor misclassified earlier-period settlement.",
+    "evidence": "behavior-rerun/followup-proposal.md; v2trace reviews. Preserve old rejected decisions; retain known usage and existing2attempt limits. Hidden/economic feasibility remains kernel-owned."
   }
 ]

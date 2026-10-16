@@ -36,7 +36,9 @@ def main():
     excluded = {'__pycache__', '.pytest_cache', '.git', '.venv', 'node_modules', 'uploads', 'logs', '.env', 'cache'}
     manifest = {}
     roots = ['backend/app', 'backend/tests', 'backend/scripts', 'deerflow_bridge']
-    candidates = [root / 'backend/pyproject.toml']
+    candidates = [root / 'backend/pyproject.toml',
+                  root / 'docs/handoff/reflexive-world-simulation/run_live_evaluation.py',
+                  root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/live-policy.json']
     for folder in roots:
         candidates.extend((root / folder).rglob('*'))
     for path in sorted(set(candidates)):

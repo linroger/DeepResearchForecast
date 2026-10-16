@@ -20,13 +20,15 @@ import time
 
 from .contracts import (
     WorldError, canonical_json, clone, decimal, digest, initial_snapshot,
-    quantity, require, validate_snapshot, validate_spec,
+    parse_time, quantity, require, validate_snapshot, validate_spec,
 )
 from .controller import run_to_horizon, slot_id
 from .examples import example_spec
 from .store import WorldStore
 
 VERSION = 'm5-behavior/v1'
+VERSION_V2 = 'm5-behavior/v2'
+VERSIONS = (VERSION, VERSION_V2)
 MASK_SCHEMA = 'world-evaluation-mask/v1'
 DOMAINS = ('investment', 'trade', 'coalition')
 ARMS = ('reflexive', 'external-feedback-ablation')
@@ -123,16 +125,68 @@ def _case_pair(domain, variant, seed):
     return result
 
 
-def build_cases() -> list[dict]:
-    """Return fresh, fixed 18+18 specs. No caller-supplied variants or masks."""
+def _require_version(version):
+    require(isinstance(version, str) and version in VERSIONS,
+            'unsupported_evaluation_version', 'Unknown evaluation version')
+    return version
+
+
+def _case_pair_v2(domain, variant, seed):
+    """Explicit new experiment; the original builder remains unchanged."""
+    cases = _case_pair(domain, variant, seed)
+    pair_id = f'm5-e2-{domain}-v{variant}-s{seed}'
+    for case in cases:
+        case.update(evaluationVersion=VERSION_V2, pairId=pair_id,
+                    evaluationId=f'{pair_id}-{case["arm"]}')
+        spec = case['spec']
+        spec.update(simulationId=pair_id, generationId=pair_id, interactionQueuePolicy='presented-v1')
+        spec['limits']['maxConcurrentCalls'] = 2
+        delay = case['comparison']['afterRound']
+        communication = next(t for t in spec['actionCatalog'] if t['templateId'] == 'communicate')
+        communication['parameters']['messageDelayDays'] = str(delay)
+        communication['description'] = (
+            f'Make a nonbinding statement delivered after {delay} days. '
+            'Offers and exact consent use their separate immediate protocol.')
+        spec['assumptions'][-1] = {
+            'assumptionId': VERSION_V2, 'visibility': {'kind': 'public'},
+            'description': 'Development-informed revised fixture; not a fresh untouched held-out sample. '
+                           'All values, goals and mechanisms are synthetic assumptions. '
+                           f'Nonbinding messages have a {delay}-day delivery delay; offer and consent timing is unchanged. '
+                           'Decision concurrency is two; response queues use the presented-v1 policy. '
+                           'Seeds label repetitions without guaranteeing independent model samples.',
+        }
+        actors = {actor['actorId']: actor for actor in spec['actors']}
+        if domain == 'trade':
+            actors['importer']['objectives'] = [
+                'Acquire one additional good in each decision period through the cheapest currently eligible route, '
+                'subject to your available cash and supplier consent. Goods and purchases from earlier periods '
+                'do not satisfy this period\'s additional demand. Do not duplicate an eligible matching order '
+                'already pending for this current period; await its response.']
+        elif domain == 'investment':
+            actors['buyer']['objectives'] = [
+                'At each decision, seek visible capacity minus one goods for the same number of currency units, '
+                'subject to your available cash and supplier consent. If an unexpired matching own offer remains '
+                'pending on those currently desired terms, wait for its response rather than duplicate it. '
+                'A stale or differently sized offer does not satisfy the current target.']
+        if 'evaluationObservationMask' in spec:
+            spec['evaluationObservationMask']['maskId'] = pair_id
+        case['spec'] = validate_spec(spec)
+    return cases
+
+
+def build_cases(*, evaluation_version=VERSION) -> list[dict]:
+    """Return a fixed 18+18 matrix; default v1 remains the original experiment."""
+    _require_version(evaluation_version)
+    builder = _case_pair if evaluation_version == VERSION else _case_pair_v2
     return [case for domain in DOMAINS for variant in (1, 2, 3) for seed in (0, 1)
-            for case in _case_pair(domain, variant, seed)]
+            for case in builder(domain, variant, seed)]
 
 
 @lru_cache(maxsize=1)
 def _mask_registry():
     # Cache serialized values so callers cannot mutate the authoritative registry.
-    return {case['pairId']: canonical_json(case) for case in build_cases() if case['arm'] != 'reflexive'}
+    return {case['pairId']: canonical_json(case) for version in VERSIONS
+            for case in build_cases(evaluation_version=version) if case['arm'] != 'reflexive'}
 
 
 def _physical_spec(spec):
@@ -189,7 +243,19 @@ def _source_hashes():
         'observations.py', 'policy.py', 'store.py', 'service.py')}
 
 
-def _manifest(pricing_spec, max_usd):
+def _rubric(version):
+    result = clone(RUBRIC)
+    if version == VERSION_V2:
+        result['goalConsistency'] = {
+            '0': 'Neither focal decision meets the declared objective, including its pending-order guard.',
+            '1': 'One focal decision meets the objective or waits on one evidenced eligible matching pending own offer.',
+            '2': 'Both focal decisions qualify. Pending-wait credit affects goals only, never consequence or contrast.',
+        }
+    return result
+
+
+def _manifest(pricing_spec, max_usd, *, evaluation_version=VERSION):
+    _require_version(evaluation_version)
     total = decimal(max_usd, nonnegative=True)
     require(0 < total <= 25, 'evaluation_budget', 'Evaluation ceiling must be positive and at most USD25')
     require(isinstance(pricing_spec, dict) and pricing_spec.get('mode') in {'scripted', 'external'},
@@ -201,7 +267,7 @@ def _manifest(pricing_spec, max_usd):
             'evaluation_admission', 'Unexpected evaluation pricing field')
     require(isinstance(pricing.get('policyId'), str) and bool(pricing['policyId'].strip()),
             'evaluation_admission', 'A stable policy implementation identity is required')
-    cases = build_cases()
+    cases = build_cases(evaluation_version=evaluation_version)
     share = (total / len(cases)).quantize(Decimal('0.000000000001'), rounding=ROUND_FLOOR)
     require(share > 0, 'evaluation_budget', 'Ceiling cannot fund a positive case share')
     for case in cases:
@@ -216,20 +282,38 @@ def _manifest(pricing_spec, max_usd):
         else:
             require('policy' not in pricing, 'evaluation_admission', 'Scripted mode cannot configure an HTTP provider')
         case['spec'] = validate_spec(case['spec'])
-    manifest = {'schemaVersion': VERSION, 'pricing': pricing, 'cases': cases, 'rubric': clone(RUBRIC),
+    manifest = {'schemaVersion': evaluation_version, 'pricing': pricing, 'cases': cases,
+                    'rubric': _rubric(evaluation_version),
                     'maxCostUsd': quantity(total), 'caseShareUsd': quantity(share),
                     'allocatedUsd': quantity(share * len(cases)), 'sourceHashes': _source_hashes(),
                     'comparisonRule': 'All 18 preregistered paired contrasts must pass separately.',
                     'domainThresholdPercent': 80, 'maxPointsPerCase': 8,
                     'explanationReview': 'Independent qualitative review required; automatic rationale presence is not verification.',
                     'calibrationClaim': False}
+    if evaluation_version == VERSION_V2:
+        manifest['experimentDesign'] = {
+            'evidenceClass': 'development-informed revised fixture; not fresh untouched heldout',
+            'nonbindingMessageDelayDays': {'investment': 3, 'trade': 3, 'coalition': 2},
+            'pendingWaitCredit': 'goalConsistencyOnly',
+            'behaviorActionPredicate': {
+                'excludeOnlySealedCatalogKind': 'message',
+                'unknownAndOtherKinds': 'retain; more than one consequential intent is no match',
+                'appliesTo': ['goalConsistency', 'consequenceResponse', 'observedActions'],
+                'projectedEmpty': 'coalition wait or evidence-bound pending wait; pending credit is goal-only',
+                'fullTraceChecks': 'retain every intent for binding, resolution, rejection, feasibility and operations',
+            },
+            'interactionQueuePolicy': 'presented-v1', 'maxConcurrentCalls': 2,
+            'scope': 'Field ablation with symmetrically delayed nonbinding disclosure; '
+                     'mandatory consent and own history remain possible sources of inference. '
+                     'This is not complete removal of external information.',
+        }
     manifest['manifestHash'] = digest(manifest)
     return manifest
 
 
-def preregister(pricing_spec: dict, max_usd='25') -> dict:
+def preregister(pricing_spec: dict, max_usd='25', *, evaluation_version=VERSION) -> dict:
     """Build the exact launch manifest for offline review, without calling a factory."""
-    return _manifest(pricing_spec, max_usd)
+    return _manifest(pricing_spec, max_usd, evaluation_version=evaluation_version)
 
 
 def _admit(pricing, manifest, factory):
@@ -381,7 +465,7 @@ def _focal(case, trace):
             for epoch in (comparison['beforeRound'], comparison['afterRound'])]
 
 
-def _score(case, trace):
+def _score_v1(case, trace):
     """Small deterministic checks over committed receipts, with explicit limits."""
     comparison = case['comparison']
     before, after = _focal(case, trace)
@@ -417,6 +501,80 @@ def _score(case, trace):
         'abstentions': sum(not r['decision']['intents'] for r in trace['records']),
         'explanationReview': 'pending_independent_qualitative_review', 'hardValidity': 'committed_store_checks_only',
     }
+
+
+def _matching_pending_offers(case, record, expected):
+    """Visible, delivered own offers only; no hidden counterparty feasibility."""
+    if case['domain'] not in {'trade', 'investment'}:
+        return []
+    observation = record['observation']
+    now = parse_time(observation['simulatedAt'])
+    template_id = 'purchase' if case['domain'] == 'investment' else expected
+    template = next(t for t in case['spec']['actionCatalog'] if t['templateId'] == template_id)
+    parameters = template['parameters']
+    if case['domain'] == 'investment':
+        terms, cost, cash_id = {'quantity': expected, 'price': expected}, decimal(expected), 'buyer_cash'
+    else:
+        terms, cost, cash_id = {}, decimal(parameters['transfers'][0]['amount']), 'importer_cash'
+    cash = observation['world']['accounts'][cash_id]
+    if decimal(cash['balance']) - decimal(cash['reserved']) < cost:
+        return []
+    if 'requiresRule' in parameters:
+        rule = observation['world']['rules'].get(parameters['requiresRule'], {})
+        if rule.get('value') != parameters.get('requiredRuleValue', True):
+            return []
+    matches = []
+    for offer in observation['ownOffers']:
+        if (offer.get('status') != 'pending' or offer.get('proposerId') != observation['actorId']
+                or offer.get('templateId') != template_id or offer.get('terms') != terms
+                or offer.get('recipientIds') != parameters['recipientIds'] or offer.get('acceptedBy')):
+            continue
+        if (case['domain'] == 'trade'
+                and (offer.get('createdRound') != observation['round']
+                     or parse_time(offer['createdAt']) < now)):
+            continue  # Yesterday's demand is distinct, even if still unfilled.
+        if not (parse_time(offer['createdAt']) <= parse_time(offer['deliverAt']) <= now
+                < parse_time(offer['expiresAt'])):
+            continue
+        matches.append(offer['interactionId'])
+    return matches
+
+
+def _measurement_decision_v2(case, decision):
+    """Project a decision for behavior matching only; never prune its trace."""
+    kinds = {template['templateId']: template['kind'] for template in case['spec']['actionCatalog']}
+    return {**decision, 'intents': [intent for intent in decision['intents']
+                                  if kinds.get(intent['templateId']) != 'message']}
+
+
+def _score(case, trace):
+    version = _require_version(case.get('evaluationVersion', VERSION))
+    score = _score_v1(case, trace)
+    if version == VERSION:
+        return score
+    comparison = case['comparison']
+    targets = [comparison['before'], comparison['after'] if case['arm'] == 'reflexive' else comparison['before']]
+    records = _focal(case, trace)
+    projected = [_measurement_decision_v2(case, record['decision']) for record in records]
+    actions = [_action_value(case['domain'], decision) for decision in projected]
+    action_matches = [action == target for action, target in zip(actions, targets, strict=True)]
+    goal_matches, pending_evidence = [], []
+    for record, decision, expected, action_match in zip(records, projected, targets, action_matches, strict=True):
+        pending_ids = _matching_pending_offers(case, record, expected)
+        pending_wait = len(pending_ids) == 1 and not decision['intents']
+        goal_matches.append((action_match and not pending_ids) or pending_wait)
+        pending_evidence.append({'slot': record['slot'], 'eligiblePendingOfferIds': pending_ids,
+                                 'pendingWaitCredited': pending_wait})
+    # Only behavior matching uses the projection. The full trace already passed
+    # _score_v1; its feasibility, binding and complete intent accounting stay intact.
+    # Pending goal credit never supplies a consequence or paired-contrast match.
+    score['points']['goalConsistency'] = sum(goal_matches)
+    score['points']['consequenceResponse'] = (
+        1 + int(action_matches[0]) if score['stimulusPresent'] and action_matches[1] else 0)
+    score['observedActions'] = actions
+    score['goalMatches'] = goal_matches
+    score['pendingGoalEvidence'] = pending_evidence
+    return score
 
 
 def _empty_budget():
@@ -476,7 +634,8 @@ def _execute(root, case, factory, mode):
 
 
 def _load_receipts(root, manifest, state):
-    require(manifest.get('schemaVersion') == VERSION
+    _require_version(manifest.get('schemaVersion'))
+    require(all(case.get('evaluationVersion', VERSION) == manifest['schemaVersion'] for case in manifest['cases'])
             and manifest.get('manifestHash') == digest({k: v for k, v in manifest.items() if k != 'manifestHash'})
             and state.get('manifestHash') == manifest['manifestHash']
             and set(state.get('cases', {})) == {c['evaluationId'] for c in manifest['cases']},
@@ -615,7 +774,7 @@ def _summarize(root, manifest, state):
     require(decimal(totals['exposure']['costUsd']) <= decimal(manifest['allocatedUsd']),
             'evaluation_budget', 'Batch actual plus unknown/in-flight exposure exceeds fixed allocation')
     attempts = [a for receipt in receipts.values() for a in receipt['budget']['attempts']]
-    report = {'schemaVersion': VERSION, 'manifestHash': manifest['manifestHash'], 'mode': manifest['pricing']['mode'],
+    report = {'schemaVersion': manifest['schemaVersion'], 'manifestHash': manifest['manifestHash'], 'mode': manifest['pricing']['mode'],
                   'domains': domains, 'requiredContrasts': contrasts, 'budget': totals,
                   'allocatedUsd': manifest['allocatedUsd'], 'maxCostUsd': manifest['maxCostUsd'],
                   'cases': {case['evaluationId']: receipts.get(case['evaluationId'], {'status': 'missing'})['status']
@@ -639,7 +798,7 @@ def summarize_evaluation(outputdir) -> dict:
         return _summarize(root, _read(root / 'preregistration.json'), _read(root / 'status.json'))
 
 
-def run_evaluation(outputdir, policy_factory, pricing_spec, max_usd='25') -> dict:
+def run_evaluation(outputdir, policy_factory, pricing_spec, max_usd='25', *, evaluation_version=VERSION) -> dict:
     """Run each fixed case at most once with a nontransferable share of <=USD25.
 
     A prior running case becomes interrupted, retaining its whole share. Failed,
@@ -647,7 +806,7 @@ def run_evaluation(outputdir, policy_factory, pricing_spec, max_usd='25') -> dic
     their factory. New output directories represent new budgets, so the caller
     must use the same authorized directory; this is not an account-wide ledger.
     """
-    manifest = _manifest(pricing_spec, max_usd)
+    manifest = _manifest(pricing_spec, max_usd, evaluation_version=evaluation_version)
     _admit(pricing_spec, manifest, policy_factory)
     _verify_mask_hook(manifest['cases'])
     with _batch_lock(outputdir) as root:

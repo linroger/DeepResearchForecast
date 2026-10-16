@@ -1097,3 +1097,190 @@ def test_concurrent_actor_calls_keep_independent_execution_bindings(actor_case, 
         assert response.decision['actorId'] == response.decision['rationale'] == observation['actorId']
         assert response.decision['observationId'] == observation['observationId']
         validate_decision(actor_case.spec, response.decision, observation['actorId'], observation, phase='proposal')
+
+
+@pytest.fixture
+def sdk_protocol_offer(actor_case, boundary):
+    """Create a pending offer through the real adapter and protocol producers."""
+    from app.services.world_simulation.contracts import initial_snapshot, validate_decision
+    from app.services.world_simulation.kernel import stage_interactions
+    from app.services.world_simulation.observations import build_observation
+
+    spec = deepcopy(actor_case.spec)
+    spec['flows'] = []  # Isolate consent effects from unrelated background production.
+    initial = initial_snapshot(spec)
+    observed = build_observation(spec, initial, 'buyer', 1)
+    case = boundary(spec=spec, content=json.dumps({'intents': [
+        {'templateId': 'purchase', 'operation': 'propose', 'parameters': {'quantity': '2', 'price': '3'}},
+    ]}))
+    proposal = validate_decision(spec, case.policy.decide(observed).decision, 'buyer', observed, phase='proposal')
+    staged = stage_interactions(spec, initial, [proposal], 1)
+    recipient = build_observation(spec, staged, 'producer', 1, 'response')
+    assert len(recipient['inbox']) == 1
+    return SimpleNamespace(spec=spec, initial=initial, proposal=proposal, recipient=recipient,
+                           offer=recipient['inbox'][0], case=case)
+
+
+@pytest.mark.parametrize('include_empty_parameters', [False, True])
+def test_sdk_protocol_consent_has_exact_reference_and_no_new_terms(sdk_protocol_offer, include_empty_parameters):
+    from app.services.world_simulation.contracts import validate_decision
+    from app.services.world_simulation.kernel import resolve_round
+
+    fixture = sdk_protocol_offer
+    offer = fixture.offer
+    intent = {'templateId': offer['templateId'], 'operation': 'accept',
+              'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}
+    if include_empty_parameters:
+        intent['parameters'] = {}
+    fixture.case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
+    response = fixture.case.policy.decide(fixture.recipient)
+    wire = json.loads(fixture.case.sent[-1].content)['messages']
+    prompt = wire[0]['content']
+    assert 'For accept/reject/defer/withdraw, omit parameters or use {}' in prompt
+    assert 'required proposal inputs do not apply to these operations' in prompt
+    assert 'exactly from the same delivered inbox item' in prompt
+    assert 'allowed fields, required values, types, min/max and enum' in prompt
+    assert 'An accepted action receipt does not by itself prove counterpart consent' in prompt
+    assert 'claim identical prior terms only when the recorded terms match' in prompt
+    assert 'Attribute communicated claims to their speaker and time' in prompt
+    assert 'If permitted sources conflict, acknowledge the disagreement' in prompt
+    assert 'do not invent an agreement, approval or recurring obligation' in prompt
+    assert not any(term in prompt for term in ('m5-', 'ablation', 'rubric', 'capacity-minus-one'))
+    assert json.loads(wire[1]['content']) == fixture.recipient
+    assert fixture.recipient['options'][0]['inputs']['quantity']['required'] is True
+    normalized = validate_decision(fixture.spec, response.decision, 'producer', fixture.recipient, phase='response')
+    result = resolve_round(fixture.spec, fixture.initial, [fixture.proposal, normalized], 1)
+    resolution = next(row for row in result['resolutions'] if row['intentId'] == normalized['intents'][0]['intentId'])
+    assert resolution['accepted'] is True
+    state = result['snapshot']
+    assert state['interactions'][offer['interactionId']]['acceptedBy'] == ['producer']
+    assert state['accounts']['buyer_cash']['balance'] == '27'
+    assert state['accounts']['buyer_stock']['balance'] == '2'
+    assert all(record['status'] == 'settled' for record in state['commitments'].values())
+    assert len(fixture.case.sent) == 2
+
+
+@pytest.mark.parametrize('mistake,expected_code', [
+    ('copied_terms', 'invalid_input'), ('altered_terms', 'invalid_input'),
+    ('wrong_id', 'unavailable_offer'), ('wrong_version', 'stale_terms'),
+])
+def test_sdk_protocol_invalid_consent_still_rejects_without_partial_effects(
+        sdk_protocol_offer, mistake, expected_code):
+    from app.services.world_simulation.contracts import validate_decision
+    from app.services.world_simulation.kernel import resolve_round
+
+    fixture = sdk_protocol_offer
+    offer = fixture.offer
+    intent = {'templateId': offer['templateId'], 'operation': 'accept',
+              'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}
+    if mistake == 'copied_terms':
+        intent['parameters'] = deepcopy(offer['terms'])
+    elif mistake == 'altered_terms':
+        intent['parameters'] = {'quantity': '3', 'price': '3'}
+    elif mistake == 'wrong_id':
+        intent['interactionId'] = ('0' if offer['interactionId'][0] != '0' else '1') + offer['interactionId'][1:]
+    else:
+        intent['termsVersion'] += 1
+    fixture.case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
+    response = fixture.case.policy.decide(fixture.recipient)
+    assert response.decision['intents'][0] == intent  # The transport does not guess a repair.
+    normalized = validate_decision(fixture.spec, response.decision, 'producer', fixture.recipient, phase='response')
+    result = resolve_round(fixture.spec, fixture.initial, [fixture.proposal, normalized], 1)
+    resolution = next(row for row in result['resolutions'] if row['intentId'] == normalized['intents'][0]['intentId'])
+    assert resolution['accepted'] is False and resolution['code'] == expected_code
+    assert result['snapshot']['accounts'] == fixture.initial['accounts']
+    pending = result['snapshot']['interactions'][offer['interactionId']]
+    assert pending['status'] == 'pending' and pending['acceptedBy'] == []
+    assert pending['terms'] == offer['terms'] and result['snapshot']['commitments'] == {}
+    assert len(fixture.case.sent) == 2
+
+
+def test_sdk_protocol_counter_is_new_terms_without_consent_or_reservation(sdk_protocol_offer):
+    from app.services.world_simulation.contracts import validate_decision
+    from app.services.world_simulation.kernel import resolve_round
+
+    fixture = sdk_protocol_offer
+    offer = fixture.offer
+    terms = {'quantity': '1', 'price': '2'}
+    intent = {'templateId': offer['templateId'], 'operation': 'counter', 'parameters': terms,
+              'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}
+    fixture.case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
+    response = fixture.case.policy.decide(fixture.recipient)
+    normalized = validate_decision(fixture.spec, response.decision, 'producer', fixture.recipient, phase='response')
+    result = resolve_round(fixture.spec, fixture.initial, [fixture.proposal, normalized], 1)
+    assert all(row['accepted'] for row in result['resolutions'])
+    original = result['snapshot']['interactions'][offer['interactionId']]
+    counter = result['snapshot']['interactions'][original['supersededBy']]
+    assert original['status'] == 'superseded' and original['terms'] == offer['terms']
+    assert counter['terms'] == terms and counter['termsVersion'] == offer['termsVersion'] + 1
+    assert counter['status'] == 'pending' and counter['acceptedBy'] == []
+    assert result['snapshot']['accounts'] == fixture.initial['accounts']
+    assert result['snapshot']['commitments'] == {} and len(fixture.case.sent) == 2
+
+
+def test_sdk_protocol_overmaximum_request_is_rejected_not_clamped(actor_case, boundary):
+    from app.services.world_simulation.contracts import initial_snapshot, validate_decision
+    from app.services.world_simulation.kernel import resolve_round
+    from app.services.world_simulation.observations import build_observation
+
+    spec = deepcopy(actor_case.spec)
+    spec['flows'] = []
+    initial = initial_snapshot(spec)
+    observation = build_observation(spec, initial, 'buyer', 1)
+    case = boundary(spec=spec, content=json.dumps({'intents': [
+        {'templateId': 'purchase', 'operation': 'propose', 'parameters': {'quantity': '11', 'price': '3'}},
+    ]}))
+    response = case.policy.decide(observation)
+    assert response.decision['intents'][0]['parameters']['quantity'] == '11'
+    normalized = validate_decision(spec, response.decision, 'buyer', observation, phase='proposal')
+    result = resolve_round(spec, initial, [normalized], 1)
+    assert result['resolutions'][0]['accepted'] is False
+    assert result['resolutions'][0]['code'] == 'invalid_input'
+    assert result['resolutions'][0]['explanation'] == 'Input above declared maximum'
+    assert result['snapshot']['accounts'] == initial['accounts']
+    assert result['snapshot']['interactions'] == {} and len(case.sent) == 1
+
+
+def test_sdk_protocol_coalition_consent_is_separate_from_own_vote_and_authority(actor_case, boundary):
+    from app.services.world_simulation.contracts import initial_snapshot, validate_decision
+    from app.services.world_simulation.examples import example_spec
+    from app.services.world_simulation.kernel import resolve_round, stage_interactions
+    from app.services.world_simulation.observations import build_observation
+
+    spec = example_spec('coalition')
+    spec['policy'] = deepcopy(actor_case.spec['policy'])
+    spec['limits'] = deepcopy(actor_case.spec['limits'])
+    initial = initial_snapshot(spec)
+    proposer = build_observation(spec, initial, 'org_a', 1)
+    case = boundary(spec=spec, content=json.dumps({'intents': [
+        {'templateId': 'coalition', 'operation': 'propose', 'parameters': {}},
+    ]}))
+    proposal = validate_decision(spec, case.policy.decide(proposer).decision, 'org_a', proposer, phase='proposal')
+    staged = stage_interactions(spec, initial, [proposal], 1)
+    recipient = build_observation(spec, staged, 'org_b', 1, 'response')
+    offer = recipient['inbox'][0]
+    case.body['choices'][0]['message']['content'] = json.dumps({'intents': [
+        {'templateId': offer['templateId'], 'operation': 'accept', 'parameters': {},
+         'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']},
+    ]})
+    acceptance = validate_decision(spec, case.policy.decide(recipient).decision, 'org_b', recipient, phase='response')
+    consent = resolve_round(spec, initial, [proposal, acceptance], 1)['snapshot']
+    assert consent['relations']['coalition_ab']['value'] == 'allied'
+    assert all(commitment['kind'] != 'vote' for commitment in consent['commitments'].values())
+    assert consent['accounts'] == initial['accounts']
+    assert consent['rules']['program_authorized']['value'] is False
+    prompt = json.loads(case.sent[-1].content)['messages'][0]['content']
+    assert 'coalition consent and public promises cast no votes or grant authority' in prompt
+
+    observation = build_observation(spec, consent, 'org_b', 2)
+    case.body['choices'][0]['message']['content'] = json.dumps({'intents': [
+        {'templateId': 'program_vote', 'operation': 'execute', 'parameters': {'support': True}},
+    ]})
+    vote = validate_decision(spec, case.policy.decide(observation).decision, 'org_b', observation, phase='proposal')
+    result = resolve_round(spec, consent, [vote], 2)
+    assert all(row['accepted'] for row in result['resolutions'])
+    motion = next(record for record in result['snapshot']['commitments'].values() if record['kind'] == 'vote')
+    assert motion['votes'] == {'org_b': True}
+    assert result['snapshot']['accounts'] == initial['accounts']
+    assert result['snapshot']['rules']['program_authorized']['value'] is False
+    assert len(case.sent) == 3

@@ -1,0 +1,32 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 19747,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/scripts/main_offline_pytest.py": "b2bd4469cdeb5f94097aafc5b81b0bf634fefd2fe1810dd3b3d0c0d42ff0a15b",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_evaluation.py": "79be7bcbf557794b498a9f6c2f5f6d990a1b585996ede5a40ff16a6bd1976ebc",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_policy.py": "6b5ee6702f1f4499764168debe80d00250b642f012d81b638d0765b748330f57",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_controller.py": "fdad029ed7afcd63c19b17fedf53826874533b4fa61b869176a8118dc55a3d86",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_store.py": "4499bc43a3eebc116842092a25c62549c64b1c220189803078fff1d4f9a18686",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_queue_fairness.py": "798cbdd8567430985190576c244044dae18320e2f859daa913df307b762d38e9",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/tests/test_world_evaluation_launch.py": "e7bb89fa38653e813b73a8648207d76959e8fb5d6c3917b39ac5e07d7b024d7d",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/app/config.py": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-first-20261016T184024Z-lfnuv1gs/source/backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

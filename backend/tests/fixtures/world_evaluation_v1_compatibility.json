@@ -1,0 +1,3664 @@
+{
+  "caseHashes": {
+    "m5-coalition-v1-s0-external-feedback-ablation": "025619bce1a0211a2e07bbc958999fd0493da5bc827e8cd2aca108ddd2c5061f",
+    "m5-coalition-v1-s0-reflexive": "159cbdd26345fd2cbe059d2073ac4ad6682f801eb2374e3d38e4fca0fd5d46a9",
+    "m5-coalition-v1-s1-external-feedback-ablation": "76c6cf6366f9f1d1fa71272023028f1335f604b78f72166a31aae1075f239344",
+    "m5-coalition-v1-s1-reflexive": "0371c84aec0f4b8329efc717c79f04f92beca90d1da5493a950f2b37ba5fb24d",
+    "m5-coalition-v2-s0-external-feedback-ablation": "52a52352779f635f923e8990f82c0db4d02938e9b0afad28314c670808560a6c",
+    "m5-coalition-v2-s0-reflexive": "0c7bf98984227b1bf5a3c890a8c2931c115d5ab9fad3f9741338421c896b4aec",
+    "m5-coalition-v2-s1-external-feedback-ablation": "a031d321525d7a91d27efe82dea51a0967ab3bb75de82b1521323e85ddf38a17",
+    "m5-coalition-v2-s1-reflexive": "54cf8de86ceed0a3cba4aac18410224c1c8ecaa9900b0c553b6a138896d8c03a",
+    "m5-coalition-v3-s0-external-feedback-ablation": "3022ea35395afe7b006a8ccfb1258395025ec93c102d48194b49a8a5caf2991d",
+    "m5-coalition-v3-s0-reflexive": "9dfe4eac1fcc7a60b251093e0d77550c58dc23b582580193f960b0a61a92dcce",
+    "m5-coalition-v3-s1-external-feedback-ablation": "0f55693fe28f73b3f2cb4e3d170c30abf9213ecc561c276f1a4227612d2bf04d",
+    "m5-coalition-v3-s1-reflexive": "503ab369b375a7582107de2963c9c65d9ee0ac942ca2f16308d8e706e80bbdff",
+    "m5-investment-v1-s0-external-feedback-ablation": "665cab5b984624faa2e341640fbb47784fb09646524c5a61c0d9e7e64be9265f",
+    "m5-investment-v1-s0-reflexive": "7b6baf12394b143e8163466a7118457a1b8ade31823316528c6483cae992f33d",
+    "m5-investment-v1-s1-external-feedback-ablation": "c31f050bafe90bf751b61f5f13913e7fef1e129ddcefdbe4fb6038e0f8384b56",
+    "m5-investment-v1-s1-reflexive": "cfa2128720833c9942e2be474354ce91cf7fb06c85286b7d71310f4cb79f2f94",
+    "m5-investment-v2-s0-external-feedback-ablation": "cfac1819e6f4a89da034c80ae579bef17efe0b7721374fda019606ede27085ed",
+    "m5-investment-v2-s0-reflexive": "ebcd3c8cf6a3fb2ee88e4c0fa05767aa3e115a9a93d3ee05e3b0b1eb4d58ec3d",
+    "m5-investment-v2-s1-external-feedback-ablation": "29a48235e0ebe71d011bbfceb7ef00de831aa6134012373451fb86d725116209",
+    "m5-investment-v2-s1-reflexive": "46450201d2a34aceaaabdaca5c728a19cf04ab2a214b1b910224d005617f1963",
+    "m5-investment-v3-s0-external-feedback-ablation": "1eee31f54014afd79aff63e53347946480b0eb73f1da1ed0e95c273b3f4d6747",
+    "m5-investment-v3-s0-reflexive": "5d785fc375bf3de3b8c1363569c29a6da36801c7f29034cac47778aa950e1571",
+    "m5-investment-v3-s1-external-feedback-ablation": "bf6364e3a882f34f46f5de7b21b66ed03dd0d4c6ae8da398a4d5b939d6f180fe",
+    "m5-investment-v3-s1-reflexive": "e586750e386e4f364ead92f7a6ae6fd39f483073c08af28ac19ad3a8985ed81b",
+    "m5-trade-v1-s0-external-feedback-ablation": "0435262ac98b71431f73e4b5ebe3cb789eb5f8b321a84b38c2d0f9963a687627",
+    "m5-trade-v1-s0-reflexive": "4fea8ae495d6cb5d2c85f2823427f126457a9d4eb037e3b77a5196383aff6190",
+    "m5-trade-v1-s1-external-feedback-ablation": "4477f0fb64a88291591000b1c06b8bd4b0d2b12c5f4976d26d8015bde02faac0",
+    "m5-trade-v1-s1-reflexive": "5ec78d5bdbb063d880842243f3d49a7bd5e8d3feb3b9954b5f9d21e76df03343",
+    "m5-trade-v2-s0-external-feedback-ablation": "af0313fd61bfe622fc8c593cf9523ee6d3b0598600a0a8ce9012b801c2cb65d2",
+    "m5-trade-v2-s0-reflexive": "f0eeef8864f687bc946d3322a5f2c028c1512e0037362ebda5c7321f29148d91",
+    "m5-trade-v2-s1-external-feedback-ablation": "9081711ed3c9ae41f2c09221093bfb0c5925cbc86732d8a940c74a35bb855b5b",
+    "m5-trade-v2-s1-reflexive": "aea2b70f6a91b2be2e50c7642ce6cfa851ed0d24d4112dd1108f0a75d3526ea2",
+    "m5-trade-v3-s0-external-feedback-ablation": "ac975a5feca1b582c6c57aad7882ce0e0d0d687a72e97633ef3d44be0bdb6867",
+    "m5-trade-v3-s0-reflexive": "6b6b7218401ca3a054f4268b55c97c3a7c673bed0903b1b27691479da7d91402",
+    "m5-trade-v3-s1-external-feedback-ablation": "781ed5fbfc83e23c3b26c7eb961cf8af217c82410c5504e2e80226add07e11fa",
+    "m5-trade-v3-s1-reflexive": "4fccc13973696a8378ac139fd036fd536efb9cb89b9e4a0e7894e621e093961a"
+  },
+  "provenance": {
+    "manifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
+    "note": "Generated with stdlib only from original v1 artifacts. Case hashes strip only policy and three runtime limits. Score controls retain unmodified focal observations/decisions and applicable resolutions; snapshots are projected to fields consumed by the original scorer/validator. They prove scoring compatibility, not full store replay.",
+    "originalPreregistration": "docs/handoff/reflexive-world-simulation/live-evidence/preregistration.json"
+  },
+  "scoringControls": [
+    {
+      "case": {
+        "arm": "reflexive",
+        "comparison": {
+          "actorId": "importer",
+          "after": "order_b",
+          "afterRound": 3,
+          "baseline": true,
+          "before": "order_a",
+          "beforeRound": 2,
+          "changed": false,
+          "direction": "switch_to_eligible_route",
+          "recordId": "route_a_eligible",
+          "section": "rules"
+        },
+        "domain": "trade",
+        "evaluationId": "m5-trade-v1-s0-reflexive",
+        "pairId": "m5-trade-v1-s0",
+        "seed": 0,
+        "spec": {
+          "actionCatalog": [
+            {
+              "actorIds": [
+                "regulator"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Make route A ineligible for new orders after two days; accepted orders are grandfathered.",
+              "inputs": {},
+              "kind": "policy",
+              "parameters": {
+                "authorityIds": [
+                  "regulator"
+                ],
+                "durationDays": "2",
+                "ruleId": "route_a_eligible",
+                "value": false
+              },
+              "templateId": "restrict_a",
+              "visibility": {
+                "actorIds": [
+                  "regulator"
+                ],
+                "kind": "actors"
+              }
+            },
+            {
+              "actorIds": [
+                "importer"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Offer 2 currency for one good through route A; requires current route eligibility and supplier consent.",
+              "inputs": {},
+              "kind": "agreement",
+              "parameters": {
+                "durationDays": "0",
+                "recipientIds": [
+                  "supplier_a"
+                ],
+                "requiresRule": "route_a_eligible",
+                "transfers": [
+                  {
+                    "amount": "2",
+                    "fromAccount": "importer_cash",
+                    "toAccount": "supplier_a_cash"
+                  },
+                  {
+                    "amount": "1",
+                    "fromAccount": "supplier_a_stock",
+                    "toAccount": "importer_stock"
+                  }
+                ]
+              },
+              "templateId": "order_a",
+              "visibility": {
+                "kind": "public"
+              }
+            },
+            {
+              "actorIds": [
+                "importer"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Offer 3 currency for one good through route B; requires current route eligibility and supplier consent.",
+              "inputs": {},
+              "kind": "agreement",
+              "parameters": {
+                "durationDays": "0",
+                "recipientIds": [
+                  "supplier_b"
+                ],
+                "requiresRule": "route_b_eligible",
+                "transfers": [
+                  {
+                    "amount": "3",
+                    "fromAccount": "importer_cash",
+                    "toAccount": "supplier_b_cash"
+                  },
+                  {
+                    "amount": "1",
+                    "fromAccount": "supplier_b_stock",
+                    "toAccount": "importer_stock"
+                  }
+                ]
+              },
+              "templateId": "order_b",
+              "visibility": {
+                "kind": "public"
+              }
+            },
+            {
+              "actorIds": [
+                "regulator",
+                "importer",
+                "supplier_a",
+                "supplier_b"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Make a nonbinding public statement.",
+              "inputs": {
+                "text": {
+                  "required": true,
+                  "type": "string"
+                }
+              },
+              "kind": "message",
+              "parameters": {},
+              "templateId": "communicate",
+              "visibility": {
+                "kind": "public"
+              }
+            }
+          ],
+          "actors": [
+            {
+              "actorId": "regulator",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "restrict_a",
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Implement the declared route restriction"
+              ],
+              "name": "Regulator",
+              "objectives": [
+                "Implement the declared route restriction"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "importer",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "order_a",
+                "order_b",
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [
+                "importer_cash",
+                "importer_stock"
+              ],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Obtain goods through currently eligible routes"
+              ],
+              "name": "Importer",
+              "objectives": [
+                "Buy one good through the cheapest currently eligible route."
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "supplier_a",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [
+                "supplier_a_cash",
+                "supplier_a_stock"
+              ],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Sell available goods on route A"
+              ],
+              "name": "Supplier A",
+              "objectives": [
+                "Sell available goods on route A"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "supplier_b",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [
+                "supplier_b_cash",
+                "supplier_b_stock"
+              ],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Sell available goods on route B"
+              ],
+              "name": "Supplier B",
+              "objectives": [
+                "Sell available goods on route B"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            }
+          ],
+          "asOf": "2030-01-01T00:00:00.000000Z",
+          "assumptions": [
+            {
+              "assumptionId": "synthetic-example/v1",
+              "description": "All values and mechanisms are synthetic.",
+              "visibility": {
+                "kind": "public"
+              }
+            },
+            {
+              "assumptionId": "m5-behavior/v1",
+              "description": "Synthetic held-out parameter variant; all values, goals and mechanisms are assumptions. Seeds label matched repetitions and do not guarantee independent model samples.",
+              "visibility": {
+                "kind": "public"
+              }
+            }
+          ],
+          "engine": "world-v1",
+          "flows": [],
+          "forecastEffect": "diagnostic_only",
+          "generationId": "m5-trade-v1-s0",
+          "horizon": "2030-01-05T00:00:00.000000Z",
+          "initialState": {
+            "accounts": {
+              "importer_cash": {
+                "balance": "30",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "metrics": {},
+            "relations": {},
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            }
+          },
+          "limits": {
+            "maxActors": 4,
+            "maxAttemptsPerSlot": 2,
+            "maxConcurrentCalls": 4,
+            "maxCostUsd": "0.573969584564",
+            "maxEventsPerRound": 1000,
+            "maxInboxItems": 20,
+            "maxIntentsPerPhase": 3,
+            "maxMessageChars": 1200,
+            "maxOutputTokens": 4096,
+            "maxTokens": 250000
+          },
+          "periods": [
+            {
+              "end": "2030-01-02T00:00:00.000000Z",
+              "index": 1,
+              "start": "2030-01-01T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-03T00:00:00.000000Z",
+              "index": 2,
+              "start": "2030-01-02T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-04T00:00:00.000000Z",
+              "index": 3,
+              "start": "2030-01-03T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-05T00:00:00.000000Z",
+              "index": 4,
+              "start": "2030-01-04T00:00:00.000000Z"
+            }
+          ],
+          "policy": {
+            "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+            "maxInputTokens": 60000,
+            "model": "glm-5.3",
+            "pricing": {
+              "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+              "contextWindowTokens": 1000000,
+              "inputOverheadTokens": 1024,
+              "inputUsdPerMillion": "2",
+              "maxOutputIncludesReasoning": true,
+              "maxOutputTokens": 131072,
+              "model": "glm-5.3",
+              "outputTokenParameter": "max_tokens",
+              "outputUsdPerMillion": "6",
+              "provider": "glm",
+              "source": {
+                "asOf": "2026-10-16T16:20:00Z",
+                "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+              }
+            },
+            "provider": "glm",
+            "reasoningEffort": "low",
+            "timeoutSeconds": 120
+          },
+          "scheduledEvents": [],
+          "schemaVersion": "simulation-world-spec/v1",
+          "seed": 0,
+          "simulationId": "m5-trade-v1-s0",
+          "sourceBindings": {}
+        },
+        "variant": 1
+      },
+      "expectedActions": [
+        null,
+        null
+      ],
+      "expectedEvidenceRefs": [
+        {
+          "decisionId": "ebeb0f833eb75986b11375f169960e0d",
+          "observationId": "2fb2f5f0c4da248783872259f9ba002f77da5a690880d68696fe51b0c00bb2c3",
+          "slot": "2:proposal:importer"
+        },
+        {
+          "decisionId": "13628538ee3054f2ab92ed2ed6205389",
+          "observationId": "a31615857d5675d6fbbcf2d7bc797e4e89308a2b829b485002f771e5d14c3570",
+          "slot": "3:proposal:importer"
+        }
+      ],
+      "expectedPoints": {
+        "consequenceResponse": 0,
+        "explanationRecord": null,
+        "feasibility": 2,
+        "goalConsistency": 0
+      },
+      "originalReceiptHash": "34a60cef8c9b7eace324e1e9fdb4ba94a35292b17473d174b1003af6399cd4c4",
+      "originalTraceHash": "a805e242799d3af46fa17ab456985e3a736c1005b4308bf63870f749b08a82a9",
+      "trace": {
+        "history": [
+          {
+            "accounts": {
+              "importer_cash": {
+                "balance": "30",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "actorStates": {
+              "importer": {},
+              "regulator": {},
+              "supplier_a": {},
+              "supplier_b": {}
+            },
+            "generationId": "m5-trade-v1-s0",
+            "metrics": {},
+            "relations": {},
+            "round": 0,
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-trade-v1-s0",
+            "specHash": "bd3ae4c853d39bd7dc2948bde0ad5c09ce8b5f95c8b5e945119e80ae938f6422"
+          },
+          {
+            "accounts": {
+              "importer_cash": {
+                "balance": "28",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "1",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "2",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "9",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "actorStates": {
+              "importer": {},
+              "regulator": {},
+              "supplier_a": {},
+              "supplier_b": {}
+            },
+            "generationId": "m5-trade-v1-s0",
+            "metrics": {},
+            "relations": {},
+            "round": 1,
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-trade-v1-s0",
+            "specHash": "bd3ae4c853d39bd7dc2948bde0ad5c09ce8b5f95c8b5e945119e80ae938f6422"
+          },
+          {
+            "accounts": {
+              "importer_cash": {
+                "balance": "28",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "1",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "2",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "9",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "actorStates": {
+              "importer": {},
+              "regulator": {},
+              "supplier_a": {},
+              "supplier_b": {}
+            },
+            "generationId": "m5-trade-v1-s0",
+            "metrics": {},
+            "relations": {},
+            "round": 2,
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-trade-v1-s0",
+            "specHash": "bd3ae4c853d39bd7dc2948bde0ad5c09ce8b5f95c8b5e945119e80ae938f6422"
+          },
+          {
+            "accounts": {
+              "importer_cash": {
+                "balance": "28",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "1",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "2",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "9",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "actorStates": {
+              "importer": {},
+              "regulator": {},
+              "supplier_a": {},
+              "supplier_b": {}
+            },
+            "generationId": "m5-trade-v1-s0",
+            "metrics": {},
+            "relations": {},
+            "round": 3,
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-trade-v1-s0",
+            "specHash": "bd3ae4c853d39bd7dc2948bde0ad5c09ce8b5f95c8b5e945119e80ae938f6422"
+          },
+          {
+            "accounts": {
+              "importer_cash": {
+                "balance": "28",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "importer_stock": {
+                "balance": "1",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "importer",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "importer"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_cash": {
+                "balance": "2",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_a_stock": {
+                "balance": "9",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_a",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_a"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_cash": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              },
+              "supplier_b_stock": {
+                "balance": "10",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "supplier_b",
+                "reserved": "0",
+                "unit": "goods",
+                "visibility": {
+                  "actorIds": [
+                    "supplier_b"
+                  ],
+                  "kind": "actors"
+                }
+              }
+            },
+            "actorStates": {
+              "importer": {},
+              "regulator": {},
+              "supplier_a": {},
+              "supplier_b": {}
+            },
+            "generationId": "m5-trade-v1-s0",
+            "metrics": {},
+            "relations": {},
+            "round": 4,
+            "rules": {
+              "route_a_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "route_b_eligible": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-trade-v1-s0",
+            "specHash": "bd3ae4c853d39bd7dc2948bde0ad5c09ce8b5f95c8b5e945119e80ae938f6422"
+          }
+        ],
+        "records": [
+          {
+            "decision": {
+              "actorId": "importer",
+              "decisionId": "ebeb0f833eb75986b11375f169960e0d",
+              "intents": [],
+              "observationId": "2fb2f5f0c4da248783872259f9ba002f77da5a690880d68696fe51b0c00bb2c3",
+              "phase": "proposal",
+              "rationale": "The order_a agreement was accepted and settled: 2 currency paid and 1 good received. The objective of buying one good through the cheapest eligible route is already fulfilled, so I wait.",
+              "round": 2,
+              "stateUpdates": {
+                "beliefs": [
+                  {
+                    "text": "Objective achieved: one good purchased via route A at 2 currency; commitment settled; no further action needed this period."
+                  }
+                ],
+                "plans": []
+              },
+              "status": "acted"
+            },
+            "observation": {
+              "actor": {
+                "actorId": "importer",
+                "beliefs": [],
+                "constraints": [
+                  "Spend only available authorized resources"
+                ],
+                "incentives": [
+                  "Obtain goods through currently eligible routes"
+                ],
+                "name": "Importer",
+                "objectives": [
+                  "Buy one good through the cheapest currently eligible route."
+                ],
+                "priorityRules": [],
+                "values": [
+                  "Honor explicit obligations"
+                ]
+              },
+              "actorId": "importer",
+              "horizon": "2030-01-05T00:00:00.000000Z",
+              "inbox": [],
+              "messages": [
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "020ac094152d5d878c676dea6d589c80",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_a",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_b"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier A has 10 goods available and is ready to sell on route A this period. Open to offers."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                },
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "1cbecd3ad6525daa9863d50cb68410e8",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_b",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_a"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier B has 10 goods available for sale on route B this period. Open to offers."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                }
+              ],
+              "observationId": "2fb2f5f0c4da248783872259f9ba002f77da5a690880d68696fe51b0c00bb2c3",
+              "options": [
+                {
+                  "description": "Make a nonbinding public statement.",
+                  "inputs": {
+                    "text": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "kind": "message",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "communicate"
+                },
+                {
+                  "description": "Offer 2 currency for one good through route A; requires current route eligibility and supplier consent.",
+                  "inputs": {},
+                  "kind": "agreement",
+                  "operations": [
+                    "propose",
+                    "withdraw"
+                  ],
+                  "templateId": "order_a"
+                },
+                {
+                  "description": "Offer 3 currency for one good through route B; requires current route eligibility and supplier consent.",
+                  "inputs": {},
+                  "kind": "agreement",
+                  "operations": [
+                    "propose",
+                    "withdraw"
+                  ],
+                  "templateId": "order_b"
+                }
+              ],
+              "ownOffers": [
+                {
+                  "acceptedBy": [
+                    "supplier_a"
+                  ],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158",
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                  "lastResponseRound": 1,
+                  "obligations": {
+                    "condition": {
+                      "requiredValue": true,
+                      "ruleId": "route_a_eligible"
+                    },
+                    "durationDays": "0",
+                    "transfers": [
+                      {
+                        "amount": "2",
+                        "fromAccount": "importer_cash",
+                        "fromActorId": "importer",
+                        "toAccount": "supplier_a_cash",
+                        "toActorId": "supplier_a",
+                        "unit": "currency"
+                      },
+                      {
+                        "amount": "1",
+                        "fromAccount": "supplier_a_stock",
+                        "fromActorId": "supplier_a",
+                        "toAccount": "importer_stock",
+                        "toActorId": "importer",
+                        "unit": "goods"
+                      }
+                    ]
+                  },
+                  "proposerId": "importer",
+                  "recipientIds": [
+                    "supplier_a"
+                  ],
+                  "status": "accepted",
+                  "templateId": "order_a",
+                  "terms": {},
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                }
+              ],
+              "periodEnd": "2030-01-03T00:00:00.000000Z",
+              "phase": "proposal",
+              "privateState": {
+                "beliefs": [
+                  {
+                    "basis": {
+                      "kind": "simulation_event",
+                      "refs": [
+                        "f054fd56e1600696f4310e32910807c517ba04e38a5df65bbbd69bb5827c7993",
+                        "fc3aa89174b050c2be1192f378430596"
+                      ]
+                    },
+                    "decisionId": "fc3aa89174b050c2be1192f378430596",
+                    "observationId": "f054fd56e1600696f4310e32910807c517ba04e38a5df65bbbd69bb5827c7993",
+                    "round": 1,
+                    "text": "Route A and B are both eligible; route A is cheaper (2 vs 3 currency)."
+                  }
+                ],
+                "lastActionResults": [
+                  {
+                    "accepted": true,
+                    "actorId": "importer",
+                    "code": "accepted",
+                    "explanation": "Action accepted under the declared mechanism",
+                    "intentId": "b6b479f215695c1c95da5e83d5cdc2c0",
+                    "round": 1
+                  }
+                ],
+                "lastObservedEvents": [
+                  {
+                    "actorId": "importer",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Agreement accepted",
+                    "details": {
+                      "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                      "termsVersion": 1
+                    },
+                    "eventId": "12487d1aac2a5dbc91fb52092a6d6248",
+                    "kind": "agreement_accepted",
+                    "round": 1,
+                    "sourceIntentId": "b6b479f215695c1c95da5e83d5cdc2c0",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "020ac094152d5d878c676dea6d589c80"
+                    },
+                    "eventId": "ce511c63b66a5781a63666f6dc4e5922",
+                    "kind": "message_accepted",
+                    "round": 1,
+                    "sourceIntentId": "ab46825313885370ba4b3d579d6e9889",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_b",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "1cbecd3ad6525daa9863d50cb68410e8"
+                    },
+                    "eventId": "e67a09f56d6f5532a786387fbc710cc1",
+                    "kind": "message_accepted",
+                    "round": 1,
+                    "sourceIntentId": "1aadde38278e5f758c0ab77ecafd0252",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Offer accept",
+                    "details": {
+                      "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                      "termsVersion": 1
+                    },
+                    "eventId": "a7a6d2f44d695e699714abcfa685e8a9",
+                    "kind": "offer_accept",
+                    "round": 1,
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Commitment settled",
+                    "details": {
+                      "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158"
+                    },
+                    "eventId": "edee2763ed9f59c0b9e7ab4c916e7a26",
+                    "kind": "commitment_settled",
+                    "round": 1,
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                ],
+                "observedEvents": [
+                  "12487d1aac2a5dbc91fb52092a6d6248",
+                  "ce511c63b66a5781a63666f6dc4e5922",
+                  "e67a09f56d6f5532a786387fbc710cc1",
+                  "a7a6d2f44d695e699714abcfa685e8a9",
+                  "edee2763ed9f59c0b9e7ab4c916e7a26"
+                ],
+                "plans": [
+                  {
+                    "basis": {
+                      "kind": "simulation_event",
+                      "refs": [
+                        "f054fd56e1600696f4310e32910807c517ba04e38a5df65bbbd69bb5827c7993",
+                        "fc3aa89174b050c2be1192f378430596"
+                      ]
+                    },
+                    "decisionId": "fc3aa89174b050c2be1192f378430596",
+                    "observationId": "f054fd56e1600696f4310e32910807c517ba04e38a5df65bbbd69bb5827c7993",
+                    "round": 1,
+                    "text": "Buy one good via route A (cheapest eligible route at 2 currency)."
+                  }
+                ],
+                "priorityChanges": []
+              },
+              "round": 2,
+              "schemaVersion": "actor-world-observation/v1",
+              "simulatedAt": "2030-01-02T00:00:00.000000Z",
+              "world": {
+                "accounts": {
+                  "importer_cash": {
+                    "balance": "28",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "importer",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "actorIds": [
+                        "importer"
+                      ],
+                      "kind": "actors"
+                    }
+                  },
+                  "importer_stock": {
+                    "balance": "1",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "importer",
+                    "reserved": "0",
+                    "unit": "goods",
+                    "visibility": {
+                      "actorIds": [
+                        "importer"
+                      ],
+                      "kind": "actors"
+                    }
+                  }
+                },
+                "commitments": {
+                  "3c1566ba44f55c34aa0fb72b2f774158": {
+                    "actorId": "supplier_a",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158",
+                    "createdAt": "2030-01-01T00:00:00.000000Z",
+                    "dueAt": "2030-01-01T00:00:00.000000Z",
+                    "effects": [],
+                    "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                    "kind": "agreement",
+                    "participantIds": [
+                      "importer",
+                      "supplier_a"
+                    ],
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "status": "settled",
+                    "templateId": "order_a",
+                    "transfers": [
+                      {
+                        "amount": "2",
+                        "fromAccount": "importer_cash",
+                        "toAccount": "supplier_a_cash"
+                      },
+                      {
+                        "amount": "1",
+                        "fromAccount": "supplier_a_stock",
+                        "toAccount": "importer_stock"
+                      }
+                    ],
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "metrics": {},
+                "relations": {},
+                "rules": {
+                  "route_a_eligible": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": true,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "route_b_eligible": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": true,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                }
+              }
+            },
+            "slot": "2:proposal:importer"
+          },
+          {
+            "decision": {
+              "actorId": "importer",
+              "decisionId": "13628538ee3054f2ab92ed2ed6205389",
+              "intents": [],
+              "observationId": "a31615857d5675d6fbbcf2d7bc797e4e89308a2b829b485002f771e5d14c3570",
+              "phase": "proposal",
+              "rationale": "Objective already achieved: one good purchased via route A at 2 currency, commitment settled. No pending inbox items and no obligations requiring response. No further purchases are needed this period.",
+              "round": 3,
+              "stateUpdates": {},
+              "status": "wait"
+            },
+            "observation": {
+              "actor": {
+                "actorId": "importer",
+                "beliefs": [],
+                "constraints": [
+                  "Spend only available authorized resources"
+                ],
+                "incentives": [
+                  "Obtain goods through currently eligible routes"
+                ],
+                "name": "Importer",
+                "objectives": [
+                  "Buy one good through the cheapest currently eligible route."
+                ],
+                "priorityRules": [],
+                "values": [
+                  "Honor explicit obligations"
+                ]
+              },
+              "actorId": "importer",
+              "horizon": "2030-01-05T00:00:00.000000Z",
+              "inbox": [],
+              "messages": [
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "020ac094152d5d878c676dea6d589c80",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_a",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_b"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier A has 10 goods available and is ready to sell on route A this period. Open to offers."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                },
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "1cbecd3ad6525daa9863d50cb68410e8",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_b",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_a"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier B has 10 goods available for sale on route B this period. Open to offers."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                },
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-02T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 2,
+                  "deliverAt": "2030-01-02T00:00:00.000000Z",
+                  "expiresAt": "2030-02-01T00:00:00.000000Z",
+                  "interactionId": "317a3e4049485ae1b35b3d52e0c0b2bd",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_a",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_b"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier A has 9 goods remaining after settling the importer's order on route A. Still ready to sell on route A this period; open to offers."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                },
+                {
+                  "acceptedBy": [],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "createdAt": "2030-01-02T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 2,
+                  "deliverAt": "2030-01-02T00:00:00.000000Z",
+                  "expiresAt": "2030-02-01T00:00:00.000000Z",
+                  "interactionId": "a4f70092516a5e698e080c3928863d5b",
+                  "kind": "message",
+                  "lastResponseRound": 0,
+                  "proposerId": "supplier_b",
+                  "recipientIds": [
+                    "importer",
+                    "regulator",
+                    "supplier_a"
+                  ],
+                  "status": "accepted",
+                  "templateId": "communicate",
+                  "terms": {
+                    "text": "Supplier B still has 10 goods available for sale on route B this period. Route B remains eligible; offering competitive pricing and prompt delivery. Open to offers from the importer."
+                  },
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                }
+              ],
+              "observationId": "a31615857d5675d6fbbcf2d7bc797e4e89308a2b829b485002f771e5d14c3570",
+              "options": [
+                {
+                  "description": "Make a nonbinding public statement.",
+                  "inputs": {
+                    "text": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "kind": "message",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "communicate"
+                },
+                {
+                  "description": "Offer 2 currency for one good through route A; requires current route eligibility and supplier consent.",
+                  "inputs": {},
+                  "kind": "agreement",
+                  "operations": [
+                    "propose",
+                    "withdraw"
+                  ],
+                  "templateId": "order_a"
+                },
+                {
+                  "description": "Offer 3 currency for one good through route B; requires current route eligibility and supplier consent.",
+                  "inputs": {},
+                  "kind": "agreement",
+                  "operations": [
+                    "propose",
+                    "withdraw"
+                  ],
+                  "templateId": "order_b"
+                }
+              ],
+              "ownOffers": [
+                {
+                  "acceptedBy": [
+                    "supplier_a"
+                  ],
+                  "basis": {
+                    "kind": "scenario_assumption",
+                    "refs": [
+                      "synthetic-example/v1"
+                    ]
+                  },
+                  "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158",
+                  "createdAt": "2030-01-01T00:00:00.000000Z",
+                  "createdPhase": "proposal",
+                  "createdRound": 1,
+                  "deliverAt": "2030-01-01T00:00:00.000000Z",
+                  "expiresAt": "2030-01-31T00:00:00.000000Z",
+                  "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                  "lastResponseRound": 1,
+                  "obligations": {
+                    "condition": {
+                      "requiredValue": true,
+                      "ruleId": "route_a_eligible"
+                    },
+                    "durationDays": "0",
+                    "transfers": [
+                      {
+                        "amount": "2",
+                        "fromAccount": "importer_cash",
+                        "fromActorId": "importer",
+                        "toAccount": "supplier_a_cash",
+                        "toActorId": "supplier_a",
+                        "unit": "currency"
+                      },
+                      {
+                        "amount": "1",
+                        "fromAccount": "supplier_a_stock",
+                        "fromActorId": "supplier_a",
+                        "toAccount": "importer_stock",
+                        "toActorId": "importer",
+                        "unit": "goods"
+                      }
+                    ]
+                  },
+                  "proposerId": "importer",
+                  "recipientIds": [
+                    "supplier_a"
+                  ],
+                  "status": "accepted",
+                  "templateId": "order_a",
+                  "terms": {},
+                  "termsVersion": 1,
+                  "visibility": {
+                    "kind": "public"
+                  }
+                }
+              ],
+              "periodEnd": "2030-01-04T00:00:00.000000Z",
+              "phase": "proposal",
+              "privateState": {
+                "beliefs": [
+                  {
+                    "basis": {
+                      "kind": "simulation_event",
+                      "refs": [
+                        "2fb2f5f0c4da248783872259f9ba002f77da5a690880d68696fe51b0c00bb2c3",
+                        "ebeb0f833eb75986b11375f169960e0d"
+                      ]
+                    },
+                    "decisionId": "ebeb0f833eb75986b11375f169960e0d",
+                    "observationId": "2fb2f5f0c4da248783872259f9ba002f77da5a690880d68696fe51b0c00bb2c3",
+                    "round": 2,
+                    "text": "Objective achieved: one good purchased via route A at 2 currency; commitment settled; no further action needed this period."
+                  }
+                ],
+                "lastActionResults": [
+                  {
+                    "accepted": true,
+                    "actorId": "importer",
+                    "code": "accepted",
+                    "explanation": "Action accepted under the declared mechanism",
+                    "intentId": "b6b479f215695c1c95da5e83d5cdc2c0",
+                    "round": 1
+                  }
+                ],
+                "lastObservedEvents": [
+                  {
+                    "actorId": "importer",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Agreement accepted",
+                    "details": {
+                      "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                      "termsVersion": 1
+                    },
+                    "eventId": "12487d1aac2a5dbc91fb52092a6d6248",
+                    "kind": "agreement_accepted",
+                    "round": 1,
+                    "sourceIntentId": "b6b479f215695c1c95da5e83d5cdc2c0",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "020ac094152d5d878c676dea6d589c80"
+                    },
+                    "eventId": "ce511c63b66a5781a63666f6dc4e5922",
+                    "kind": "message_accepted",
+                    "round": 1,
+                    "sourceIntentId": "ab46825313885370ba4b3d579d6e9889",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_b",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "1cbecd3ad6525daa9863d50cb68410e8"
+                    },
+                    "eventId": "e67a09f56d6f5532a786387fbc710cc1",
+                    "kind": "message_accepted",
+                    "round": 1,
+                    "sourceIntentId": "1aadde38278e5f758c0ab77ecafd0252",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Offer accept",
+                    "details": {
+                      "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                      "termsVersion": 1
+                    },
+                    "eventId": "a7a6d2f44d695e699714abcfa685e8a9",
+                    "kind": "offer_accept",
+                    "round": 1,
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-01T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Commitment settled",
+                    "details": {
+                      "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158"
+                    },
+                    "eventId": "edee2763ed9f59c0b9e7ab4c916e7a26",
+                    "kind": "commitment_settled",
+                    "round": 1,
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_a",
+                    "at": "2030-01-02T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "317a3e4049485ae1b35b3d52e0c0b2bd"
+                    },
+                    "eventId": "272481e126be5eb39c6b2e1738f8598c",
+                    "kind": "message_accepted",
+                    "round": 2,
+                    "sourceIntentId": "4c4b3414a10c55b198df1fefb806fb33",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  {
+                    "actorId": "supplier_b",
+                    "at": "2030-01-02T00:00:00.000000Z",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "description": "Message accepted",
+                    "details": {
+                      "interactionId": "a4f70092516a5e698e080c3928863d5b"
+                    },
+                    "eventId": "c4cf1f7b88e45fa6a402105ca2581521",
+                    "kind": "message_accepted",
+                    "round": 2,
+                    "sourceIntentId": "92a6f441e9f2578190ffb3af47a25ee2",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                ],
+                "observedEvents": [
+                  "12487d1aac2a5dbc91fb52092a6d6248",
+                  "ce511c63b66a5781a63666f6dc4e5922",
+                  "e67a09f56d6f5532a786387fbc710cc1",
+                  "a7a6d2f44d695e699714abcfa685e8a9",
+                  "edee2763ed9f59c0b9e7ab4c916e7a26",
+                  "272481e126be5eb39c6b2e1738f8598c",
+                  "c4cf1f7b88e45fa6a402105ca2581521"
+                ],
+                "plans": [],
+                "priorityChanges": []
+              },
+              "round": 3,
+              "schemaVersion": "actor-world-observation/v1",
+              "simulatedAt": "2030-01-03T00:00:00.000000Z",
+              "world": {
+                "accounts": {
+                  "importer_cash": {
+                    "balance": "28",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "importer",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "actorIds": [
+                        "importer"
+                      ],
+                      "kind": "actors"
+                    }
+                  },
+                  "importer_stock": {
+                    "balance": "1",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "importer",
+                    "reserved": "0",
+                    "unit": "goods",
+                    "visibility": {
+                      "actorIds": [
+                        "importer"
+                      ],
+                      "kind": "actors"
+                    }
+                  }
+                },
+                "commitments": {
+                  "3c1566ba44f55c34aa0fb72b2f774158": {
+                    "actorId": "supplier_a",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "commitmentId": "3c1566ba44f55c34aa0fb72b2f774158",
+                    "createdAt": "2030-01-01T00:00:00.000000Z",
+                    "dueAt": "2030-01-01T00:00:00.000000Z",
+                    "effects": [],
+                    "interactionId": "4ffdb9312a355ea99b1b713849172fa2",
+                    "kind": "agreement",
+                    "participantIds": [
+                      "importer",
+                      "supplier_a"
+                    ],
+                    "sourceIntentId": "4235b7632c6b593eab7d8a7ab0096a15",
+                    "status": "settled",
+                    "templateId": "order_a",
+                    "transfers": [
+                      {
+                        "amount": "2",
+                        "fromAccount": "importer_cash",
+                        "toAccount": "supplier_a_cash"
+                      },
+                      {
+                        "amount": "1",
+                        "fromAccount": "supplier_a_stock",
+                        "toAccount": "importer_stock"
+                      }
+                    ],
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "metrics": {},
+                "relations": {},
+                "rules": {
+                  "route_a_eligible": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": false,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "route_b_eligible": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": true,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                }
+              }
+            },
+            "slot": "3:proposal:importer"
+          }
+        ],
+        "rounds": [
+          {
+            "resolutions": [],
+            "round": 1
+          },
+          {
+            "resolutions": [],
+            "round": 2
+          },
+          {
+            "resolutions": [],
+            "round": 3
+          },
+          {
+            "resolutions": [],
+            "round": 4
+          }
+        ]
+      }
+    },
+    {
+      "case": {
+        "arm": "reflexive",
+        "comparison": {
+          "actorId": "org_c",
+          "after": "oppose",
+          "afterRound": 2,
+          "baseline": "none",
+          "before": "wait",
+          "beforeRound": 1,
+          "changed": "allied",
+          "direction": "wait_then_record_opposition",
+          "recordId": "coalition_ab",
+          "section": "relations"
+        },
+        "domain": "coalition",
+        "evaluationId": "m5-coalition-v1-s0-reflexive",
+        "pairId": "m5-coalition-v1-s0",
+        "seed": 0,
+        "spec": {
+          "actionCatalog": [
+            {
+              "actorIds": [
+                "org_a"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Propose an explicit coalition to B; consent does not cast votes.",
+              "inputs": {},
+              "kind": "agreement",
+              "parameters": {
+                "durationDays": "0",
+                "recipientIds": [
+                  "org_b"
+                ],
+                "relationId": "coalition_ab",
+                "relationValue": "allied"
+              },
+              "templateId": "coalition",
+              "visibility": {
+                "actorIds": [
+                  "org_a",
+                  "org_b"
+                ],
+                "kind": "actors"
+              }
+            },
+            {
+              "actorIds": [
+                "org_a",
+                "org_b",
+                "org_c"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Cast your own vote. Weights A/B/C are 30/20/50; passage requires 55 and funding of 60. Coalition consent never casts a vote.",
+              "inputs": {
+                "support": {
+                  "required": true,
+                  "type": "boolean"
+                }
+              },
+              "kind": "vote",
+              "parameters": {
+                "cost": "60",
+                "fromAccount": "institution_budget",
+                "mandateRule": "mandate",
+                "motionId": "program",
+                "ruleValue": true,
+                "targetRule": "program_authorized",
+                "threshold": "55",
+                "toAccount": "program_sink",
+                "weights": {
+                  "org_a": "30",
+                  "org_b": "20",
+                  "org_c": "50"
+                }
+              },
+              "templateId": "program_vote",
+              "visibility": {
+                "kind": "public"
+              }
+            },
+            {
+              "actorIds": [
+                "org_a",
+                "org_b",
+                "org_c",
+                "institution"
+              ],
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "description": "Make a nonbinding public statement.",
+              "inputs": {
+                "text": {
+                  "required": true,
+                  "type": "string"
+                }
+              },
+              "kind": "message",
+              "parameters": {},
+              "templateId": "communicate",
+              "visibility": {
+                "kind": "public"
+              }
+            }
+          ],
+          "actors": [
+            {
+              "actorId": "org_a",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "coalition",
+                "program_vote",
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Build a coalition to pass the program"
+              ],
+              "name": "Organization A",
+              "objectives": [
+                "Build a coalition to pass the program"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "org_b",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "program_vote",
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Support the program after an explicit coalition agreement"
+              ],
+              "name": "Organization B",
+              "objectives": [
+                "Support the program after an explicit coalition agreement"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "org_c",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "program_vote",
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Preserve the institutional budget"
+              ],
+              "name": "Organization C",
+              "objectives": [
+                "Preserve the institutional budget. Wait while no coalition exists; record your own opposing program vote when coalition_ab is allied."
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            },
+            {
+              "actorId": "institution",
+              "basis": {
+                "kind": "scenario_assumption",
+                "refs": [
+                  "synthetic-example/v1"
+                ]
+              },
+              "beliefs": [],
+              "cadence": 1,
+              "capabilities": [
+                "communicate"
+              ],
+              "constraints": [
+                "Spend only available authorized resources"
+              ],
+              "controlledAccounts": [
+                "institution_budget"
+              ],
+              "evidenceGrade": "scenario-assumption",
+              "incentives": [
+                "Execute only authorized and funded programs"
+              ],
+              "name": "Executing institution",
+              "objectives": [
+                "Execute only authorized and funded programs"
+              ],
+              "priorityRules": [],
+              "respondToOffers": true,
+              "values": [
+                "Honor explicit obligations"
+              ]
+            }
+          ],
+          "asOf": "2030-01-01T00:00:00.000000Z",
+          "assumptions": [
+            {
+              "assumptionId": "synthetic-example/v1",
+              "description": "All values and mechanisms are synthetic.",
+              "visibility": {
+                "kind": "public"
+              }
+            },
+            {
+              "assumptionId": "m5-behavior/v1",
+              "description": "Synthetic held-out parameter variant; all values, goals and mechanisms are assumptions. Seeds label matched repetitions and do not guarantee independent model samples.",
+              "visibility": {
+                "kind": "public"
+              }
+            }
+          ],
+          "engine": "world-v1",
+          "flows": [],
+          "forecastEffect": "diagnostic_only",
+          "generationId": "m5-coalition-v1-s0",
+          "horizon": "2030-01-05T00:00:00.000000Z",
+          "initialState": {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "none",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            }
+          },
+          "limits": {
+            "maxActors": 4,
+            "maxAttemptsPerSlot": 2,
+            "maxConcurrentCalls": 4,
+            "maxCostUsd": "0.573969584564",
+            "maxEventsPerRound": 1000,
+            "maxInboxItems": 20,
+            "maxIntentsPerPhase": 3,
+            "maxMessageChars": 1200,
+            "maxOutputTokens": 4096,
+            "maxTokens": 250000
+          },
+          "periods": [
+            {
+              "end": "2030-01-02T00:00:00.000000Z",
+              "index": 1,
+              "start": "2030-01-01T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-03T00:00:00.000000Z",
+              "index": 2,
+              "start": "2030-01-02T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-04T00:00:00.000000Z",
+              "index": 3,
+              "start": "2030-01-03T00:00:00.000000Z"
+            },
+            {
+              "end": "2030-01-05T00:00:00.000000Z",
+              "index": 4,
+              "start": "2030-01-04T00:00:00.000000Z"
+            }
+          ],
+          "policy": {
+            "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+            "maxInputTokens": 60000,
+            "model": "glm-5.3",
+            "pricing": {
+              "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+              "contextWindowTokens": 1000000,
+              "inputOverheadTokens": 1024,
+              "inputUsdPerMillion": "2",
+              "maxOutputIncludesReasoning": true,
+              "maxOutputTokens": 131072,
+              "model": "glm-5.3",
+              "outputTokenParameter": "max_tokens",
+              "outputUsdPerMillion": "6",
+              "provider": "glm",
+              "source": {
+                "asOf": "2026-10-16T16:20:00Z",
+                "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+              }
+            },
+            "provider": "glm",
+            "reasoningEffort": "low",
+            "timeoutSeconds": 120
+          },
+          "scheduledEvents": [],
+          "schemaVersion": "simulation-world-spec/v1",
+          "seed": 0,
+          "simulationId": "m5-coalition-v1-s0",
+          "sourceBindings": {}
+        },
+        "variant": 1
+      },
+      "expectedActions": [
+        "wait",
+        "oppose"
+      ],
+      "expectedEvidenceRefs": [
+        {
+          "decisionId": "f7fa3ae35ac4583394c3406a2859a1fb",
+          "observationId": "28bf30d0680a9308186df03d1bb8a08561935edf5c36635581997ac4cb7e6b75",
+          "slot": "1:proposal:org_c"
+        },
+        {
+          "decisionId": "c892a41b064050128126f97dfa1bbdff",
+          "observationId": "c7560aa86a3ec5d4c86f331458d96d526e4628d3a5593e889e6b10238eec7ef5",
+          "slot": "2:proposal:org_c"
+        }
+      ],
+      "expectedPoints": {
+        "consequenceResponse": 2,
+        "explanationRecord": null,
+        "feasibility": 2,
+        "goalConsistency": 2
+      },
+      "originalReceiptHash": "62762b3e7a656d472d373d3354f097a93c78c13fc77d7c72c8536c66e9051783",
+      "originalTraceHash": "6224aabd723edccd3ef55987066dde0dd575fc2b4d444b117e8fbff6a8d2a29e",
+      "trace": {
+        "history": [
+          {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "actorStates": {
+              "institution": {},
+              "org_a": {},
+              "org_b": {},
+              "org_c": {}
+            },
+            "generationId": "m5-coalition-v1-s0",
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "none",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "round": 0,
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-coalition-v1-s0",
+            "specHash": "7d8cd0dfdd35677d80581fbf1ac066f7a3b17274c41d15a5272fde4346ae8236"
+          },
+          {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "actorStates": {
+              "institution": {},
+              "org_a": {},
+              "org_b": {},
+              "org_c": {}
+            },
+            "generationId": "m5-coalition-v1-s0",
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "allied",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "round": 1,
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-coalition-v1-s0",
+            "specHash": "7d8cd0dfdd35677d80581fbf1ac066f7a3b17274c41d15a5272fde4346ae8236"
+          },
+          {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "actorStates": {
+              "institution": {},
+              "org_a": {},
+              "org_b": {},
+              "org_c": {}
+            },
+            "generationId": "m5-coalition-v1-s0",
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "allied",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "round": 2,
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-coalition-v1-s0",
+            "specHash": "7d8cd0dfdd35677d80581fbf1ac066f7a3b17274c41d15a5272fde4346ae8236"
+          },
+          {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "actorStates": {
+              "institution": {},
+              "org_a": {},
+              "org_b": {},
+              "org_c": {}
+            },
+            "generationId": "m5-coalition-v1-s0",
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "allied",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "round": 3,
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-coalition-v1-s0",
+            "specHash": "7d8cd0dfdd35677d80581fbf1ac066f7a3b17274c41d15a5272fde4346ae8236"
+          },
+          {
+            "accounts": {
+              "institution_budget": {
+                "balance": "80",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "institution",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_sink": {
+                "balance": "0",
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "ownerId": "external",
+                "reserved": "0",
+                "unit": "currency",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "actorStates": {
+              "institution": {},
+              "org_a": {},
+              "org_b": {},
+              "org_c": {}
+            },
+            "generationId": "m5-coalition-v1-s0",
+            "metrics": {},
+            "relations": {
+              "coalition_ab": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": "allied",
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "round": 4,
+            "rules": {
+              "mandate": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": true,
+                "visibility": {
+                  "kind": "public"
+                }
+              },
+              "program_authorized": {
+                "basis": {
+                  "kind": "scenario_assumption",
+                  "refs": [
+                    "synthetic-example/v1"
+                  ]
+                },
+                "value": false,
+                "visibility": {
+                  "kind": "public"
+                }
+              }
+            },
+            "schemaVersion": "world-snapshot/v1",
+            "simulationId": "m5-coalition-v1-s0",
+            "specHash": "7d8cd0dfdd35677d80581fbf1ac066f7a3b17274c41d15a5272fde4346ae8236"
+          }
+        ],
+        "records": [
+          {
+            "decision": {
+              "actorId": "org_c",
+              "decisionId": "f7fa3ae35ac4583394c3406a2859a1fb",
+              "intents": [],
+              "observationId": "28bf30d0680a9308186df03d1bb8a08561935edf5c36635581997ac4cb7e6b75",
+              "phase": "proposal",
+              "rationale": "coalition_ab is currently 'none', so per objectives Organization C waits and casts no vote. The opposing vote is only to be recorded once coalition_ab is allied.",
+              "round": 1,
+              "stateUpdates": {
+                "plans": [
+                  {
+                    "text": "Wait while coalition_ab is 'none'; cast opposing program vote if it becomes 'allied'."
+                  }
+                ]
+              },
+              "status": "wait"
+            },
+            "observation": {
+              "actor": {
+                "actorId": "org_c",
+                "beliefs": [],
+                "constraints": [
+                  "Spend only available authorized resources"
+                ],
+                "incentives": [
+                  "Preserve the institutional budget"
+                ],
+                "name": "Organization C",
+                "objectives": [
+                  "Preserve the institutional budget. Wait while no coalition exists; record your own opposing program vote when coalition_ab is allied."
+                ],
+                "priorityRules": [],
+                "values": [
+                  "Honor explicit obligations"
+                ]
+              },
+              "actorId": "org_c",
+              "horizon": "2030-01-05T00:00:00.000000Z",
+              "inbox": [],
+              "messages": [],
+              "observationId": "28bf30d0680a9308186df03d1bb8a08561935edf5c36635581997ac4cb7e6b75",
+              "options": [
+                {
+                  "description": "Make a nonbinding public statement.",
+                  "inputs": {
+                    "text": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "kind": "message",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "communicate"
+                },
+                {
+                  "description": "Cast your own vote. Weights A/B/C are 30/20/50; passage requires 55 and funding of 60. Coalition consent never casts a vote.",
+                  "inputs": {
+                    "support": {
+                      "required": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "kind": "vote",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "program_vote"
+                }
+              ],
+              "ownOffers": [],
+              "periodEnd": "2030-01-02T00:00:00.000000Z",
+              "phase": "proposal",
+              "privateState": {
+                "beliefs": [],
+                "lastActionResults": [],
+                "lastObservedEvents": [],
+                "observedEvents": [],
+                "plans": [],
+                "priorityChanges": []
+              },
+              "round": 1,
+              "schemaVersion": "actor-world-observation/v1",
+              "simulatedAt": "2030-01-01T00:00:00.000000Z",
+              "world": {
+                "accounts": {
+                  "institution_budget": {
+                    "balance": "80",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "institution",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "program_sink": {
+                    "balance": "0",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "external",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "commitments": {},
+                "metrics": {},
+                "relations": {
+                  "coalition_ab": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": "none",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "rules": {
+                  "mandate": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": true,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "program_authorized": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": false,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                }
+              }
+            },
+            "slot": "1:proposal:org_c"
+          },
+          {
+            "decision": {
+              "actorId": "org_c",
+              "decisionId": "c892a41b064050128126f97dfa1bbdff",
+              "intents": [
+                {
+                  "actorId": "org_c",
+                  "intentId": "1cf564fda8d859049859e912689a9562",
+                  "operation": "execute",
+                  "parameters": {
+                    "support": false
+                  },
+                  "phase": "proposal",
+                  "priority": 0,
+                  "templateId": "program_vote"
+                }
+              ],
+              "observationId": "c7560aa86a3ec5d4c86f331458d96d526e4628d3a5593e889e6b10238eec7ef5",
+              "phase": "proposal",
+              "rationale": "Coalition_ab is allied, so per objective I cast my own opposing program vote (support=false).",
+              "round": 2,
+              "stateUpdates": {
+                "plans": [
+                  {
+                    "text": "Coalition_ab is allied this round; opposing vote cast. Continue monitoring coalition status next round."
+                  }
+                ]
+              },
+              "status": "acted"
+            },
+            "observation": {
+              "actor": {
+                "actorId": "org_c",
+                "beliefs": [],
+                "constraints": [
+                  "Spend only available authorized resources"
+                ],
+                "incentives": [
+                  "Preserve the institutional budget"
+                ],
+                "name": "Organization C",
+                "objectives": [
+                  "Preserve the institutional budget. Wait while no coalition exists; record your own opposing program vote when coalition_ab is allied."
+                ],
+                "priorityRules": [],
+                "values": [
+                  "Honor explicit obligations"
+                ]
+              },
+              "actorId": "org_c",
+              "horizon": "2030-01-05T00:00:00.000000Z",
+              "inbox": [],
+              "messages": [],
+              "observationId": "c7560aa86a3ec5d4c86f331458d96d526e4628d3a5593e889e6b10238eec7ef5",
+              "options": [
+                {
+                  "description": "Make a nonbinding public statement.",
+                  "inputs": {
+                    "text": {
+                      "required": true,
+                      "type": "string"
+                    }
+                  },
+                  "kind": "message",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "communicate"
+                },
+                {
+                  "description": "Cast your own vote. Weights A/B/C are 30/20/50; passage requires 55 and funding of 60. Coalition consent never casts a vote.",
+                  "inputs": {
+                    "support": {
+                      "required": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "kind": "vote",
+                  "operations": [
+                    "execute"
+                  ],
+                  "templateId": "program_vote"
+                }
+              ],
+              "ownOffers": [],
+              "periodEnd": "2030-01-03T00:00:00.000000Z",
+              "phase": "proposal",
+              "privateState": {
+                "beliefs": [],
+                "lastActionResults": [],
+                "lastObservedEvents": [],
+                "observedEvents": [],
+                "plans": [
+                  {
+                    "basis": {
+                      "kind": "simulation_event",
+                      "refs": [
+                        "28bf30d0680a9308186df03d1bb8a08561935edf5c36635581997ac4cb7e6b75",
+                        "f7fa3ae35ac4583394c3406a2859a1fb"
+                      ]
+                    },
+                    "decisionId": "f7fa3ae35ac4583394c3406a2859a1fb",
+                    "observationId": "28bf30d0680a9308186df03d1bb8a08561935edf5c36635581997ac4cb7e6b75",
+                    "round": 1,
+                    "text": "Wait while coalition_ab is 'none'; cast opposing program vote if it becomes 'allied'."
+                  }
+                ],
+                "priorityChanges": []
+              },
+              "round": 2,
+              "schemaVersion": "actor-world-observation/v1",
+              "simulatedAt": "2030-01-02T00:00:00.000000Z",
+              "world": {
+                "accounts": {
+                  "institution_budget": {
+                    "balance": "80",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "institution",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "program_sink": {
+                    "balance": "0",
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "ownerId": "external",
+                    "reserved": "0",
+                    "unit": "currency",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "commitments": {},
+                "metrics": {},
+                "relations": {
+                  "coalition_ab": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": "allied",
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                },
+                "rules": {
+                  "mandate": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": true,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  },
+                  "program_authorized": {
+                    "basis": {
+                      "kind": "scenario_assumption",
+                      "refs": [
+                        "synthetic-example/v1"
+                      ]
+                    },
+                    "value": false,
+                    "visibility": {
+                      "kind": "public"
+                    }
+                  }
+                }
+              }
+            },
+            "slot": "2:proposal:org_c"
+          }
+        ],
+        "rounds": [
+          {
+            "resolutions": [],
+            "round": 1
+          },
+          {
+            "resolutions": [
+              {
+                "accepted": true,
+                "actorId": "org_c",
+                "code": "accepted",
+                "explanation": "Action accepted under the declared mechanism",
+                "intentId": "1cf564fda8d859049859e912689a9562",
+                "round": 2
+              }
+            ],
+            "round": 2
+          },
+          {
+            "resolutions": [],
+            "round": 3
+          },
+          {
+            "resolutions": [],
+            "round": 4
+          }
+        ]
+      }
+    }
+  ]
+}
