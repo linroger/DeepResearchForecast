@@ -93,6 +93,56 @@ def test_state_variables_from_research_and_official_with_cutoff():
     assert wms.state_variables_from_research(None, None) == []
 
 
+def test_state_variables_ignore_projected_quantitative_facts():
+    actors = {
+        "as_of_date": "2026-07-01",
+        "quantitative_facts": [
+            {"metric": "Current capacity", "value": "100", "value_type": "actual", "as_of_date": "2026-06-30"},
+            {"metric": "Analyst estimate", "value": "120", "value_type": "estimate", "period_end": "2026-07-01"},
+            {"metric": "Future target", "value": "200", "value_type": "target", "period_end": "2026-12-31"},
+            {"metric": "Forecast value", "value": "210", "value_type": "forecast", "period_end": "2027-03-31"},
+        ],
+    }
+    rows = wms.state_variables_from_research(actors, None, max_variables=24)
+    by_id = {r["id"]: r for r in rows}
+    assert set(by_id) == {"current_capacity", "analyst_estimate"}
+
+
+def test_state_variables_official_respects_snapshot_eligibility():
+    actors = {"as_of_date": "2026-07-01", "quantitative_facts": []}
+    official = {
+        "series": [
+            {
+                "series": "fred:GDP",
+                "provider": "fred",
+                "title": "GDP",
+                "units": "USD",
+                "frequency": "Q",
+                "retrieved_at": "2026-07-01T00:00:00Z",
+                "observations": [
+                    {"date": "2026-04-01", "value": 100.0, "flag": "observed"},
+                    {"date": "2026-10-01", "value": 999.0, "flag": "observed"},
+                ],
+                "provenance": {},
+            },
+            {
+                "series": "fred:CPIAUCSL",
+                "provider": "fred",
+                "title": "CPI",
+                "units": "index",
+                "frequency": "M",
+                "retrieved_at": "2026-08-01T00:00:00Z",
+                "observations": [{"date": "2026-06-01", "value": 300.0, "flag": "observed"}],
+                "provenance": {},
+            },
+        ],
+    }
+    rows = wms.state_variables_from_research(actors, official, max_variables=24)
+    by_id = {r["id"]: r for r in rows}
+    assert by_id["gdp"]["value"] == 100.0
+    assert "cpi" not in by_id
+
+
 def test_resolve_agency_class_order():
     assert wms.resolve_agency_class({"agency_class": "labor_union"}, "Organization") == "labor_union"
     assert wms.resolve_agency_class({"name": "X"}, "Organization", ontology_class="central_bank") == "central_bank"

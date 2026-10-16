@@ -37,6 +37,7 @@ from ..utils.actors import (
 )
 from .actor_role_prompt import sanitize_untrusted_dossier_text
 from .agent_decision import default_capacity, infer_agency_class
+from .official_data import data_api, resolution_instant
 from .world_model import parse_quantity, slugify
 
 WORLD_MODEL_SEED_VERSION = "world-model-seed/v1"
@@ -46,6 +47,8 @@ MAX_PLANS = 4
 MAX_RED_LINES = 3
 MAX_GOALS = 3
 _PLAN_DIMENSIONS = ("future_plans", "likely_actions", "current_actions", "investments_capital_allocation")
+_CURRENT_QUANTITATIVE_TYPES = {"", "actual", "estimate"}
+_STATUS_INFERRED_PREFIXES = ("wb:", "imf:WEO/", "imf:WEO_")
 
 
 def _clean(value: Any, max_chars: int) -> str:
@@ -173,6 +176,12 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
     out: List[Dict[str, Any]] = []
     seen: set = set()
     as_of = str((actors or {}).get("as_of_date") or "")[:10] if isinstance(actors, dict) else ""
+    cutoff = None
+    if as_of:
+        try:
+            cutoff = resolution_instant(as_of)
+        except (TypeError, ValueError, OverflowError):
+            cutoff = None
 
     def push(row: Dict[str, Any]) -> bool:
         vid = slugify(row.get("name"))
@@ -183,6 +192,12 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
         return True
 
     for fact in extract_quantitative_rows(actors):
+        value_type = _clean(fact.get("value_type"), 40).casefold()
+        if value_type not in _CURRENT_QUANTITATIVE_TYPES:
+            continue
+        period_end = str(fact.get("period_end") or "")[:10]
+        if as_of and period_end and period_end > as_of:
+            continue
         name = _clean(fact.get("metric"), 140)
         if not name:
             continue
@@ -204,6 +219,7 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
         push(row)
 
     series = official_data.get("series") if isinstance(official_data, dict) else None
+    api = data_api()
     taken = 0
     for row in series if isinstance(series, list) else []:
         if taken >= MAX_OFFICIAL_SERIES or len(out) >= max_variables:
@@ -216,17 +232,59 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
         if not name or not units or not isinstance(obs, list):
             continue  # the official snapshot applies the same no-units exclusion
         latest: Optional[Dict[str, Any]] = None
-        for o in obs:
-            if not isinstance(o, dict):
-                continue
-            value = o.get("value")
-            date = str(o.get("date") or "")[:10]
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
-                continue
-            if as_of and date and date > as_of:
-                continue
-            if latest is None or date > str(latest.get("date") or ""):
-                latest = {"date": date, "value": float(value)}
+        if api is not None:
+            try:
+                carrier = api.Series.from_dict(dict(row))
+            except (TypeError, ValueError, KeyError, OverflowError):
+                carrier = None
+            if carrier is not None:
+                try:
+                    retrieved = resolution_instant(carrier.retrieved_at)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                if cutoff is not None and retrieved > cutoff:
+                    continue
+                provenance = carrier.provenance
+                aggregated = bool(provenance.get("aggregation") or provenance.get("aggregation_method"))
+                inferred = carrier.series.startswith(_STATUS_INFERRED_PREFIXES) or "fidelity_policy_version" in provenance
+                if provenance.get("resolution_safe") is False and not (aggregated or inferred):
+                    continue
+                for o in carrier.observations:
+                    value = o.value
+                    date = str(o.date or "")[:10]
+                    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                        continue
+                    if as_of and date and date > as_of:
+                        continue
+                    kind = api.observation_kind(o, carrier)
+                    if kind not in ("observed", "preliminary"):
+                        continue
+                    if latest is None or date > str(latest.get("date") or ""):
+                        latest = {"date": date, "value": float(value)}
+            else:
+                for o in obs:
+                    if not isinstance(o, dict):
+                        continue
+                    value = o.get("value")
+                    date = str(o.get("date") or "")[:10]
+                    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                        continue
+                    if as_of and date and date > as_of:
+                        continue
+                    if latest is None or date > str(latest.get("date") or ""):
+                        latest = {"date": date, "value": float(value)}
+        else:
+            for o in obs:
+                if not isinstance(o, dict):
+                    continue
+                value = o.get("value")
+                date = str(o.get("date") or "")[:10]
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                    continue
+                if as_of and date and date > as_of:
+                    continue
+                if latest is None or date > str(latest.get("date") or ""):
+                    latest = {"date": date, "value": float(value)}
         if latest is None:
             continue
         provider = _clean(row.get("provider_name") or row.get("provider"), 80)

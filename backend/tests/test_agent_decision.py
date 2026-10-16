@@ -104,6 +104,39 @@ def test_option_menu_adds_response_options_to_moves_aimed_at_actor():
     assert menu[1]["id"] == "respond_1_negotiate"
 
 
+def test_primary_catalog_actions_are_affordable_by_default_capacity():
+    checks = [
+        ("firm", "invest_capex"),
+        ("central_bank", "rate_move"),
+        ("labor_union", "strike_action"),
+        ("regulator_agency", "issue_ruling"),
+    ]
+    for klass, option_id in checks:
+        tmpl = next(t for t in ad.catalog_for(klass) if t.id == option_id)
+        assert tmpl.cost <= ad.default_capacity(klass)
+
+
+def test_irreversible_actions_are_not_offered_again_after_intervening_hold():
+    world = _world()
+    alpha = world.actors[0]
+    world.register_decisions(1, [{
+        "agent_id": 0, "actor_name": "Alpha Systems",
+        "option": {"id": "product_launch", "label": "Launch", "kind": "operational", "cost": 2, "reversibility": "irreversible"},
+        "targets": [], "magnitude": 0.9, "status": "ok",
+    }])
+    world.commit_round(1)
+    world.start_round(2, {"label": "2026-Q4"})
+    world.register_decisions(2, [{
+        "agent_id": 0, "actor_name": "Alpha Systems",
+        "option": {"id": ad.HOLD_OPTION_ID, "label": "Hold", "kind": "wait", "cost": 0},
+        "targets": [], "magnitude": 0.0, "status": "ok",
+    }])
+    world.commit_round(2)
+    world.start_round(3, {"label": "2027-Q1"})
+    ids = [o["id"] for o in ad.build_option_menu(alpha, world, 3)]
+    assert "product_launch" not in ids
+
+
 def test_deciding_roster_principals_first_audience_excluded_capped():
     cfgs = [
         {"agent_id": 0, "entity_name": "A", "cadence": "sampled", "influence_weight": 0.9},
@@ -163,6 +196,18 @@ def test_parse_valid_decision_resolves_targets_and_scenario():
     row = d.scenario_commitment(outcome_power=1.5)
     assert row["scenario"] == "Permit granted" and row["outcome_power"] == 1.5 and row["period_end"] == "2026-09-30"
     assert d.to_dict()["schema_version"] == ad.DECISION_CONTRACT_VERSION
+
+
+def test_parse_preserves_explicit_zero_scenario_confidence():
+    world = _world()
+    menu = _menu(world)
+    d = ad.parse_decision({
+        "option_id": "plan_1",
+        "public_statement": "Proceed.",
+        "scenario_commitment": {"scenario": "Permit delayed", "confidence": 0},
+    }, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios, round_num=1)
+    row = d.scenario_commitment(outcome_power=1.0)
+    assert row is not None and row["confidence"] == 0.0
 
 
 def test_parse_unknown_option_and_bad_payload_degrade_to_typed_hold():

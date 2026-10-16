@@ -194,7 +194,8 @@ def test_apply_arbiter_update_clamps_and_records():
             {"variable_id": "permit_status", "new_value": "under review", "rationale": "inquiry"},
             {"variable_id": "does_not_exist", "new_value": 1},
         ],
-        "new_variables": [{"name": "Union strike risk", "value": "elevated", "kind": "categorical"}],
+        "new_variables": [{"name": "Union strike risk", "value": "elevated", "kind": "categorical",
+                           "rationale": "Strike rhetoric escalated"}],
         "events": [{"description": "Markets react to the Aurora pledge", "kind": "emergent",
                     "actors": ["Alpha Systems"]}],
         "relationship_changes": [{"source": "Alpha Systems", "target": "Grid Regulator", "direction": "closer"}],
@@ -208,6 +209,8 @@ def test_apply_arbiter_update_clamps_and_records():
     assert world.variables["permit_status"].value == "under review"
     assert [c["id"] for c in summary["variables_changed"]] == ["regional_capacity", "permit_status"]
     assert summary["variables_added"][0]["id"] == "union_strike_risk"
+    added = world.variables["union_strike_risk"]
+    assert added.history[0]["round"] == 1 and added.history[0]["cause"] == "Strike rhetoric escalated"
     assert summary["events"] == 1 and summary["effects_added"] == 1 and summary["resolutions"] == 1
     assert world._relationship_between(0, 2).polarity > 0
     assert world.pending_effects[0].due_round == 2
@@ -345,9 +348,13 @@ def test_brief_respects_char_budget_on_line_boundaries():
 def test_json_round_trip_preserves_state():
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, {"label": "2026-Q3", "period_end": "2026-09-30"})
-    world.register_decisions(1, [_decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
-                                                               "kind": "economic", "cost": 3, "lag": 2},
-                                           commitment={"description": "Break ground", "due_periods": 1})])
+    world.register_decisions(1, [
+        _decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
+                                       "kind": "economic", "cost": 3, "lag": 2},
+                  commitment={"description": "Break ground", "due_periods": 1}),
+        _decision(0, "Alpha Systems", {"id": "product_launch", "label": "Launch", "kind": "operational",
+                                       "cost": 2, "reversibility": "irreversible"}),
+    ])
     world.apply_arbiter_update(1, {"pending_effects": [{"description": "Permit lands", "due_periods": 1}],
                                    "events": [{"description": "Reaction", "kind": "emergent"}]})
     world.commit_round(1)
@@ -361,6 +368,7 @@ def test_json_round_trip_preserves_state():
     assert [e.description for e in clone.events] == [e.description for e in world.events]
     assert clone.scenario_shares == world.scenario_shares
     assert clone.resolve_actor("Alpha") == 0
+    assert "product_launch" in clone.actors[0].irreversible_option_ids
     assert clone.to_dict() == world.to_dict()
 
 

@@ -330,6 +330,7 @@ class ActorState:
         self.reputation = _clamp(float(reputation), 0.0, 1.0)
         self.commitments: List[Dict[str, Any]] = []
         self.last_action: Optional[Dict[str, Any]] = None
+        self.irreversible_option_ids: List[str] = []
 
     # -- helpers --------------------------------------------------------------
     @property
@@ -368,7 +369,7 @@ class ActorState:
             "red_lines": list(self.red_lines), "goals": list(self.goals),
             "incentives": dict(self.incentives), "aliases": list(self.aliases),
             "reputation": round(self.reputation, 4), "commitments": list(self.commitments),
-            "last_action": self.last_action,
+            "last_action": self.last_action, "irreversible_option_ids": list(self.irreversible_option_ids),
         }
 
     @classmethod
@@ -386,6 +387,8 @@ class ActorState:
             a.capacity_used = 0
         a.commitments = [c for c in (d.get("commitments") or []) if isinstance(c, dict)]
         a.last_action = d.get("last_action") if isinstance(d.get("last_action"), dict) else None
+        a.irreversible_option_ids = [str(x) for x in (d.get("irreversible_option_ids") or [])
+                                     if str(x).strip()]
         return a
 
 
@@ -642,7 +645,8 @@ class WorldModel:
 
     def add_variable(self, name: Any, value: Any, *, unit: str = "", kind: str = "numeric",
                      as_of: Optional[str] = None, provenance: str = "research", rationale: str = "",
-                     var_id: Optional[str] = None) -> str:
+                     var_id: Optional[str] = None, initial_round: int = 0,
+                     initial_cause: str = "") -> str:
         """Register (or update) a variable; returns its id.  Duplicate names merge."""
         vid = slugify(var_id or name)
         if vid in self.variables:
@@ -657,6 +661,12 @@ class WorldModel:
                 unit = parsed_unit
         self.variables[vid] = StateVariable(vid, name, value, unit=unit, kind=kind, as_of=as_of,
                                             provenance=provenance, rationale=rationale)
+        self.variables[vid].history = [{
+            "round": int(initial_round),
+            "value": self.variables[vid].value,
+            "cause": _text(initial_cause, 200) or ("seed" if int(initial_round) == 0 else provenance),
+            "source": provenance,
+        }]
         return vid
 
     def add_relationship(self, rel: Relationship) -> None:
@@ -806,6 +816,7 @@ class WorldModel:
                 "round": int(round_num), "option_id": option_id, "kind": kind,
                 "label": _text(option.get("label"), 160), "targets": target_names,
                 "magnitude": round(magnitude, 3), "status": status, "resolution": None,
+                "reversibility": _text(option.get("reversibility"), 24),
             }
             event_kind = "action"
             if option_id == "hold_position" or status != "ok":
@@ -817,6 +828,9 @@ class WorldModel:
                 option_id=option_id, action_kind=kind, period_label=label)))
             if status != "ok":
                 continue
+            if option.get("reversibility") == "irreversible" and option_id != "hold_position":
+                if option_id not in actor.irreversible_option_ids:
+                    actor.irreversible_option_ids.append(option_id)
             if option_id != "hold_position":
                 # a commitment that fell due this period is honoured by acting on it; a holder
                 # lets it lapse (see lapse_overdue_commitments) — mechanical, no LLM judgement
@@ -907,7 +921,8 @@ class WorldModel:
                 continue
             self.add_variable(nv["name"], nv.get("value"), unit=nv.get("unit") or "",
                               kind=nv.get("kind") or "numeric", as_of=str((self.period or {}).get("period_end") or ""),
-                              provenance="arbiter", rationale=nv.get("rationale") or "", var_id=vid)
+                              provenance="arbiter", rationale=nv.get("rationale") or "", var_id=vid,
+                              initial_round=round_num, initial_cause=nv.get("rationale") or "")
             summary["variables_added"].append({"id": vid, "name": self.variables[vid].name,
                                                "value": self.variables[vid].value,
                                                "unit": self.variables[vid].unit})

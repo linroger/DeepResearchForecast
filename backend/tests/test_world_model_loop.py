@@ -377,5 +377,23 @@ def test_resume_skips_committed_world_rounds(tmp_path, monkeypatch):
     assert any("# WORLD STATE" in n for n in notes)
 
 
+def test_resume_restores_partial_trajectory_and_continues_remaining_rounds(tmp_path, monkeypatch):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    cfg = _world_config()
+    _run(cfg, sim_dir, max_rounds=1)
+    traj_before = json.load(open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8"))
+    assert [r["round"] for r in traj_before["trajectory"]] == [0, 1]
+    round1_decisions_before = len([c for c in _WorldLLM.calls if c["kind"] == "decision" and c["round"] == 1])
+    rps._WORLD_COORDINATORS.clear()
+    _run(cfg, sim_dir, resume=True)
+    traj_after = json.load(open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8"))
+    assert [r["round"] for r in traj_after["trajectory"]] == [0, 1, 2, 3]
+    assert traj_after["trajectory"][1]["shares"] == traj_before["trajectory"][1]["shares"]
+    assert len([c for c in _WorldLLM.calls if c["kind"] == "decision" and c["round"] == 1]) == round1_decisions_before
+    assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 3
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))

@@ -859,6 +859,55 @@ def test_html_worldstate_calendar_date_axis(tmp_path):
 
 
 @pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")
+def test_world_variables_html_skips_zero_seed_and_sets_chronological_category_order(tmp_path):
+    charts = str(tmp_path / "charts")
+    viz = ReportVisualizer()
+    world_state = {
+        "world": {
+            "period_labels": {"3": "2026-Q3", "4": "2026-Q4"},
+            "variables": [
+                {
+                    "id": "indexed_ok",
+                    "name": "Indexed ok",
+                    "kind": "numeric",
+                    "unit": "MW",
+                    "history": [
+                        {"round": 0, "value": 100.0, "cause": "seed"},
+                        {"round": 4, "value": 110.0, "cause": "late"},
+                    ],
+                },
+                {
+                    "id": "out_of_order",
+                    "name": "Out of order",
+                    "kind": "numeric",
+                    "unit": "%",
+                    "history": [
+                        {"round": 0, "value": 100.0, "cause": "seed"},
+                        {"round": 3, "value": 105.0, "cause": "earlier"},
+                    ],
+                },
+                {
+                    "id": "zero_seed",
+                    "name": "Zero seed",
+                    "kind": "numeric",
+                    "unit": "USD",
+                    "history": [
+                        {"round": 0, "value": 0.0, "cause": "seed"},
+                        {"round": 4, "value": 1_000_000_000.0, "cause": "jump"},
+                    ],
+                },
+            ],
+        }
+    }
+    rel = viz.build_world_variables_html(world_state, charts)
+    assert rel is not None
+    with open(str(tmp_path / rel), "r", encoding="utf-8") as f:
+        html = f.read()
+    assert "Zero seed" not in html
+    assert '"categoryarray":["seed","2026-Q3","2026-Q4"]' in html
+
+
+@pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")
 def test_html_price_history_writes_files(tmp_path):
     viz = ReportVisualizer()
     charts = str(tmp_path / "charts")
