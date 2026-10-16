@@ -18,6 +18,16 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 报告必须通过严格的引用与一致性审计才会对外提供。运行过程中，一个仪表盘实时展示每个阶段。
 
+### 自反式世界模拟（显式启用）
+
+`simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
+
+准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策阶段槽位在重试和恢复之后仍最多允许两次真实请求。
+
+模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
+
+首次真实模型评估完成了 36 个案例中的 30 个；成对响应性比较中 7 对通过、7 对失败、4 对不完整。发布门未通过，因此世界模式仍为实验性显式启用功能。原始评分、审查发现与预算核算见[评估与交付报告](docs/handoff/reflexive-world-simulation/DELIVERY.md)。
+
 ```mermaid
 flowchart TB
     Q(["你的问题"]):::io --> ROW1

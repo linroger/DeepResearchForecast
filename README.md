@@ -18,6 +18,16 @@ DeepAgentForecast is a forecasting engine that runs on your own machine. You typ
 
 The report is only served after it passes a strict citation and consistency audit. One dashboard shows every stage while it runs.
 
+### Reflexive world simulation (explicit opt-in)
+
+`simulation_engine: "world-v1"` adds a concrete world that evolves after each round: actors propose feasible actions, counterparties independently consent, and declared mechanisms update resources, projects, rules, coalitions and delayed obligations. Actors receive the resulting permitted state and their own action outcomes in the next round. Historical runs and the default engine remain `oasis-legacy` until the separate model-behavior release gate is accepted.
+
+World preparation accepts an explicit `world_spec`, or `world_policy_spec` for bounded automatic modeling from research and actor evidence. Every modeled quantity needs evidence or a labeled assumption. The HTTP policy pins provider, model, prices, input/output limits and a total run budget; opaque CLI transports are not admitted. Each decision slot has at most two durable actual requests across retries and resume.
+
+The simulation tab shows World, Decisions/Actions, Commitments and Assumptions with public, actor and analyst views. Reports consume one frozen result. `diagnostic_only` displays conditional pathways without changing evidence-only probability inputs; `no_update` omits world reasoning and plots. These are conditional simulations, not calibrated forecasts. See the [source-linked architecture and diagrams](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md), [executable contracts](docs/handoff/reflexive-world-simulation/implementation-contract.md) and [current verification/release status](docs/handoff/reflexive-world-simulation/handoff.md).
+
+The first live study completed 30 of 36 cases; seven paired responsiveness contrasts passed, seven failed and four were incomplete. The promotion gate did not pass, so world mode remains experimental opt-in. See the [evaluation and delivery report](docs/handoff/reflexive-world-simulation/DELIVERY.md) for the unchanged scores, review findings and budget accounting.
+
 ```mermaid
 flowchart TB
     Q(["Your question"]):::io --> ROW1

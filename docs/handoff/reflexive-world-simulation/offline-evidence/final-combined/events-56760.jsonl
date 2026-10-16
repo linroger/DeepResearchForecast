@@ -1,0 +1,72 @@
+{"pid": 56760, "event": "redirect:app.config"}
+{"pid": 56760, "event": "redirect:app.utils.logger"}
+{"pid": 56760, "event": "redirect:app.services.simulation_manager"}
+{"pid": 56760, "event": "blocked:network:socket.__new__"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen", "program": "uname"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen", "program": "unregistered-executable"}
+{"pid": 56760, "event": "quarantine:oasis_import_cwd"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/proc/self/maps", "category": "unclassified"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen", "program": "fc-list"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen", "program": "system_profiler"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/private/var/select/X11/lib/X11/fonts/TTF", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/private/var/select/X11/lib/X11/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/usr/local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/usr/lib/openoffice/share/fonts/truetype", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/.local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/.fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/Network/Library/Fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/opt/local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/Library/Fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/private/var/select/X11/lib/X11/fonts/TTF", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/private/var/select/X11/lib/X11/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/usr/local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/usr/lib/openoffice/share/fonts/truetype", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/.local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/.fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/Network/Library/Fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "/opt/local/share/fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/Library/Fonts", "category": "font_discovery"}
+{"pid": 56760, "event": "blocked:external_read", "path": "<IDENTITY>/.igraphrc", "category": "unclassified"}
+{"pid": 56760, "event": "allowed:guarded_child", "child_pid": 60131, "script": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-delivery-20261016T181720Z-kz74vt5f/evidence/tmp/control-pwnavq8s/bounded_fixture.py"}
+{"pid": 56760, "event": "blocked:child_process_limit"}
+{"pid": 56760, "event": "blocked:child_process_limit"}
+{"pid": 56760, "event": "blocked:child_process_limit"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "allowed:guarded_child", "child_pid": 60132, "script": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-delivery-20261016T181720Z-kz74vt5f/evidence/tmp/control-7ybd0_r2/fixture.py"}
+{"pid": 56760, "event": "blocked:identity_environment"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "blocked:network:socket.__new__"}
+{"pid": 56760, "event": "blocked:network:socket.getaddrinfo"}
+{"pid": 56760, "event": "blocked:network:socket.bind"}
+{"pid": 56760, "event": "quarantine:oasis_import_cwd"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "blocked:network:socket.getaddrinfo"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "quarantine:oasis_import_cwd"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "blocked:network:socket.getaddrinfo"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:credential_path"}
+{"pid": 56760, "event": "allowed:guarded_child", "child_pid": 60133, "script": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-delivery-20261016T181720Z-kz74vt5f/evidence/tmp/control-uflcd4f0/relative_fixture.py"}
+{"pid": 56760, "event": "blocked:saved_data"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen"}
+{"pid": 56760, "event": "blocked:changed_child_script"}
+{"pid": 56760, "event": "blocked:process:subprocess.Popen"}
+{"pid": 56760, "event": "blocked:sqlite_uri"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}
+{"pid": 56760, "event": "blocked:external_write"}

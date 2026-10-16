@@ -1,0 +1,5 @@
+{"pid": 62888, "event": "redirect:app.config"}
+{"pid": 62888, "event": "redirect:app.utils.logger"}
+{"pid": 62888, "event": "redirect:app.services.simulation_manager"}
+{"pid": 62888, "event": "blocked:process:subprocess.Popen", "program": "uname"}
+{"pid": 62888, "event": "blocked:process:subprocess.Popen", "program": "unregistered-executable"}

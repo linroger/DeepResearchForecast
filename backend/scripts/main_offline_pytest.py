@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import types
+from urllib.parse import urlsplit, unquote
 
 REPO = Path(__file__).resolve().parents[2]
 IDENTITY = ("HOME", "home", "CODEX_HOME", "USERPROFILE")
@@ -59,6 +60,40 @@ class RedirectImports(importlib.abc.MetaPathFinder):
         }
 
     def find_spec(self, fullname, path=None, target=None):
+        if fullname == "oasis":
+            # Delegate discovery directly to PathFinder, avoiding this finder
+            # recursively. Execute the installed dependency's original loader;
+            # only its import-time relative logs get a bounded working directory.
+            spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
+            if spec is None or spec.loader is None:
+                return spec
+            original_loader = spec.loader
+            guard = self.guard
+
+            class OasisImportLoader(importlib.abc.Loader):
+                def create_module(self, module_spec):
+                    create = getattr(original_loader, "create_module", None)
+                    return create(module_spec) if create is not None else None
+
+                def __getattr__(self, name):
+                    return getattr(original_loader, name)
+
+                def exec_module(self, module):
+                    original_cwd = os.getcwd()
+                    quarantine = guard.root / "import-cwd" / "oasis"
+                    quarantine.mkdir(parents=True, exist_ok=True)
+                    if spec.origin and Path(spec.origin).is_file():
+                        source = Path(spec.origin).read_bytes()
+                        guard.source_hashes[str(Path(spec.origin).resolve())] = hashlib.sha256(source).hexdigest()
+                    os.chdir(quarantine)
+                    try:
+                        guard.record("quarantine:oasis_import_cwd")
+                        original_loader.exec_module(module)
+                    finally:
+                        os.chdir(original_cwd)
+
+            spec.loader = OasisImportLoader()
+            return spec
         if fullname not in self.targets:
             return None
         source_path, class_name, replacements = self.targets[fullname]
@@ -244,6 +279,8 @@ class Guard:
                 self.deny("process:" + event)
             self.spawn_ticket.argv = None
         elif event in {"os.kill", "os.killpg"}:
+            if event == "os.kill" and args == (os.getpid(), 0):
+                return  # Read-only liveness probe of this guarded process.
             with self.child_lock:
                 child = self.children.get(args[0])
             if child is None or child.poll() is not None:
@@ -251,9 +288,25 @@ class Guard:
         elif event in {"os.system", "os.exec", "os.posix_spawn", "os.fork", "os.forkpty", "pty.spawn"}:
             self.deny("process:" + event)
         elif event == "sqlite3.connect" and args[0] != ":memory:":
-            if not args[0] or os.fsdecode(args[0]).lower().startswith("file:"):
+            if not args[0]:
                 self.deny("sqlite_uri")
-            self.path(args[0], write=True)
+            raw = os.fsdecode(args[0])
+            if raw.lower().startswith("file:"):
+                parsed = urlsplit(raw)
+                # SQLite URI options can select VFSes, bypass locking, attach
+                # remote names or reinterpret paths. Admit only the canonical
+                # local URI emitted by Path.as_uri plus a single access mode.
+                decoded = unquote(parsed.path, errors="strict")
+                candidate = Path(decoded)
+                if (parsed.scheme != "file" or parsed.netloc or parsed.fragment
+                        or parsed.query not in {"mode=ro", "mode=rw", "mode=rwc"}
+                        or not candidate.is_absolute() or "\x00" in decoded
+                        or candidate.as_uri() + "?" + parsed.query != raw
+                        or not candidate.resolve().is_relative_to(self.root)):
+                    self.deny("sqlite_uri")
+                self.path(candidate, write=True)
+            else:
+                self.path(raw, write=True)
 
     def configure(self, *, child=False):
         # Start from a small non-secret environment. Preserve identity exactly,

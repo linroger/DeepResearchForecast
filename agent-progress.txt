@@ -379,3 +379,13 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Follow-ups:**
   - Live validation (a paid run; needs owner approval): confirm the agents' notes and reports follow the routed methods. `feature_research_method_skills` stays `passes: false` until then.
   - `_BASE_RATE_RE` treats any 历史 as a base-rate KIQ; narrow it only if live runs show casual uses.
+
+### 2026-10-16 UTC — codex/reflexive-world-simulation — implementation in progress
+
+User approved PLANS.md and a US$25 live-evaluation ceiling after offline gates. Core/kernel/store/compiler/strict actor policy and actual manager→child→result scenarios are implemented. Third combined gate225passed; subsequent compiler plus service consumer gate78passed with no drift or blocked attempts. Independent review found and closed source/projection/resource-provenance defects; lifecycle/report/UI integration and bounded modeler producer remain active. Exact receipts and current ownership are recorded under docs/handoff/reflexive-world-simulation/. The feature remains passes:false until all planned acceptance gates close. No paid calls or remote publication have occurred.
+
+### 2026-10-16T18:22:06.258848+00:00 — codex/reflexive-world-simulation — opt-in implementation delivered
+
+Implemented research/actor compiler and bounded modeler, private actor decisions, typed causal world transitions, durable SQLite budgets/attempts/replay, shared lifecycle/result consumers, EN/ZH UI and safe report integration. Final combined691checks passed; final project-filter correction73focused checks passed with no source drift. UI24checks/build and isolated browser evidence match current sources. Independent slice/recovery/privacy/queue/list reviews recorded under docs/handoff/reflexive-world-simulation/.
+
+Live evaluation reached36terminal cases with30completed and independently reviewed: investment84/96, trade47/96, coalition48/96incomplete; contrasts7passed7failed4incomplete. Keepworld-v1explicit opt-in, legacydefault, featurepasses:false. Conservative globalexposure9.222150955664USD of25; no activeproviderbatch. Source-linked diagrams/report and immutable evidence are in ARCHITECTURE.md and DELIVERY.md. Remaining work is a properly preregistered future behavior study, separate empirical forecast validation, and remote publication after authentication repair. No unrelated primary-checkout changes were modified.

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "WORLD-ADMISSION",
+    "status": "resolved",
+    "problem": "Explicit world-v1 start silently launched legacy OASIS.",
+    "evidence": "m0-red.md; test_world_engine_admission.py"
+  },
+  {
+    "id": "WORLD-RECOVERY",
+    "status": "resolved",
+    "problem": "Final-commit export recovery, generation races and cancellation receipt loss.",
+    "evidence": "test_world_service_results.py; test_world_controller.py; independent eight-finding closure"
+  },
+  {
+    "id": "WORLD-REFLECTION",
+    "status": "resolved",
+    "problem": "Live valid string reflections were accepted by prompt/validator but rejected by kernel.",
+    "evidence": "world-reflection-release:496pass; source-linked normalized receipt and reload tests"
+  },
+  {
+    "id": "WORLD-EVAL-BUDGET",
+    "status": "resolved",
+    "problem": "Evaluation wrapper incorrectly treated lifetime maximum quotes as permanent consumption.",
+    "evidence": "world-exposure-budget-green:81pass; actual+unknown/inflight admission remains transactional"
+  },
+  {
+    "id": "WORLD-REPAIR",
+    "status": "resolved",
+    "problem": "Blind retries supplied no own validation feedback or final diagnostic code.",
+    "evidence": "world-bounded-repair-final:18pass; two-call cap retained"
+  },
+  {
+    "id": "WORLD-ENVELOPE",
+    "status": "resolved",
+    "problem": "Models sometimes echoed a different actor/observation ID.",
+    "evidence": "world-request-bound-release:212pass; adapter binds immutable request metadata; stale/fence/menu checks retained"
+  },
+  {
+    "id": "WORLD-LIVE-RELEASE",
+    "status": "promotion_withheld",
+    "problem": "Study executed and reviewed; required model-behavior gate not met. Trade proxy conflicts with one-good completion, and6coalition cases stopped after transport failures.",
+    "evidence": "live-evidence/report.json; DELIVERY.md;7pairedpassed7failed4incomplete. Preserveoriginalresults; futurepreregisteredstudyneeded."
+  },
+  {
+    "id": "REMOTE-PUBLICATION",
+    "status": "blocked_external",
+    "problem": "Previously rejected GitHub authentication; no unchanged credential retry. Local scoped commit remains authorized.",
+    "evidence": "handoff.md planning/delivery records"
+  },
+  {
+    "id": "WORLD-QUEUE-FAIRNESS",
+    "status": "resolved",
+    "problem": "Explicit waits may leave capped pending offers ahead of unseen offers; global cursor may couple recipients.",
+    "evidence": "queue-fairness-investigation.md; exact reviewed four-module hashes;16 permanent cases in final-combined691"
+  },
+  {
+    "id": "WORLD-LIST-STATUS",
+    "status": "resolved",
+    "problem": "SimulationManager.list_simulations reads preparation state directly instead of the world runtime projection used by get_simulation.",
+    "evidence": "2 status reds +1 filtered corruption red; shared read-only projection; final73pass gate; lifecycle-implementation.md"
+  },
+  {
+    "id": "WORLD-FORECAST-VALIDATION",
+    "status": "outside_current_validation",
+    "problem": "Synthetic mechanics and live behavior do not establish empirical forecasting accuracy or calibrated probabilities.",
+    "evidence": "Safe report boundaries enforced; a dated uncontaminated historical/prospective dataset is required before predictive claims."
+  }
+]

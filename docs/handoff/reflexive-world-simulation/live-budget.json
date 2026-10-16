@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "world-evaluation-total-budget/v1",
+  "authorizedUsd": "25",
+  "activeOutput": null,
+  "phases": [
+    {
+      "phase": "initial-contract-pilot",
+      "output": "/private/tmp/drf-world-live-evaluation-20261016",
+      "status": "closed_after_live_contract_failure",
+      "settledCeilingUsd": "1.481372444444",
+      "reportedActualUpperUsd": "0.119644",
+      "unknownCeilingUsd": "0.694444444444",
+      "reportSha256": "1f63eb8e05bdf58be12a0b61995476de68fb182fa4d2fd115d73d463a15b1231",
+      "originalManifestHash": "cbb68e77e45584d47149919e1d869a00f103c4f9b6dd22c5244f86a50fb2980d",
+      "reason": "Prompt permitted belief/plan strings; validator accepted them but kernel required objects. Three cases failed; one interrupted. Remaining unstarted cases are canceled in this phase."
+    },
+    {
+      "phase": "reflection-contract-repair",
+      "output": "/private/tmp/drf-world-live-evaluation-20261016-reflection-repair",
+      "status": "closed_after_evaluator_reservation_bug",
+      "limitUsd": "23.518627555556",
+      "settledCeilingUsd": "0.949801209876",
+      "reportedActualUpperUsd": "0.296506",
+      "unknownCeilingUsd": "0.653295209876",
+      "reportSha256": "c9a9ef6bd5e361894206d27bed588fb049e92ca5558331abbb29da923141c6d5",
+      "originalManifestHash": "3c9a5a3446cdc172c6281baf701d8fbbe07e782b47b5843a6f83029fcfd945d1",
+      "reason": "Evaluation wrapper counted cumulative maximum reservations forever instead of actual plus unknown/in-flight exposure. Two cases stopped/failed and one interrupted; remaining cases canceled for this phase."
+    },
+    {
+      "phase": "exposure-contract-corrected",
+      "output": "/private/tmp/drf-world-live-evaluation-20261016-exposure-corrected",
+      "status": "closed_for_bounded_repair_feedback",
+      "limitUsd": "22.568826345680",
+      "settledCeilingUsd": "0.935077842935",
+      "reportedActualUpperUsd": "0.308166",
+      "unknownCeilingUsd": "0.626911842935",
+      "reportSha256": "21a73afa63d65d9ae794da2b7145f01ca3f142e8e7a9789321d9c9c1dadd49fa",
+      "originalManifestHash": "50556339fed84c4f7afbdd33327a5ed64e01a41d782e24d8a3ce790fc88ddd72",
+      "reason": "Required actor decisions exhausted blind retries. Added sanitized own-validation feedback for second attempt, still at most2 actual calls per stable slot."
+    },
+    {
+      "phase": "bounded-validation-feedback",
+      "output": "/private/tmp/drf-world-live-evaluation-20261016-bounded-repair",
+      "status": "closed_for_request_owned_execution_envelope",
+      "limitUsd": "21.633748502745",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-bounded-repair-final-20261016T165906Z-gx4ufi1k",
+      "settledCeilingUsd": "0.970843458409",
+      "reportedActualUpperUsd": "0.369906",
+      "unknownCeilingUsd": "0.600937458409",
+      "reportSha256": "fa23049d98547ed3704806734d26b68c5685b16d635fed159199070df99f2bc7",
+      "originalManifestHash": "b741d0ff13546115ab01a1339df3633f0f6e577549c90be08dc48134fb5903a2",
+      "reason": "One case completed all4rounds;3failed on model-copied outeractor/observation identity after2requests; fifthcase interrupted. Execution-envelope IDs will be bound to immutable dispatchedrequest byadapter, model decisions remainvalidated."
+    },
+    {
+      "phase": "request-owned-execution-envelope",
+      "output": "/private/tmp/drf-world-live-evaluation-20261016-request-bound",
+      "status": "closed_evaluated_no_promotion",
+      "limitUsd": "20.662905044336",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-request-bound-release-20261016T171030Z-uzeo4cfz",
+      "settledCeilingUsd": "4.885056",
+      "reportedActualUpperUsd": "4.158586",
+      "unknownCeilingUsd": "0.72647",
+      "reportSha256": "8c1a3e5df850152d2cb6b6876f230a4823c3d0548c53b1a3f131e6fbee975cea",
+      "originalManifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
+      "reason": "All36 cases terminal;30completed and independently reviewed,6transport/stoppage failures retained. Strict contrast gate has7passed,7failed,4incomplete. No default promotion or further dispatch."
+    }
+  ],
+  "status": "closed",
+  "conservativeConsumedUsd": "9.222150955664",
+  "remainingAuthorizedUsd": "15.777849044336",
+  "billingClaim": false
+}

@@ -31,8 +31,17 @@ export const getPrepareStatus = (data) => {
  * 获取模拟状态
  * @param {string} simulationId
  */
-export const getSimulation = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}`)
+export const getSimulation = (simulationId, options = {}) => {
+  return service.get(`/api/simulation/${simulationId}`, options)
+}
+
+/** Read one committed world projection. Revision conflicts require explicit refresh. */
+export const getWorldSimulation = (simulationId, { view = 'public', actorId, round, revision } = {}, options = {}) => {
+  const params = { view }
+  if (view === 'actor' && actorId) params.actor_id = actorId
+  if (round !== undefined && round !== null) params.round = round
+  if (revision) params.revision = revision
+  return service.get(`/api/simulation/${encodeURIComponent(simulationId)}/world`, { ...options, params })
 }
 
 /**
@@ -49,8 +58,8 @@ export const getSimulationProfiles = (simulationId, platform = 'reddit') => {
  * @param {string} simulationId
  * @param {string} platform - 'reddit' | 'twitter'
  */
-export const getSimulationProfilesRealtime = (simulationId, platform = 'reddit') => {
-  return service.get(`/api/simulation/${simulationId}/profiles/realtime`, { params: { platform } })
+export const getSimulationProfilesRealtime = (simulationId, platform = 'reddit', options = {}) => {
+  return service.get(`/api/simulation/${simulationId}/profiles/realtime`, { ...options, params: { platform } })
 }
 
 /**
@@ -99,8 +108,8 @@ export const stopSimulation = (data) => {
  * 获取模拟运行实时状态
  * @param {string} simulationId
  */
-export const getRunStatus = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/run-status`)
+export const getRunStatus = (simulationId, options = {}) => {
+  return service.get(`/api/simulation/${simulationId}/run-status`, options)
 }
 
 /**
@@ -118,8 +127,9 @@ export const getRunStatusDetail = (simulationId) => {
  * @param {number} limit - 返回数量
  * @param {number} offset - 偏移量
  */
-export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50, offset = 0) => {
+export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50, offset = 0, options = {}) => {
   return service.get(`/api/simulation/${simulationId}/posts`, {
+    ...options,
     params: { platform, limit, offset }
   })
 }
@@ -131,8 +141,9 @@ export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50
  * @param {number} limit - 返回数量
  * @param {number} offset - 偏移量
  */
-export const getSimulationComments = (simulationId, platform = 'reddit', limit = 200, offset = 0) => {
+export const getSimulationComments = (simulationId, platform = 'reddit', limit = 200, offset = 0, options = {}) => {
   return service.get(`/api/simulation/${simulationId}/comments`, {
+    ...options,
     params: { platform, limit, offset }
   })
 }
@@ -155,8 +166,8 @@ export const getSimulationTimeline = (simulationId, startRound = 0, endRound = n
  * 获取Agent统计信息
  * @param {string} simulationId
  */
-export const getAgentStats = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/agent-stats`)
+export const getAgentStats = (simulationId, options = {}) => {
+  return service.get(`/api/simulation/${simulationId}/agent-stats`, options)
 }
 
 /**

@@ -4996,6 +4996,20 @@ class ReportVisualizer:
         降级链：plotly 缺失/关闭 → 整族记 skipped 并回退 matplotlib PNG 族；kaleido 缺失/
         运行失败 → HTML 保留、PNG 经 matplotlib 等价图补齐（有等价图时）。总开关
         REPORT_VISUALIZER 关闭 → 返回 [] 且不落盘（degrade-safe）。"""
+        from .report_agent import read_report_world
+        from .world_simulation.contracts import require
+        world = read_report_world(report_dir)
+        artifacts = dict(artifacts or {})
+        if world:
+            require(artifacts.get("world_result", world["result"]) == world["result"]
+                    and artifacts.get("world_result_ref", world["reference"]) == world["reference"],
+                    "result_binding_mismatch", "Chart input differs from the report's frozen result")
+            artifacts["world_result"] = world["result"]
+            artifacts["world_result_ref"] = world["reference"]
+            artifacts.pop("world_state_trajectory", None)
+        else:
+            require(not artifacts.get("world_result") and not artifacts.get("world_result_ref"),
+                    "result_binding_mismatch", "World charts require a report-owned binding")
         items: List[Dict[str, str]] = []
         skipped: List[Dict[str, str]] = []
         if not bool(_cfg("REPORT_VISUALIZER", True)):
@@ -5191,15 +5205,112 @@ class ReportVisualizer:
         self._run_matplotlib_family(report_dir, charts_dir, artifacts, forecast,
                                     ensemble, items, skipped)
         self._run_official_data(charts_dir, artifacts, items, skipped)
+        if world and world["result"]["forecastEffect"] == "diagnostic_only":
+            items.extend(self.build_world_metrics(world, charts_dir))
+            for key, metric in world["result"]["world"]["metrics"].items():
+                if metric.get("kind") in {"category", "boolean"}:
+                    skipped.append({"builder": "world_metric", "metric_id": key,
+                                    "reason": "categorical_state_shown_in_pathway"})
+        if world:
+            from .report_agent import load_simulation_world
+            current = load_simulation_world(world["reference"]["simulationId"])
+            require(current is not None and current["reference"] == world["reference"],
+                    "result_binding_mismatch", "World changed while rendering charts")
+            for item in items:
+                paths = [item["path"]] + ([item["png_path"]] if item.get("png_path") else [])
+                if str(item["path"]).endswith(".html"):
+                    from ..utils.chart_html import _PLOTLY_SRC_RE
+                    with open(os.path.join(report_dir, item["path"]), encoding="utf-8") as stream:
+                        if _PLOTLY_SRC_RE.search(stream.read()):
+                            paths.append(os.path.join(os.path.dirname(item["path"]), "plotly.min.js"))
+                item["artifact_sha256"] = {}
+                for path in paths:
+                    with open(os.path.join(report_dir, path), "rb") as stream:
+                        item["artifact_sha256"][path] = hashlib.sha256(stream.read()).hexdigest()
 
         # ---- 落盘 manifest（原子写；失败不影响已生成的图表）+ INFO 汇总（不再沉默跳过）----
         self._persist_manifest(report_dir, items, skipped,
                                provenance=self._manifest_provenance(artifacts))
+        if world:
+            require(os.path.isfile(os.path.join(report_dir, "viz_manifest.json")),
+                    "missing_chart_manifest", "World chart manifest was not persisted")
+            read_report_world(report_dir)  # chart/manifest writes are mandatory for world reports
         skip_summary = ", ".join(f"{s['builder']}={s['reason']}" for s in skipped) or "-"
         logger.info("报告可视化完成 report=%s：产出 %d 项（png_pair=%d），跳过 %d 项 [%s]",
                     report_id, len(items),
                     sum(1 for it in items if it.get("png_path")),
                     len(skipped), skip_summary)
+        return items
+
+    @staticmethod
+    def build_world_metrics(world: Dict[str, Any], charts_dir: str) -> List[Dict[str, Any]]:
+        """Per-metric SVG charts in native units; exact values retained in titles.
+
+        Decimal arithmetic avoids losing stock precision. Missing points remain
+        gaps. This deterministic renderer needs no browser or plotting service.
+        """
+        from decimal import Decimal
+        from html import escape
+        from ..utils.atomic import write_text_atomic
+        from .world_simulation.contracts import require
+
+        result, reference = world["result"], world["reference"]
+        rows = result["trajectory"]
+        metrics = sorted({key for row in rows for key in row["metrics"]})
+        items = []
+        os.makedirs(charts_dir, exist_ok=True)
+        for key in metrics:
+            points = [(row["simulatedAt"], row["metrics"].get(key)) for row in rows]
+            units = {record["unit"] for _, record in points if record is not None}
+            require(len(units) == 1, "metric_unit_mismatch", "A world metric changed units")
+            unit = next(iter(units))
+            # Categories/booleans are exact state records in the pathway section,
+            # not numeric magnitudes. Retain numeric charts beside them.
+            if any(record is not None and record.get("kind") in {"category", "boolean"}
+                   for _, record in points):
+                continue
+            values = [Decimal(record["value"]) for _, record in points
+                      if record is not None and record.get("value") is not None]
+            if not values:
+                continue
+            lo, hi = min(values), max(values)
+            span = hi - lo or Decimal(1)
+            label = f"Conditional world pathway: {key} ({unit})"
+            svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="960" height="430" viewBox="0 0 960 430" role="img">',
+                   '<title>' + escape(label) + '</title>',
+                   '<rect width="960" height="430" fill="white"/>',
+                   '<g font-family="sans-serif" font-size="13" fill="#16324f">',
+                   '<text x="80" y="30">' + escape(label) + '</text>',
+                   '<text x="80" y="52">Simulated under declared assumptions; not probability evidence.</text>',
+                   '<path d="M80 80V340H900" fill="none" stroke="#52606d"/>']
+            previous = None
+            from .world_simulation.contracts import parse_time
+            times = [parse_time(at) for at, _ in points]
+            duration = Decimal(str((times[-1] - times[0]).total_seconds())) or Decimal(1)
+            for index, (at, record) in enumerate(points):
+                if record is None or record.get("value") is None:
+                    previous = None
+                    continue
+                x = Decimal(80) + Decimal(820) * Decimal(str((times[index] - times[0]).total_seconds())) / duration
+                y = Decimal(320) - Decimal(220) * (Decimal(record["value"]) - lo) / span
+                if previous is not None:
+                    svg.append(f'<path d="M{previous[0]:.2f} {previous[1]:.2f}L{x:.2f} {y:.2f}" fill="none" stroke="#167d9a" stroke-width="2"/>')
+                svg.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="4" fill="#167d9a"><title>'
+                           + escape(f'{at}: {record["value"]} {unit}') + '</title></circle>')
+                previous = (x, y)
+            for y, value in ((100, hi), (320, lo)):
+                svg.append(f'<text x="8" y="{y}">' + escape(str(value)) + '</text>')
+            svg.extend(['<text x="80" y="365">' + escape(points[0][0]) + '</text>',
+                        '<text x="900" y="365" text-anchor="end">' + escape(points[-1][0]) + '</text>',
+                        '<text x="80" y="395">' + escape('Revision: ' + reference['revision']) + '</text>',
+                        '</g></svg>'])
+            stem = "world_metric_" + hashlib.sha256(key.encode()).hexdigest()[:16]
+            path = f"charts/{stem}.svg"
+            write_text_atomic(os.path.join(charts_dir, stem + ".svg"), "\n".join(svg))
+            items.append({"id": stem, "path": path, "type": "svg", "title": label,
+                          "caption": label, "source": "world_result", "placement_hint": "simulation",
+                          "world_result_ref": reference, "metric_id": key, "unit": unit,
+                          "value_status": "simulated"})
         return items
 
     def _run_matplotlib_family(self, report_dir: str, charts_dir: str,
@@ -5398,6 +5509,8 @@ class ReportVisualizer:
             }
             if unhashed:
                 out["unhashed_inputs"] = unhashed
+            if (artifacts or {}).get("world_result_ref"):
+                out["world_result_ref"] = artifacts["world_result_ref"]
             return out
         except Exception:  # noqa: BLE001 — 溯源是旁路增强
             return {}

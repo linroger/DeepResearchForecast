@@ -8403,6 +8403,160 @@ class PipelineOrchestrator:
             # 仅主线程可设置信号处理器；非主线程下 atexit 仍覆盖正常退出
             pass
 
+    @staticmethod
+    def _simulation_engine(state: PipelineState) -> str:
+        from .simulation_manager import validate_simulation_engine
+        engine = validate_simulation_engine(state.options.get("simulation_engine", "oasis-legacy"))
+        if state.simulation_id:
+            directory = os.path.join(SimulationRunner.RUN_STATE_DIR, state.simulation_id)
+            if os.path.exists(os.path.join(directory, "state.json")) or os.path.exists(os.path.join(directory, "world_input_manifest.json")):
+                if SimulationRunner.simulation_engine(state.simulation_id) != engine:
+                    raise ValueError("Pipeline and saved simulation engine pins differ")
+        return engine
+
+    def _run_world_stages(self, state: PipelineState, project: Any, graph_id: str,
+                          actors: Any, report_md: str, *, consumed_generation=None):
+        """PREPARE and RUN remain pipeline stages; the service owns world execution."""
+        from pathlib import Path
+        from .world_simulation.artifacts import load_inputs, read_json
+        from .world_simulation.contracts import clone, require
+        from .world_simulation.service import WorldSimulationService
+        require(self._simulation_engine(state) == "world-v1", "engine_mismatch", "World pipeline required")
+        manager = SimulationManager()
+        sim = manager.get_simulation(state.simulation_id) if state.simulation_id else None
+        prepare_reused = sim is not None and bool(sim.world_input_manifest_sha256)
+        manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+        prepare_registered = any(name in manifest or name in state.artifacts
+                                 for name in ("world_spec", "world_input_manifest"))
+        run_registered = any(name in manifest or name in state.artifacts
+                             for name in ("world_result", "world_result_manifest"))
+        upd = self._make_stage_updater(state, STAGE_PREPARE)
+        upd(5, "Validate world preparation" if prepare_reused else "Compile world model")
+        source_identity = {"report": report_md, "actors": actors}
+        if consumed_generation is not None:
+            source_identity["consumed_generation"] = consumed_generation["files"]
+        # Research source JSON legitimately contains numeric estimates; world
+        # quantity normalization belongs to the compiler, not source identity.
+        generation = "research_" + hashlib.sha256(json.dumps(
+            source_identity, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+        pinned_generation = state.options.get("world_research_generation_id")
+        require(pinned_generation is None or pinned_generation == generation,
+                "input_binding_mismatch", "Consumed research generation changed")
+        state.options["world_research_generation_id"] = generation
+        if sim is not None:
+            require(sim.simulation_engine == "world-v1", "engine_mismatch", "Pipeline and simulation engines differ")
+        if prepare_reused:
+            manager.validate_prepared_simulation_config(sim.simulation_id)
+            spec, _ = load_inputs(WorldSimulationService.directory(sim.simulation_id, root=manager.SIMULATION_DATA_DIR))
+            require(spec["sourceBindings"]["researchGenerationId"] == generation,
+                    "input_binding_mismatch", "Prepared world belongs to different research")
+            if prepare_registered:
+                require(self._validate_reuse(state, STAGE_PREPARE), "input_binding_mismatch", "World PREPARE artifacts changed")
+        else:
+            raw_spec = state.options.get("world_spec")
+            if raw_spec is None:
+                candidate = Path(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)) / "world_modeling_candidate.json"
+                if candidate.exists():
+                    raw_spec = read_json(candidate)
+                    raw_spec = raw_spec.get("world_spec", raw_spec)
+            policy_spec = clone(state.options.get("world_policy_spec"))
+            require(raw_spec is not None or policy_spec is not None, "world_model_not_ready",
+                    "World preparation requires world_spec, a modeling candidate, or explicit modeling policy")
+            raw_spec = clone(raw_spec)
+            require(raw_spec is None or isinstance(raw_spec, dict), "invalid_spec", "world_spec must be an object")
+            safety = state.options.get("safety_policy_v1", {})
+            policy = safety.get("simulation_forecast_effect", (raw_spec or {}).get("forecastEffect", "diagnostic_only"))
+            if raw_spec is not None:
+                require(isinstance(raw_spec, dict), "invalid_spec", "world_spec must be an object")
+                require(raw_spec.get("forecastEffect", policy) == policy, "unsupported_policy", "World and pipeline forecast policies differ")
+                raw_spec["forecastEffect"] = policy
+            elif policy_spec is not None:
+                require(isinstance(policy_spec, dict), "missing_modeling_policy", "world_policy_spec must be an object")
+                policy_spec["forecastEffect"] = policy
+            if sim is None:
+                sim = manager.create_simulation(project.project_id, graph_id, simulation_engine="world-v1")
+                state.simulation_id = sim.simulation_id
+                PipelineManager.save(state)
+            engine = research_engine_for_run(state.options)
+            bundle = actors
+            if engine == RESEARCH_ENGINE_LEGACY:
+                handoff = Path(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id))
+                # Legacy research sources are a list, not a world artifact.
+                # Pin bounded source bytes before decoding; the real compiler
+                # separately validates the producer's actor/source/dossier seal.
+                source_bytes = {
+                    name: _research_data_read(str(handoff), name, 8 * 1024 * 1024)
+                    for name in ("sources.json", "actor_dossier.md")
+                }
+                if consumed_generation is not None:
+                    for name, raw in source_bytes.items():
+                        require(hashlib.sha256(raw).hexdigest() == consumed_generation["files"].get(name),
+                                "input_binding_mismatch", f"Consumed legacy research artifact changed: {name}")
+                sources = json.loads(source_bytes["sources.json"])
+                require(isinstance(sources, list), "invalid_source", "Legacy research sources must be a list")
+                bundle = {"actors": actors, "sources": sources,
+                          "dossier": source_bytes["actor_dossier.md"].decode("utf-8")}
+            sim = manager.prepare_world_simulation(
+                sim.simulation_id, raw_spec=raw_spec, research_report=report_md,
+                research_generation_id=generation, research_engine=engine,
+                actor_bundle=bundle, policy_spec=policy_spec,
+                ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt)
+            spec, _ = load_inputs(WorldSimulationService.directory(sim.simulation_id, root=manager.SIMULATION_DATA_DIR))
+            require(spec["forecastEffect"] == policy, "unsupported_policy", "Compiled world changed the pinned forecast policy")
+        self._complete_stage(state, STAGE_PREPARE, "World inputs sealed", reused=prepare_reused)
+        upd = self._make_stage_updater(state, STAGE_RUN)
+        upd(2, "Validate world result")
+        directory = WorldSimulationService.directory(sim.simulation_id, root=manager.SIMULATION_DATA_DIR)
+        completed = (directory / "world_result_manifest.json").exists()
+        status = SimulationRunner.get_run_state(sim.simulation_id)
+        completed = completed and status is not None and status.runner_status == RunnerStatus.COMPLETED
+        # A claimed complete stage or an existing final export must validate. It
+        # must not be converted into a fresh attempt on integrity failure.
+        if run_registered:
+            self._require_run_completion_evidence(state, sim.simulation_id, status, False)
+        if completed and run_registered:
+            require(self._validate_reuse(state, STAGE_RUN), "result_binding_mismatch", "World RUN artifacts changed")
+        if completed:
+            self._require_run_completion_evidence(state, sim.simulation_id, status, False)
+        else:
+            self._wait_world_simulation(state, sim.simulation_id, upd)
+        self._require_run_completion_evidence(state, sim.simulation_id, None, False)
+        self._complete_stage(state, STAGE_RUN, "World horizon committed", reused=completed)
+        return sim
+
+    def _wait_world_simulation(self, state: PipelineState, simulation_id: str, update):
+        """Use the real runner child boundary and cancellation barriers."""
+        cancel = self._cancel_events.get(state.pipeline_id)
+        if cancel is not None and cancel.is_set():
+            raise PipelineCancelled("World run cancelled before launch")
+        SimulationRunner.start_simulation(simulation_id)
+        try:
+            last_round, last_progress = -1, time.monotonic()
+            stall = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
+            while True:
+                if cancel is not None and cancel.is_set():
+                    SimulationRunner.stop_simulation(simulation_id)
+                    raise PipelineCancelled("World run cancelled")
+                run = SimulationRunner.get_run_state(simulation_id)
+                if run is None:
+                    raise RuntimeError("World child status is missing")
+                if run.runner_status == RunnerStatus.COMPLETED:
+                    return run
+                if run.runner_status in {RunnerStatus.FAILED, RunnerStatus.STOPPED}:
+                    raise RuntimeError(f"World child did not complete: {run.error or run.runner_status.value}")
+                if run.current_round != last_round:
+                    last_round, last_progress = run.current_round, time.monotonic()
+                    update(min(98, int(run.current_round / max(run.total_rounds, 1) * 100)),
+                           f"World round {run.current_round}/{run.total_rounds}")
+                if stall > 0 and time.monotonic() - last_progress > stall:
+                    SimulationRunner.stop_simulation(simulation_id)
+                    raise RuntimeError("World child stopped progressing")
+                time.sleep(1)
+        except BaseException:
+            SimulationRunner.stop_simulation(simulation_id)
+            raise
+
     @classmethod
     def start(
         cls,
@@ -8414,8 +8568,13 @@ class PipelineOrchestrator:
         max_rounds: Optional[int] = None,
         language: Optional[str] = None,
         model: Optional[str] = None,
+        simulation_engine: str = "oasis-legacy",
+        world_spec: Optional[dict] = None,
+        world_policy_spec: Optional[dict] = None,
     ) -> PipelineState:
         """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。"""
+        from .simulation_manager import validate_simulation_engine
+        validate_simulation_engine(simulation_engine)
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
 
@@ -8445,6 +8604,9 @@ class PipelineOrchestrator:
             # ""=auto（不传 --target-language，模型自选）；具体值=覆盖。model: None=用 Config 默认。
             "research_language": language,
             "research_model": model or None,
+            "simulation_engine": simulation_engine,
+            "world_spec": world_spec,
+            "world_policy_spec": world_policy_spec,
         })
         state.options["actor_intelligence_policy_v1"] = (
             admission_actor_intelligence_policy_v1()
@@ -8491,6 +8653,13 @@ class PipelineOrchestrator:
                 logger.info(f"[{pipeline_id}] 收到取消请求，等待管线在取消点退出")
                 return {"ok": True, "status": "cancelling"}
 
+            if (data.get("options") or {}).get("simulation_engine", "oasis-legacy") == "world-v1":
+                simulation_ids = [data.get("simulation_id")]
+                simulation_ids.extend(row["simulation_id"] for row in
+                    (data.get("options") or {}).get("world_seed_runs", {}).values())
+                for simulation_id in simulation_ids:
+                    if simulation_id:
+                        SimulationRunner.stop_simulation(simulation_id)
             # 孤儿（重启后遗留 running）：直接落盘为 cancelled（是用户决定，不是错误）
             PipelineManager.mark_failed(pipeline_id, "已被用户取消", status="cancelled")
             data = PipelineManager.load(pipeline_id) or {}
@@ -8616,6 +8785,7 @@ class PipelineOrchestrator:
             _bad = PipelineManager.is_incompatible(data)  # I-4-4
             if _bad is not None:
                 raise IncompatiblePipelineSchema(pipeline_id, _bad)
+            cls._simulation_engine(PipelineState.from_dict(data))
             if data.get("status") == "running":
                 # ORCH-3(a): 无在飞线程 + owner 证据判死 → 就地回收（复用 reconcile 的判据），
                 # 让「僵死的 running 孤儿」无需重启后端即可恢复。判活则维持 409。
@@ -8779,6 +8949,9 @@ class PipelineOrchestrator:
         if _bad is not None:
             raise IncompatiblePipelineSchema(base_pipeline_id, _bad)
         base_state = PipelineState.from_dict(base)
+        engine = cls._simulation_engine(base_state)
+        if engine == "world-v1" and set(overlay or {}) - {"label", "seed"}:
+            raise ValueError("World forks accept label and seed; model changes require a new world_spec")
         if not base_state.graph_id:
             raise RuntimeError("基础管线尚未建图，无法分叉情景")
 
@@ -8817,6 +8990,16 @@ class PipelineOrchestrator:
             except (TypeError, ValueError):
                 pass
 
+        new_state.options["simulation_engine"] = engine
+        if engine == "world-v1":
+            from copy import deepcopy
+            for key in ("safety_policy_v1", "world_research_generation_id", "research_language"):
+                if key in base_state.options:
+                    new_state.options[key] = deepcopy(base_state.options[key])
+            if not base_state.simulation_id:
+                raise ValueError("World fork requires a prepared parent simulation")
+            child = SimulationManager().fork_world_simulation(base_state.simulation_id, seed=(overlay or {}).get("seed"))
+            new_state.simulation_id = child.simulation_id
         PipelineManager.ensure_dirs(new_id)
         task_manager = TaskManager()
         task_id = task_manager.create_task(
@@ -9023,6 +9206,26 @@ class PipelineOrchestrator:
         有界、带停滞看门狗；任一额外种子失败仅告警跳过；有效样本<2 则不落集成文件（degrade-safe）。
         默认 N=1 → 该方法直接返回（与现状逐字节一致）。
         """
+        if self._simulation_engine(state) == "world-v1":
+            from .world_simulation.artifacts import load_inputs
+            from .world_simulation.service import WorldSimulationService
+            spec, _ = load_inputs(WorldSimulationService.directory(state.simulation_id))
+            n = int(state.options.get("safety_policy_v1", {}).get("n_forecast_seeds", 1))
+            runs = state.options.setdefault("world_seed_runs", {})
+            for ordinal in range(2, n + 1):
+                seed = spec["seed"] + ordinal * 7919
+                key = str(seed)
+                if key in runs and runs[key].get("status") == "completed":
+                    self._validate_world_seed(runs[key], seed=seed)
+                    WorldSimulationService.require_complete(runs[key]["simulation_id"])
+                    if not runs[key].get("report_id"):
+                        raise ValueError("Completed world seed has no report identity")
+                    continue
+                sim_id, report_id, _ = self._run_one_seed(state, project, graph_id, actors,
+                    research, report_md, seed=seed, max_rounds=None)
+                runs[key].update(simulation_id=sim_id, report_id=report_id, status="completed")
+                PipelineManager.save(state)
+            return
         try:
             # Foglamp WP1 (1B/1D)：种子数读 run 钉住的安全政策（缺失回退环境值，现默认 1）。
             n_seeds = max(1, int(self._pinned_safety(
@@ -9257,6 +9460,46 @@ class PipelineOrchestrator:
         logger.warning("[%s] 官方数据绑定失败（%s 阶段），下游按「官方数据不可用」降级继续: %s",
                        state.pipeline_id, stage, reason)
 
+    @staticmethod
+    def _validate_world_seed(row: dict, *, seed: int):
+        """Validate durable seed admission without launching or writing."""
+        from .world_simulation.artifacts import load_inputs
+        from .world_simulation.contracts import require
+        from .world_simulation.service import WorldSimulationService
+        manager = SimulationManager()
+        child = manager.get_simulation(row["simulation_id"])
+        require(child is not None and child.world_generation_id == row["world_generation_id"]
+                and child.world_input_manifest_sha256 == row["world_input_manifest_sha256"],
+                "input_binding_mismatch", "Saved seed generation changed")
+        manager.validate_prepared_simulation_config(child.simulation_id)
+        spec, _ = load_inputs(WorldSimulationService.directory(child.simulation_id))
+        require(spec["seed"] == seed, "input_binding_mismatch", "Saved child belongs to a different seed")
+        return child
+
+    def _run_world_seed(self, state: PipelineState, *, seed: int):
+        """Persist child admission before dispatch so retries cannot renew its budget."""
+        from .world_simulation.service import WorldSimulationService
+        manager = SimulationManager()
+        runs = state.options.setdefault("world_seed_runs", {})
+        key = str(seed)
+        row = runs.get(key)
+        if row is None:
+            child = manager.fork_world_simulation(state.simulation_id, seed=seed)
+            row = {"simulation_id": child.simulation_id,
+                   "world_generation_id": child.world_generation_id,
+                   "world_input_manifest_sha256": child.world_input_manifest_sha256,
+                   "status": "prepared", "report_id": None, "valueStatus": "simulated"}
+            runs[key] = row
+            PipelineManager.save(state)
+        child = self._validate_world_seed(row, seed=seed)
+        run = SimulationRunner.get_run_state(child.simulation_id)
+        if run is None or run.runner_status != RunnerStatus.COMPLETED:
+            self._wait_world_simulation(state, child.simulation_id, lambda pct, message: None)
+        WorldSimulationService.require_complete(child.simulation_id)
+        row["status"] = "world_completed"
+        PipelineManager.save(state)
+        return child
+
     def _run_one_seed(self, state: "PipelineState", project: Any, graph_id: str,
                       actors: Any, research: dict, report_md: str, *,
                       seed: int, max_rounds: Optional[int],
@@ -9267,111 +9510,122 @@ class PipelineOrchestrator:
         W9-5 ``scenario_spine``：主跑的情景脊柱（名+判定标准），钉给种子的 ReportAgent 使
         种子对同一组命名情景打分（概率自由）；报告链尚未支持该参数时回退旧签名。
         """
-        from .official_data import bind_simulation_research, simulation_research_binding
-        parent_binding = simulation_research_binding(getattr(state, "simulation_id", None))
-        if parent_binding["status"] == "invalid":
-            raise ValueError("Parent research generation changed before seed preparation")
-        sim_manager = SimulationManager()
-        _is_http = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
-        sim_state = sim_manager.create_simulation(
-            project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
-        sim_id = sim_state.simulation_id
-        if parent_binding["status"] == "valid":
-            bind_simulation_research(
-                sim_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                pipeline_id=state.pipeline_id, expected_generation=parent_binding,
-                report=report_md, sources=research.get("sources"))
-        # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
-        # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
-        # CLI providers stay capped at 3 (local CLI throughput bound).
-        _pp = int(getattr(Config, "PARALLEL_PROFILE_COUNT", 16) or 16)
-        # W9-5：与主路径（PREPARE 阶段）对齐——把 GRAPH 阶段持久化的中心度先验也喂给种子跑的
-        # salience 排序（此前种子跑漏传 graph_priors，agent 选池与主跑系统性不一致）。
-        _graph_priors = None
-        try:
-            _graph_priors = _read_json(os.path.join(
-                state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                "graph_priors.json"))
-        except Exception:  # noqa: BLE001
+        if self._simulation_engine(state) == "world-v1":
+            if max_rounds is not None:
+                raise ValueError("World seed runs use the sealed horizon; max_rounds cannot override it")
+            sim_state = self._run_world_seed(state, seed=seed)
+            sim_id = sim_state.simulation_id
+        else:
+            from .official_data import bind_simulation_research, simulation_research_binding
+            parent_binding = simulation_research_binding(getattr(state, "simulation_id", None))
+            if parent_binding["status"] == "invalid":
+                raise ValueError("Parent research generation changed before seed preparation")
+            sim_manager = SimulationManager()
+            _is_http = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
+            sim_state = sim_manager.create_simulation(
+                project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
+            sim_id = sim_state.simulation_id
+            if parent_binding["status"] == "valid":
+                bind_simulation_research(
+                    sim_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                    pipeline_id=state.pipeline_id, expected_generation=parent_binding,
+                    report=report_md, sources=research.get("sources"))
+            # SIM-11 (pairs with SIM-7): HTTP/openai-compat providers tolerate higher
+            # persona fan-out; raise the default 8→16 (configurable via PARALLEL_PROFILE_COUNT).
+            # CLI providers stay capped at 3 (local CLI throughput bound).
+            _pp = int(getattr(Config, "PARALLEL_PROFILE_COUNT", 16) or 16)
+            # W9-5：与主路径（PREPARE 阶段）对齐——把 GRAPH 阶段持久化的中心度先验也喂给种子跑的
+            # salience 排序（此前种子跑漏传 graph_priors，agent 选池与主跑系统性不一致）。
             _graph_priors = None
-        sim_manager.prepare_simulation(
-            simulation_id=sim_id,
-            simulation_requirement=state.prompt,
-            document_text=report_md,
-            parallel_profile_count=_pp if _is_http else 3,
-            actors=actors,
-            graph_priors=_graph_priors,  # W9-5: 与主路径一致（P3-7 中心度先验）
-            max_rounds=max_rounds,  # PREP-1: 集成种子跑同样按真实执行窗排期
-            research_language=state.options.get("research_language"),  # PREP-4
-        )
-        run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed)}
-        if max_rounds:
-            run_kwargs["max_rounds"] = int(max_rounds)
-        # Foglamp WP1 (1A/1B)：读 run 钉住的安全政策（默认已为 false——观察图不得吃反馈）。
-        if self._pinned_safety(state, "sim_graph_feedback",
-                               Config.SIM_GRAPH_FEEDBACK) and graph_id:
-            run_kwargs["enable_graph_memory_update"] = True
-            run_kwargs["graph_id"] = graph_id
-        SimulationRunner.start_simulation(simulation_id=sim_id, **run_kwargs)
-        cancel_ev = type(self)._cancel_events.get(state.pipeline_id)
-        last_progress_at = time.monotonic()
-        last_round = -1
-        try:
-            stall_s = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
-        except (TypeError, ValueError):
-            stall_s = 1800.0
-        # W9-2：种子轮询内的心跳刷新节律（与看护线程同参）。
-        try:
-            _hb_interval = float(getattr(Config, "PIPELINE_HEARTBEAT_INTERVAL_S", 30) or 30)
-        except (TypeError, ValueError):
-            _hb_interval = 30.0
-        _last_hb = time.monotonic()
-        while True:
-            if cancel_ev is not None and cancel_ev.is_set():
-                try:
-                    SimulationRunner.stop_simulation(sim_id)
-                except Exception:  # noqa: BLE001
-                    pass
-                raise PipelineCancelled("多种子集成期间被取消")
-            rs = SimulationRunner.get_run_state(sim_id)
-            if rs is None:
-                raise RuntimeError("集成种子模拟运行状态丢失")
-            cur = getattr(rs, "current_round", 0) or 0
-            if cur != last_round:
-                last_round = cur
-                last_progress_at = time.monotonic()
-            if rs.runner_status == RunnerStatus.COMPLETED:
-                break
-            if rs.runner_status in (RunnerStatus.FAILED, RunnerStatus.STOPPED):
-                raise RuntimeError(f"集成种子模拟未正常结束: {rs.runner_status}")
-            if stall_s > 0 and (time.monotonic() - last_progress_at) > stall_s:
-                try:
-                    SimulationRunner.stop_simulation(sim_id)
-                except Exception:  # noqa: BLE001
-                    pass
-                raise RuntimeError(f"集成种子模拟约 {int(stall_s)}s 无进展，看门狗终止")
-            # W9-2：种子轮询期间按心跳节律刷新 heartbeat_at——集成窗口内心跳不再冻结，
-            # 别的进程的 reconcile_orphans 能看到「这条管线还活着」。
-            if (time.monotonic() - _last_hb) >= _hb_interval:
-                _last_hb = time.monotonic()
-                try:
-                    PipelineManager.touch_heartbeat(state.pipeline_id, pid=os.getpid())
-                except Exception:  # noqa: BLE001
-                    pass
-            time.sleep(5)
-        # 反馈写入器排空（与主跑一致），保证报告读到完整图谱（Foglamp 1B：读钉住政策）
-        if self._pinned_safety(state, "sim_graph_feedback",
-                               Config.SIM_GRAPH_FEEDBACK) and graph_id:
-            SimulationRunner.join_monitor_thread(sim_id, timeout=30)
             try:
-                ZepGraphMemoryManager.stop_updater(sim_id)
+                _graph_priors = _read_json(os.path.join(
+                    state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                    "graph_priors.json"))
+            except Exception:  # noqa: BLE001
+                _graph_priors = None
+            sim_manager.prepare_simulation(
+                simulation_id=sim_id,
+                simulation_requirement=state.prompt,
+                document_text=report_md,
+                parallel_profile_count=_pp if _is_http else 3,
+                actors=actors,
+                graph_priors=_graph_priors,  # W9-5: 与主路径一致（P3-7 中心度先验）
+                max_rounds=max_rounds,  # PREP-1: 集成种子跑同样按真实执行窗排期
+                research_language=state.options.get("research_language"),  # PREP-4
+            )
+            run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed)}
+            if max_rounds:
+                run_kwargs["max_rounds"] = int(max_rounds)
+            # Foglamp WP1 (1A/1B)：读 run 钉住的安全政策（默认已为 false——观察图不得吃反馈）。
+            if self._pinned_safety(state, "sim_graph_feedback",
+                                   Config.SIM_GRAPH_FEEDBACK) and graph_id:
+                run_kwargs["enable_graph_memory_update"] = True
+                run_kwargs["graph_id"] = graph_id
+            SimulationRunner.start_simulation(simulation_id=sim_id, **run_kwargs)
+            cancel_ev = type(self)._cancel_events.get(state.pipeline_id)
+            last_progress_at = time.monotonic()
+            last_round = -1
+            try:
+                stall_s = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
+            except (TypeError, ValueError):
+                stall_s = 1800.0
+            # W9-2：种子轮询内的心跳刷新节律（与看护线程同参）。
+            try:
+                _hb_interval = float(getattr(Config, "PIPELINE_HEARTBEAT_INTERVAL_S", 30) or 30)
+            except (TypeError, ValueError):
+                _hb_interval = 30.0
+            _last_hb = time.monotonic()
+            while True:
+                if cancel_ev is not None and cancel_ev.is_set():
+                    try:
+                        SimulationRunner.stop_simulation(sim_id)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    raise PipelineCancelled("多种子集成期间被取消")
+                rs = SimulationRunner.get_run_state(sim_id)
+                if rs is None:
+                    raise RuntimeError("集成种子模拟运行状态丢失")
+                cur = getattr(rs, "current_round", 0) or 0
+                if cur != last_round:
+                    last_round = cur
+                    last_progress_at = time.monotonic()
+                if rs.runner_status == RunnerStatus.COMPLETED:
+                    break
+                if rs.runner_status in (RunnerStatus.FAILED, RunnerStatus.STOPPED):
+                    raise RuntimeError(f"集成种子模拟未正常结束: {rs.runner_status}")
+                if stall_s > 0 and (time.monotonic() - last_progress_at) > stall_s:
+                    try:
+                        SimulationRunner.stop_simulation(sim_id)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    raise RuntimeError(f"集成种子模拟约 {int(stall_s)}s 无进展，看门狗终止")
+                # W9-2：种子轮询期间按心跳节律刷新 heartbeat_at——集成窗口内心跳不再冻结，
+                # 别的进程的 reconcile_orphans 能看到「这条管线还活着」。
+                if (time.monotonic() - _last_hb) >= _hb_interval:
+                    _last_hb = time.monotonic()
+                    try:
+                        PipelineManager.touch_heartbeat(state.pipeline_id, pid=os.getpid())
+                    except Exception:  # noqa: BLE001
+                        pass
+                time.sleep(5)
+            # 反馈写入器排空（与主跑一致），保证报告读到完整图谱（Foglamp 1B：读钉住政策）
+            if self._pinned_safety(state, "sim_graph_feedback",
+                                   Config.SIM_GRAPH_FEEDBACK) and graph_id:
+                SimulationRunner.join_monitor_thread(sim_id, timeout=30)
+                try:
+                    ZepGraphMemoryManager.stop_updater(sim_id)
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                SimulationRunner.write_run_summary(sim_id)
             except Exception:  # noqa: BLE001
                 pass
-        try:
-            SimulationRunner.write_run_summary(sim_id)
-        except Exception:  # noqa: BLE001
-            pass
         rid = f"report_{uuid.uuid4().hex[:12]}"
+        if self._simulation_engine(state) == "world-v1":
+            row = state.options["world_seed_runs"][str(seed)]
+            rid = row.get("report_id") or rid
+            row["report_id"] = rid
+            PipelineManager.save(state)
         _agent_kwargs: dict[str, Any] = {
             "graph_id": graph_id,
             "simulation_id": sim_id,
@@ -9391,6 +9645,8 @@ class PipelineOrchestrator:
             else:
                 agent = ReportAgent(**_agent_kwargs)
         except TypeError:
+            if self._simulation_engine(state) == "world-v1":
+                raise
             logger.info("[%s] ReportAgent 尚未支持 scenario_spine，种子 %s 回退自由情景命名",
                         state.pipeline_id, seed)
             agent = ReportAgent(**_agent_kwargs)
@@ -9532,6 +9788,12 @@ class PipelineOrchestrator:
         states missing one endpoint degrade to a zero-duration bookkeeping
         interval rather than an invented multi-hour duration.
         """
+        strict_world = self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}
+        if strict_world:
+            SimulationManager().validate_prepared_simulation_config(state.simulation_id)
+            if stage == STAGE_RUN:
+                self._require_run_completion_evidence(state, state.simulation_id, None, False)
+            self._record_stage_artifacts(state, stage)
         st = state.stages.setdefault(stage, StageState(name=stage))
         st.status = "completed"
         st.progress = 100
@@ -9549,10 +9811,11 @@ class PipelineOrchestrator:
         state.global_progress = self._global_from_stage(
             state.mode, stage, 100, state.options.get("dynamic_bands")
         )
-        try:
-            self._record_stage_artifacts(state, stage)  # T6.3
-        except Exception:
-            pass
+        if not strict_world:
+            try:
+                self._record_stage_artifacts(state, stage)  # T6.3
+            except Exception:
+                pass
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -9865,6 +10128,12 @@ class PipelineOrchestrator:
         issues: list[str] = []
         if not sim_id:
             return "ok", issues, {}
+        if SimulationRunner.simulation_engine(sim_id) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            SimulationManager().validate_prepared_simulation_config(sim_id)
+            result = WorldSimulationService.require_complete(sim_id)
+            return "ok", [], {"simulation_engine": "world-v1", "revision": result["revision"],
+                              "committed_round": result["committedRound"]}
         base = self._sim_dir(sim_id)
         db_rows = 0
         db_found = False
@@ -10013,6 +10282,14 @@ class PipelineOrchestrator:
         运行中临时产物发现（_discover_partial_artifacts）三处共用，避免三套各写一份文件名清单
         造成漂移。仅返回候选路径，不检查存在性（调用方按需过滤）。
         """
+        engine = PipelineOrchestrator._simulation_engine(state)
+        if engine == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
+            if not state.simulation_id:
+                raise ValueError("World stage has no simulation identity")
+            from .world_simulation.service import WorldSimulationService
+            directory = WorldSimulationService.directory(state.simulation_id)
+            names = ("world_spec", "world_input_manifest") if stage == STAGE_PREPARE else ("world_result", "world_result_manifest")
+            return [(name, str(directory / (name + ".json"))) for name in names]
         hd = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
         specs: list[tuple[str, str]] = []
         if stage == STAGE_RESEARCH:
@@ -10258,6 +10535,20 @@ class PipelineOrchestrator:
         供后续 resume 复用前做完整性校验（_validate_reuse）。清单写失败仅退化为「无清单」，
         不影响 T6.3 的深链登记。
         """
+        if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
+            manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+            registered = any(name in manifest or name in state.artifacts
+                             for name, _ in self._stage_artifact_specs(state, stage))
+            if registered and not self._validate_reuse(state, stage):
+                raise ValueError("Previously registered world stage artifacts changed")
+            for name, path in self._stage_artifact_specs(state, stage):
+                entry = _manifest_entry_for(name, path, stage)
+                if entry is None:
+                    raise ValueError(f"Required world artifact is missing: {name}")
+                manifest[name] = entry
+                state.artifacts[name] = path
+            PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+            return
         recorded: list[tuple[str, str]] = []
 
         def add_if(name: str, path: Optional[str]) -> bool:
@@ -10363,6 +10654,19 @@ class PipelineOrchestrator:
           - sha256 当时未能计算（None）→ 仅比字节数 + schema（无哈希可比时不因此误判）。
         仅在 Config.PIPELINE_VALIDATE_ARTIFACTS 开启时被调用（见各复用分支）。
         """
+        if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
+            SimulationManager().validate_prepared_simulation_config(state.simulation_id)
+            if stage == STAGE_RUN:
+                from .world_simulation.service import WorldSimulationService
+                WorldSimulationService.require_complete(state.simulation_id)
+            manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+            for name, path in self._stage_artifact_specs(state, stage):
+                entry = manifest.get(name)
+                if not isinstance(entry, dict) or entry.get("path") != path or not entry.get("sha256"):
+                    return False
+                if not os.path.isfile(path) or _sha256_file(path) != entry["sha256"]:
+                    return False
+            return True
         manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
         if not manifest:
             if stage == STAGE_REPORT and state.report_id:
@@ -10447,6 +10751,8 @@ class PipelineOrchestrator:
         校验器本身异常时必须 fail closed：缺失清单的兼容路径已经由
         ``_validate_reuse`` 显式放行，异常意味着身份/完整性未被证明。
         """
+        if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
+            return self._validate_reuse(state, stage)
         if not bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
             return True
         try:
@@ -10471,6 +10777,13 @@ class PipelineOrchestrator:
         terminal COMPLETED state. A missing summary remains recoverable for legacy
         runs and is generated once by ``_publish_run_summary``.
         """
+        if PipelineOrchestrator._simulation_engine(state) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            if sim_state is None or sim_state.simulation_id != state.simulation_id or sim_state.simulation_engine != "world-v1":
+                raise ValueError("Pipeline and simulation world identities differ")
+            SimulationManager().validate_prepared_simulation_config(state.simulation_id)
+            WorldSimulationService.require_complete(state.simulation_id)
+            return True
         sim_id = state.simulation_id
         if not sim_id or sim_state is None:
             return False
@@ -10546,6 +10859,8 @@ class PipelineOrchestrator:
              直接绑死。无任何 seal 身份可核验（pre-seal 遗留）→ fail closed 照旧重跑。
         返回 ``(可复用, 不可复用原因)``；探测自身异常一律 fail closed。
         """
+        if self._simulation_engine(state) == "world-v1":
+            return self._run_reuse_ready(state, sim_state), ""
         try:
             if not _sim_reuse_completed_enabled():
                 return False, "sim_resume_reuse_completed_disabled"
@@ -10625,6 +10940,13 @@ class PipelineOrchestrator:
         的 simulation_end 完成标记」+「有效 run_summary.json」。缺任一 → 以清晰讯息抛
         RuntimeError（RUN 阶段判失败、可 resume；与 DEFECT-1 组合：该结果同样不可复用）。
         """
+        if self._simulation_engine(state) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            if state.simulation_id != sim_id:
+                raise ValueError("Pipeline world completion identity mismatch")
+            SimulationManager().validate_prepared_simulation_config(sim_id)
+            WorldSimulationService.require_complete(sim_id)
+            return
         missing = self._sim_platform_completion_missing(sim_id, run_state)
         if missing:
             raise RuntimeError(
@@ -12464,6 +12786,7 @@ class PipelineOrchestrator:
         # 心跳让 reconcile_orphans 把「死管线」与「慢但活（深研究/persona 静默数分钟）」区分开。
         hb_stop = self._start_heartbeat(state)
         try:
+            self._simulation_engine(state)
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
@@ -13319,472 +13642,477 @@ class PipelineOrchestrator:
                 state.graph_id = graph_id
                 self._complete_stage(state, STAGE_GRAPH, "图谱构建完成")
 
-            # ---- Stage 3: PREPARE ----
-            upd = self._make_stage_updater(state, STAGE_PREPARE)
-            sim_manager = SimulationManager()
-            prepare_stage_done = state.stages.get(STAGE_PREPARE) and state.stages[STAGE_PREPARE].status == "completed"
-            sim_state = sim_manager.get_simulation(state.simulation_id) if state.simulation_id else None
-            # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
-            # 不符则当作未完成、走重建分支并留痕（半写的 sim_config 会让模拟/报告静默降级）。
-            _prepare_reuse = bool(prepare_stage_done and sim_state is not None)
-            if _prepare_reuse and not self._reuse_ok(state, STAGE_PREPARE):
-                _prepare_reuse = False
-                state.options["resumed_stage_validation"] = "prepare_rebuilt_manifest_mismatch"
-                logger.info("[%s] 模拟环境产物清单校验未通过，回落到重建", state.pipeline_id)
-            if _prepare_reuse:
-                try:
-                    sim_manager.validate_prepared_simulation_config(
+            if self._simulation_engine(state) == "world-v1":
+                sim_state = self._run_world_stages(
+                    state, project, graph_id, actors, report_md,
+                    consumed_generation=_consumed_research_generation)
+            else:
+                # ---- Stage 3: PREPARE ----
+                upd = self._make_stage_updater(state, STAGE_PREPARE)
+                sim_manager = SimulationManager()
+                prepare_stage_done = state.stages.get(STAGE_PREPARE) and state.stages[STAGE_PREPARE].status == "completed"
+                sim_state = sim_manager.get_simulation(state.simulation_id) if state.simulation_id else None
+                # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
+                # 不符则当作未完成、走重建分支并留痕（半写的 sim_config 会让模拟/报告静默降级）。
+                _prepare_reuse = bool(prepare_stage_done and sim_state is not None)
+                if _prepare_reuse and not self._reuse_ok(state, STAGE_PREPARE):
+                    _prepare_reuse = False
+                    state.options["resumed_stage_validation"] = "prepare_rebuilt_manifest_mismatch"
+                    logger.info("[%s] 模拟环境产物清单校验未通过，回落到重建", state.pipeline_id)
+                if _prepare_reuse:
+                    try:
+                        sim_manager.validate_prepared_simulation_config(
+                            sim_state.simulation_id
+                        )
+                    except Exception as exc:  # noqa: BLE001 — seal proof is mandatory
+                        _prepare_reuse = False
+                        state.options["resumed_stage_validation"] = (
+                            "prepare_rebuilt_config_seal_mismatch"
+                        )
+                        state.options["artifact_validation_error"] = {
+                            "stage": STAGE_PREPARE,
+                            "artifact": "simulation_config_manifest",
+                            "error": str(exc)[:300],
+                        }
+                        logger.warning(
+                            "[%s] 已完成 PREPARE 的配置封印校验失败，回落到重建: %s",
+                            state.pipeline_id,
+                            exc,
+                        )
+                if _prepare_reuse:
+                    upd(100, "复用已有模拟环境…")
+                    _prepare_completion_message = "环境已恢复"
+                else:
+                    if prepare_stage_done and sim_state is None:
+                        # 阶段标完成但模拟状态丢了（手动清理/磁盘损坏）：自愈重建，但要留痕。
+                        logger.warning(
+                            f"[{state.pipeline_id}] prepare 阶段已完成但模拟 "
+                            f"{state.simulation_id} 不存在，重新创建模拟环境"
+                        )
+                    upd(5, "创建模拟…")
+                    sim_state = sim_manager.create_simulation(project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
+                    state.simulation_id = sim_state.simulation_id
+                    if _consumed_research_generation is not None:
+                        from .official_data import ResearchBindingConflict, bind_simulation_research
+                        try:
+                            bind_simulation_research(
+                                sim_state.simulation_id,
+                                state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                                pipeline_id=state.pipeline_id, expected_generation=_consumed_research_generation,
+                                report=report_md, sources=research.get("sources"))
+                            state.options.pop("official_data_binding", None)
+                        except ResearchBindingConflict:
+                            # A fresh simulation id that already pins another research
+                            # generation is a provenance violation, not a data outage.
+                            raise
+                        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
+                            self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
+                    # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的
+                    # *_partial 临时产物指针（扫描器会为新 attempt 重新登记）。
+                    for _pk in [k for k in list(state.artifacts) if k.endswith("_partial")]:
+                        state.artifacts.pop(_pk, None)
+                    PipelineManager.save(state)
+
+                    def prepare_cb(stage: str, progress: int, message: str, **_kwargs):
+                        upd(max(5, min(99, int(progress))), f"{stage}: {message}")
+
+                    # persona 生成并发：CLI 提供方受本机 CLI 吞吐限制保持 3；
+                    # OpenAI 兼容 HTTP 提供方可以放心放大（每个 persona 1 次 LLM + 2 次 Zep 检索）。
+                    _is_http_provider = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
+                    # P3-7: 读取 GRAPH 阶段持久化的中心度先验，融入 agent-cap 的 salience 排序
+                    # （从 handoff 读，resume 也能拿到）。缺失则为 None → 排序行为不变。
+                    _graph_priors = None
+                    try:
+                        _gp_path = os.path.join(
+                            state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                            "graph_priors.json")
+                        if os.path.exists(_gp_path):
+                            with open(_gp_path, "r", encoding="utf-8") as _gf:
+                                _graph_priors = json.load(_gf)
+                    except Exception:  # noqa: BLE001
+                        _graph_priors = None
+                    # SIM-11 (pairs with SIM-7): raise HTTP persona fan-out default 8→16
+                    # (configurable via PARALLEL_PROFILE_COUNT); CLI providers stay at 3.
+                    _pp = int(getattr(Config, "PARALLEL_PROFILE_COUNT", 16) or 16)
+                    # PREP-1: 把本次运行的真实轮数预算透传到事件排期（否则生成器只能按
+                    # OASIS_DEFAULT_MAX_ROUNDS 钳制，options.max_rounds < 默认时欠覆盖）。
+                    # CAL：日历模式只透传用户显式 max_rounds（生成器把它当 target_max 粗化
+                    # 粒度、绝不截断）；默认上限已由生成器自身读取，不在此注入。
+                    _prep_mr = state.options.get("max_rounds") or (
+                        None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
+                    sim_manager.prepare_simulation(
+                        simulation_id=sim_state.simulation_id,
+                        simulation_requirement=state.prompt,
+                        document_text=report_md,
+                        progress_callback=prepare_cb,
+                        parallel_profile_count=_pp if _is_http_provider else 3,
+                        actors=actors,  # 研究档案直通模拟准备：persona/配置以实证立场为准
+                        graph_priors=_graph_priors,  # P3-7: 中心度先验（融入 salience 排序）
+                        max_rounds=int(_prep_mr) if _prep_mr else None,
+                        research_language=state.options.get("research_language"),  # PREP-4
+                    )
+                    _prepare_completion_message = "环境就绪"
+
+                # T4.6: 情景 overlay — 把影响力/立场覆盖 + 注入事件确定性落到 simulation_config.json
+                _overlay = state.options.get("scenario_overlay")
+                # DEFECT-1 (SIM_RESUME_REUSE_COMPLETED): RUN stage 位丢失（崩溃/重启窗口、
+                # resume 重置）但磁盘上已有「绑定同一密封配置的已完成模拟」时复用产物，不再
+                # 重启子进程重烧配额（2026-07-15 取证：18 轮模拟被 resume 重跑 4 次、损失
+                # 3h34m）。必须在下方 PREPARE 的配置注入块之前判定：复用路径要保持配置字节
+                # 与该场运行密封时完全一致（重注入/重密封会破坏 seal↔运行的身份绑定）。
+                _sim_disk_reuse = False
+                if (_prepare_reuse
+                        and not (state.stages.get(STAGE_RUN)
+                                 and state.stages[STAGE_RUN].status == "completed")):
+                    _sim_ok, _sim_why = self._completed_sim_reusable(state, sim_state)
+                    if _sim_ok and self._reuse_ok(state, STAGE_RUN):
+                        _sim_disk_reuse = True
+                        logger.info(
+                            "[%s] RUN stage 位缺失，但发现同一密封配置的已完成模拟 %s"
+                            "（simulation_end 完成标记 + seal 身份已核验）——复用产物，跳过重跑",
+                            state.pipeline_id, sim_state.simulation_id,
+                        )
+                    elif _sim_why and _sim_why != "sim_resume_reuse_completed_disabled":
+                        logger.debug(
+                            "[%s] 已完成模拟复用不成立（%s）→ 照旧重跑",
+                            state.pipeline_id, _sim_why,
+                        )
+                _run_already_done = _sim_disk_reuse or bool(
+                    _prepare_reuse and state.stages.get(STAGE_RUN)
+                    and state.stages[STAGE_RUN].status == "completed"
+                    and self._run_reuse_ready(state, sim_state)
+                    and self._reuse_ok(state, STAGE_RUN)
+                )
+                _config_mutated_after_prepare = False
+                if _overlay and not _run_already_done:
+                    try:
+                        _cfg_path = os.path.join(
+                            Config.OASIS_SIMULATION_DATA_DIR, sim_state.simulation_id, "simulation_config.json"
+                        )
+                        if os.path.exists(_cfg_path):
+                            with open(_cfg_path, "r", encoding="utf-8") as _cf:
+                                _cfg = json.load(_cf)
+                            self.apply_scenario_overlay_to_config(_cfg, _overlay)
+                            _tmp = _cfg_path + ".tmp"
+                            with open(_tmp, "w", encoding="utf-8") as _cf:
+                                json.dump(_cfg, _cf, ensure_ascii=False, indent=2)
+                            os.replace(_tmp, _cfg_path)
+                            _config_mutated_after_prepare = True
+                            logger.info("[%s] 情景 overlay 已应用到 simulation_config", state.pipeline_id)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("[%s] 情景 overlay 应用跳过: %s", state.pipeline_id, e)
+
+                # NEXTSTEPS P1-1/P1-2: 决策通道开启时，把 WorldState 种子（情景+基率）+ 时点跨度
+                # （as_of→horizon，供子进程逐轮日期映射）注入 simulation_config.json，供 post-sim
+                # 演化"结果世界态"。默认关 → 不注入，行为与今日逐字节一致。
+                # CAL：日历模式无条件注入（去掉 SIM_DECISION_CHANNEL 门控；空情景 → 演化静默关），
+                # 并从已生成的 temporal_config 补 horizon_date/horizon_source/horizon_defaulted。
+                _cal_gen = _calendar_mode()
+                if (_cal_gen or getattr(Config, "SIM_DECISION_CHANNEL", False)) and not _run_already_done:
+                    try:
+                        from ..utils.actors import world_state_seed_from_actors as _ws_seed
+                        # SIM-ADD-1（belt-and-suspenders）：pre-v1 种子前再兜底一次。sealed
+                        # actor-intelligence/v1 严格 no-op，保持 actor context 的 exact-object
+                        # provenance；新契约缺 seed 时只能告警并由 producer 重做。
+                        _fi_prep = inject_forecast_inputs_from_report(actors, report_md)
+                        if _fi_prep is not None:
+                            logger.info("[%s] PREPARE 兜底注入 forecast_inputs：%d 情景",
+                                        state.pipeline_id, len(_fi_prep.get("scenarios") or []))
+                        _seed = _ws_seed(actors)
+                        if not _seed.get("scenarios"):
+                            # 响亮信号：即便兜底解析后仍无情景分布，决策通道不会点火。
+                            logger.warning(
+                                "[%s] world_state 种子为空——研究阶段未产出可用情景概率分布，"
+                                "决策通道不会点火、模拟对 forecast 无贡献", state.pipeline_id)
+                        if _cal_gen or _seed.get("scenarios"):
+                            _seed["as_of_date"] = (actors.get("as_of_date") if isinstance(actors, dict) else None)
+                            _seed["horizon_date"] = self._infer_horizon_date(state.prompt, actors)
+                            _wcfg_path = os.path.join(
+                                Config.OASIS_SIMULATION_DATA_DIR, sim_state.simulation_id, "simulation_config.json")
+                            if os.path.exists(_wcfg_path):
+                                from ..utils.atomic import write_json_atomic
+                                with open(_wcfg_path, "r", encoding="utf-8") as _wf:
+                                    _wcfg = json.load(_wf)
+                                _tc = _wcfg.get("temporal_config")
+                                if isinstance(_tc, dict) and _tc.get("mode") == "calendar":
+                                    # 判定日以 temporal_config 为准（含 LLM/default 兜底结果）
+                                    _seed["horizon_date"] = _tc.get("horizon_date") or _seed.get("horizon_date")
+                                    _seed["horizon_source"] = _tc.get("horizon_source")
+                                    _seed["horizon_defaulted"] = bool(_tc.get("horizon_defaulted"))
+                                _wcfg["world_state_seed"] = _seed
+                                write_json_atomic(_wcfg_path, _wcfg)
+                                _config_mutated_after_prepare = True
+                                logger.info("[%s] WorldState 种子已注入 simulation_config（%d 情景, horizon=%s）",
+                                            state.pipeline_id, len(_seed.get("scenarios") or []),
+                                            _seed.get("horizon_date"))
+                    except Exception as _ws_err:  # noqa: BLE001
+                        logger.warning("[%s] WorldState 种子注入跳过: %s", state.pipeline_id, _ws_err)
+
+                # The manager sealed the initially generated config before the two
+                # PREPARE-owned mutation blocks above.  Rebind the exact final bytes
+                # and all cast/context/role authorities before RUN can observe the
+                # file.  A reseal failure is an admission failure, not a degradable
+                # enrichment error.  A completed read-only reuse never reaches it.
+                if _config_mutated_after_prepare:
+                    sim_state = sim_manager.reseal_simulation_config(
                         sim_state.simulation_id
                     )
-                except Exception as exc:  # noqa: BLE001 — seal proof is mandatory
-                    _prepare_reuse = False
-                    state.options["resumed_stage_validation"] = (
-                        "prepare_rebuilt_config_seal_mismatch"
-                    )
-                    state.options["artifact_validation_error"] = {
-                        "stage": STAGE_PREPARE,
-                        "artifact": "simulation_config_manifest",
-                        "error": str(exc)[:300],
-                    }
-                    logger.warning(
-                        "[%s] 已完成 PREPARE 的配置封印校验失败，回落到重建: %s",
-                        state.pipeline_id,
-                        exc,
-                    )
-            if _prepare_reuse:
-                upd(100, "复用已有模拟环境…")
-                _prepare_completion_message = "环境已恢复"
-            else:
-                if prepare_stage_done and sim_state is None:
-                    # 阶段标完成但模拟状态丢了（手动清理/磁盘损坏）：自愈重建，但要留痕。
-                    logger.warning(
-                        f"[{state.pipeline_id}] prepare 阶段已完成但模拟 "
-                        f"{state.simulation_id} 不存在，重新创建模拟环境"
-                    )
-                upd(5, "创建模拟…")
-                sim_state = sim_manager.create_simulation(project.project_id, graph_id, enable_twitter=True, enable_reddit=True)
-                state.simulation_id = sim_state.simulation_id
-                if _consumed_research_generation is not None:
-                    from .official_data import ResearchBindingConflict, bind_simulation_research
-                    try:
-                        bind_simulation_research(
-                            sim_state.simulation_id,
-                            state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                            pipeline_id=state.pipeline_id, expected_generation=_consumed_research_generation,
-                            report=report_md, sources=research.get("sources"))
-                        state.options.pop("official_data_binding", None)
-                    except ResearchBindingConflict:
-                        # A fresh simulation id that already pins another research
-                        # generation is a provenance violation, not a data outage.
-                        raise
-                    except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
-                        self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
-                # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的
-                # *_partial 临时产物指针（扫描器会为新 attempt 重新登记）。
-                for _pk in [k for k in list(state.artifacts) if k.endswith("_partial")]:
-                    state.artifacts.pop(_pk, None)
-                PipelineManager.save(state)
 
-                def prepare_cb(stage: str, progress: int, message: str, **_kwargs):
-                    upd(max(5, min(99, int(progress))), f"{stage}: {message}")
-
-                # persona 生成并发：CLI 提供方受本机 CLI 吞吐限制保持 3；
-                # OpenAI 兼容 HTTP 提供方可以放心放大（每个 persona 1 次 LLM + 2 次 Zep 检索）。
-                _is_http_provider = bool(Config.PROVIDER_META.get(Config.LLM_PROVIDER, {}).get('openai_compat'))
-                # P3-7: 读取 GRAPH 阶段持久化的中心度先验，融入 agent-cap 的 salience 排序
-                # （从 handoff 读，resume 也能拿到）。缺失则为 None → 排序行为不变。
-                _graph_priors = None
-                try:
-                    _gp_path = os.path.join(
-                        state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                        "graph_priors.json")
-                    if os.path.exists(_gp_path):
-                        with open(_gp_path, "r", encoding="utf-8") as _gf:
-                            _graph_priors = json.load(_gf)
-                except Exception:  # noqa: BLE001
-                    _graph_priors = None
-                # SIM-11 (pairs with SIM-7): raise HTTP persona fan-out default 8→16
-                # (configurable via PARALLEL_PROFILE_COUNT); CLI providers stay at 3.
-                _pp = int(getattr(Config, "PARALLEL_PROFILE_COUNT", 16) or 16)
-                # PREP-1: 把本次运行的真实轮数预算透传到事件排期（否则生成器只能按
-                # OASIS_DEFAULT_MAX_ROUNDS 钳制，options.max_rounds < 默认时欠覆盖）。
-                # CAL：日历模式只透传用户显式 max_rounds（生成器把它当 target_max 粗化
-                # 粒度、绝不截断）；默认上限已由生成器自身读取，不在此注入。
-                _prep_mr = state.options.get("max_rounds") or (
-                    None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
-                sim_manager.prepare_simulation(
-                    simulation_id=sim_state.simulation_id,
-                    simulation_requirement=state.prompt,
-                    document_text=report_md,
-                    progress_callback=prepare_cb,
-                    parallel_profile_count=_pp if _is_http_provider else 3,
-                    actors=actors,  # 研究档案直通模拟准备：persona/配置以实证立场为准
-                    graph_priors=_graph_priors,  # P3-7: 中心度先验（融入 salience 排序）
-                    max_rounds=int(_prep_mr) if _prep_mr else None,
-                    research_language=state.options.get("research_language"),  # PREP-4
+                # PREPARE's integrity fingerprint must cover the final config consumed
+                # by RUN. Scenario/world-state injection above mutates
+                # simulation_config.json; completing earlier recorded a permanently
+                # stale hash and forced every resume to create a new simulation.
+                self._complete_stage(
+                    state,
+                    STAGE_PREPARE,
+                    _prepare_completion_message,
+                    reused=_prepare_reuse,
                 )
-                _prepare_completion_message = "环境就绪"
 
-            # T4.6: 情景 overlay — 把影响力/立场覆盖 + 注入事件确定性落到 simulation_config.json
-            _overlay = state.options.get("scenario_overlay")
-            # DEFECT-1 (SIM_RESUME_REUSE_COMPLETED): RUN stage 位丢失（崩溃/重启窗口、
-            # resume 重置）但磁盘上已有「绑定同一密封配置的已完成模拟」时复用产物，不再
-            # 重启子进程重烧配额（2026-07-15 取证：18 轮模拟被 resume 重跑 4 次、损失
-            # 3h34m）。必须在下方 PREPARE 的配置注入块之前判定：复用路径要保持配置字节
-            # 与该场运行密封时完全一致（重注入/重密封会破坏 seal↔运行的身份绑定）。
-            _sim_disk_reuse = False
-            if (_prepare_reuse
-                    and not (state.stages.get(STAGE_RUN)
-                             and state.stages[STAGE_RUN].status == "completed")):
-                _sim_ok, _sim_why = self._completed_sim_reusable(state, sim_state)
-                if _sim_ok and self._reuse_ok(state, STAGE_RUN):
-                    _sim_disk_reuse = True
+                # ---- Stage 4: RUN ----
+                upd = self._make_stage_updater(state, STAGE_RUN)
+                previous_run_done = bool(
+                    state.stages.get(STAGE_RUN)
+                    and state.stages[STAGE_RUN].status == "completed"
+                )
+                # A rebuilt PREPARE attempt invalidates every downstream RUN result,
+                # even if the persisted stage bit still says completed.
+                run_stage_done = bool(_prepare_reuse and previous_run_done)
+                if previous_run_done and not _prepare_reuse:
+                    state.options["resumed_stage_validation"] = "run_rebuilt_prepare_identity_changed"
+                    logger.info("[%s] PREPARE attempt 已变化，旧 RUN 结果不可复用", state.pipeline_id)
+                if run_stage_done and not self._run_reuse_ready(state, sim_state):
+                    run_stage_done = False
+                    state.options["resumed_stage_validation"] = "run_rebuilt_simulation_state_mismatch"
+                    logger.info("[%s] RUN 状态与当前 simulation identity 不一致，回落到重跑", state.pipeline_id)
+                # I-4-3: 复用前校验 RUN 产物（run_summary.json）未被半写/篡改；不符则重跑模拟并留痕。
+                if run_stage_done and not self._reuse_ok(state, STAGE_RUN):
+                    run_stage_done = False
+                    state.options["resumed_stage_validation"] = "run_rebuilt_manifest_mismatch"
+                    logger.info("[%s] 模拟结果产物清单校验未通过，回落到重跑", state.pipeline_id)
+                # DEFECT-1: stage 位丢失但磁盘证据（完成标记 + seal 身份 + 产物清单）已在
+                # PREPARE 边界核验通过 → 走复用分支，不再重启模拟子进程。
+                if not run_stage_done and _sim_disk_reuse:
+                    run_stage_done = True
+                    state.options["resumed_stage_validation"] = "run_reused_completed_simulation"
                     logger.info(
-                        "[%s] RUN stage 位缺失，但发现同一密封配置的已完成模拟 %s"
-                        "（simulation_end 完成标记 + seal 身份已核验）——复用产物，跳过重跑",
+                        "[%s] 复用磁盘上已完成的模拟 %s（SIM_RESUME_REUSE_COMPLETED）",
                         state.pipeline_id, sim_state.simulation_id,
                     )
-                elif _sim_why and _sim_why != "sim_resume_reuse_completed_disabled":
-                    logger.debug(
-                        "[%s] 已完成模拟复用不成立（%s）→ 照旧重跑",
-                        state.pipeline_id, _sim_why,
-                    )
-            _run_already_done = _sim_disk_reuse or bool(
-                _prepare_reuse and state.stages.get(STAGE_RUN)
-                and state.stages[STAGE_RUN].status == "completed"
-                and self._run_reuse_ready(state, sim_state)
-                and self._reuse_ok(state, STAGE_RUN)
-            )
-            _config_mutated_after_prepare = False
-            if _overlay and not _run_already_done:
-                try:
-                    _cfg_path = os.path.join(
-                        Config.OASIS_SIMULATION_DATA_DIR, sim_state.simulation_id, "simulation_config.json"
-                    )
-                    if os.path.exists(_cfg_path):
-                        with open(_cfg_path, "r", encoding="utf-8") as _cf:
-                            _cfg = json.load(_cf)
-                        self.apply_scenario_overlay_to_config(_cfg, _overlay)
-                        _tmp = _cfg_path + ".tmp"
-                        with open(_tmp, "w", encoding="utf-8") as _cf:
-                            json.dump(_cfg, _cf, ensure_ascii=False, indent=2)
-                        os.replace(_tmp, _cfg_path)
-                        _config_mutated_after_prepare = True
-                        logger.info("[%s] 情景 overlay 已应用到 simulation_config", state.pipeline_id)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("[%s] 情景 overlay 应用跳过: %s", state.pipeline_id, e)
-
-            # NEXTSTEPS P1-1/P1-2: 决策通道开启时，把 WorldState 种子（情景+基率）+ 时点跨度
-            # （as_of→horizon，供子进程逐轮日期映射）注入 simulation_config.json，供 post-sim
-            # 演化"结果世界态"。默认关 → 不注入，行为与今日逐字节一致。
-            # CAL：日历模式无条件注入（去掉 SIM_DECISION_CHANNEL 门控；空情景 → 演化静默关），
-            # 并从已生成的 temporal_config 补 horizon_date/horizon_source/horizon_defaulted。
-            _cal_gen = _calendar_mode()
-            if (_cal_gen or getattr(Config, "SIM_DECISION_CHANNEL", False)) and not _run_already_done:
-                try:
-                    from ..utils.actors import world_state_seed_from_actors as _ws_seed
-                    # SIM-ADD-1（belt-and-suspenders）：pre-v1 种子前再兜底一次。sealed
-                    # actor-intelligence/v1 严格 no-op，保持 actor context 的 exact-object
-                    # provenance；新契约缺 seed 时只能告警并由 producer 重做。
-                    _fi_prep = inject_forecast_inputs_from_report(actors, report_md)
-                    if _fi_prep is not None:
-                        logger.info("[%s] PREPARE 兜底注入 forecast_inputs：%d 情景",
-                                    state.pipeline_id, len(_fi_prep.get("scenarios") or []))
-                    _seed = _ws_seed(actors)
-                    if not _seed.get("scenarios"):
-                        # 响亮信号：即便兜底解析后仍无情景分布，决策通道不会点火。
-                        logger.warning(
-                            "[%s] world_state 种子为空——研究阶段未产出可用情景概率分布，"
-                            "决策通道不会点火、模拟对 forecast 无贡献", state.pipeline_id)
-                    if _cal_gen or _seed.get("scenarios"):
-                        _seed["as_of_date"] = (actors.get("as_of_date") if isinstance(actors, dict) else None)
-                        _seed["horizon_date"] = self._infer_horizon_date(state.prompt, actors)
-                        _wcfg_path = os.path.join(
-                            Config.OASIS_SIMULATION_DATA_DIR, sim_state.simulation_id, "simulation_config.json")
-                        if os.path.exists(_wcfg_path):
-                            from ..utils.atomic import write_json_atomic
-                            with open(_wcfg_path, "r", encoding="utf-8") as _wf:
-                                _wcfg = json.load(_wf)
-                            _tc = _wcfg.get("temporal_config")
-                            if isinstance(_tc, dict) and _tc.get("mode") == "calendar":
-                                # 判定日以 temporal_config 为准（含 LLM/default 兜底结果）
-                                _seed["horizon_date"] = _tc.get("horizon_date") or _seed.get("horizon_date")
-                                _seed["horizon_source"] = _tc.get("horizon_source")
-                                _seed["horizon_defaulted"] = bool(_tc.get("horizon_defaulted"))
-                            _wcfg["world_state_seed"] = _seed
-                            write_json_atomic(_wcfg_path, _wcfg)
-                            _config_mutated_after_prepare = True
-                            logger.info("[%s] WorldState 种子已注入 simulation_config（%d 情景, horizon=%s）",
-                                        state.pipeline_id, len(_seed.get("scenarios") or []),
-                                        _seed.get("horizon_date"))
-                except Exception as _ws_err:  # noqa: BLE001
-                    logger.warning("[%s] WorldState 种子注入跳过: %s", state.pipeline_id, _ws_err)
-
-            # The manager sealed the initially generated config before the two
-            # PREPARE-owned mutation blocks above.  Rebind the exact final bytes
-            # and all cast/context/role authorities before RUN can observe the
-            # file.  A reseal failure is an admission failure, not a degradable
-            # enrichment error.  A completed read-only reuse never reaches it.
-            if _config_mutated_after_prepare:
-                sim_state = sim_manager.reseal_simulation_config(
-                    sim_state.simulation_id
-                )
-
-            # PREPARE's integrity fingerprint must cover the final config consumed
-            # by RUN. Scenario/world-state injection above mutates
-            # simulation_config.json; completing earlier recorded a permanently
-            # stale hash and forced every resume to create a new simulation.
-            self._complete_stage(
-                state,
-                STAGE_PREPARE,
-                _prepare_completion_message,
-                reused=_prepare_reuse,
-            )
-
-            # ---- Stage 4: RUN ----
-            upd = self._make_stage_updater(state, STAGE_RUN)
-            previous_run_done = bool(
-                state.stages.get(STAGE_RUN)
-                and state.stages[STAGE_RUN].status == "completed"
-            )
-            # A rebuilt PREPARE attempt invalidates every downstream RUN result,
-            # even if the persisted stage bit still says completed.
-            run_stage_done = bool(_prepare_reuse and previous_run_done)
-            if previous_run_done and not _prepare_reuse:
-                state.options["resumed_stage_validation"] = "run_rebuilt_prepare_identity_changed"
-                logger.info("[%s] PREPARE attempt 已变化，旧 RUN 结果不可复用", state.pipeline_id)
-            if run_stage_done and not self._run_reuse_ready(state, sim_state):
-                run_stage_done = False
-                state.options["resumed_stage_validation"] = "run_rebuilt_simulation_state_mismatch"
-                logger.info("[%s] RUN 状态与当前 simulation identity 不一致，回落到重跑", state.pipeline_id)
-            # I-4-3: 复用前校验 RUN 产物（run_summary.json）未被半写/篡改；不符则重跑模拟并留痕。
-            if run_stage_done and not self._reuse_ok(state, STAGE_RUN):
-                run_stage_done = False
-                state.options["resumed_stage_validation"] = "run_rebuilt_manifest_mismatch"
-                logger.info("[%s] 模拟结果产物清单校验未通过，回落到重跑", state.pipeline_id)
-            # DEFECT-1: stage 位丢失但磁盘证据（完成标记 + seal 身份 + 产物清单）已在
-            # PREPARE 边界核验通过 → 走复用分支，不再重启模拟子进程。
-            if not run_stage_done and _sim_disk_reuse:
-                run_stage_done = True
-                state.options["resumed_stage_validation"] = "run_reused_completed_simulation"
-                logger.info(
-                    "[%s] 复用磁盘上已完成的模拟 %s（SIM_RESUME_REUSE_COMPLETED）",
-                    state.pipeline_id, sim_state.simulation_id,
-                )
-            if run_stage_done:
-                upd(100, "复用已有模拟结果…")
-                _run_completion_message = "模拟已恢复"
-            else:
-                upd(2, "启动 OASIS 模拟…")
-                run_kwargs: dict[str, Any] = {"platform": "parallel"}
-                # T3.7: 每次运行的 max_rounds 优先，否则用 Config.OASIS_DEFAULT_MAX_ROUNDS（0→None=跑满）。
-                # CAL：日历模式运行期不注入默认上限——轮数由 temporal_config.n_rounds 定，
-                # 用户显式 max_rounds 也已在配置生成期粗化粒度（运行器会忽略并告警）。
-                _mr = state.options.get("max_rounds") or (
-                    None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
-                if _mr:
-                    run_kwargs["max_rounds"] = int(_mr)
-                # T3.10 → Foglamp WP1 (1A/1B)：模拟 → 观察图反馈默认【关】（I-11/I-12），
-                # 且按 run 钉住的安全政策决定，服务重载不改变已准入运行的语义。
-                if cls._pinned_safety(state, "sim_graph_feedback",
-                                      Config.SIM_GRAPH_FEEDBACK) and graph_id:
-                    run_kwargs["enable_graph_memory_update"] = True
-                    run_kwargs["graph_id"] = graph_id
-                SimulationRunner.start_simulation(simulation_id=sim_state.simulation_id, **run_kwargs)
-                # 轮询直到完成
-                cancel_ev = cls._cancel_events.get(state.pipeline_id)
-                _last_round_seen = (-1, -1)
-                # B12: 停滞看门狗——记录上次「轮次推进」的时刻；长时间毫无进展视为卡死。
-                _last_progress_at = time.monotonic()
-                try:
-                    _stall_s = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
-                except (TypeError, ValueError):
-                    _stall_s = 1800.0
-                # C1/C2: independent disk-based watchdog that force-stops a wedged sim even if
-                # this poll loop blocks on the sim's IPC (the inline check below can't fire then).
-                _wd_ctl = self._spawn_run_stall_watchdog(state.pipeline_id, sim_state.simulation_id, _stall_s)
-                # ORCH-6: 看门狗退休放 finally——此前只在 COMPLETED 快乐路径置位 stop，取消/
-                # FAILED/STOPPED/轮询异常路径会让 daemon 线程继续每 30s 轮询 run_state.json，
-                # 并在 stall_s 后对已结束的模拟再次 stop_simulation、伴随整个报告阶段游荡。
-                try:
-                    while True:
-                        if cancel_ev is not None and cancel_ev.is_set():
-                            # 先停掉 OASIS 子进程再退出，避免取消后模拟继续烧额度
-                            try:
-                                SimulationRunner.stop_simulation(sim_state.simulation_id)
-                            except Exception as stop_err:  # noqa: BLE001
-                                logger.warning(f"[{state.pipeline_id}] 取消时停止模拟失败: {stop_err}")
-                            raise PipelineCancelled("模拟已被用户取消")
-                        rs = SimulationRunner.get_run_state(sim_state.simulation_id)
-                        if rs is None:
-                            raise RuntimeError("模拟运行状态丢失")
-                        total = getattr(rs, "total_rounds", 0) or 0
-                        cur = getattr(rs, "current_round", 0) or 0
-                        # 仅在轮次推进时落盘进度，省掉每 5s 一次的无效 JSON 重写 + 任务更新
-                        # （取消请求由循环顶部的检查兜底，最多延迟一个 5s 周期）
-                        if (cur, total) != _last_round_seen:
-                            if total > 0 and (_last_round_seen[1] or 0) <= 0:
-                                # CAL：读一次 temporal_config，把日历指纹随成本信号/清单落盘。
-                                _tc_sig = None
-                                try:
-                                    _tc_path = os.path.join(
-                                        Config.OASIS_SIMULATION_DATA_DIR,
-                                        sim_state.simulation_id, "simulation_config.json")
-                                    with open(_tc_path, "r", encoding="utf-8") as _tf:
-                                        _tc_cfg = (json.load(_tf) or {}).get("temporal_config")
-                                    if isinstance(_tc_cfg, dict) and _tc_cfg.get("mode") == "calendar":
-                                        _tc_sig = {
-                                            "calendar_unit": _tc_cfg.get("unit"),
-                                            "n_rounds": _tc_cfg.get("n_rounds"),
-                                            "horizon_date": _tc_cfg.get("horizon_date"),
-                                        }
-                                except Exception:  # noqa: BLE001 — 观测指纹缺失不阻塞运行
-                                    _tc_sig = None
-                                self._recompute_dynamic_bands(
-                                    state, total_rounds=total, temporal=_tc_sig)  # T6.7
-                                self._update_manifest(
-                                    state, STAGE_RUN, total_rounds=total, temporal=_tc_sig)  # I-8-1
-                            _last_round_seen = (cur, total)
-                            _last_progress_at = time.monotonic()  # B12: 有进展即续命看门狗
-                            if total > 0:
-                                upd(min(98, int(cur / total * 100)), f"模拟轮次 {cur}/{total}")
-                            else:
-                                upd(5, "模拟进行中…")
-                        if rs.runner_status == RunnerStatus.COMPLETED:
-                            break
-                        if rs.runner_status in (RunnerStatus.FAILED, RunnerStatus.STOPPED):
-                            raise RuntimeError(f"模拟未正常结束: {rs.runner_status} {getattr(rs, 'error', '') or ''}")
-                        # B12: 停滞看门狗——长时间无轮次推进（区别于「慢但在推进」）判定为卡死，
-                        # 停模拟并失败，避免管线线程永久空转。取消仍由循环顶部兜底；默认 30min。
-                        if _stall_s > 0 and (time.monotonic() - _last_progress_at) > _stall_s:
-                            try:
-                                SimulationRunner.stop_simulation(sim_state.simulation_id)
-                            except Exception as _wd_err:  # noqa: BLE001
-                                logger.warning(f"[{state.pipeline_id}] 看门狗停止模拟失败: {_wd_err}")
-                            raise RuntimeError(f"模拟约 {int(_stall_s)}s 无进展（疑似卡死），看门狗已终止")
-                        time.sleep(5)
-                except BaseException:
-                    # DEFECT-3: 失败/取消/停滞的模拟同样烧了真金白银——在阶段失败前把
-                    # 子进程已落盘的 sim_llm_telemetry.json 恰好一次入账（_run 的 finally
-                    # 会把 LLMMeter 快照终版落盘 run_telemetry.json）。方法自身绝不抛出，
-                    # 原始异常原样上抛。
-                    self._record_sim_run_telemetry(state, sim_state.simulation_id)
-                    raise
-                finally:
-                    _wd_ctl["stop"] = True  # C1/C2/ORCH-6: 任何退出路径都退休独立看门狗
-                # EXECPLAN2 F-12-1: 模拟结束后、读 actions.jsonl 写 run_summary 与跑报告之前，
-                # 加一道"汇流栅栏"。runner_status 会在 simulation_end 事件被解析的瞬间就置为
-                # COMPLETED（此时 OASIS 进程仍存活、监控线程仍在收尾，「模拟 → 图谱」反馈写入器
-                # 也可能还在排空队列向同一张 FalkorDB 图谱写 typed 边/episode）。若直接前进，报告
-                # 可能读到只摄入了一半反馈的图谱、run_summary 也可能基于仍在增长的 actions.jsonl，
-                # 导致同一模拟的报告 run-to-run 漂移、漏掉末轮反馈动态。故：
-                #   (1) join 监控线程 → 保证 OASIS 进程已退出且 _monitor_simulation 的 finally 跑完；
-                #   (2) 显式 stop_updater → 其 stop() 会 _flush_remaining 再 join worker（幂等，
-                #       即便监控线程已停过也安全）。
-                # 仅在本次运行启用了反馈回路时才需要（与 RUN 启动条件一致）；任何卡顿降级为告警，
-                # 不让栅栏本身拖垮管线。
-                if cls._pinned_safety(state, "sim_graph_feedback",
-                                      Config.SIM_GRAPH_FEEDBACK) and graph_id:
-                    # F-12-1 汇流栅栏：经公共访问点等待监控线程退出（不再直接读私有注册表）。
-                    if not SimulationRunner.join_monitor_thread(sim_state.simulation_id, timeout=30):
-                        logger.warning(
-                            "[%s] 等待模拟监控线程退出超时（降级继续）", state.pipeline_id,
-                        )
+                if run_stage_done:
+                    upd(100, "复用已有模拟结果…")
+                    _run_completion_message = "模拟已恢复"
+                else:
+                    upd(2, "启动 OASIS 模拟…")
+                    run_kwargs: dict[str, Any] = {"platform": "parallel"}
+                    # T3.7: 每次运行的 max_rounds 优先，否则用 Config.OASIS_DEFAULT_MAX_ROUNDS（0→None=跑满）。
+                    # CAL：日历模式运行期不注入默认上限——轮数由 temporal_config.n_rounds 定，
+                    # 用户显式 max_rounds 也已在配置生成期粗化粒度（运行器会忽略并告警）。
+                    _mr = state.options.get("max_rounds") or (
+                        None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
+                    if _mr:
+                        run_kwargs["max_rounds"] = int(_mr)
+                    # T3.10 → Foglamp WP1 (1A/1B)：模拟 → 观察图反馈默认【关】（I-11/I-12），
+                    # 且按 run 钉住的安全政策决定，服务重载不改变已准入运行的语义。
+                    if cls._pinned_safety(state, "sim_graph_feedback",
+                                          Config.SIM_GRAPH_FEEDBACK) and graph_id:
+                        run_kwargs["enable_graph_memory_update"] = True
+                        run_kwargs["graph_id"] = graph_id
+                    SimulationRunner.start_simulation(simulation_id=sim_state.simulation_id, **run_kwargs)
+                    # 轮询直到完成
+                    cancel_ev = cls._cancel_events.get(state.pipeline_id)
+                    _last_round_seen = (-1, -1)
+                    # B12: 停滞看门狗——记录上次「轮次推进」的时刻；长时间毫无进展视为卡死。
+                    _last_progress_at = time.monotonic()
                     try:
-                        ZepGraphMemoryManager.stop_updater(sim_state.simulation_id)
-                    except Exception as _flush_err:  # noqa: BLE001
-                        logger.warning(
-                            "[%s] 排空图谱反馈写入器失败（降级继续）: %s",
-                            state.pipeline_id, _flush_err,
-                        )
+                        _stall_s = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
+                    except (TypeError, ValueError):
+                        _stall_s = 1800.0
+                    # C1/C2: independent disk-based watchdog that force-stops a wedged sim even if
+                    # this poll loop blocks on the sim's IPC (the inline check below can't fire then).
+                    _wd_ctl = self._spawn_run_stall_watchdog(state.pipeline_id, sim_state.simulation_id, _stall_s)
+                    # ORCH-6: 看门狗退休放 finally——此前只在 COMPLETED 快乐路径置位 stop，取消/
+                    # FAILED/STOPPED/轮询异常路径会让 daemon 线程继续每 30s 轮询 run_state.json，
+                    # 并在 stall_s 后对已结束的模拟再次 stop_simulation、伴随整个报告阶段游荡。
+                    try:
+                        while True:
+                            if cancel_ev is not None and cancel_ev.is_set():
+                                # 先停掉 OASIS 子进程再退出，避免取消后模拟继续烧额度
+                                try:
+                                    SimulationRunner.stop_simulation(sim_state.simulation_id)
+                                except Exception as stop_err:  # noqa: BLE001
+                                    logger.warning(f"[{state.pipeline_id}] 取消时停止模拟失败: {stop_err}")
+                                raise PipelineCancelled("模拟已被用户取消")
+                            rs = SimulationRunner.get_run_state(sim_state.simulation_id)
+                            if rs is None:
+                                raise RuntimeError("模拟运行状态丢失")
+                            total = getattr(rs, "total_rounds", 0) or 0
+                            cur = getattr(rs, "current_round", 0) or 0
+                            # 仅在轮次推进时落盘进度，省掉每 5s 一次的无效 JSON 重写 + 任务更新
+                            # （取消请求由循环顶部的检查兜底，最多延迟一个 5s 周期）
+                            if (cur, total) != _last_round_seen:
+                                if total > 0 and (_last_round_seen[1] or 0) <= 0:
+                                    # CAL：读一次 temporal_config，把日历指纹随成本信号/清单落盘。
+                                    _tc_sig = None
+                                    try:
+                                        _tc_path = os.path.join(
+                                            Config.OASIS_SIMULATION_DATA_DIR,
+                                            sim_state.simulation_id, "simulation_config.json")
+                                        with open(_tc_path, "r", encoding="utf-8") as _tf:
+                                            _tc_cfg = (json.load(_tf) or {}).get("temporal_config")
+                                        if isinstance(_tc_cfg, dict) and _tc_cfg.get("mode") == "calendar":
+                                            _tc_sig = {
+                                                "calendar_unit": _tc_cfg.get("unit"),
+                                                "n_rounds": _tc_cfg.get("n_rounds"),
+                                                "horizon_date": _tc_cfg.get("horizon_date"),
+                                            }
+                                    except Exception:  # noqa: BLE001 — 观测指纹缺失不阻塞运行
+                                        _tc_sig = None
+                                    self._recompute_dynamic_bands(
+                                        state, total_rounds=total, temporal=_tc_sig)  # T6.7
+                                    self._update_manifest(
+                                        state, STAGE_RUN, total_rounds=total, temporal=_tc_sig)  # I-8-1
+                                _last_round_seen = (cur, total)
+                                _last_progress_at = time.monotonic()  # B12: 有进展即续命看门狗
+                                if total > 0:
+                                    upd(min(98, int(cur / total * 100)), f"模拟轮次 {cur}/{total}")
+                                else:
+                                    upd(5, "模拟进行中…")
+                            if rs.runner_status == RunnerStatus.COMPLETED:
+                                break
+                            if rs.runner_status in (RunnerStatus.FAILED, RunnerStatus.STOPPED):
+                                raise RuntimeError(f"模拟未正常结束: {rs.runner_status} {getattr(rs, 'error', '') or ''}")
+                            # B12: 停滞看门狗——长时间无轮次推进（区别于「慢但在推进」）判定为卡死，
+                            # 停模拟并失败，避免管线线程永久空转。取消仍由循环顶部兜底；默认 30min。
+                            if _stall_s > 0 and (time.monotonic() - _last_progress_at) > _stall_s:
+                                try:
+                                    SimulationRunner.stop_simulation(sim_state.simulation_id)
+                                except Exception as _wd_err:  # noqa: BLE001
+                                    logger.warning(f"[{state.pipeline_id}] 看门狗停止模拟失败: {_wd_err}")
+                                raise RuntimeError(f"模拟约 {int(_stall_s)}s 无进展（疑似卡死），看门狗已终止")
+                            time.sleep(5)
+                    except BaseException:
+                        # DEFECT-3: 失败/取消/停滞的模拟同样烧了真金白银——在阶段失败前把
+                        # 子进程已落盘的 sim_llm_telemetry.json 恰好一次入账（_run 的 finally
+                        # 会把 LLMMeter 快照终版落盘 run_telemetry.json）。方法自身绝不抛出，
+                        # 原始异常原样上抛。
+                        self._record_sim_run_telemetry(state, sim_state.simulation_id)
+                        raise
+                    finally:
+                        _wd_ctl["stop"] = True  # C1/C2/ORCH-6: 任何退出路径都退休独立看门狗
+                    # EXECPLAN2 F-12-1: 模拟结束后、读 actions.jsonl 写 run_summary 与跑报告之前，
+                    # 加一道"汇流栅栏"。runner_status 会在 simulation_end 事件被解析的瞬间就置为
+                    # COMPLETED（此时 OASIS 进程仍存活、监控线程仍在收尾，「模拟 → 图谱」反馈写入器
+                    # 也可能还在排空队列向同一张 FalkorDB 图谱写 typed 边/episode）。若直接前进，报告
+                    # 可能读到只摄入了一半反馈的图谱、run_summary 也可能基于仍在增长的 actions.jsonl，
+                    # 导致同一模拟的报告 run-to-run 漂移、漏掉末轮反馈动态。故：
+                    #   (1) join 监控线程 → 保证 OASIS 进程已退出且 _monitor_simulation 的 finally 跑完；
+                    #   (2) 显式 stop_updater → 其 stop() 会 _flush_remaining 再 join worker（幂等，
+                    #       即便监控线程已停过也安全）。
+                    # 仅在本次运行启用了反馈回路时才需要（与 RUN 启动条件一致）；任何卡顿降级为告警，
+                    # 不让栅栏本身拖垮管线。
+                    if cls._pinned_safety(state, "sim_graph_feedback",
+                                          Config.SIM_GRAPH_FEEDBACK) and graph_id:
+                        # F-12-1 汇流栅栏：经公共访问点等待监控线程退出（不再直接读私有注册表）。
+                        if not SimulationRunner.join_monitor_thread(sim_state.simulation_id, timeout=30):
+                            logger.warning(
+                                "[%s] 等待模拟监控线程退出超时（降级继续）", state.pipeline_id,
+                            )
+                        try:
+                            ZepGraphMemoryManager.stop_updater(sim_state.simulation_id)
+                        except Exception as _flush_err:  # noqa: BLE001
+                            logger.warning(
+                                "[%s] 排空图谱反馈写入器失败（降级继续）: %s",
+                                state.pipeline_id, _flush_err,
+                            )
 
-                _run_completion_message = "模拟完成"
+                    _run_completion_message = "模拟完成"
 
-            # T3.14: 模拟结束后聚合 run_summary.json（per-agent engagement + 每轮动作量 + top_posts +
-            # 可选派系）。报告阶段的 simulation_outcomes 工具与前端均可直接读，免再 fuzzy 检索。
-            _run_summary_published = False
-            try:
-                _comm = None
-                _comm_path = os.path.join(handoff_dir, "communities.json")
-                if os.path.exists(_comm_path):
-                    with open(_comm_path, "r", encoding="utf-8") as cf:
-                        _comm = json.load(cf)
-                _run_summary_published = self._publish_run_summary(
-                    state,
-                    sim_state.simulation_id,
-                    communities=_comm,
-                    regenerate=not run_stage_done,
-                )
-                if not _run_summary_published:
-                    logger.warning("[%s] run_summary 未生成或结构无效", state.pipeline_id)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("[%s] run_summary 写出跳过: %s", state.pipeline_id, e)
+                # T3.14: 模拟结束后聚合 run_summary.json（per-agent engagement + 每轮动作量 + top_posts +
+                # 可选派系）。报告阶段的 simulation_outcomes 工具与前端均可直接读，免再 fuzzy 检索。
+                _run_summary_published = False
+                try:
+                    _comm = None
+                    _comm_path = os.path.join(handoff_dir, "communities.json")
+                    if os.path.exists(_comm_path):
+                        with open(_comm_path, "r", encoding="utf-8") as cf:
+                            _comm = json.load(cf)
+                    _run_summary_published = self._publish_run_summary(
+                        state,
+                        sim_state.simulation_id,
+                        communities=_comm,
+                        regenerate=not run_stage_done,
+                    )
+                    if not _run_summary_published:
+                        logger.warning("[%s] run_summary 未生成或结构无效", state.pipeline_id)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("[%s] run_summary 写出跳过: %s", state.pipeline_id, e)
 
-            # DEFECT-3: RUN 完成边界（新跑与复用共用）恰好一次入账模拟子进程的 token
-            # 花费。刻意放在下方完成证据门**之前**：token 已经真实烧掉，门若判失败也不
-            # 该丢账（meter_run_token 幂等守卫保证复用/重入/失败钩子的任何组合都不双计；
-            # _complete_stage / _fail_stage 都会随后 flush LLMMeter 快照进 run_telemetry）。
-            self._record_sim_run_telemetry(state, sim_state.simulation_id)
+                # DEFECT-3: RUN 完成边界（新跑与复用共用）恰好一次入账模拟子进程的 token
+                # 花费。刻意放在下方完成证据门**之前**：token 已经真实烧掉，门若判失败也不
+                # 该丢账（meter_run_token 幂等守卫保证复用/重入/失败钩子的任何组合都不双计；
+                # _complete_stage / _fail_stage 都会随后 flush LLMMeter 快照进 run_telemetry）。
+                self._record_sim_run_telemetry(state, sim_state.simulation_id)
 
-            # DEFECT-2: hollow-run 完成证据门——rc=0/stage 返回/状态投影都不是完成证据
-            # （bug-sweep：子进程可以 rc=0 退出却从未产出 simulation_end，下游把它当成功
-            # 消费）。每个启用平台必须有 simulation_end 完成标记，且 run_summary.json 必须
-            # 有效；缺任一 → RUN 阶段以清晰讯息判失败（可 resume）。新跑与复用共用此门：
-            # legacy 完成位伪装的 hollow 结果同样在此被拦下（与 DEFECT-1 组合：不可复用）。
-            _gate_rs = (
-                SimulationRunner.get_run_state(sim_state.simulation_id)
-                if run_stage_done else rs
-            )
-            self._require_run_completion_evidence(
-                state, sim_state.simulation_id, _gate_rs, _run_summary_published,
-            )
-
-            # Reconcile both freshly executed and reused RUNs. The successful EV
-            # resume proved that a valid reused summary can coexist with a stale
-            # API-facing state.json at round 0; reuse must repair that projection
-            # just as a fresh run does.
-            try:
-                _terminal_rs = (
+                # DEFECT-2: hollow-run 完成证据门——rc=0/stage 返回/状态投影都不是完成证据
+                # （bug-sweep：子进程可以 rc=0 退出却从未产出 simulation_end，下游把它当成功
+                # 消费）。每个启用平台必须有 simulation_end 完成标记，且 run_summary.json 必须
+                # 有效；缺任一 → RUN 阶段以清晰讯息判失败（可 resume）。新跑与复用共用此门：
+                # legacy 完成位伪装的 hollow 结果同样在此被拦下（与 DEFECT-1 组合：不可复用）。
+                _gate_rs = (
                     SimulationRunner.get_run_state(sim_state.simulation_id)
                     if run_stage_done else rs
                 )
-                _summary_path = os.path.join(
-                    SimulationRunner.RUN_STATE_DIR,
-                    sim_state.simulation_id,
-                    "run_summary.json",
+                self._require_run_completion_evidence(
+                    state, sim_state.simulation_id, _gate_rs, _run_summary_published,
                 )
-                _terminal_summary = (
-                    _read_json(_summary_path) if _run_summary_published else None
-                )
-                ss = sim_manager.get_simulation(sim_state.simulation_id)
-                if ss is not None:
-                    self._reconcile_completed_simulation_state(
-                        ss, _terminal_rs, _terminal_summary,
+
+                # Reconcile both freshly executed and reused RUNs. The successful EV
+                # resume proved that a valid reused summary can coexist with a stale
+                # API-facing state.json at round 0; reuse must repair that projection
+                # just as a fresh run does.
+                try:
+                    _terminal_rs = (
+                        SimulationRunner.get_run_state(sim_state.simulation_id)
+                        if run_stage_done else rs
                     )
-                    sim_manager._save_simulation_state(ss)
-            except Exception as _state_sync_err:  # noqa: BLE001
-                logger.warning(
-                    "[%s] 同步终态 simulation state 失败: %s",
-                    state.pipeline_id,
-                    _state_sync_err,
+                    _summary_path = os.path.join(
+                        SimulationRunner.RUN_STATE_DIR,
+                        sim_state.simulation_id,
+                        "run_summary.json",
+                    )
+                    _terminal_summary = (
+                        _read_json(_summary_path) if _run_summary_published else None
+                    )
+                    ss = sim_manager.get_simulation(sim_state.simulation_id)
+                    if ss is not None:
+                        self._reconcile_completed_simulation_state(
+                            ss, _terminal_rs, _terminal_summary,
+                        )
+                        sim_manager._save_simulation_state(ss)
+                except Exception as _state_sync_err:  # noqa: BLE001
+                    logger.warning(
+                        "[%s] 同步终态 simulation state 失败: %s",
+                        state.pipeline_id,
+                        _state_sync_err,
+                    )
+
+                # Completion now follows the final summary publication, so the stage
+                # manifest and status describe the same durable boundary.
+                self._complete_stage(
+                    state,
+                    STAGE_RUN,
+                    _run_completion_message,
+                    reused=run_stage_done,
                 )
 
-            # Completion now follows the final summary publication, so the stage
-            # manifest and status describe the same durable boundary.
-            self._complete_stage(
-                state,
-                STAGE_RUN,
-                _run_completion_message,
-                reused=run_stage_done,
-            )
-
-            # SIM-ADD-2：决策通道端到端可观测性——一条 per-run 摘要，把「种子了几个情景 /
-            # 是否产出 world_state_trajectory.json / 终局结果份额」钉在日志与 options 里，
-            # 让「模拟是否真的贡献了 forecast」可事后审计（取证发现此前全靠翻磁盘才知道熄火）。
-            try:
-                self._log_decision_channel_outcome(state, sim_state.simulation_id)
-            except Exception as _dc_obs_err:  # noqa: BLE001 — 观测性，绝不影响主流程
-                logger.debug("[%s] 决策通道摘要跳过: %s", state.pipeline_id, _dc_obs_err)
+                # SIM-ADD-2：决策通道端到端可观测性——一条 per-run 摘要，把「种子了几个情景 /
+                # 是否产出 world_state_trajectory.json / 终局结果份额」钉在日志与 options 里，
+                # 让「模拟是否真的贡献了 forecast」可事后审计（取证发现此前全靠翻磁盘才知道熄火）。
+                try:
+                    self._log_decision_channel_outcome(state, sim_state.simulation_id)
+                except Exception as _dc_obs_err:  # noqa: BLE001 — 观测性，绝不影响主流程
+                    logger.debug("[%s] 决策通道摘要跳过: %s", state.pipeline_id, _dc_obs_err)
 
             # ---- Stage 5: REPORT ----
             upd = self._make_stage_updater(state, STAGE_REPORT)
@@ -13913,12 +14241,15 @@ class PipelineOrchestrator:
                 }
                 from .official_data import load_for_simulation
                 _ra_artifacts["official_data"] = load_for_simulation(sim_state.simulation_id)
-                try:
+                if self._simulation_engine(state) == "world-v1":
                     agent = ReportAgent(**_ra_kwargs, **_ra_artifacts)
-                except TypeError:
-                    logger.info("[%s] ReportAgent 尚未支持研究工件直通参数，回退旧签名",
-                                state.pipeline_id)
-                    agent = ReportAgent(**_ra_kwargs)
+                else:
+                    try:
+                        agent = ReportAgent(**_ra_kwargs, **_ra_artifacts)
+                    except TypeError:
+                        logger.info("[%s] ReportAgent 尚未支持研究工件直通参数，回退旧签名",
+                                    state.pipeline_id)
+                        agent = ReportAgent(**_ra_kwargs)
 
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
@@ -13942,6 +14273,8 @@ class PipelineOrchestrator:
                 except PipelineCancelled:
                     raise
                 except Exception as _ens_err:  # noqa: BLE001 — 集成失败不拖垮已成功的主跑
+                    if self._simulation_engine(state) == "world-v1":
+                        raise
                     logger.warning("[%s] 多种子集成失败（主报告不受影响）: %s",
                                    state.pipeline_id, _ens_err)
 

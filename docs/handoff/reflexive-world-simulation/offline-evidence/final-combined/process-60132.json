@@ -1,0 +1,22 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 60132,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "blocked:network:socket.__new__": 1,
+    "blocked:external_write": 2,
+    "blocked:credential_path": 1
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-delivery-20261016T181720Z-kz74vt5f/evidence/tmp/control-7ybd0_r2/fixture.py": "91b4dda132c6c71455351219f79239c8504e1f6678e95c5e2d4ebf0086ef8310"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

@@ -244,6 +244,28 @@ print(json.dumps({'guarded': True, 'pid': os.getpid()}))
         with self.assertRaisesRegex(PermissionError, "credential_path"):
             self.guard.path(self.work / ".env" / ".." / "synthetic.txt")
 
+    def test_local_sqlite_uri_modes_and_escape_controls(self):
+        import sqlite3
+        path = self.work / 'world.sqlite3'
+        with sqlite3.connect(path.as_uri() + '?mode=rwc', uri=True) as db:
+            db.execute('CREATE TABLE control(value INTEGER)')
+            db.execute('INSERT INTO control VALUES (7)')
+        with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
+            self.assertEqual(db.execute('SELECT value FROM control').fetchone()[0], 7)
+            with self.assertRaises(sqlite3.OperationalError):
+                db.execute('INSERT INTO control VALUES (8)')
+        for uri in (
+            path.as_uri() + '?mode=rw&nolock=1', path.as_uri() + '?mode=memory',
+            path.as_uri() + '?vfs=unix-none', 'file://localhost' + str(path) + '?mode=ro',
+            'file:relative.sqlite?mode=rwc', 'file:///outside.sqlite?mode=ro',
+            path.as_uri() + '?mode=ro#fragment',
+            self.work.as_uri() + '/%2e%2e/outside.sqlite?mode=rwc',
+        ):
+            with self.assertRaisesRegex(PermissionError, 'sqlite_uri'):
+                sys.audit('sqlite3.connect', uri)
+        with self.assertRaisesRegex(PermissionError, 'credential_path'):
+            sys.audit('sqlite3.connect', (self.work / '.env').as_uri() + '?mode=ro')
+
     def test_protected_evidence_destination(self):
         for name in (".env", ".ssh", "credentials"):
             candidate = self.work / name / "new-evidence"
@@ -272,6 +294,89 @@ print(json.dumps({'guarded': True, 'pid': os.getpid()}))
         self.assertEqual(mimetypes.guess_type("report.md")[0], "text/markdown")
         with self.assertRaisesRegex(PermissionError, "external_write"):
             Path("/private/etc/apache2/mime.types").write_text("blocked")
+
+    def test_oasis_import_loader_restores_cwd_and_preserves_guard(self):
+        """Exercise the narrow loader boundary with real denied operations."""
+        import importlib.abc
+        import importlib.machinery
+        import types
+
+        finder = next(item for item in sys.meta_path
+                      if type(item).__name__ == "RedirectImports" and item.guard is self.guard)
+        original_cwd = Path.cwd()
+        quarantine = self.guard.root / "import-cwd" / "oasis"
+        outside = self.guard.root.parent / (self.guard.root.name + "-oasis-escape.txt")
+        control = self
+
+        class FixtureLoader(importlib.abc.Loader):
+            def create_module(self, spec):
+                module = types.ModuleType(spec.name)
+                module.original_loader_created = True
+                return module
+
+            def exec_module(self, module):
+                control.assertEqual(Path.cwd(), quarantine)
+                Path("loader-control.log").write_text("synthetic import log")
+                with control.assertRaisesRegex(PermissionError, "credential_path"):
+                    Path(".env").read_text()
+                with control.assertRaisesRegex(PermissionError, "network"):
+                    socket.getaddrinfo("offline.invalid", 443)
+                with control.assertRaisesRegex(PermissionError, "external_write"):
+                    outside.write_text("blocked")
+                module.original_loader_executed = True
+
+        for fail in (False, True):
+            loader = FixtureLoader()
+            if fail:
+                execute = loader.exec_module
+                def failing(module):
+                    execute(module)
+                    raise RuntimeError("synthetic import failure")
+                loader.exec_module = failing
+            original = importlib.util.spec_from_loader("oasis", loader, is_package=True)
+            before = self.guard.counts["quarantine:oasis_import_cwd"]
+            with mock.patch.object(importlib.machinery.PathFinder, "find_spec", return_value=original) as discover:
+                wrapped = finder.find_spec("oasis")
+                discover.assert_called_once_with("oasis", None, None)
+                module = importlib.util.module_from_spec(wrapped)
+                self.assertTrue(module.original_loader_created)
+                if fail:
+                    with self.assertRaisesRegex(RuntimeError, "synthetic import failure"):
+                        wrapped.loader.exec_module(module)
+                else:
+                    wrapped.loader.exec_module(module)
+                self.assertTrue(module.original_loader_executed)
+            self.assertEqual(Path.cwd(), original_cwd)
+            self.assertEqual(self.guard.counts["quarantine:oasis_import_cwd"], before + 1)
+            self.assertEqual((quarantine / "loader-control.log").read_text(), "synthetic import log")
+            self.assertFalse(outside.exists())
+
+        # No prefix match and no wrapper for other installed packages.
+        with mock.patch.object(importlib.machinery.PathFinder, "find_spec") as discover:
+            self.assertIsNone(finder.find_spec("oasis_not_the_package"))
+            self.assertIsNone(finder.find_spec("oasis.social_platform"))
+            discover.assert_not_called()
+        self.assertEqual(Path.cwd(), original_cwd)
+
+    def test_oasis_installed_import_logs_are_quarantined(self):
+        """Execute installed OASIS unchanged, or inspect its earlier collection import."""
+        import importlib
+        import logging
+        original_cwd = Path.cwd()
+        oasis = importlib.import_module("oasis")
+        self.assertEqual(Path.cwd(), original_cwd)
+        self.assertTrue(hasattr(oasis, "LLMAction"))
+        self.assertTrue(hasattr(oasis, "generate_reddit_agent_graph"))
+        self.assertGreaterEqual(self.guard.counts["quarantine:oasis_import_cwd"], 1)
+        quarantine = self.guard.root / "import-cwd" / "oasis"
+        self.assertTrue((quarantine / "log").is_dir())
+        paths = [Path(handler.baseFilename).resolve()
+                 for name in ("social.twitter", "social.reddit")
+                 for handler in logging.getLogger(name).handlers
+                 if getattr(handler, "baseFilename", None)]
+        self.assertTrue(paths, "Installed OASIS must retain its real import-time file handlers")
+        self.assertTrue(all(path.is_relative_to(quarantine) for path in paths), paths)
+        self.assertIn(str(Path(oasis.__file__).resolve()), self.guard.source_hashes)
 
     def test_application_import_roots(self):
         from app.config import Config

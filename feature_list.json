@@ -222,5 +222,19 @@
     ],
     "passes": false,
     "note": "Steps 1-5 verified offline 2026-10-16: tests/test_research_skills.py (133 cases incl. 40+ real EN/ZH routing cases and false-positive guards), the scripted full-run test test_e2e_method_skills_reach_every_phase_and_fill_the_forecast_frame (skills on and off), the guarded-runner end-to-end and the full backend suite. Step 6 needs a paid live run, which needs owner approval. Design and review records: docs/handoff/research-skills/ (design.md, review-results.md)."
+  },
+  {
+    "id": "feature_reflexive_world_simulation",
+    "category": "cross-stage",
+    "description": "Replace social-only simulation with an explicitly pinned world engine whose actors change concrete resources, commitments, rules and relationships over time and respond to permitted consequences, preserving legacy runs and forecast evidence boundaries.",
+    "steps": [
+      "Compile research and actor evidence into versioned world and role models with explicit assumptions and private knowledge boundaries.",
+      "Execute investment/supply, policy/trade and coalition/institution scenarios through one causal proposal-response-resolution-commit loop.",
+      "Verify conservation, authority, consent, timing, private prompts, durable attempts and crash/resume closure.",
+      "Run the actual pipeline/direct API child lifecycle with immutable input pins, cancellation, forks and strict committed completion.",
+      "Read matching world/decisions/commitments/assumptions through UI, report, chat, charts, translation and export; isolate evidence-only probabilities under pinned safe policy.",
+      "Complete reviewed offline gates and the approved maximum US$25 held-out live evaluation before default admission or model-realism claims."
+    ],
+    "passes": false
   }
 ]

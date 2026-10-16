@@ -1,0 +1,26 @@
+{
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "status": "closed_no_open_findings_in_assigned_scope",
+  "checkedAt": "2026-10-16T18:22:51.763970+00:00",
+  "scope": "Final list-status and queue-fairness source/receipt review; no edits, runtime tests or provider calls by reviewer. Earlier component reviews remain in scoped notes.",
+  "findings": [
+    {
+      "id": "list-project-filter",
+      "status": "resolved",
+      "evidence": "Runtime tamper red then final73pass. Saved project filtering precedes runtime projection; selected integrity failures remain explicit; GET does not write authority artifacts."
+    }
+  ],
+  "queue": "Four candidate hashes match approved patch;16permanentcases preserve approved assertions; historical36case unpinned comparison independently verified.",
+  "sourceHashes": {
+    "backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0",
+    "backend/tests/test_world_lifecycle.py": "fdd8f3848baf48b4324814918ee15f1d0ffec048673acc1229fb0d77f0ecef1d",
+    "backend/app/services/world_simulation/contracts.py": "781ecb0fb4f8a30f8f4bbe0fa72069cf31c56d464d30bd1d1660cedd87b61857",
+    "backend/app/services/world_simulation/observations.py": "80e87afcbfbf6d2a39c859e0061238e318df2bcb3e45b7ae9f3c4847b7381e39",
+    "backend/app/services/world_simulation/kernel.py": "15eacdbdc81bdee09ac0a1a18e6289f8f3f03d7a2a4756d55b1cd9ee7946de74",
+    "backend/app/services/world_simulation/service.py": "df105588782b46609e5b344d414085382a233d6ef161f366fdb126a564c1abe5",
+    "backend/tests/test_world_queue_fairness.py": "798cbdd8567430985190576c244044dae18320e2f859daa913df307b762d38e9"
+  },
+  "runtimeReceipt": "offline-evidence/list-status-closure",
+  "promotionApproved": false
+}

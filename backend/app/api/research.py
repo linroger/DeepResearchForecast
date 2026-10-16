@@ -97,6 +97,16 @@ def run_pipeline():
         if model:
             model = model.lower()
 
+        from ..services.simulation_manager import validate_simulation_engine
+        try:
+            engine = validate_simulation_engine(data.get('simulation_engine', 'oasis-legacy'))
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+        world_options = {}
+        if any(key in data for key in ('simulation_engine', 'world_spec', 'world_policy_spec')):
+            world_options = {"simulation_engine": engine, "world_spec": data.get('world_spec'),
+                             "world_policy_spec": data.get('world_policy_spec')}
+
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         preflight_errors = preflight_pipeline(mode=mode, model=model)
         if preflight_errors:
@@ -114,6 +124,7 @@ def run_pipeline():
             max_rounds=max_rounds,
             language=language,
             model=model,
+            **world_options,
         )
         return jsonify({
             "success": True,
