@@ -1,0 +1,16 @@
+{
+  "checked_utc": "2026-10-16T14:21:24.946582+00:00",
+  "branch": "codex/reflexive-world-simulation",
+  "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "links_checked": 160,
+  "source_anchors_checked": 148,
+  "source_baseline_files": 38,
+  "source_hash_drift": [],
+  "application_changes": [],
+  "review_verdict": "PASS with no blocking plan defects",
+  "post_review_change": "Plan status line only; bound in review-binding.json",
+  "document_errors": [],
+  "application_tests_run": false,
+  "provider_calls_run": false,
+  "status": "passed"
+}
