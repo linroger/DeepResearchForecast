@@ -716,6 +716,17 @@ class Config:
     REPORT_TRANSLATION_CALL_TIMEOUT_S = max(0.0, float(os.environ.get('REPORT_TRANSLATION_CALL_TIMEOUT_S', '240') or '240'))
     # Still-contaminated lines that get one last whole-line retranslation (2 prompts each).
     REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES = max(0, int(os.environ.get('REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES', '12') or '12'))
+    # FILTER-SAFE (bilingual): survive provider content-filter rejections of translation calls
+    # (glm-5.3 HTTP 400 code 1301 / 422) instead of losing the whole variant.  A rejected chunk
+    # is split smaller and retried once with the institutional-register directive (names stay
+    # verbatim — rewriting them as offices is itself filtered); a chunk that is still rejected,
+    # or a section whose integrity retry still drifts numbers / citations / structure, keeps its
+    # source text and is disclosed (translation_status.<lang>.json verbatim_chunks, status
+    # "partial", meta translations[].translation_quality "partial"); undisclosed residual lines
+    # and number drift stay fail-closed.  Restored numeric tokens are kept apart from adjacent
+    # alphanumerics ("2025-Q4" + "3667亿美元" used to fuse into 43667亿).  false = the previous
+    # all-or-nothing behaviour.
+    REPORT_BILINGUAL_FILTER_SAFE = os.environ.get('REPORT_BILINGUAL_FILTER_SAFE', 'true').strip().lower() == 'true'
 
     # —— PM-2：确定性逐预测市场锚定（forecast_extractor 经 getattr 读取）——
     # 抽取二元预测后跑一次批处理 LLM 匹配（陈述表 × 相关性门控市场表），确定性回填

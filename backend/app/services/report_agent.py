@@ -7227,6 +7227,7 @@ class ReportAgent:
     def _restore_translation_tokens(
         cls, candidate: str, mapping: List[Tuple[str, str]],
         fold_formatting: bool = False,
+        separate_numbers: bool = False,
     ) -> Tuple[str, List[str]]:
         """Restore placeholders and report unaccounted/duplicated immutable tokens.
 
@@ -7234,6 +7235,10 @@ class ReportAgent:
         bare numeric rendering that differs solely in thousands separators or
         full-width digits as accounting for its placeholder (COST-1(d)); the
         default keeps the strict byte-level accounting the bilingual path pins.
+        ``separate_numbers=True`` (FILTER-SAFE bilingual pass) keeps a restored numeric
+        token apart from an adjacent alphanumeric (see
+        :meth:`_space_fused_translation_tokens`); the default restores the bytes exactly
+        as before.
         """
         from collections import Counter, defaultdict
 
@@ -7276,6 +7281,8 @@ class ReportAgent:
                 restored = _tdates.strip_redundant_date_unit(restored, placeholder, raw)
             elif placeholder.startswith("⟦Q"):
                 restored = _tq.strip_redundant_quantity_unit(restored, placeholder, raw)
+        if separate_numbers:
+            restored = cls._space_fused_translation_tokens(restored, mapping)
         for placeholder, raw in mapping:
             count = restored.count(placeholder)
             if count:
@@ -7427,9 +7434,21 @@ class ReportAgent:
         return "\n".join(out_lines), slots
 
     def _resolve_prose_slots(
-        self, slots: Dict[str, str], target_language_name: str
+        self,
+        slots: Dict[str, str],
+        target_language_name: str,
+        *,
+        extra_rules: str = "",
+        chunk_index: Optional[int] = None,
+        restore: Optional[Callable[[str], str]] = None,
     ) -> Dict[str, str]:
         """Translate keyed prose cores; keep only structurally faithful candidates.
+
+        FILTER-SAFE: ``extra_rules`` (the ladder's directive) is appended to every slot
+        prompt; a batch the provider content filter rejects marks its keys so the next,
+        smaller batch and the single-fragment call carry the directive; a fragment that
+        is rejected with the directive too keeps its source bytes and is disclosed
+        (``restore`` renders its placeholders for the record).
 
         A candidate is accepted only when it (1) is non-empty, (2) carries the exact
         same ⟦…⟧ placeholder multiset as its source core, and (3) introduces no bare
@@ -7469,6 +7488,16 @@ class ReportAgent:
             rules = _tdates.translation_prompt_rules(slot_target, text)
             return (" " + rules) if rules else ""
 
+        filter_safe = self._translation_filter_safe_active()
+        directive = _filter_safe.translation_register_directive()
+        filtered_keys: set = set()
+
+        def _slot_rules(keys: List[str]) -> str:
+            rules = extra_rules or ""
+            if filtered_keys.intersection(keys) and directive not in rules:
+                rules = f"{rules}\n{directive}" if rules else directive
+            return rules
+
         resolved: Dict[str, str] = {}
         pending = [
             key for key in slots
@@ -7496,6 +7525,9 @@ class ReportAgent:
                 )
                 if extra_prompt_rules:
                     sys_prompt += " " + extra_prompt_rules
+                slot_rules = _slot_rules(keys)
+                if slot_rules:
+                    sys_prompt += "\n" + slot_rules
                 raw = ""
                 try:
                     raw = self.llm.chat(
@@ -7512,6 +7544,8 @@ class ReportAgent:
                     )
                 except Exception as exc:  # noqa: BLE001 — bounded fallback retries below
                     self._note_translation_call_failure()
+                    if filter_safe and _filter_safe.is_content_filter(exc):
+                        filtered_keys.update(keys)
                     logger.warning("双语报告：结构骨架 prose-slot 翻译调用失败: %s", exc)
                 text = str(raw or "").strip()
                 if text.startswith("```"):
@@ -7540,29 +7574,51 @@ class ReportAgent:
         for key in pending:
             core = slots[key]
             raw = ""
-            try:
-                raw = self.llm.chat(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "Translate this one Markdown prose fragment into "
-                                f"{target_language_name}. Preserve its Markdown punctuation. "
-                                "Copy every ⟦…⟧ placeholder token exactly. Output ONLY the "
-                                "translated fragment. Do not add Arabic numerals, URLs, "
-                                "citations, code, or commentary."
-                                + _prefixed_rules(core)
-                            ),
-                        },
-                        {"role": "user", "content": core},
-                    ],
-                    temperature=0.0,
-                    max_tokens=max(512, min(4096, len(core) * 2 + 512)),
-                    tier="strong",
+            rules = _slot_rules([key])
+            attempts = [rules]
+            if filter_safe and directive not in rules:
+                # A fragment first rejected on its own call gets the one directive retry.
+                attempts.append(f"{rules}\n{directive}" if rules else directive)
+            rejected = False
+            for attempt_rules in attempts:
+                rejected = False
+                try:
+                    raw = self.llm.chat(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Translate this one Markdown prose fragment into "
+                                    f"{target_language_name}. Preserve its Markdown punctuation. "
+                                    "Copy every ⟦…⟧ placeholder token exactly. Output ONLY the "
+                                    "translated fragment. Do not add Arabic numerals, URLs, "
+                                    "citations, code, or commentary."
+                                    + _prefixed_rules(core)
+                                    + (("\n" + attempt_rules) if attempt_rules else "")
+                                ),
+                            },
+                            {"role": "user", "content": core},
+                        ],
+                        temperature=0.0,
+                        max_tokens=max(512, min(4096, len(core) * 2 + 512)),
+                        tier="strong",
+                    )
+                except Exception as exc:  # noqa: BLE001 — final bounded prose-only attempt
+                    self._note_translation_call_failure()
+                    logger.warning("双语报告：单 prose-slot 翻译调用失败: %s", exc)
+                    if filter_safe and _filter_safe.is_content_filter(exc):
+                        rejected = True
+                        continue
+                    break
+                break
+            if rejected:
+                # Rejected with the directive as well: the fragment keeps its source
+                # bytes and is disclosed as part of a partial translation.
+                self._record_translation_verbatim_region(
+                    restore(core) if restore is not None else core,
+                    "content_filter", scope="fragment", chunk_index=chunk_index,
                 )
-            except Exception as exc:  # noqa: BLE001 — final bounded prose-only attempt
-                self._note_translation_call_failure()
-                logger.warning("双语报告：单 prose-slot 翻译调用失败: %s", exc)
+                continue
             candidate = str(raw or "").strip()
             if candidate.startswith("```"):
                 candidate = re.sub(r"^```(?:markdown|md)?\s*", "", candidate, flags=re.I)
@@ -7575,6 +7631,9 @@ class ReportAgent:
         self,
         markdown: str,
         target_language_name: str,
+        *,
+        extra_rules: str = "",
+        chunk_index: Optional[int] = None,
     ) -> str:
         """Structure-preserving translator: the primary guarantee, not a hope.
 
@@ -7600,14 +7659,26 @@ class ReportAgent:
             # tokens and return the structurally-identical source unchanged.
             restored, _issues = self._restore_translation_tokens(protected, mapping)
             return restored
-        resolved = self._resolve_prose_slots(slots, target_language_name)
+        filter_safe = self._translation_filter_safe_active()
+        if filter_safe:
+            resolved = self._resolve_prose_slots(
+                slots,
+                target_language_name,
+                extra_rules=extra_rules,
+                chunk_index=chunk_index,
+                restore=lambda text: self._restore_translation_tokens(text, mapping)[0],
+            )
+        else:
+            resolved = self._resolve_prose_slots(slots, target_language_name)
 
         def _fill(match: "re.Match") -> str:
             key = match.group(1)
             return resolved.get(key, slots.get(key, ""))
 
         reassembled = self._STRUCT_SLOT_RE.sub(_fill, template)
-        restored, _issues = self._restore_translation_tokens(reassembled, mapping)
+        restored, _issues = self._restore_translation_tokens(
+            reassembled, mapping, **({"separate_numbers": True} if filter_safe else {})
+        )
         return restored
 
     @staticmethod
@@ -7930,6 +8001,7 @@ class ReportAgent:
         primary_citations: Optional[Dict[str, Any]] = None,
         *,
         enforce_citations: bool = True,
+        verbatim_regions: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Audit a language variant and build its isolated citation artifact.
 
@@ -7938,6 +8010,11 @@ class ReportAgent:
         clean, and every body marker resolves through the primary report's finalized
         citation namespace into a visible References entry.  The returned citation
         payload is never persisted by this function.
+
+        ``verbatim_regions`` (FILTER-SAFE) are the source-text regions the bilingual
+        pass kept on purpose; their lines are disclosed partial-translation lines,
+        not contamination, and the audit then carries a ``partial`` block.  Number,
+        citation and structure parity stay hard gates for every line.
         """
         from . import report_lint as _rl
         from .forecast_extractor import _norm_citation_tag, validate_citation_markers
@@ -7976,12 +8053,14 @@ class ReportAgent:
             spine=(self._forecast_spine if isinstance(
                 getattr(self, "_forecast_spine", None), dict) else None),
         )
+        scan_body = variant_body
         if getattr(self, "official_data", None):
             # Canonical official metadata (either language's form) keeps
             # publisher names and units verbatim, as in the primary audit.
+            scan_body = "\n".join("" if self._official_canonical_line(line) else line
+                                  for line in variant_body.split("\n"))
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
-                "\n".join("" if self._official_canonical_line(line) else line
-                          for line in variant_body.split("\n")), target_name)
+                scan_body, target_name)
 
         marker_audit = validate_citation_markers(variant_body, primary_by_tag)
         expected_tags = list(marker_audit.get("order") or [])
@@ -8048,6 +8127,18 @@ class ReportAgent:
         contamination = int(
             (lint_audit.get("language_contamination") or {}).get("lines", 0) or 0
         )
+        # FILTER-SAFE: lines whose foreign text is source material the bilingual pass
+        # kept verbatim on purpose (provider content-filter rejections, post-retry
+        # integrity drift) are disclosed partial-translation lines; only lines the pass
+        # never disclosed count against the tolerance.
+        regions = self._translation_regions_kept(variant_body, verbatim_regions)
+        disclosed_lines = 0
+        if regions and contamination:
+            disclosed_lines = min(
+                contamination,
+                self._count_disclosed_contamination(scan_body, target_name, regions),
+            )
+            contamination -= disclosed_lines
         # A handful of lines the repair ladder could not translate (usually a name-
         # heavy sentence the model keeps verbatim) must not withhold an otherwise
         # verified translation: they publish with a recorded warning.  Beyond the
@@ -8063,6 +8154,12 @@ class ReportAgent:
             warnings.append(
                 f"translation keeps {contamination} source-language line(s) "
                 f"(tolerance {residual_tolerance})"
+            )
+        if regions:
+            warnings.append(
+                f"partial translation: {len(regions)} source-language region(s) kept "
+                f"verbatim ({disclosed_lines} line(s)) after provider content-filter "
+                "rejections or integrity failures"
             )
 
         variant_rows: List[Dict[str, Any]] = []
@@ -8155,6 +8252,7 @@ class ReportAgent:
             "translator_version": self._TRANSLATOR_VERSION,
             "residual_source_lines": {
                 "count": contamination,
+                "disclosed": disclosed_lines,
                 "tolerance": residual_tolerance,
                 "samples": list(
                     (lint_audit.get("language_contamination") or {}).get("samples") or []
@@ -8164,6 +8262,14 @@ class ReportAgent:
             "issues": issues,
             "hard_passed": not issues,
         }
+        if regions:
+            audit["partial"] = {
+                "verbatim_regions": [
+                    self._verbatim_region_summary(region) for region in regions
+                ],
+                "disclosed_lines": disclosed_lines,
+                "undisclosed_lines": contamination,
+            }
         return audit, citations_payload
 
     @staticmethod
@@ -8183,23 +8289,41 @@ class ReportAgent:
         return min(configured, max(1, body_lines // 200))
 
     def _translate_section(self, section_md: str, target_language_name: str,
-                           extra_rules: str = "") -> str:
+                           extra_rules: str = "", *,
+                           chunk_index: Optional[int] = None) -> str:
         """把单个章节（H2 块）译成目标语言，严格保留 markdown 结构、围栏、表格列数、引用标记、
         数字概率。调用失败 / 空输出 → 返回原文（degrade-safe，交由数字完整性核对标记）。
 
         WAVE10：``extra_rules`` 追加到系统提示词末尾——引用记号对账重试用它枚举本章的
-        精确记号清单（缺省空串时提示词与历史逐字节一致）。"""
+        精确记号清单（缺省空串时提示词与历史逐字节一致）。``chunk_index`` 仅用于
+        FILTER-SAFE 披露记录（保留原文的块属于哪一章）。"""
         if not section_md.strip():
             return section_md
         units = self._split_translation_units(section_md)
+        unit_kwargs = {"chunk_index": chunk_index} if chunk_index is not None else {}
         return "\n\n".join(
-            self._translate_markdown_unit(unit, target_language_name, extra_rules)
+            self._translate_markdown_unit(unit, target_language_name, extra_rules, **unit_kwargs)
             for unit in units
         )
 
     def _translate_markdown_unit(self, markdown: str, target_language_name: str,
-                                 extra_rules: str = "") -> str:
-        """Translate one bounded Markdown unit and restore immutable source bytes."""
+                                 extra_rules: str = "", *,
+                                 chunk_index: Optional[int] = None,
+                                 _ladder_level: int = 0) -> str:
+        """Translate one bounded Markdown unit and restore immutable source bytes.
+
+        FILTER-SAFE (bilingual pass only): a unit the provider content filter rejects is
+        split smaller and retried once with the institutional-register directive
+        (``_ladder_level`` 1); a piece rejected again keeps its source bytes and is
+        disclosed.  Ladder outcomes are memoised per unit, so the integrity retry and the
+        residual-line repair never replay a request the filter has already rejected.
+        """
+        filter_safe = self._translation_filter_safe_active()
+        if filter_safe:
+            memo = getattr(self, "_translation_filter_memo", None) or {}
+            cached = memo.get(self._translation_memo_key(markdown))
+            if cached is not None:
+                return cached
         date_target = _tdates.target_code_for_language(target_language_name)
         protected_md, protected_mapping = self._protect_translation_tokens(
             markdown, date_target=date_target
@@ -8237,6 +8361,11 @@ class ReportAgent:
             )
         except Exception as _te:  # noqa: BLE001 — 单章翻译失败保留原文，不牵连整篇
             self._note_translation_call_failure()
+            if filter_safe and _filter_safe.is_content_filter(_te):
+                return self._translate_unit_after_content_filter(
+                    markdown, target_language_name, extra_rules,
+                    chunk_index=chunk_index, ladder_level=_ladder_level, error=_te,
+                )
             logger.warning(f"双语报告：章节翻译调用失败，保留原文: {_te}")
             return markdown
         out = (out or "").strip()
@@ -8250,7 +8379,7 @@ class ReportAgent:
             if inner.strip():
                 out = inner.rstrip()
         restored, placeholder_issues = self._restore_translation_tokens(
-            out, protected_mapping
+            out, protected_mapping, **({"separate_numbers": True} if filter_safe else {})
         )
         # Structure is a hard invariant, not a hope: if the whole-unit candidate
         # dropped/duplicated an immutable token, or drifted on heading levels, table
@@ -8273,9 +8402,16 @@ class ReportAgent:
                 placeholder_issues[:8],
                 structural_drift,
             )
+            skeleton_kwargs: Dict[str, Any] = {}
+            if filter_safe:
+                skeleton_kwargs = {
+                    "extra_rules": extra_rules if _ladder_level else "",
+                    "chunk_index": chunk_index,
+                }
             return self._translate_from_source_skeleton(
                 markdown,
                 target_language_name,
+                **skeleton_kwargs,
             ).strip()
         return restored
 
@@ -8392,6 +8528,275 @@ class ReportAgent:
             f"{failures} translation model call(s) failed (provider or network errors); "
             "the affected text stayed untranslated — retry when the provider is healthy"
         )
+
+    # ── FILTER-SAFE (bilingual pass): content-filter ladder + verbatim disclosure ──
+    # Live defect (report_0f2e07d62a34, glm-5.3): sixteen translation calls were rejected by
+    # the provider's content filter (HTTP 400 code 1301); the affected text stayed in the
+    # source language silently, every repair pass was rejected the same way, and the whole
+    # Chinese version was lost to its own audit (contamination beyond tolerance).  The
+    # numeric-parity failure of that run was a second defect: two restored placeholders
+    # fused ("2025-Q4" + "3667亿美元" → "2025-Q43667亿美元", read as 43667亿).
+    # Everything below runs only while a bilingual pass has armed ``_translation_filter_safe``
+    # (REPORT_BILINGUAL_FILTER_SAFE); the primary report's purity retranslation shares
+    # ``_translate_section`` and stays byte-identical.
+
+    _TRANSLATION_ANY_PLACEHOLDER_RE = re.compile(r"⟦[^⟧]*⟧")
+    _VERBATIM_REGION_PUBLIC_KEYS = (
+        "chunk", "heading", "reason", "scope", "detail", "lines", "chars", "sample",
+    )
+
+    def _translation_filter_safe_active(self) -> bool:
+        return bool(getattr(self, "_translation_filter_safe", False))
+
+    def _reset_translation_filter_safe_state(self, source_md: str) -> None:
+        """Arm the ladder for one bilingual pass and forget the previous pass's records."""
+        self._translation_filter_safe = bool(
+            getattr(Config, "REPORT_BILINGUAL_FILTER_SAFE", True)
+        )
+        self._translation_verbatim_regions: List[Dict[str, Any]] = []
+        self._translation_filter_memo: Dict[str, str] = {}
+        self._translation_source_chunks: List[Tuple[str, str]] = [
+            (self._translation_chunk_heading(chunk), self._translation_match_key(chunk))
+            for chunk in self._split_markdown_h2_sections(source_md or "")
+        ]
+
+    @staticmethod
+    def _translation_memo_key(markdown: str) -> str:
+        return hashlib.sha1((markdown or "").encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _translation_match_key(cls, text: str) -> str:
+        """Alphanumeric skeleton of ``text`` (inline code / URLs masked, case folded).
+
+        Disclosed source text is matched by content, never by position: the repair and
+        lint passes may re-punctuate or partially translate a kept line, so only the
+        foreign-language runs that survive have to be accounted for.
+        """
+        masked = cls._LANG_INLINE_PROTECTED_RE.sub(" ", text or "")
+        return re.sub(r"[^\w]+", "", masked.lower())
+
+    @staticmethod
+    def _translation_chunk_heading(chunk: str) -> str:
+        return (chunk or "").split("\n", 1)[0].strip().lstrip("#").strip()
+
+    def _locate_translation_chunk(self, key: str) -> Optional[int]:
+        for index, (_heading, chunk_key) in enumerate(
+            getattr(self, "_translation_source_chunks", None) or []
+        ):
+            if key and key in chunk_key:
+                return index
+        return None
+
+    def _record_translation_verbatim_region(
+        self,
+        text: str,
+        reason: str,
+        *,
+        scope: str,
+        chunk_index: Optional[int] = None,
+        detail: str = "",
+    ) -> None:
+        """Disclose source text the bilingual pass keeps verbatim.
+
+        ``reason`` is ``content_filter`` (the provider rejected the text on the retry
+        rung too) or ``integrity`` (the section still drifted on a hard invariant after
+        its integrity retry); ``scope`` is ``section`` / ``unit`` / ``fragment``.
+        """
+        if not self._translation_filter_safe_active():
+            return
+        key = self._translation_match_key(text)
+        if not key:
+            return
+        lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+        with ReportAgent._TRANSLATION_FAILURE_LOCK:
+            regions = getattr(self, "_translation_verbatim_regions", None)
+            if regions is None:
+                regions = self._translation_verbatim_regions = []
+            # Dedupe: the same text (the residual-line repair re-submits a rejected
+            # line) or text inside an already disclosed region adds nothing; a new
+            # region that encloses earlier ones replaces them.
+            if any(key == r["key"] or (len(key) >= 20 and key in r["key"]) for r in regions):
+                return
+            regions[:] = [
+                r for r in regions
+                if not (len(r["key"]) >= 20 and r["key"] in key)
+            ]
+            if chunk_index is None:
+                chunk_index = self._locate_translation_chunk(key)
+            source_chunks = getattr(self, "_translation_source_chunks", None) or []
+            heading = (
+                source_chunks[chunk_index][0]
+                if chunk_index is not None and 0 <= chunk_index < len(source_chunks)
+                else ""
+            )
+            regions.append({
+                "key": key,
+                "line_keys": [self._translation_match_key(line) for line in lines],
+                "chunk": chunk_index,
+                "heading": heading,
+                "reason": reason,
+                "scope": scope,
+                "detail": (detail or "")[:200],
+                "lines": len(lines),
+                "chars": len(text or ""),
+                "sample": (lines[0][:120] if lines else ""),
+            })
+
+    @classmethod
+    def _translation_regions_kept(
+        cls, variant_body: str, regions: Optional[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """Disclosed regions whose source lines still appear verbatim in the variant.
+
+        A region the later repair passes managed to translate after all is not a
+        partial-translation disclosure; each kept region is annotated with the number
+        of its lines that survived (``kept_lines``).
+        """
+        kept: List[Dict[str, Any]] = []
+        if not regions:
+            return kept
+        variant_key = cls._translation_match_key(variant_body)
+        for region in regions:
+            if not isinstance(region, dict) or not region.get("key"):
+                continue
+            line_keys = [k for k in (region.get("line_keys") or []) if k]
+            if line_keys:
+                kept_lines = sum(1 for k in line_keys if k in variant_key)
+            else:
+                kept_lines = int(region["key"] in variant_key)
+            if kept_lines:
+                kept.append({**region, "kept_lines": kept_lines})
+        return kept
+
+    @classmethod
+    def _verbatim_region_summary(cls, region: Dict[str, Any]) -> Dict[str, Any]:
+        summary = {key: region.get(key) for key in cls._VERBATIM_REGION_PUBLIC_KEYS}
+        summary["kept_lines"] = int(region.get("kept_lines") or 0)
+        return summary
+
+    @staticmethod
+    def _audit_verbatim_chunks(audit: Any) -> List[Dict[str, Any]]:
+        partial = audit.get("partial") if isinstance(audit, dict) else None
+        if not isinstance(partial, dict):
+            return []
+        return [
+            dict(region) for region in (partial.get("verbatim_regions") or [])
+            if isinstance(region, dict)
+        ]
+
+    @classmethod
+    def _count_disclosed_contamination(
+        cls, scan_body: str, target_name: str, regions: List[Dict[str, Any]]
+    ) -> int:
+        """Contaminated lines whose foreign text is entirely disclosed verbatim source.
+
+        A line counts as disclosed when the whole line is kept source text, or when every
+        foreign-language run the detector found on it (a run of at least six skeleton
+        characters) is contained in a disclosed region.  Anything else is contamination.
+        """
+        from . import report_lint as _rl
+
+        blob = "\n".join(str(region.get("key") or "") for region in regions)
+        if not blob.strip():
+            return 0
+        disclosed = 0
+        for _index, line, runs in _rl.language_contamination_lines(scan_body, target_name):
+            line_key = cls._translation_match_key(line)
+            if line_key and line_key in blob:
+                disclosed += 1
+                continue
+            run_keys = [cls._translation_match_key(run) for run in runs]
+            if run_keys and all(len(k) >= 6 and k in blob for k in run_keys):
+                disclosed += 1
+        return disclosed
+
+    @classmethod
+    def _space_fused_translation_tokens(
+        cls, candidate: str, mapping: List[Tuple[str, str]]
+    ) -> str:
+        """Keep a restored numeric token apart from an adjacent ASCII alphanumeric.
+
+        Live defect: the model wrote "⟦XE⟧⟦QF⟧" for "2025-Q4 peak of ⟦QF⟧"; restored to
+        "2025-Q43667亿美元" the amount parser read 43667亿 and number parity failed.  A
+        space is inserted only where the restored bytes would fuse: an ASCII letter, digit
+        or underscore directly before a token that starts with a digit, sign or currency
+        symbol, or a digit directly after a token that ends with a digit.
+        """
+        raw_by_placeholder = dict(mapping)
+        text = candidate or ""
+        out: List[str] = []
+        last = ""
+        position = 0
+        for match in cls._TRANSLATION_ANY_PLACEHOLDER_RE.finditer(text):
+            literal = text[position:match.start()]
+            if literal:
+                out.append(literal)
+                last = literal[-1]
+            placeholder = match.group(0)
+            position = match.end()
+            raw = raw_by_placeholder.get(placeholder)
+            if not raw:
+                out.append(placeholder)
+                last = placeholder[-1]
+                continue
+            if raw[0] in "0123456789+-$€£¥" and re.fullmatch(r"[A-Za-z0-9_]", last or ""):
+                out.append(" ")
+            out.append(placeholder)
+            last = raw[-1]
+            if raw[-1].isdigit() and text[position:position + 1].isdigit():
+                out.append(" ")
+                last = " "
+        out.append(text[position:])
+        return "".join(out)
+
+    def _translate_unit_after_content_filter(
+        self,
+        markdown: str,
+        target_language_name: str,
+        extra_rules: str,
+        *,
+        chunk_index: Optional[int],
+        ladder_level: int,
+        error: BaseException,
+    ) -> str:
+        """One rung per unit: split smaller + institutional-register directive, then verbatim."""
+        memo = getattr(self, "_translation_filter_memo", None)
+        if memo is None:
+            memo = self._translation_filter_memo = {}
+        memo_key = self._translation_memo_key(markdown)
+        brief = str(error).replace("\n", " ")[:160]
+        if ladder_level >= 1:
+            logger.warning(
+                "双语报告：机构语体重试仍被提供方内容审查拒绝，保留原文并披露 chunk=%s chars=%d: %s",
+                chunk_index, len(markdown), brief,
+            )
+            self._record_translation_verbatim_region(
+                markdown, "content_filter", scope="unit", chunk_index=chunk_index,
+                detail=brief,
+            )
+            memo[memo_key] = markdown
+            return markdown
+        # Paragraph-sized pieces (a sixth of the unit, at least 200 characters): the
+        # filter scores the whole response, so the rejected passage is isolated while
+        # the clean paragraphs around it still translate.
+        pieces = self._split_translation_units(
+            markdown, max_chars=max(200, len(markdown) // 6)
+        )
+        directive = _filter_safe.translation_register_directive()
+        rules = f"{extra_rules}\n{directive}" if extra_rules else directive
+        logger.warning(
+            "双语报告：章节翻译被提供方内容审查拒绝，改小切分（%d 段）并以机构语体重试一次 chunk=%s: %s",
+            len(pieces), chunk_index, brief,
+        )
+        result = "\n\n".join(
+            self._translate_markdown_unit(
+                piece, target_language_name, rules,
+                chunk_index=chunk_index, _ladder_level=1,
+            )
+            for piece in pieces
+        )
+        memo[memo_key] = result
+        return result
 
     # Bumped whenever translation output changes materially, so translations made by
     # an older engine are reported as outdated and can be regenerated in place.
@@ -8827,13 +9232,18 @@ class ReportAgent:
         def _is_references(chunk: str) -> bool:
             return chunk.split("\n", 1)[0].strip() in _REFS_HEADINGS
 
+        def section_kwargs(index: int) -> Dict[str, Any]:
+            # FILTER-SAFE: the chunk index only travels when the ladder is armed, so the
+            # unarmed call keeps its historical signature.
+            return {"chunk_index": index} if self._translation_filter_safe_active() else {}
+
         translated: List[Optional[str]] = [None] * len(chunks)
 
         def _first_pass(pair: Tuple[int, str]) -> Tuple[int, str]:
             i, ch = pair
             if _is_references(ch):
                 return i, self._localize_translation_references(ch, tgt_code)
-            return i, self._translate_section(ch, tgt_name)
+            return i, self._translate_section(ch, tgt_name, **section_kwargs(i))
 
         def _translated(done: int, outcome: Tuple[int, str]) -> None:
             i, text = outcome
@@ -8881,7 +9291,8 @@ class ReportAgent:
             if non_citation_hard or quality["residual"] or citation_retry:
                 try:
                     retry = self._translate_section(
-                        ch, tgt_name, extra_rules=_retry_rules(ch, quality, citation_retry)
+                        ch, tgt_name, extra_rules=_retry_rules(ch, quality, citation_retry),
+                        **section_kwargs(i),
                     )
                 except Exception as exc:  # noqa: BLE001 — one bounded retry only
                     logger.warning(f"双语报告：完整性重译失败，保留首译: {exc}")
@@ -8894,6 +9305,21 @@ class ReportAgent:
                     ):
                         cur = retry
                         quality = retry_quality
+            if quality["hard"] and self._translation_filter_safe_active():
+                # FILTER-SAFE: a section that still drifts on a hard invariant (numbers,
+                # citations, headings, tables, fences) after its retry would sink the whole
+                # variant at the audit; its source text is exact by construction, so the
+                # section is kept verbatim and disclosed as a partial translation.
+                logger.warning(
+                    "双语报告：章节完整性重译后仍有硬性漂移，保留该章原文并披露 report=%s chunk=%s hard=%s",
+                    label, i, quality["hard"],
+                )
+                self._record_translation_verbatim_region(
+                    ch, "integrity", scope="section", chunk_index=i,
+                    detail=", ".join(quality["hard"]),
+                )
+                cur = ch
+                quality = self._translation_chunk_quality(ch, ch, tgt_code)
             return i, cur, quality
 
         outcomes: Dict[int, Tuple[str, Dict[str, Any]]] = {}
@@ -8974,6 +9400,7 @@ class ReportAgent:
                     keep_existing_on_failure=keep_existing_on_failure,
                 )
             finally:
+                self._translation_filter_safe = False
                 if dashboards is not None:
                     if dashboards.is_alive() and progress_callback is not None:
                         try:
@@ -9047,6 +9474,7 @@ class ReportAgent:
 
         source_sha = hashlib.sha256(md.encode("utf-8")).hexdigest()
         self._translation_call_failures = 0
+        self._reset_translation_filter_safe_state(md)
 
         def _progress(percent: int, message: str) -> None:
             bounded = max(1, min(99, int(percent)))
@@ -9158,6 +9586,7 @@ class ReportAgent:
             str(src_code),
             str(tgt_code),
             primary_citations,
+            verbatim_regions=getattr(self, "_translation_verbatim_regions", None),
         )
         if citation_drift:
             audit.setdefault("issues", []).append(
@@ -9192,6 +9621,7 @@ class ReportAgent:
                 source_markdown_sha256=source_sha,
                 progress=100,
                 issues=list(audit.get("issues") or [])[:12],
+                verbatim_chunks=self._audit_verbatim_chunks(audit),
             )
             logger.error(
                 "双语报告硬审计未通过，译文不发布: %s %s issues=%s",
@@ -9228,6 +9658,9 @@ class ReportAgent:
             model_name = getattr(self.llm, "model", None) or getattr(Config, "LLM_MODEL_NAME", "")
         except Exception:  # noqa: BLE001
             model_name = getattr(Config, "LLM_MODEL_NAME", "")
+        # FILTER-SAFE: disclosed regions the pass kept in the source language make
+        # this a partial translation (published, labelled, regenerable).
+        verbatim_chunks = self._audit_verbatim_chunks(audit)
         entry = {
             "report_id": report_id,
             "lang": tgt_code,
@@ -9239,13 +9672,15 @@ class ReportAgent:
             "markdown_sha256": audit["markdown_sha256"],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "model": model_name,
-            "translation_quality": "ok",
+            "translation_quality": "partial" if verbatim_chunks else "ok",
             "translator_version": self._TRANSLATOR_VERSION,
             "available": True,
             "citations_path": f"citations.{tgt_code}.json",
             "final_audit_path": f"final_audit.{tgt_code}.json",
             "missing_numbers": [],
         }
+        if verbatim_chunks:
+            entry["verbatim_chunks"] = verbatim_chunks
         existing = [
             e for e in (report.translations or [])
             if not (isinstance(e, dict) and e.get("lang") == tgt_code)
@@ -9255,15 +9690,24 @@ class ReportAgent:
         ReportManager._set_translation_runtime_status(
             report_id,
             str(tgt_code),
-            "available",
+            "partial" if verbatim_chunks else "available",
             source_markdown_sha256=source_sha,
             markdown_sha256=audit["markdown_sha256"],
             progress=100,
-            message="translation passed isolated publication audit",
+            message=(
+                "translation passed isolated publication audit"
+                + (f" with {len(verbatim_chunks)} source-language region(s) kept verbatim"
+                   if verbatim_chunks else "")
+            ),
+            verbatim_chunks=verbatim_chunks,
+            warnings=list(audit.get("warnings") or []),
         )
         logger.info(
             f"双语报告已生成: {report_id} {src_code}→{tgt_code}，{len(chunks)} 章，"
-            f"{len(translated_md)} 字，variant_audit=passed")
+            f"{len(translated_md)} 字，variant_audit=passed"
+            + (f"，partial：{len(verbatim_chunks)} 处原文保留 "
+               f"chunks={[c.get('chunk') for c in verbatim_chunks][:8]}"
+               if verbatim_chunks else ""))
 
     def translate_research_markdown(
         self,
@@ -9277,9 +9721,12 @@ class ReportAgent:
         with LLMCache.bypass(), llm_call_timeout(
             getattr(Config, "REPORT_TRANSLATION_CALL_TIMEOUT_S", 240)
         ):
-            return self._translate_research_markdown_uncached(
-                md, label=label, primary_citations=primary_citations
-            )
+            try:
+                return self._translate_research_markdown_uncached(
+                    md, label=label, primary_citations=primary_citations
+                )
+            finally:
+                self._translation_filter_safe = False
 
     def _translate_research_markdown_uncached(
         self,
@@ -9319,6 +9766,7 @@ class ReportAgent:
         chunks = self._split_markdown_h2_sections(md)
         if not chunks:
             return {"available": False, "reason": "empty document"}
+        self._reset_translation_filter_safe_state(md)
 
         # Same engine as the forecast report: concurrent sections plus targeted
         # integrity retries (a dossier used to get one plain sequential retry, so a
@@ -9364,6 +9812,7 @@ class ReportAgent:
             str(tgt_code),
             primary_citations if isinstance(primary_citations, dict) else {},
             enforce_citations=bool(primary_citations),
+            verbatim_regions=getattr(self, "_translation_verbatim_regions", None),
         )
         if not audit.get("hard_passed"):
             failure_issue = self._translation_failure_issue()
@@ -13956,7 +14405,7 @@ class ReportManager:
         if status in {"pending", "processing", "generating"}:
             payload["heartbeat_at"] = updated_at
             payload.pop("issues", None)
-        elif status in {"failed", "available", "completed"}:
+        elif status in {"failed", "available", "completed", "partial"}:
             payload["progress"] = int(fields.get("progress", 100) or 100)
         payload.update({key: value for key, value in fields.items() if value is not None})
         write_json_atomic(cls._get_translation_runtime_status_path(report_id, lang), payload)
@@ -14000,8 +14449,10 @@ class ReportManager:
 
     @classmethod
     def _variant_audit_summary(cls, report_id: str, lang: str) -> Dict[str, Any]:
-        """Residual source-language lines and engine version of a published variant."""
-        summary: Dict[str, Any] = {"residual_source_lines": 0, "translator_version": ""}
+        """Residual source-language lines, engine version and disclosed verbatim regions."""
+        summary: Dict[str, Any] = {
+            "residual_source_lines": 0, "translator_version": "", "verbatim_chunks": [],
+        }
         try:
             with open(cls._get_report_final_audit_path(report_id, lang), encoding="utf-8") as handle:
                 audit = json.load(handle)
@@ -14011,11 +14462,20 @@ class ReportManager:
             return summary
         residual = audit.get("residual_source_lines")
         try:
-            summary["residual_source_lines"] = max(
-                0, int((residual or {}).get("count") or 0)
+            # Lines published in the source language: the undisclosed residue plus the
+            # disclosed lines of a partial translation (the UI note reports both).
+            summary["residual_source_lines"] = (
+                max(0, int((residual or {}).get("count") or 0))
+                + max(0, int((residual or {}).get("disclosed") or 0))
             ) if isinstance(residual, dict) else 0
         except (TypeError, ValueError):
             summary["residual_source_lines"] = 0
+        partial = audit.get("partial")
+        if isinstance(partial, dict):
+            summary["verbatim_chunks"] = [
+                dict(region) for region in (partial.get("verbatim_regions") or [])
+                if isinstance(region, dict)
+            ]
         version = str(audit.get("translator_version") or "")
         if not version:
             # Variants audited by the date-aware engine before the stamp existed
@@ -14145,8 +14605,15 @@ class ReportManager:
             summary = cls._variant_audit_summary(report_id, requested)
             result["translation"]["residual_source_lines"] = summary["residual_source_lines"]
             result["translation"]["translator_version"] = summary["translator_version"]
+            # FILTER-SAFE: a published translation that keeps disclosed source-language
+            # regions is partial; it can be regenerated once the provider accepts the text.
+            result["translation"]["partial"] = bool(summary["verbatim_chunks"])
+            result["translation"]["verbatim_chunks"] = list(summary["verbatim_chunks"])
+            result["partial"] = bool(summary["verbatim_chunks"])
             result["outdated"] = summary["translator_version"] != ReportAgent._TRANSLATOR_VERSION
-            result["can_update"] = bool(result["outdated"] and result["can_generate"])
+            result["can_update"] = bool(
+                (result["outdated"] or result["partial"]) and result["can_generate"]
+            )
             return result
 
         runtime = cls._load_translation_runtime_status(report_id, requested)

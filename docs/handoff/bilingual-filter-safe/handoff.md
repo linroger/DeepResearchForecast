@@ -1,0 +1,69 @@
+# Handoff.md — Bilingual translation vs. the provider content filter
+
+**Last Updated (UTC):** 2026-10-16T21:00Z
+**Status:** Complete (offline); live re-run owed to the owner's approval
+**Current Focus:** none open — the live re-run of the Chinese translation on `report_0f2e07d62a34` is the next check (paid GLM calls).
+
+The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 2119.
+
+## 1) Request & Context
+- **Request (from the session that started this one):** make `REPORT_BILINGUAL`'s translation pass survive provider content-filter rejections: (1) detect a content-filter rejection per chunk and retry that chunk once with a smaller split and an institutional-register directive — never rewriting names as office descriptors, which is itself filtered; (2) keep a chunk that still cannot be translated verbatim and record which chunk and why in `translation_status.<lang>.json`; (3) make the final audit treat a verbatim-kept chunk as a disclosed partial translation (status `partial`, not `failed`) while still rejecting real contamination and number drift; (4) a documented `REPORT_BILINGUAL_*` knob that turns the behaviour off. The primary (English) publication path MUST stay byte-identical.
+- **Environment:** worktree `claude/gifted-elion-7c02f2`, reset onto `claude-reflexive-world-state-model` (9945b50) because `report_filter_safe.py` only exists there. Tests run with the primary checkout's venv: `cd backend && DRF_TEST_PROCESS=1 /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python -m pytest tests/<file>` (pyproject already passes `-q`).
+- **Evidence:** `backend/uploads/reports/report_0f2e07d62a34/` (primary checkout): `translation_status.zh.json`, `full_report.zh.rejected.md`, `console_log.txt` lines 375–412.
+- **Non-goals:** a fallback LLM provider (owner decided against one), frontend changes (the API carries the new fields; the UI note "N line(s) kept in the source language" already renders from `residual_source_lines`).
+
+## 2) Requirements → Acceptance Checks
+| Requirement | Acceptance check | Expected outcome | Evidence |
+|---|---|---|---|
+| R1 content-filter retry per chunk | fake LLM raises the 1301 error on the first call for a unit, succeeds when the system prompt carries the directive | unit translated; directive present on the retry only; pieces smaller than the unit | `tests/test_report_bilingual_filter_safe.py` |
+| R2 verbatim fallback + disclosure | fake rejects every attempt for one paragraph | paragraph kept byte-for-byte; `_translation_verbatim_regions` names chunk, reason `content_filter`; `translation_status.zh.json` carries `verbatim_chunks` | same |
+| R3 audit = partial, not failed | end-to-end `_generate_bilingual_report` with two rejected paragraphs | `full_report.zh.md` published, runtime status `partial`, meta entry `translation_quality=partial`, `translation_status()` → available + partial + can_update; undisclosed contamination beyond tolerance and number drift still rejected | same |
+| R4 knob | `REPORT_BILINGUAL_FILTER_SAFE=false` | previous behaviour: no retry, variant rejected as before | same |
+| R5 primary path byte-identical | the ladder, the disclosure and the number-boundary guard only run while a bilingual pass is active (`_translation_filter_safe`) | `_apply_language_purity` / primary tests unchanged | existing suites green |
+| R6 live number-parity root cause | restore `⟦XE⟧⟦QF⟧` → "2025-Q4" + "3667亿美元" | guard inserts a space so the amount parses as 366.7 billion | unit test |
+
+## 3) Plan
+1. `report_filter_safe.translation_register_directive()` — fidelity-preserving institutional register (names verbatim).
+2. `report_agent.py`: memoised per-unit ladder in `_translate_markdown_unit`; directive + fragment disclosure in `_resolve_prose_slots`; section-level verbatim fallback on residual hard drift in `_translate_chunks_with_integrity`; verbatim-region registry; audit classification of contamination into disclosed/undisclosed; `partial` status through runtime status, meta entry, `translation_status()`; number-boundary guard in `_restore_translation_tokens` (bilingual only).
+3. `report_lint.language_contamination_lines()` shared with the detector (byte-identical output).
+4. Config + `.env.example` + API status write + tests + docs.
+
+## 4) To-Do & Progress Ledger
+- [x] Code — **done**; `report_filter_safe.py` (translation directive), `report_lint.py` (`language_contamination_lines`), `report_agent.py` (ladder, memo, disclosure registry, section fallback, audit classification, status plumbing, restore guard), `config.py` + `.env.example` (`REPORT_BILINGUAL_FILTER_SAFE`), `api/report.py` (partial status on the on-demand path), `api/research.py` (partial fields on the dossier status).
+- [x] Tests — **done**; `tests/test_report_bilingual_filter_safe.py`, 19 tests (R1–R6 below).
+- [x] Lint / env drift — **done**; ruff F,E9 with the project ignores clean, `check_env_drift.py --strict` exit 0.
+- [x] Regression — **done**; wide subset 720 passed (701 existing + 19 new) after the spy-compatibility fix in §6; the wider report/translation/research subset ran 700 passed / 1 failed before that fix, the one failure being the spy case.
+- [x] agent-progress.txt entry, this record, side-session note — **done**.
+- [ ] Live re-run on `report_0f2e07d62a34` — needs the owner's approval.
+
+## 5) Findings, Decisions, Assumptions
+- **Finding (falsifies the brief's hypothesis):** the current code already keeps source text when a translation call fails, so the 16 failures did not drop text. The numeric-multiset failure came from one translated section: the model glued two restored placeholders ("2025-Q4" + "3667亿美元" → "2025-Q43667亿美元"), which `translation_quantities` reads as 43667亿 = 4.37 trillion. Reproduced offline on the rejected file (`qty:4366700000000` vs `qty:366700000000`).
+- **Finding:** the 2 contamination lines were binary-forecast table rows (F4, F11) left half-translated after the prose-slot, purity-segment and whole-line repair calls were all content-filtered; the tolerance for that body length was 1.
+- **Decision:** the generation directive (`register_directive` L1) literally asks for heads of state to be referred to by office — exactly the rewrite the live probes showed is filtered and which a translation must not do. The translation rung therefore gets its own directive in the same module (neutral official register, every name verbatim) rather than reusing the L1 text.
+- **Decision:** disclosure matching is content-based (alphanumeric skeleton of the kept source text, inline code/URLs masked) rather than positional, so later repair/lint passes cannot turn a disclosed line into "undisclosed contamination" unless they actually translate it.
+- **Decision:** transient provider errors (429, timeouts) keep the old behaviour (verbatim without disclosure → contamination → rejected → "retry when the provider is healthy"); only deterministic content-filter rejections and post-retry integrity drift are disclosed.
+
+## 6) Issues, Mistakes, Recoveries
+- **Sub-split threshold was a no-op** → the first ladder used `max(400, len // 2)`, which never splits a unit under 400 characters (the new test caught it: "改小切分（1 段）") → paragraph-sized pieces `max(200, len // 6)` → guard: `test_filtered_unit_is_split_smaller_and_retried_with_directive` asserts every retry request is shorter than the rejected one.
+- **Three of my own tests encoded wrong premises** → (a) a drifted whole-unit candidate never reaches the section audit because `_translate_markdown_unit` already discards it (structure-preserving fallback), so the section-level fallback is exercised by stubbing `_translate_section`; (b) one undisclosed line sits inside the tolerance of a short body (tolerance 1) — the rejection test now leaves two undisclosed lines; (c) the disclosure sample is capped at 120 characters.
+- **Fixed-signature spy in `test_sessionb_translation_reallm.py`** → the first version always passed the new keyword arguments to `_translate_from_source_skeleton`, breaking a two-argument spy → the new keywords (and `chunk_index` / `separate_numbers` on the other call sites) now travel only while the ladder is armed, which also makes the unarmed primary path's call signatures byte-identical to before → guard: the wider subset.
+
+## 7) Scenario-Focused Resolution Tests
+- **Live scenario, replayed offline (`test_end_to_end_partial_translation_is_published_and_disclosed`):** primary published, a scripted provider rejects two paragraphs of the "Executive Summary" chunk on every attempt (code 1301, role assistant). Change applied: the ladder. Post-change: the rejected paragraphs stay in English, the rest of the chunk and the table translate, `full_report.zh.md` is published, `translation_status.zh.json` = `partial` with two `verbatim_chunks` (chunk 1, "Executive Summary", `content_filter`, `unit`), meta entry `translation_quality: partial`, API `partial: true` / `can_update: true` / `residual_source_lines: 2`, the primary bytes unchanged, exactly two requests carried the sensitive paragraph (whole unit, then the directive retry) — **resolved**.
+- **Same scenario with the knob off:** rejected as before (`failed`, "2 target-language contamination lines", provider-failure note), no directive ever sent — **previous behaviour preserved**.
+- **Directive succeeds on the retry:** full translation, not partial, `translation_quality: ok` — **resolved**.
+- **Live numeric defect (`test_restore_guard_keeps_fused_numeric_tokens_apart`):** the "⟦XE⟧⟦QF⟧" candidate restored without the guard yields `qty:4366700000000`; with the guard "2025-Q4 3667亿美元" and the source multiset — **resolved** (armed passes only).
+- **Audit gates (`test_audit_still_rejects_…`):** two undisclosed lines beyond tolerance → rejected; a 42%→24% drift beside disclosed regions → rejected — **fail-closed preserved**.
+
+## 8) Verification Summary
+- **Fast checks:** `tests/test_report_bilingual_filter_safe.py` 19 passed; ruff (`--select F,E9 --ignore F401,F841`, the project's ignores) clean on every touched file; `python -m compileall` ok; `scripts/check_env_drift.py --strict` exit 0 ("every Config env var is documented").
+- **Regression runs:** translation/report suites (`test_report_bilingual`, `test_translation_robustness`, `test_report_filter_safe`, `test_sessionb_translation_structure`, `test_research_dossier_translation`, `test_translation_dates`, `test_translation_quantities`) 149 passed; wider subset (every `tests/test_report*`, `test_translation*`, `test_research_dossier*`, `test_sessionb_translation*`, `test_backfill_report_visuals`, `test_env_drift*`) 700 passed / 1 failed (the spy case, fixed, §6); re-run after the fix: affected modules 154 passed, then the whole wide subset plus the new module 720 passed in 107 s.
+- **Evidence:** this file, `agent-progress.txt` (2026-10-17T04:50+08:00), the side-session note `bilingual-filter-safe.md`, the commit on `claude/gifted-elion-7c02f2`.
+
+## 9) Remaining Work & Next Steps
+- Live re-run of the Chinese translation on `report_0f2e07d62a34` (`POST /api/report/<id>/translations/zh`) needs the owner's approval (paid GLM calls).
+- Frontend: a "retry partial translation" affordance keyed on `translation_status.partial` / `can_update` (the backend exposes both).
+
+## 10) Updates to This File
+- 2026-10-16T20:30Z: created (T0) with the diagnosis and the plan.
+- 2026-10-16T21:00Z: code, tests and checks recorded (§4, §6–§8); status Complete (offline); live re-run left to the owner (§9).
