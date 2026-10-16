@@ -3911,6 +3911,8 @@ class ReportAgent:
             except (TypeError, ValueError):
                 return str(r)
 
+        from .world_model import is_kind_name_unit
+
         def _fmt(value, unit):
             if isinstance(value, bool):
                 return "是" if value else "否"
@@ -3926,7 +3928,9 @@ class ReportAgent:
                     s = f"{float(value):.2f}".rstrip("0").rstrip(".")
             else:
                 s = str(value)[:60]
-            u = str(unit or "")
+            u = str(unit or "").strip()
+            if is_kind_name_unit(u):
+                u = ""  # persisted runs may still carry "boolean" / "date" as a unit
             return f"{s}{u}" if u == "%" else (f"{u}{s}" if u and (u[0] in "$€£¥￥") else (f"{s} {u}".strip()))
 
         lines = ["【世界演化轨迹（elicited model projection——模型引出的推演投影，非观察证据；"

@@ -38,6 +38,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 WORLD_MODEL_STATE_VERSION = "world-model-state/v1"
 
 VARIABLE_KINDS = ("numeric", "categorical", "boolean", "text")
+# Type names a model may echo into a variable's ``unit`` field ("yes boolean",
+# "2027-03-10 date").  A unit belongs to numeric facts only, and a kind name is never a
+# unit: such units are blanked at validation, in the kernel and by ``format_value``.
+_KIND_NAME_UNITS = frozenset(VARIABLE_KINDS) | frozenset((
+    "number", "num", "int", "integer", "float", "decimal", "bool", "flag", "string", "str",
+    "category", "enum", "date", "datetime", "timestamp",
+))
 PROVENANCES = ("research", "official", "seed", "arbiter", "effect", "action")
 VALENCES = ("allied", "adversarial", "transactional", "directional", "neutral")
 EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "system")
@@ -71,6 +78,11 @@ _NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
+
+
+def is_kind_name_unit(unit: Any) -> bool:
+    """True when ``unit`` is a type / kind name rather than a unit of measure."""
+    return str(unit or "").strip().casefold() in _KIND_NAME_UNITS
 
 
 def _text(value: Any, max_chars: int = 240) -> str:
@@ -195,7 +207,7 @@ def format_value(value: Any, unit: str = "") -> str:
     else:
         s = _text(value, 120)
     u = _text(unit, 24)
-    if not u:
+    if not u or is_kind_name_unit(u):
         return s
     if u == "%":
         return f"{s}%"
@@ -229,9 +241,10 @@ class StateVariable:
                  history: Optional[List[Dict[str, Any]]] = None) -> None:
         self.id = str(var_id)
         self.name = _text(name, 140) or self.id
-        self.unit = _text(unit, 24)
         self.kind = kind if kind in VARIABLE_KINDS else "text"
         self.value = self._coerce(value)
+        # a unit belongs to numeric facts only, and a kind name is never a unit
+        self.unit = "" if self.kind != "numeric" or is_kind_name_unit(unit) else _text(unit, 24)
         self.as_of = _text(as_of, 40) or None
         self.provenance = provenance if provenance in PROVENANCES else "seed"
         self.rationale = _text(rationale, 240)
@@ -266,6 +279,8 @@ class StateVariable:
         Returns True when the stored value actually changed.
         """
         new = self._coerce(value)
+        if self.kind != "numeric":
+            self.unit = ""  # a numeric fact that became text keeps no unit
         if self.kind == "numeric" and isinstance(new, (int, float)) and max_change_ratio:
             cur = float(self.value) if isinstance(self.value, (int, float)) else 0.0
             cap = abs(cur) * float(max_change_ratio) if cur != 0 else None

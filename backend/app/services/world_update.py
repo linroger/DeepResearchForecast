@@ -11,7 +11,9 @@ Once every platform has delivered a round, the coordinator runs ONE world update
    delayed effects.  Its output is validated against the variable registry and
    the cast (``validate_arbiter_update``) and clamped by the kernel before being
    applied.  Any failure leaves the round committed with the deterministic
-   update only and ``arbiter_status=failed``.
+   update only and ``arbiter_status=failed``; the failure record names the
+   provider's error class, HTTP status / code and whether the LLM client's
+   fallback provider took the call over (``arbiter_problems``).
 3. ``build_round_digest`` — the agent-facing "WHAT CHANGED LAST PERIOD" text
    (herding guard: no scenario shares).
 
@@ -24,8 +26,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .agent_decision import AgentDecision
-from .world_model import WorldModel, _bound_lines, _text, format_value, normalize_label
+from ..utils.llm_errors import describe_llm_error
+from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
+from .world_model import WorldModel, _bound_lines, _text, format_value, is_kind_name_unit, normalize_label
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,7 @@ MAX_PENDING_EFFECTS = 6
 MAX_RESOLUTIONS = 24
 NARRATIVE_MAX_CHARS = 700
 DIGEST_MAX_CHARS = 1100
+ARBITER_ERROR_SNIPPET_CHARS = 200
 
 
 def _decision_rows(decisions: Iterable[Any]) -> List[Dict[str, Any]]:
@@ -237,13 +241,19 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for nv in new_vars[:MAX_NEW_VARIABLES]:
             if not isinstance(nv, dict) or not _text(nv.get("name"), 140):
                 continue
-            kind = _text(nv.get("kind"), 16).casefold() or "numeric"
+            raw_kind = _text(nv.get("kind"), 16).casefold()
+            kind = raw_kind or "numeric"
             if kind not in ("numeric", "categorical", "boolean", "text"):
                 kind = "text"
             if kind == "numeric" and _num(nv.get("value")) is None:
                 kind = "text"
+            unit = _text(nv.get("unit"), 24)
+            # a unit belongs to numeric facts only; models echo the kind ("boolean", "date")
+            # into the unit field, which would otherwise render as "yes boolean"
+            if kind != "numeric" or unit.casefold() in (kind, raw_kind) or is_kind_name_unit(unit):
+                unit = ""
             update["new_variables"].append({"name": _text(nv["name"], 140), "value": nv.get("value"),
-                                            "unit": _text(nv.get("unit"), 24), "kind": kind,
+                                            "unit": unit, "kind": kind,
                                             "rationale": _text(nv.get("rationale"), 200)})
         if len(new_vars) > MAX_NEW_VARIABLES:
             problems.append(f"{len(new_vars) - MAX_NEW_VARIABLES} new variables dropped (cap {MAX_NEW_VARIABLES})")
@@ -348,7 +358,15 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
                 decisions: Iterable[Any], deterministic: Dict[str, Any], scenarios: Sequence[str], *,
                 language: str = "", temperature: float = 0.3, max_tokens: int = 2200
                 ) -> Tuple[str, Dict[str, Any], List[str]]:
-    """One arbiter call → ``(status, validated_update, problems)``; never raises."""
+    """One arbiter call → ``(status, validated_update, problems)``; never raises.
+
+    ``llm.chat_json`` is the backend ``LLMClient`` surface: on a content-filter or other
+    non-retryable 4xx rejection the client itself retries the request once on the
+    configured fallback provider (``LLMClient.chat`` failover) before raising.  A failure
+    that survives that is recorded with the provider's error class, HTTP status / code, a
+    bounded message snippet and the failover outcome, so ``arbiter_problems`` says why
+    the round carries only the deterministic update.
+    """
     if llm is None:
         return "skipped", {}, ["no llm"]
     prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language)
@@ -356,8 +374,9 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
         raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=temperature,
                             max_tokens=max_tokens)
     except Exception as exc:  # noqa: BLE001 — a failed arbiter must not break the round
-        logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, exc)
-        return "failed", {}, [f"llm error: {type(exc).__name__}"]
+        detail = describe_llm_error(exc, max_chars=ARBITER_ERROR_SNIPPET_CHARS)
+        logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, detail)
+        return "failed", {}, [f"llm error: {detail}"]
     update, problems = validate_arbiter_update(raw, world, scenarios)
     if not isinstance(raw, dict):
         return "invalid", update, problems
@@ -445,7 +464,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
             except Exception as exc:  # noqa: BLE001 — a kernel bug must not break the loop
                 logger.warning("applying arbiter update failed in round %s: %s", round_num, exc)
                 status = "failed"
-                problems.append(f"apply error: {type(exc).__name__}")
+                problems.append(f"apply error: {describe_llm_error(exc, max_chars=120)}")
     world.commit_round(round_num)
     diff = world.diff(before)
     narrative = str(update.get("narrative") or "") if isinstance(update, dict) else ""
@@ -458,7 +477,8 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
                       "ok": sum(1 for d in rows if d.get("status") == "ok"),
                       "held": sum(1 for d in rows if (d.get("option") or {}).get("id") == "hold_position"),
                       "failed": sum(1 for d in rows if d.get("status") == "failed"),
-                      "invalid": sum(1 for d in rows if d.get("status") == "invalid")},
+                      "invalid": sum(1 for d in rows if d.get("status") == "invalid"),
+                      LANGUAGE_MISMATCH: sum(1 for d in rows if d.get("status") == LANGUAGE_MISMATCH)},
         "deterministic": deterministic,
         "arbiter_status": status,
         "arbiter_problems": problems[:12],

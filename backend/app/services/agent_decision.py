@@ -14,8 +14,11 @@ decision per round:
   capacity it has left, and ``hold_position``.
 * ``build_decision_prompt`` / ``parse_decision`` turn the menu into a bounded
   JSON contract and validate the model's answer; any failure degrades to
-  ``hold_position`` with a typed status (``failed`` / ``invalid``) so a dead
-  decision step is never mistaken for strategic patience.
+  ``hold_position`` with a typed status (``failed`` / ``invalid`` /
+  ``language_mismatch``) so a dead decision step is never mistaken for
+  strategic patience.  A public statement whose script does not match the run
+  language (CJK vs Latin) is rejected for publication the same way, and every
+  typed non-decision carries its ``problems`` into ``world_actions.jsonl``.
 
 Pure except for the injected ``llm.chat_json`` call in ``elicit_decision``.
 """
@@ -27,6 +30,7 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from ..utils.llm_errors import describe_llm_error
 from .world_model import ActorState, WorldModel, _text, normalize_label
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,24 @@ HOLD_OPTION_ID = "hold_position"
 MAX_OPTIONS = 10
 STATEMENT_MAX_CHARS = 480
 RATIONALE_MAX_CHARS = 320
+LANGUAGE_MISMATCH = "language_mismatch"
+DECISION_STATUSES = ("ok", "invalid", "failed", LANGUAGE_MISMATCH)
+MAX_PROBLEMS = 6
+DECISION_ERROR_SNIPPET_CHARS = 200
+
+# Script heuristic for the run-language check: CJK ideographs / kana / hangul against Latin
+# letters.  One CJK character carries about three Latin letters' worth of text — the same
+# weighting the runner uses to infer the run language from the forecast question — so a
+# Latin statement that merely quotes a Chinese name stays Latin, and vice versa.
+_CJK_CHAR_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]")
+_LATIN_CHAR_RE = re.compile(r"[A-Za-z\u00c0-\u024f]")
+_CJK_LANGUAGE_CODES = ("zh", "cn", "ja", "jp", "ko", "kr")
+_CJK_LANGUAGE_WORDS = ("chinese", "mandarin", "cantonese", "japanese", "korean", "中文", "汉语", "汉文", "普通话",
+                       "简体", "繁體", "繁体", "日本語", "日语", "한국어", "韩语")
+_LATIN_LANGUAGE_CODES = ("en", "es", "fr", "de", "pt", "it", "nl")
+_LATIN_LANGUAGE_WORDS = ("english", "spanish", "español", "espanol", "french", "français", "francais", "german",
+                         "deutsch", "portuguese", "português", "portugues", "italian", "italiano", "dutch",
+                         "nederlands", "英文", "英语")
 
 ACTION_KINDS = ("policy", "economic", "coalition", "communication", "legal", "coercive",
                 "operational", "wait")
@@ -502,6 +524,35 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
     return "\n\n".join(p for p in parts if p)
 
 
+def expected_script(language: Any) -> str:
+    """``"cjk"`` / ``"latin"`` for a run language, ``""`` when it is unset or unknown."""
+    low = str(language or "").strip().casefold()
+    if not low or low == "auto":
+        return ""
+    code = re.split(r"[-_ (/]", low, maxsplit=1)[0]          # "zh-CN" / "en_US" / "English (US)" → code
+    if code in _CJK_LANGUAGE_CODES or any(w in low for w in _CJK_LANGUAGE_WORDS):
+        return "cjk"
+    if code in _LATIN_LANGUAGE_CODES or any(w in low for w in _LATIN_LANGUAGE_WORDS):
+        return "latin"
+    return ""
+
+
+def text_script(text: Any) -> str:
+    """Dominant script of a statement: ``"cjk"``, ``"latin"`` or ``""`` (no letters at all)."""
+    s = str(text or "")
+    cjk = len(_CJK_CHAR_RE.findall(s))
+    latin = len(_LATIN_CHAR_RE.findall(s))
+    if not cjk and not latin:
+        return ""
+    return "cjk" if cjk * 3 >= latin else "latin"
+
+
+def statement_matches_language(text: Any, language: Any) -> bool:
+    """False only when the run language and the statement both have a known script and they differ."""
+    want, have = expected_script(language), text_script(text)
+    return not want or not have or want == have
+
+
 class AgentDecision:
     """A validated structured decision (or a typed non-decision)."""
 
@@ -512,7 +563,7 @@ class AgentDecision:
                  expected_reactions: Optional[List[Dict[str, str]]] = None,
                  scenario: Optional[str] = None, scenario_confidence: float = 0.0,
                  status: str = "ok", round_num: int = 0, period_end: Optional[str] = None,
-                 raw_option_id: str = "") -> None:
+                 raw_option_id: str = "", problems: Optional[List[str]] = None) -> None:
         self.agent_id = int(agent_id)
         self.actor_name = actor_name
         self.option = dict(option)
@@ -529,6 +580,8 @@ class AgentDecision:
         self.round = int(round_num)
         self.period_end = period_end
         self.raw_option_id = raw_option_id
+        # why a typed non-decision is not a move (validation / provider detail), for the record
+        self.problems = [_text(p, 300) for p in (problems or []) if _text(p, 300)][:MAX_PROBLEMS]
 
     @property
     def ok(self) -> bool:
@@ -546,6 +599,7 @@ class AgentDecision:
             "expected_reactions": list(self.expected_reactions),
             "scenario": self.scenario, "scenario_confidence": round(self.scenario_confidence, 3),
             "status": self.status, "raw_option_id": self.raw_option_id,
+            "problems": list(self.problems),
         }
 
     def scenario_commitment(self, outcome_power: Optional[float] = None) -> Optional[Dict[str, Any]]:
@@ -563,10 +617,10 @@ class AgentDecision:
 
 
 def hold_decision(actor: ActorState, *, status: str, round_num: int, period_end: Optional[str],
-                  raw_option_id: str = "") -> AgentDecision:
+                  raw_option_id: str = "", problems: Optional[List[str]] = None) -> AgentDecision:
     return AgentDecision(actor.agent_id, actor.name, HOLD_TEMPLATE.to_option(), targets=[], magnitude=0.0,
                          public_statement="", status=status, round_num=round_num, period_end=period_end,
-                         raw_option_id=raw_option_id)
+                         raw_option_id=raw_option_id, problems=problems)
 
 
 def _match_scenario(raw: Any, scenarios: Sequence[str]) -> Optional[str]:
@@ -586,13 +640,17 @@ def _match_scenario(raw: Any, scenarios: Sequence[str]) -> Optional[str]:
 
 
 def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: List[Dict[str, Any]],
-                   scenarios: Sequence[str], round_num: int, period_end: Optional[str] = None) -> AgentDecision:
+                   scenarios: Sequence[str], round_num: int, period_end: Optional[str] = None,
+                   language: str = "") -> AgentDecision:
     """Validate the model's JSON against the menu, the cast and the scenario set.
 
     Unknown option ids, missing payloads or malformed structures degrade to a
     ``hold_position`` decision with ``status="invalid"``.  Targets are resolved
     to cast names; unknown names are dropped.  A ``custom`` option must carry a
-    catalogued kind and a label.
+    catalogued kind and a label.  When ``language`` (the run language) is set, a
+    move whose ``public_statement`` is written in the wrong script (CJK vs Latin)
+    is rejected for publication the same way, with ``status="language_mismatch"``
+    and the rejected text in ``problems``; the actor then posts organically.
     """
     if not isinstance(raw, dict):
         return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end)
@@ -634,6 +692,13 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
     except (TypeError, ValueError):
         magnitude = 0.5
     statement = _text(raw.get("public_statement"), STATEMENT_MAX_CHARS)
+    if option["id"] != HOLD_OPTION_ID and statement and not statement_matches_language(statement, language):
+        # the statement is what gets published: a wrong-script one is treated like an invalid
+        # decision (typed hold → organic post) and stays visible in world_actions.jsonl
+        return hold_decision(actor, status=LANGUAGE_MISMATCH, round_num=round_num, period_end=period_end,
+                             raw_option_id=raw_option,
+                             problems=[f"public_statement is {text_script(statement)}-script but the run "
+                                       f"language is {_text(language, 40)}: \"{_text(statement, 100)}\""])
     rationale = _text(raw.get("private_rationale"), RATIONALE_MAX_CHARS)
     commitment = None
     rc = raw.get("commitment")
@@ -681,10 +746,17 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
 def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: ActorState,
                     world: WorldModel, options: List[Dict[str, Any]], scenarios: Sequence[str],
                     round_num: int, period_end: Optional[str] = None,
-                    temperature: float = 0.4, max_tokens: int = 1200) -> AgentDecision:
-    """One structured LLM call → validated decision; failures become typed holds."""
+                    temperature: float = 0.4, max_tokens: int = 1200, language: str = "") -> AgentDecision:
+    """One structured LLM call → validated decision; failures become typed holds.
+
+    ``llm.chat_json`` is the backend ``LLMClient`` surface: a content-filter or other
+    non-retryable 4xx rejection is retried once on the configured fallback provider by the
+    client itself before it raises; what survives is recorded in ``problems`` with the
+    provider's error class, HTTP status / code, a bounded snippet and the failover outcome.
+    """
     if llm is None:
-        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end)
+        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end,
+                             problems=["no llm client"])
     messages: List[Dict[str, str]] = []
     if system_message:
         messages.append({"role": "system", "content": str(system_message)})
@@ -692,10 +764,12 @@ def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: A
     try:
         raw = llm.chat_json(messages=messages, temperature=temperature, max_tokens=max_tokens)
     except Exception as exc:  # noqa: BLE001 — the round loop must survive a failed decision
-        logger.warning("decision step failed for %s (status=failed): %s", actor.name, exc)
-        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end)
+        detail = describe_llm_error(exc, max_chars=DECISION_ERROR_SNIPPET_CHARS)
+        logger.warning("decision step failed for %s (status=failed): %s", actor.name, detail)
+        return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end,
+                             problems=[f"llm error: {detail}"])
     return parse_decision(raw, actor=actor, world=world, options=options, scenarios=scenarios,
-                          round_num=round_num, period_end=period_end)
+                          round_num=round_num, period_end=period_end, language=language)
 
 
 def decision_memory_note(decision: AgentDecision, period_label: str = "") -> str:
@@ -718,7 +792,8 @@ def decision_memory_note(decision: AgentDecision, period_label: str = "") -> str
 
 
 def summarize_decisions(decisions: Iterable[AgentDecision]) -> Dict[str, int]:
-    counts = {"ok": 0, "invalid": 0, "failed": 0, "hold": 0}
+    counts = dict.fromkeys(DECISION_STATUSES, 0)
+    counts["hold"] = 0
     for d in decisions:
         if d.status in counts:
             counts[d.status] += 1

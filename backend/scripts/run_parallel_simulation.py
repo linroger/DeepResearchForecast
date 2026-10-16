@@ -4048,10 +4048,11 @@ class _ReflexiveWorldCoordinator:
                     decision = await asyncio.to_thread(
                         elicit_decision, self._llm, system_message=system_message, user_prompt=prompt,
                         actor=actor, world=world, options=options, scenarios=self._scenarios,
-                        round_num=rnd, period_end=period_end)
+                        round_num=rnd, period_end=period_end, language=self._language)
             except Exception as _e:  # noqa: BLE001
                 self._log(f"reflexive world: decision for {actor.name} failed (holds): {_e}")
-                decision = hold_decision(actor, status="failed", round_num=rnd, period_end=period_end)
+                decision = hold_decision(actor, status="failed", round_num=rnd, period_end=period_end,
+                                         problems=[f"decision step error: {type(_e).__name__}: {str(_e)[:200]}"])
             decisions[aid] = decision
 
         await asyncio.gather(*(_one(int(aid)) for aid in roster_ids))
@@ -5878,8 +5879,9 @@ async def run_twitter_simulation(
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
         # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
-        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
-        # the organic LLMAction post so a dead decision step never silences the cast.
+        # ManualAction with decision tags); actors whose decision failed / was invalid / carried a
+        # statement in the wrong language fall back to the organic LLMAction post so a dead
+        # decision step never silences the cast.
         _wc_decisions: Dict[int, Any] = {}
         _wc_posted = 0
         if _world_coord is not None:
@@ -6469,8 +6471,9 @@ async def run_reddit_simulation(
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
         # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
-        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
-        # the organic LLMAction post so a dead decision step never silences the cast.
+        # ManualAction with decision tags); actors whose decision failed / was invalid / carried a
+        # statement in the wrong language fall back to the organic LLMAction post so a dead
+        # decision step never silences the cast.
         _wc_decisions: Dict[int, Any] = {}
         _wc_posted = 0
         if _world_coord is not None:

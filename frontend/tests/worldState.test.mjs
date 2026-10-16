@@ -18,6 +18,10 @@ test('formatWorldValue mirrors the backend rendering', () => {
   assert.equal(formatWorldValue(true, ''), 'yes')
   assert.equal(formatWorldValue('pending', ''), 'pending')
   assert.equal(formatWorldValue(null, 'x'), '— x')
+  // a kind name is never a unit (arbiter-created facts of persisted runs carry "boolean" / "date")
+  assert.equal(formatWorldValue(true, 'boolean'), 'yes')
+  assert.equal(formatWorldValue('2027-03-10', 'date'), '2027-03-10')
+  assert.equal(formatWorldValue(12, 'numeric'), '12')
 })
 
 test('variableDelta reads the last two history points', () => {

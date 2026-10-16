@@ -2,7 +2,10 @@
 
 Offline with the conftest FakeLLMClient.  Pins: variable ids in the arbiter prompt,
 unknown ids / actors filtered, numeric clamp through the kernel, arbiter failure
-leaves the round committed with the deterministic update, digest herding guard.
+leaves the round committed with the deterministic update, digest herding guard,
+provider failures recorded precisely (class, HTTP status, provider code, snippet,
+failover outcome), one fallback-provider retry through the real LLMClient, and
+kind-name units ("yes boolean") never reaching a brief.
 """
 
 import random
@@ -10,7 +13,7 @@ import random
 from app.services import world_update as wu
 from app.services.agent_decision import AgentDecision
 from app.services.world_model import WorldModel
-from tests.conftest import FakeLLMClient
+from tests.conftest import FakeLLMClient, content_filter_error
 
 
 def _world():
@@ -142,7 +145,8 @@ def test_run_world_round_applies_arbiter_and_builds_digest():
     assert world.variables["regional_capacity"].value == 180.0                  # 120 → clamped to +50%
     assert world.variables["permit_status"].value == "under review"
     assert world.committed_round == 1
-    assert record["decisions"] == {"total": 3, "ok": 3, "held": 1, "failed": 0, "invalid": 0}
+    assert record["decisions"] == {"total": 3, "ok": 3, "held": 1, "failed": 0, "invalid": 0,
+                                   "language_mismatch": 0}
     assert record["scenario_pressure"] == {"Permit delayed": "up"}
     assert world.actors[0].last_action["resolution"] == "partial"
     assert len(world.pending_effects) == 1
@@ -168,7 +172,7 @@ def test_run_world_round_survives_arbiter_failure_and_disabled():
     world.start_round(1, _PERIOD)
     record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=Boom(), rng=random.Random(0),
                                 scenarios=world.scenarios)
-    assert record["arbiter_status"] == "failed" and record["arbiter_problems"] == ["llm error: RuntimeError"]
+    assert record["arbiter_status"] == "failed" and record["arbiter_problems"] == ["llm error: RuntimeError: down"]
     assert world.committed_round == 1 and world.variables["regional_capacity"].value == 120.0
     assert record["decisions"]["total"] == 3 and "Alpha Systems" in record["digest"]
 
@@ -194,3 +198,112 @@ def test_dead_round_commits_with_no_decisions():
     assert record["decisions"]["total"] == 0 and record["arbiter_status"] == "applied"
     assert record["digest"].startswith("Quiet quarter.")
     assert world.committed_round == 2
+
+
+# ---------------------------------------------------------------------------
+# provider failures: precise records and the fallback-provider retry
+# ---------------------------------------------------------------------------
+_FILTER_HEAD = "llm error: BadRequestError (HTTP 400, provider code 1301, content filter"
+
+
+class _Filtered:
+    """Stand-in whose only answer is the live Zhipu content-filter rejection."""
+
+    def chat_json(self, **kwargs):
+        raise content_filter_error()
+
+
+def test_arbiter_content_filter_failure_record_is_precise():
+    """sim_d6ebcc77e22d recorded only ``llm error: BadRequestError`` for two content-filter
+    rejections; the record must name class, HTTP status, provider code and the message."""
+    world = _world()
+    world.start_round(1, _PERIOD)
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=_Filtered(), rng=random.Random(0),
+                                scenarios=world.scenarios)
+    assert record["arbiter_status"] == "failed" and world.committed_round == 1
+    [problem] = record["arbiter_problems"]
+    assert problem.startswith(_FILTER_HEAD + "): Error code: 400 - {'contentFilter'")
+    assert "'code': '1301'" in problem
+    assert len(problem) <= len(_FILTER_HEAD) + 2 + 2 + wu.ARBITER_ERROR_SNIPPET_CHARS
+    assert world.variables["regional_capacity"].value == 120.0            # no fabricated numeric effect
+    assert "arbiter=failed" in record["headline"]
+
+
+def test_arbiter_content_filter_recovers_through_fallback_provider(scripted_failover):
+    """The arbiter goes through the backend LLMClient: a content-filter rejection is retried ONCE
+    on the configured fallback provider and the round is applied from its answer."""
+    payload = {"narrative": "Fallback arbiter resolved the period.",
+               "variable_changes": [{"variable_id": "permit_status", "new_value": "under review"}],
+               "action_resolutions": [{"actor": "Alpha Systems", "outcome": "partial"}]}
+    llm, transports = scripted_failover(content_filter_error(), payload)
+    world = _world()
+    world.start_round(1, _PERIOD)
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=llm, rng=random.Random(0),
+                                scenarios=world.scenarios)
+    assert record["arbiter_status"] == "applied" and record["arbiter_problems"] == []
+    assert transports == [("glm", False), ("kimi", True)]                  # one primary attempt, one fallback retry
+    assert world.variables["permit_status"].value == "under review"
+    assert world.actors[0].last_action["resolution"] == "partial"
+    assert record["digest"].startswith("Fallback arbiter resolved the period.")
+
+
+def test_arbiter_records_fallback_outcome_when_both_providers_fail(scripted_failover):
+    llm, transports = scripted_failover(content_filter_error(), fallback_error=content_filter_error("assistant"))
+    world = _world()
+    world.start_round(1, _PERIOD)
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=llm, rng=random.Random(0),
+                                scenarios=world.scenarios)
+    assert record["arbiter_status"] == "failed" and world.committed_round == 1
+    [problem] = record["arbiter_problems"]
+    assert problem.startswith(_FILTER_HEAD + "; fallback kimi: failed (BadRequestError (HTTP 400, provider code 1301, "
+                              "content filter): Error code: 400")
+    assert transports == [("glm", False), ("kimi", True)]                  # degrade-safe: no further attempts
+
+    unconfigured, transports2 = scripted_failover(content_filter_error(), fallback_provider=None)
+    world2 = _world()
+    world2.start_round(1, _PERIOD)
+    rec2 = wu.run_world_round(world2, 1, _PERIOD, _decisions(), [], llm=unconfigured, rng=random.Random(0),
+                              scenarios=world2.scenarios)
+    assert rec2["arbiter_status"] == "failed"
+    assert rec2["arbiter_problems"][0].startswith(_FILTER_HEAD + "; fallback: not configured (LLM_FALLBACK_PROVIDER unset)")
+    assert transports2 == [("glm", False)]
+
+
+# ---------------------------------------------------------------------------
+# units: a kind name is never a unit
+# ---------------------------------------------------------------------------
+def test_validate_blanks_kind_named_units_on_new_variables():
+    world = _world()
+    world.start_round(1, _PERIOD)
+    update, _ = wu.validate_arbiter_update({"new_variables": [
+        {"name": "Truce talks opened", "value": True, "unit": "boolean", "kind": "boolean"},
+        {"name": "Deadline agreed", "value": "2027-03-10", "unit": "date", "kind": "date"},
+        {"name": "Licence backlog", "value": 12, "unit": "numeric", "kind": "numeric"},
+    ]}, world, world.scenarios)
+    assert [(nv["kind"], nv["unit"]) for nv in update["new_variables"]] == [("boolean", ""), ("text", ""), ("numeric", "")]
+    update2, _ = wu.validate_arbiter_update({"new_variables": [
+        {"name": "Tariff floor", "value": 10, "unit": "%", "kind": "numeric"},
+        {"name": "Status note", "value": "pending", "unit": "USD", "kind": "text"},      # text facts carry no unit
+    ]}, world, world.scenarios)
+    assert [(nv["kind"], nv["unit"]) for nv in update2["new_variables"]] == [("numeric", "%"), ("text", "")]
+
+
+def test_briefs_never_print_a_kind_name_as_unit():
+    world = _world()
+    world.start_round(1, _PERIOD)
+    llm = FakeLLMClient(json_responses=[{"narrative": "Talks opened.", "new_variables": [
+        {"name": "Truce talks opened", "value": True, "unit": "boolean", "kind": "boolean"},
+        {"name": "Deadline agreed", "value": "2027-03-10", "unit": "date", "kind": "date"}]}])
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=llm, rng=random.Random(0),
+                                scenarios=world.scenarios)
+    assert record["arbiter_status"] == "applied"
+    assert world.variables["truce_talks_opened"].unit == "" and world.variables["deadline_agreed"].unit == ""
+    assert "- New: Truce talks opened = yes" in record["digest"]
+    assert "- New: Deadline agreed = 2027-03-10" in record["digest"]
+    brief = world.render_public_brief(upto_round=1, previous=record["snapshot_before"])
+    assert "- Truce talks opened: yes" in brief and "- Deadline agreed: 2027-03-10" in brief
+    world.start_round(2, {"label": "2026-Q4", "period_end": "2026-12-31"})
+    prompt = wu.build_arbiter_prompt(world, 2, world.period, [], {}, world.scenarios)
+    assert "Truce talks opened = yes [boolean]" in prompt and "Deadline agreed = 2027-03-10 [text]" in prompt
+    for text in (record["digest"], brief, prompt):
+        assert "yes boolean" not in text and "2027-03-10 date" not in text

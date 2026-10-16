@@ -2,6 +2,12 @@
 // No DOM, no network: unit-tested with node:test.
 
 const CURRENCY_CODES = new Set(['usd', 'eur', 'gbp', 'cny', 'rmb', 'jpy', 'hkd', 'aud', 'cad', '美元', '人民币', '元'])
+// Type names a model may echo into a variable's unit field ("yes boolean"). The backend blanks
+// them on new runs; persisted runs can still carry them, so the formatter never prints one.
+const KIND_NAME_UNITS = new Set([
+  'numeric', 'categorical', 'boolean', 'text', 'number', 'num', 'int', 'integer', 'float', 'decimal',
+  'bool', 'flag', 'string', 'str', 'category', 'enum', 'date', 'datetime', 'timestamp'
+])
 
 function isCurrencyUnit(unit) {
   const u = String(unit || '').trim()
@@ -28,7 +34,7 @@ export function formatWorldValue(value, unit = '') {
   else if (value === null || value === undefined) s = '—'
   else s = String(value).trim().slice(0, 120)
   const u = String(unit || '').trim()
-  if (!u) return s
+  if (!u || KIND_NAME_UNITS.has(u.toLowerCase())) return s
   if (u === '%') return `${s}%`
   if (isCurrencyUnit(u)) return `${u}${s}`
   return `${s} ${u}`
