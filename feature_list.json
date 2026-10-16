@@ -236,6 +236,7 @@
       "The dashboard simulation tab shows the World State panel, run_summary.json carries a world_model block, and the report's diagnostic pack renders the world evolution and a world-variables chart.",
       "A live run (real LLM) shows actors reacting to world changes across rounds; a human review confirms the moves are realistic for each actor's agency class."
     ],
-    "passes": false
+    "passes": true,
+    "note": "Offline: tests/test_world_model*.py, test_agent_decision.py, test_world_update.py, test_world_model_loop.py (2026-10-16). Live (owner-approved, 2026-10-16/17): pipe_d569f211eb14 / sim_d6ebcc77e22d on glm-5.3, 9 monthly rounds, 7 agents: arbiter applied 7/9 (2 provider content-filter rejections committed mechanically), 50 valid decisions with 12 distinct option ids by agency class, one decision per actor per round on both platforms, 11 caused fact changes inside the clamp, rounds 39-140 s vs the 1800 s barrier, dashboard panel + run_summary + report chart/block verified. Evidence: docs/handoff/reflexive-world-state/handoff.md section 7 'Live run'. Follow-ups listed there (section 9)."
   }
 ]
