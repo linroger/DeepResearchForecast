@@ -3789,6 +3789,7 @@ class _ReflexiveWorldCoordinator:
         self._dir = simulation_dir
         self._config = config
         self._expected = max(1, int(expected_platforms or 1))
+        self._missing_platform_seq = 0
         tc = config.get("temporal_config") or {}
         self._tc = tc if isinstance(tc, dict) else {}
         block = config.get("world_model") or {}
@@ -3877,8 +3878,14 @@ class _ReflexiveWorldCoordinator:
             self._brief = self._world.render_public_brief(upto_round=0, previous=None)
             self._digest = ""
         if self._ws is not None and self._world.scenario_shares:
-            # keep the mirrored scenario shares of a resumed run (the WorldState itself restarts from seed)
-            pass
+            try:
+                shares = {str(k): float(v) for k, v in (self._world.scenario_shares or {}).items()
+                          if str(k) in set(self._ws.scenarios)}
+                total = sum(max(0.0, v) for v in shares.values())
+                if total > 0:
+                    self._ws.shares = {k: round(max(0.0, shares.get(k, 0.0)) / total, 6) for k in self._ws.scenarios}
+            except (TypeError, ValueError):
+                pass
         try:
             self._world.set_period_labels({i + 1: rp.get("label") for i, rp in self._period_by_round.items()
                                            if isinstance(rp, dict) and rp.get("label")})
@@ -3890,6 +3897,47 @@ class _ReflexiveWorldCoordinator:
             row0["as_of"] = self._as_of_date
         self._trajectory: List[Dict[str, Any]] = [row0]
         self._scenario_decisions: List[Dict[str, Any]] = []
+        if self._ws is not None and self._resumed_round > 0:
+            try:
+                traj_path = os.path.join(simulation_dir, "world_state_trajectory.json")
+                if os.path.exists(traj_path):
+                    with open(traj_path, "r", encoding="utf-8") as _tf:
+                        saved_traj = json.load(_tf)
+                    rows = saved_traj.get("trajectory") if isinstance(saved_traj, dict) else None
+                    restored: List[Dict[str, Any]] = []
+                    for row in rows if isinstance(rows, list) else []:
+                        if not isinstance(row, dict):
+                            continue
+                        try:
+                            rr = int(row.get("round", -1))
+                        except (TypeError, ValueError):
+                            continue
+                        if rr < 0 or rr > self._resumed_round:
+                            continue
+                        restored.append(dict(row))
+                    if restored:
+                        self._trajectory = restored
+                        history = [dict(r.get("shares")) for r in restored if isinstance(r.get("shares"), dict)]
+                        if history:
+                            self._ws.history = history
+                            self._ws.shares = dict(history[-1])
+                            self._world.scenario_shares = dict(self._ws.shares)
+                        self._ws.round_statuses = [str(r.get("round_status")) for r in restored[1:]
+                                                   if str(r.get("round_status") or "").strip()]
+                    decisions = saved_traj.get("decisions") if isinstance(saved_traj, dict) else None
+                    self._scenario_decisions = []
+                    for row in decisions if isinstance(decisions, list) else []:
+                        if not isinstance(row, dict):
+                            continue
+                        try:
+                            rr = int(row.get("round", 0) or 0)
+                        except (TypeError, ValueError):
+                            rr = 0
+                        if rr > self._resumed_round:
+                            continue
+                        self._scenario_decisions.append(dict(row))
+            except Exception as _traj_err:  # noqa: BLE001
+                log_info(f"reflexive world: could not restore trajectory state ({_traj_err}); continuing from mirrored shares")
         self._world_decisions: Dict[int, Dict[int, Any]] = {}
         self._decision_futures: Dict[int, "asyncio.Future"] = {}
         self._pending: Dict[int, Dict[str, Any]] = {}
@@ -3908,6 +3956,11 @@ class _ReflexiveWorldCoordinator:
         self._converged_at: Optional[int] = None
         self._stable_streak = 0
         self._prev_date = self._as_of_date
+        if self._trajectory:
+            _last = self._trajectory[-1]
+            _date = _last.get("period_end") or _last.get("as_of")
+            if _date:
+                self._prev_date = str(_date)
         self._finalized = False
         try:
             self._seed_value = int(os.environ.get("SIM_SEED", "0") or "0")
@@ -3965,6 +4018,13 @@ class _ReflexiveWorldCoordinator:
                     missing = [p for p in self._known_platforms()
                                if p != str(platform) and p not in self._done
                                and self._watermark.get(p, -1) < round_num - 1]
+                    gap = self._expected - len(self._known_platforms())
+                    if gap > 0:
+                        placeholders = []
+                        for _ in range(gap):
+                            self._missing_platform_seq += 1
+                            placeholders.append(f"missing_platform_{self._missing_platform_seq}")
+                        missing.extend(placeholders)
                     self._stalled.update(missing)
                     self._log(f"reflexive world: barrier timeout before round {round_num + 1}; "
                               f"platform(s) {missing or '?'} marked stalled, committing with available deliveries")
@@ -4100,7 +4160,7 @@ class _ReflexiveWorldCoordinator:
         except Exception as _e:  # noqa: BLE001
             self._log(f"reflexive world: deliver failed in round {round_num + 1} (isolated): {_e}")
 
-    async def heartbeat(self, platform: str, round_num: int) -> None:
+    async def heartbeat(self, platform: str, round_num: int, fired_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """Dead / failed round on this platform: advance its watermark without actions."""
         try:
             if self._is_committed(round_num):
@@ -4111,6 +4171,14 @@ class _ReflexiveWorldCoordinator:
                 buf = {"period": self._period_for(round_num), "actions": [], "events": [], "event_keys": set(),
                        "platforms": set()}
                 self._pending[round_num] = buf
+            for ev in fired_events or []:
+                if not isinstance(ev, dict):
+                    continue
+                key = (str(ev.get("date", "") or ""), str(ev.get("content", "") or ""))
+                if key in buf["event_keys"]:
+                    continue
+                buf["event_keys"].add(key)
+                buf["events"].append(ev)
             self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
             await self._try_commit()
         except Exception as _e:  # noqa: BLE001
@@ -5841,7 +5909,7 @@ async def run_twitter_simulation(
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _world_coord is not None:
                 # REFLEXIVE WORLD: a dead round still advances the world (due effects, events)
-                await _world_coord.heartbeat(_ckpt_platform, round_num)
+                await _world_coord.heartbeat(_ckpt_platform, round_num, _scheduled_events_due(event_config, round_num))
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
@@ -5912,7 +5980,7 @@ async def run_twitter_simulation(
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _world_coord is not None:
                 # REFLEXIVE WORLD: the decisions already made still shape the world this round
-                await _world_coord.heartbeat(_ckpt_platform, round_num)
+                await _world_coord.heartbeat(_ckpt_platform, round_num, _scheduled_events_due(event_config, round_num))
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
@@ -6432,7 +6500,7 @@ async def run_reddit_simulation(
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _world_coord is not None:
                 # REFLEXIVE WORLD: a dead round still advances the world (due effects, events)
-                await _world_coord.heartbeat(_ckpt_platform, round_num)
+                await _world_coord.heartbeat(_ckpt_platform, round_num, _scheduled_events_due(event_config, round_num))
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 死轮只推演化水位（无动作交付），防止双平台按轮配对停摆
                 _inband_evo.heartbeat(_ckpt_platform, round_num)
@@ -6503,7 +6571,7 @@ async def run_reddit_simulation(
                     **_supported_log_kwargs(action_logger, "log_round_end", _cal_extra))
             if _world_coord is not None:
                 # REFLEXIVE WORLD: the decisions already made still shape the world this round
-                await _world_coord.heartbeat(_ckpt_platform, round_num)
+                await _world_coord.heartbeat(_ckpt_platform, round_num, _scheduled_events_due(event_config, round_num))
             if _inband_evo is not None:
                 # CAL-TEMPORAL: 失败轮同样只推演化水位（该轮已按 0 动作记账）
                 _inband_evo.heartbeat(_ckpt_platform, round_num)

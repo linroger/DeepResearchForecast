@@ -88,11 +88,12 @@ def test_validate_filters_unknowns_and_types():
             {"variable_id": "Permit status", "new_value": "under review"},          # name instead of id
             {"variable_id": "ghost", "new_value": 1},
             {"variable_id": "regional_capacity", "new_value": "lots"},
+            {"variable_id": "regional_capacity", "delta": "NaN"},
         ],
         "new_variables": [{"name": "Strike risk", "value": "elevated", "kind": "categorical"},
                           {"name": "Bad numeric", "value": "n/a", "kind": "numeric"},
                           {"name": "A"}, {"name": "B"}, {"name": "C"}],
-        "events": [{"description": "Markets react", "kind": "weird", "actors": ["Alpha", "Zed"]}],
+        "events": [{"description": "Markets react", "kind": "weird", "actors": ["Alpha", "Zed"], "variable_ids": 1}],
         "relationship_changes": [{"source": "Alpha Systems", "target": "Grid Regulator", "direction": "closer"},
                                  {"source": "Alpha Systems", "target": "Alpha", "direction": "closer"},
                                  {"source": "Alpha Systems", "target": "Beta Union", "direction": "sideways"}],
@@ -118,8 +119,21 @@ def test_validate_filters_unknowns_and_types():
     assert update["action_resolutions"] == [{"actor": "Alpha Systems", "outcome": "partial", "rationale": ""}]
     assert update["scenario_pressure"] == {"Permit granted": "up"}
     joined = " | ".join(problems)
-    assert "unknown variable 'ghost'" in joined and "non-numeric change" in joined
+    assert "unknown variable 'ghost'" in joined and "duplicate change for 'regional_capacity'" in joined
     assert "unknown actor 'Zed'" in joined and "sideways" in joined and "new variables dropped" in joined
+
+
+def test_validate_rejects_non_finite_numeric_changes():
+    world = _world()
+    world.start_round(1, _PERIOD)
+    update, problems = wu.validate_arbiter_update({
+        "variable_changes": [
+            {"variable_id": "regional_capacity", "delta": "Infinity"},
+            {"variable_id": "regional_capacity", "new_value": "NaN"},
+        ],
+    }, world, world.scenarios)
+    assert update["variable_changes"] == []
+    assert any("non-numeric change for numeric variable" in p for p in problems)
 
 
 def test_run_world_round_applies_arbiter_and_builds_digest():
@@ -183,6 +197,28 @@ def test_run_world_round_survives_arbiter_failure_and_disabled():
     rec3 = wu.run_world_round(world3, 1, _PERIOD, _decisions(), [], llm=FakeLLMClient(json_responses=["garbage"]),
                               rng=random.Random(0), scenarios=world3.scenarios)
     assert rec3["arbiter_status"] == "invalid" and world3.committed_round == 1
+
+    class BadPayload:
+        def chat_json(self, **kwargs):
+            return {"events": [{"description": "Bad", "variable_ids": 1}]}
+
+    world4 = _world()
+    world4.start_round(1, _PERIOD)
+    rec4 = wu.run_world_round(world4, 1, _PERIOD, _decisions(), [], llm=BadPayload(), rng=random.Random(0),
+                              scenarios=world4.scenarios)
+    assert rec4["arbiter_status"] == "applied"
+
+
+def test_overdue_commitments_lapse_before_new_actions():
+    world = _world()
+    alpha = world.actors[0]
+    alpha.add_commitment("Missed milestone", made_round=1, due_round=1)
+    world.start_round(2, _PERIOD)
+    decision = AgentDecision(0, "Alpha Systems", {"id": "public_statement", "label": "Speak", "kind": "communication", "cost": 1},
+                             targets=[], magnitude=0.2, public_statement="Act now.", round_num=2)
+    det = wu.deterministic_round_update(world, 2, _PERIOD, [decision], [], random.Random(0))
+    assert det["commitments_lapsed"] == ["Alpha Systems: Missed milestone"]
+    assert alpha.commitments[0]["status"] == "lapsed"
 
 
 def test_dead_round_commits_with_no_decisions():

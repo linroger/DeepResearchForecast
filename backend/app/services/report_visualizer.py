@@ -3126,6 +3126,7 @@ class ReportVisualizer:
                     continue
             fig = go.Figure()
             plotted = 0
+            round_labels: Dict[int, str] = {}
             for var in (world.get("variables") or [])[:12]:
                 if not isinstance(var, dict) or var.get("kind") != "numeric":
                     continue
@@ -3134,12 +3135,16 @@ class ReportVisualizer:
                 if len(hist) < 2:
                     continue
                 seed = float(hist[0]["value"])
+                if seed in (0.0, -0.0):
+                    continue
                 xs, ys, hover = [], [], []
                 for h in hist:
                     rnd = int(h.get("round") or 0)
-                    xs.append(labels.get(rnd) or (f"period {rnd}" if rnd else "seed"))
+                    label = labels.get(rnd) or (f"period {rnd}" if rnd else "seed")
+                    round_labels[rnd] = label
+                    xs.append(label)
                     raw = float(h["value"])
-                    ys.append(raw / seed * 100.0 if seed not in (0.0, -0.0) else raw)
+                    ys.append(raw / seed * 100.0)
                     unit = str(var.get("unit") or "")
                     hover.append(f"{raw:g} {unit}".strip() + (f" — {h.get('cause')}" if h.get("cause") else ""))
                 fig.add_trace(go.Scatter(
@@ -3152,7 +3157,12 @@ class ReportVisualizer:
             if plotted == 0:
                 return None
             _apply_layout(fig, "Simulated World Variables (indexed, seed = 100)", height=460)
-            fig.update_layout(xaxis_title="Simulated period", yaxis_title="Index (seed value = 100)")
+            category_array = [name for _, name in sorted(round_labels.items(), key=lambda kv: kv[0])]
+            fig.update_layout(
+                xaxis_title="Simulated period",
+                yaxis_title="Index (seed value = 100)",
+                xaxis=dict(categoryorder="array", categoryarray=category_array),
+            )
             return self._save_pair(fig, charts_dir, "world_variables", "world_variables")
         except Exception as exc:  # noqa: BLE001
             logger.debug("build_world_variables_html 失败（跳过该图）：%s", exc)

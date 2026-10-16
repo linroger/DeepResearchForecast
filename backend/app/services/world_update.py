@@ -22,6 +22,7 @@ Once every platform has delivered a round, the coordinator runs ONE world update
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .agent_decision import AgentDecision
@@ -66,9 +67,9 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
         world.start_round(round_num, period)
     scheduled = world.register_scheduled_events(round_num, fired_events)
     rows = _decision_rows(decisions)
+    lapsed = world.lapse_overdue_commitments(round_num)
     action_events = world.register_decisions(round_num, rows)
     fired = world.fire_due_effects(round_num, rng)
-    lapsed = world.lapse_overdue_commitments(round_num)
     return {
         "scheduled_events": [e.description for e in scheduled],
         "actions": [e.description for e in action_events if e.kind == "action"],
@@ -168,9 +169,11 @@ def _num(value: Any) -> Optional[float]:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        out = float(value)
+        return out if math.isfinite(out) else None
     try:
-        return float(str(value).replace(",", "").replace("%", "").strip())
+        out = float(str(value).replace(",", "").replace("%", "").strip())
+        return out if math.isfinite(out) else None
     except (TypeError, ValueError):
         return None
 
@@ -191,6 +194,7 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
     update["narrative"] = _text(raw.get("narrative"), NARRATIVE_MAX_CHARS)
     changes = raw.get("variable_changes")
     if isinstance(changes, list):
+        changed_ids: set = set()
         for ch in changes[:MAX_VARIABLE_CHANGES]:
             if not isinstance(ch, dict):
                 continue
@@ -202,6 +206,9 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                 var = next((v for v in world.variables.values() if normalize_label(v.name) == wanted), None)
             if var is None:
                 problems.append(f"unknown variable '{vid}'")
+                continue
+            if var.id in changed_ids:
+                problems.append(f"duplicate change for '{var.id}'")
                 continue
             row: Dict[str, Any] = {"variable_id": var.id, "rationale": _text(ch.get("rationale"), 200)}
             if var.kind == "numeric":
@@ -232,6 +239,7 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                     continue
                 row["new_value"] = val
             update["variable_changes"].append(row)
+            changed_ids.add(var.id)
     new_vars = raw.get("new_variables")
     if isinstance(new_vars, list):
         for nv in new_vars[:MAX_NEW_VARIABLES]:
@@ -269,9 +277,12 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             kind = _text(ev.get("kind"), 16).casefold()
             if kind not in ("emergent", "consequence", "resolution"):
                 kind = "emergent"
+            var_ids = ev.get("variable_ids")
+            if not isinstance(var_ids, list):
+                var_ids = []
             update["events"].append({"description": _text(ev["description"], 320), "kind": kind,
                                      "actors": _names(ev.get("actors")), "targets": _names(ev.get("targets")),
-                                     "variable_ids": [str(x) for x in (ev.get("variable_ids") or [])
+                                     "variable_ids": [str(x) for x in var_ids
                                                       if str(x) in world.variables][:6]})
     rels = raw.get("relationship_changes")
     if isinstance(rels, list):
@@ -358,7 +369,11 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
     except Exception as exc:  # noqa: BLE001 — a failed arbiter must not break the round
         logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, exc)
         return "failed", {}, [f"llm error: {type(exc).__name__}"]
-    update, problems = validate_arbiter_update(raw, world, scenarios)
+    try:
+        update, problems = validate_arbiter_update(raw, world, scenarios)
+    except Exception as exc:  # noqa: BLE001 — malformed payload must not break round commit
+        logger.warning("world arbiter validation failed in round %s: %s", round_num, exc)
+        return "invalid", {}, [f"validation error: {type(exc).__name__}"]
     if not isinstance(raw, dict):
         return "invalid", update, problems
     return "applied", update, problems

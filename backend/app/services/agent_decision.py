@@ -152,7 +152,7 @@ ACTION_CATALOG: Dict[str, Tuple[ActionTemplate, ...]] = {
     ),
     "regulator_agency": _COMMON + (
         _t("open_inquiry", "Open an investigation, review or inquiry", "legal", 2, 1, "sticky", True),
-        _t("issue_ruling", "Issue a ruling, approval, fine or licence decision", "legal", 3, 1, "irreversible", True),
+        _t("issue_ruling", "Issue a ruling, approval, fine or licence decision", "legal", 2, 1, "irreversible", True),
         _t("propose_rule", "Propose or finalise a rule / standard", "policy", 2, 2, "sticky"),
         _t("grant_waiver", "Grant an exemption, waiver or extension", "policy", 1, 0, "reversible", True),
     ),
@@ -163,7 +163,7 @@ ACTION_CATALOG: Dict[str, Tuple[ActionTemplate, ...]] = {
         _t("block_measure", "Block, delay or condition a measure", "policy", 2, 0, "reversible", True),
     ),
     "central_bank": _COMMON + (
-        _t("rate_move", "Change the policy rate or guidance", "policy", 3, 1, "sticky"),
+        _t("rate_move", "Change the policy rate or guidance", "policy", 2, 1, "sticky"),
         _t("liquidity_tool", "Deploy or withdraw a liquidity / balance-sheet tool", "economic", 2, 1, "sticky"),
         _t("macroprudential", "Tighten or ease macroprudential rules", "policy", 2, 2, "sticky"),
     ),
@@ -178,7 +178,7 @@ ACTION_CATALOG: Dict[str, Tuple[ActionTemplate, ...]] = {
         _t("endorse_oppose", "Endorse or oppose a measure or candidate", "communication", 1, 0, "sticky", True),
     ),
     "firm": _COMMON + (
-        _t("invest_capex", "Commit capital: new plant, capacity, R&D programme", "economic", 3, 2, "sticky"),
+        _t("invest_capex", "Commit capital: new plant, capacity, R&D programme", "economic", 2, 2, "sticky"),
         _t("cut_or_delay", "Cut, delay or divest a project", "economic", 2, 1, "sticky"),
         _t("price_move", "Change pricing, terms or supply allocation", "economic", 1, 0, "reversible", True),
         _t("product_launch", "Launch a product, service or technology milestone", "operational", 2, 1, "irreversible"),
@@ -204,7 +204,7 @@ ACTION_CATALOG: Dict[str, Tuple[ActionTemplate, ...]] = {
         _t("coordinate_members", "Coordinate member action (pledge, boycott, standard adoption)", "coalition", 2, 1, "sticky"),
     ),
     "labor_union": _COMMON + (
-        _t("strike_action", "Call or threaten a strike / work stoppage", "coercive", 3, 0, "sticky", True),
+        _t("strike_action", "Call or threaten a strike / work stoppage", "coercive", 2, 0, "sticky", True),
         _t("bargain", "Enter or escalate collective bargaining", "coalition", 2, 1, "reversible", True),
         _t("mobilize", "Mobilise members or allies", "communication", 1, 0),
     ),
@@ -387,8 +387,7 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
               "kind": kind, "cost": cost, "lag": lag, "reversibility": "sticky", "targets_actor": False,
               "why": "a plan or likely action documented in your dossier"})
     # 3) class catalogue filtered by capacity and prior irreversible moves
-    taken_irreversible = {c.get("option_id") for c in [actor.last_action or {}]
-                          if c.get("reversibility") == "irreversible"}
+    taken_irreversible = set(getattr(actor, "irreversible_option_ids", []) or [])
     for tmpl in catalog_for(actor.agency_class):
         if tmpl.id in taken_irreversible:
             continue
@@ -554,7 +553,7 @@ class AgentDecision:
             return None
         row: Dict[str, Any] = {"agent_id": self.agent_id, "scenario": self.scenario,
                                "magnitude": round(max(0.1, self.magnitude), 3),
-                               "confidence": round(self.scenario_confidence or 0.6, 3), "round": self.round}
+                               "confidence": round(self.scenario_confidence, 3), "round": self.round}
         if outcome_power is not None:
             row["outcome_power"] = outcome_power
         if self.period_end:
@@ -725,4 +724,3 @@ def summarize_decisions(decisions: Iterable[AgentDecision]) -> Dict[str, int]:
         if d.option.get("id") == HOLD_OPTION_ID:
             counts["hold"] += 1
     return counts
-
