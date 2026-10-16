@@ -26,7 +26,7 @@ World preparation accepts an explicit `world_spec`, or `world_policy_spec` for b
 
 The simulation tab shows World, Decisions/Actions, Commitments and Assumptions with public, actor and analyst views. Reports consume one frozen result. `diagnostic_only` displays conditional pathways without changing evidence-only probability inputs; `no_update` omits world reasoning and plots. These are conditional simulations, not calibrated forecasts. See the [source-linked architecture and diagrams](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md), [executable contracts](docs/handoff/reflexive-world-simulation/implementation-contract.md) and [current verification/release status](docs/handoff/reflexive-world-simulation/handoff.md).
 
-The first live study completed 30 of 36 cases; seven paired responsiveness contrasts passed, seven failed and four were incomplete. The promotion gate did not pass, so world mode remains experimental opt-in. See the [evaluation and delivery report](docs/handoff/reflexive-world-simulation/DELIVERY.md) for the unchanged scores, review findings and budget accounting.
+The latest behavior rerun completed and independently reviewed all 36 cases. All six trade comparisons passed after correcting recurring demand and action handling; overall, 16 of 18 required comparisons passed. Investment choice consistency and coalition goal timing remain unresolved, so world mode stays experimental opt-in. The original study and first v2 rerun are preserved unchanged. See the [final repair and rerun report](docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/REPORT.md) for source links, failed cases, verification and the original USD25 budget reconciliation.
 
 ```mermaid
 flowchart TB

@@ -66,6 +66,13 @@ _SYSTEM = (
     'If permitted sources conflict, acknowledge the disagreement instead of inventing '
     'a source or certainty. Explain acting or waiting using the stated objective and '
     'constraints; do not invent an agreement, approval or recurring obligation. '
+    'The current decision period is [simulatedAt, periodEnd): it includes simulatedAt '
+    'and excludes periodEnd. Events or settlements before simulatedAt remain historical '
+    'even when their records are still visible. Use event/effective time for when something '
+    'happened; message delivery time says when information arrived. A planned or due action '
+    'is not a completed action. Choosing to wait does not mean a listed action is unavailable; '
+    'distinguish your choice from an actual visible restriction. Keep resource claims and '
+    'arithmetic consistent with visible quantities, and describe the intents you actually submit. '
     'Stable objectives and values cannot '
     'be changed. rationale is at most 1200 characters; status is acted, wait or unable. '
     'Use intents=[] for an explicit wait or inability. '
@@ -489,6 +496,51 @@ class StrictHTTPPolicy(_StrictHTTPTransport):
         _, upper = self._request(observation, feedback=feedback)
         return {'tokens': upper + self.max_output, 'costUsd': self._cost(upper, self.max_output)}
 
+    def _validate_visible_input_grammar(self, decision, observation):
+        """Fresh HTTP only: declared grammar, never hidden feasibility or replay."""
+        from .kernel import _input_values
+
+        intents = decision.get('intents')
+        require(isinstance(intents, list), 'invalid_decision', 'Actor intents must be an array')
+        menu = {option['templateId']: option for option in observation['options']}
+        for intent in intents:
+            require(isinstance(intent, dict), 'invalid_intent', 'Actor intent must be an object')
+            tid, operation = intent.get('templateId'), intent.get('operation', 'execute')
+            require(isinstance(tid, str) and isinstance(operation, str)
+                    and tid in menu and operation in menu[tid]['operations'],
+                    'invalid_intent', 'Action is not in the actor\'s visible menu')
+            # Use the exact shared scalar grammar. None skips only private roster
+            # membership; ignore the normalized return so model inputs stay intact.
+            _input_values(menu[tid], {**intent, 'operation': operation}, None, self._max_message_chars)
+            if operation not in {'accept', 'reject', 'defer', 'counter', 'withdraw'}:
+                continue
+            withdraw = operation == 'withdraw'
+            require(menu[tid]['kind'] == 'agreement'
+                    and observation['phase'] == ('proposal' if withdraw else 'response'),
+                    'invalid_intent', 'Offer operation is not available in this phase')
+            records = observation['ownOffers'] if withdraw else observation['inbox']
+            reference = intent.get('interactionId')
+            matches = [record for record in records if record.get('interactionId') == reference]
+            require(isinstance(reference, str) and len(matches) == 1
+                    and matches[0].get('templateId') == tid,
+                    'unavailable_offer', 'Offer is unavailable in this observation')
+            offer = matches[0]
+            aid = observation['actorId']
+            require(visible_to(offer, aid) and (
+                offer.get('proposerId') == aid if withdraw else
+                aid in offer.get('recipientIds', []) and aid not in offer.get('acceptedBy', [])
+            ), 'unavailable_offer', 'Offer is unavailable in this observation')
+            now = parse_time(observation['simulatedAt'])
+            require(offer.get('status') == 'pending' and now < parse_time(offer.get('expiresAt')),
+                    'closed_offer', 'Offer is no longer pending')
+            if not withdraw:
+                require(parse_time(offer.get('deliverAt')) <= now
+                        and not (offer.get('createdRound') == observation['round']
+                                 and offer.get('createdPhase') == 'response'),
+                        'undelivered_offer', 'Offer is not eligible in this response phase')
+            require(type(intent.get('termsVersion')) is int and intent['termsVersion'] == offer.get('termsVersion'),
+                    'stale_terms', 'Response must identify the exact terms version')
+
     def decide(self, observation, *, feedback=None):
         from .controller import PolicyResponse
 
@@ -499,6 +551,13 @@ class StrictHTTPPolicy(_StrictHTTPTransport):
         actor_id, observation_id = sent_observation['actorId'], sent_observation['observationId']
         response = self._dispatch(messages, upper)
         decision = {**response.decision, 'actorId': actor_id, 'observationId': observation_id}
+        try:
+            self._validate_visible_input_grammar(decision, sent_observation)
+        except WorldError as error:
+            raise PolicyFailure(error.code, str(error), usage=response.usage) from None
+        except Exception:
+            raise PolicyFailure('policy_input_validation_failed', 'Actor public input validation failed',
+                                usage=response.usage) from None
         return PolicyResponse(decision, response.usage)
 
 

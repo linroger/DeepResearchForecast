@@ -306,7 +306,8 @@ def _validate_flow_precision(spec: dict) -> None:
                             "Flow rates and chronological boundaries exceed exact twelve-place accounting")
 
 
-def _input_values(template: dict, intent: dict, actors: dict, max_chars: int) -> dict:
+def _input_values(template: dict, intent: dict, actors: dict | None, max_chars: int) -> dict:
+    """Validate declared inputs; None omits only private roster membership."""
     supplied, schema = intent.get("parameters", {}), template["inputs"]
     require(isinstance(supplied, dict) and set(supplied) <= set(schema), "invalid_input", "Unsupported action input")
     # Empty consent/reject/defer/withdraw has no new offer inputs.
@@ -331,7 +332,7 @@ def _input_values(template: dict, intent: dict, actors: dict, max_chars: int) ->
         else:
             require(isinstance(value, str), "invalid_input", "String input required")
             require(len(value) <= max_chars, "invalid_input", "Action text exceeds declared limit")
-            require(kind != "actor" or value in actors, "invalid_input", "Unknown actor input")
+            require(kind != "actor" or actors is None or value in actors, "invalid_input", "Unknown actor input")
             measure = Decimal(len(value))
         if measure is not None:
             require("min" not in field or measure >= decimal(field["min"]), "invalid_input", "Input below declared minimum")

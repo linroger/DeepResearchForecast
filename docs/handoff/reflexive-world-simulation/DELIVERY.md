@@ -1,5 +1,7 @@
 # Reflexive world simulation: delivery and evaluation
 
+> Current continuation: the [final behavior repair and rerun report](behavior-rerun/public-grammar/REPORT.md) records36/36completed and independently reviewed,16/18contrasts, all6tradepairs passed, and retained investment/coalition failures. World-v1 remains opt-in. Global conservative exposure isUSD18.529952955664 of the original25; no live batch is active. The original delivery below is retained as historical evidence.
+
 The `world-v1` engine implements the requested evolving-world feedback loop on `codex/reflexive-world-simulation`, based on main `8852ce123fa15a6b4f4c3e6e4e492435c0e3137b`. Implementation commit: `e902aedb1a8307c024da950060c4d7bb30f34220`. It is available by explicit opt-in. The live behavior gate did not pass, so `oasis-legacy` remains the default and the overall feature's promotion flag remains false. This delivery does not claim calibrated forecasts or validated general realism.
 
 The [source-linked architecture report and diagrams](ARCHITECTURE.md) explain research, the DeerFlow harness, actor ontology, Graphiti, world simulation and forecasting end to end. The [implementation contract](implementation-contract.md) documents executable interfaces. The [handoff](handoff.md) preserves decisions, failures, review closures and follow-up instructions.

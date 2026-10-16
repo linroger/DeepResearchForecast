@@ -1,0 +1,149 @@
+{
+  "manifestHash": "6c5be0e1f3dbabe812bd7e8a5db58fa7ef26de093a6c67af571d86ef5b426081",
+  "reviews": [
+    {
+      "evaluationId": "m5-e2-investment-v1-s0-reflexive",
+      "traceHash": "ce6d35a9ee672dea5eaf5d31b80d194b85f18d0c1b4fa7165f672eb8d61bd468",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 f74e8a52a70e5fccaf44049740f5a3b7 correctly observes capacity 3/cash 28, explains a 2-for-2 target and submits exactly quantity=price=2. Its prior-offer reference matches accepted offer 2d3d71e15e7b50ac89f7b810e4484306 and settled commitment 880b0113dceb533c984acccb7c238d57, so no pending-order wait applies. Round-3 c4e43c2e2e1d5c1a927d4c3f918186a2 correctly uses capacity 5/cash 26 to explain and submit 4-for-4. Both prior offers are accepted/settled and explicitly historical. Both focal proposal intents are accepted; new supplier consent remains conditional. No delivered message is cited.",
+      "evidenceRefs": [
+        "f74e8a52a70e5fccaf44049740f5a3b7",
+        "c4e43c2e2e1d5c1a927d4c3f918186a2"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v1-s0-external-feedback-ablation",
+      "traceHash": "5bc24d9cacb2cb1bc6efe2c68254c0c7e8599caa1661ef03bf5e036dbe983686",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal buyer rationales agree with their actual observations and purchase intents. Round-2 f74e8a52a70e5fccaf44049740f5a3b7 sees capacity 3/cash 28 and explains/submits 2-for-2; its prior settlement date 2030-01-01 matches the historical commitment. Round-3 c4e43c2e2e1d5c1a927d4c3f918186a2 sees masked capacity 3/cash 26 and again explains/submits 2-for-2. Prior offers are accepted with settled commitments rather than pending, supporting fresh proposals under the declared guard. Both focal intent resolutions are accepted. The explanations use visible metrics, own cash and consent history without invented authority or disclosure.",
+      "evidenceRefs": [
+        "f74e8a52a70e5fccaf44049740f5a3b7",
+        "c4e43c2e2e1d5c1a927d4c3f918186a2"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v1-s1-reflexive",
+      "traceHash": "ebd616b27fad496e1a58b522dc71055456cb63841d3731978a6eaa53c688e7f3",
+      "score": 0,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Material disagreement at round-2 decision 58f1c8ed4262509d9f7554825ad75e3d: its observation has capacity 3 and cash 28, and its rationale explicitly computes 3-1=2 and says it proposes 2 goods for 2 currency. Actual intent d3230b7592ec5ae2902d0468beb268dc instead proposes quantity=price=3, with an accepted resolution. The next observation confirms offer d543311e36675bbdb5caecaf78761857 was accepted at 3-for-3 and commitment 9e923425cf435288954b35120d277d98 settled those transfers (cash 25, stock 5). Round-3 23a89f537f935c848c5a2038a628f895 accurately explains capacity 5/cash 25 and submits 4-for-4, acknowledging earlier 2- and 3-good purchases. The accurate second explanation does not remove the first material contradiction. Raw actions remain 3 then 4; no automated score/contrast correction is made.",
+      "evidenceRefs": [
+        "58f1c8ed4262509d9f7554825ad75e3d",
+        "23a89f537f935c848c5a2038a628f895"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v1-s1-external-feedback-ablation",
+      "traceHash": "84bc4314093e26a51f30e3a9a932b2b5837a30f23fdc16243f6988f00c316bc5",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 58f1c8ed4262509d9f7554825ad75e3d accurately observes capacity 3/cash 27 and submits 2-for-2. It explicitly distinguishes the prior accepted/settled offer's different terms, quantity 2/price 3, and correctly finds no pending match. Round-3 23a89f537f935c848c5a2038a628f895 observes masked capacity 3/cash 25 and explains/submits 2-for-2; both prior commitments are settled. Both focal proposal resolutions are accepted, schema bounds and current cash are described accurately, and supplier consent for the new offer is still conditional. The earlier 2-for-3 trade is nonfocal and is not silently relabeled as an identical 2-for-2 trade.",
+      "evidenceRefs": [
+        "58f1c8ed4262509d9f7554825ad75e3d",
+        "23a89f537f935c848c5a2038a628f895"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v2-s0-reflexive",
+      "traceHash": "56ccca4ac69d76427475bd70119ac0652b6c658fef5eab9b3a022cbab269c6bc",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 6a0cf0ebddd7502c9156ef12d35f7a36 correctly explains capacity 4 minus one, cash 27 with zero reserved, and submits 3-for-3. Its description of the prior purchase as settled on 2030-01-01 matches commitment dc2a633fdac45a70bd402656e75720c6, rather than treating it as current pending demand. Round-3 89d70dec431956af9329708b647f8e2c correctly observes capacity 7/cash 24 and explains/submits 6-for-6. The two earlier 3-for-3 offers are accepted with settled commitments, so no pending match exists. Both focal intent resolutions are accepted and no absent message or hidden balance is used. A recovered generation failure occurred in round 1, outside these focal slots; its cause is not retained.",
+      "evidenceRefs": [
+        "6a0cf0ebddd7502c9156ef12d35f7a36",
+        "89d70dec431956af9329708b647f8e2c"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v2-s0-external-feedback-ablation",
+      "traceHash": "84aa2c25940f4980dc127891b6e81db2662f8cd55fd492de631bbc526a68307a",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 6a0cf0ebddd7502c9156ef12d35f7a36 accurately uses capacity 4/cash 27 for a fresh 3-for-3 proposal and identifies the prior 3-for-3 settlement as historical, not pending. Round-3 89d70dec431956af9329708b647f8e2c accurately uses masked capacity 4/cash 24 and submits exactly one new 3-for-3 purchase. The prior offers are accepted with settled commitments on 2030-01-01 and 2030-01-02, supporting both the rationale and linked belief updates about no pending match. Both focal proposals are accepted. New consent remains conditional and both delivered-message lists are empty.",
+      "evidenceRefs": [
+        "6a0cf0ebddd7502c9156ef12d35f7a36",
+        "89d70dec431956af9329708b647f8e2c"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v2-s1-reflexive",
+      "traceHash": "36830794a9d641bbad0d2c472d914ff98ba97da0a43be706d2a19fdda0257025",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 ba8f90e2e8b25f7ba40aa8e76dc691ef observes capacity 4/cash 27, explains the 3-for-3 target and submits exactly those terms. Its prior accepted/settled claim is supported by offer 48fc926a9d2256fa89c87e9d4402a7ca and commitment 62a2988aa3d952e988a4bcfcc864d535. Round-3 3d8aca96ed125bcd9f77c889c65a763b observes capacity 7/cash 24, explains and submits 6-for-6, and correctly describes the two historical offers as settled 3-for-3 purchases rather than pending orders on current terms. Both focal resolutions are accepted, and the linked belief states the current visible capacity and cash accurately.",
+      "evidenceRefs": [
+        "ba8f90e2e8b25f7ba40aa8e76dc691ef",
+        "3d8aca96ed125bcd9f77c889c65a763b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v2-s1-external-feedback-ablation",
+      "traceHash": "3efb4da694389b065136c51bd38833cef477b9e91143fc5e364dca579282caca",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal explanations match the buyer's actual metric, resources, pending-order guard and intents. Round-2 ba8f90e2e8b25f7ba40aa8e76dc691ef sees capacity 4/cash 27 and submits the described 3-for-3 purchase after a historical accepted/settled 3-for-3 offer. Round-3 3d8aca96ed125bcd9f77c889c65a763b sees masked capacity 4/cash 24 and again explains/submits 3-for-3; both earlier offers have acceptedBy producer and settled commitments, so no unexpired pending match remains. Both proposal resolutions are accepted, without a claim that the new proposal has already settled or that hidden producer resources were observed.",
+      "evidenceRefs": [
+        "ba8f90e2e8b25f7ba40aa8e76dc691ef",
+        "3d8aca96ed125bcd9f77c889c65a763b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v3-s0-reflexive",
+      "traceHash": "630032c8b9d128746a379dfef99b1c89d0f10fb2ae1fc615dc9994cc08fb867f",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 3a144192dd4650ebbd4c7e77e6d2107d accurately observes capacity 5/cash 26, explains and submits 4-for-4, and calls the accepted/settled earlier 4-for-4 offer historical rather than pending. Round-3 6c7b56887dd75d738ed2157667eac7f9 accurately observes capacity 9/cash 22, explains and submits 8-for-8 within quantity 1-10 and price 1-20, and correctly identifies the two prior purchases as 4-for-4 rather than identical new terms. Both focal resolutions are accepted and new consent remains conditional. A round-2 producer response required a second generation attempt, but that does not change the final buyer explanation evidence or establish the failed attempt's cause.",
+      "evidenceRefs": [
+        "3a144192dd4650ebbd4c7e77e6d2107d",
+        "6c7b56887dd75d738ed2157667eac7f9"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v3-s0-external-feedback-ablation",
+      "traceHash": "97b01bc6a7b5086daa30a1002dc2629ab50a5f03e14dfdb5296cbe9ff409c564",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 3a144192dd4650ebbd4c7e77e6d2107d correctly observes capacity 5/cash 26 and submits its described 4-for-4 purchase, with the earlier same-term offer accepted and settled on 2030-01-01. Round-3 6c7b56887dd75d738ed2157667eac7f9 sees masked capacity 5/cash 22 and again explains/submits 4-for-4; both prior offers are accepted/settled rather than pending. Both focal resolutions are accepted. The rationale expressly distinguishes the new proposal from supplier acceptance, accurately grounding the fresh action in current visible resources and the pending-offer guard.",
+      "evidenceRefs": [
+        "3a144192dd4650ebbd4c7e77e6d2107d",
+        "6c7b56887dd75d738ed2157667eac7f9"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v3-s1-reflexive",
+      "traceHash": "dcb7105a5718ae36fce4c17544d59721ac5e4e78280de35d26c32d3673a53b6a",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 126974a12b72592ca0d17cc9b406afff correctly observes capacity 5/cash 26, explains and submits 4-for-4, and dates the prior accepted/settled 4-for-4 offer to 2030-01-01. Round-3 6689b4e8ed695f2e87469362810c1da0 correctly observes capacity 9/cash 22 and submits the described 8-for-8 proposal; prior settled 4-for-4 offers are not treated as pending orders on the new desired terms. Both focal intent resolutions are accepted. Capacity is attributed to the actual metric, no absent message is cited, and supplier consent is not claimed in advance. The recorded recovered failure is in round 4, outside the focal slots.",
+      "evidenceRefs": [
+        "126974a12b72592ca0d17cc9b406afff",
+        "6689b4e8ed695f2e87469362810c1da0"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-investment-v3-s1-external-feedback-ablation",
+      "traceHash": "cd2abafb94983f0bc5517fd00f07b4db22513f871e44e2865dceb362a1f937eb",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 126974a12b72592ca0d17cc9b406afff accurately explains capacity 5/cash 26 and submits 4-for-4 within the visible schema. Its reference to prior offer 6410a6c2... and settlement on 2030-01-01 matches the record. Round-3 6689b4e8ed695f2e87469362810c1da0 sees masked capacity 5/cash 22 and explains/submits 4-for-4. Its two prior identical-term offers are both accepted with settled commitments, supporting the absence of a pending duplicate. Both focal resolutions are accepted and no delivered messages are present. A known-metered round-4 generation failure recovered on the second attempt; no cause is inferred.",
+      "evidenceRefs": [
+        "126974a12b72592ca0d17cc9b406afff",
+        "6689b4e8ed695f2e87469362810c1da0"
+      ]
+    }
+  ]
+}

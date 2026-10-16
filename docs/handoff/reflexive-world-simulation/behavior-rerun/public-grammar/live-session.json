@@ -1,0 +1,21 @@
+{
+  "sessionId": 47864,
+  "output": "/private/tmp/drf-world-behavior-v2-public-grammar-20261016",
+  "manifestHash": "6c5be0e1f3dbabe812bd7e8a5db58fa7ef26de093a6c67af571d86ef5b426081",
+  "status": "completed_reviewed_closed",
+  "maxUsd": "11.285825044336",
+  "priorConservativeUsd": "13.714174955664",
+  "sourceFreeze": "No source/test/launcher/pricing edits while this batch runs. Monitor existing session/output; never reset or replace cases.",
+  "reviewers": {
+    "investment": "01a145b6-1094-74e3-b1be-c67cd7b50260",
+    "trade": "01a145c2-9a84-7070-bf66-1129a6fcd070",
+    "coalition": "01a145c2-9b3c-7171-9f1e-95de9e722f99"
+  },
+  "exitCode": 0,
+  "finishedUtc": "2026-10-16T20:15:08.978620+00:00",
+  "closedReportSha256": "3c37b6b71fd407d3fa9e87d4efcba46547eb60e0617b73a014124003e4b1f74e",
+  "reviewedCases": 36,
+  "contrastGate": "failed",
+  "rubricGate": "passed",
+  "furtherDispatchAuthorizedByThisRecord": false
+}

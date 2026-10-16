@@ -26,7 +26,7 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
 
-首次真实模型评估完成了 36 个案例中的 30 个；成对响应性比较中 7 对通过、7 对失败、4 对不完整。发布门未通过，因此世界模式仍为实验性显式启用功能。原始评分、审查发现与预算核算见[评估与交付报告](docs/handoff/reflexive-world-simulation/DELIVERY.md)。
+最新行为复测完成了全部 36 个案例及独立审查。修复逐期需求与行动处理后，交易领域的 6 对比较全部通过；总体 18 对必需比较中有 16 对通过。投资行动与解释的一致性、联盟行动的目标触发时机仍存在问题，因此世界模式继续保持实验性显式启用。原始研究与首次 v2 复测结果均原样保留。源码链接、失败案例、验证证据及原始 25 美元预算核算见[最终修复与复测报告](docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/REPORT.md)。
 
 ```mermaid
 flowchart TB

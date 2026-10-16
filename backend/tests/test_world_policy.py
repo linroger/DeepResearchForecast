@@ -753,7 +753,7 @@ def test_pinned_reasoning_effort_is_exact_optional_sdk_field(
         spec['policy']['reasoningEffort'] = effort
     monkeypatch.setenv('LLM_FALLBACK_REASONING_EFFORT', 'high')
     policy_type = StrictHTTPPolicy if mode == 'actor' else StrictHTTPModeler
-    case = boundary(spec=spec, policy_type=policy_type, content='{}')
+    case = boundary(spec=spec, policy_type=policy_type, content='{"intents":[]}' if mode == 'actor' else '{}')
     request = actor_case.observation if mode == 'actor' else modeler_case.messages
     reservation = case.policy.reservation(request)
     response = case.policy.decide(request)
@@ -1014,14 +1014,17 @@ def test_identity_binding_does_not_repair_foreign_nested_provenance(actor_case, 
 
 def test_identity_binding_cannot_authorize_foreign_action_capabilities(actor_case, boundary):
     from app.services.world_simulation.contracts import WorldError, validate_decision
+    from app.services.world_simulation.policy import PolicyFailure
 
     case = boundary(content=json.dumps({'actorId': 'producer', 'observationId': 'producer-view',
                                        'intents': [{'templateId': 'expand', 'operation': 'execute'}]}))
-    response = case.policy.decide(actor_case.observation)
-    assert response.decision['actorId'] == 'buyer'
-    assert response.decision['intents'][0]['templateId'] == 'expand'
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(actor_case.observation)
+    assert failed.value.code == 'invalid_intent'
+    assert failed.value.usage == {'tokens': 140, 'costUsd': '0.000560000000'}
+    raw = {**_decision(actor_case.observation), 'intents': [{'templateId': 'expand', 'operation': 'execute'}]}
     with pytest.raises(WorldError) as caught:
-        validate_decision(actor_case.spec, response.decision, 'buyer', actor_case.observation, phase='proposal')
+        validate_decision(actor_case.spec, raw, 'buyer', actor_case.observation, phase='proposal')
     assert caught.value.code == 'invalid_intent' and len(case.sent) == 1
 
 
@@ -1168,6 +1171,7 @@ def test_sdk_protocol_invalid_consent_still_rejects_without_partial_effects(
         sdk_protocol_offer, mistake, expected_code):
     from app.services.world_simulation.contracts import validate_decision
     from app.services.world_simulation.kernel import resolve_round
+    from app.services.world_simulation.policy import PolicyFailure
 
     fixture = sdk_protocol_offer
     offer = fixture.offer
@@ -1182,9 +1186,14 @@ def test_sdk_protocol_invalid_consent_still_rejects_without_partial_effects(
     else:
         intent['termsVersion'] += 1
     fixture.case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
-    response = fixture.case.policy.decide(fixture.recipient)
-    assert response.decision['intents'][0] == intent  # The transport does not guess a repair.
-    normalized = validate_decision(fixture.spec, response.decision, 'producer', fixture.recipient, phase='response')
+    with pytest.raises(PolicyFailure) as failed:
+        fixture.case.policy.decide(fixture.recipient)
+    assert failed.value.code == expected_code
+    assert failed.value.usage == {'tokens': 140, 'costUsd': '0.000560000000'}
+    # Old recorded decisions still pass unchanged shared admission and retain
+    # their kernel rejection; only a newly dispatched HTTP reply fails earlier.
+    raw = {**_decision(fixture.recipient), 'intents': [intent]}
+    normalized = validate_decision(fixture.spec, raw, 'producer', fixture.recipient, phase='response')
     result = resolve_round(fixture.spec, fixture.initial, [fixture.proposal, normalized], 1)
     resolution = next(row for row in result['resolutions'] if row['intentId'] == normalized['intents'][0]['intentId'])
     assert resolution['accepted'] is False and resolution['code'] == expected_code
@@ -1222,6 +1231,7 @@ def test_sdk_protocol_overmaximum_request_is_rejected_not_clamped(actor_case, bo
     from app.services.world_simulation.contracts import initial_snapshot, validate_decision
     from app.services.world_simulation.kernel import resolve_round
     from app.services.world_simulation.observations import build_observation
+    from app.services.world_simulation.policy import PolicyFailure
 
     spec = deepcopy(actor_case.spec)
     spec['flows'] = []
@@ -1230,9 +1240,13 @@ def test_sdk_protocol_overmaximum_request_is_rejected_not_clamped(actor_case, bo
     case = boundary(spec=spec, content=json.dumps({'intents': [
         {'templateId': 'purchase', 'operation': 'propose', 'parameters': {'quantity': '11', 'price': '3'}},
     ]}))
-    response = case.policy.decide(observation)
-    assert response.decision['intents'][0]['parameters']['quantity'] == '11'
-    normalized = validate_decision(spec, response.decision, 'buyer', observation, phase='proposal')
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(observation)
+    assert failed.value.code == 'invalid_input'
+    assert failed.value.usage == {'tokens': 140, 'costUsd': '0.000560000000'}
+    raw = {**_decision(observation), 'intents': json.loads(case.body['choices'][0]['message']['content'])['intents']}
+    assert raw['intents'][0]['parameters']['quantity'] == '11'
+    normalized = validate_decision(spec, raw, 'buyer', observation, phase='proposal')
     result = resolve_round(spec, initial, [normalized], 1)
     assert result['resolutions'][0]['accepted'] is False
     assert result['resolutions'][0]['code'] == 'invalid_input'
@@ -1284,3 +1298,372 @@ def test_sdk_protocol_coalition_consent_is_separate_from_own_vote_and_authority(
     assert result['snapshot']['accounts'] == initial['accounts']
     assert result['snapshot']['rules']['program_authorized']['value'] is False
     assert len(case.sent) == 3
+
+
+def _public_grammar_case(actor_case, boundary, schema, parameters, *, content_factory=None):
+    """A real projected message option with declared auxiliary input fields."""
+    from app.services.world_simulation.contracts import initial_snapshot
+    from app.services.world_simulation.observations import build_observation
+
+    spec = deepcopy(actor_case.spec)
+    option = next(item for item in spec['actionCatalog'] if item['templateId'] == 'communicate')
+    option['inputs'] = {'text': {'type': 'string', 'required': True}, **schema}
+    observation = build_observation(spec, initial_snapshot(spec), 'buyer', 1)
+    raw = {'intents': [{'templateId': 'communicate', 'parameters': parameters}]}
+    case = boundary(spec=spec, content=json.dumps(raw), content_factory=content_factory)
+    return case, observation, raw
+
+
+@pytest.mark.parametrize('field,value', [
+    ({'type': 'decimal', 'required': True, 'min': '1', 'max': '3', 'enum': ['2']}, '2.00'),
+    ({'type': 'decimal', 'min': '1', 'max': '3'}, 2),
+    ({'type': 'integer', 'required': True, 'min': '1', 'max': '3', 'enum': [2]}, 2),
+    ({'type': 'boolean', 'required': True}, True),
+    ({'type': 'string', 'min': '1', 'max': '5', 'enum': ['fine']}, 'fine'),
+    ({'type': 'actor', 'max': '64'}, 'unlisted_actor_reference'),
+    ({'type': 'actor', 'enum': ['buyer']}, 'buyer'),
+])
+def test_public_grammar_accepts_declared_values_without_normalizing_or_private_membership(
+        actor_case, boundary, field, value):
+    params = {'text': 'status', 'value': value}
+    case, observation, raw = _public_grammar_case(actor_case, boundary, {'value': field}, params)
+    result = case.policy.decide(observation)
+    assert result.decision['intents'] == raw['intents']
+    assert result.usage == {'tokens': 140, 'costUsd': '0.000560000000'}
+    assert len(case.sent) == 1
+    prompt = json.loads(case.sent[0].content)['messages'][0]['content']
+    assert 'current decision period is [simulatedAt, periodEnd)' in prompt
+    assert 'Events or settlements before simulatedAt remain historical' in prompt
+    assert 'Choosing to wait does not mean a listed action is unavailable' in prompt
+    assert 'Keep resource claims and arithmetic consistent with visible quantities' in prompt
+
+
+@pytest.mark.parametrize('field,value,code', [
+    ({'type': 'decimal'}, 'not-a-number', 'invalid_quantity'),
+    ({'type': 'decimal'}, '1e31', 'invalid_quantity'),
+    ({'type': 'decimal'}, '1.0000000000001', 'invalid_quantity'),
+    ({'type': 'decimal', 'min': '1'}, '0', 'invalid_input'),
+    ({'type': 'decimal', 'max': '3'}, '4', 'invalid_input'),
+    ({'type': 'decimal', 'enum': ['2']}, '3', 'invalid_input'),
+    ({'type': 'integer'}, True, 'invalid_input'),
+    ({'type': 'integer'}, '2', 'invalid_input'),
+    ({'type': 'integer', 'min': '1'}, 0, 'invalid_input'),
+    ({'type': 'integer', 'max': '3'}, 4, 'invalid_input'),
+    ({'type': 'integer', 'enum': [2]}, 3, 'invalid_input'),
+    ({'type': 'boolean'}, 1, 'invalid_input'),
+    ({'type': 'boolean'}, 'true', 'invalid_input'),
+    ({'type': 'string'}, 2, 'invalid_input'),
+    ({'type': 'string', 'min': '1'}, '', 'invalid_input'),
+    ({'type': 'string', 'max': '3'}, 'long', 'invalid_input'),
+    ({'type': 'string', 'enum': ['fine']}, 'nope', 'invalid_input'),
+    ({'type': 'string'}, 'x' * 1201, 'invalid_input'),
+    ({'type': 'actor'}, True, 'invalid_input'),
+    ({'type': 'actor', 'enum': ['buyer']}, 'unlisted_actor_reference', 'invalid_input'),
+])
+def test_public_grammar_failure_retains_known_usage(actor_case, boundary, field, value, code):
+    from app.services.world_simulation.policy import PolicyFailure
+
+    case, observation, _ = _public_grammar_case(
+        actor_case, boundary, {'value': field}, {'text': 'status', 'value': value})
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(observation)
+    assert failed.value.code == code
+    assert failed.value.usage == {'tokens': 140, 'costUsd': '0.000560000000'}
+    assert len(case.sent) == 1
+
+
+@pytest.mark.parametrize('parameters', [None, [], {'text': 'status'}, {'text': 'status', 'value': 2, 'extra': 1}])
+def test_public_grammar_requires_declared_parameter_object_and_fields(actor_case, boundary, parameters):
+    from app.services.world_simulation.policy import PolicyFailure
+
+    case, observation, _ = _public_grammar_case(
+        actor_case, boundary, {'value': {'type': 'integer', 'required': True}}, parameters)
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(observation)
+    assert failed.value.code == 'invalid_input' and failed.value.usage['tokens'] == 140
+    assert len(case.sent) == 1
+
+
+def test_public_grammar_unexpected_error_has_known_usage_and_no_raw_error(actor_case, boundary, monkeypatch):
+    from app.services.world_simulation import kernel
+    from app.services.world_simulation.policy import PolicyFailure
+
+    case, observation, _ = _public_grammar_case(actor_case, boundary, {}, {'text': 'status'})
+    def broken(*args):
+        raise RuntimeError('PRIVATE_INTERNAL_EXCEPTION')
+    monkeypatch.setattr(kernel, '_input_values', broken)
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(observation)
+    assert failed.value.code == 'policy_input_validation_failed'
+    assert failed.value.usage['tokens'] == 140 and len(case.sent) == 1
+    assert 'PRIVATE_INTERNAL_EXCEPTION' not in str(failed.value)
+    assert failed.value.__suppress_context__
+
+
+@pytest.mark.parametrize('operation', ['reject', 'defer'])
+def test_public_grammar_exact_delivered_response_is_permitted(sdk_protocol_offer, operation):
+    fixture = sdk_protocol_offer
+    offer = fixture.offer
+    raw = {'intents': [{'templateId': offer['templateId'], 'operation': operation, 'parameters': {},
+                        'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}]}
+    fixture.case.body['choices'][0]['message']['content'] = json.dumps(raw)
+    result = fixture.case.policy.decide(fixture.recipient)
+    assert result.decision['intents'] == raw['intents']
+    assert result.usage['tokens'] == 140 and len(fixture.case.sent) == 2
+
+
+@pytest.mark.parametrize('change,code', [
+    ('missing_id', 'unavailable_offer'), ('missing_version', 'stale_terms'), ('boolean_version', 'stale_terms'),
+    ('mixed_record', 'unavailable_offer'), ('expired', 'closed_offer'), ('undelivered', 'undelivered_offer'),
+    ('accepted', 'closed_offer'), ('already_consented', 'unavailable_offer'), ('not_recipient', 'unavailable_offer'),
+])
+def test_public_grammar_uses_exact_captured_delivered_reference(sdk_protocol_offer, change, code):
+    from app.services.world_simulation.contracts import digest
+    from app.services.world_simulation.policy import PolicyFailure
+
+    fixture = sdk_protocol_offer
+    observation = deepcopy(fixture.recipient)
+    offer = observation['inbox'][0]
+    intent = {'templateId': offer['templateId'], 'operation': 'accept', 'parameters': {},
+              'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}
+    if change == 'missing_id':
+        del intent['interactionId']
+    elif change == 'missing_version':
+        del intent['termsVersion']
+    elif change == 'boolean_version':
+        intent['termsVersion'] = True
+    elif change == 'mixed_record':
+        other_option = deepcopy(observation['options'][0])
+        other_option['templateId'] = 'another-visible-agreement'
+        observation['options'].append(other_option)
+        other_offer = deepcopy(offer)
+        other_offer.update(interactionId='another-visible-offer', templateId=other_option['templateId'])
+        observation['inbox'].append(other_offer)
+        intent['templateId'] = other_option['templateId']
+    elif change == 'expired':
+        offer['expiresAt'] = observation['simulatedAt']
+    elif change == 'undelivered':
+        offer['deliverAt'] = observation['periodEnd']
+    elif change == 'accepted':
+        offer['status'] = 'accepted'
+    elif change == 'already_consented':
+        offer['acceptedBy'] = [observation['actorId']]
+    else:
+        offer['recipientIds'] = ['authority']
+    observation['observationId'] = digest({k: v for k, v in observation.items() if k != 'observationId'})
+    fixture.case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
+    with pytest.raises(PolicyFailure) as failed:
+        fixture.case.policy.decide(observation)
+    assert failed.value.code == code and failed.value.usage['tokens'] == 140
+    assert len(fixture.case.sent) == 2
+
+
+@pytest.mark.parametrize('invalid', [None, 'wrong_proposer', 'closed', 'supplied_terms'])
+def test_public_grammar_withdraws_only_own_pending_offer_without_delivery_requirement(
+        actor_case, boundary, invalid):
+    from app.services.world_simulation.contracts import initial_snapshot, validate_decision, digest
+    from app.services.world_simulation.kernel import stage_interactions
+    from app.services.world_simulation.observations import build_observation
+    from app.services.world_simulation.policy import PolicyFailure
+
+    spec = deepcopy(actor_case.spec)
+    next(item for item in spec['actionCatalog'] if item['templateId'] == 'purchase')['parameters']['messageDelayDays'] = '1'
+    initial = initial_snapshot(spec)
+    observation = build_observation(spec, initial, 'buyer', 1)
+    case = boundary(spec=spec, content=json.dumps({'intents': [
+        {'templateId': 'purchase', 'operation': 'propose', 'parameters': {'quantity': '2', 'price': '3'}}]}))
+    proposal = validate_decision(spec, case.policy.decide(observation).decision, 'buyer', observation, phase='proposal')
+    staged = stage_interactions(spec, initial, [proposal], 1)
+    owner = build_observation(spec, staged, 'buyer', 1)
+    offer = owner['ownOffers'][0]
+    assert offer['deliverAt'] > owner['simulatedAt']
+    intent = {'templateId': offer['templateId'], 'operation': 'withdraw', 'parameters': {},
+              'interactionId': offer['interactionId'], 'termsVersion': offer['termsVersion']}
+    if invalid == 'wrong_proposer':
+        offer['proposerId'] = 'producer'
+    elif invalid == 'closed':
+        offer['status'] = 'accepted'
+    elif invalid == 'supplied_terms':
+        intent['parameters'] = deepcopy(offer['terms'])
+    owner['observationId'] = digest({k: v for k, v in owner.items() if k != 'observationId'})
+    case.body['choices'][0]['message']['content'] = json.dumps({'intents': [intent]})
+    if invalid is None:
+        assert case.policy.decide(owner).decision['intents'] == [intent]
+    else:
+        with pytest.raises(PolicyFailure) as failed:
+            case.policy.decide(owner)
+        assert failed.value.usage['tokens'] == 140
+    assert len(case.sent) == 2
+
+
+@pytest.mark.parametrize('repair_succeeds', [True, False])
+def test_public_grammar_controller_repairs_or_exhausts_two_metered_attempts(
+        actor_case, boundary, tmp_path, repair_succeeds):
+    from app.services.world_simulation.contracts import WorldError, validate_spec
+    from app.services.world_simulation.controller import run_round
+    from app.services.world_simulation.store import WorldStore
+
+    spec = deepcopy(actor_case.spec)
+    actor = next(item for item in spec['actors'] if item['actorId'] == 'buyer')
+    actor.update(capabilities=['give'], controlledAccounts=['cash'])
+    basis = deepcopy(actor['basis'])
+    account = {'unit': 'currency', 'basis': basis, 'visibility': {'kind': 'public'}}
+    spec.update(actors=[actor], flows=[], scheduledEvents=[], periods=spec['periods'][:1],
+                horizon=spec['periods'][0]['end'], initialState={
+                    'accounts': {'cash': {**account, 'ownerId': 'buyer', 'balance': '10'},
+                                 'sink': {**account, 'ownerId': 'external', 'balance': '0'}},
+                    'metrics': {}, 'rules': {}, 'relations': {}},
+                actionCatalog=[{'templateId': 'give', 'kind': 'transfer', 'actorIds': ['buyer'],
+                                'description': 'Transfer a declared amount.', 'basis': basis,
+                                'parameters': {'fromAccount': 'cash', 'toAccount': 'sink'},
+                                'inputs': {'amount': {'type': 'decimal', 'required': True, 'min': '1', 'max': '3'}}}])
+    spec = validate_spec(spec)
+
+    def completion(request, number):
+        amount = '2' if repair_succeeds and number == 2 else '4'
+        return json.dumps({'intents': [{'templateId': 'give', 'parameters': {'amount': amount}}]})
+
+    case = boundary(spec=spec, content_factory=completion)
+    path = tmp_path / 'visible-grammar.sqlite3'
+    with WorldStore(path, spec) as store:
+        fence = store.acquire_writer('grammar')
+        if repair_succeeds:
+            head = run_round(store, case.policy, fence)
+            assert head['accounts']['cash']['balance'] == '8'
+            assert store.decision('1:proposal:buyer')['intents'][0]['parameters']['amount'] == '2'
+        else:
+            with pytest.raises(WorldError) as failed:
+                run_round(store, case.policy, fence)
+            assert failed.value.code == 'required_decision_failed'
+            assert store.head()['round'] == 0 and store.decision('1:proposal:buyer') is None
+        assert len(case.sent) == 2
+        first, second = [json.loads(request.content)['messages'] for request in case.sent]
+        assert first[1] == second[1]
+        assert 'Previous decision validation feedback' not in first[0]['content']
+        assert '"code":"invalid_input"' in second[0]['content']
+        assert 'Input above declared maximum' in second[0]['content']
+        summary = store.budget_summary()
+        assert summary['actual']['tokens'] == 280 and summary['unknown']['tokens'] == 0
+        assert Decimal(summary['actual']['costUsd']) == Decimal('0.00112')
+        assert [row['status'] for row in summary['attempts']] == ['failed', 'succeeded' if repair_succeeds else 'failed']
+        assert summary['attempts'][1]['reserved']['tokens'] > summary['attempts'][0]['reserved']['tokens']
+        store.release_writer(fence)
+    with WorldStore(path, spec) as store:
+        if repair_succeeds:
+            with pytest.raises(WorldError):
+                store.acquire_writer('resume')
+        else:
+            fence = store.acquire_writer('resume')
+            with pytest.raises(WorldError):
+                run_round(store, case.policy, fence)
+            store.release_writer(fence)
+        assert len(case.sent) == 2 and store.budget_summary()['attempts'] == summary['attempts']
+
+
+@pytest.mark.parametrize('changed_max,value,valid', [('99', '4', False), ('1', '2', True)])
+def test_public_grammar_uses_before_rpc_schema_despite_caller_mutation(
+        actor_case, boundary, changed_max, value, valid):
+    from app.services.world_simulation.policy import PolicyFailure
+
+    holder = {}
+    params = {'text': 'status', 'value': value}
+    def mutate(request, number):
+        option = next(item for item in holder['observation']['options'] if item['templateId'] == 'communicate')
+        option['inputs']['value']['max'] = changed_max
+        return json.dumps({'intents': [{'templateId': 'communicate', 'parameters': params}]})
+    case, observation, _ = _public_grammar_case(
+        actor_case, boundary, {'value': {'type': 'decimal', 'max': '3'}}, params, content_factory=mutate)
+    holder['observation'] = observation
+    if valid:
+        assert case.policy.decide(observation).decision['intents'][0]['parameters'] == params
+    else:
+        with pytest.raises(PolicyFailure) as failed:
+            case.policy.decide(observation)
+        assert failed.value.code == 'invalid_input' and failed.value.usage['tokens'] == 140
+    captured = json.loads(json.loads(case.sent[0].content)['messages'][1]['content'])
+    option = next(item for item in captured['options'] if item['templateId'] == 'communicate')
+    assert option['inputs']['value']['max'] == '3' and len(case.sent) == 1
+
+
+def test_public_grammar_concurrent_actors_do_not_share_schema(actor_case, boundary):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    from app.services.world_simulation.contracts import initial_snapshot
+    from app.services.world_simulation.observations import build_observation
+    from app.services.world_simulation.policy import PolicyFailure
+
+    spec = deepcopy(actor_case.spec)
+    message_template = next(item for item in spec['actionCatalog'] if item['templateId'] == 'communicate')
+    for aid, limit in [('buyer', '1'), ('producer', '3')]:
+        template = deepcopy(message_template)
+        template.update(templateId='message_' + aid, actorIds=[aid], inputs={
+            'text': {'type': 'string', 'required': True}, 'value': {'type': 'integer', 'max': limit}})
+        spec['actionCatalog'].append(template)
+        next(actor for actor in spec['actors'] if actor['actorId'] == aid)['capabilities'].append(template['templateId'])
+    snapshot = initial_snapshot(spec)
+    observations = [build_observation(spec, snapshot, aid, 1) for aid in ('buyer', 'producer')]
+    barrier = threading.Barrier(2)
+    def completion(request, number):
+        captured = json.loads(json.loads(request.content)['messages'][1]['content'])
+        barrier.wait(timeout=5)
+        return json.dumps({'intents': [{'templateId': 'message_' + captured['actorId'],
+                                        'parameters': {'text': 'status', 'value': 2}}]})
+    case = boundary(spec=spec, content_factory=completion)
+    def invoke(observation):
+        try:
+            return case.policy.decide(observation)
+        except PolicyFailure as error:
+            return error
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        buyer, producer = list(pool.map(invoke, observations))
+    assert isinstance(buyer, PolicyFailure) and buyer.code == 'invalid_input'
+    assert buyer.usage['tokens'] == producer.usage['tokens'] == 140
+    assert producer.decision['actorId'] == 'producer' and len(case.sent) == 2
+
+
+def test_public_grammar_does_not_check_economic_feasibility(actor_case, boundary):
+    from app.services.world_simulation.contracts import initial_snapshot, validate_decision
+    from app.services.world_simulation.kernel import resolve_round
+    from app.services.world_simulation.observations import build_observation
+
+    spec = deepcopy(actor_case.spec)
+    spec['flows'] = []
+    spec['initialState']['accounts']['producer_cash']['balance'] = '0'
+    initial = initial_snapshot(spec)
+    observation = build_observation(spec, initial, 'producer', 1)
+    case = boundary(spec=spec, content='{"intents":[{"templateId":"expand"}]}')
+    response = case.policy.decide(observation)
+    assert response.decision['intents'] == [{'templateId': 'expand'}]
+    normalized = validate_decision(spec, response.decision, 'producer', observation, phase='proposal')
+    result = resolve_round(spec, initial, [normalized], 1)
+    assert result['resolutions'][0]['accepted'] is False
+    assert result['snapshot']['accounts'] == initial['accounts']
+    assert len(case.sent) == 1
+
+
+def test_public_grammar_is_not_applied_to_modeler(modeler_case, boundary, monkeypatch):
+    from app.services.world_simulation import kernel
+    from app.services.world_simulation.policy import StrictHTTPModeler
+
+    def forbidden(*args):
+        raise AssertionError('Actor input grammar must not inspect modeler output')
+    monkeypatch.setattr(kernel, '_input_values', forbidden)
+    case = boundary(spec=modeler_case.spec, policy_type=StrictHTTPModeler,
+                    content=json.dumps(modeler_case.proposal))
+    result = case.policy.decide(modeler_case.messages)
+    assert result.decision == modeler_case.proposal
+    assert result.usage['tokens'] == 140 and len(case.sent) == 1
+
+
+def test_public_grammar_never_returns_a_valid_subset_of_invalid_intents(actor_case, boundary):
+    from app.services.world_simulation.policy import PolicyFailure
+
+    case, observation, raw = _public_grammar_case(
+        actor_case, boundary, {'value': {'type': 'integer', 'max': '3'}}, {'text': 'status', 'value': 2})
+    raw['intents'].append({'templateId': 'communicate', 'parameters': {'text': 'status', 'value': 4}})
+    original = deepcopy(raw)
+    case.body['choices'][0]['message']['content'] = json.dumps(raw)
+    with pytest.raises(PolicyFailure) as failed:
+        case.policy.decide(observation)
+    assert failed.value.code == 'invalid_input' and failed.value.usage['tokens'] == 140
+    assert raw == original and len(case.sent) == 1

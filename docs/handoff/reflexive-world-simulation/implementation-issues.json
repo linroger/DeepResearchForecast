@@ -38,8 +38,8 @@
   {
     "id": "WORLD-LIVE-RELEASE",
     "status": "promotion_withheld",
-    "problem": "Study executed and reviewed; required model-behavior gate not met. Trade proxy conflicts with one-good completion, and6coalition cases stopped after transport failures.",
-    "evidence": "live-evidence/report.json; DELIVERY.md;7pairedpassed7failed4incomplete. Preserveoriginalresults; futurepreregisteredstudyneeded."
+    "problem": "All studies are preserved. Latest36case rerun passes domain/reflexive rubrics but fails2of18required contrasts.",
+    "evidence": "behavior-rerun/public-grammar/REPORT.md; final16passed2failed, no incomplete cases; world-v1 remains opt-in."
   },
   {
     "id": "REMOTE-PUBLICATION",
@@ -67,14 +67,21 @@
   },
   {
     "id": "WORLD-BEHAVIOR-V2",
-    "status": "rerun_complete_followup_needed",
-    "problem": "User requested recurring-demand evaluation repair and general protocol/grounding improvements, then a new study preserving original results.",
-    "evidence": "behavior-rerun/REPORT.md and live-evidence:36completed,17/18contrasts; recurring objective repaired, remaining temporal interpretation failure and nonfocal invalid inputs retained."
+    "status": "evaluation_mismatch_resolved_reruns_complete",
+    "problem": "Original one-shot trade objective did not match repeated route-choice measurement; allowed messages also distorted consequential-action matching.",
+    "evidence": "Versionedv2 recurring demand and sealed-message-only projection; v1compatibility unchanged; finaltrade12/12cases,6/6pairs,96/96points. Original/v2Aresults preserved."
   },
   {
     "id": "WORLD-ACTOR-PUBLIC-GRAMMAR",
-    "status": "design_reviewed_implementation_next",
-    "problem": "Fresh HTTP decisions can violate visible input bounds; one actor misclassified earlier-period settlement.",
-    "evidence": "behavior-rerun/followup-proposal.md; v2trace reviews. Preserve old rejected decisions; retain known usage and existing2attempt limits. Hidden/economic feasibility remains kernel-owned."
+    "status": "resolved",
+    "problem": "Fresh HTTP decisions could violate visible bounds/exact offer references before kernel, and period wording was ambiguous.",
+    "evidence": "537guardedtests/sourceapproval;3actualhistoricalreplays+cachedrecovery; actor-only post-known-usage validation with existing2attemptrepair. Finalstudy has0committedrejections but5knownfailedgenerations; not a semantic reliability claim."
+  },
+  {
+    "id": "WORLD-SEMANTIC-BEHAVIOR",
+    "status": "open_release_blocker",
+    "problem": "A valid investment intent contradicts its stated quantity; a coalition actor acts before its explicit conditional goal trigger. Nonfocal arithmetic/current-evidence mistakes also remain.",
+    "evidence": "behavior-rerun/public-grammar/live-evidence/retained-failures/; independent investment/coalition reviews;16/18contrasts.",
+    "nextStep": "Design and review a general mechanism that improves choice/goal/evidence consistency without injecting expected answers, weakening thresholds or rewriting old traces. Preserve opt-in; no automatic additional study."
   }
 ]

@@ -1,0 +1,36 @@
+{
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "completedUtc": "2026-10-16T20:20:08.261578+00:00",
+  "scope": "Bounded final report, budget, evidence and EN/ZH documentation review; no runtime or provider work.",
+  "verdict": "No material findings.",
+  "confirmed": {
+    "completedCases": 36,
+    "reviewedCases": 36,
+    "passedContrasts": 16,
+    "failedContrasts": 2,
+    "domainPoints": {
+      "investment": 92,
+      "trade": 96,
+      "coalition": 92
+    },
+    "denominatorPointsPerDomain": 96,
+    "attempts": 695,
+    "knownFailedAttempts": 5,
+    "retries": 5,
+    "committedRejections": 0,
+    "conservativeExposureUsd": "18.529952955664",
+    "remainingOriginalUsd": "6.470047044336",
+    "activeOutput": null,
+    "worldOptIn": true,
+    "promotionAuthorized": false
+  },
+  "reviewedArtifacts": {
+    "docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/REPORT.md": "c8f7b26ad69948ab82d05b8579ef5effd68dbe1e37ae0c9943b21a958ec38beb",
+    "docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/live-evidence/report.json": "3c37b6b71fd407d3fa9e87d4efcba46547eb60e0617b73a014124003e4b1f74e",
+    "docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/live-evidence/closure.json": "f1f97ae98e660c0131febc0d4d4fb97995bcd0f698ad8cdd72045f536db83f43",
+    "docs/handoff/reflexive-world-simulation/live-budget.json": "5347027549ea7aeb07050ee2389e938331135037e027c319116155d8034d70f7",
+    "README.md": "3adca9b1be0e0716d6b79ae12fc466d6cc4786ff5eca4983247be09355d8cec6",
+    "README.zh-CN.md": "33ce5abc7a5af99a8c8840a5c361e4eee9f460381d110785b6a2441328dde513"
+  }
+}

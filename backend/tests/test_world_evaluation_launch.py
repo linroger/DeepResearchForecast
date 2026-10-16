@@ -146,10 +146,12 @@ def test_v2_live_preregistration_and_opening_reservations_without_dispatch():
     from app.services.world_simulation.policy import StrictHTTPPolicy
 
     root = Path(__file__).resolve().parents[2]
-    pricing = json.loads((root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/live-policy.json').read_text())
-    manifest = preregister(pricing, max_usd='15.777849044336', evaluation_version='m5-behavior/v2')
+    phase = root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar'
+    config = json.loads((phase / 'preflight.json').read_text())
+    pricing = json.loads((phase / config['policyFile']).read_text())
+    manifest = preregister(pricing, max_usd=config['maxUsd'], evaluation_version=config['evaluationVersion'])
     assert len(manifest['cases']) == 36
-    assert Decimal(manifest['allocatedUsd']) <= Decimal('15.777849044336')
+    assert Decimal(manifest['allocatedUsd']) <= Decimal(config['maxUsd'])
     _verify_mask_hook(manifest['cases'])
     sent = []
 
