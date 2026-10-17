@@ -27,6 +27,8 @@ logger = get_logger('mirofish.api.report')
 def _verify_world_report_request():
     """One read-only world gate for normal, cached and auxiliary consumers."""
     from ..services.world_simulation.contracts import WorldError
+    if request.method == "OPTIONS":
+        return None  # CORS preflight carries no report data
     try:
         report_id = (request.view_args or {}).get("report_id")
         if report_id and request.method != "DELETE":
@@ -35,7 +37,7 @@ def _verify_world_report_request():
             data = request.get_json(silent=True) or {}
             if data.get("simulation_id"):
                 load_simulation_world(data["simulation_id"])
-    except (WorldError, OSError, ValueError, KeyError):
+    except (WorldError, OSError, ValueError, KeyError, TypeError):
         return jsonify({"success": False, "error": "World result integrity verification failed",
                         "code": "world_result_integrity"}), 409
 

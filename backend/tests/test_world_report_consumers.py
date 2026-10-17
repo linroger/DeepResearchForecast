@@ -313,6 +313,28 @@ def test_report_routes_share_pin_and_reject_before_export_or_translation(
         'simulation_id': directory.name, 'message': 'Explain'}).status_code == 409
 
 
+
+def test_report_telemetry_floats_in_meta_keep_world_reports_readable(world, report_config, report_client):
+    """Report telemetry writes floats into meta.json (the report's own record, not a world
+    artefact); the binding still verifies and the gated routes still serve.  Tampering with
+    the identity meta.json names still fails closed."""
+    directory = world()
+    _, report, _ = generate(directory)
+    rid = report.report_id
+    folder = Path(ReportManager._get_report_folder(rid))
+    data = json.loads((folder / 'meta.json').read_text())
+    data['telemetry'] = {'totals': {'duration_s': 812.4, 'est_cost_usd': 0.4213, 'latency_ms': 2311.7}}
+    (folder / 'meta.json').write_text(json.dumps(data))
+    owned = ReportManager.load_world_result(rid)
+    assert owned is not None and owned['reference'] == report.world_result_ref
+    for route in (rid, rid + '/world-result', rid + '/download'):
+        assert report_client.get('/api/report/' + route).status_code == 200, route
+    data['world_result_ref']['revision'] = 'wrong'
+    (folder / 'meta.json').write_text(json.dumps(data))
+    with pytest.raises(WorldError):
+        ReportManager.load_world_result(rid)
+    assert report_client.get(f'/api/report/{rid}').status_code == 409
+
 def test_direct_generation_and_regeneration_use_real_constructor(world, report_config, report_client, monkeypatch):
     import time
     from app.api import report as api
