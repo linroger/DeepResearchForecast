@@ -1,5 +1,7 @@
 # Frozen bounded consistency interfaces
 
+> This is the original v1 contract, preserved below. The additive v2 mode is defined in [server-bound-review/PLANS.md](server-bound-review/PLANS.md) and the current [implementation contract](../../implementation-contract.md). V2 uses four compact `{kind, explanation}` checks and server bindings for the full observation/candidate/final decision; v1 references and absent-mode behavior are unchanged. The two-call limit applies to both modes.
+
 User requested fixing the remaining semantic issues. Independent design review recommends this opt-in protocol; original specs, exact replay and two total RPCs per decision slot are retained. No worker executes app code/tests/providers or commits. Coordinator owns runtime gates. All work is in this isolated worktree; do not modify others' files.
 
 ## Pin and pure validation (coordinator-owned review.py)

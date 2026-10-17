@@ -51,8 +51,14 @@ sequenceDiagram
   C->>DB: Read committed opening state
   C->>DB: Freeze roster and persist observations
   C->>A: Private observation and action options
-  A-->>C: Structured intents and private reflection
-  C->>DB: Persist successful decision receipts
+  A-->>C: Structured candidate and private reflection
+  opt Pinned actor consistency review
+    C->>DB: Persist private candidate and usage
+    C->>A: Same observation plus saved candidate
+    A-->>C: Complete final decision and four checks
+    C->>DB: Atomically save clear final, review and usage
+  end
+  C->>DB: Read admitted final decisions
   C->>K: Stage communication only
   C->>B: Delivered offers and exact obligations
   B-->>C: Accept, reject, counter or defer
@@ -89,6 +95,8 @@ The [strict HTTP policy](../../../backend/app/services/world_simulation/policy.p
 
 Fresh actor HTTP replies now pass public input-grammar and exact offer-reference checks against the observation captured from the serialized request before dispatch. A rejection retains known usage and may use only the existing second attempt. The shared scalar helper omits private actor-roster membership only in this public preflight; normal kernel checks retain it. Hidden economic feasibility remains with the kernel, and legal choices are not rewritten to match a rationale or evaluator. Historical receipts, cached decisions and modeler output do not pass through this new response gate, preserving prior rejected-action replay. Failed generation attempts and committed rejections are reported separately. The [versioned behavior reruns](behavior-rerun/public-grammar/REPORT.md) preserve their original outcomes; no default promotion follows from mechanical validation alone.
 
+New generations can explicitly pin `policy.decisionReview: "actor-consistency-v2"`. The controller then uses the two-call allowance for one candidate and one complete revision. The model checks goal alignment, conditional timing, quantities and agreement between its explanation and final intents. A private store journal binds the original observation, candidate and final decision. Only a structurally valid, clear revision reaches the kernel; an invalid candidate, failed revision or unresolved assessment stops the round without a third call or an invented wait. Known usage is charged and unknown exposure retained. Saved candidates can resume only an unconsumed revision; saved finals need no new call. The absent pin retains ordinary decision/repair behavior, and the older v1 review schema remains supported. [review.py](../../../backend/app/services/world_simulation/review.py) validates shape and scope, not the truth of model explanations. See the [consistency repair report](behavior-rerun/semantic-consistency/REPORT.md) for the narrower live evidence and remaining full-study gate.
+
 ## Graphiti, forecasts and user-facing consumers
 
 [Graph construction](../../../backend/app/services/graph_builder.py) continues to represent observed research and source relationships, and supports the existing report retrieval tools. World preparation receives the research/actor artifacts and ontology directly; this version does not fetch a second world model from Graphiti. Graph centrality supplies no monetary balance, legal authority or vote entitlement. Concrete simulation state lives in SQLite. World mode does not write hypothetical events into the observed Graphiti graph; actors instead receive committed feedback through the world observation path. No separate simulated graph namespace is activated in this version.
@@ -109,8 +117,8 @@ The [offline wrapper](run_offline.py) freezes source outside the managed `.codex
 
 ## Observed results and release decision
 
-The frozen live matrix reached 36 terminal cases: 30 completed and received independent-agent reviews of both focal decisions; six coalition cases failed or were stopped after transport failures. The unchanged rubric scored investment 84/96 (87.5%), trade 47/96 (48.95%), and coalition 48/96 (50%, incomplete). Paired feedback contrasts were seven passed, seven failed and four incomplete. These results do not meet the default-promotion gate. [Frozen report](live-evidence/report.json) and [individual reviews](live-evidence/qualitative-review.json) retain the original denominator and exact decision references.
+The original full study completed 30 of 36 cases with 7 passed, 7 failed and 4 incomplete feedback contrasts. The subsequent versioned v2 study completed 36 of 36 with 17 of 18 contrasts; the public-grammar follow-up completed 36 of 36 with 16 of 18 contrasts and all 6 trade pairs passing. Each study retains its original cases, independent reviews and denominators. [The earlier full-study report](behavior-rerun/public-grammar/REPORT.md) records the remaining quantity/rationale and conditional-goal failures that motivated optional consistency review.
 
-Trade exposed a mismatch between its one-good objective and a proxy expecting repeated route choices: many actors had already bought a good and legitimately waited. Some actors also made unsupported explanatory claims, while the kernel rejected invalid interaction IDs, terms or quantities. The ablation changes a specified record field; public actor messages can still transmit related information. It is not a complete removal of external feedback. These limitations are recorded without changing the preregistered scores.
+The [current consistency report](behavior-rerun/semantic-consistency/REPORT.md) distinguishes guarded implementation checks, directed saved-candidate confirmations and the outstanding fresh full-matrix gate. These sources must not be combined into a claim that the reviewed mode passed all 36 cases. The default remains `oasis-legacy`; `world-v1` stays opt-in. Synthetic outcomes are not calibrated forecast probabilities.
 
-Across the five development/evaluation phases, conservative consumed exposure is USD9.222150955664 of the original USD25 authorization; USD15.777849044336 remains unused. This includes unknown calls and conservative earlier interruption ceilings and is not audited billing. No further provider batch is active. The final queue-fairness change was verified offline after this live batch; the recorded unpinned cases preserve their original behavior. See [live-budget.json](live-budget.json), [offline evidence](offline-verification.json) and [delivery verdict](DELIVERY.md).
+The [global budget ledger](live-budget.json) accounts for every phase under the original USD25 ceiling, including known usage and conservative unknown exposure. These are tariff-based exposure estimates, not audited billing. The [delivery record](DELIVERY.md) links the current report while preserving earlier delivery statements as dated evidence.

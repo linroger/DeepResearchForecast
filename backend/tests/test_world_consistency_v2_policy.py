@@ -176,3 +176,28 @@ def test_v2_full_revision_prompt_is_bounded_before_dispatch(v2_case, boundary):
             method(observation, review=candidate)
         assert failed.value.code == 'policy_context_limit'
     assert case.sent == []
+
+
+def test_v2_wire_distinguishes_rule_existence_snapshot_time_and_future_consent(v2_case, boundary):
+    from app.services.world_simulation.contracts import canonical_json
+    from app.services.world_simulation.policy import _REVIEW_CANDIDATE_PREFIX
+
+    spec, observation, candidate, final = v2_case
+    assessment = _compact_assessment('unresolved')
+    case = boundary(spec=spec, content=json.dumps({'decision': final, 'assessment': assessment}))
+    result = case.policy.decide(observation, review=candidate)
+    messages = json.loads(case.sent[0].content)['messages']
+    system, marker, draft = messages[0]['content'].partition(_REVIEW_CANDIDATE_PREFIX)
+    assert 'A conditional rule still exists when its predicate is currently unmet' in system
+    assert 'distinguish existence from current applicability' in system
+    assert 'snapshot at simulatedAt, not a guarantee that values persist through periodEnd' in system
+    assert 'Preserve historical event dates and pending/proposed statuses' in system
+    assert 'future fulfilment or counterparty consent need not be certain' in system
+    assert 'Still check known affordability, authority and protocol constraints' in system
+    assert 'do not force clear or justify inventing a wait' in system
+    assert not any(label in system for label in ('m5-', '2030-01-01', 'ablation', 'rubric'))
+    assert marker and json.loads(draft) == candidate
+    assert messages[1]['content'] == canonical_json(observation)
+    assert result.assessment == assessment and result.assessment['status'] == 'unresolved'
+    assert result.decision['intents'] == final['intents']
+    assert result.usage == {'tokens': 140, 'costUsd': '0.000560000000'} and len(case.sent) == 1

@@ -1,8 +1,8 @@
 # Handoff.md
 
-**Last Updated (UTC):** 2026-10-17T12:39:20.618210+00:00
-**Status:** In progress — semantic consistency repair; first directed confirmation remains incomplete.
-**Current Focus:** Preserve the reviewed phase8 checkpoint, then capture fixed assessment-validation diagnostics without changing actor behavior.
+**Last Updated (UTC):** 2026-10-17T13:28:28.440189+00:00
+**Status:** Bounded repair and evaluation complete; semantic acceptance failed and default promotion withheld.
+**Current Focus:** Preserve all results and the opt-in default; any further semantic treatment needs a concrete design and fresh acceptance evidence.
 
 ## 1) Request & Context
 
@@ -14,15 +14,17 @@ The user wants multi-agent simulation to represent actors changing a concrete wo
 |---|---|---|---|
 | New branch off main | Verify branch and merge base | Exact committed-main base; isolated checkout | task-brief.json |
 | Reflexive world loop | Trace snapshot→observation→action→resolution→next snapshot | Each round is causal and actors react to changed conditions | PLANS.md and scenario contracts |
-| Realistic actor behavior | Test capability/resource/institution/information constraints | Invalid actions rejected; feasible choices depend on actor role and current state | Planned acceptance matrix |
+| Realistic actor behavior | Cross-domain physical/consent/privacy tests and full-model paired studies | Mechanisms verified; promotion withheld because behavior gates fail | acceptance-scenarios.md; semantic-consistency/REPORT.md |
 | Research/ontology integration | Trace source evidence into typed initial state and actor profiles | Facts, assumptions and missing parameters remain distinguishable | Source review and interface design |
-| Durable/reproducible execution | Plan event/state recovery, seeded randomness and idempotency controls | Crash/resume does not duplicate consequences | Planned fault scenarios |
-| Forecast integrity | Define report/forecast consumers and validation limits | Simulated outcomes carry provenance and uncertainty | Planned consumer checks |
+| Durable/reproducible execution | Actual controller/store crash/reopen and fenced-write scenarios | No duplicate effects or renewed attempt allowance | test_world_store.py; test_world_consistency_store.py |
+| Forecast integrity | Public report/chat/translation/chart tests under both safe forecast policies | Hypothetical outcomes remain outside probability inputs | test_world_report_consumers.py; report-implementation.md |
 | Approval-ready design | Independent review of plan and contracts | Concrete staged delivery with no hidden architectural choices | plan-review.md |
 
 ## 3) Plan & Decomposition
 
-Read current main implementation and existing contracts, identify reusable parts, define actor/world/action/event interfaces and a complete round sequence, choose one end-to-end validation domain, plan cross-workflow integration and migration, then independently review the plan. Application implementation begins only after plan approval.
+The original plan was approved on2026-10-16 and implemented in dependency order: concrete world/actor contracts and mechanisms, durable store/controller, compiler and strict HTTP policies, pipeline lifecycle, then UI/report/forecast consumers. Offline fault scenarios and independent review preceded paid evaluation. Full studies exposed trade measurement, protocol and semantic behavior defects, preserved in dated evidence below.
+
+The current follow-up implemented the separately reviewed optional consistency protocol, froze it for guarded tests, ran fixed saved-context confirmations, independently reviewed every completed result, and closed the original-budget ledger. Its source and scenario evidence are complete; semantic acceptance remains failed because two final explanations were wrong. The next design must address that evidence without weakening the gate. See semantic-consistency/PLANS.md, server-bound-review/PLANS.md and temporal-clarification/PLANS.md under behavior-rerun.
 
 ## 4) To-Do & Progress Ledger
 
@@ -54,11 +56,17 @@ The original implementation acceptance has scripted cross-domain round scenarios
 
 ## 8) Verification Summary
 
-Branch/base metadata is recorded in task-brief.json; ARCHITECTURE.md links current implementation sources and includes pipeline/round diagrams. The original delivery source is bound by the515-file snapshot and durable receipts in offline-evidence/. The current actor-boundary follow-up is bound by the523-file snapshot and537passing checks in behavior-rerun/public-grammar/offline/. Its final report refresh passed one additional guarded check; no source changes followed acceptance. New-code Ruff F/E9, whitespace checks and init.sh smoke pass. UI24tests/build and isolated browser evidence remain source-matched. Independent live reviews and budget closure are preserved in live-evidence/. These checks do not prove general realism or calibrated forecasting.
+ARCHITECTURE.md links current sources and pipeline/round diagrams. Original implementation gates and UI/browser acceptance remain in offline-verification.json and browser-evidence/. The semantic follow-up passed853broad and345focused v1 checks, then882broad v2 checks. A56-case focused run added actual SDK directed-journal/resume coverage. The final prompt-only change passed308focused checks in8.25seconds with no failure/error/skip or drift across535files. Counts are separate runs and must not be summed as unique coverage. Independent source review closed each bounded change.
+
+Phase11 made12fixed calls:12completed/correctactions,10independent fullqualitativepasses,2failures retained. Its frozen-source report refresh passed1guarded check in1.25seconds and asserted the failed diagnostic gate. Final focused guard events were3storage redirects and2blocked SDK metadata process probes; report refresh had3redirects only. No network attempts were recorded in these offline gates; the CPython audit boundary is not an OS sandbox. All410prior artifacts and535accepted source files matched after live review. RuffF/E9, source AST isolation, JSON/local-link and whitespace checks passed. The latest report, raw journal/reviews, budget and receipts are under behavior-rerun/semantic-consistency/. These checks do not establish a fresh full-matrix pass or calibrated forecasting.
 
 ## 9) Remaining Work & Next Steps
 
-M0–M4 and the targeted trade/protocol fixes are implemented and verified. All36latest cases and all36independent case reviews are complete; domain/reflexive-arm thresholds passed, but only16/18paired comparisons passed. World-v1 remains opt-in and feature_reflexive_world_simulation remains passes:false. The retained investment rationale/action mismatch and premature coalition action are open release blockers; see behavior-rerun/public-grammar/REPORT.md and implementation-issues.json. No further live dispatch is active or planned. Conservative global exposure is18.529952955664USD of the original25, leaving6.470047044336USD unused. Prior273artifacts and all523accepted source files are unchanged. Remote publication remains blocked by previously rejected authentication; do not retry unchanged credentials.
+M0–M4, trade/protocol repairs and the optional consistency implementation are complete. The final directed confirmation corrected both retained action defects twice and preserved all eight control actions. All12responses completed with known usage; only10of12full qualitative reviews passed. Two explanation defects remain open: an existing condition called absent and an unsupported future within-period voting opportunity. See [the current report](behavior-rerun/semantic-consistency/REPORT.md) and [implementation issues](implementation-issues.json). This does not replace the latest full36-case result of16of18contrasts. `world-v1` remains opt-in and `feature_reflexive_world_simulation.passes` remains false.
+
+All eleven live phases are closed. Conservative exposure is USD18.913368955664; USD6.086631044336 remains from the original USD25 authorization. No provider process or replacement batch is active. Every one of410prior study artifacts and535frozen current source files matched after phase11. Earlier failures and review denominators are immutable. The guarded summary retained a failed diagnostic gate.
+
+A future bounded design could encode explicit goal conditions and eligible decision opportunities, avoiding inference from unrestricted prose while preserving actor discretion. Do not silently rewrite existing objectives, force expected actions, lower thresholds, or rerun until a favorable sample appears. Fresh candidate generation and a complete world study are separate acceptance work, as is empirical forecast calibration. Reconcile the remaining original budget before any additional paid work. Remote publication remains blocked by earlier rejected authentication; do not retry unchanged credentials or disturb the primary checkout.
 
 ## 10) Updates to This File
 
@@ -75,8 +83,7 @@ M0–M4 and the targeted trade/protocol fixes are implemented and verified. All3
 ## Next-session prompt
 
 ```text
-Continue only in /Users/rogerlin/.codex/worktrees/reflexive-world-simulation/DeepResearchForecast on codex/reflexive-world-simulation. Read behavior-rerun/public-grammar/REPORT.md, this handoff, implementation-issues.json and live-budget.json. Trade mismatch and actor public grammar/time fixes are delivered; final537offline tests and1guarded summary pass. All36new cases completed/reviewed,16/18contrasts passed; retain investment quantity/explanation mismatch and coalition premature opposition as release blockers. Preserve every original and revised study, terminal slot and receipt. World-v1 remains opt-in, oasis-legacy default, featurepasses:false. No provider process is active. Original25USD conservative exposure18.529952955664 leaves6.470047044336; never reset it. Do not launch another study merely to seek a pass. Any further improvement needs a reviewed domain-general design that does not encode expected answers or weaken existing criteria, followed by meaningful regression checks and preregistration before paid calls. Check git status/log and preserve the unrelated primary checkout. Remote authentication previously failed and must be repaired before publication.
-
+Resume /Users/rogerlin/.codex/worktrees/reflexive-world-simulation/DeepResearchForecast on codex/reflexive-world-simulation. Read this handoff, semantic-consistency/REPORT.md, implementation-issues.json, live-budget.json and the latest git log first. No provider batch is active. Optional actor-consistency-v2 is implemented and source-reviewed, with882broad/308finalfocused tests. Phase11 has12correctactions but10/12qualitativepasses; preserve both failures and all earlier results. World-v1 remains opt-in, feature passes:false. Original remaining authorization is6.086631044336USD, never a new25. Before new code, propose a narrow design for explicit condition/time-opportunity grounding; do not add prompts/repeats merely to seek a pass. A fresh full36-case study and calibrated forecasting claims remain unproven. Keep unrelated primary-checkout state untouched; do not retry unchanged rejected remote credentials.
 ```
 
 - 2026-10-16T14:21:24.965083+00:00: Final planning checks passed: 38 source files unchanged against the branch base; all current document/source links and review hashes valid; no application diff. Application tests were not run because this turn changes planning documents only. The planning commit is local; the previously rejected GitHub credentials were not retried.
@@ -196,3 +203,15 @@ Continue only in /Users/rogerlin/.codex/worktrees/reflexive-world-simulation/Dee
 - 2026-10-17T13:05:21.688118+00:00: Phase10session75676 finishedexit0:12structurallyvalid responses,11cleared/all11actionmatches,1consistency_unresolved investment-mismatch-r1 withheld;cost.088024USD unknown0. Bothcoalitiontriggercorrectionsaccepted; investmentr0corrected2/2, r1hasnoaccepteddecision/noinferredreason. Independent11reviewpending. Runtime535filesstillfrozen; no furtherpaidreplicationplanned. Preservefull12denominator andhistoricalfullgatefailure.
 
 - 2026-10-17T13:17:36.129377+00:00: Phase10sealed:12structuralvalid,11correctactions/rationales,9qualitativepasses+2condition/timeassessmentdefects,1unresolved. Frozen summary1pass;404priorartifacts unchanged. Cost.088024USD; global18.823088955664USD remaining6.176911044336USD, activeOutputnull. Independentapprovednarrowv2promptclarification nowreleased; schema/rules/calls/oldv1/None unchanged. No inferredcauseforunresolvedrow.
+
+- 2026-10-17T13:22:00.842737+00:00: Temporal prompt-only clarification accepted308focusedchecks8.25s/no drift535 and independent review. All410priorartifacts unchanged. Registered phase11 fixed12calls max1.25USD within originalremaining6.176911044336; output/private/tmp/drf-world-consistency-temporal-20261017 manifestd8fc180c2e1414dda53182de171ada13d7aa88b8e5d3b2c072a83b3bab6c248e. Runtime/tests/pricing FROZEN; no replacement/regrading/full36promotion.
+
+- 2026-10-17T13:24:02.944608+00:00: Phase11 session55432 finished exit0. All12fixedrevisioncalls completed and matched expected actions; known exposure0.09028USD, unknown0. Independent decision/explanation review pending; no diagnostic pass/full36promotion claim yet. Source/pricing freeze continues through closeout.
+
+- 2026-10-17T13:27:55.806147+00:00: Phase11 closed after all12independent reviews:12correctactions,10fullqualitativepasses,2explanationfailures (existingconditioncalledabsent; unsupportedfuturewithin-periodvotingopportunity). All12knownusage, exposure0.09028USD, unknown0. Frozen-source summary1passed1.25s;410priorartifacts/535sources unchanged. Globalconservative18.913368955664USD, originalremaining6.086631044336USD, activeOutputnull. Preservefailedgate andworld-v1opt-in; no furtherrepeat merelytoseekpass. Finalreport/docs inprogress.
+
+- 2026-10-17T13:28:28.440189+00:00: Updated architecture diagram, EN/ZH usage notes, executable review contract, issue states and consolidated report. Recorded final action success separately from failed qualitative/full release gates. Final documentation/source-preservation review and explicit owned-path commit remain.
+
+- Final independent documentation review confirmed results, all11budget/report hashes, EN/ZH parity and196localMarkdown links. Corrected the phase9 ledger narrative from unsupported strictJSON attribution to recorded policy_invalid_response with specific cause unrecorded; no raw result or charge changed. Fixed two plaintext issue paths to include behavior-rerun/. Bounded rereview requested.
+
+- 2026-10-17T13:31:22.194377+00:00: Final independent closeout review closed both documentation findings; no outstanding source/documentation findings within reviewed scope. Two semantic explanation failures remain intentionally open. All implementation/review workers complete and closed, no active providerbatch. Explicit owned-path commit is the remaining delivery action; final-review.json binds reviewed artifacts.

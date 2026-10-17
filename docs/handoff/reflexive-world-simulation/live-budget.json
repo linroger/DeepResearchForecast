@@ -125,7 +125,7 @@
       "recordDirectory": "behavior-rerun/semantic-consistency/diagnostics",
       "manifestHash": "68a737cf23135ddb84310c35c69fce5cac14f7485159a30e42f09317695c0b89",
       "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-diagnostics-20261017T124014Z-u0d4j6ms",
-      "reason": "12calls10admissible/all10actionmatches;6independentpasses,4wrongoption-citationassessments;2failed(indexvalidation andstrictJSON). Evidence supportsv2server-owned scopebinding; no oldresultregrade.",
+      "reason": "12calls10admissible/all10actionmatches;6independentpasses,4wrongoption-citationassessments;2failed(indexvalidation andpolicy_invalid_response with specific cause unrecorded). Evidence supportsv2server-owned scopebinding; no oldresultregrade.",
       "settledCeilingUsd": "0.102118",
       "reportedActualUpperUsd": "0.102118",
       "unknownCeilingUsd": "0",
@@ -146,10 +146,26 @@
       "reportedActualUpperUsd": "0.088024",
       "unknownCeilingUsd": "0",
       "reportSha256": "c1b2ebbd3b7d895ee4cb63c930e7a82284ec211d6a5e6d8bc73a379f62baedca"
+    },
+    {
+      "phase": "consistency-temporal-clarification",
+      "output": "/private/tmp/drf-world-consistency-temporal-20261017",
+      "status": "closed_actions_correct_qualitative_gate_failed",
+      "limitUsd": "1.25",
+      "evaluationVersion": "world-consistency-replay/v1",
+      "policyFile": "behavior-rerun/semantic-consistency/server-bound-review/live-policy.json",
+      "recordDirectory": "behavior-rerun/semantic-consistency/temporal-clarification",
+      "manifestHash": "d8fc180c2e1414dda53182de171ada13d7aa88b8e5d3b2c072a83b3bab6c248e",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-temporal-20261017T132124Z-4c4se52f",
+      "reason": "12fixedcalls allcompleted/allactions correct;10independent fullpasses and2retained semantic explanation failures. Gate failed; no repeat/regrade/full36promotion.",
+      "settledCeilingUsd": "0.09028",
+      "reportedActualUpperUsd": "0.09028",
+      "unknownCeilingUsd": "0",
+      "reportSha256": "197b9b31bb2861bc6ee8ef12c8804f185963ffc7f2de3d3ac43d859a6ba6f3df"
     }
   ],
-  "status": "closed_pending_temporal_clarification",
-  "conservativeConsumedUsd": "18.823088955664",
-  "remainingAuthorizedUsd": "6.176911044336",
+  "status": "closed_no_promotion",
+  "conservativeConsumedUsd": "18.913368955664",
+  "remainingAuthorizedUsd": "6.086631044336",
   "billingClaim": false
 }

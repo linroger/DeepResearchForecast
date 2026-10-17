@@ -1,6 +1,6 @@
 # Reflexive world simulation: delivery and evaluation
 
-> Current continuation: the [final behavior repair and rerun report](behavior-rerun/public-grammar/REPORT.md) records36/36completed and independently reviewed,16/18contrasts, all6tradepairs passed, and retained investment/coalition failures. World-v1 remains opt-in. Global conservative exposure isUSD18.529952955664 of the original25; no live batch is active. The original delivery below is retained as historical evidence.
+> Current continuation: the [actor consistency repair report](behavior-rerun/semantic-consistency/REPORT.md) records optional durable candidate/revision review, 882 broad checks and 308 final focused checks. Its final 12-call saved-context confirmation produced 12 correct actions and 10 complete qualitative passes; two explanation failures remain. The latest full study remains 16/18 contrasts. World-v1 stays opt-in. Global conservative exposure is USD18.913368955664 of the original USD25, leaving USD6.086631044336; every phase is closed. The original delivery below is historical evidence.
 
 The `world-v1` engine implements the requested evolving-world feedback loop on `codex/reflexive-world-simulation`, based on main `8852ce123fa15a6b4f4c3e6e4e492435c0e3137b`. Implementation commit: `e902aedb1a8307c024da950060c4d7bb30f34220`. It is available by explicit opt-in. The live behavior gate did not pass, so `oasis-legacy` remains the default and the overall feature's promotion flag remains false. This delivery does not claim calibrated forecasts or validated general realism.
 

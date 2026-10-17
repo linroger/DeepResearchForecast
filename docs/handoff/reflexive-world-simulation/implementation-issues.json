@@ -79,9 +79,28 @@
   },
   {
     "id": "WORLD-SEMANTIC-BEHAVIOR",
+    "status": "targeted_repair_implemented_full_gate_pending",
+    "problem": "The prior full study retained valid investment/action disagreement and premature coalition opposition. Optional consistency review now checks candidate decisions before commitment; a fresh full-matrix acceptance remains necessary.",
+    "evidence": "behavior-rerun/semantic-consistency/REPORT.md: both retained action defects corrected in both directed revisions; all8controls preserved; final12/12actions and10/12fullqualitativepasses. This is not a fresh36case pass.",
+    "nextStep": "Keep world-v1 opt-in. Confirm the bounded saved-context review, then separately preregister fresh candidate generation and full trajectories with all36cases/all18contrasts; never substitute targeted revisions or lower thresholds."
+  },
+  {
+    "id": "WORLD-CONSISTENCY-JOURNAL",
+    "status": "resolved",
+    "problem": "Candidate/revision review needs durable two-call admission, atomic final/audit/metering and nonrenewable crash recovery.",
+    "evidence": "test_world_consistency_controller.py;test_world_consistency_store.py;test_world_consistency_v2.py; private journal/mode isolation and causal result tests."
+  },
+  {
+    "id": "WORLD-CONSISTENCY-SCOPE",
+    "status": "resolved",
+    "problem": "V1 models generated invalid or wrong assessment indexes and evidence paths even with correct final actions.",
+    "evidence": "Preserved phase9; explicitv2 compactchecks and whole-context server bindings. V1 unchanged; no selected-citation or truth-proof claim."
+  },
+  {
+    "id": "WORLD-CONSISTENCY-TEMPORAL",
     "status": "open_release_blocker",
-    "problem": "A valid investment intent contradicts its stated quantity; a coalition actor acts before its explicit conditional goal trigger. Nonfocal arithmetic/current-evidence mistakes also remain.",
-    "evidence": "behavior-rerun/public-grammar/live-evidence/retained-failures/; independent investment/coalition reviews;16/18contrasts.",
-    "nextStep": "Design and review a general mechanism that improves choice/goal/evidence consistency without injecting expected answers, weakening thresholds or rewriting old traces. Preserve opt-in; no automatic additional study."
+    "problem": "Review explanations confused unmet conditions with absent rules and current snapshots with future persistence.",
+    "evidence": "Final prompt-only source accepted308checks;12/12correctactions but10/12full qualitativepasses. Existing-condition denial and unsupported within-period voting opportunity remain. See behavior-rerun/semantic-consistency/temporal-clarification/live-evidence/qualitative-review.md.",
+    "nextStep": "Design explicit condition/time opportunity representations before another treatment; keep failed study intact. No repeated same-treatment attempts to obtain a pass."
   }
 ]

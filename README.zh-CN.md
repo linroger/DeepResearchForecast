@@ -26,7 +26,7 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
 
-最新行为复测完成了全部 36 个案例及独立审查。修复逐期需求与行动处理后，交易领域的 6 对比较全部通过；总体 18 对必需比较中有 16 对通过。投资行动与解释的一致性、联盟行动的目标触发时机仍存在问题，因此世界模式继续保持实验性显式启用。原始研究与首次 v2 复测结果均原样保留。源码链接、失败案例、验证证据及原始 25 美元预算核算见[最终修复与复测报告](docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/REPORT.md)。
+最近一次完整行为复测完成了全部 36 个案例及独立审查。交易领域的 6 对比较全部通过，总体 18 对必需比较中有 16 对通过。保留的投资数量与解释不一致、联盟行动早于触发条件的问题，促成了新建模拟可选的一致性复核：固定 `policy.decisionReview: "actor-consistency-v2"` 与 `limits.maxAttemptsPerSlot: 2`。一次候选决策调用后进行一次修订调用，只有有效且标记为 clear 的最终决策才可执行；失败或 unresolved 的复核会停止本回合，不增加第三次调用。历史运行及未启用该模式的行为保持不变。[一致性修复与确认报告](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/REPORT.md) 区分了基于已保存上下文的定向证据与尚未通过的完整行为发布门。最终定向确认的 12 次行动均正确，完整定性审查通过 10/12，两处解释错误仍然保留。世界模式继续保持实验性显式启用；所有原始研究结果及原始 25 美元总预算均保留。
 
 ```mermaid
 flowchart TB

@@ -1,0 +1,33 @@
+{
+  "originalOutput": "/private/tmp/drf-world-consistency-temporal-20261017",
+  "verification": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-temporal-closeout-azdhv3bu/evidence",
+  "beforeSummary": {
+    "report.json": "d48a98f3a6036df76e91f30bd59057fc8b981112e159fc6015d33770539e4d57",
+    "qualitative-review.md": "38f9704c7b3b98124659bed487b8653dd9cdaecf02fe2131a52e27bac20f371a",
+    "journal.json": "ae25a2d084ea54203788fefc1fa5df12b39f491d2bcdf19d92e9c346abb5bced",
+    "preregistration.json": "c18ce6120a868bf9a86e1196b12458a4578823315220be69472a017ddb16fcd6",
+    "qualitative-review.json": "ae20f3f7df549053cce772aa63d7aa7361ebf6b9e25ddd963384b6e498d8ed6c"
+  },
+  "artifactHashes": {
+    "report.json": "197b9b31bb2861bc6ee8ef12c8804f185963ffc7f2de3d3ac43d859a6ba6f3df",
+    "summary-junit.xml": "acaf02150f7b5ee4ffd9fd797172b317c2c116dca0234eb025705c711ee7dc39",
+    "report-before-qualitative.json": "d48a98f3a6036df76e91f30bd59057fc8b981112e159fc6015d33770539e4d57",
+    "qualitative-review.md": "38f9704c7b3b98124659bed487b8653dd9cdaecf02fe2131a52e27bac20f371a",
+    "summary-completed.json": "36310e5bcb515d4bf9293d38b1a69079bebe370ec74d7535281ad6ccb8caa226",
+    "journal.json": "ae25a2d084ea54203788fefc1fa5df12b39f491d2bcdf19d92e9c346abb5bced",
+    "preregistration.json": "c18ce6120a868bf9a86e1196b12458a4578823315220be69472a017ddb16fcd6",
+    "qualitative-review.json": "ae20f3f7df549053cce772aa63d7aa7361ebf6b9e25ddd963384b6e498d8ed6c"
+  },
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "priorArtifactsUnchanged": 410,
+  "frozenSourceFiles": 535,
+  "reviewedCases": 12,
+  "qualitativePasses": 10,
+  "qualitativeFailures": 2,
+  "correctActionCases": 12,
+  "runtimeFailedCases": 0
+}
