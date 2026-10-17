@@ -40,7 +40,9 @@ def main():
                   root / 'docs/handoff/reflexive-world-simulation/run_live_evaluation.py',
                   root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/live-policy.json',
                   root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/live-policy.json',
-                  root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/preflight.json']
+                  root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/preflight.json',
+                  root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/live-policy.json',
+                  root / 'docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/preflight.json']
     for folder in roots:
         candidates.extend((root / folder).rglob('*'))
     for path in sorted(set(candidates)):

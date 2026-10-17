@@ -240,7 +240,7 @@ def _verify_mask_hook(cases):
 def _source_hashes():
     return {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in (
         'evaluation.py', 'contracts.py', 'controller.py', 'examples.py', 'kernel.py',
-        'observations.py', 'policy.py', 'store.py', 'service.py')}
+        'observations.py', 'policy.py', 'store.py', 'service.py', 'review.py')}
 
 
 def _rubric(version):
@@ -381,7 +381,7 @@ def _bind_external_policy(policy, spec):
         'timeout': config['timeoutSeconds'], 'context': tariff['contextWindowTokens'],
         '_input_rate': decimal(tariff['inputUsdPerMillion']), '_output_rate': decimal(tariff['outputUsdPerMillion']),
         '_overhead': tariff['inputOverheadTokens'], '_output_parameter': tariff['outputTokenParameter'],
-        '_reasoning_effort': config.get('reasoningEffort'),
+        '_reasoning_effort': config.get('reasoningEffort'), 'decision_review': config.get('decisionReview'),
         'max_intents': limits['maxIntentsPerPhase'], '_max_messages': limits['maxInboxItems'],
         '_max_message_chars': limits['maxMessageChars'], '_actors': frozenset(a['actorId'] for a in spec['actors']),
     }
@@ -401,6 +401,7 @@ class _ReservedPolicy:
         self.policy = policy
         self.external = bool(getattr(policy, 'external', False))
         self.supports_feedback = getattr(policy, 'supports_feedback', False) is True
+        self.decision_review = getattr(policy, 'decision_review', None)
         self._lock = threading.Lock()
         self.calls = []
         if mode == 'external':
@@ -409,23 +410,30 @@ class _ReservedPolicy:
             require(getattr(policy, 'evaluation_mode', None) == 'scripted', 'evaluation_admission',
                     'Scripted policy must explicitly attest no external dispatches')
 
-    def reservation(self, observation, *, feedback=None):
+    def reservation(self, observation, *, feedback=None, review=None):
         kwargs = {'feedback': feedback} if self.supports_feedback else {}
+        if self.decision_review is not None:
+            kwargs['review'] = review
         reservation = self.policy.reservation(observation, **kwargs)
         cost = decimal(reservation['costUsd'], nonnegative=True)
         require(type(reservation['tokens']) is int and reservation['tokens'] > 0 and cost > 0,
                 'unbounded_transport', 'Metered policy must reserve positive complete exposure')
         return reservation
 
-    def decide(self, observation, *, feedback=None):
+    def decide(self, observation, *, feedback=None, review=None):
         start = time.monotonic_ns()
         try:
             kwargs = {'feedback': feedback} if self.supports_feedback else {}
+            if self.decision_review is not None:
+                kwargs['review'] = review
             return self.policy.decide(observation, **kwargs)
         finally:
             with self._lock:
-                self.calls.append({'slot': slot_id(observation['round'], observation['phase'], observation['actorId']),
-                                   'elapsedNs': time.monotonic_ns() - start})
+                record = {'slot': slot_id(observation['round'], observation['phase'], observation['actorId']),
+                          'elapsedNs': time.monotonic_ns() - start}
+                if self.decision_review is not None:
+                    record['purpose'] = 'revision' if review is not None else 'candidate'
+                self.calls.append(record)
 
 
 def _trace(store):
@@ -433,7 +441,10 @@ def _trace(store):
     for period in store.rounds():
         for decision in period['decisions']:
             slot = slot_id(decision['round'], decision['phase'], decision['actorId'])
-            records.append({'slot': slot, 'observation': store.observation(slot), 'decision': decision})
+            record = {'slot': slot, 'observation': store.observation(slot), 'decision': decision}
+            if store.spec.get('policy', {}).get('decisionReview') is not None:
+                record['consistencyReview'] = store.consistency_receipt(slot)
+            records.append(record)
     return {'head': store.head(), 'history': store.history(), 'rounds': store.rounds(), 'records': records}
 
 
@@ -727,7 +738,7 @@ def _operational_report(cases, receipts):
     known = [receipts[c['evaluationId']] for c in cases if c['evaluationId'] in receipts]
     attempts = [a for r in known for a in r['budget']['attempts']]
     operations = [r['operations'] for r in known if 'operations' in r]
-    return {'knownAttempts': len(attempts), 'knownRetries': sum(a['ordinal'] > 1 for a in attempts),
+    return {'knownAttempts': len(attempts), 'knownRetries': sum(a['ordinal'] > 1 and a.get('purpose') != 'revision' for a in attempts),
                 'unobservedCases': len(cases) - len(operations),
                 'rejectedCommittedIntents': sum(op['rejectedCommittedIntents'] for op in operations),
                 'totalCommittedIntents': sum(op['totalCommittedIntents'] for op in operations),
@@ -779,7 +790,7 @@ def _summarize(root, manifest, state):
                   'allocatedUsd': manifest['allocatedUsd'], 'maxCostUsd': manifest['maxCostUsd'],
                   'cases': {case['evaluationId']: receipts.get(case['evaluationId'], {'status': 'missing'})['status']
                          for case in manifest['cases']},
-                  'attempts': len(attempts), 'retries': sum(a['ordinal'] > 1 for a in attempts),
+                  'attempts': len(attempts), 'retries': sum(a['ordinal'] > 1 and a.get('purpose') != 'revision' for a in attempts),
                   'calibrationClaim': False, 'liveModelRealismClaim': False,
                   'qualitativeReview': 'Independent qualitative explanation review and hard-validity/privacy review remain required.'}
     report['rubricGate'] = ('incomplete' if any(d['status'] == 'incomplete' for d in domains.values()) else
@@ -787,6 +798,8 @@ def _summarize(root, manifest, state):
                                             for d in domains.values()) else 'failed')
     report['contrastGate'] = ('incomplete' if any(c['status'] == 'incomplete' for c in contrasts) else
                              'passed' if all(c['status'] == 'passed' for c in contrasts) else 'failed')
+    if any(a.get('purpose') == 'revision' for a in attempts):
+        report['revisionCalls'] = sum(a.get('purpose') == 'revision' for a in attempts)
     report['promotionAuthorized'] = False
     _write(root / 'report.json', report)
     return report

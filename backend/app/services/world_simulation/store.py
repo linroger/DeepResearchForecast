@@ -11,6 +11,7 @@ from decimal import Decimal, localcontext
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import threading
 from uuid import uuid4
@@ -35,6 +36,24 @@ _SCHEMA = (
     "CREATE TABLE attempts (attempt_id TEXT PRIMARY KEY, slot TEXT NOT NULL REFERENCES slots(slot), ordinal INTEGER NOT NULL, reserved_tokens INTEGER NOT NULL, reserved_cost TEXT NOT NULL, status TEXT NOT NULL, usage TEXT, UNIQUE(slot,ordinal))",
     "CREATE TABLE event_ids (event_id TEXT PRIMARY KEY, round INTEGER NOT NULL REFERENCES commits(round))",
 )
+_REVIEW_SCHEMA = (
+    "CREATE TABLE consistency_journal (attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id), "
+    "slot TEXT NOT NULL REFERENCES slots(slot), stage TEXT NOT NULL CHECK(stage IN ('candidate','revision')), "
+    "observation_hash TEXT NOT NULL, candidate_attempt_id TEXT REFERENCES attempts(attempt_id), candidate_hash TEXT, "
+    "decision TEXT, assessment TEXT, error TEXT, receipt_hash TEXT NOT NULL, UNIQUE(slot,stage))"
+)
+_REVIEW_COLUMNS = {"attempt_id", "slot", "stage", "observation_hash", "candidate_attempt_id",
+                   "candidate_hash", "decision", "assessment", "error", "receipt_hash"}
+
+
+def _review_pin(spec):
+    # Unpinned worlds have no dependency on, or migration to, the new journal.
+    policy = spec.get("policy", {})
+    if not isinstance(policy, dict) or "decisionReview" not in policy:
+        return None
+    from .review import review_mode
+
+    return review_mode(spec)
 
 
 def _json(value):
@@ -73,6 +92,7 @@ class WorldStore:
         self._closed = False
         self._owned_fence = None
         supplied = validate_spec(spec) if spec is not None else None
+        self._review_mode = _review_pin(supplied) if supplied is not None else None
         require(self.path.is_file() or (not self.read_only and supplied is not None),
                 "missing_world", "Opening a new world requires a specification")
         if not self.read_only:
@@ -142,6 +162,8 @@ class WorldStore:
         require(snapshot["round"] == 0, "invalid_round", "Initial world must be round zero")
         for statement in _SCHEMA:
             self._db.execute(statement)
+        if self._review_mode is not None:
+            self._db.execute(_REVIEW_SCHEMA)
         self._db.execute(f"PRAGMA application_id={_APPLICATION_ID}")
         self._db.execute(f"PRAGMA user_version={_VERSION}")
         self._db.execute("INSERT INTO model VALUES (1,?,?)", (canonical_json(spec), digest(spec)))
@@ -163,6 +185,7 @@ class WorldStore:
         row = self._db.execute("SELECT * FROM model WHERE singleton=1").fetchone()
         require(row is not None, "corrupt_store", "World model is missing")
         self._spec = validate_spec(json.loads(row["spec"]))
+        self._review_mode = _review_pin(self._spec)
         require(digest(self._spec) == row["spec_hash"], "corrupt_store", "World model hash changed")
         require(supplied is None or digest(supplied) == row["spec_hash"],
                 "world_identity_mismatch", "Provided specification differs from stored world")
@@ -187,6 +210,8 @@ class WorldStore:
                 "corrupt_store", "Committed event index is inconsistent")
         require(self._db.execute("SELECT 1 FROM writer WHERE singleton=1").fetchone() is not None,
                 "corrupt_store", "Writer fence record is missing")
+        if self._review_mode is not None:
+            self._verify_consistency_journal()
 
     def close(self):
         with self._lock:
@@ -239,8 +264,11 @@ class WorldStore:
         return self._records("resolutions")
 
     def rounds(self):
-        with self._lock:
+        context = self._consistency_read() if self._review_mode is not None else self._lock
+        with context:
             self._check_open()
+            if self._review_mode is not None:
+                self._verify_consistency_journal()
             return [{"round": row["round"], "revision": row["revision"], "snapshot": json.loads(row["snapshot"]),
                      "events": json.loads(row["events"]), "resolutions": json.loads(row["resolutions"]),
                      "decisions": json.loads(row["decisions"])}
@@ -359,6 +387,12 @@ class WorldStore:
         return self._receipt(slot, "observation")
 
     def decision(self, slot):
+        if self._review_mode is not None:
+            with self._consistency_read():
+                _, entries = self._verified_consistency(slot)
+                if len(entries) == 2 and entries[1]["status"] == "succeeded":
+                    return _json(entries[1]["decision"])
+                return None
         return self._receipt(slot, "decision")
 
     def _validated_decision(self, value, observation, actor, phase):
@@ -376,6 +410,8 @@ class WorldStore:
         value = _json(decision)
         with self._transaction():
             self._fence(fence)
+            require(self._review_mode is None, "consistency_admission_required",
+                    "Pinned decisions require atomic consistency revision completion")
             row = self._slot(slot)
             require(row["observation"] is not None, "missing_observation", "Decision requires its persisted observation")
             self._validated_decision(value, json.loads(row["observation"]), row["actor"], row["phase"])
@@ -390,6 +426,7 @@ class WorldStore:
         return {"tokens": tokens, "costUsd": quantity(decimal(cost, nonnegative=True))}
 
     def _budget(self):
+        review_entries = self._verify_consistency_journal() if self._review_mode is not None else {}
         attempts = []
         reserved_tokens = actual_tokens = unknown_tokens = 0
         with localcontext() as context:
@@ -408,6 +445,11 @@ class WorldStore:
                 attempts.append({"attemptId": row["attempt_id"], "slot": row["slot"], "ordinal": row["ordinal"],
                                  "status": row["status"], "reserved": {"tokens": row["reserved_tokens"],
                                  "costUsd": row["reserved_cost"]}, "usage": usage})
+                if self._review_mode is not None:
+                    entry = review_entries[row["attempt_id"]]
+                    attempts[-1]["purpose"] = entry["stage"]
+                    if entry["error"] is not None:
+                        attempts[-1]["errorCode"] = entry["error"]["code"]
             # Historical allowance may exceed the per-run exposure ceiling as
             # known usage releases unused reservations. Do not apply the scalar
             # input magnitude limit to this cumulative audit total.
@@ -419,7 +461,8 @@ class WorldStore:
 
     def budget_summary(self):
         """Reserved is lifetime allowance; exposure = actual + unknown (not reserved + actual)."""
-        with self._lock:
+        context = self._consistency_read() if self._review_mode is not None else self._lock
+        with context:
             self._check_open()
             return self._budget()
 
@@ -427,6 +470,8 @@ class WorldStore:
         reserved = self._usage(reserved_tokens, reserved_cost)
         with self._transaction():
             self._fence(fence)
+            require(self._review_mode is None, "consistency_admission_required",
+                    "Pinned attempts require an explicit consistency stage")
             row = self._slot(slot)
             require(row["observation"] is not None, "missing_observation", "Attempt requires its persisted observation")
             require(row["decision"] is None, "decision_already_saved", "A completed decision cannot dispatch again")
@@ -451,6 +496,8 @@ class WorldStore:
         encoded = canonical_json(normalized)
         with self._transaction():
             self._fence(fence)
+            require(self._review_mode is None, "consistency_admission_required",
+                    "Pinned attempts require atomic consistency completion")
             row = self._db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
             require(row is not None, "unknown_attempt", "Attempt reservation does not exist")
             self._slot(row["slot"])
@@ -462,6 +509,248 @@ class WorldStore:
                         "attempt_conflict", "Finished attempt receipt cannot change")
                 return
             self._db.execute("UPDATE attempts SET status=?,usage=? WHERE attempt_id=?", (status, encoded, attempt_id))
+
+    @contextmanager
+    def _consistency_read(self):
+        """Read related journal/slot/attempt rows from a single SQLite snapshot."""
+        with self._lock:
+            self._check_open()
+            owns_transaction = not self._db.in_transaction
+            if owns_transaction:
+                self._db.execute("BEGIN")
+            try:
+                yield
+                if owns_transaction:
+                    self._db.execute("COMMIT")
+            except BaseException:
+                if owns_transaction:
+                    self._db.execute("ROLLBACK")
+                raise
+
+    def _require_consistency(self):
+        require(self._review_mode is not None, "consistency_not_enabled", "Decision review is not pinned for this world")
+        table = self._db.execute("SELECT type FROM sqlite_master WHERE name='consistency_journal'").fetchone()
+        require(table is not None and table[0] == "table"
+                and {row[1] for row in self._db.execute("PRAGMA table_info(consistency_journal)")} == _REVIEW_COLUMNS,
+                "corrupt_consistency_journal", "Pinned consistency journal is missing or has an invalid schema")
+
+    @staticmethod
+    def _consistency_error(error):
+        if error is None:
+            return None
+        require(isinstance(error, dict) and set(error) == {"code", "message"}
+                and isinstance(error["code"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", error["code"])
+                and isinstance(error["message"], str), "invalid_consistency_error", "Failure requires a bounded error code and message")
+        # Never store an opaque exception/provider/model string, even privately.
+        return {"code": error["code"], "message": "Consistency attempt did not produce an admissible response."}
+
+    def _consistency_hash(self, entry):
+        return digest({"schemaVersion": "world-consistency-receipt/v1", "mode": self._review_mode,
+                       "specHash": digest(self._spec), **{key: entry[key] for key in (
+                           "attempt_id", "slot", "stage", "observation_hash", "candidate_attempt_id", "candidate_hash",
+                           "ordinal", "reserved_tokens", "reserved_cost", "status", "usage", "decision", "assessment", "error")}})
+
+    def _verified_consistency(self, slot):
+        """Validate private state before returning any candidate or final receipt."""
+        self._require_consistency()
+        round_index, phase, actor = self._slot_parts(slot)
+        state = {"candidate": None, "candidateAttempt": None, "reviewAttempt": None}
+        try:
+            row = self._db.execute("SELECT * FROM slots WHERE slot=?", (slot,)).fetchone()
+            entries = [dict(item) for item in self._db.execute(
+                "SELECT j.*,a.attempt_id AS linked_attempt,a.slot AS attempt_slot,a.ordinal,a.reserved_tokens,"
+                "a.reserved_cost,a.status,a.usage FROM consistency_journal j LEFT JOIN attempts a "
+                "ON a.attempt_id=j.attempt_id WHERE j.slot=? ORDER BY a.ordinal", (slot,))]
+            attempts = self._db.execute("SELECT COUNT(*) FROM attempts WHERE slot=?", (slot,)).fetchone()[0]
+            require(len(entries) == attempts <= 2, "corrupt_consistency_journal", "Consistency attempt linkage is incomplete")
+            if row is None:
+                require(not entries, "corrupt_consistency_journal", "Consistency slot is missing")
+                return state, []
+            require(row["round"] == round_index and row["phase"] == phase and row["actor"] == actor,
+                    "corrupt_consistency_journal", "Consistency slot identity changed")
+            observation = json.loads(row["observation"]) if row["observation"] is not None else None
+            if entries:
+                require(isinstance(observation, dict) and type(observation.get("round")) is int
+                        and observation["round"] == round_index and observation.get("actorId") == actor
+                        and observation.get("phase") == phase and isinstance(observation.get("observationId"), str),
+                        "corrupt_consistency_journal", "Consistency observation binding is invalid")
+            for ordinal, entry in enumerate(entries, 1):
+                for key in ("usage", "decision", "assessment", "error"):
+                    entry[key] = json.loads(entry[key]) if entry[key] is not None else None
+                stage = "candidate" if ordinal == 1 else "revision"
+                require(entry["linked_attempt"] == entry["attempt_id"] and entry["attempt_slot"] == slot
+                        and entry["ordinal"] == ordinal and entry["stage"] == stage
+                        and entry["observation_hash"] == digest(observation)
+                        and entry["status"] in {"succeeded", "failed", "unknown"},
+                        "corrupt_consistency_journal", "Consistency purpose or attempt identity changed")
+                self._usage(entry["reserved_tokens"], entry["reserved_cost"])
+                if ordinal == 1:
+                    require(entry["candidate_attempt_id"] is None and entry["candidate_hash"] is None,
+                            "corrupt_consistency_journal", "Candidate has an invalid predecessor")
+                else:
+                    candidate = entries[0]
+                    require(candidate["status"] == "succeeded" and candidate["decision"] is not None
+                            and entry["candidate_attempt_id"] == candidate["attempt_id"]
+                            and entry["candidate_hash"] == digest(candidate["decision"]),
+                            "corrupt_consistency_journal", "Revision is not bound to a successful candidate")
+                require(entry["receipt_hash"] == self._consistency_hash(entry),
+                        "corrupt_consistency_journal", "Consistency receipt hash changed")
+                if entry["usage"] is None:
+                    require(entry["status"] == "unknown" and all(entry[key] is None for key in ("decision", "assessment", "error")),
+                            "corrupt_consistency_journal", "Unfinished consistency attempt has a payload")
+                else:
+                    usage = entry["usage"]
+                    require(isinstance(usage, dict) and set(usage) == {"tokens", "costUsd"},
+                            "corrupt_consistency_journal", "Consistency usage is invalid")
+                    self._usage(usage["tokens"], usage["costUsd"])
+                    require(usage["tokens"] <= entry["reserved_tokens"]
+                            and decimal(usage["costUsd"]) <= decimal(entry["reserved_cost"]),
+                            "corrupt_consistency_journal", "Consistency usage exceeds its reservation")
+                    if entry["status"] == "succeeded":
+                        require(entry["error"] is None, "corrupt_consistency_journal", "Successful consistency receipt contains an error")
+                        self._validated_decision(entry["decision"], observation, actor, phase)
+                        if ordinal == 1:
+                            require(entry["assessment"] is None, "corrupt_consistency_journal", "Candidate contains a final assessment")
+                        else:
+                            from .review import validate_assessment
+
+                            assessment = validate_assessment(entry["assessment"], observation, entry["decision"])
+                            require(assessment["status"] == "clear", "corrupt_consistency_journal", "Final assessment is not clear")
+                    else:
+                        require(entry["decision"] is None and entry["assessment"] is None
+                                and self._consistency_error(entry["error"]) == entry["error"],
+                                "corrupt_consistency_journal", "Failed consistency attempt has an invalid payload")
+                attempt = {"attemptId": entry["attempt_id"], "status": entry["status"], "stage": stage}
+                if entry["error"] is not None:
+                    attempt["errorCode"] = entry["error"]["code"]
+                state["candidateAttempt" if ordinal == 1 else "reviewAttempt"] = attempt
+                if ordinal == 1 and entry["status"] == "succeeded":
+                    state["candidate"] = entry["decision"]
+            final = entries[-1]["decision"] if len(entries) == 2 and entries[-1]["status"] == "succeeded" else None
+            require(row["decision"] == (canonical_json(final) if final is not None else None),
+                    "corrupt_consistency_journal", "Final decision lacks its matching completed revision")
+            return state, entries
+        except (ValueError, TypeError, KeyError, sqlite3.DatabaseError) as error:
+            if isinstance(error, WorldError) and error.code == "corrupt_consistency_journal":
+                raise
+            raise WorldError("corrupt_consistency_journal", "Consistency journal validation failed") from None
+
+    def _verify_consistency_journal(self):
+        self._require_consistency()
+        entries = {}
+        slots = {row[0] for row in self._db.execute(
+            "SELECT slot FROM slots UNION SELECT slot FROM attempts UNION SELECT slot FROM consistency_journal")}
+        for slot in slots:
+            _, rows = self._verified_consistency(slot)
+            entries.update((row["attempt_id"], row) for row in rows)
+        # A committed decision cannot outlive the private admission proof.
+        for row in self._db.execute("SELECT decisions FROM commits WHERE round>0"):
+            for decision in json.loads(row[0]):
+                slot = f"{decision['round']}:{decision['phase']}:{decision['actorId']}"
+                _, rows = self._verified_consistency(slot)
+                require(len(rows) == 2 and rows[1]["status"] == "succeeded" and rows[1]["decision"] == decision,
+                        "corrupt_consistency_journal", "Committed decision lacks its consistency receipt")
+        return entries
+
+    def consistency_state(self, slot):
+        with self._consistency_read():
+            state, _ = self._verified_consistency(slot)
+            return _json(state)
+
+    def consistency_receipt(self, slot):
+        """Private audit only; public world/result exports never include this."""
+        with self._consistency_read():
+            state, entries = self._verified_consistency(slot)
+            if len(entries) != 2 or entries[1]["status"] != "succeeded":
+                return None
+            candidate, final = entries
+            return _json({"mode": self._review_mode, "slot": slot,
+                          "observationId": final["decision"]["observationId"], "observationHash": final["observation_hash"],
+                          "candidate": state["candidate"], "candidateHash": final["candidate_hash"],
+                          "finalDecisionId": final["decision"]["decisionId"], "finalDecisionHash": digest(final["decision"]),
+                          "assessment": final["assessment"], "receiptHash": final["receipt_hash"],
+                          "stages": [{"attemptId": item["attempt_id"], "stage": item["stage"], "status": item["status"],
+                                      "usage": item["usage"], "reserved": {"tokens": item["reserved_tokens"],
+                                      "costUsd": item["reserved_cost"]}} for item in (candidate, final)]})
+
+    def reserve_consistency_attempt(self, slot, stage, fence, reserved_tokens=0, reserved_cost="0"):
+        require(stage in ("candidate", "revision"), "invalid_consistency_stage", "Unknown consistency stage")
+        reserved = self._usage(reserved_tokens, reserved_cost)
+        with self._transaction():
+            self._fence(fence)
+            self._require_consistency()
+            row = self._slot(slot)
+            require(row["observation"] is not None, "missing_observation", "Attempt requires its persisted observation")
+            state, entries = self._verified_consistency(slot)
+            require(row["decision"] is None, "decision_already_saved", "A completed decision cannot dispatch again")
+            require((stage == "candidate" and not entries) or (
+                    stage == "revision" and len(entries) == 1 and state["candidate"] is not None),
+                    "consistency_stage_exhausted", "Consistency stages cannot be skipped or replaced")
+            exposure = self._budget()["exposure"]
+            with localcontext() as context:
+                context.prec = 64
+                require(exposure["tokens"] + reserved["tokens"] <= self._spec["limits"]["maxTokens"]
+                        and decimal(exposure["costUsd"]) + decimal(reserved["costUsd"]) <= decimal(self._spec["limits"]["maxCostUsd"]),
+                        "run_budget_exhausted", "Run token or cost allowance exhausted")
+            attempt_id = uuid4().hex
+            entry = {"attempt_id": attempt_id, "slot": slot, "stage": stage, "observation_hash": digest(json.loads(row["observation"])),
+                     "candidate_attempt_id": entries[0]["attempt_id"] if entries else None,
+                     "candidate_hash": digest(state["candidate"]) if entries else None,
+                     "ordinal": len(entries) + 1, "reserved_tokens": reserved["tokens"], "reserved_cost": reserved["costUsd"],
+                     "status": "unknown", "usage": None, "decision": None, "assessment": None, "error": None}
+            self._db.execute("INSERT INTO attempts VALUES (?,?,?,?,?,'unknown',NULL)",
+                             (attempt_id, slot, entry["ordinal"], reserved["tokens"], reserved["costUsd"]))
+            self._db.execute("INSERT INTO consistency_journal VALUES (?,?,?,?,?,?,NULL,NULL,NULL,?)",
+                             (attempt_id, slot, stage, entry["observation_hash"], entry["candidate_attempt_id"],
+                              entry["candidate_hash"], self._consistency_hash(entry)))
+        return attempt_id
+
+    def finish_consistency_attempt(self, attempt_id, *, status, usage, fence, decision=None, assessment=None, error=None):
+        require(status in ("succeeded", "failed", "unknown"), "invalid_attempt_status", "Invalid attempt outcome")
+        require(isinstance(usage, dict) and set(usage) == {"tokens", "costUsd"}, "invalid_usage", "Usage must contain tokens and costUsd")
+        normalized = self._usage(usage["tokens"], usage["costUsd"])
+        decision = _json(decision) if decision is not None else None
+        assessment = _json(assessment) if assessment is not None else None
+        error = self._consistency_error(error)
+        with self._transaction():
+            self._fence(fence)
+            self._require_consistency()
+            attempt = self._db.execute("SELECT slot FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+            require(attempt is not None, "unknown_attempt", "Attempt reservation does not exist")
+            _, entries = self._verified_consistency(attempt["slot"])
+            entry = next((item for item in entries if item["attempt_id"] == attempt_id), None)
+            require(entry is not None, "corrupt_consistency_journal", "Attempt has no consistency purpose")
+            payload = {"status": status, "usage": normalized, "decision": decision, "assessment": assessment, "error": error}
+            if entry["usage"] is not None:
+                require(all(entry[key] == value for key, value in payload.items()),
+                        "attempt_conflict", "Finished consistency receipt cannot change")
+                return
+            row = self._slot(attempt["slot"])
+            require(normalized["tokens"] <= entry["reserved_tokens"]
+                    and decimal(normalized["costUsd"]) <= decimal(entry["reserved_cost"]),
+                    "reservation_exceeded", "Reported usage exceeds the reserved allowance")
+            if status == "succeeded":
+                require(error is None, "invalid_consistency_payload", "Successful consistency attempts cannot contain errors")
+                observation = json.loads(row["observation"])
+                self._validated_decision(decision, observation, row["actor"], row["phase"])
+                if entry["stage"] == "candidate":
+                    require(assessment is None, "invalid_consistency_payload", "Candidate cannot contain a final assessment")
+                else:
+                    from .review import validate_assessment
+
+                    assessment = validate_assessment(assessment, observation, decision)
+                    require(assessment["status"] == "clear", "consistency_unresolved", "Consistency assessment remains unresolved")
+                    payload["assessment"] = assessment
+            else:
+                require(decision is None and assessment is None, "invalid_consistency_payload", "Failed attempts cannot admit a decision or assessment")
+            entry.update(payload)
+            self._db.execute("UPDATE attempts SET status=?,usage=? WHERE attempt_id=?", (status, canonical_json(normalized), attempt_id))
+            self._db.execute("UPDATE consistency_journal SET decision=?,assessment=?,error=?,receipt_hash=? WHERE attempt_id=?",
+                             (canonical_json(decision) if decision is not None else None,
+                              canonical_json(assessment) if assessment is not None else None,
+                              canonical_json(error) if error is not None else None, self._consistency_hash(entry), attempt_id))
+            if status == "succeeded" and entry["stage"] == "revision":
+                self._db.execute("UPDATE slots SET decision=? WHERE slot=?", (canonical_json(decision), entry["slot"]))
 
     def _validate_closure(self, snapshot, previous=None):
         require(isinstance(snapshot, dict), "invalid_snapshot", "World snapshot must be an object")
@@ -515,6 +804,8 @@ class WorldStore:
                 "invalid_commit", "Round evidence must be lists and expected round an integer")
         with self._transaction():
             self._fence(fence)
+            if self._review_mode is not None:
+                self._verify_consistency_journal()
             head = self._head_row()
             require(head["round"] == expected_round, "stale_round", "Committed head changed")
             round_index = expected_round + 1

@@ -1,0 +1,43 @@
+{
+  "integrationRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-integration-first-20261017T122252Z-tldty5gf",
+  "integrationPassed": 853,
+  "integrationSeconds": "165.81",
+  "finalRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-review-closure-20261017T122724Z-8xzy9o2w",
+  "finalPassed": 345,
+  "finalSeconds": "7.65",
+  "files": 532,
+  "sourceDrift": [],
+  "changesSinceBroadGate": [
+    "backend/app/services/world_simulation/consistency_evaluation.py",
+    "backend/tests/test_world_consistency_evaluation.py",
+    "backend/tests/test_world_consistency_policy.py"
+  ],
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "priorArtifactsUnchanged": 392,
+  "manifestHash": "58694fca4c38d2f64c993ed6c309cb03501521deda87206cc926587ce303d9cf",
+  "maxUsd": "1.25",
+  "calls": 12,
+  "sourceReview": {
+    "reviewer": "Epicurus",
+    "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+    "verdict": "Core and policy no findings; both evaluator P1/P2 closed after behavioral red and narrow source rereview."
+  },
+  "knownLimits": "Directed historical candidate revision only; not fresh candidate generation/full matrix/calibration.",
+  "preDispatchContractRepair": {
+    "beforeAnyProviderCall": true,
+    "history": "launch-preflight-failure.json",
+    "gate64": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-launch-closure-20261017T123034Z-9lo1bepr",
+    "finalGate": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0",
+    "passed": 29,
+    "seconds": "4.36",
+    "sourceDrift": [],
+    "review": "Epicurus closed actual shared records/allocatedUsd contract with no findings."
+  },
+  "dispatchManifestHash": "9969cb8b2f3cdb2e3d638ba07e74775398af67975fe7c773bfd02390451a34f1",
+  "dispatchGate": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0"
+}

@@ -179,6 +179,9 @@ def _basis(record: dict) -> None:
 def validate_spec(raw: Any) -> dict:
     require(isinstance(raw, dict), "invalid_spec", "World specification must be an object")
     spec = clone(raw)
+    from .review import review_mode
+
+    review_mode(spec)
     if "interactionQueuePolicy" in spec:
         require(spec["interactionQueuePolicy"] == "presented-v1", "unsupported_queue_policy",
                 "Unknown interaction queue policy")

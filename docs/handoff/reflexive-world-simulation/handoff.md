@@ -1,8 +1,8 @@
 # Handoff.md
 
-**Last Updated (UTC):** 2026-10-16T20:16:40.483730+00:00
-**Status:** Repairs and reruns complete; semantic behavior release blockers remain; opt-in retained.
-**Current Focus:** Deliver the verified local changes and retained behavior failures; no active provider batch or pending subagent.
+**Last Updated (UTC):** 2026-10-17T12:39:20.618210+00:00
+**Status:** In progress — semantic consistency repair; first directed confirmation remains incomplete.
+**Current Focus:** Preserve the reviewed phase8 checkpoint, then capture fixed assessment-validation diagnostics without changing actor behavior.
 
 ## 1) Request & Context
 
@@ -168,3 +168,19 @@ Continue only in /Users/rogerlin/.codex/worktrees/reflexive-world-simulation/Dee
 - 2026-10-16T20:20:27.413738+00:00: Staged whitespace scan found one final blank line in immutable qualitative-review-investment.md. Retained exact reviewer/archive bytes and hashes; source and editable-document whitespace gate excludes only that evidence file. Recorded precise exception in public-grammar/delivery-checks.json. No application or scored-result changes.
 
 - 2026-10-16T20:20:48.467781+00:00: Created local implementation/evidence commit 095b9ef94ca83cab43491b1d32497e186937dda2 with54explicitlyownedfiles. Worktree clean immediately after commit; all523frozen sourcefiles and273priorartifacts still hash-match. Allsubagents completed/closed, no activeproviderbatch. This documentation closeout records the commit without changing reviewed source/report/results. Remote push remains blocked by earlier rejected credentials and was not retried unchanged.
+
+- 2026-10-17T12:05:55.361476+00:00: User renewed “fix the issues.” Started bounded semantic-consistency repair from clean95ebd04. Read actual controller/store/policy, refreshed verification/review skills and originalremainingUSD6.470047044336. Epicurus reviewing a general optional two-call candidate/revision design; coordinator owns persistence/interface plan. No runtime source changes/provider calls yet. New plan: behavior-rerun/semantic-consistency/PLANS.md. Priorresults/default/thresholds unchanged.
+
+- 2026-10-17T12:13:21.788900+00:00: Independent design accepted optional actor-consistency-v1 candidate/revision with same2totalcalls, private durable journal, atomic finaldecision/audit/metering and unchangedlegacyreplay. Frozen APIs in semantic-consistency/contract.md; store/policy workers disjoint, parent owns pureassessment/controller/compiler/evaluator. Meaningful old-source regression2failed: purchase3vs2andprematurevote actuallycommitted. Sixexactfailure/controlcontexts saved withseparateanalystlabels. Preserved all392priorstudy artifacts byhash; no livecalls.
+
+- 2026-10-17T12:29:04.024543+00:00: Semanticreview source accepted:853broadtests then345focusedclosure, no drift532. Independent review P1missing-preregreset/P2stale-manifest reproduced2red and closed; sourcechanges since853 limitedharness+two testfiles. All392priorartifacts unchanged. Registeredphase8 directed12revisioncalls, capUSD1.25 withinoriginalremaining6.470047044336, output/private/tmp/drf-world-consistency-replay-20261017, manifest58694fca4c38d2f64c993ed6c309cb03501521deda87206cc926587ce303d9cf. Source/fixtures/pricingFROZEN. No newcandidate generation/fullmatrix/promotion claim.
+
+- 2026-10-17T12:30:03.789649+00:00: Directedlaunch stoppedbeforefactory/client construction withKeyError allocatedUsd; newmanifest missedsharedlauncherallocationfield. No outputdirectory orphasebindingfiles exist,0providerdispatch/nocharge. Markedpending/activeOutputnull, retained initialreviewedmanifest. Correctingcommonrecordcontract andaddingregressionbeforefreshguard/review andauthorization. No priorresultorbudgetreset.
+
+- 2026-10-17T12:32:02.116073+00:00: Sharedlaunchcontractfixed allocatedUsd=maxCostUsd with actual helper/persist test. Gate64passed then final29passed4.36s/nodrift532 after unused-local cleanup; independent reviewclosed. Newdispatchmanifest9969cb8b2f3cdb2e3d638ba07e74775398af67975fe7c773bfd02390451a34f1; same12fixedcontexts and1.25USDcap,0priorphase8calls. Reauthorizedfresh output; fullsourcefreeze.
+
+- 2026-10-17T12:34:37.636628+00:00: Phase8session12465 finishedexit0:12revisioncalls,9valid/all9actionmatches,3knownfailed invalid_assessment; exposure.102994USD unknown0. Savederrors currentlylackfixedvalidationmessage, so exactfailedrulecannotberecoveredfromreceipts; no speculationaboutcause. Independentreviewof9completedrequested; all12remain denominator, no fullgatepromotion. Sourcefreezecontinuesuntilreview/budgetclosure.
+
+- 2026-10-17T12:38:28.082417+00:00: Phase8closed with9independentpasses/12attempts,3invalid_assessment failures retained; exact-source summary1passed. Both originalsemanticerrors corrected in the admissible repetitions, all7completedcontrols preserved, no inferredcausefor3lostmessages. Archivedprereg/journal/reviews/report. Phasecost.102994USD; global18.632946955664USD; remaining6.367053044336USD, activeOutputnull. Sourcefreeze released for bounded diagnostic-message recording only; no actor/prompt/scorer change before cause evidence.
+
+- Immutable semantic-consistency/red-junit.xml retains its captured pytest assertion whitespace. Scoped source/editable-document whitespace check excludes only that raw receipt; no evidence bytes are cleaned or rewritten.

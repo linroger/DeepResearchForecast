@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-17T12:30:03.789649+00:00",
+  "error": "KeyError: allocatedUsd in run_live_evaluation.main while constructing phase records",
+  "beforeFactory": true,
+  "providerCalls": 0,
+  "outputAbsent": true,
+  "phaseRecordsAbsent": true,
+  "previousManifestHash": "58694fca4c38d2f64c993ed6c309cb03501521deda87206cc926587ce303d9cf",
+  "fix": "Add explicit allocatedUsd=maxCostUsd to directed manifest and test the common launcher record constructor."
+}

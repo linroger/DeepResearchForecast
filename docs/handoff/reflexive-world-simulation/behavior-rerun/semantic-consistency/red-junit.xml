@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="1.378" timestamp="2026-10-17T20:11:48.177811" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_consistency_controller" name="test_causal_loop_uses_revised_choice_before_effects[investment]" time="0.047"><failure message="AssertionError: assert '3' == '2'&#10;  &#10;  - 2&#10;  + 3">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-red-lluhvj1_/evidence/pytest-tmp/test_causal_loop_uses_revised_0')
+domain = 'investment'
+
+    @pytest.mark.parametrize('domain', ['investment', 'coalition'])
+    def test_causal_loop_uses_revised_choice_before_effects(tmp_path, domain):
+        spec = specification(domain)
+        policy = RevisingPolicy(domain)
+        with WorldStore(tmp_path / 'world.sqlite3', spec) as store:
+            fence = store.acquire_writer('test')
+            head = run_round(store, policy, fence)
+            if domain == 'investment':
+&gt;               assert head['accounts']['buyer_stock']['balance'] == '2'
+E               AssertionError: assert '3' == '2'
+E                 
+E                 - 2
+E                 + 3
+
+backend/tests/test_world_consistency_controller.py:78: AssertionError</failure></testcase><testcase classname="tests.test_world_consistency_controller" name="test_causal_loop_uses_revised_choice_before_effects[coalition]" time="0.037"><failure message="AssertionError: assert not [{'accepted': True, 'actorId': 'org_c', 'code': 'accepted', 'explanation': 'Action accepted under the declared mechanism', ...}]">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-red-lluhvj1_/evidence/pytest-tmp/test_causal_loop_uses_revised_1')
+domain = 'coalition'
+
+    @pytest.mark.parametrize('domain', ['investment', 'coalition'])
+    def test_causal_loop_uses_revised_choice_before_effects(tmp_path, domain):
+        spec = specification(domain)
+        policy = RevisingPolicy(domain)
+        with WorldStore(tmp_path / 'world.sqlite3', spec) as store:
+            fence = store.acquire_writer('test')
+            head = run_round(store, policy, fence)
+            if domain == 'investment':
+                assert head['accounts']['buyer_stock']['balance'] == '2'
+            else:
+&gt;               assert not [r for r in store.rounds()[0]['resolutions'] if r['actorId'] == 'org_c']
+E               AssertionError: assert not [{'accepted': True, 'actorId': 'org_c', 'code': 'accepted', 'explanation': 'Action accepted under the declared mechanism', ...}]
+
+backend/tests/test_world_consistency_controller.py:80: AssertionError</failure></testcase></testsuite></testsuites>

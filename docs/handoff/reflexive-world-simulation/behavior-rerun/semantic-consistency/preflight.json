@@ -1,0 +1,5 @@
+{
+  "evaluationVersion": "world-consistency-replay/v1",
+  "maxUsd": "1.25",
+  "policyFile": "live-policy.json"
+}

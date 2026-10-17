@@ -57,9 +57,11 @@ def admit_launch(repository, notes, offline_run, output):
     if consumed + maximum > Decimal('25'):
         raise ValueError('Combined evaluation phases exceed original approval')
     version = active.get('evaluationVersion')
-    if version not in {'m5-behavior/v1', 'm5-behavior/v2'}:
+    if version not in {'m5-behavior/v1', 'm5-behavior/v2', 'world-consistency-replay/v1'}:
         raise ValueError('Unknown evaluation version')
-    preflight = json.loads((offline_run / 'evidence/reviewed-preregistration.json').read_text())
+    preflight_name = ('reviewed-consistency-preregistration.json' if version == 'world-consistency-replay/v1'
+                      else 'reviewed-preregistration.json')
+    preflight = json.loads((offline_run / 'evidence' / preflight_name).read_text())
     expected_manifest = active.get('manifestHash')
     if (not expected_manifest or preflight.get('manifestHash') != expected_manifest
             or preflight.get('schemaVersion') != version):
@@ -82,6 +84,18 @@ def admit_launch(repository, notes, offline_run, output):
             'manifestHash': expected_manifest,
             'pricingPath': local_path(active.get('policyFile', 'live-policy.json')),
             'recordDirectory': records}
+
+
+def build_phase_records(manifest, admitted, pricing, offline_run):
+    """Build the shared launch records before any policy factory may dispatch."""
+    return (
+        {'output': admitted['destination'], 'maxCostUsd': admitted['maximum'],
+         'evaluationVersion': admitted['version'], 'manifestHash': manifest['manifestHash'],
+         'offlineRun': str(offline_run.resolve())},
+        {'manifestHash': manifest['manifestHash'], 'sourceHashes': manifest['sourceHashes'],
+         'allocatedUsd': manifest['allocatedUsd'], 'policyId': pricing['policyId'],
+         'output': admitted['destination'], 'authorization': pricing['authorization']},
+    )
 
 
 def persist_phase_records(records, location, binding):
@@ -114,7 +128,7 @@ def main():
     repository = Path(__file__).resolve().parents[3]
     notes = Path(__file__).resolve().parent
     admitted = admit_launch(repository, notes, args.offline_run, args.output)
-    destination, maximum = admitted['destination'], admitted['maximum']
+    maximum = admitted['maximum']
     version, records = admitted['version'], admitted['recordDirectory']
     # Explicitly prevent app recovery hooks. This marker is not a network guard;
     # real HTTP requests below are authorized only for the frozen synthetic matrix.
@@ -131,7 +145,10 @@ def main():
         os.environ[key] = config[key]
     del config
     sys.path.insert(0, str(repository / 'backend'))
-    from app.services.world_simulation.evaluation import preregister, run_evaluation
+    if version == 'world-consistency-replay/v1':
+        from app.services.world_simulation.consistency_evaluation import preregister, run_evaluation
+    else:
+        from app.services.world_simulation.evaluation import preregister, run_evaluation
     from app.services.world_simulation.policy import StrictHTTPPolicy
     from app.services.world_simulation.contracts import WorldError
     pricing = json.loads(admitted['pricingPath'].read_text())
@@ -142,12 +159,7 @@ def main():
         'manifestHash': manifest['manifestHash'], 'coordinator': 'Codex implementation coordinator',
         'evidenceRefs': [str(args.offline_run.resolve()), str(notes / 'live-policy-sources.json'),
                          str(notes / 'implementation-approval.json'), str(records / 'pricing-verification.json')]}
-    persist_phase_records(records,
-        {'output': destination, 'maxCostUsd': maximum, 'evaluationVersion': version,
-         'manifestHash': manifest['manifestHash'], 'offlineRun': str(args.offline_run.resolve())},
-        {'manifestHash': manifest['manifestHash'], 'sourceHashes': manifest['sourceHashes'],
-         'allocatedUsd': manifest['allocatedUsd'], 'policyId': pricing['policyId'],
-         'output': destination, 'authorization': pricing['authorization']})
+    persist_phase_records(records, *build_phase_records(manifest, admitted, pricing, args.offline_run))
 
     def factory(spec):
         # Repeated transport failures do not justify dispatching the rest of the
@@ -160,8 +172,8 @@ def main():
     factory.evaluation_mode = 'external'
     report = run_evaluation(args.output.resolve(), factory, pricing, max_usd=maximum, evaluation_version=version)
     print(json.dumps({'manifestHash': report['manifestHash'], 'cases': report['cases'],
-        'budget': report['budget'], 'rubricGate': report['rubricGate'],
-        'contrastGate': report['contrastGate']}), flush=True)
+        'budget': report['budget'], 'rubricGate': report.get('rubricGate'),
+        'contrastGate': report.get('contrastGate'), 'diagnosticGate': report.get('diagnosticGate')}), flush=True)
 
 
 if __name__ == '__main__':

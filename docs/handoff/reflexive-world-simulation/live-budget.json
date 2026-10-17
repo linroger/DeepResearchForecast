@@ -97,10 +97,27 @@
       "unknownCeilingUsd": "0",
       "reportSha256": "3c37b6b71fd407d3fa9e87d4efcba46547eb60e0617b73a014124003e4b1f74e",
       "originalManifestHash": "6c5be0e1f3dbabe812bd7e8a5db58fa7ef26de093a6c67af571d86ef5b426081"
+    },
+    {
+      "phase": "directed-actor-consistency-replay",
+      "output": "/private/tmp/drf-world-consistency-replay-20261017",
+      "status": "closed_directed_review_incomplete",
+      "limitUsd": "1.25",
+      "evaluationVersion": "world-consistency-replay/v1",
+      "policyFile": "behavior-rerun/semantic-consistency/live-policy.json",
+      "recordDirectory": "behavior-rerun/semantic-consistency",
+      "manifestHash": "9969cb8b2f3cdb2e3d638ba07e74775398af67975fe7c773bfd02390451a34f1",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0",
+      "reason": "12revisioncalls,9completed/9matched/9independentlyreviewed,3knowninvalid_assessment failures retained; no inferred failure reason, no fullgatepromotion.",
+      "preDispatchFailure": "behavior-rerun/semantic-consistency/launch-preflight-failure.json",
+      "settledCeilingUsd": "0.102994",
+      "reportedActualUpperUsd": "0.102994",
+      "unknownCeilingUsd": "0",
+      "reportSha256": "4eccb26ec710bc37f358f33bc80bbac78443128b7b4c825770f43b75a2a6f136"
     }
   ],
-  "status": "closed_no_promotion",
-  "conservativeConsumedUsd": "18.529952955664",
-  "remainingAuthorizedUsd": "6.470047044336",
+  "status": "closed_pending_diagnostic_followup",
+  "conservativeConsumedUsd": "18.632946955664",
+  "remainingAuthorizedUsd": "6.367053044336",
   "billingClaim": false
 }
