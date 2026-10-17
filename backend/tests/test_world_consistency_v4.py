@@ -145,3 +145,25 @@ def test_v4_high_profile_preregistrations_and_quotes_never_dispatch():
                     'providerCalls': 0, 'profile': config})
     finally:
         sdk.close()
+
+
+def test_v4_known_validator_failure_keeps_specific_safe_reason_and_charge(tmp_path):
+    from app.services.world_simulation import consistency_evaluation as replay
+    from test_world_consistency_evaluation import factory_for
+
+    config = v4_pricing(); manifest = replay.preregister(config, '1.25')
+    config['authorization'] = {'manifestHash': manifest['manifestHash'], 'offlineGatesPassed': True,
+                               'pricingVerified': True, 'evidenceRefs': ['fixture://v4-safe-failure']}
+    calls = []; factory, clients = factory_for(manifest, calls, first_failure='invalid_assessment')
+    root = tmp_path / 'run'
+    try:
+        report = replay.run_evaluation(root, factory, config)
+        row = json.loads((root / 'journal.json').read_text())['cases'][manifest['cases'][0]['evaluationId']]
+        assert row['status'] == 'failed' and row['errorCode'] == 'invalid_assessment'
+        assert row['usage']['tokens'] == 30 and report['attempts'] == len(calls) == 12
+        assert row['errorMessage'] == 'V4 private fields cannot contain reserved control names'
+        assert 'SENTINEL_PROVIDER_BODY' not in json.dumps(row) and 'reviewShape' not in row
+        assert report['completedCases'] == 11 and report['diagnosticGate'] == 'incomplete'
+    finally:
+        for client in clients:
+            client.close()
