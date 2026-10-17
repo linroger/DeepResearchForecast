@@ -1567,8 +1567,15 @@ class SimulationManager:
                 state.error = run.get("error")
         return state
 
-    def list_simulations(self, project_id: Optional[str] = None) -> List[SimulationState]:
-        """列出所有模拟"""
+    def list_simulations(self, project_id: Optional[str] = None, *,
+                         skip_unverifiable_worlds: bool = False) -> List[SimulationState]:
+        """列出所有模拟
+
+        A selected world-v1 run that fails integrity verification fails the list closed
+        (world-v1's rule, pinned by test_world_lifecycle); ``skip_unverifiable_worlds`` is for
+        the cross-project history index, which logs and skips such a run instead so one damaged
+        world cannot hide every other run.
+        """
         simulations = []
         
         if os.path.exists(self.SIMULATION_DATA_DIR):
@@ -1578,15 +1585,25 @@ class SimulationManager:
                 if sim_id.startswith('.') or not os.path.isdir(sim_path):
                     continue
                 
-                # One unloadable entry (a Finder duplicate such as "sim_x copy", a symlinked
-                # directory, a corrupt state.json or a broken world store) must not take the whole
-                # list down for every engine; single-simulation reads still fail loudly.
+                # An entry that cannot be loaded at all (a Finder duplicate such as "sim_x copy", a
+                # symlinked directory, a corrupt state.json, world artefacts under an OASIS pin) is
+                # not a simulation of any project: skip it rather than fail the list for every
+                # engine.  Single-simulation reads still fail loudly.
                 try:
                     state = self._load_simulation_state(sim_id)
-                    if state and (project_id is None or state.project_id == project_id):
-                        simulations.append(self._project_world_status(state))
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(f"跳过无法加载的模拟目录 {sim_id!r}: {type(exc).__name__}: {exc}")
+                    continue
+                if not state or (project_id is not None and state.project_id != project_id):
+                    continue
+                if not skip_unverifiable_worlds:
+                    simulations.append(self._project_world_status(state))
+                    continue
+                try:
+                    simulations.append(self._project_world_status(state))
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(f"模拟 {sim_id!r} 的世界完整性校验失败，已从历史列表中跳过: "
+                                 f"{type(exc).__name__}: {exc}")
         
         return simulations
     

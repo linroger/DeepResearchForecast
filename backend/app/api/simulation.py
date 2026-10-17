@@ -987,7 +987,7 @@ def get_simulation_history():
         limit = request.args.get('limit', 20, type=int)
         
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
+        simulations = manager.list_simulations(skip_unverifiable_worlds=True)[:limit]
         
         # 增强模拟数据，只从 Simulation 文件读取
         enriched_simulations = []
