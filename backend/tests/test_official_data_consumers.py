@@ -104,7 +104,9 @@ def test_seed_report_receives_only_valid_persisted_official_generation(
             official_data.load_for_simulation(kw["simulation_id"]))))
     monkeypatch.setattr(pipeline, "SimulationRunner", types.SimpleNamespace(
         start_simulation=lambda **kw: None, write_run_summary=lambda *a: None,
-        get_run_state=lambda *a: types.SimpleNamespace(current_round=1, runner_status=pipeline.RunnerStatus.COMPLETED)))
+        get_run_state=lambda *a: types.SimpleNamespace(current_round=1, runner_status=pipeline.RunnerStatus.COMPLETED),
+        # the orchestrator cross-checks the pipeline's engine pin against saved simulation state
+        RUN_STATE_DIR=str(tmp_path / "simulations"), simulation_engine=lambda sid: "oasis-legacy"))
     captured = []
 
     def report(**kwargs):

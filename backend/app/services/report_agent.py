@@ -92,11 +92,20 @@ def read_report_world(report_dir: str, *, metadata: Optional[dict] = None) -> Op
     boundary is shared by publication, chat, charts, translation and export.
     """
     from .world_simulation.artifacts import file_digest, read_json
-    from .world_simulation.contracts import ENGINE, require
+    from .world_simulation.contracts import ENGINE, WorldError, require
 
     folder = Path(report_dir)
     if metadata is None:
-        metadata = read_json(folder / "meta.json") if (folder / "meta.json").exists() else {}
+        metadata = {}
+        if (folder / "meta.json").exists():
+            # An unreadable meta.json alone does not make a report a world report: OASIS
+            # reports keep their own fail-closed handling (drafts withheld, 200).  A report that
+            # also holds world artefacts still fails the binding checks below.
+            try:
+                loaded = read_json(folder / "meta.json")
+            except (WorldError, OSError, ValueError):
+                loaded = None
+            metadata = loaded if isinstance(loaded, dict) else {}
     reference = metadata.get("world_result_ref")
     names = ("world_result.json", "world_result_manifest.json", "world_result_ref.json")
     present = any((folder / name).exists() or (folder / name).is_symlink() for name in names)
