@@ -498,9 +498,13 @@ class Config:
     SIMULATION_RECLAIM_PORT_PROBE = os.environ.get(
         'SIMULATION_RECLAIM_PORT_PROBE', 'true'
     ).strip().lower() == 'true'
-    # 报告阶段起飞前 ~10 token 探测主/回退提供方可用性；双双不可用时 <60s 内以可恢复的
+    # 报告阶段起飞前发一次短 ping 探测主/回退提供方可用性；双双不可用时 <60s 内以可恢复的
     # REPORT 阶段失败收场，而不是烧完全部章节成本后才被健康门拦下。
     REPORT_LLM_PREFLIGHT = os.environ.get('REPORT_LLM_PREFLIGHT', 'true').strip().lower() == 'true'
+    # 探测的输出预算：推理模型（如编码套餐上的 glm-5.3）关闭推理后仍会输出推理 token 并计入
+    # max_tokens；64 曾让三次探测都以空 content（finish_reason=length）收场、把健康提供方误判
+    # 为不可用（2026-10-18）。被长度截断的探测回复视为提供方可达（_report_llm_preflight）。
+    REPORT_LLM_PREFLIGHT_MAX_TOKENS = int(os.environ.get('REPORT_LLM_PREFLIGHT_MAX_TOKENS', '1024') or '1024')
     # claude CLI 子进程隔离操作员的全局 ~/.claude hooks（--settings 内联 disableAllHooks，
     # 保留 OAuth；--bare 会丢登录态故不用）。SessionEnd 钩子曾让 2769+ 次管线调用空错误失败。
     LLM_CLI_ISOLATE_HOOKS = os.environ.get('LLM_CLI_ISOLATE_HOOKS', 'true').strip().lower() == 'true'

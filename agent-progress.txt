@@ -464,3 +464,10 @@ This repository implements a six-stage forecast workflow: DeerFlow 2 research, o
 - **Verification:** isolated-worktree full suite on this branch's hunks 6287 passed / 1 failed (zero-seed chart regression, fixed) / 19 errors (worktree lacks the untracked deer-flow tree); frontend 163 passed; build OK; gates OK. A concurrent process was editing this checkout (price-history chart removal and related files); its changes were left uncommitted.
 - **Ledger:** `docs/handoff/world-state-merge/handoff.md`.
 
+### 2026-10-18T02:06+08:00 (CST) — branch `claude-reflexive-world-state-model` — reboot recovery and the report pre-flight probe
+
+- **Context:** the machine rebooted at ~01:38 during the live-validation session's gate-off OPEC+ report regeneration; the owner said "resume" and later pasted the resulting failure ("报告前置探测失败 … 返回空 content（finish_reason=length）").
+- **Recovery:** frontend restarted on :3000 (a backend had already been started on :5001 at 01:49 outside start.sh); the interrupted run was handed back to its owner session, which resumed it on a second gate-off backend (:5013).
+- **Cause and fix:** glm-5.3 (coding plan) emits reasoning tokens with thinking disabled and they count against max_tokens; the 64-token pre-flight cap failed a healthy provider. New `_report_llm_preflight` (budget `REPORT_LLM_PREFLIGHT_MAX_TOKENS`=1024, cut-off reply = reachable), `llm_client.EmptyCompletionError` with finish_reason and the correct switch name; `.env.example` documented; `tests/test_report_llm_preflight.py` (12). Isolated full suite 6300 passed / 0 failed.
+- **Also seen:** the retry then hit GLM's account rate limit (429 code 1302) with four pipelines running at once; the owner session waits for the three other runs before retrying.
+

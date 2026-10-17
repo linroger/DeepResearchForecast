@@ -8006,6 +8006,46 @@ def _actions_simulation_end_present(path: str, tail_bytes: int = 262144) -> bool
         return False
 
 
+_REPORT_PREFLIGHT_FAILURE = (
+    "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
+    "烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）"
+)
+
+
+def _report_llm_preflight() -> None:
+    """ORCH-8: one short ping through ``LLMClient.chat`` (its retries and fallback chain
+    included) before the report stage spends section budget.
+
+    Raises ``RuntimeError`` with the resumable "报告前置探测失败…" message only when no
+    provider can answer.  A reply cut off by its token cap (``EmptyCompletionError`` with
+    ``finish_reason == "length"``) proves the provider is reachable and passes: glm-5.3 on
+    the coding plan still emits reasoning tokens with thinking disabled, and a 64-token cap
+    once made all three attempts end empty and failed a healthy provider
+    (pipe_fd2799f3ad41, 2026-10-18).  The budget is ``Config.REPORT_LLM_PREFLIGHT_MAX_TOKENS``
+    (floor 16); a uuid in the prompt keeps LLM_CACHE from replaying a stale answer.
+    """
+    from ..utils.llm_client import EmptyCompletionError, LLMClient
+    try:
+        budget = max(16, int(getattr(Config, "REPORT_LLM_PREFLIGHT_MAX_TOKENS", 1024) or 1024))
+    except (TypeError, ValueError):
+        budget = 1024
+    try:
+        LLMClient().chat(
+            [{"role": "user", "content": f"ping {uuid.uuid4().hex[:8]} — reply: pong"}],
+            temperature=0.0, max_tokens=budget,
+        )
+    except EmptyCompletionError as err:
+        if err.finish_reason == "length":
+            logger.warning(
+                "报告前置探测：提供方 %s 可达，但回复被 %d token 上限截断（推理 token 计入上限）；继续报告阶段",
+                err.provider or "?", budget,
+            )
+            return
+        raise RuntimeError(f"{_REPORT_PREFLIGHT_FAILURE}: {str(err)[:200]}") from err
+    except Exception as err:  # noqa: BLE001 — any other failure means no provider answered
+        raise RuntimeError(f"{_REPORT_PREFLIGHT_FAILURE}: {str(err)[:200]}") from err
+
+
 # ---------------------------------------------------------------------------
 # 编排器
 # ---------------------------------------------------------------------------
@@ -13862,21 +13902,11 @@ class PipelineOrchestrator:
                 self._complete_stage(state, STAGE_REPORT, "报告完成（复用）", reused=True)
             else:
                 # ORCH-8: 报告是最贵的 LLM 阶段，而健康门在全部章节成本烧完后才触发。双 provider
-                # 同时不可用（MiniMax 审查/配额 + claude-cli 耗尽）时，先花 ~10 token 探测一次
-                # （chat() 自带重试+回退链）；失败即在 <60s 内以可恢复的 REPORT 阶段失败收场，
+                # 同时不可用（MiniMax 审查/配额 + claude-cli 耗尽）时，先发一次短 ping 探测
+                # （_report_llm_preflight；chat() 自带重试+回退链）；失败即在 <60s 内以可恢复的 REPORT 阶段失败收场，
                 # 而不是磨完 N 个占位章节。带 uuid 防命中 LLM_CACHE 的陈旧 'ping' 结果。
                 if bool(getattr(Config, "REPORT_LLM_PREFLIGHT", True)):
-                    try:
-                        from ..utils.llm_client import LLMClient as _PreflightLLM
-                        _PreflightLLM().chat(
-                            [{"role": "user", "content": f"ping {uuid.uuid4().hex[:8]} — reply: pong"}],
-                            temperature=0.0, max_tokens=64,
-                        )
-                    except Exception as _pf_err:  # noqa: BLE001
-                        raise RuntimeError(
-                            "报告前置探测失败：主/回退 LLM 提供方均不可用 —— 中止报告阶段以免"
-                            f"烧掉全部章节成本（稍后 resume 可从 REPORT 续跑）: {str(_pf_err)[:200]}"
-                        ) from _pf_err
+                    _report_llm_preflight()
                 # XRUN-15/LOOP-005: 铸新报告 = 新 attempt。清掉上一 attempt 的临时及正式
                 # REPORT-owned 指针/完整性行，随后在生成开始前持久化新 report_id。这样每次
                 # progress callback 都扫描当前 attempt 的 sections/charts，而非旧目录或空目录。

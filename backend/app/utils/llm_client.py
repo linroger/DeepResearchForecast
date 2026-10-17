@@ -259,6 +259,21 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     return base
 
 
+class EmptyCompletionError(RuntimeError):
+    """An OpenAI-compatible provider answered, but with empty content.
+
+    ``finish_reason`` is kept so a caller can tell a reply cut off by its token cap
+    (``"length"``, typically a reasoning model spending the budget on reasoning tokens) from
+    other empty answers.  It subclasses RuntimeError, so every existing retry and fallback
+    path treats it exactly as before.
+    """
+
+    def __init__(self, message: str, *, provider: str = "", finish_reason: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.finish_reason = finish_reason
+
+
 class LLMClient:
     """LLM客户端 — 支持 claude-cli / codex-cli / openai"""
 
@@ -990,9 +1005,17 @@ class LLMClient:
         # 明确报错而不是把空串交给下游 JSON 解析，便于定位与重试。
         if content is None or not content.strip():
             finish = getattr(choice, "finish_reason", None)
-            raise RuntimeError(
+            # kimi/minimax keep their own switches; deepseek/qwen/glm share LLM_DISABLE_THINKING
+            # (Config.reasoning_extra_body).  Some gateways still emit reasoning tokens with
+            # thinking disabled (glm-5.3 on the coding plan, 2026-10-18) and those count against
+            # max_tokens, so the budget can be the fix even when the switch is on.
+            knob = {"kimi": "LLM_KIMI_DISABLE_THINKING",
+                    "minimax": "LLM_MINIMAX_DISABLE_THINKING"}.get(self.provider, "LLM_DISABLE_THINKING")
+            raise EmptyCompletionError(
                 f"OpenAI 兼容提供方({self.provider})返回空 content（finish_reason={finish}）。"
-                f"若为 kimi/minimax 推理模型，请确认已关闭推理(LLM_{self.provider.upper()}_DISABLE_THINKING)或增大 max_tokens。"
+                f"推理 token 计入 max_tokens：请确认已关闭推理({knob}=true)或增大 max_tokens"
+                "（部分网关关闭推理后仍会输出推理内容）。",
+                provider=self.provider, finish_reason=finish,
             )
         return self._clean_content(content)
 
