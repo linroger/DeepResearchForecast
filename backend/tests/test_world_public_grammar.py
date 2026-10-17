@@ -15,7 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 
-pytestmark = pytest.mark.guarded_runner
+# Safe unguarded: reads one checked-in fixture, writes only under tmp_path and forbids HTTP itself,
+# so the normal suite runs it (the guarded runner still can).
 QUANTITY_CASE = "m5-e2-investment-v3-s0-external-feedback-ablation"
 WRONG_ID_CASE = "m5-investment-v2-s0-reflexive"
 ALTERED_TERMS_CASE = "m5-investment-v1-s0-external-feedback-ablation"
