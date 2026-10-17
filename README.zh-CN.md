@@ -32,6 +32,8 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 最近一次完成的完整行为研究仍为 18 对必需比较中通过 16 对，因此尚未切换默认引擎。后续诊断保留了结构错误和事实性解释错误；保留更多复核数据不代表其内容正确。[当前发布记录](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md)与 [v4 契约](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md)区分源码验证与真实模型验收。所有既有结果均保留。评估授权现为总计 40 美元，包含原始 25 美元授权下已发生的全部消耗，并未重置预算。
 
+**已知限制（2026-10-18 审查）。** world-v1 目前还不能在本部署上用真实研究档案建立世界：默认研究引擎不给编译器留下可引用的论断，建模请求超出固定的输入上限，编译错误也没有修复路径。提供方返回 429（代码 1302）或 v4 复核未能解决时，世界运行会永久终止；运行中途重启还可能使其一直显示为运行中。请把它当作基于手工编写 `world_spec` 的研究预览。审查结论、合并时完成的修复与后续计划见[引擎合并记录](docs/handoff/world-engines-consolidation/handoff.md)。
+
 ```mermaid
 flowchart TB
     Q(["你的问题"]):::io --> ROW1

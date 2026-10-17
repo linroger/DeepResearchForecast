@@ -32,6 +32,8 @@ Fresh world admission on this branch pins `policy.decisionReview: "actor-consist
 
 The latest completed full behavior study remains at 16 of 18 required comparisons, so default promotion is still pending. Subsequent diagnostics preserved both structural failures and factual explanation errors; retaining more review data is not proof that it is correct. The [current release record](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md) and [v4 contract](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md) distinguish source verification from live acceptance. All prior results remain preserved. The evaluation authorization is USD40 total, including all spending carried forward from the original USD25 authorization.
 
+**Known limits (review of 2026-10-18).** world-v1 cannot yet build a world from a real research dossier here: the default research engine leaves the compiler no citable claims, modeling requests exceed the pinned input limit, and a compile error has no repair path. A provider 429 (code 1302) or an unresolved v4 review ends a world run for good, and a reboot mid-run can leave it reported as running. Treat it as a research preview on hand-built `world_spec` inputs. The review findings, the fixes made during the merge and the follow-up plan are in the [engine consolidation record](docs/handoff/world-engines-consolidation/handoff.md).
+
 ```mermaid
 flowchart TB
     Q(["Your question"]):::io --> ROW1
