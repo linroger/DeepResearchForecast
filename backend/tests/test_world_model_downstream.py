@@ -53,6 +53,15 @@ def _world_state_payload(committed=3):
             "pending_effects": [{"id": "fx1", "due_round": 4, "description": "Importers relocate", "probability": 0.5}],
             "events": [{"round": r, "kind": "action", "description": f"Actor0 move {r}", "actors": ["Actor0"],
                         "targets": ["Actor1"], "statement": "Tariff raised"} for r in (1, 2, 3)],
+            "interactions": [
+                {"id": "i1_1", "kind": "proposal", "proposer": 0, "recipient": 1, "option_id": "open_talks",
+                 "terms": "Audits for licences", "opened_round": 1, "expires_round": 3, "status": "accepted",
+                 "parent_id": "", "resolved_round": 2, "response": "Agreed.", "obligations": ["c0", "c9"], "deferrals": 0},
+                {"id": "i3_2", "kind": "counter", "proposer": 1, "recipient": 0, "option_id": "partnership_deal",
+                 "terms": "Joint venture", "opened_round": 3, "expires_round": 5, "status": "open",
+                 "parent_id": "", "resolved_round": None, "response": "", "obligations": [], "deferrals": 1},
+                "junk", {"status": "lapsed"},
+            ],
         },
     }
 
@@ -131,6 +140,11 @@ def test_world_state_api_happy_path_is_bounded(client, tmp_path):
     assert data["history"][1]["narrative"] == "Importers protest."
     assert len(data["recent_events"]) == 3 and data["pending_effects"][0]["id"] == "fx1"
     assert data["period"]["label"] == "2027-Q1" and data["question"] == "Will A happen?"
+    # OFFERS: open first, names resolved, bounded fields, junk rows skipped
+    assert [(it["id"], it["status"], it["proposer"], it["recipient"]) for it in data["interactions"]] == [
+        ("i3_2", "open", "Actor1", "Actor0"), ("i1_1", "accepted", "Actor0", "Actor1")]
+    assert data["interactions"][1]["obligations"] == 2 and data["interactions"][1]["response"] == "Agreed."
+    assert data["interactions"][0]["expires_round"] == 5 and data["interactions"][0]["kind"] == "counter"
 
 
 def test_world_state_api_404_before_commit_and_containment(client, tmp_path):

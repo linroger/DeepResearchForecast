@@ -343,3 +343,33 @@ def test_briefs_never_print_a_kind_name_as_unit():
     assert "Truce talks opened = yes [boolean]" in prompt and "Deadline agreed = 2027-03-10 [text]" in prompt
     for text in (record["digest"], brief, prompt):
         assert "yes boolean" not in text and "2027-03-10 date" not in text
+
+
+def test_behaviour_metrics_count_moves_that_answer_last_period():
+    world = _world()
+    names = [a.name for a in world.actors.values()]
+    world.start_round(1, {"label": "P1"})
+    var = next(iter(world.variables.values()))
+    var.set_value(99, round_num=1, source="arbiter", cause="shock")
+    world.register_decisions(1, [{"agent_id": list(world.actors)[0], "option": {"id": "impose_measure", "label": "Impose", "kind": "policy", "cost": 1, "lag": 0},
+                                 "targets": [names[1]], "magnitude": 0.5, "public_statement": "Imposed.", "status": "ok"}])
+    world.commit_round(1)
+    assert wu.behaviour_metrics(world, 1, [])["responsive_share"] is None          # no prior period
+    world.start_round(2, {"label": "P2"})
+    a0, a1 = list(world.actors)[:2]
+    rows = [
+        {"agent_id": a1, "actor_name": names[1], "option": {"id": "public_statement", "label": "Say", "kind": "communication", "cost": 1},
+         "public_statement": f"After {var.name} jumped we answer {names[0]} in kind.", "private_rationale": "", "status": "ok"},
+        {"agent_id": a0, "actor_name": names[0], "option": {"id": "subsidize", "label": "Subsidise", "kind": "economic", "cost": 2},
+         "public_statement": "A new programme.", "private_rationale": "unrelated", "status": "ok"},
+        {"agent_id": a0, "actor_name": names[0], "option": {"id": "hold_position", "label": "Hold", "kind": "wait", "cost": 0},
+         "public_statement": "", "status": "ok"},
+        {"agent_id": a1, "actor_name": names[1], "option": {"id": "accept:i1_1", "label": "Accept", "kind": "coalition", "cost": 1},
+         "public_statement": "Accepted.", "status": "ok"},
+    ]
+    m = wu.behaviour_metrics(world, 2, rows)
+    assert m == {"moves": 3, "responsive_moves": 2, "offers_answered": 1, "responsive_share": 0.667,
+                 "signals_last_period": m["signals_last_period"]}
+    assert m["signals_last_period"] >= 2
+    record = wu.run_world_round(world, 2, {"label": "P2"}, rows[:2], [], llm=None, rng=None, arbiter_enabled=False)
+    assert record["behaviour"]["moves"] == 2 and record["behaviour"]["responsive_moves"] == 1

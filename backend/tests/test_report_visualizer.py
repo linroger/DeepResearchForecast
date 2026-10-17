@@ -864,7 +864,10 @@ def test_world_variables_html_skips_zero_seed_and_sets_chronological_category_or
     viz = ReportVisualizer()
     world_state = {
         "world": {
-            "period_labels": {"3": "2026-Q3", "4": "2026-Q4"},
+            # one point per committed period, carried forward when nothing changed (the seed sits at
+            # the as-of date — here unlabelled, so "seed"); a zero seed cannot be indexed and is skipped
+            "committed_round": 4,
+            "period_labels": {"1": "2026-Q1", "2": "2026-Q2", "3": "2026-Q3", "4": "2026-Q4"},
             "variables": [
                 {
                     "id": "indexed_ok",
@@ -904,7 +907,8 @@ def test_world_variables_html_skips_zero_seed_and_sets_chronological_category_or
     with open(str(tmp_path / rel), "r", encoding="utf-8") as f:
         html = f.read()
     assert "Zero seed" not in html
-    assert '"categoryarray":["seed","2026-Q3","2026-Q4"]' in html
+    assert '"categoryarray":["seed","2026-Q1","2026-Q2","2026-Q3","2026-Q4"]' in html
+    assert '"x":["seed","2026-Q1","2026-Q2","2026-Q3","2026-Q4"],"y":[100.0,100.0,100.0,100.0,110.0]' in html  # carried forward, indexed to 100
 
 
 @pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")

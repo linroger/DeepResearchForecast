@@ -47,7 +47,17 @@ _KIND_NAME_UNITS = frozenset(VARIABLE_KINDS) | frozenset((
 ))
 PROVENANCES = ("research", "official", "seed", "arbiter", "effect", "action")
 VALENCES = ("allied", "adversarial", "transactional", "directional", "neutral")
-EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "system")
+EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "system",
+               "offer", "agreement", "breach")
+# OFFERS (ported from the world-v1 engine's consent mechanics): a move of one of these
+# options aimed at another actor opens an offer that only the recipient's answer can settle.
+PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concession", "sign_agreement",
+                                 "partnership_deal", "bargain", "convene", "program_decision"})
+RESPONSE_PREFIXES = ("accept:", "reject:", "counter:", "defer:")
+INTERACTION_TTL_PERIODS = 2          # an unanswered offer lapses after this many periods
+INTERACTION_MAX_DEFERRALS = 2        # a deferral moves the deadline one period, at most this often
+INTERACTION_TERMS_MAX_CHARS = 300
+INTERACTION_LIMIT = 200
 COMMITMENT_STATUSES = ("pending", "due", "fulfilled", "lapsed", "withdrawn")
 
 DEFAULT_CAPACITY_PER_ROUND = 2
@@ -507,8 +517,60 @@ class PendingEffect:
                    created_round=d.get("created_round") or 0)
 
 
+class Interaction:
+    """An offer from one actor to another that only the recipient's answer can settle.
+
+    Ported from the world-v1 engine's consent rule: speech cannot create an agreement.  A
+    proposal (``kind="proposal"``) or a counter-offer (``kind="counter"``) stays ``open`` (or
+    ``deferred``) until the recipient accepts, rejects or counters it, or it lapses after
+    ``INTERACTION_TTL_PERIODS`` periods.  Acceptance binds *both* parties with commitments
+    (``obligations``: commitment ids, source ``agreement:<id>``); a lapsed obligation or an
+    explicit withdrawal is a ``breach`` with reputation and relationship consequences.
+    """
+
+    def __init__(self, iid: str, *, proposer: int, recipient: int, option_id: str, terms: str,
+                 opened_round: int, expires_round: int, kind: str = "proposal", status: str = "open",
+                 parent_id: str = "", resolved_round: Optional[int] = None, response: str = "",
+                 obligations: Optional[List[str]] = None, deferrals: int = 0) -> None:
+        self.id = _text(iid, 40)
+        self.deferrals = max(0, int(deferrals or 0))
+        self.proposer = int(proposer)
+        self.recipient = int(recipient)
+        self.option_id = _text(option_id, 64)
+        self.terms = _text(terms, INTERACTION_TERMS_MAX_CHARS)
+        self.opened_round = int(opened_round)
+        self.expires_round = int(expires_round)
+        self.kind = kind if kind in ("proposal", "counter") else "proposal"
+        self.status = status if status in ("open", "deferred", "accepted", "rejected", "countered",
+                                           "lapsed", "breached") else "open"
+        self.parent_id = _text(parent_id, 40)
+        self.resolved_round = int(resolved_round) if resolved_round is not None else None
+        self.response = _text(response, 200)
+        self.obligations = [str(o) for o in (obligations or []) if str(o)][:4]
+
+    def is_open(self) -> bool:
+        return self.status in ("open", "deferred")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"id": self.id, "kind": self.kind, "proposer": self.proposer, "recipient": self.recipient,
+                "option_id": self.option_id, "terms": self.terms, "opened_round": self.opened_round,
+                "expires_round": self.expires_round, "status": self.status, "parent_id": self.parent_id,
+                "resolved_round": self.resolved_round, "response": self.response,
+                "obligations": list(self.obligations), "deferrals": self.deferrals}
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Interaction":
+        return cls(d.get("id") or "", proposer=d.get("proposer") or 0, recipient=d.get("recipient") or 0,
+                   option_id=d.get("option_id") or "", terms=d.get("terms") or "",
+                   opened_round=d.get("opened_round") or 0, expires_round=d.get("expires_round") or 0,
+                   kind=d.get("kind") or "proposal", status=d.get("status") or "open",
+                   parent_id=d.get("parent_id") or "", resolved_round=d.get("resolved_round"),
+                   response=d.get("response") or "", obligations=d.get("obligations"),
+                   deferrals=d.get("deferrals") or 0)
+
+
 class WorldEvent:
-    """One dated world event (action, scheduled, consequence, emergent, resolution)."""
+    """One dated world event (action, scheduled, consequence, emergent, resolution, offer, agreement, breach)."""
 
     def __init__(self, round_num: int, kind: str, description: str, *,
                  actors: Optional[List[str]] = None, targets: Optional[List[str]] = None,
@@ -577,6 +639,11 @@ class WorldModel:
         self.period_labels: Dict[int, str] = {}
         self._effect_seq = 0
         self._name_index: Dict[str, int] = {}
+        # OFFERS: id → Interaction (open offers, agreements and their outcomes)
+        self.interactions: Dict[str, Interaction] = {}
+        self._interaction_seq = 0
+        # MODELLING GAPS reported by the seed (what the research could not ground)
+        self.seed_gaps: List[Dict[str, Any]] = []
 
     # -- construction -----------------------------------------------------------
     @classmethod
@@ -591,6 +658,7 @@ class WorldModel:
         world = cls(question=seed.get("question") or "", as_of_date=seed.get("as_of_date"),
                     horizon_date=seed.get("horizon_date"), scenarios=scenarios or seed.get("scenarios") or (),
                     settings=seed.get("settings") if isinstance(seed.get("settings"), dict) else None)
+        world.seed_gaps = [g for g in (seed.get("gaps") or []) if isinstance(g, dict)][:32]
         seeded: Dict[int, Dict[str, Any]] = {}
         for row in seed.get("actors") or []:
             if isinstance(row, dict) and row.get("agent_id") is not None:
@@ -843,6 +911,14 @@ class WorldModel:
                 option_id=option_id, action_kind=kind, period_label=label)))
             if status != "ok":
                 continue
+            if option_id.startswith(RESPONSE_PREFIXES):
+                # OFFERS: the recipient's answer settles the offer; nothing else in this decision
+                # can create an agreement (consent rule)
+                verb, _, iid = option_id.partition(":")
+                out.extend(self.resolve_interaction(round_num, iid, verb, aid,
+                                                    statement=d.get("public_statement") or "",
+                                                    terms=d.get("terms") or "", magnitude=magnitude, lag=lag))
+                continue
             if option.get("reversibility") == "irreversible" and option_id != "hold_position":
                 if option_id not in actor.irreversible_option_ids:
                     actor.irreversible_option_ids.append(option_id)
@@ -861,7 +937,8 @@ class WorldModel:
                     due_periods = lag
                 actor.add_commitment(commitment["description"], made_round=round_num,
                                      due_round=round_num + max(1, due_periods))
-            elif lag > 0 and option_id != "hold_position":
+            elif lag > 0 and option_id != "hold_position" and option_id not in PROPOSAL_OPTION_IDS:
+                # (a proposing move's pending item is the offer itself, not an announced commitment)
                 actor.add_commitment(f"{_text(option.get('label'), 120) or option_id} (announced)",
                                      made_round=round_num, due_round=round_num + lag, source="option_lag")
             # relationship dynamics: coalition moves pull closer, antagonistic ones push apart
@@ -890,7 +967,174 @@ class WorldModel:
                     rel = self._ensure_relationship(aid, other, kind="OPPOSES", round_num=round_num,
                                                     basis=description)
                     rel.nudge(-0.15 * (0.5 + 0.5 * magnitude), round_num=round_num, cause=description)
+            # OFFERS: a proposing move aimed at another actor opens an offer the recipient must
+            # answer; withdrawing from an agreement in force is an explicit breach
+            if option_id in PROPOSAL_OPTION_IDS and targets:
+                terms = (_text(d.get("terms"), INTERACTION_TERMS_MAX_CHARS)
+                         or _text(d.get("public_statement"), INTERACTION_TERMS_MAX_CHARS) or description)
+                for other in targets[:2]:
+                    out.append(self.open_interaction(round_num, aid, other, option_id, terms))
+            elif option_id == "break_alliance" and targets:
+                for other in targets[:2]:
+                    out.extend(self.breach_agreements_between(round_num, aid, other,
+                                                              cause=f"{actor.name} withdrew: {description}"))
         return out
+
+    # -- offers and agreements (consent rule) ----------------------------------------
+    def open_interaction(self, round_num: int, proposer: int, recipient: int, option_id: str, terms: str, *,
+                         kind: str = "proposal", parent_id: str = "") -> WorldEvent:
+        """Record an offer from ``proposer`` to ``recipient``; returns its ``offer`` event."""
+        self._interaction_seq += 1
+        iid = f"i{int(round_num)}_{self._interaction_seq}"
+        inter = Interaction(iid, proposer=proposer, recipient=recipient, option_id=option_id, terms=terms,
+                            opened_round=round_num, expires_round=int(round_num) + INTERACTION_TTL_PERIODS,
+                            kind=kind, parent_id=parent_id)
+        self.interactions[iid] = inter
+        if len(self.interactions) > INTERACTION_LIMIT:
+            for old_id in [i for i, it in self.interactions.items() if not it.is_open()]:
+                del self.interactions[old_id]
+                if len(self.interactions) <= INTERACTION_LIMIT:
+                    break
+        pname, rname = self.actor_name(proposer), self.actor_name(recipient)
+        what = "counter-offer" if kind == "counter" else "offer"
+        return self._add_event(WorldEvent(
+            round_num, "offer",
+            f"{pname} made an {what} to {rname} [{iid}]: {inter.terms} "
+            f"(answer due by {self._period_label_for_round(inter.expires_round)})",
+            actors=[pname], targets=[rname], source="interaction", option_id=option_id,
+            period_label=str((self.period or {}).get("label") or "")))
+
+    def open_interactions_for(self, agent_id: int) -> List[Interaction]:
+        """Offers the actor still has to answer, oldest first."""
+        return sorted((it for it in self.interactions.values() if it.recipient == int(agent_id) and it.is_open()),
+                      key=lambda it: (it.opened_round, it.id))
+
+    def agreements_between(self, a: int, b: int) -> List[Interaction]:
+        return [it for it in self.interactions.values() if it.status == "accepted"
+                and {it.proposer, it.recipient} == {int(a), int(b)}]
+
+    def resolve_interaction(self, round_num: int, iid: str, verb: str, actor_id: int, *, statement: str = "",
+                            terms: str = "", magnitude: float = 0.5, lag: int = 0) -> List[WorldEvent]:
+        """The recipient's answer: accept (binds both parties), reject, counter or defer."""
+        inter = self.interactions.get(str(iid))
+        name = self.actor_name(actor_id)
+        if inter is None or inter.recipient != int(actor_id) or not inter.is_open():
+            return [self._add_event(WorldEvent(round_num, "system",
+                                               f"{name} answered an offer that is no longer open ({iid})",
+                                               actors=[name], source="interaction"))]
+        pname, rname = self.actor_name(inter.proposer), self.actor_name(inter.recipient)
+        inter.response = _text(statement, 200)
+        inter.resolved_round = int(round_num)
+        label = str((self.period or {}).get("label") or "")
+        events: List[WorldEvent] = []
+        if verb == "accept":
+            inter.status = "accepted"
+            due = int(round_num) + max(1, int(lag or 0))
+            for party, other in ((inter.proposer, inter.recipient), (inter.recipient, inter.proposer)):
+                row = self.actors[party].add_commitment(
+                    f"Honour the agreement with {self.actor_name(other)}: {inter.terms}",
+                    made_round=round_num, due_round=due, source=f"agreement:{inter.id}")
+                row["counterparty"] = int(other)
+                inter.obligations.append(row["id"])
+            rel = self._ensure_relationship(inter.proposer, inter.recipient, kind="PARTNERS_WITH",
+                                            round_num=round_num, basis=f"agreement {inter.id}")
+            rel.nudge(0.25 * (0.5 + 0.5 * magnitude), round_num=round_num,
+                      cause=f"{rname} accepted {pname}'s offer")
+            events.append(self._add_event(WorldEvent(
+                round_num, "agreement",
+                f"Agreement [{inter.id}]: {rname} accepted {pname}'s offer — {inter.terms} "
+                f"(both sides' obligations due {self._period_label_for_round(due)})",
+                actors=[rname, pname], targets=[pname], source="interaction", statement=statement,
+                option_id=inter.option_id, period_label=label)))
+        elif verb == "reject":
+            inter.status = "rejected"
+            rel = self._ensure_relationship(inter.proposer, inter.recipient, kind="RELATES_TO",
+                                            round_num=round_num, basis=f"offer {inter.id} rejected")
+            rel.nudge(-0.1 * (0.5 + 0.5 * magnitude), round_num=round_num,
+                      cause=f"{rname} rejected {pname}'s offer")
+            events.append(self._add_event(WorldEvent(
+                round_num, "offer", f"{rname} rejected {pname}'s offer [{inter.id}]: {inter.terms}",
+                actors=[rname], targets=[pname], source="interaction", statement=statement,
+                option_id=inter.option_id, period_label=label)))
+        elif verb == "counter":
+            inter.status = "countered"
+            new_terms = (_text(terms, INTERACTION_TERMS_MAX_CHARS)
+                         or _text(statement, INTERACTION_TERMS_MAX_CHARS) or inter.terms)
+            events.append(self._add_event(WorldEvent(
+                round_num, "offer", f"{rname} countered {pname}'s offer [{inter.id}]",
+                actors=[rname], targets=[pname], source="interaction", statement=statement,
+                option_id=inter.option_id, period_label=label)))
+            events.append(self.open_interaction(round_num, inter.recipient, inter.proposer, inter.option_id,
+                                                new_terms, kind="counter", parent_id=inter.id))
+        else:  # defer: the deadline moves one period, at most twice — then the offer lapses
+            inter.deferrals += 1
+            if inter.deferrals > INTERACTION_MAX_DEFERRALS:
+                inter.status = "lapsed"
+                events.append(self._add_event(WorldEvent(
+                    round_num, "offer",
+                    f"{pname}'s offer to {rname} [{inter.id}] lapsed after repeated deferral: {inter.terms}",
+                    actors=[rname], targets=[pname], source="interaction", statement=statement,
+                    option_id=inter.option_id, period_label=label)))
+            else:
+                inter.status = "deferred"
+                inter.expires_round = max(inter.expires_round, int(round_num) + 1)
+                events.append(self._add_event(WorldEvent(
+                    round_num, "offer",
+                    f"{rname} deferred its answer to {pname}'s offer [{inter.id}] "
+                    f"(open until {self._period_label_for_round(inter.expires_round)})",
+                    actors=[rname], targets=[pname], source="interaction", statement=statement,
+                    option_id=inter.option_id, period_label=label)))
+        return events
+
+    def lapse_expired_interactions(self, round_num: int) -> List[Dict[str, Any]]:
+        """Offers nobody answered in time lapse (visible to everyone)."""
+        lapsed: List[Dict[str, Any]] = []
+        for inter in self.interactions.values():
+            if inter.is_open() and inter.expires_round < int(round_num):
+                inter.status = "lapsed"
+                inter.resolved_round = int(round_num)
+                pname, rname = self.actor_name(inter.proposer), self.actor_name(inter.recipient)
+                self._add_event(WorldEvent(round_num, "offer",
+                                           f"{pname}'s offer to {rname} [{inter.id}] lapsed unanswered: {inter.terms}",
+                                           actors=[pname], targets=[rname], source="interaction",
+                                           option_id=inter.option_id,
+                                           period_label=str((self.period or {}).get("label") or "")))
+                lapsed.append(inter.to_dict())
+        return lapsed
+
+    def breach_agreements_between(self, round_num: int, breacher: int, other: int, *, cause: str) -> List[WorldEvent]:
+        """An explicit withdrawal from every agreement in force between two actors."""
+        events: List[WorldEvent] = []
+        for inter in self.agreements_between(breacher, other):
+            events.append(self._breach(round_num, inter, breacher, cause))
+        return events
+
+    def _breach(self, round_num: int, inter: Interaction, breacher: int, cause: str) -> WorldEvent:
+        inter.status = "breached"
+        inter.resolved_round = int(round_num)
+        other = inter.recipient if inter.proposer == int(breacher) else inter.proposer
+        for party in (inter.proposer, inter.recipient):
+            actor = self.actors.get(party)
+            if actor is None:
+                continue
+            for c in actor.commitments:
+                if c.get("id") not in inter.obligations:
+                    continue
+                if party == int(breacher) and c.get("status") in ("pending", "due", "lapsed"):
+                    c["status"] = "breached"
+                elif party != int(breacher) and c.get("status") in ("pending", "due"):
+                    c["status"] = "released"
+        bname, oname = self.actor_name(breacher), self.actor_name(other)
+        actor = self.actors.get(int(breacher))
+        if actor is not None:
+            actor.reputation = _clamp(actor.reputation - 0.15, 0.0, 1.0)
+        rel = self._ensure_relationship(int(breacher), other, kind="OPPOSES", round_num=round_num,
+                                        basis=f"breach of {inter.id}")
+        rel.nudge(-0.3, round_num=round_num, cause=f"{bname} breached the agreement with {oname}")
+        return self._add_event(WorldEvent(
+            round_num, "breach", f"Breach [{inter.id}]: {bname} broke its agreement with {oname} — {cause}",
+            actors=[bname], targets=[oname], source="interaction", option_id=inter.option_id,
+            period_label=str((self.period or {}).get("label") or "")))
 
     def apply_arbiter_update(self, round_num: int, update: Dict[str, Any]) -> Dict[str, Any]:
         """Apply a *validated* arbiter update (see ``world_update.validate_arbiter_update``).
@@ -1045,7 +1289,7 @@ class WorldModel:
     def lapse_overdue_commitments(self, round_num: int) -> List[Dict[str, Any]]:
         """Commitments due before this round that were never resolved lapse (visible)."""
         lapsed: List[Dict[str, Any]] = []
-        for actor in self.actors.values():
+        for actor in list(self.actors.values()):
             for c in actor.commitments:
                 if c.get("status") == "due" and int(c.get("due_round", 0)) < round_num:
                     c["status"] = "lapsed"
@@ -1053,6 +1297,13 @@ class WorldModel:
                     self._add_event(WorldEvent(round_num, "consequence",
                                                f"{actor.name}'s commitment lapsed: {c.get('description')}",
                                                actors=[actor.name], source="commitment"))
+                    source = str(c.get("source") or "")
+                    if source.startswith("agreement:"):
+                        # OFFERS: an obligation under an agreement that lapses is a breach
+                        inter = self.interactions.get(source.split(":", 1)[1])
+                        if inter is not None and inter.status == "accepted":
+                            self._breach(round_num, inter, actor.agent_id,
+                                         cause=f"its obligation lapsed: {c.get('description')}")
         return lapsed
 
     def commit_round(self, round_num: int) -> None:
@@ -1071,6 +1322,7 @@ class WorldModel:
                               for r in self.relationships.values()},
             "pending_effects": len(self.pending_effects),
             "commitments_pending": sum(len(a.pending_commitments()) for a in self.actors.values()),
+            "interactions": {iid: it.status for iid, it in self.interactions.items()},
         }
 
     def diff(self, previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1102,7 +1354,17 @@ class WorldModel:
                                     "from": before.get("valence"), "to": r.valence,
                                     "polarity": round(r.polarity, 4),
                                     "direction": "closer" if r.polarity > float(before.get("polarity", 0.0)) else "farther"})
-        return {"variables_changed": changed, "variables_added": added, "relationships_changed": rel_changes}
+        prev_inter = (previous or {}).get("interactions") or {}
+        inter_changes: List[Dict[str, Any]] = []
+        for iid, it in self.interactions.items():
+            before = prev_inter.get(iid)
+            if before == it.status or (before is None and previous is None):
+                continue
+            inter_changes.append({"id": iid, "from": before, "to": it.status, "kind": it.kind,
+                                  "proposer": self.actor_name(it.proposer), "recipient": self.actor_name(it.recipient),
+                                  "terms": it.terms})
+        return {"variables_changed": changed, "variables_added": added, "relationships_changed": rel_changes,
+                "interactions_changed": inter_changes}
 
     def events_in_round(self, round_num: int, kinds: Optional[Iterable[str]] = None) -> List[WorldEvent]:
         ks = set(kinds) if kinds else None
@@ -1169,6 +1431,16 @@ class WorldModel:
                 direction = rc.get("direction")
                 suffix = f" ({direction})" if direction else ""
                 lines.append(f"- {rc['source']} — {rc['target']}: now {word}{suffix}")
+        deals = self.events_in_round(r, ("offer", "agreement", "breach")) if r > 0 else []
+        open_offers = [it for it in self.interactions.values() if it.is_open()]
+        if deals or open_offers:
+            lines.append("## Offers and agreements")
+            for e in deals[:8]:
+                lines.append(f"- {e.description}")
+            for it in open_offers[:6]:
+                if not any(f"[{it.id}]" in e.description for e in deals):
+                    lines.append(f"- Open: {self.actor_name(it.proposer)} → {self.actor_name(it.recipient)} [{it.id}]: "
+                                 f"{it.terms} (answer due by {self._period_label_for_round(it.expires_round)})")
         pending: List[str] = []
         for actor in self.actors.values():
             for c in actor.pending_commitments():
@@ -1202,6 +1474,16 @@ class WorldModel:
             for c in pend[:5]:
                 flag = " (DUE NOW)" if c.get("status") == "due" else ""
                 lines.append(f"  · {c.get('description')} — due {self._period_label_for_round(int(c.get('due_round', 0)))}{flag}")
+        offers = self.open_interactions_for(agent_id)
+        if offers:
+            lines.append("- Offers awaiting YOUR answer (accept, reject, counter or defer this period; unanswered offers lapse):")
+            for it in offers[:3]:
+                lines.append(f"  · [{it.id}] from {self.actor_name(it.proposer)}: {it.terms} "
+                             f"(open until {self._period_label_for_round(it.expires_round)})")
+        own = [it for it in self.interactions.values() if it.proposer == agent_id and it.is_open()]
+        if own:
+            lines.append("- Your offers awaiting an answer: " + "; ".join(
+                f"to {self.actor_name(it.recipient)} [{it.id}]: {_text(it.terms, 80)}" for it in own[:3]))
         aimed = [e for e in self.events_in_round(r) if actor.name in e.targets] if r > 0 else []
         if aimed:
             lines.append("- Aimed at you last period:")
@@ -1248,6 +1530,9 @@ class WorldModel:
             "pending_effects": [fx.to_dict() for fx in self.pending_effects],
             "events": [e.to_dict() for e in self.events[-EVENT_LIMIT:]],
             "effect_seq": self._effect_seq,
+            "interactions": [it.to_dict() for it in self.interactions.values()],
+            "interaction_seq": self._interaction_seq,
+            "seed_gaps": list(self.seed_gaps),
         }
 
     @classmethod
@@ -1269,10 +1554,16 @@ class WorldModel:
                 world.add_relationship(Relationship.from_dict(row))
         world.pending_effects = [PendingEffect.from_dict(x) for x in (d.get("pending_effects") or []) if isinstance(x, dict)]
         world.events = [WorldEvent.from_dict(x) for x in (d.get("events") or []) if isinstance(x, dict)]
+        for row in d.get("interactions") or []:
+            if isinstance(row, dict) and row.get("id"):
+                inter = Interaction.from_dict(row)
+                world.interactions[inter.id] = inter
+        world.seed_gaps = [g for g in (d.get("seed_gaps") or []) if isinstance(g, dict)][:32]
         try:
             world.round = int(d.get("round") or 0)
             world.committed_round = int(d.get("committed_round") or 0)
             world._effect_seq = int(d.get("effect_seq") or 0)
+            world._interaction_seq = int(d.get("interaction_seq") or 0)
         except (TypeError, ValueError):
             pass
         world.period = dict(d["period"]) if isinstance(d.get("period"), dict) else None

@@ -29,7 +29,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import describe_llm_error
 from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
-from .world_model import WorldModel, _bound_lines, _text, format_value, is_kind_name_unit, normalize_label
+from .world_model import (RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
+                          normalize_label)
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +73,23 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
     scheduled = world.register_scheduled_events(round_num, fired_events)
     rows = _decision_rows(decisions)
     lapsed = world.lapse_overdue_commitments(round_num)
+    lapsed_offers = world.lapse_expired_interactions(round_num)   # OFFERS: unanswered offers expire first
     action_events = world.register_decisions(round_num, rows)
     fired = world.fire_due_effects(round_num, rng)
+    breaches = [e.description for e in world.events_in_round(round_num, ("breach",))]
     return {
         "scheduled_events": [e.description for e in scheduled],
         "actions": [e.description for e in action_events if e.kind == "action"],
         "effects_fired": fired,
         "commitments_lapsed": [f"{c.get('actor')}: {c.get('description')}" for c in lapsed],
         "decisions": len(rows),
+        # OFFERS: what the consent mechanics did this period (opened / answered / lapsed / breached)
+        "offers_opened": [e.description for e in action_events if e.kind == "offer" and " made an " in e.description],
+        "offers_answered": [e.description for e in action_events
+                            if e.kind in ("offer", "agreement") and " made an " not in e.description],
+        "offers_lapsed": [f"{world.actor_name(o.get('proposer'))} → {world.actor_name(o.get('recipient'))}: {o.get('terms')}"
+                          for o in lapsed_offers],
+        "breaches": breaches,
     }
 
 
@@ -142,6 +152,16 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         lines.append("")
         lines.append("## Already applied mechanically")
         lines.extend(f"- {m}" for m in mech[:10] if m)
+    deals = (list(deterministic.get("offers_opened") or []) + list(deterministic.get("offers_answered") or [])
+             + [f"Lapsed: {o}" for o in (deterministic.get("offers_lapsed") or [])]
+             + list(deterministic.get("breaches") or []))
+    open_offers = [it for it in world.interactions.values() if it.is_open()]
+    if deals or open_offers:
+        lines.append("")
+        lines.append("## Offers and agreements (settled only by the parties' answers — never assume consent)")
+        lines.extend(f"- {d}" for d in deals[:8])
+        lines.extend(f"- Still open: {world.actor_name(it.proposer)} → {world.actor_name(it.recipient)} "
+                     f"[{it.id}]: {it.terms}" for it in open_offers[:6])
     cast = ", ".join(a.name for a in list(world.actors.values())[:30])
     sc = "; ".join(str(s) for s in scenarios) or "(none)"
     lang = f" Write narrative and descriptions in {language}." if language else ""
@@ -434,12 +454,51 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
     if consequences:
         lines.append("Events and consequences:")
         lines.extend(f"- {e.description}" for e in consequences[:8])
+    deals = world.events_in_round(round_num, ("offer", "agreement", "breach"))
+    if deals:
+        lines.append("Offers and agreements:")
+        lines.extend(f"- {e.description}" for e in deals[:8])
     if diff["relationships_changed"]:
         lines.append("Alliances and rivalries:")
         for rc in diff["relationships_changed"][:6]:
             direction = f" ({rc['direction']})" if rc.get("direction") else ""
             lines.append(f"- {rc['source']} — {rc['target']}: {rc['to']}{direction}")
     return _bound_lines(lines, max_chars)
+
+
+def behaviour_metrics(world: WorldModel, round_num: int, decisions: Iterable[Any]) -> Dict[str, Any]:
+    """Deterministic responsiveness diagnostics for one round (ported, in spirit, from the
+    world-v1 behaviour evaluation's "consequence response" criterion — without an LLM judge).
+
+    A move is *responsive* when it answers an offer, or when its public statement / rationale
+    names a fact that changed last period or an actor that moved last period.  Round 1 has no
+    prior period and scores nothing.  This is a textual diagnostic, not a realism verdict."""
+    rows = _decision_rows(decisions)
+    prev = int(round_num) - 1
+    moves = [d for d in rows if d.get("status") == "ok" and (d.get("option") or {}).get("id") != "hold_position"]
+    out: Dict[str, Any] = {"moves": len(moves), "responsive_moves": 0, "offers_answered": 0,
+                           "responsive_share": None, "signals_last_period": 0}
+    if prev < 1:
+        return out
+    changed = [v.name.casefold() for v in world.variables.values()
+               if any(isinstance(h, dict) and int(h.get("round") or 0) == prev for h in v.history)]
+    movers = set()
+    for e in world.events_in_round(prev, ("action", "offer", "agreement", "breach", "consequence", "emergent")):
+        for name in e.actors[:2]:
+            movers.add(name.casefold())
+    out["signals_last_period"] = len(changed) + len(movers)
+    for d in moves:
+        option_id = str((d.get("option") or {}).get("id") or "")
+        text = f"{d.get('private_rationale') or ''} {d.get('public_statement') or ''}".casefold()
+        me = str(d.get("actor_name") or "").casefold()
+        if option_id.startswith(RESPONSE_PREFIXES):
+            out["offers_answered"] += 1
+            out["responsive_moves"] += 1
+        elif any(name and name in text for name in changed) or any(m and m != me and m in text for m in movers):
+            out["responsive_moves"] += 1
+    if moves:
+        out["responsive_share"] = round(out["responsive_moves"] / len(moves), 3)
+    return out
 
 
 def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, Any]) -> str:
@@ -502,6 +561,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "narrative": narrative,
         "diff": diff,
         "digest": digest,
+        "behaviour": behaviour_metrics(world, round_num, rows),
         "snapshot_before": before,
     }
     record["headline"] = world_update_headline(world, round_num, record)

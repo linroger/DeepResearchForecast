@@ -224,5 +224,42 @@ actor world (levers, constraints, decision rights). This is additive metadata, l
   platforms, or `--twitter-only` / `--reddit-only`).
 - Promotion of world-model outputs into published probabilities stays behind the Foglamp
   `SIMULATION_FORECAST_EFFECT` policy (`diagnostic_only`).
-- A concurrent Codex session is drafting a plan for the same topic on
-  `codex/reflexive-world-simulation`; this branch does not depend on it.
+- The Codex engine on `codex/reflexive-world-simulation` (`world-v1`, a separate opt-in
+  engine that replaces the social simulation) is not merged wholesale: its own delivery keeps
+  it opt-in after its live behaviour gate. Section 2.10 lists what was ported from it.
+
+## 2.10 Ported from the Codex `world-v1` engine (2026-10-17)
+
+Studied: `docs/handoff/reflexive-world-simulation/{ARCHITECTURE,DELIVERY,contracts,plan-review,
+runtime-input,policy-implementation,store-implementation}.md` and the package
+`backend/app/services/world_simulation/`. Kept the integrated model as the base (it runs inside
+the social simulation, is live-validated and feeds the report and the dashboard). Ported:
+
+- **Consent rule (offers → answers → obligations → breach).** `world_model.Interaction`: a move
+  of a proposing option (`open_talks`, `form_alliance`, `signal_concession`, `sign_agreement`,
+  `partnership_deal`, `bargain`, `convene`, `program_decision`) aimed at another actor opens an
+  offer with exact `terms` (new decision field); the recipient's menu starts with
+  `accept:/counter:/reject:/defer:<id>`; acceptance binds both parties with commitments
+  (`source=agreement:<id>`, `counterparty`), pulls the relationship closer; rejection pushes it
+  apart; a counter opens a counter-offer back; a deferral moves the deadline one period (twice at
+  most); unanswered offers lapse after `INTERACTION_TTL_PERIODS`; a lapsed obligation or an
+  explicit `break_alliance` is a breach (reputation −0.15, relationship −0.3, obligations
+  breached/released). Offers appear in both briefs, the digest, the arbiter prompt (which must
+  never assume consent), the round record (`offers_opened/answered/lapsed`, `breaches`), the
+  run summary (`offers` counts), the `/world-state` API (`interactions`), the panel card and the
+  report block. Tests: `tests/test_world_interactions.py`.
+- **Modelling gaps instead of invention.** `world_model_seed.seed_gaps` lists what the research
+  could not ground (numeric facts without units or as-of dates, actors without goals / plans /
+  an agency class, a cast without relationships, a world without facts); the sealed block, the
+  kernel (`seed_gaps`), the run summary, the API and the panel badge carry them.
+- **Behaviour diagnostics.** `world_update.behaviour_metrics`: per round, the share of moves
+  that answered an offer or whose statement / rationale names a fact that changed or an actor
+  that moved last period (a textual diagnostic, not a realism verdict); aggregated in the run
+  summary (`behaviour`), shown as a panel badge and a report line.
+
+Not ported, with reasons: the SQLite fenced store and exact-decimal replay (the JSON artifacts
+plus resume guards already give replay without re-deciding), the strict budgeted HTTP policy
+(the pipeline's telemetry/budget and the decision concurrency caps cover it), the compiler's
+typed mechanism catalogue (it only admits eight pre-declared action kinds and fails the whole
+world on any gap; the integrated model keeps the agency-class catalogue plus a bounded arbiter),
+the preregistered evaluation harness (tied to Codex's evidence workflow and frozen fixtures).

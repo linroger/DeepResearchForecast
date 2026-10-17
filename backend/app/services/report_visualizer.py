@@ -360,10 +360,12 @@ def world_variable_series(world: Any, *, max_variables: int = 12) -> List[Dict[s
         first = min(last_by_round)
         seed_row = last_by_round[first]
         seed = float(seed_row["value"])
+        if seed in (0.0, -0.0):
+            continue                                     # a zero seed cannot be indexed to 100
         unit = str(var.get("unit") or "")
 
         def _index(raw: float) -> float:
-            return raw / seed * 100.0 if seed not in (0.0, -0.0) else raw
+            return round(raw / seed * 100.0, 6)             # no floating-point noise in the chart data
 
         def _fmt(raw: float) -> str:
             return f"{raw:g} {unit}".strip()

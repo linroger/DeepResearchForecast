@@ -2245,6 +2245,29 @@ def get_simulation_feed_rounds(simulation_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def _world_interactions(world: dict, limit: int = 24) -> list:
+    """Offers and agreements of a ``world_state.json`` world block, open first then newest."""
+    names = {}
+    for a in (world.get("actors") or []):
+        if isinstance(a, dict) and a.get("agent_id") is not None:
+            names[a.get("agent_id")] = str(a.get("name") or f"Agent {a.get('agent_id')}")
+    rows = [it for it in (world.get("interactions") or []) if isinstance(it, dict) and it.get("id")]
+    rows.sort(key=lambda it: (0 if it.get("status") in ("open", "deferred") else 1,
+                              -int(it.get("resolved_round") or it.get("opened_round") or 0), str(it.get("id"))))
+    out = []
+    for it in rows[:limit]:
+        out.append({
+            "id": str(it.get("id"))[:40], "kind": str(it.get("kind") or "proposal")[:16],
+            "status": str(it.get("status") or "open")[:16],
+            "proposer": names.get(it.get("proposer"), str(it.get("proposer"))),
+            "recipient": names.get(it.get("recipient"), str(it.get("recipient"))),
+            "terms": str(it.get("terms") or "")[:300], "opened_round": it.get("opened_round"),
+            "expires_round": it.get("expires_round"), "resolved_round": it.get("resolved_round"),
+            "response": str(it.get("response") or "")[:200], "obligations": len(it.get("obligations") or []),
+        })
+    return out
+
+
 @simulation_bp.route('/<simulation_id>/world-state', methods=['GET'])
 def get_simulation_world_state(simulation_id: str):
     """REFLEXIVE WORLD: the latest committed world (facts, actors, relationships, events)
@@ -2345,6 +2368,12 @@ def get_simulation_world_state(simulation_id: str):
             "pending_effects": [fx for fx in (world.get("pending_effects") or []) if isinstance(fx, dict)][:20],
             "recent_events": events,
             "history": history,
+            # OFFERS: open offers first, then the latest settled ones (names resolved, bounded)
+            "interactions": _world_interactions(world),
+            # MODELLING GAPS the seed reported (what the research could not ground)
+            "seed_gaps": [{"kind": str(g.get("kind") or "")[:40], "subject": str(g.get("subject") or "")[:120],
+                           "note": str(g.get("note") or "")[:160]}
+                          for g in (world.get("seed_gaps") or []) if isinstance(g, dict)][:32],
         }
         return jsonify({"success": True, "data": data})
     except Exception as e:

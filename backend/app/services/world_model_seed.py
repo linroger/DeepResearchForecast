@@ -602,11 +602,52 @@ def build_world_model_seed(
         row["allies"] = _dedupe(row["allies"], 8)
         row["rivals"] = _dedupe(row["rivals"], 8)
     block["relationships"] = rels[:80]
+    # MODELLING GAPS (ported from the world-v1 compiler's stance): what the research could not
+    # ground is reported, never invented — the run, the panel and the report show the list
+    block["gaps"] = seed_gaps(block)
     return block
+
+
+MAX_SEED_GAPS = 32
+
+
+def seed_gaps(block: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Typed modelling gaps of a seed block: facts without units or dates, actors without
+    documented goals / plans / levers, a cast with no grounded relationships."""
+    gaps: List[Dict[str, str]] = []
+
+    def add(kind: str, subject: str, note: str) -> None:
+        if len(gaps) < MAX_SEED_GAPS:
+            gaps.append({"kind": kind, "subject": _clean(subject, 120), "note": _clean(note, 160)})
+
+    for var in block.get("state_variables") or []:
+        if not isinstance(var, dict):
+            continue
+        name = str(var.get("name") or var.get("id") or "")
+        if str(var.get("kind") or "numeric") == "numeric" and not str(var.get("unit") or "").strip():
+            add("variable_without_unit", name, "numeric fact without a unit; the arbiter can only move it as a bare number")
+        if str(var.get("provenance") or "research") in ("research", "official") and not str(var.get("as_of") or "").strip():
+            add("variable_without_as_of", name, "no as-of date; staleness cannot be judged")
+    actors = [a for a in (block.get("actors") or []) if isinstance(a, dict)]
+    for a in actors:
+        name = str(a.get("name") or f"Agent {a.get('agent_id')}")
+        if a.get("agency_class") in (None, "", "other_actor"):
+            add("actor_unclassified", name, "no agency class inferred; falls back to the generic option catalogue")
+        if not a.get("goals"):
+            add("actor_without_goals", name, "no documented goals; decisions lean on the role brief alone")
+        if not a.get("documented_plans") and not a.get("red_lines"):
+            add("actor_without_plans", name, "no documented plans or red lines; option menu is class-generic")
+    if len(actors) >= 2 and not (block.get("relationships") or []):
+        add("no_relationships", "cast", "no grounded relationships between the actors; alliances start from scratch")
+    if not (block.get("state_variables") or []):
+        add("no_state_variables", "world", "no quantitative facts to track; the world starts without numbers")
+    return gaps
 
 
 def world_model_seed_summary(block: Optional[Dict[str, Any]]) -> str:
     if not isinstance(block, dict):
         return ""
+    gaps = block.get("gaps") if isinstance(block.get("gaps"), list) else []
     return (f"world model: {len(block.get('state_variables') or [])} variables, "
-            f"{len(block.get('actors') or [])} actors, {len(block.get('relationships') or [])} relationships")
+            f"{len(block.get('actors') or [])} actors, {len(block.get('relationships') or [])} relationships"
+            + (f", {len(gaps)} modelling gaps" if gaps else ""))

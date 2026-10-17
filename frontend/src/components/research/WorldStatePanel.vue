@@ -22,6 +22,12 @@
         <span class="ws-badge st-failed" v-if="vm.arbiterFailedRounds">
           {{ vm.arbiterFailedRounds }} {{ L('轮仅机械推进', 'mechanical-only rounds') }}
         </span>
+        <span class="ws-badge st-gaps" v-if="vm.seedGaps.length" :title="gapsTitle">
+          {{ vm.seedGaps.length }} {{ L('项建模缺口', 'modelling gaps') }}
+        </span>
+        <span class="ws-badge st-behaviour" v-if="vm.behaviour" :title="behaviourTitle">
+          {{ L('回应上期', 'responsive moves') }} {{ Math.round(vm.behaviour.responsiveShare * 100) }}%
+        </span>
         <span class="ws-badge st-note">{{ L('推演投影，非观察证据', 'model projection, not evidence') }}</span>
       </div>
     </div>
@@ -114,6 +120,28 @@
           <li v-if="!vm.pending.length" class="ws-empty">{{ L('无待兑现承诺', 'No open commitments') }}</li>
         </ul>
       </div>
+      <div class="ws-card" v-if="vm.offers.length || vm.offerCounts">
+        <div class="ws-card-head">
+          {{ vm.isPast ? L('本时段的要约与协议', 'Offers and agreements this period') : L('要约与协议', 'Offers and agreements') }}
+          ({{ vm.offers.length }})
+        </div>
+        <ul class="ws-list">
+          <li v-for="it in vm.offers.slice(0, 8)" :key="it.id" class="ws-offer">
+            <span class="ws-badge mono" :class="'offer-' + it.status">{{ it.status }}</span>
+            <span class="ws-actor">{{ it.proposer }} → {{ it.recipient }}</span>
+            <span>{{ it.terms }}</span>
+            <span class="ws-due mono" v-if="!vm.isPast && it.expiresRound !== null && (it.status === 'open' || it.status === 'deferred')">
+              {{ L('截至第', 'until round ') }}{{ it.expiresRound }}{{ L('期', '') }}
+            </span>
+          </li>
+          <li v-if="!vm.offers.length" class="ws-empty">{{ L('本时段无要约变动', 'No offers moved this period') }}</li>
+        </ul>
+        <div class="ws-decisions mono" v-if="vm.offerCounts && !vm.isPast">
+          {{ L('累计', 'total') }} {{ vm.offerCounts.opened || 0 }} · {{ L('接受', 'accepted') }} {{ vm.offerCounts.accepted || 0 }}
+          · {{ L('拒绝', 'rejected') }} {{ vm.offerCounts.rejected || 0 }} · {{ L('失效', 'lapsed') }} {{ vm.offerCounts.lapsed || 0 }}
+          · {{ L('违约', 'breached') }} {{ vm.offerCounts.breached || 0 }}
+        </div>
+      </div>
     </div>
 
     <details class="ws-digest" v-if="vm.digest" :open="!vm.narrative">
@@ -179,6 +207,12 @@ function selectRound(round) {
 function backToLatest() {
   selectedRound.value = null
 }
+
+// MODELLING GAPS / BEHAVIOUR badges carry their detail in the title attribute (hover)
+const gapsTitle = computed(() => vm.value.seedGaps.map((g) => `${g.kind}: ${g.subject} — ${g.note}`).join('\n'))
+const behaviourTitle = computed(() => vm.value.behaviour
+  ? `${vm.value.behaviour.responsiveMoves}/${vm.value.behaviour.moves} ${L('项行动回应了上期的事实变化或他方行动', 'moves answered last period\'s changes or another actor')} (${vm.value.behaviour.roundsScored} ${L('个时段', 'periods')}, ${vm.value.behaviour.offersAnswered} ${L('项应答要约', 'offers answered')}). ${L('文本层面的诊断，非真实性判定', 'Textual diagnostic, not a realism verdict')}`
+  : '')
 
 function tickLabel(h) {
   const bits = [h.label, `${L('仲裁', 'arbiter')} ${h.arbiterStatus || L('无', 'none')}`]
@@ -292,7 +326,13 @@ onUnmounted(stopPolling)
 .ws-var-delta.dir-up { color: #15803d; }
 .ws-var-delta.dir-down { color: #b91c1c; }
 .ws-var-prov { font-size: 10px; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.03em; }
-.ws-move, .ws-pending, .ws-event { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.ws-move, .ws-pending, .ws-event, .ws-offer { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.st-gaps { border-color: #d97706; color: #b45309; cursor: help; }
+.st-behaviour { cursor: help; }
+.offer-open, .offer-deferred { border-color: #d97706; color: #b45309; }
+.offer-accepted { border-color: #16a34a; color: #15803d; }
+.offer-rejected, .offer-lapsed { opacity: 0.75; }
+.offer-breached { border-color: #dc2626; color: #b91c1c; }
 .ws-actor { font-weight: 600; }
 .ws-stmt { display: block; width: 100%; opacity: 0.8; font-style: italic; }
 .ws-kind { font-size: 10px; opacity: 0.6; padding: 0 4px; border-radius: 3px; border: 1px solid var(--border, #e5e7eb); }

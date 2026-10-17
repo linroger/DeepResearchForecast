@@ -223,7 +223,30 @@ export function summarizeWorldState(data, selectedRound = null) {
   for (const fx of Array.isArray(d.pending_effects) ? d.pending_effects : []) {
     if (fx && fx.description) pending.push({ actor: 'Expected', description: fx.description, dueRound: fx.due_round ?? null, status: 'effect' })
   }
+  // OFFERS (consent mechanics): the latest view lists open offers and the newest settled ones;
+  // a past period lists the offers whose status changed in that period (from the row's diff)
+  const offers = isPast
+    ? (Array.isArray(diff.interactions_changed) ? diff.interactions_changed : [])
+        .filter((it) => it && typeof it === 'object')
+        .map((it) => ({ id: String(it.id || ''), status: String(it.to || ''), proposer: String(it.proposer || ''),
+          recipient: String(it.recipient || ''), terms: String(it.terms || ''), expiresRound: null, resolvedRound: shownRound }))
+    : (Array.isArray(d.interactions) ? d.interactions : [])
+        .filter((it) => it && typeof it === 'object')
+        .map((it) => ({ id: String(it.id || ''), status: String(it.status || ''), proposer: String(it.proposer || ''),
+          recipient: String(it.recipient || ''), terms: String(it.terms || ''),
+          expiresRound: it.expires_round ?? null, resolvedRound: it.resolved_round ?? null }))
   const summary = d.summary && typeof d.summary === 'object' ? d.summary : {}
+  const offerCounts = summary.offers && typeof summary.offers === 'object' ? summary.offers : null
+  // MODELLING GAPS (what the seed could not ground) and BEHAVIOUR (textual responsiveness diagnostics)
+  const seedGaps = (Array.isArray(d.seed_gaps) ? d.seed_gaps : [])
+    .filter((g) => g && typeof g === 'object')
+    .map((g) => ({ kind: String(g.kind || ''), subject: String(g.subject || ''), note: String(g.note || '') }))
+  const behaviour = summary.behaviour && typeof summary.behaviour === 'object' && summary.behaviour.responsive_share !== null
+    && summary.behaviour.responsive_share !== undefined
+    ? { roundsScored: Number(summary.behaviour.rounds_scored || 0), moves: Number(summary.behaviour.moves || 0),
+        responsiveMoves: Number(summary.behaviour.responsive_moves || 0),
+        responsiveShare: Number(summary.behaviour.responsive_share), offersAnswered: Number(summary.behaviour.offers_answered || 0) }
+    : null
   const problems = textItems(row && row.arbiter_problems, 12)
   if (row && row.error) problems.push(String(row.error))
   const headline = isPast
@@ -254,6 +277,10 @@ export function summarizeWorldState(data, selectedRound = null) {
     eventsInWindow,
     relationshipChanges,
     pending,
+    offers,
+    offerCounts,
+    seedGaps,
+    behaviour,
     history: rows.map((r) => ({
       round: r.round, label: r.period_label || `#${r.round}`, headline: String(r.headline || ''),
       arbiterStatus: r.arbiter_status || '',

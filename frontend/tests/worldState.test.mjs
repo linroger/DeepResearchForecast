@@ -240,3 +240,41 @@ test('summarizeWorldState keeps the legacy digest fallback and is defensive', ()
   assert.equal(agencyLabel('sovereign_government'), 'sovereign government')
   assert.equal(agencyLabel(null), '')
 })
+
+test('offers: the latest view lists the API rows and a past period lists the status changes of its diff', () => {
+  const data = {
+    committed_round: 3,
+    summary: { offers: { opened: 2, open: 1, accepted: 1, rejected: 0, countered: 0, lapsed: 0, breached: 0 } },
+    interactions: [
+      { id: 'i3_2', status: 'open', proposer: 'Union', recipient: 'Ministry', terms: 'Wage floor', expires_round: 5, resolved_round: null },
+      { id: 'i1_1', status: 'accepted', proposer: 'Ministry', recipient: 'Agency', terms: 'Audits', expires_round: 3, resolved_round: 2 }
+    ],
+    history: [
+      { round: 2, period_label: '2026-11', diff: { variables_changed: [], variables_added: [], relationships_changed: [],
+        interactions_changed: [{ id: 'i1_1', from: 'open', to: 'accepted', proposer: 'Ministry', recipient: 'Agency', terms: 'Audits' }] } },
+      { round: 3, period_label: '2026-12', diff: { variables_changed: [], variables_added: [], relationships_changed: [] } }
+    ]
+  }
+  const latest = summarizeWorldState(data)
+  assert.deepEqual(latest.offers.map((o) => [o.id, o.status, o.expiresRound]), [['i3_2', 'open', 5], ['i1_1', 'accepted', 3]])
+  assert.equal(latest.offerCounts.accepted, 1)
+  const past = summarizeWorldState(data, 2)
+  assert.deepEqual(past.offers, [{ id: 'i1_1', status: 'accepted', proposer: 'Ministry', recipient: 'Agency', terms: 'Audits',
+    expiresRound: null, resolvedRound: 2 }])
+  assert.deepEqual(summarizeWorldState(data, 3).offers, latest.offers)        // the latest round is the live view
+  assert.deepEqual(summarizeWorldState({ committed_round: 1, history: [] }).offers, [])
+  assert.equal(summarizeWorldState({ committed_round: 1, history: [] }).offerCounts, null)
+})
+
+test('modelling gaps and behaviour diagnostics are summarised when present', () => {
+  const data = {
+    committed_round: 2, history: [],
+    summary: { seed_gaps: 2, behaviour: { rounds_scored: 1, moves: 3, responsive_moves: 2, responsive_share: 0.667, offers_answered: 1 } },
+    seed_gaps: [{ kind: 'variable_without_unit', subject: 'Permits', note: 'no unit' }, 'junk', { kind: 'no_relationships', subject: 'cast', note: 'none' }]
+  }
+  const vm = summarizeWorldState(data)
+  assert.deepEqual(vm.seedGaps.map((g) => g.subject), ['Permits', 'cast'])
+  assert.deepEqual(vm.behaviour, { roundsScored: 1, moves: 3, responsiveMoves: 2, responsiveShare: 0.667, offersAnswered: 1 })
+  assert.equal(summarizeWorldState({ committed_round: 1, history: [], summary: { behaviour: { responsive_share: null } } }).behaviour, null)
+  assert.deepEqual(summarizeWorldState({ committed_round: 1, history: [] }).seedGaps, [])
+})

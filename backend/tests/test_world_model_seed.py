@@ -218,7 +218,9 @@ def test_canonical_dossier_uses_only_validated_pack_rows():
 def test_seed_degrades_on_garbage():
     block = wms.build_world_model_seed("not a dict", [{"agent_id": "x"}, None, {"agent_id": 1, "entity_name": "Z"}])
     assert block["actors"][0]["name"] == "Z" and block["state_variables"] == [] and block["relationships"] == []
-    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships"
+    # a garbage seed is honest about what it could not ground
+    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships, 4 modelling gaps"
+    assert sorted(g["kind"] for g in block["gaps"]) == ["actor_unclassified", "actor_without_goals", "actor_without_plans", "no_state_variables"]
 
 
 def test_agent_activity_config_additive_fields_and_parameters_emit_block():
@@ -423,3 +425,36 @@ def test_build_seed_from_v3_dossier_yields_plans_and_red_lines():
     dossier["actors"][0]["red_lines"] = ["EXPLICIT LINE"]
     row = wms.build_world_model_seed(dossier, _v3_cfgs())["actors"][0]
     assert row["documented_plans"] == ["FLAT PLAN"] and row["red_lines"] == ["EXPLICIT LINE"]
+
+
+def test_seed_reports_modelling_gaps_instead_of_inventing():
+    block = {
+        "state_variables": [
+            {"id": "a", "name": "Tariff", "value": 10, "unit": "%", "kind": "numeric", "provenance": "research", "as_of": "2026-01-01"},
+            {"id": "b", "name": "Permits", "value": 3, "unit": "", "kind": "numeric", "provenance": "research", "as_of": ""},
+            {"id": "c", "name": "Status", "value": "pending", "unit": "", "kind": "categorical", "provenance": "arbiter"},
+        ],
+        "actors": [
+            {"agent_id": 0, "name": "Ministry", "agency_class": "sovereign_government", "goals": ["Growth"],
+             "documented_plans": ["Cut tariffs"], "red_lines": []},
+            {"agent_id": 1, "name": "Firm", "agency_class": "other_actor", "goals": [], "documented_plans": [], "red_lines": []},
+        ],
+        "relationships": [],
+    }
+    gaps = wms.seed_gaps(block)
+    assert [(g["kind"], g["subject"]) for g in gaps] == [
+        ("variable_without_unit", "Permits"), ("variable_without_as_of", "Permits"),
+        ("actor_unclassified", "Firm"), ("actor_without_goals", "Firm"), ("actor_without_plans", "Firm"),
+        ("no_relationships", "cast")]
+    assert all(g["note"] for g in gaps)
+    assert wms.seed_gaps({"state_variables": [], "actors": [], "relationships": []}) == [
+        {"kind": "no_state_variables", "subject": "world", "note": "no quantitative facts to track; the world starts without numbers"}]
+    # the sealed block carries them and the summary line counts them
+    built = wms.build_world_model_seed(_legacy_actors(), _cfgs(), question="Will the permit unlock deployment?")
+    assert isinstance(built.get("gaps"), list)
+    if built["gaps"]:
+        assert "modelling gaps" in wms.world_model_seed_summary(built)
+    # the kernel keeps them across a save/load round-trip
+    from app.services.world_model import WorldModel
+    world = WorldModel.from_seed({**built, "gaps": gaps}, _cfgs())
+    assert world.seed_gaps == gaps and WorldModel.from_dict(world.to_dict()).seed_gaps == gaps

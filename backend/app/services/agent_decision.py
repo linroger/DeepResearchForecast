@@ -31,7 +31,8 @@ import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import describe_llm_error
-from .world_model import ActorState, WorldModel, _text, normalize_label
+from .world_model import (ActorState, INTERACTION_TERMS_MAX_CHARS, PROPOSAL_OPTION_IDS, WorldModel,
+                          _text, normalize_label)
 
 logger = logging.getLogger(__name__)
 
@@ -385,8 +386,25 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
         seen.add(opt["id"])
         options.append(opt)
 
-    # 1) responses to what was aimed at this actor last period
-    aimed = [e for e in world.events_in_round(last_round) if actor.name in e.targets] if last_round > 0 else []
+    # 0) OFFERS: answers owed on open offers — the only way an agreement can come about
+    for it in world.open_interactions_for(actor.agent_id)[:3]:
+        who = world.actor_name(it.proposer)
+        until = world._period_label_for_round(it.expires_round)
+        for verb, label, kind, cost, lag in (
+            ("accept", f"Accept {who}'s offer [{it.id}]: {_text(it.terms, 110)} — binds both sides", "coalition", 1, 1),
+            ("counter", f"Counter {who}'s offer [{it.id}] with your own terms (state them in `terms`)", "coalition", 1, 0),
+            ("reject", f"Reject {who}'s offer [{it.id}]", "communication", 1, 0),
+            ("defer", f"Defer your answer to {who}'s offer [{it.id}] (open until {until})", "communication", 0, 0),
+        ):
+            if cost <= remaining:
+                push({"id": f"{verb}:{it.id}", "label": label, "kind": kind, "cost": cost, "lag": lag,
+                      "reversibility": "sticky" if verb == "accept" else "reversible", "targets_actor": False,
+                      "suggested_targets": [who], "interaction_id": it.id,
+                      "why": f"an offer from {who} awaits your answer (lapses after {until})"})
+    # 1) responses to what was aimed at this actor last period (offers are answered above)
+    aimed = [e for e in world.events_in_round(last_round)
+             if actor.name in e.targets and e.kind not in ("offer", "agreement", "breach")
+             and e.option_id not in PROPOSAL_OPTION_IDS] if last_round > 0 else []
     for idx, ev in enumerate(aimed[:3]):
         who = ev.actors[0] if ev.actors else "another actor"
         who_id = world.resolve_actor(who)
@@ -505,7 +523,9 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         f"{', '.join(ACTION_KINDS)} when none fits); name real targets from the cast when the option "
         "needs one; magnitude 0-1 is how far you go; public_statement is what you publicly say or "
         "announce this period (1-3 sentences, concrete: decision, numbers, dates, conditions); "
-        "private_rationale is for your own record; commitment is what you bind yourself to and when "
+        "private_rationale is for your own record; terms states the exact terms when your move makes "
+        "an offer to another actor or counters one (what you give, what you expect, by when) — an "
+        "offer binds nobody until the other side accepts it; commitment is what you bind yourself to and when "
         "(due_periods ≥ 1) or null; alliance_moves lists any alliance you propose/strengthen/break; "
         "scenario_commitment names which candidate scenario your move pushes toward, or \"abstain\" "
         f"if your move has no real bearing on the outcome. Candidate scenarios: {sc}.\n"
@@ -514,7 +534,7 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         "Return ONLY JSON:\n"
         '{"option_id": "<id or custom>", "custom_action": {"kind": "...", "label": "..."} | null, '
         '"targets": ["<actor name>", ...], "magnitude": 0.0-1.0, '
-        '"public_statement": "...", "private_rationale": "...", '
+        '"public_statement": "...", "private_rationale": "...", "terms": "<offer or counter-offer terms> | null", '
         '"commitment": {"description": "...", "due_periods": 1} | null, '
         '"alliance_moves": [{"target": "<actor name>", "move": "propose|strengthen|break|oppose"}], '
         '"expected_reactions": [{"actor": "<actor name>", "reaction": "..."}], '
@@ -562,8 +582,9 @@ class AgentDecision:
                  expected_reactions: Optional[List[Dict[str, str]]] = None,
                  scenario: Optional[str] = None, scenario_confidence: float = 0.0,
                  status: str = "ok", round_num: int = 0, period_end: Optional[str] = None,
-                 raw_option_id: str = "", problems: Optional[List[str]] = None) -> None:
+                 raw_option_id: str = "", problems: Optional[List[str]] = None, terms: str = "") -> None:
         self.agent_id = int(agent_id)
+        self.terms = _text(terms, INTERACTION_TERMS_MAX_CHARS)   # OFFERS: exact offer / counter-offer terms
         self.actor_name = actor_name
         self.option = dict(option)
         self.targets = list(targets)
@@ -594,6 +615,7 @@ class AgentDecision:
             "option": dict(self.option), "targets": list(self.targets),
             "magnitude": round(self.magnitude, 3),
             "public_statement": self.public_statement, "private_rationale": self.private_rationale,
+            "terms": self.terms,
             "commitment": self.commitment, "alliance_moves": list(self.alliance_moves),
             "expected_reactions": list(self.expected_reactions),
             "scenario": self.scenario, "scenario_confidence": round(self.scenario_confidence, 3),
@@ -699,6 +721,7 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
                              problems=[f"public_statement is {text_script(statement)}-script but the run "
                                        f"language is {_text(language, 40)}: \"{_text(statement, 100)}\""])
     rationale = _text(raw.get("private_rationale"), RATIONALE_MAX_CHARS)
+    terms = _text(raw.get("terms"), INTERACTION_TERMS_MAX_CHARS)
     commitment = None
     rc = raw.get("commitment")
     if isinstance(rc, dict) and _text(rc.get("description"), 220):
@@ -739,7 +762,7 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
                          public_statement=statement, private_rationale=rationale, commitment=commitment,
                          alliance_moves=moves, expected_reactions=reactions, scenario=scenario,
                          scenario_confidence=confidence, status="ok", round_num=round_num,
-                         period_end=period_end, raw_option_id=raw_option)
+                         period_end=period_end, raw_option_id=raw_option, terms=terms)
 
 
 def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: ActorState,
