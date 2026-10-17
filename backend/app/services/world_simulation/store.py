@@ -101,6 +101,11 @@ class WorldStore:
                 "missing_world", "Opening a new world requires a specification")
         if not self.read_only:
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            if not self.path.exists():
+                # A reader must never see a half-made world: sqlite3.connect creates an empty
+                # file at once and the schema only appears when the init transaction commits,
+                # so a status poll in between (or after a failed init) raised unsupported_store.
+                self._create_atomically(supplied)
         target = self.path.as_uri() + "?mode=ro" if self.read_only else str(self.path)
         self._db = sqlite3.connect(target, uri=self.read_only,
                                    timeout=30, isolation_level=None, check_same_thread=False)
@@ -154,6 +159,57 @@ class WorldStore:
             except BaseException:
                 self._db.execute("ROLLBACK")
                 raise
+
+    def _create_atomically(self, spec):
+        """Build a new world in a temporary file next to its final path, then publish it with a
+        hard link: readers see either no world (missing_world) or a complete, initialised one.
+
+        os.link fails if the final path already exists, so a concurrent creator can never
+        replace a world another writer has already opened; the loser discards its copy and
+        opens the winner's, whose spec the normal open then verifies.  The temporary database
+        uses rollback journalling so no -wal/-shm side files exist at publication; the normal
+        writer connection switches the final file to WAL.  A failed initialisation leaves no
+        file at the final path.
+        """
+        tmp = self.path.with_name(f".{self.path.name}.init-{os.getpid()}-{uuid4().hex[:8]}")
+        db = sqlite3.connect(str(tmp), timeout=30, isolation_level=None, check_same_thread=False)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA journal_mode=DELETE")
+            db.execute("PRAGMA synchronous=FULL")
+            self._db = db
+            with self._transaction():
+                self._initialize(spec)
+            db.close()
+            fd = os.open(str(tmp), os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            try:
+                os.link(str(tmp), str(self.path))
+            except FileExistsError:
+                pass  # another creator published first; its world is complete
+            tmp.unlink()
+            dir_fd = os.open(str(self.path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except BaseException:
+            try:
+                db.close()
+            except Exception:  # noqa: BLE001 — already closed on the success path
+                pass
+            for leftover in (tmp, tmp.with_name(tmp.name + "-journal")):
+                try:
+                    leftover.unlink()
+                except FileNotFoundError:
+                    pass
+            raise
+        finally:
+            self._db = None
 
     def _initialize(self, spec):
         # The pure kernel settles effects at asOf before any observation exists.
