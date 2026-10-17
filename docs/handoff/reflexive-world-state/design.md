@@ -247,7 +247,12 @@ the social simulation, is live-validated and feeds the report and the dashboard)
   breached/released). Offers appear in both briefs, the digest, the arbiter prompt (which must
   never assume consent), the round record (`offers_opened/answered/lapsed`, `breaches`), the
   run summary (`offers` counts), the `/world-state` API (`interactions`), the panel card and the
-  report block. Tests: `tests/test_world_interactions.py`.
+  report block. Tests: `tests/test_world_interactions.py`. Live validation (2026-10-17,
+  `sim_1838cf014c0b`, 8 offers) added two rules: any non-hold move — an answer included — honours
+  an obligation that fell due in that period, and an actor that owes an answer to an open offer or
+  whose agreement obligation falls due decides in that round even when the activity sampler did
+  not activate it (`_ReflexiveWorldCoordinator.owed_decision_ids`); without them every breach of
+  that run was an artefact of the mechanics, not of the actors.
 - **Modelling gaps instead of invention.** `world_model_seed.seed_gaps` lists what the research
   could not ground (numeric facts without units or as-of dates, actors without goals / plans /
   an agency class, a cast without relationships, a world without facts); the sealed block, the
