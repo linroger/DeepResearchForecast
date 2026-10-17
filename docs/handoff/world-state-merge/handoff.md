@@ -74,3 +74,4 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
 - 2026-10-17T12:00Z: side branches merged; Codex summary and port decision recorded; per-period feed delivered and live-checked (§4, §7, §8).
 - 2026-10-17T12:15Z: Codex port landed offline (consent rule, gaps, behaviour diagnostics) with design.md §2.10 and README (EN/ZH, line-aligned) updates; suite totals to follow.
 - 2026-10-17T12:30Z: isolated full-suite totals recorded, zero-seed regression fixed, concurrent-edit incident recorded (§6); status Complete pending the merge to main (§8/§10 updated after the merge).
+- 2026-10-17T12:35Z: Codex-port batch committed as 1de81a5; branch pushed and `main` fast-forwarded to the branch tip (PR linroger/DeepResearchForecast#6 thereby merged).
