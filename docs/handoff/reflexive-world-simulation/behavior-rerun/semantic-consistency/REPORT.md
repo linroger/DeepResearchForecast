@@ -1,5 +1,7 @@
 # Actor consistency repair and confirmation
 
+> Later continuation: [condition and decision-opportunity repair](condition-schedule/REPORT.md) records 11 completed decisions with 11 qualitative passes and one withheld unresolved response out of 12 calls. The confirmation remains incomplete and world-v1 stays opt-in. All earlier results below are preserved as historical evidence.
+
 This follow-up adds an optional, durable candidate/revision step for newly prepared `world-v1` simulations. It addresses the retained investment quantity-versus-rationale mismatch and coalition action before its declared trigger. The original studies remain unchanged. `oasis-legacy` remains the default; `world-v1` remains opt-in and its full behavior-promotion gate remains unmet.
 
 The implementation is on `codex/reflexive-world-simulation`, based on main `8852ce123fa15a6b4f4c3e6e4e492435c0e3137b`. [The architecture report](../../ARCHITECTURE.md) maps deep research, the DeerFlow harness, actor ontology, Graphiti, simulation and forecasting. [The executable contract](../../implementation-contract.md) defines current APIs. This report concerns the consistency follow-up, not a claim of general realism or calibrated prediction.

@@ -201,3 +201,33 @@ def test_v2_wire_distinguishes_rule_existence_snapshot_time_and_future_consent(v
     assert result.assessment == assessment and result.assessment['status'] == 'unresolved'
     assert result.decision['intents'] == final['intents']
     assert result.usage == {'tokens': 140, 'costUsd': '0.000560000000'} and len(case.sent) == 1
+
+
+@pytest.mark.parametrize('status', ['clear', 'unresolved'])
+def test_v2_wire_checks_embedded_conditions_and_current_decision_scope(v2_case, boundary, status):
+    from app.services.world_simulation.contracts import canonical_json
+    from app.services.world_simulation.policy import _REVIEW_CANDIDATE_PREFIX
+
+    spec, observation, candidate, final = v2_case
+    original_observation, original_candidate = deepcopy((observation, candidate))
+    assessment = _compact_assessment(status)
+    case = boundary(spec=spec, content=json.dumps({'decision': final, 'assessment': assessment}))
+    quote = case.policy.reservation(observation, review=candidate)
+    result = case.policy.decide(observation, review=candidate)
+    messages = json.loads(case.sent[0].content)['messages']
+    system, marker, draft = messages[0]['content'].partition(_REVIEW_CANDIDATE_PREFIX)
+    assert 'read conditional clauses in actor.objectives and actor.constraints' in system
+    assert 'An empty actor.priorityRules list establishes only that this list is empty' in system
+    assert 'name each decision-relevant condition and distinguish met, unmet or unknown' in system
+    assert 'Current options authorize this decision, not another turn before periodEnd' in system
+    assert 'A plan or empty intents does not install a contingent action or reserve another turn' in system
+    assert 'at a future eligible observation' in system
+    assert 'apply these checks to rationale, stateUpdates and message claims' in system
+    assert not any(label in system for label in ('m5-', '2030-01-01', 'ablation', 'rubric'))
+    assert marker and json.loads(draft) == original_candidate
+    assert messages[1]['content'] == canonical_json(original_observation)
+    assert observation == original_observation and candidate == original_candidate
+    size = len(json.dumps(messages, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8'))
+    assert quote['tokens'] == size + spec['policy']['pricing']['inputOverheadTokens'] + spec['limits']['maxOutputTokens']
+    assert result.assessment == assessment and result.decision['intents'] == final['intents']
+    assert result.usage == {'tokens': 140, 'costUsd': '0.000560000000'} and len(case.sent) == 1

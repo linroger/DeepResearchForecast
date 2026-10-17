@@ -81,7 +81,7 @@
     "id": "WORLD-SEMANTIC-BEHAVIOR",
     "status": "targeted_repair_implemented_full_gate_pending",
     "problem": "The prior full study retained valid investment/action disagreement and premature coalition opposition. Optional consistency review now checks candidate decisions before commitment; a fresh full-matrix acceptance remains necessary.",
-    "evidence": "behavior-rerun/semantic-consistency/REPORT.md: both retained action defects corrected in both directed revisions; all8controls preserved; final12/12actions and10/12fullqualitativepasses. This is not a fresh36case pass.",
+    "evidence": "behavior-rerun/semantic-consistency/condition-schedule/REPORT.md: bothinvestmentrevisions andonecompletedcoalitioncorrection passed,all8controls preserved;11completedfullpasses plus1unresolvedof12. Priorfull-study failures unchanged; no fresh36casepass.",
     "nextStep": "Keep world-v1 opt-in. Confirm the bounded saved-context review, then separately preregister fresh candidate generation and full trajectories with all36cases/all18contrasts; never substitute targeted revisions or lower thresholds."
   },
   {
@@ -98,9 +98,16 @@
   },
   {
     "id": "WORLD-CONSISTENCY-TEMPORAL",
-    "status": "open_release_blocker",
+    "status": "targeted_repair_verified_confirmation_incomplete",
     "problem": "Review explanations confused unmet conditions with absent rules and current snapshots with future persistence.",
-    "evidence": "Final prompt-only source accepted308checks;12/12correctactions but10/12full qualitativepasses. Existing-condition denial and unsupported within-period voting opportunity remain. See behavior-rerun/semantic-consistency/temporal-clarification/live-evidence/qualitative-review.md.",
-    "nextStep": "Design explicit condition/time opportunity representations before another treatment; keep failed study intact. No repeated same-treatment attempts to obtain a pass."
+    "evidence": "behavior-rerun/semantic-consistency/condition-schedule/REPORT.md:376focusedchecks;11/11completed decisions and explanations passed independent review;1unresolved response remains in12call denominator. Earlier2errors preserved in phase11.",
+    "nextStep": "Retain review uncertainty rather than forcing clear; preserve the incomplete confirmation and full36gate. Any further treatment requires concrete evidence and a reconciled budget."
+  },
+  {
+    "id": "WORLD-CONSISTENCY-UNRESOLVED",
+    "status": "open_release_blocker",
+    "problem": "One phase12 coalition revision returned consistency_unresolved and was withheld. Its discarded decision/assessment contents do not establish a cause or correctness.",
+    "evidence": "behavior-rerun/semantic-consistency/condition-schedule/live-evidence/journal.json; behavior-rerun/semantic-consistency/condition-schedule/live-evidence/qualitative-review.md excludes the withheld row and retains12required denominator.",
+    "nextStep": "Do not reset the slot, infer missing content or force a clear assessment. Obtain a separately designed evidence-producing treatment before further paid confirmation; full behavior promotion remains withheld."
   }
 ]

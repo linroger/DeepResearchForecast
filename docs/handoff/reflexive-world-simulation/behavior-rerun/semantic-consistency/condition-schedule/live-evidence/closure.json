@@ -1,0 +1,35 @@
+{
+  "originalOutput": "/private/tmp/drf-world-consistency-condition-schedule-20261017",
+  "verification": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-condition-schedule-closeout-wb9j1rfv/evidence",
+  "beforeSummary": {
+    "report.json": "01bcf64d3435f265db1422bb076ce80c311d3145457035c3c2007c7c9b1b84e0",
+    "qualitative-review.md": "fef894f4b46e88a4631493f9bc2b88ea932ee7e22cdd9de090bd5266b5025e14",
+    "journal.json": "e401de762e259064d0b2732ec27b108c34998c6ab7bf8e9b900c143d25dc0fcc",
+    "preregistration.json": "e2c6c4237d55efacd758f86aab40b0879361870c1de3fe296b22575233b7857f",
+    "qualitative-review.json": "42d07dfbc1ba322bfac5e580b52d7a86d9bc18bff1aa05537e6d71e12980a5bd"
+  },
+  "artifactHashes": {
+    "report.json": "02e08e08fae98d29ee9dfb8082c74375edf8600215c65c4ea16b00dd3338520f",
+    "summary-junit.xml": "67a7e489ab3ddace53dcd061be2679f34cd7d2edbd19ac015f932b1698299180",
+    "report-before-qualitative.json": "01bcf64d3435f265db1422bb076ce80c311d3145457035c3c2007c7c9b1b84e0",
+    "qualitative-review.md": "fef894f4b46e88a4631493f9bc2b88ea932ee7e22cdd9de090bd5266b5025e14",
+    "summary-completed.json": "dd1757a9558230e2d3665a1a9b854bcc1a39f178fcf17cf8351fc4b2ec0072fa",
+    "journal.json": "e401de762e259064d0b2732ec27b108c34998c6ab7bf8e9b900c143d25dc0fcc",
+    "preregistration.json": "e2c6c4237d55efacd758f86aab40b0879361870c1de3fe296b22575233b7857f",
+    "qualitative-review.json": "42d07dfbc1ba322bfac5e580b52d7a86d9bc18bff1aa05537e6d71e12980a5bd"
+  },
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "priorArtifactsUnchanged": 416,
+  "frozenSourceFiles": 535,
+  "reviewedCases": 11,
+  "qualitativePasses": 11,
+  "qualitativeFailures": 0,
+  "correctActionCases": 11,
+  "unresolvedCalls": 1,
+  "requiredDenominator": 12,
+  "diagnosticGate": "incomplete"
+}

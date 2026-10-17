@@ -1,0 +1,23 @@
+{
+  "checkedUtc": "2026-10-17T13:55:28.557238+00:00",
+  "sourceIsolation": "AST outside _REVIEW_SYSTEM_V2 identical to d59cb43; no other production change.",
+  "ruff": "F,E9 passed for both changed Python files.",
+  "guardedGate": {
+    "passed": 376,
+    "seconds": "9.35",
+    "sourceFiles": 535,
+    "sourceDrift": []
+  },
+  "summaryGate": {
+    "passed": 1,
+    "seconds": "1.23",
+    "diagnosticGate": "incomplete"
+  },
+  "preservedPriorArtifacts": 416,
+  "closedPhaseReportHashesVerified": 12,
+  "jsonAndLocalReportLinks": "passed",
+  "featurePromotionPasses": false,
+  "providerProcessActive": false,
+  "whitespaceException": "Only immutable condition-schedule/red-junit.xml, whose captured pytest assertion indentation is preserved. Editable source/docs are checked.",
+  "publication": "Local scoped commit only; previously rejected remote credentials not retried."
+}

@@ -2,8 +2,8 @@
   "branch": "codex/reflexive-world-simulation",
   "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
   "implementation_commit": "e902aedb1a8307c024da950060c4d7bb30f34220",
-  "phase": "Optional actor consistency repair implemented; directed action checks pass, qualitative and full promotion gates withheld",
-  "updatedUtc": "2026-10-17T13:31:46.244483+00:00",
+  "phase": "Condition and timing instructions repaired;11completed qualitativepasses with1withheld response;fullpromotiongateunmet",
+  "updatedUtc": "2026-10-17T13:53:58.282377+00:00",
   "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
   "application_tests_run": true,
   "live_provider_calls_run": true,
@@ -20,8 +20,8 @@
     "failed": 2,
     "incomplete": 0
   },
-  "conservativeConsumedUsd": "18.913368955664",
-  "remainingOriginalAuthorizationUsd": "6.086631044336",
+  "conservativeConsumedUsd": "19.009480955664",
+  "remainingOriginalAuthorizationUsd": "5.990519044336",
   "activeProviderBatch": null,
   "reports": [
     "ARCHITECTURE.md",
@@ -30,7 +30,8 @@
     "final-review.json",
     "live-evidence/report.json",
     "behavior-rerun/public-grammar/REPORT.md",
-    "behavior-rerun/semantic-consistency/REPORT.md"
+    "behavior-rerun/semantic-consistency/REPORT.md",
+    "behavior-rerun/semantic-consistency/condition-schedule/REPORT.md"
   ],
   "priorPlanningRecord": {
     "branch": "codex/reflexive-world-simulation",
@@ -84,9 +85,9 @@
     }
   },
   "behaviorV2Commit": "37b43161c75d6b64b98bbcbf007053fd7b447ff1",
-  "latestOfflineTestsPassed": 308,
+  "latestOfflineTestsPassed": 376,
   "latestSummaryTestsPassed": 1,
-  "latestReport": "behavior-rerun/semantic-consistency/REPORT.md",
+  "latestReport": "behavior-rerun/semantic-consistency/condition-schedule/REPORT.md",
   "latestImplementationCommit": "bfbc31107d0dbfae55b7972a66e9b1cc19c10eec",
   "worktreeCleanAtImplementationCommit": true,
   "priorPublicGrammarDelivery": {
@@ -133,13 +134,34 @@
   "consistencyBroadTestsPassed": 882,
   "latestDirectedConfirmation": {
     "calls": 12,
-    "completed": 12,
-    "correctActions": 12,
-    "qualitativePasses": 10,
-    "qualitativeFailures": 2,
-    "diagnosticGate": "failed",
+    "completed": 11,
+    "correctActions": 11,
+    "qualitativePasses": 11,
+    "qualitativeFailures": 0,
+    "unresolvedCalls": 1,
+    "diagnosticGate": "incomplete",
     "freshCandidateGeneration": false,
     "fullMatrixRun": false
   },
-  "consistencyReport": "behavior-rerun/semantic-consistency/REPORT.md"
+  "consistencyReport": "behavior-rerun/semantic-consistency/REPORT.md",
+  "priorTemporalDelivery": {
+    "phase": "Optional actor consistency repair implemented; directed action checks pass, qualitative and full promotion gates withheld",
+    "updatedUtc": "2026-10-17T13:31:46.244483+00:00",
+    "conservativeConsumedUsd": "18.913368955664",
+    "remainingOriginalAuthorizationUsd": "6.086631044336",
+    "latestOfflineTestsPassed": 308,
+    "latestSummaryTestsPassed": 1,
+    "latestReport": "behavior-rerun/semantic-consistency/REPORT.md",
+    "latestDirectedConfirmation": {
+      "calls": 12,
+      "completed": 12,
+      "correctActions": 12,
+      "qualitativePasses": 10,
+      "qualitativeFailures": 2,
+      "diagnosticGate": "failed",
+      "freshCandidateGeneration": false,
+      "fullMatrixRun": false
+    },
+    "latestImplementationCommit": "bfbc31107d0dbfae55b7972a66e9b1cc19c10eec"
+  }
 }
