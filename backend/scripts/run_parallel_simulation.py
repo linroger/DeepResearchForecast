@@ -64,6 +64,16 @@ if sys.platform == 'win32':
     
     builtins.open = _utf8_open
 
+# stdout 按行刷新（所有平台）：后端把本进程的 stdout/stderr 捕获进 simulation.log（与主日志
+# 记录器 SimulationLogManager 同一文件），每条 print 整行即时落盘，而不是 8 KiB 块——块边界会
+# 切断多字节字符，且模拟结束后 runner 空闲等待命令期间最后一块（含每轮 world 决策/提交行）
+# 一直留在缓冲区里。
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (OSError, ValueError):
+        pass
+
 # XRUN-14: transformers tokenizers 在 fork 后会逐条刷 "The current process just got forked"
 # 警告（曾把 simulation.log 的整个可见尾部淹没，掩盖真实错误）。必须在任何 huggingface
 # 相关 import 之前显式禁用 tokenizers 并行才能静音。
@@ -4108,10 +4118,11 @@ class _ReflexiveWorldCoordinator:
                     decision = await asyncio.to_thread(
                         elicit_decision, self._llm, system_message=system_message, user_prompt=prompt,
                         actor=actor, world=world, options=options, scenarios=self._scenarios,
-                        round_num=rnd, period_end=period_end)
+                        round_num=rnd, period_end=period_end, language=self._language)
             except Exception as _e:  # noqa: BLE001
                 self._log(f"reflexive world: decision for {actor.name} failed (holds): {_e}")
-                decision = hold_decision(actor, status="failed", round_num=rnd, period_end=period_end)
+                decision = hold_decision(actor, status="failed", round_num=rnd, period_end=period_end,
+                                         problems=[f"decision step error: {type(_e).__name__}: {str(_e)[:200]}"])
             decisions[aid] = decision
 
         await asyncio.gather(*(_one(int(aid)) for aid in roster_ids))
@@ -4401,6 +4412,10 @@ class _ReflexiveWorldCoordinator:
     def _world_summary(self) -> Dict[str, Any]:
         world = self._world
         failed = 0
+        scored_rounds = 0
+        moves_total = 0
+        responsive_total = 0
+        offers_answered = 0
         try:
             hist = os.path.join(self._dir, WORLD_HISTORY_FILE)
             if os.path.exists(hist):
@@ -4410,8 +4425,16 @@ class _ReflexiveWorldCoordinator:
                             row = json.loads(line)
                         except ValueError:
                             continue
-                        if isinstance(row, dict) and row.get("arbiter_status") in ("failed", "invalid"):
+                        if not isinstance(row, dict):
+                            continue
+                        if row.get("arbiter_status") in ("failed", "invalid"):
                             failed += 1
+                        beh = row.get("behaviour") if isinstance(row.get("behaviour"), dict) else {}
+                        if beh.get("responsive_share") is not None:
+                            scored_rounds += 1
+                            moves_total += int(beh.get("moves") or 0)
+                            responsive_total += int(beh.get("responsive_moves") or 0)
+                            offers_answered += int(beh.get("offers_answered") or 0)
         except OSError:
             failed = 0
         return {
@@ -4425,6 +4448,17 @@ class _ReflexiveWorldCoordinator:
             "arbiter_enabled": bool(self._arbiter_on),
             "arbiter_failed_rounds": failed,
             "decision_actors_max": self.decision_max,
+            # OFFERS (consent mechanics): how the actors' offers fared
+            "offers": _offer_counts(world),
+            # MODELLING GAPS reported by the seed; BEHAVIOUR: textual responsiveness diagnostics
+            "seed_gaps": len(getattr(world, "seed_gaps", None) or []),
+            "behaviour": {
+                "rounds_scored": scored_rounds,
+                "moves": moves_total,
+                "responsive_moves": responsive_total,
+                "responsive_share": round(responsive_total / moves_total, 3) if moves_total else None,
+                "offers_answered": offers_answered,
+            },
         }
 
     def _write_world_state(self, headline: str = "") -> None:
@@ -4461,6 +4495,19 @@ def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected
     except Exception as _e:  # noqa: BLE001
         log_info(f"reflexive world model init failed (falling back to legacy evolution): {_e}")
         return None
+
+
+def _offer_counts(world: Any) -> Dict[str, int]:
+    """Status counts of the world's offers (``world_model.Interaction``), for summaries."""
+    counts = {"opened": 0, "open": 0, "accepted": 0, "rejected": 0, "countered": 0, "lapsed": 0, "breached": 0}
+    for inter in getattr(world, "interactions", {}).values():
+        counts["opened"] += 1
+        status = str(getattr(inter, "status", "") or "")
+        if status in ("open", "deferred"):
+            counts["open"] += 1
+        elif status in counts:
+            counts[status] += 1
+    return counts
 
 
 async def _finalize_world_coordinator(simulation_dir: str, log_info) -> bool:
@@ -5946,8 +5993,9 @@ async def run_twitter_simulation(
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
         # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
-        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
-        # the organic LLMAction post so a dead decision step never silences the cast.
+        # ManualAction with decision tags); actors whose decision failed / was invalid / carried a
+        # statement in the wrong language fall back to the organic LLMAction post so a dead
+        # decision step never silences the cast.
         _wc_decisions: Dict[int, Any] = {}
         _wc_posted = 0
         if _world_coord is not None:
@@ -6537,8 +6585,9 @@ async def run_reddit_simulation(
         if _reaction_on:
             _advance_reaction_window(_reaction_state, db_path)
         # REFLEXIVE WORLD: deciding actors make ONE structured move (published as a CREATE_POST
-        # ManualAction with decision tags); actors whose decision failed/invalid fall back to
-        # the organic LLMAction post so a dead decision step never silences the cast.
+        # ManualAction with decision tags); actors whose decision failed / was invalid / carried a
+        # statement in the wrong language fall back to the organic LLMAction post so a dead
+        # decision step never silences the cast.
         _wc_decisions: Dict[int, Any] = {}
         _wc_posted = 0
         if _world_coord is not None:

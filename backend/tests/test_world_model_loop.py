@@ -10,7 +10,10 @@ per-actor decision prompts and the arbiter prompt.  Pins:
   A3 no platform begins round r+1 before world update r is committed (barrier);
   A4 arbiter failure → the round still commits with the deterministic update;
   A7 SIM_WORLD_MODEL=false / hours mode → no world artifacts, legacy path intact;
-  resume: already-committed rounds are not re-decided or re-committed.
+  resume: already-committed rounds are not re-decided or re-committed;
+  live follow-ups (sim_d6ebcc77e22d): a provider content-filter rejection of the arbiter is
+     recorded with class / HTTP status / provider code, and a public statement in the wrong
+     script for the run language is rejected with a typed status → organic post.
 """
 
 import asyncio
@@ -30,6 +33,7 @@ for _p in (_BACKEND, _SCRIPTS):
 import run_parallel_simulation as rps  # noqa: E402
 from action_logger import PlatformActionLogger  # noqa: E402
 import app.services.decision_channel as dc  # noqa: E402
+from tests.conftest import content_filter_error  # noqa: E402
 from test_calendar_round_loop import (  # noqa: E402
     _FakeAgent,
     _FakeGraph,
@@ -49,6 +53,8 @@ from test_calendar_round_loop import (  # noqa: E402
 class _WorldLLM:
     calls = []            # [{"kind", "round", "actor", "content"}]
     arbiter_fail = False
+    arbiter_error = None          # callable → exception raised by the arbiter call (provider rejection)
+    wrong_language_rounds = ()    # rounds in which Actor0's statement comes out in Chinese
 
     def __init__(self, *a, **k):
         self.provider = "fake"
@@ -68,8 +74,10 @@ class _WorldLLM:
                                     "system": messages[0]["content"] if messages[0]["role"] == "system" else ""})
             if actor == "Actor0":
                 option = "impose_measure" if "[impose_measure]" in content else re.search(r"\[(\w+)\]", content).group(1)
+                statement = (f"关税上调至25%（第{rnd}轮）。" if rnd in _WorldLLM.wrong_language_rounds
+                             else f"Tariff raised to 25% on imports (round {rnd}).")
                 return {"option_id": option, "targets": ["Actor1"], "magnitude": 0.9,
-                        "public_statement": f"Tariff raised to 25% on imports (round {rnd}).",
+                        "public_statement": statement,
                         "private_rationale": "protect domestic producers",
                         "commitment": {"description": "Publish the tariff schedule", "due_periods": 1},
                         "alliance_moves": [{"target": "Actor2", "move": "propose"}],
@@ -77,6 +85,8 @@ class _WorldLLM:
             return {"option_id": "hold_position", "scenario_commitment": "abstain"}
         if "consequence arbiter" in content:
             _WorldLLM.calls.append({"kind": "arbiter", "round": None, "actor": None, "content": content})
+            if _WorldLLM.arbiter_error is not None:
+                raise _WorldLLM.arbiter_error()
             if _WorldLLM.arbiter_fail:
                 raise RuntimeError("arbiter provider down")
             moved = "Actor0: Impose or raise a tariff" in content
@@ -116,6 +126,8 @@ def _patch_world(monkeypatch, sim_dir, envs):
     _patch_runtime(monkeypatch, sim_dir, envs)
     _WorldLLM.calls = []
     _WorldLLM.arbiter_fail = False
+    _WorldLLM.arbiter_error = None
+    _WorldLLM.wrong_language_rounds = ()
     monkeypatch.setattr("app.utils.llm_client.LLMClient", _WorldLLM)
     monkeypatch.setattr(dc, "elicit_round", lambda *a, **k: pytest.fail("legacy elicit must not run in world mode"))
     rps._WORLD_COORDINATORS.clear()
@@ -300,7 +312,7 @@ def test_arbiter_failure_round_commits_deterministically(tmp_path, monkeypatch):
     env = envs[0]
     history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
     assert [h["arbiter_status"] for h in history] == ["failed"] * 3
-    assert history[0]["arbiter_problems"] == ["llm error: RuntimeError"]
+    assert history[0]["arbiter_problems"] == ["llm error: RuntimeError: arbiter provider down"]
     state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
     assert state["committed_round"] == 3
     assert state["world"]["variables"][0]["value"] == 10.0                 # no fabricated numeric effect
@@ -314,6 +326,69 @@ def test_arbiter_failure_round_commits_deterministically(tmp_path, monkeypatch):
     assert "[2026-11-05] 事件A发生" in r3                                    # scheduled event of round 2 → round-3 brief
     traj = json.load(open(os.path.join(sim_dir, "world_state_trajectory.json"), encoding="utf-8"))
     assert traj["world_model"]["arbiter_failed_rounds"] == 3 and traj["outcome"]["leader"] == "A"
+
+
+def test_arbiter_content_filter_rejection_is_recorded_precisely(tmp_path, monkeypatch):
+    """Live run sim_d6ebcc77e22d: two arbiter calls were rejected by the provider content filter
+    (HTTP 400, code 1301) and the history only said ``llm error: BadRequestError``.  The record now
+    names class, status, code and classification; the round still commits deterministically."""
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    _WorldLLM.arbiter_error = content_filter_error
+    _run(_world_config(), sim_dir)
+    history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
+    assert [h["arbiter_status"] for h in history] == ["failed"] * 3
+    for row in history:
+        [problem] = row["arbiter_problems"]
+        assert problem.startswith("llm error: BadRequestError (HTTP 400, provider code 1301, content filter): "
+                                  "Error code: 400 - {'contentFilter'")
+        assert "'code': '1301'" in problem and len(problem) <= 320
+    state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
+    assert state["committed_round"] == 3 and state["world"]["variables"][0]["value"] == 10.0
+    assert state["summary"]["arbiter_failed_rounds"] == 3
+    updates = [e for e in _read_events(sim_dir) if e.get("event_type") == "world_update"]
+    assert [u["arbiter_status"] for u in updates] == ["failed"] * 3
+    # the deterministic world still moved and the loop kept deciding
+    assert [c["round"] for c in _WorldLLM.calls if c["kind"] == "decision" and c["actor"] == "Actor0"] == [1, 2, 3]
+
+
+def test_wrong_language_statement_is_rejected_and_actor_posts_organically(tmp_path, monkeypatch):
+    """A Chinese public_statement in an English run (live: MOFCOM, round 4) is rejected with a typed
+    status: no decision post, the actor falls back to its organic post, and the rejected text never
+    enters the shared world."""
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    _WorldLLM.wrong_language_rounds = (2,)
+    cfg = _world_config()
+    cfg["output_language"] = "English"
+    _run(cfg, sim_dir)
+    env = envs[0]
+    d2 = [c for c in _WorldLLM.calls if c["kind"] == "decision" and c["actor"] == "Actor0" and c["round"] == 2][0]
+    assert "Write public_statement in English." in d2["content"]
+    rows = _read_jsonl(os.path.join(sim_dir, "world_actions.jsonl"))
+    a0 = {r["round"]: r for r in rows if r["actor_name"] == "Actor0"}
+    assert a0[1]["status"] == "ok" and a0[3]["status"] == "ok"
+    assert a0[2]["status"] == "language_mismatch" and a0[2]["option"]["id"] == "hold_position"
+    assert a0[2]["raw_option_id"] not in ("", "hold_position") and a0[2]["public_statement"] == ""   # the move it tried
+    assert a0[2]["problems"] == ['public_statement is cjk-script but the run language is English: "关税上调至25%（第2轮）。"']
+    # publication: no decision post in round 2; Actor0 fell back to the organic post instead
+    posts = [e for e in _read_events(sim_dir)
+             if e.get("action_type") == "CREATE_POST" and e.get("action_args", {}).get("is_world_decision")]
+    assert [p["round"] for p in posts] == [1, 3]
+    assert env.llm_steps == [[0]]
+    # the rejected text never reaches the shared world: round 2 records no move for Actor0 (typed),
+    # and the round-3 WORLD STATE brief carries the typed non-move instead of the Chinese statement
+    history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
+    assert history[1]["decisions"]["language_mismatch"] == 1
+    assert history[1]["decisions"]["ok"] == history[1]["decisions"]["total"] - 1
+    r3 = [n for n in _world_clock_notes(env) if "round 3/3" in n][0]
+    assert "- Actor0: Actor0 makes no recorded move (language_mismatch)" in r3
+    digest_rows = _read_jsonl(os.path.join(sim_dir, "world_digest.jsonl"))
+    assert "关税上调至25%" not in r3 and "关税" not in digest_rows[1]["digest"]
+    state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
+    assert state["committed_round"] == 3
 
 
 # ===========================================================================
@@ -410,6 +485,57 @@ def test_resume_restores_partial_trajectory_and_continues_remaining_rounds(tmp_p
     assert [r["round"] for r in traj_after["trajectory"]] == [0, 1, 2, 3]
     assert traj_after["trajectory"][1]["shares"] == traj_before["trajectory"][1]["shares"]
     assert len([c for c in _WorldLLM.calls if c["kind"] == "decision" and c["round"] == 1]) == round1_decisions_before
+    assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 3
+
+
+# ===========================================================================
+# observability: the coordinator's per-round lines reach simulation.log intact
+# ===========================================================================
+def test_world_round_lines_reach_simulation_log(tmp_path, monkeypatch):
+    """The backend streams the runner's stdout/stderr into simulation.log through its own handle
+    while the runner's SimulationLogManager writes the same file: both append, so the per-round
+    world lines are on disk, whole, in the main logger's format (the live run found them torn)."""
+    import contextlib
+    from action_logger import SimulationLogManager
+    from app.services.simulation_runner import SimulationRunner
+
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    cfg = _world_config()
+    sink = SimulationRunner._open_main_log(sim_dir)            # the backend's stdout/stderr capture handle
+    assert sink.mode == "a"
+    manager = None
+    try:
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            manager = SimulationLogManager(sim_dir)             # as in main(): after the capture exists
+            print("library banner printed before the first round")
+            asyncio.run(rps.run_twitter_simulation(cfg, sim_dir, action_logger=PlatformActionLogger("twitter", sim_dir),
+                                                   main_logger=manager))
+    finally:
+        sink.close()
+        if manager is not None:
+            for handler in list(manager._main_logger.handlers):
+                handler.close()
+            manager._main_logger.handlers.clear()
+
+    with open(os.path.join(sim_dir, "simulation.log"), "rb") as f:
+        text = f.read().decode("utf-8")                         # strict: no torn multi-byte characters anywhere
+    lines = text.splitlines()
+    records = [line.split(" - INFO - ", 1)[1] for line in lines if " - INFO - " in line]
+    world = [r for r in records if r.startswith("[Twitter] round") or r.startswith("[Twitter] world update committed")]
+    assert [re.match(r"\[Twitter\] round (\d) decisions: \d+ actors → \{", r).group(1)
+            for r in world if " decisions: " in r] == ["1", "2", "3"]
+    assert [r.split(": ", 1)[1].split(":", 1)[0] for r in world if r.startswith("[Twitter] world update committed")] == [
+        "2026-Q3", "2026-Q4", "2027-Q1"]
+    kinds = ["decide" if " decisions: " in r else "commit" if "committed" in r else "publish" for r in world]
+    assert kinds == ["decide", "publish", "commit"] * 3                   # each round: decide → publish → commit
+    assert any(r.startswith("[Twitter] reflexive world complete: leader=A") for r in records)
+    # the captured console copies land whole too, and the file keeps what was printed before the manager existed
+    assert "library banner printed before the first round" in lines
+    assert "[Twitter] round 1 decisions: " in "\n".join(lines) and sum(
+        1 for line in lines if line.startswith("[Twitter] world update committed: 2026-Q3")) == 1
+    assert not any(re.match(r"^\[\d\d:\d\d:\d\d\] ", line) for line in lines)   # no console-handler echo into the same file
     assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 3
 
 

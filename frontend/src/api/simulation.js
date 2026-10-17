@@ -118,10 +118,11 @@ export const getRunStatusDetail = (simulationId) => {
  * @param {number} limit - 返回数量
  * @param {number} offset - 偏移量
  */
-export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50, offset = 0) => {
-  return service.get(`/api/simulation/${simulationId}/posts`, {
-    params: { platform, limit, offset }
-  })
+export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50, offset = 0, round = null) => {
+  // PERIOD VIEW: `round` (a committed round number) narrows the feed to that period's posts
+  const params = { platform, limit, offset }
+  if (round !== null && round !== undefined) params.round = round
+  return service.get(`/api/simulation/${simulationId}/posts`, { params })
 }
 
 /**
@@ -131,10 +132,19 @@ export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50
  * @param {number} limit - 返回数量
  * @param {number} offset - 偏移量
  */
-export const getSimulationComments = (simulationId, platform = 'reddit', limit = 200, offset = 0) => {
-  return service.get(`/api/simulation/${simulationId}/comments`, {
-    params: { platform, limit, offset }
-  })
+export const getSimulationComments = (simulationId, platform = 'reddit', limit = 200, offset = 0, round = null) => {
+  // PERIOD VIEW: `round` narrows the replies to the ones written in that period
+  const params = { platform, limit, offset }
+  if (round !== null && round !== undefined) params.round = round
+  return service.get(`/api/simulation/${simulationId}/comments`, { params })
+}
+
+/**
+ * PERIOD VIEW: the rounds of a platform's feed with period labels and post/reply counts
+ * (GET /api/simulation/<id>/feed-rounds). Empty `rounds` before the run has an action log.
+ */
+export const getFeedRounds = (simulationId, platform = 'reddit') => {
+  return service.get(`/api/simulation/${simulationId}/feed-rounds`, { params: { platform } })
 }
 
 /**

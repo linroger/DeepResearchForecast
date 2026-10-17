@@ -218,7 +218,9 @@ def test_canonical_dossier_uses_only_validated_pack_rows():
 def test_seed_degrades_on_garbage():
     block = wms.build_world_model_seed("not a dict", [{"agent_id": "x"}, None, {"agent_id": 1, "entity_name": "Z"}])
     assert block["actors"][0]["name"] == "Z" and block["state_variables"] == [] and block["relationships"] == []
-    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships"
+    # a garbage seed is honest about what it could not ground
+    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships, 4 modelling gaps"
+    assert sorted(g["kind"] for g in block["gaps"]) == ["actor_unclassified", "actor_without_goals", "actor_without_plans", "no_state_variables"]
 
 
 def test_agent_activity_config_additive_fields_and_parameters_emit_block():
@@ -276,3 +278,183 @@ def test_sealed_config_carries_world_model_block(tmp_path):
         validate_simulation_config_seal(str(tmp_path), expected_manifest_sha256=manifest_sha,
                                         expected_config_sha256=config_sha, expected_simulation_id="sim_wm",
                                         require=True)
+
+
+# ----------------------------------------------------------------------------- research engine v3 rows
+def _v3_actors():
+    """Research engine v3 ``actors.json`` rows (deerflow_bridge/linear_research.py ACTOR EXTRACTION
+    TASK), shaped like the live pipe_d569f211eb14 dossier: goals / constraints / stated_vs_revealed /
+    memory / incentives / worldview, and none of the legacy plan or red-line keys."""
+    return {
+        "as_of_date": "2026-10-16",
+        "central_question": "What is the state of US–China trade restrictions on 30 June 2027?",
+        "actors": [
+            {"name": "Donald Trump", "type": "Person", "role": "US President; sets tariff levels personally",
+             "stance": "Seeks a bigger deal", "description": "Personally authorized chip sales in December 2025.",
+             "stated_vs_revealed": ("States 'fair and reciprocal relationship'; revealed record shows willingness "
+                                    "to override security hawks and will escalate when cornered."),
+             "memory": ("Escalated to 126.1 percent average tariffs in May 2025, then cut to 51.7 percent at "
+                        "Geneva; announced a Beijing summit scheduled for April 2027."),
+             "influence": "high", "simulation_tier": 1, "role_class": "principal", "aliases": ["President Trump"],
+             "goals": ["Conclude a 'bigger deal' with China before the January 10, 2027 truce expiry",
+                       "Preserve tariff leverage while claiming wins",
+                       "Possibly reinstate the Affiliates Rule",
+                       "Keep Nvidia/AMD chip sales and profit-sharing",
+                       "Impose Section 232 duties on legacy chips"],
+             "constraints": ["November 3, 2026 midterm elections",
+                             "Will not accept a deal without verified soybean purchases",
+                             "Post-IEEPA legal limits forcing Section 301/232 instruments",
+                             "Rules out any tariff cut below 20 percent before the midterms",
+                             "No clear majority in the Senate for a tariff bill"],
+             "assets": ["Executive authority over tariffs"],
+             "vulnerabilities": ["Will escalate if the truce collapses"],
+             "incentives": [{"driver": "Political credit", "gains_if": "Framework converts to signed text",
+                             "loses_if": "Truce collapses", "intensity": "high"}],
+             "worldview": {"values": ["Reciprocity"], "beliefs": ["Tariff leverage extracts concessions"],
+                           "identity": "Dealmaker president", "frame": "Trade as transactional negotiation"},
+             "risk_tolerance": "high", "salience": {"tier": 1, "score": 0.95, "basis": "Sets tariff levels"}},
+            {"name": "Xi Jinping", "type": "Person", "role": "President of China", "stance": "Willing to extend truce",
+             "stated_vs_revealed": ("Commits to purchases and fentanyl-precursor controls; revealed practice is "
+                                    "uneven follow-through."),
+             "memory": "April 2025 controls followed by November 2025 suspension under deal pressure.",
+             "influence": "high", "simulation_tier": 1, "role_class": "principal", "aliases": [],
+             "goals": ["Prolong truce to stabilize economy", "Preserve rare-earth chokepoint leverage"],
+             "constraints": ["US imports of rare earths never recovered — leverage costs export revenue",
+                             "Soybean pace at 'almost half' of commitment draws US criticism"],
+             "incentives": [{"driver": "Leverage", "gains_if": "Tariff cuts continue", "loses_if": "Re-escalation",
+                             "intensity": "high"}],
+             "worldview": {"values": [], "beliefs": [], "identity": "", "frame": ""}, "risk_tolerance": "medium",
+             "salience": {"tier": 1, "score": 0.9, "basis": "Controls rare-earth instruments"}},
+            {"name": "PIIE", "type": "Organization", "role": "Think tank", "stance": "Neutral measurement",
+             "stated_vs_revealed": "Neutral scholarly measurement.", "memory": "Documented the 2018-2026 chronology.",
+             "influence": "low", "simulation_tier": 4, "role_class": "arbiter", "aliases": [],
+             "goals": ["Accurate bilateral tariff measurement"], "constraints": None, "incentives": [],
+             "worldview": {}, "risk_tolerance": "low", "salience": {"tier": 4, "score": 0.2, "basis": "Benchmark"}},
+            {"name": "商务部", "type": "Government", "role": "中国商务部", "stance": "维持暂停措施",
+             "stated_vs_revealed": "公开承诺扩大采购；实际执行不均", "memory": "2025年10月出台管制措施，11月暂停。",
+             "influence": "high", "simulation_tier": 1, "role_class": "principal", "aliases": ["MOFCOM"],
+             "goals": ["推动签署阶段性协议", "维持现有关税水平", "可能收紧稀土许可"],
+             "constraints": ["绝不接受无核查的采购承诺", "2026年11月10日法律到期需发布编号公告"],
+             "incentives": [], "worldview": {}, "risk_tolerance": "medium",
+             "salience": {"tier": 1, "score": 0.8, "basis": "管制工具"}},
+        ],
+        "relationships": [{"source": "Donald Trump", "target": "Xi Jinping", "type": "COMPETES_WITH",
+                           "valence": "adversarial", "polarity": -0.5, "strength": 0.7, "basis": "tariffs"}],
+        "quantitative_facts": [{"metric": "Average US tariff on imports from China", "value": "35.2",
+                                "unit": "percent", "as_of_date": "2026-09-30", "source": "PIIE"}],
+        "forecast_inputs": {"scenarios": [{"name": "Deal deepens"}, {"name": "Truce holds"}]},
+    }
+
+
+def _v3_cfgs():
+    return [{"agent_id": 0, "entity_name": "Donald Trump", "entity_type": "Person", "stance": "Seeks a bigger deal"},
+            {"agent_id": 1, "entity_name": "Xi Jinping", "entity_type": "Person"},
+            {"agent_id": 2, "entity_name": "PIIE", "entity_type": "Organization"},
+            {"agent_id": 3, "entity_name": "商务部", "entity_type": "Government"}]
+
+
+def test_v3_plans_come_from_stated_commitments_and_action_phrased_goals():
+    trump, xi, piie, mofcom = _v3_actors()["actors"]
+    assert wms.derive_v3_plans(trump) == [
+        "Conclude a 'bigger deal' with China before the January 10, 2027 truce expiry",   # action verb
+        "Impose Section 232 duties on legacy chips",                                       # action verb
+        "announced a Beijing summit scheduled for April 2027",                             # memory commitment
+    ]
+    # postures ("Preserve", "Keep"), hedges ("Possibly"), the stance-only stated clause, the revealed half,
+    # vulnerabilities and incentives are never promoted; "May 2025" is a month, not a hedge
+    assert wms.derive_v3_plans(xi) == ["Commits to purchases and fentanyl-precursor controls",
+                                       "Prolong truce to stabilize economy"]
+    assert wms.derive_v3_plans(piie) == []                                      # noun-phrase goal, no commitment
+    assert wms.derive_v3_plans(mofcom) == ["公开承诺扩大采购", "推动签署阶段性协议"]
+    assert wms.derive_v3_plans(None) == [] and wms.derive_v3_plans({"goals": "Sign the deal"}) == ["Sign the deal"]
+    many = {"goals": [f"Impose duty {i}" for i in range(6)]}
+    assert len(wms.derive_v3_plans(many)) == wms.MAX_PLANS
+
+
+def test_v3_red_lines_come_from_non_negotiable_wording_only():
+    trump, xi, piie, mofcom = _v3_actors()["actors"]
+    assert wms.derive_v3_red_lines(trump) == ["Will not accept a deal without verified soybean purchases",
+                                              "Rules out any tariff cut below 20 percent before the midterms"]
+    assert wms.derive_v3_red_lines(xi) == []                                    # "never recovered" is history
+    assert wms.derive_v3_red_lines(piie) == []                                  # constraints: null
+    assert wms.derive_v3_red_lines(mofcom) == ["绝不接受无核查的采购承诺"]       # the procedural expiry is not one
+    refusal = {"stated_vs_revealed": "Says it will not accept chip-control floors; in fact it wavers",
+               "goals": ["Rule out any tariff cut before verification"]}
+    assert wms.derive_v3_red_lines(refusal) == ["Says it will not accept chip-control floors"]   # goals are not read
+    assert wms.derive_v3_plans(refusal) == []                                  # a refusal is never a plan
+    assert wms.derive_v3_red_lines({"constraints": ["Might refuse to sign", "Trump's signature needed",
+                                                    "No clear majority in the Senate", "Not yet ratified",
+                                                    "不得不接受现有关税水平"]}) == []        # hedged / absence / "has to"
+    # "U.S." is an abbreviation, not a sentence end; the revealed clause after ";" stays out
+    ustr = {"stated_vs_revealed": "U.S. Trade Representative commits to publishing the tariff-cut list; "
+                                  "privately doubts China's follow-through"}
+    assert wms.derive_v3_plans(ustr) == ["U.S. Trade Representative commits to publishing the tariff-cut list"]
+
+
+def test_build_seed_from_v3_dossier_yields_plans_and_red_lines():
+    from app.services.agent_decision import build_option_menu
+    block = wms.build_world_model_seed(_v3_actors(), _v3_cfgs(), question="US–China trade?", temporal_timeline=_Timeline())
+    actors = {a["agent_id"]: a for a in block["actors"]}
+    trump = actors[0]
+    assert trump["documented_plans"] == [
+        "Conclude a 'bigger deal' with China before the January 10, 2027 truce expiry",
+        "Impose Section 232 duties on legacy chips",
+        "announced a Beijing summit scheduled for April 2027"]
+    assert trump["red_lines"] == ["Will not accept a deal without verified soybean purchases",
+                                  "Rules out any tariff cut below 20 percent before the midterms"]
+    assert trump["goals"][0].startswith("Conclude a 'bigger deal'") and trump["aliases"] == ["President Trump"]
+    assert actors[1]["documented_plans"][0] == "Commits to purchases and fentanyl-precursor controls"
+    assert actors[1]["red_lines"] == [] and actors[2]["documented_plans"] == [] and actors[2]["red_lines"] == []
+    assert actors[3]["red_lines"] == ["绝不接受无核查的采购承诺"]
+    dumped = json.dumps(block, ensure_ascii=False)
+    for leak in ("will escalate when cornered", "Will escalate if the truce collapses",          # revealed / vulnerability
+                 "Tariff leverage extracts concessions", "Framework converts to signed text",   # worldview / incentive
+                 "实际执行不均"):
+        assert leak not in dumped, leak
+    promoted = json.dumps([(a["documented_plans"], a["red_lines"]) for a in block["actors"]], ensure_ascii=False)
+    for posture in ("Possibly reinstate", "Preserve tariff leverage", "Keep Nvidia/AMD", "维持现有关税水平"):
+        assert posture not in promoted, posture                              # goals stay goals, never plans
+    assert trump["rivals"] == ["Xi Jinping"] and block["state_variables"][0]["value"] == 35.2
+    # the derived plans reach the option menu of the running world
+    world = WorldModel.from_seed(block, _v3_cfgs())
+    labels = [o["label"] for o in build_option_menu(world.actors[0], world, 1)]
+    assert any(label.startswith("Advance your documented plan: Conclude a 'bigger deal'") for label in labels)
+    # explicit legacy keys still win over the derivation
+    dossier = _v3_actors()
+    dossier["actors"][0]["future_plans"] = ["FLAT PLAN"]
+    dossier["actors"][0]["red_lines"] = ["EXPLICIT LINE"]
+    row = wms.build_world_model_seed(dossier, _v3_cfgs())["actors"][0]
+    assert row["documented_plans"] == ["FLAT PLAN"] and row["red_lines"] == ["EXPLICIT LINE"]
+
+
+def test_seed_reports_modelling_gaps_instead_of_inventing():
+    block = {
+        "state_variables": [
+            {"id": "a", "name": "Tariff", "value": 10, "unit": "%", "kind": "numeric", "provenance": "research", "as_of": "2026-01-01"},
+            {"id": "b", "name": "Permits", "value": 3, "unit": "", "kind": "numeric", "provenance": "research", "as_of": ""},
+            {"id": "c", "name": "Status", "value": "pending", "unit": "", "kind": "categorical", "provenance": "arbiter"},
+        ],
+        "actors": [
+            {"agent_id": 0, "name": "Ministry", "agency_class": "sovereign_government", "goals": ["Growth"],
+             "documented_plans": ["Cut tariffs"], "red_lines": []},
+            {"agent_id": 1, "name": "Firm", "agency_class": "other_actor", "goals": [], "documented_plans": [], "red_lines": []},
+        ],
+        "relationships": [],
+    }
+    gaps = wms.seed_gaps(block)
+    assert [(g["kind"], g["subject"]) for g in gaps] == [
+        ("variable_without_unit", "Permits"), ("variable_without_as_of", "Permits"),
+        ("actor_unclassified", "Firm"), ("actor_without_goals", "Firm"), ("actor_without_plans", "Firm"),
+        ("no_relationships", "cast")]
+    assert all(g["note"] for g in gaps)
+    assert wms.seed_gaps({"state_variables": [], "actors": [], "relationships": []}) == [
+        {"kind": "no_state_variables", "subject": "world", "note": "no quantitative facts to track; the world starts without numbers"}]
+    # the sealed block carries them and the summary line counts them
+    built = wms.build_world_model_seed(_legacy_actors(), _cfgs(), question="Will the permit unlock deployment?")
+    assert isinstance(built.get("gaps"), list)
+    if built["gaps"]:
+        assert "modelling gaps" in wms.world_model_seed_summary(built)
+    # the kernel keeps them across a save/load round-trip
+    from app.services.world_model import WorldModel
+    world = WorldModel.from_seed({**built, "gaps": gaps}, _cfgs())
+    assert world.seed_gaps == gaps and WorldModel.from_dict(world.to_dict()).seed_gaps == gaps

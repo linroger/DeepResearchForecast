@@ -53,6 +53,15 @@ def _world_state_payload(committed=3):
             "pending_effects": [{"id": "fx1", "due_round": 4, "description": "Importers relocate", "probability": 0.5}],
             "events": [{"round": r, "kind": "action", "description": f"Actor0 move {r}", "actors": ["Actor0"],
                         "targets": ["Actor1"], "statement": "Tariff raised"} for r in (1, 2, 3)],
+            "interactions": [
+                {"id": "i1_1", "kind": "proposal", "proposer": 0, "recipient": 1, "option_id": "open_talks",
+                 "terms": "Audits for licences", "opened_round": 1, "expires_round": 3, "status": "accepted",
+                 "parent_id": "", "resolved_round": 2, "response": "Agreed.", "obligations": ["c0", "c9"], "deferrals": 0},
+                {"id": "i3_2", "kind": "counter", "proposer": 1, "recipient": 0, "option_id": "partnership_deal",
+                 "terms": "Joint venture", "opened_round": 3, "expires_round": 5, "status": "open",
+                 "parent_id": "", "resolved_round": None, "response": "", "obligations": [], "deferrals": 1},
+                "junk", {"status": "lapsed"},
+            ],
         },
     }
 
@@ -68,20 +77,39 @@ def _history_rows():
                                                                     "to": "adversarial", "direction": "farther"}]},
          "scenario_pressure": {"A": "up"}},
         {"round": 2, "period_label": "2026-Q4", "headline": "2026-Q4: quiet", "narrative": "",
-         "arbiter_status": "failed", "decisions": {"total": 3}, "deterministic": {"actions": []}, "diff": {}},
+         "arbiter_status": "failed", "arbiter_problems": ["llm error: BadRequestError"],
+         "error": "BadRequestError: content filter",
+         "decisions": {"total": 3}, "deterministic": {"actions": []}, "diff": {}, "shares": {"A": 0.6, "B": 0.4}},
         {"round": 3, "period_label": "2027-Q1", "headline": "2027-Q1: 3 decisions", "narrative": "Importers protest.",
-         "arbiter_status": "applied", "decisions": {"total": 3}, "deterministic": {"actions": ["Open an inquiry → Actor0"]},
+         "arbiter_status": "applied", "arbiter_problems": ["unknown variable 'x'"],
+         "decisions": {"total": 3}, "deterministic": {"actions": ["Open an inquiry → Actor0"]},
          "diff": {"variables_changed": [], "variables_added": [], "relationships_changed": []}},
     ]
 
 
-def _write_world(sim_dir, with_history=True, committed=3):
+def _digest_rows():
+    # one audit row per stepped round (round 2 has none: the shares step was isolated that round),
+    # plus a duplicate for round 3 (the later row wins) and junk lines the reader must skip
+    return [
+        {"round": 1, "period_end": "2026-09-30", "digest": "Digest 1.", "shares": {"A": 0.5, "B": 0.5}},
+        {"round": 3, "period_end": "2027-03-31", "digest": "Stale digest 3.", "shares": {"A": 0.7, "B": 0.3}},
+        {"round": 3, "period_end": "2027-03-31", "digest": "Digest 3.\nMoves:\n- Actor0: Open an inquiry", "shares": {"A": 0.7, "B": 0.3}},
+        {"round": 9, "digest": "Digest of a round outside the slice."},
+    ]
+
+
+def _write_world(sim_dir, with_history=True, committed=3, with_digest=False):
     os.makedirs(sim_dir, exist_ok=True)
     with open(os.path.join(sim_dir, "world_state.json"), "w", encoding="utf-8") as f:
         json.dump(_world_state_payload(committed), f, ensure_ascii=False)
     if with_history:
         with open(os.path.join(sim_dir, "world_state_history.jsonl"), "w", encoding="utf-8") as f:
             for row in _history_rows():
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    if with_digest:
+        with open(os.path.join(sim_dir, "world_digest.jsonl"), "w", encoding="utf-8") as f:
+            f.write("{not json\n\n[1, 2]\n")
+            for row in _digest_rows():
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
@@ -112,6 +140,11 @@ def test_world_state_api_happy_path_is_bounded(client, tmp_path):
     assert data["history"][1]["narrative"] == "Importers protest."
     assert len(data["recent_events"]) == 3 and data["pending_effects"][0]["id"] == "fx1"
     assert data["period"]["label"] == "2027-Q1" and data["question"] == "Will A happen?"
+    # OFFERS: open first, names resolved, bounded fields, junk rows skipped
+    assert [(it["id"], it["status"], it["proposer"], it["recipient"]) for it in data["interactions"]] == [
+        ("i3_2", "open", "Actor1", "Actor0"), ("i1_1", "accepted", "Actor0", "Actor1")]
+    assert data["interactions"][1]["obligations"] == 2 and data["interactions"][1]["response"] == "Agreed."
+    assert data["interactions"][0]["expires_round"] == 5 and data["interactions"][0]["kind"] == "counter"
 
 
 def test_world_state_api_404_before_commit_and_containment(client, tmp_path):
@@ -136,6 +169,45 @@ def test_world_state_api_bad_json_and_bad_rows(client, tmp_path):
     _write_world(str(tmp_path / "sim_ok"), with_history=False)
     res = client.get("/api/simulation/sim_ok/world-state?rows=zzz")
     assert res.status_code == 200 and res.get_json()["data"]["history"] == []
+
+
+def test_world_state_api_history_rows_carry_problems_and_digests(client, tmp_path):
+    """The panel's round selector needs each committed round's arbiter problems, the update
+    error (when the update itself failed) and the agent-facing digest of that round."""
+    _write_world(str(tmp_path / "sim_hist"), with_digest=True)
+    data = client.get("/api/simulation/sim_hist/world-state?rows=2").get_json()["data"]
+    rows = {h["round"]: h for h in data["history"]}
+    assert list(rows) == [2, 3]
+    assert rows[2]["arbiter_status"] == "failed" and rows[2]["arbiter_problems"] == ["llm error: BadRequestError"]
+    assert rows[2]["error"] == "BadRequestError: content filter"
+    assert rows[3]["arbiter_problems"] == ["unknown variable 'x'"] and "error" not in rows[3]
+    assert rows[2]["digest"] == ""                                              # no digest row → empty, never missing
+    assert rows[3]["digest"] == "Digest 3.\nMoves:\n- Actor0: Open an inquiry"   # the later duplicate wins
+    assert "shares" not in rows[2] and "shares" not in rows[3]                 # quantitative shares never travel
+    assert data["digest"] == "Tariff shock ripples."                            # top-level latest digest unchanged
+    # rows without a problems list (older runs) → []
+    _write_world(str(tmp_path / "sim_plain"))
+    plain = client.get("/api/simulation/sim_plain/world-state").get_json()["data"]["history"]
+    assert [h["arbiter_problems"] for h in plain][0] == [] and all(h["digest"] == "" for h in plain)
+    # bounds: at most 12 problems of 200 chars, digest text capped at 2000 chars, error at 200
+    sim_big = tmp_path / "sim_big"
+    _write_world(str(sim_big), with_history=False)
+    with open(sim_big / "world_state_history.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "arbiter_status": "invalid", "arbiter_problems": ["p" * 500] * 20,
+                            "error": "e" * 500, "diff": {}}) + "\n")
+    with open(sim_big / "world_digest.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "digest": "d" * 5000}) + "\n")
+    big = client.get("/api/simulation/sim_big/world-state").get_json()["data"]["history"][0]
+    assert len(big["arbiter_problems"]) == 12 and all(len(p) == 200 for p in big["arbiter_problems"])
+    assert len(big["error"]) == 200 and len(big["digest"]) == 2000
+    # a non-list problems field is tolerated; a symlinked digest file is refused like the other artifacts
+    sim_link = tmp_path / "sim_dlink"
+    _write_world(str(sim_link), with_history=False)
+    with open(sim_link / "world_state_history.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "arbiter_status": "applied", "arbiter_problems": "oops", "diff": {}}) + "\n")
+    os.symlink(str(sim_big / "world_digest.jsonl"), str(sim_link / "world_digest.jsonl"))
+    linked = client.get("/api/simulation/sim_dlink/world-state").get_json()["data"]["history"][0]
+    assert linked["arbiter_problems"] == [] and linked["digest"] == ""
 
 
 # ----------------------------------------------------------------------------- run summary + run state
@@ -289,3 +361,62 @@ def test_decision_channel_outcome_logs_world_model(tmp_path, monkeypatch):
     assert summary["world_model"]["rounds_committed"] == 3 and summary["world_model"]["arbiter_failed_rounds"] == 1
     assert summary["world_headline"].startswith("2027-Q1")
     assert summary["trajectory_produced"] is False                              # no trajectory file written here
+
+
+def test_world_variable_series_seed_at_as_of_and_one_point_per_period():
+    from app.services.report_visualizer import world_variable_series
+    world = {
+        "as_of_date": "2026-07-11", "round": 4, "committed_round": 4,
+        "period_labels": {"1": "2026-Q3", "2": "2026-Q4", "3": "2027-Q1", "4": "2027-Q2"},
+        "variables": [
+            {"id": "tariff_rate", "name": "Tariff rate", "unit": "%", "kind": "numeric", "history": [
+                {"round": 0, "value": 10.0, "cause": "seed", "source": "research"},
+                {"round": 2, "value": 25.0, "cause": "effect fired", "source": "effect"},
+                {"round": 2, "value": 30.0, "cause": "decree", "source": "arbiter"},     # same period: last wins
+                {"round": 4, "value": 40.0, "cause": "snapback", "source": "arbiter"},
+                {"round": 4, "value": "bad", "cause": "ignored"}]},
+            {"id": "licences", "name": "Licences issued", "unit": "count", "kind": "numeric", "history": [
+                {"round": 3, "value": 5, "cause": "arbiter created the fact", "source": "arbiter"},
+                {"round": 4, "value": 6, "cause": "more", "source": "arbiter"}]},
+            {"id": "permit", "name": "Permit", "unit": "", "kind": "categorical",
+             "history": [{"round": 0, "value": "pending"}, {"round": 1, "value": "granted"}]},
+            {"id": "flat", "name": "Seed only", "unit": "%", "kind": "numeric",
+             "history": [{"round": 0, "value": 3.0, "cause": "seed"}]},
+            "garbage",
+        ],
+    }
+    rows = world_variable_series(world)
+    assert [r["id"] for r in rows] == ["tariff_rate", "licences"]              # categorical / seed-only / junk skipped
+    tariff = rows[0]
+    assert tariff["x"] == ["2026-07-11", "2026-Q3", "2026-Q4", "2027-Q1", "2027-Q2"]   # seed at the as-of date
+    assert tariff["rounds"] == [0, 1, 2, 3, 4] and len(set(tariff["x"])) == len(tariff["x"])
+    assert tariff["y"] == [100.0, 100.0, 300.0, 300.0, 400.0]                 # last value of the period, carried
+    assert tariff["raw"] == [10.0, 10.0, 30.0, 30.0, 40.0]
+    assert tariff["hover"] == ["10 % — seed (research, as of 2026-07-11)", "10 % — unchanged", "30 % — decree",
+                               "30 % — unchanged", "40 % — snapback"]
+    created = rows[1]                                                          # an arbiter-created variable starts later
+    assert created["x"] == ["2027-Q1", "2027-Q2"] and created["y"] == [100.0, 120.0]
+    assert created["hover"][0] == "5 count — arbiter created the fact"
+    # no committed round recorded → the history's last round bounds the axis; no as-of → "seed"
+    bare = world_variable_series({"variables": [{"kind": "numeric", "history": [
+        {"round": 0, "value": 2}, {"round": 2, "value": 1}]}]})
+    assert bare[0]["x"] == ["seed", "period 1", "period 2"] and bare[0]["y"] == [100.0, 100.0, 50.0]
+    assert world_variable_series("garbage") == [] and world_variable_series({"variables": []}) == []
+
+
+def test_world_variables_chart_starts_at_seed_without_duplicates(tmp_path):
+    from app.services.report_visualizer import ReportVisualizer
+    viz = ReportVisualizer()
+    if not viz._interactive_ok():
+        pytest.skip("plotly unavailable")
+    payload = _world_state_payload()
+    payload["world"]["variables"][0]["history"].append(
+        {"round": 2, "value": 30.0, "cause": "second row of the period", "source": "arbiter"})
+    charts = str(tmp_path / "charts")
+    rel = viz.build_world_variables_html(payload, charts)
+    assert rel is not None
+    html = open(os.path.join(str(tmp_path), rel), encoding="utf-8").read()
+    assert '"2026-07-11"' in html and '"2026-Q3"' in html and '"2027-Q1"' in html   # seed at as-of, one x per period
+    assert '"categoryarray":["2026-07-11","2026-Q3","2026-Q4","2027-Q1"]' in html
+    assert "300" in html and "second row of the period" in html and "unchanged" in html
+    assert html.count('"2026-Q4"') == 2                                       # one point + the axis order, no duplicate

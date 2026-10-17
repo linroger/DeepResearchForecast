@@ -4,6 +4,7 @@ Step2: Zep实体读取与过滤、OASIS模拟准备与运行（全程自动化�
 """
 
 import os
+import re
 import traceback
 from flask import request, jsonify, send_file
 
@@ -2109,6 +2110,35 @@ def get_simulation_trajectory(simulation_id: str):
 WORLD_STATE_MAX_BYTES = 8 * 1024 * 1024
 WORLD_STATE_MAX_HISTORY = 200
 WORLD_STATE_MAX_EVENTS = 40
+WORLD_STATE_MAX_PROBLEMS = 12      # arbiter problems kept per history row (the kernel records at most 12)
+WORLD_STATE_MAX_DIGEST = 2000      # per-round digest text, the same bound as the latest digest
+
+
+def _bounded_jsonl_rows(path: str):
+    """Dict rows of a per-run JSONL artifact, in file order, or [] when the file is missing.
+
+    Same posture as the world-state file: a regular file only (symlinks refused), the
+    WORLD_STATE_MAX_BYTES size cap, malformed or non-object lines skipped.
+    """
+    import json
+    if os.path.islink(path) or not os.path.isfile(path) or os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+        return []
+    rows = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+    except OSError:
+        return []
+    return rows
 
 
 def _contained_sim_dir(simulation_id: str):
@@ -2124,6 +2154,120 @@ def _contained_sim_dir(simulation_id: str):
     return sim_dir
 
 
+_FEED_PLATFORM_RE = re.compile(r"[a-z0-9_]{1,32}")
+
+
+def _feed_rows_for_round(simulation_id: str, platform: str, round_arg, kind: str, limit, offset):
+    """PERIOD VIEW: the posts (or comments) of one round of a platform's feed.
+
+    Posts of round r are those created in r plus the parents of replies written in r, so a
+    thread discussed this period shows with only this period's replies; every row carries
+    ``round`` and the response carries the round's ``period_label``.  Containment and bounds
+    follow the world-state route (``_contained_sim_dir``); the index comes from
+    ``services.feed_rounds`` (read-only, cached on the artefacts' mtime/size).
+    """
+    import sqlite3
+    from ..services.feed_rounds import cached_feed_round_index, ids_for_round, load_platform_rows
+    try:
+        rnd = int(round_arg)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "round 必须是整数"}), 400
+    platform = str(platform or "reddit")
+    if not _FEED_PLATFORM_RE.fullmatch(platform):
+        return jsonify({"success": False, "error": "platform 非法"}), 400
+    sim_dir = _contained_sim_dir(simulation_id)
+    if sim_dir is None or not os.path.isdir(sim_dir):
+        return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+    try:
+        limit = max(1, min(int(limit or 50), 2000))
+        offset = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        limit, offset = 50, 0
+    index = cached_feed_round_index(sim_dir, platform)
+    labels = {r["round"]: r["period_label"] for r in index["rounds"]}
+    db_path = os.path.join(sim_dir, f"{platform}_simulation.db")
+    _posts, comments, _agents = load_platform_rows(db_path)
+    post_ids, comment_ids = ids_for_round(index, rnd, comments)
+    if kind == "posts":
+        table, id_col, ids, rounds_map = "post", "post_id", post_ids, index["post_round"]
+    else:
+        table, id_col, ids, rounds_map = "comment", "comment_id", comment_ids, index["comment_round"]
+    rows = []
+    if ids and os.path.isfile(db_path) and not os.path.islink(db_path):
+        uri = "file:" + os.path.abspath(db_path).replace("?", "%3F") + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                marks = ",".join("?" for _ in chunk)
+                try:
+                    cur.execute(f"SELECT * FROM {table} WHERE {id_col} IN ({marks})", chunk)
+                    rows.extend(dict(r) for r in cur.fetchall())
+                except sqlite3.OperationalError:
+                    break
+        finally:
+            conn.close()
+    rows.sort(key=lambda r: (str(r.get("created_at") or ""), int(r.get(id_col) or 0)), reverse=True)
+    for r in rows:
+        r["round"] = rounds_map.get(int(r.get(id_col) or -1))
+    page = rows[offset:offset + limit]
+    return jsonify({
+        "success": True,
+        "data": {
+            "platform": platform,
+            "round": rnd,
+            "period_label": labels.get(rnd, ""),
+            "total": len(rows),
+            "count": len(page),
+            kind: page,
+        }
+    })
+
+
+@simulation_bp.route('/<simulation_id>/feed-rounds', methods=['GET'])
+def get_simulation_feed_rounds(simulation_id: str):
+    """PERIOD VIEW: the rounds of a platform's feed with their period labels, headlines and
+    post/reply counts (``services.feed_rounds``).  Empty ``rounds`` when the run has no
+    action log yet; 404 for an unknown or uncontained simulation id."""
+    try:
+        from ..services.feed_rounds import cached_feed_round_index, public_index
+        platform = str(request.args.get('platform', 'reddit') or "reddit")
+        if not _FEED_PLATFORM_RE.fullmatch(platform):
+            return jsonify({"success": False, "error": "platform 非法"}), 400
+        sim_dir = _contained_sim_dir(simulation_id)
+        if sim_dir is None or not os.path.isdir(sim_dir):
+            return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+        return jsonify({"success": True, "data": public_index(cached_feed_round_index(sim_dir, platform))})
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"读取信息流轮次索引失败: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _world_interactions(world: dict, limit: int = 24) -> list:
+    """Offers and agreements of a ``world_state.json`` world block, open first then newest."""
+    names = {}
+    for a in (world.get("actors") or []):
+        if isinstance(a, dict) and a.get("agent_id") is not None:
+            names[a.get("agent_id")] = str(a.get("name") or f"Agent {a.get('agent_id')}")
+    rows = [it for it in (world.get("interactions") or []) if isinstance(it, dict) and it.get("id")]
+    rows.sort(key=lambda it: (0 if it.get("status") in ("open", "deferred") else 1,
+                              -int(it.get("resolved_round") or it.get("opened_round") or 0), str(it.get("id"))))
+    out = []
+    for it in rows[:limit]:
+        out.append({
+            "id": str(it.get("id"))[:40], "kind": str(it.get("kind") or "proposal")[:16],
+            "status": str(it.get("status") or "open")[:16],
+            "proposer": names.get(it.get("proposer"), str(it.get("proposer"))),
+            "recipient": names.get(it.get("recipient"), str(it.get("recipient"))),
+            "terms": str(it.get("terms") or "")[:300], "opened_round": it.get("opened_round"),
+            "expires_round": it.get("expires_round"), "resolved_round": it.get("resolved_round"),
+            "response": str(it.get("response") or "")[:200], "obligations": len(it.get("obligations") or []),
+        })
+    return out
+
+
 @simulation_bp.route('/<simulation_id>/world-state', methods=['GET'])
 def get_simulation_world_state(simulation_id: str):
     """REFLEXIVE WORLD: the latest committed world (facts, actors, relationships, events)
@@ -2131,7 +2275,10 @@ def get_simulation_world_state(simulation_id: str):
 
     404 while the world has not committed a round yet (early rounds, hours mode, legacy
     runs); path containment + symlink refusal + size bounds as for the trajectory route.
-    ``?rows=N`` bounds the history (default 24, max 200).
+    ``?rows=N`` bounds the history (default 24, max 200).  Each history row carries the
+    round's bounded ``arbiter_problems`` (and ``error`` when the update itself failed) plus
+    the agent-facing ``digest`` of that round, joined from ``world_digest.jsonl`` under the
+    same containment rules, so the panel can show any committed period, not only the latest.
     """
     try:
         sim_dir = _contained_sim_dir(simulation_id)
@@ -2156,34 +2303,30 @@ def get_simulation_world_state(simulation_id: str):
             rows_wanted = max(1, min(WORLD_STATE_MAX_HISTORY, int(request.args.get("rows", 24))))
         except (TypeError, ValueError):
             rows_wanted = 24
+        # per-round digests (what the agents were shown), keyed by round; the latest one is
+        # also the top-level ``digest`` below.  Only the text travels — never the shares.
+        digests = {}
+        for drow in _bounded_jsonl_rows(os.path.join(sim_dir, "world_digest.jsonl")):
+            if drow.get("round") is not None:
+                digests[drow.get("round")] = str(drow.get("digest") or "")[:WORLD_STATE_MAX_DIGEST]
         history = []
-        hist_path = os.path.join(sim_dir, "world_state_history.jsonl")
-        if os.path.isfile(hist_path) and not os.path.islink(hist_path) \
-                and os.path.getsize(hist_path) <= WORLD_STATE_MAX_BYTES:
-            try:
-                with open(hist_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                for line in lines[-rows_wanted:]:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        row = json.loads(line)
-                    except ValueError:
-                        continue
-                    if isinstance(row, dict):
-                        history.append({
-                            "round": row.get("round"), "period_label": row.get("period_label"),
-                            "headline": str(row.get("headline") or "")[:300],
-                            "narrative": str(row.get("narrative") or "")[:700],
-                            "arbiter_status": row.get("arbiter_status"),
-                            "decisions": row.get("decisions"),
-                            "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
-                            "scenario_pressure": row.get("scenario_pressure") or {},
-                            "deterministic": row.get("deterministic") or {},
-                        })
-            except OSError:
-                history = []
+        for row in _bounded_jsonl_rows(os.path.join(sim_dir, "world_state_history.jsonl"))[-rows_wanted:]:
+            problems = row.get("arbiter_problems") if isinstance(row.get("arbiter_problems"), list) else []
+            entry = {
+                "round": row.get("round"), "period_label": row.get("period_label"),
+                "headline": str(row.get("headline") or "")[:300],
+                "narrative": str(row.get("narrative") or "")[:700],
+                "arbiter_status": row.get("arbiter_status"),
+                "arbiter_problems": [str(p)[:200] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
+                "decisions": row.get("decisions"),
+                "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
+                "scenario_pressure": row.get("scenario_pressure") or {},
+                "deterministic": row.get("deterministic") or {},
+                "digest": digests.get(row.get("round"), ""),
+            }
+            if row.get("error"):
+                entry["error"] = str(row.get("error"))[:200]
+            history.append(entry)
         variables = []
         for v in (world.get("variables") or [])[:64]:
             if not isinstance(v, dict):
@@ -2225,6 +2368,12 @@ def get_simulation_world_state(simulation_id: str):
             "pending_effects": [fx for fx in (world.get("pending_effects") or []) if isinstance(fx, dict)][:20],
             "recent_events": events,
             "history": history,
+            # OFFERS: open offers first, then the latest settled ones (names resolved, bounded)
+            "interactions": _world_interactions(world),
+            # MODELLING GAPS the seed reported (what the research could not ground)
+            "seed_gaps": [{"kind": str(g.get("kind") or "")[:40], "subject": str(g.get("subject") or "")[:120],
+                           "note": str(g.get("note") or "")[:160]}
+                          for g in (world.get("seed_gaps") or []) if isinstance(g, dict)][:32],
         }
         return jsonify({"success": True, "data": data})
     except Exception as e:
@@ -2277,6 +2426,11 @@ def get_simulation_posts(simulation_id: str):
         platform = request.args.get('platform', 'reddit')
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
+        # PERIOD VIEW: ``round=N`` → only the posts of that round (plus the parents of its
+        # replies), each row carrying its ``round``; without it the legacy path below is unchanged.
+        round_arg = request.args.get('round')
+        if round_arg not in (None, ''):
+            return _feed_rows_for_round(simulation_id, platform, round_arg, 'posts', limit, offset)
         
         sim_dir = os.path.join(
             os.path.dirname(__file__),
@@ -2355,6 +2509,10 @@ def get_simulation_comments(simulation_id: str):
         post_id = request.args.get('post_id')
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
+        # PERIOD VIEW: ``round=N`` → only the replies written in that round (legacy path unchanged).
+        round_arg = request.args.get('round')
+        if round_arg not in (None, ''):
+            return _feed_rows_for_round(simulation_id, platform, round_arg, 'comments', limit, offset)
 
         sim_dir = os.path.join(
             os.path.dirname(__file__),

@@ -3920,6 +3920,8 @@ class ReportAgent:
             except (TypeError, ValueError):
                 return str(r)
 
+        from .world_model import is_kind_name_unit
+
         def _fmt(value, unit):
             if isinstance(value, bool):
                 return "是" if value else "否"
@@ -3935,7 +3937,9 @@ class ReportAgent:
                     s = f"{float(value):.2f}".rstrip("0").rstrip(".")
             else:
                 s = str(value)[:60]
-            u = str(unit or "")
+            u = str(unit or "").strip()
+            if is_kind_name_unit(u):
+                u = ""  # persisted runs may still carry "boolean" / "date" as a unit
             return f"{s}{u}" if u == "%" else (f"{u}{s}" if u and (u[0] in "$€£¥￥") else (f"{s} {u}".strip()))
 
         lines = ["【世界演化轨迹（elicited model projection——模型引出的推演投影，非观察证据；"
@@ -3945,6 +3949,19 @@ class ReportAgent:
         failed = int(summary.get("arbiter_failed_rounds") or 0)
         if failed:
             lines.append(f"⚠️ 其中 {failed} 个时段的仲裁更新失败（仅机械推进），该段轨迹可信度下调")
+        gaps = int(summary.get("seed_gaps") or 0)
+        if gaps:
+            lines.append(f"建模缺口 {gaps} 项（研究未能落实的单位/日期/目标/计划/关系，推演起点据此留白而非臆造）")
+        behaviour = summary.get("behaviour") if isinstance(summary.get("behaviour"), dict) else {}
+        if behaviour.get("responsive_share") is not None:
+            lines.append(f"行为诊断（文本层面）：{behaviour.get('rounds_scored', 0)} 个时段中，"
+                         f"{behaviour.get('responsive_moves', 0)}/{behaviour.get('moves', 0)} 项行动回应了上期的事实变化或他方行动"
+                         f"（占比 {float(behaviour['responsive_share']) * 100:.0f}%），其中应答要约 {behaviour.get('offers_answered', 0)} 项")
+        offers = summary.get("offers") if isinstance(summary.get("offers"), dict) else {}
+        if int(offers.get("opened") or 0):
+            lines.append(f"要约与协议（须对方应答方成立）：提出 {offers.get('opened', 0)}，接受 {offers.get('accepted', 0)}，"
+                         f"拒绝 {offers.get('rejected', 0)}，反要约 {offers.get('countered', 0)}，"
+                         f"失效 {offers.get('lapsed', 0)}，违约 {offers.get('breached', 0)}，仍待答复 {offers.get('open', 0)}")
         shown = 0
         for var in world.get("variables") or []:
             if not isinstance(var, dict) or shown >= max_variables:

@@ -1,15 +1,17 @@
 """Structured actor decisions (design §2.4): agency classes, option menus, parsing.
 
-Offline: the only LLM touch is the conftest FakeLLMClient.  Pins the typed
-degradation (``invalid`` / ``failed`` → hold_position), target/scenario
-validation, menu priorities and the roster rule (principals first, audience out).
+Offline: the only LLM touch is the conftest FakeLLMClient (and a scripted, offline
+LLMClient for the fallback-provider retry).  Pins the typed degradation
+(``invalid`` / ``failed`` / ``language_mismatch`` → hold_position), target/scenario
+validation, the run-language script check on public statements, precise provider
+failure records, menu priorities and the roster rule (principals first, audience out).
 """
 
 import pytest
 
 from app.services import agent_decision as ad
 from app.services.world_model import WorldModel
-from tests.conftest import FakeLLMClient
+from tests.conftest import FakeLLMClient, content_filter_error
 
 
 def _world():
@@ -267,7 +269,8 @@ def test_elicit_decision_with_fake_llm_and_failure():
     assert ad.elicit_decision(None, system_message="", user_prompt="x", actor=world.actors[0], world=world,
                               options=menu, scenarios=world.scenarios, round_num=1).status == "failed"
     counts = ad.summarize_decisions([d, failed])
-    assert counts == {"ok": 1, "invalid": 0, "failed": 1, "hold": 1}
+    assert counts == {"ok": 1, "invalid": 0, "failed": 1, "language_mismatch": 0, "hold": 1}
+    assert failed.problems == ["llm error: RuntimeError: provider down"]
 
 
 def test_memory_note_and_hold_note():
@@ -282,3 +285,118 @@ def test_memory_note_and_hold_note():
     assert "You committed to: Break ground" in note and "secret" in note
     hold = ad.hold_decision(world.actors[0], status="failed", round_num=1, period_end=None)
     assert ad.decision_memory_note(hold) == ""
+
+
+# ----------------------------------------------------------------------------- run language
+@pytest.mark.parametrize("text, script", [
+    ("We commit $2bn to Aurora now.", "latin"),
+    ("商务部将对石墨出口许可进行审查。", "cjk"),
+    ("MOFCOM (商务部) will review graphite export licences next month.", "latin"),   # a quoted name stays Latin
+    ("商务部将审查石墨出口许可（USTR 第 301 条）", "cjk"),                              # acronyms stay CJK
+    ("東京は関税を25%に引き上げた。", "cjk"),
+    ("25% — 2027-03-10", ""),                                                         # no letters: unknown
+    ("", ""),
+])
+def test_text_script_heuristic(text, script):
+    assert ad.text_script(text) == script
+
+
+@pytest.mark.parametrize("language, script", [
+    ("English", "latin"), ("en", "latin"), ("English (US)", "latin"), ("Deutsch", "latin"), ("Chinese", "cjk"),
+    ("zh-CN", "cjk"), ("中文", "cjk"), ("Japanese", "cjk"), ("", ""), ("auto", ""), ("Russian", ""),
+    ("Javanese", ""), ("Estonian", ""),
+])
+def test_expected_script(language, script):
+    assert ad.expected_script(language) == script
+    assert ad.statement_matches_language("anything", "") and ad.statement_matches_language("", language)
+
+
+def test_parse_rejects_wrong_script_statement_with_typed_status():
+    """sim_d6ebcc77e22d: one of fifty statements came out in Chinese in an English run although the
+    prompt said "Write public_statement in English." — structure-only validation let it through."""
+    world = _world()
+    menu = _menu(world)
+    raw = {"option_id": "plan_1", "targets": ["Beta Union"], "magnitude": 0.8,
+           "public_statement": "我们将于本季度向极光项目投入20亿美元。",
+           "scenario_commitment": {"scenario": "Permit granted", "confidence": 0.8}}
+    d = ad.parse_decision(raw, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios,
+                          round_num=1, period_end="2026-09-30", language="English")
+    assert d.status == ad.LANGUAGE_MISMATCH and not d.ok
+    assert d.option["id"] == ad.HOLD_OPTION_ID and d.raw_option_id == "plan_1"
+    assert d.public_statement == "" and d.scenario_commitment() is None           # nothing to publish or commit
+    assert d.problems == ['public_statement is cjk-script but the run language is English: '
+                          '"我们将于本季度向极光项目投入20亿美元。"']
+    row = d.to_dict()
+    assert row["status"] == "language_mismatch" and row["problems"] == d.problems
+    # the same payload is a valid move when the run language matches, or when none is set
+    assert ad.parse_decision(raw, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios,
+                             round_num=1, language="Chinese").ok
+    assert ad.parse_decision(raw, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios,
+                             round_num=1).ok
+    # an English run keeps a Latin statement that quotes a Chinese name; a Chinese run rejects English
+    en = dict(raw, public_statement="MOFCOM (商务部) will review the Aurora filing in Q3.")
+    assert ad.parse_decision(en, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios,
+                             round_num=1, language="English").ok
+    zh = ad.parse_decision(en, actor=world.actors[0], world=world, options=menu, scenarios=world.scenarios,
+                           round_num=1, language="Chinese")
+    assert zh.status == ad.LANGUAGE_MISMATCH and zh.problems[0].startswith("public_statement is latin-script")
+    # holding publishes nothing, and a synthesised statement is never checked
+    hold = ad.parse_decision({"option_id": ad.HOLD_OPTION_ID, "public_statement": "保持观望。"}, actor=world.actors[0],
+                             world=world, options=menu, scenarios=world.scenarios, round_num=1, language="English")
+    assert hold.ok
+    synth = ad.parse_decision({"option_id": "plan_1"}, actor=world.actors[0], world=world, options=menu,
+                              scenarios=world.scenarios, round_num=1, language="Chinese")
+    assert synth.ok and synth.public_statement.startswith("Alpha Systems: ")
+    assert ad.summarize_decisions([d, zh, hold, synth]) == {"ok": 2, "invalid": 0, "failed": 0,
+                                                            "language_mismatch": 2, "hold": 3}
+
+
+class _Filtered:
+    """Stand-in whose only answer is the live Zhipu content-filter rejection."""
+
+    def chat_json(self, **kwargs):
+        raise content_filter_error()
+
+
+def test_elicit_decision_applies_language_check_and_records_provider_errors():
+    world = _world()
+    menu = _menu(world)
+    llm = FakeLLMClient(json_responses=[{"option_id": "plan_1", "public_statement": "我们现在就投资极光项目。"}])
+    d = ad.elicit_decision(llm, system_message="ROLE", user_prompt="decide", actor=world.actors[0], world=world,
+                           options=menu, scenarios=world.scenarios, round_num=1, language="English")
+    assert d.status == ad.LANGUAGE_MISMATCH and d.raw_option_id == "plan_1"
+
+    failed = ad.elicit_decision(_Filtered(), system_message="", user_prompt="decide", actor=world.actors[0],
+                                world=world, options=menu, scenarios=world.scenarios, round_num=1)
+    assert failed.status == "failed" and failed.option["id"] == ad.HOLD_OPTION_ID
+    [problem] = failed.problems
+    assert problem.startswith("llm error: BadRequestError (HTTP 400, provider code 1301, content filter): "
+                              "Error code: 400 - {'contentFilter'")
+    assert len(problem) <= 300
+    assert ad.elicit_decision(None, system_message="", user_prompt="x", actor=world.actors[0], world=world,
+                              options=menu, scenarios=world.scenarios, round_num=1).problems == ["no llm client"]
+
+
+def test_elicit_decision_recovers_through_fallback_provider(scripted_failover):
+    """The decision step goes through the backend LLMClient: a content-filter rejection is retried
+    ONCE on the configured fallback provider and the fallback's answer is the decision."""
+    world = _world()
+    menu = _menu(world)
+    llm, transports = scripted_failover(content_filter_error(), {
+        "option_id": "plan_1", "public_statement": "We commit $2bn to Aurora now.",
+        "scenario_commitment": {"scenario": "Permit granted", "confidence": 0.7}})
+    d = ad.elicit_decision(llm, system_message="ROLE", user_prompt="decide", actor=world.actors[0], world=world,
+                           options=menu, scenarios=world.scenarios, round_num=1, language="English")
+    assert d.ok and d.option["id"] == "plan_1" and d.scenario == "Permit granted" and d.problems == []
+    assert transports == [("glm", False), ("kimi", True)]                      # one primary attempt, one fallback retry
+
+
+def test_elicit_decision_records_fallback_failure(scripted_failover):
+    world = _world()
+    menu = _menu(world)
+    llm, transports = scripted_failover(content_filter_error(), fallback_error=content_filter_error("assistant"))
+    d = ad.elicit_decision(llm, system_message="ROLE", user_prompt="decide", actor=world.actors[0], world=world,
+                           options=menu, scenarios=world.scenarios, round_num=1, language="English")
+    assert d.status == "failed" and d.option["id"] == ad.HOLD_OPTION_ID
+    assert "; fallback kimi: failed (BadRequestError (HTTP 400, provider code 1301, content filter)" in d.problems[0]
+    assert transports == [("glm", False), ("kimi", True)]                      # degrade-safe: no further attempts

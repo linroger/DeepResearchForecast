@@ -17,12 +17,20 @@ holds:
 Canonical actor-intelligence/v1 dossiers: plans, red lines and goals come only from
 the validated context pack's producer-admitted claim rows (never from the flat
 compatibility fields); analyst inference is skipped.  Legacy dossiers use their flat
-fields.  Pure and never raises (a failure degrades to a smaller block).
+fields.  Research engine v3 dossiers (``deerflow_bridge/linear_research.py`` ACTOR
+EXTRACTION TASK) carry no plan or red-line keys at all, only ``goals`` /
+``constraints`` / ``stated_vs_revealed`` / ``memory``; for them the seed derives
+documented plans from the actor's own stated commitments and action-phrased goals,
+and red lines from constraints or statements phrased as non-negotiables — never from
+hedged wording, the "revealed" half of ``stated_vs_revealed``, incentives,
+vulnerabilities or worldview (analyst reading, not world fact).  Pure and never
+raises (a failure degrades to a smaller block).
 """
 
 from __future__ import annotations
 
 import math
+import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from ..utils.actors import (
@@ -49,6 +57,50 @@ MAX_GOALS = 3
 _PLAN_DIMENSIONS = ("future_plans", "likely_actions", "current_actions", "investments_capital_allocation")
 _CURRENT_QUANTITATIVE_TYPES = {"", "actual", "estimate"}
 _STATUS_INFERRED_PREFIXES = ("wb:", "imf:WEO/", "imf:WEO_")
+_LEGACY_PLAN_KEYS = ("future_plans", "plans", "likely_actions", "current_actions", "actions_in_progress")
+_LEGACY_RED_LINE_KEYS = ("red_lines", "non_negotiables")
+
+# --- research engine v3 rows (no plan / red-line keys; items carry no evidence_type) ---------------
+# Only wording can separate the actor's documented intent from the analyst's reading there, so an
+# item is promoted only when it is phrased as the actor's own commitment, as an action the actor
+# pursues, or as a prohibition the actor declares.  Hedged wording never qualifies.
+_V3_CLAUSE_SPLIT_RE = re.compile(
+    r"\s*(?:;|；|。|(?<![A-Z])\.\s+|\s+[—–]\s+|\s+but\s+|\s+while\s+|\s+whereas\s+)\s*", re.IGNORECASE)
+_V3_REVEALED_RE = re.compile(
+    r"\b(?:reveal\w*|in practice|in fact|actually|privately|de facto|track record|record (?:shows|is)|"
+    r"behaviou?r (?:shows|is)|however)\b|实际|暗中|私下|但实际", re.IGNORECASE)
+_V3_STATED_RE = re.compile(
+    r"\b(?:states|stated|says?|said|publicly|public(?:ly)? (?:commit|pledg)\w*|commits?|committed|pledg\w*|"
+    r"promis\w*|announc\w*|claims?|declar\w*|insists?|vow\w*|official(?:ly)?|rhetoric)\b|"
+    r"声称|公开|宣称|承诺|表示|宣布", re.IGNORECASE)
+_V3_COMMIT_RE = re.compile(
+    r"\b(?:commit(?:s|ted)? to|pledg(?:e|es|ed)|promis(?:e|es|ed)|vow(?:s|ed)?|plan(?:s|ned)? to|"
+    r"intend(?:s|ed)? to|announc(?:e|es|ed)|agree(?:s|d)? to|will|shall|scheduled|set to|aims? to|"
+    r"seeks? to|propos(?:e|es|ed))\b|承诺|计划|宣布将|将于|推进|推动", re.IGNORECASE)
+_V3_HEDGE_RE = re.compile(
+    r"\b(?:possibl[ey]|perhaps|maybe|might|could|potentially|likely|probably|unclear|uncertain|"
+    r"speculat\w*|expected to|reportedly)\b|\bmay\s+(?!\d)|可能|或将|或许|也许|大概|预计|据称", re.IGNORECASE)
+_V3_RED_LINE_RE = re.compile(
+    r"\b(?:will not|won't|would not|will never|would never|never (?:accept|allow|agree|sign|permit|concede|"
+    r"tolerate|negotiate|recogni[sz]e)|refus\w* to|non-?negotiable|not negotiable|not up for negotiation|"
+    r"red ?lines?|cannot accept|can't accept|unacceptable|must not|must never|rules? out|ruled out|"
+    r"off the table|under no circumstances|not an option|insists? on|only if|no (?:deal|agreement|"
+    r"concession|compromise)s? (?:without|unless))\b|绝不|决不|不会接受|(?<!不得)不接受|不可接受|底线|红线|不得(?!不)",
+    re.IGNORECASE)
+# Leading base-form verbs that make a goal read as an intended move rather than a posture.  Maintain-
+# type verbs (keep, preserve, maintain, protect, comply, ...) are deliberately absent: holding a
+# position is already an option of every agency class.
+_V3_ACTION_VERBS = frozenset("""
+acquire adopt advance announce appeal apply approve arrange audit ban block boost broker build buy cancel
+cap certify challenge close codify commit complete conclude constrain convert create curb cut defeat deliver
+deploy detain develop diversify divest ease enact end enforce enter escalate establish exit expand extend
+file finalise finalize form freeze fund halt implement impose increase introduce invest issue join launch
+legislate license lift limit list lobby lower negotiate obtain open overturn pass phase prolong publish
+purchase pursue raise ratify rebuild reduce reform reimpose reinstate relocate remove renew reopen repeal
+replace resolve restore restrict resume retaliate revoke roll scale secure sell set settle sign stop strip
+submit suspend tighten unlock unwind upgrade verify win withdraw
+推进 推动 实施 签署 落实 延长 扩大 建立 启动 完成 达成 争取 收紧 放宽 取消 恢复 加强 实现 出台 制定 发布 加征 削减
+""".split())
 
 
 def _clean(value: Any, max_chars: int) -> str:
@@ -124,6 +176,101 @@ def _legacy_list(actor: Dict[str, Any], keys: Sequence[str], limit: int) -> List
                     text = _clean(item, 200)
                     if text:
                         out.append(text)
+    return _dedupe(out, limit)
+
+
+def _v3_items(value: Any, max_chars: int = 200) -> List[str]:
+    """Sanitised strings of a v3 list field (strings or {claim|text} rows); never dict values."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            item = item.get("claim") or item.get("text")
+        text = _clean(item, max_chars)
+        if text:
+            out.append(text)
+    return out
+
+
+def _v3_clauses(value: Any, max_chars: int = 200) -> List[str]:
+    """Clauses of a v3 free-text field (``stated_vs_revealed``, ``memory``)."""
+    text = _clean(value, 1200)
+    if not text:
+        return []
+    out: List[str] = []
+    for clause in _V3_CLAUSE_SPLIT_RE.split(text):
+        clause = clause.strip(" ,，:：.").strip()
+        if clause:
+            out.append(clause[:max_chars].rstrip())
+    return out
+
+
+def _v3_stated_clauses(actor: Dict[str, Any]) -> List[str]:
+    """The actor's own public statements in ``stated_vs_revealed``: clauses with stated-wording and
+    without revealed-wording (the revealed half is the analyst's reading of behaviour)."""
+    return [c for c in _v3_clauses(actor.get("stated_vs_revealed"))
+            if _V3_STATED_RE.search(c) and not _V3_REVEALED_RE.search(c)]
+
+
+def _v3_is_hedged(text: str) -> bool:
+    return bool(_V3_HEDGE_RE.search(text))
+
+
+def _v3_red_line_worded(text: str) -> bool:
+    return bool(_V3_RED_LINE_RE.search(text))
+
+
+def _v3_leading_action_verb(text: str) -> bool:
+    head = text.lstrip("\"'“‘(（[").split(" ", 1)[0].strip(",.;:").casefold()
+    if head in _V3_ACTION_VERBS:
+        return True
+    return any(text.startswith(v) for v in _V3_ACTION_VERBS if not v.isascii())
+
+
+def _v3_plan_like(text: str, *, require_commitment: bool) -> bool:
+    """Worded as a move the actor intends: a commitment marker (``commits to``, ``will``,
+    ``scheduled`` …) or — for goals — a leading action verb.  Hedged wording is never a plan, and
+    a declared refusal ("will not accept …") is a red line, not a plan."""
+    if _v3_is_hedged(text) or _v3_red_line_worded(text):
+        return False
+    if _V3_COMMIT_RE.search(text):
+        return True
+    return not require_commitment and _v3_leading_action_verb(text)
+
+
+def derive_v3_plans(actor: Optional[Dict[str, Any]], limit: int = MAX_PLANS) -> List[str]:
+    """Documented plans of a research engine v3 row (no legacy plan keys): the actor's stated
+    commitments first, then action-phrased goals, then forward commitments in ``memory``.  Hedged
+    wording, refusals and revealed/analyst clauses are never promoted."""
+    if not isinstance(actor, dict):
+        return []
+    out: List[str] = []
+    for clause in _v3_stated_clauses(actor):
+        if _v3_plan_like(clause, require_commitment=True):
+            out.append(clause)
+    for goal in _v3_items(actor.get("goals")):
+        if _v3_plan_like(goal, require_commitment=False):
+            out.append(goal)
+    for clause in _v3_clauses(actor.get("memory")):
+        if _v3_plan_like(clause, require_commitment=True) and not _V3_REVEALED_RE.search(clause):
+            out.append(clause)
+    return _dedupe(out, limit)
+
+
+def derive_v3_red_lines(actor: Optional[Dict[str, Any]], limit: int = MAX_RED_LINES) -> List[str]:
+    """Red lines of a research engine v3 row (no legacy red-line keys): constraints and the actor's
+    own statements that are phrased as non-negotiables ("will not accept", "rules out", 绝不 …).
+    Historical observations ("never recovered"), absences ("No clear majority") and procedural
+    requirements do not qualify."""
+    if not isinstance(actor, dict):
+        return []
+    out: List[str] = []
+    for text in _v3_items(actor.get("constraints"), 160) + [c[:160] for c in _v3_stated_clauses(actor)]:
+        if _v3_red_line_worded(text) and not _v3_is_hedged(text):
+            out.append(text)
     return _dedupe(out, limit)
 
 
@@ -381,10 +528,14 @@ def build_world_model_seed(
                 red_lines = _pack_claims(pack, ("red_lines",), MAX_RED_LINES)
                 goals = _pack_claims(pack, ("motivations", "values_worldview"), MAX_GOALS)
             else:
-                plans = _legacy_list(actor or {}, ("future_plans", "plans", "likely_actions", "current_actions",
-                                                   "actions_in_progress"), MAX_PLANS)
-                red_lines = _legacy_list(actor or {}, ("red_lines", "non_negotiables"), MAX_RED_LINES)
+                plans = _legacy_list(actor or {}, _LEGACY_PLAN_KEYS, MAX_PLANS)
+                red_lines = _legacy_list(actor or {}, _LEGACY_RED_LINE_KEYS, MAX_RED_LINES)
                 goals = _legacy_list(actor or {}, ("goals", "objectives", "motivations"), MAX_GOALS)
+                # research engine v3 rows: no plan / red-line keys → derive from the documented wording
+                if actor and not plans:
+                    plans = derive_v3_plans(actor, MAX_PLANS)
+                if actor and not red_lines:
+                    red_lines = derive_v3_red_lines(actor, MAX_RED_LINES)
             aliases = []
             if actor:
                 raw_aliases = actor.get("aliases")
@@ -451,11 +602,52 @@ def build_world_model_seed(
         row["allies"] = _dedupe(row["allies"], 8)
         row["rivals"] = _dedupe(row["rivals"], 8)
     block["relationships"] = rels[:80]
+    # MODELLING GAPS (ported from the world-v1 compiler's stance): what the research could not
+    # ground is reported, never invented — the run, the panel and the report show the list
+    block["gaps"] = seed_gaps(block)
     return block
+
+
+MAX_SEED_GAPS = 32
+
+
+def seed_gaps(block: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Typed modelling gaps of a seed block: facts without units or dates, actors without
+    documented goals / plans / levers, a cast with no grounded relationships."""
+    gaps: List[Dict[str, str]] = []
+
+    def add(kind: str, subject: str, note: str) -> None:
+        if len(gaps) < MAX_SEED_GAPS:
+            gaps.append({"kind": kind, "subject": _clean(subject, 120), "note": _clean(note, 160)})
+
+    for var in block.get("state_variables") or []:
+        if not isinstance(var, dict):
+            continue
+        name = str(var.get("name") or var.get("id") or "")
+        if str(var.get("kind") or "numeric") == "numeric" and not str(var.get("unit") or "").strip():
+            add("variable_without_unit", name, "numeric fact without a unit; the arbiter can only move it as a bare number")
+        if str(var.get("provenance") or "research") in ("research", "official") and not str(var.get("as_of") or "").strip():
+            add("variable_without_as_of", name, "no as-of date; staleness cannot be judged")
+    actors = [a for a in (block.get("actors") or []) if isinstance(a, dict)]
+    for a in actors:
+        name = str(a.get("name") or f"Agent {a.get('agent_id')}")
+        if a.get("agency_class") in (None, "", "other_actor"):
+            add("actor_unclassified", name, "no agency class inferred; falls back to the generic option catalogue")
+        if not a.get("goals"):
+            add("actor_without_goals", name, "no documented goals; decisions lean on the role brief alone")
+        if not a.get("documented_plans") and not a.get("red_lines"):
+            add("actor_without_plans", name, "no documented plans or red lines; option menu is class-generic")
+    if len(actors) >= 2 and not (block.get("relationships") or []):
+        add("no_relationships", "cast", "no grounded relationships between the actors; alliances start from scratch")
+    if not (block.get("state_variables") or []):
+        add("no_state_variables", "world", "no quantitative facts to track; the world starts without numbers")
+    return gaps
 
 
 def world_model_seed_summary(block: Optional[Dict[str, Any]]) -> str:
     if not isinstance(block, dict):
         return ""
+    gaps = block.get("gaps") if isinstance(block.get("gaps"), list) else []
     return (f"world model: {len(block.get('state_variables') or [])} variables, "
-            f"{len(block.get('actors') or [])} actors, {len(block.get('relationships') or [])} relationships")
+            f"{len(block.get('actors') or [])} actors, {len(block.get('relationships') or [])} relationships"
+            + (f", {len(gaps)} modelling gaps" if gaps else ""))

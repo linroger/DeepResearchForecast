@@ -11,7 +11,9 @@ Once every platform has delivered a round, the coordinator runs ONE world update
    delayed effects.  Its output is validated against the variable registry and
    the cast (``validate_arbiter_update``) and clamped by the kernel before being
    applied.  Any failure leaves the round committed with the deterministic
-   update only and ``arbiter_status=failed``.
+   update only and ``arbiter_status=failed``; the failure record names the
+   provider's error class, HTTP status / code and whether the LLM client's
+   fallback provider took the call over (``arbiter_problems``).
 3. ``build_round_digest`` — the agent-facing "WHAT CHANGED LAST PERIOD" text
    (herding guard: no scenario shares).
 
@@ -25,8 +27,10 @@ import logging
 import math
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .agent_decision import AgentDecision
-from .world_model import WorldModel, _bound_lines, _text, format_value, normalize_label
+from ..utils.llm_errors import describe_llm_error
+from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
+from .world_model import (RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
+                          normalize_label)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,7 @@ MAX_PENDING_EFFECTS = 6
 MAX_RESOLUTIONS = 24
 NARRATIVE_MAX_CHARS = 700
 DIGEST_MAX_CHARS = 1100
+ARBITER_ERROR_SNIPPET_CHARS = 200
 
 
 def _decision_rows(decisions: Iterable[Any]) -> List[Dict[str, Any]]:
@@ -68,14 +73,23 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
     scheduled = world.register_scheduled_events(round_num, fired_events)
     rows = _decision_rows(decisions)
     lapsed = world.lapse_overdue_commitments(round_num)
+    lapsed_offers = world.lapse_expired_interactions(round_num)   # OFFERS: unanswered offers expire first
     action_events = world.register_decisions(round_num, rows)
     fired = world.fire_due_effects(round_num, rng)
+    breaches = [e.description for e in world.events_in_round(round_num, ("breach",))]
     return {
         "scheduled_events": [e.description for e in scheduled],
         "actions": [e.description for e in action_events if e.kind == "action"],
         "effects_fired": fired,
         "commitments_lapsed": [f"{c.get('actor')}: {c.get('description')}" for c in lapsed],
         "decisions": len(rows),
+        # OFFERS: what the consent mechanics did this period (opened / answered / lapsed / breached)
+        "offers_opened": [e.description for e in action_events if e.kind == "offer" and " made an " in e.description],
+        "offers_answered": [e.description for e in action_events
+                            if e.kind in ("offer", "agreement") and " made an " not in e.description],
+        "offers_lapsed": [f"{world.actor_name(o.get('proposer'))} → {world.actor_name(o.get('recipient'))}: {o.get('terms')}"
+                          for o in lapsed_offers],
+        "breaches": breaches,
     }
 
 
@@ -138,6 +152,16 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         lines.append("")
         lines.append("## Already applied mechanically")
         lines.extend(f"- {m}" for m in mech[:10] if m)
+    deals = (list(deterministic.get("offers_opened") or []) + list(deterministic.get("offers_answered") or [])
+             + [f"Lapsed: {o}" for o in (deterministic.get("offers_lapsed") or [])]
+             + list(deterministic.get("breaches") or []))
+    open_offers = [it for it in world.interactions.values() if it.is_open()]
+    if deals or open_offers:
+        lines.append("")
+        lines.append("## Offers and agreements (settled only by the parties' answers — never assume consent)")
+        lines.extend(f"- {d}" for d in deals[:8])
+        lines.extend(f"- Still open: {world.actor_name(it.proposer)} → {world.actor_name(it.recipient)} "
+                     f"[{it.id}]: {it.terms}" for it in open_offers[:6])
     cast = ", ".join(a.name for a in list(world.actors.values())[:30])
     sc = "; ".join(str(s) for s in scenarios) or "(none)"
     lang = f" Write narrative and descriptions in {language}." if language else ""
@@ -245,13 +269,19 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for nv in new_vars[:MAX_NEW_VARIABLES]:
             if not isinstance(nv, dict) or not _text(nv.get("name"), 140):
                 continue
-            kind = _text(nv.get("kind"), 16).casefold() or "numeric"
+            raw_kind = _text(nv.get("kind"), 16).casefold()
+            kind = raw_kind or "numeric"
             if kind not in ("numeric", "categorical", "boolean", "text"):
                 kind = "text"
             if kind == "numeric" and _num(nv.get("value")) is None:
                 kind = "text"
+            unit = _text(nv.get("unit"), 24)
+            # a unit belongs to numeric facts only; models echo the kind ("boolean", "date")
+            # into the unit field, which would otherwise render as "yes boolean"
+            if kind != "numeric" or unit.casefold() in (kind, raw_kind) or is_kind_name_unit(unit):
+                unit = ""
             update["new_variables"].append({"name": _text(nv["name"], 140), "value": nv.get("value"),
-                                            "unit": _text(nv.get("unit"), 24), "kind": kind,
+                                            "unit": unit, "kind": kind,
                                             "rationale": _text(nv.get("rationale"), 200)})
         if len(new_vars) > MAX_NEW_VARIABLES:
             problems.append(f"{len(new_vars) - MAX_NEW_VARIABLES} new variables dropped (cap {MAX_NEW_VARIABLES})")
@@ -359,7 +389,15 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
                 decisions: Iterable[Any], deterministic: Dict[str, Any], scenarios: Sequence[str], *,
                 language: str = "", temperature: float = 0.3, max_tokens: int = 2200
                 ) -> Tuple[str, Dict[str, Any], List[str]]:
-    """One arbiter call → ``(status, validated_update, problems)``; never raises."""
+    """One arbiter call → ``(status, validated_update, problems)``; never raises.
+
+    ``llm.chat_json`` is the backend ``LLMClient`` surface: on a content-filter or other
+    non-retryable 4xx rejection the client itself retries the request once on the
+    configured fallback provider (``LLMClient.chat`` failover) before raising.  A failure
+    that survives that is recorded with the provider's error class, HTTP status / code, a
+    bounded message snippet and the failover outcome, so ``arbiter_problems`` says why
+    the round carries only the deterministic update.
+    """
     if llm is None:
         return "skipped", {}, ["no llm"]
     prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language)
@@ -367,8 +405,9 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
         raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=temperature,
                             max_tokens=max_tokens)
     except Exception as exc:  # noqa: BLE001 — a failed arbiter must not break the round
-        logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, exc)
-        return "failed", {}, [f"llm error: {type(exc).__name__}"]
+        detail = describe_llm_error(exc, max_chars=ARBITER_ERROR_SNIPPET_CHARS)
+        logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, detail)
+        return "failed", {}, [f"llm error: {detail}"]
     try:
         update, problems = validate_arbiter_update(raw, world, scenarios)
     except Exception as exc:  # noqa: BLE001 — malformed payload must not break round commit
@@ -415,12 +454,51 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
     if consequences:
         lines.append("Events and consequences:")
         lines.extend(f"- {e.description}" for e in consequences[:8])
+    deals = world.events_in_round(round_num, ("offer", "agreement", "breach"))
+    if deals:
+        lines.append("Offers and agreements:")
+        lines.extend(f"- {e.description}" for e in deals[:8])
     if diff["relationships_changed"]:
         lines.append("Alliances and rivalries:")
         for rc in diff["relationships_changed"][:6]:
             direction = f" ({rc['direction']})" if rc.get("direction") else ""
             lines.append(f"- {rc['source']} — {rc['target']}: {rc['to']}{direction}")
     return _bound_lines(lines, max_chars)
+
+
+def behaviour_metrics(world: WorldModel, round_num: int, decisions: Iterable[Any]) -> Dict[str, Any]:
+    """Deterministic responsiveness diagnostics for one round (ported, in spirit, from the
+    world-v1 behaviour evaluation's "consequence response" criterion — without an LLM judge).
+
+    A move is *responsive* when it answers an offer, or when its public statement / rationale
+    names a fact that changed last period or an actor that moved last period.  Round 1 has no
+    prior period and scores nothing.  This is a textual diagnostic, not a realism verdict."""
+    rows = _decision_rows(decisions)
+    prev = int(round_num) - 1
+    moves = [d for d in rows if d.get("status") == "ok" and (d.get("option") or {}).get("id") != "hold_position"]
+    out: Dict[str, Any] = {"moves": len(moves), "responsive_moves": 0, "offers_answered": 0,
+                           "responsive_share": None, "signals_last_period": 0}
+    if prev < 1:
+        return out
+    changed = [v.name.casefold() for v in world.variables.values()
+               if any(isinstance(h, dict) and int(h.get("round") or 0) == prev for h in v.history)]
+    movers = set()
+    for e in world.events_in_round(prev, ("action", "offer", "agreement", "breach", "consequence", "emergent")):
+        for name in e.actors[:2]:
+            movers.add(name.casefold())
+    out["signals_last_period"] = len(changed) + len(movers)
+    for d in moves:
+        option_id = str((d.get("option") or {}).get("id") or "")
+        text = f"{d.get('private_rationale') or ''} {d.get('public_statement') or ''}".casefold()
+        me = str(d.get("actor_name") or "").casefold()
+        if option_id.startswith(RESPONSE_PREFIXES):
+            out["offers_answered"] += 1
+            out["responsive_moves"] += 1
+        elif any(name and name in text for name in changed) or any(m and m != me and m in text for m in movers):
+            out["responsive_moves"] += 1
+    if moves:
+        out["responsive_share"] = round(out["responsive_moves"] / len(moves), 3)
+    return out
 
 
 def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, Any]) -> str:
@@ -460,7 +538,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
             except Exception as exc:  # noqa: BLE001 — a kernel bug must not break the loop
                 logger.warning("applying arbiter update failed in round %s: %s", round_num, exc)
                 status = "failed"
-                problems.append(f"apply error: {type(exc).__name__}")
+                problems.append(f"apply error: {describe_llm_error(exc, max_chars=120)}")
     world.commit_round(round_num)
     diff = world.diff(before)
     narrative = str(update.get("narrative") or "") if isinstance(update, dict) else ""
@@ -473,7 +551,8 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
                       "ok": sum(1 for d in rows if d.get("status") == "ok"),
                       "held": sum(1 for d in rows if (d.get("option") or {}).get("id") == "hold_position"),
                       "failed": sum(1 for d in rows if d.get("status") == "failed"),
-                      "invalid": sum(1 for d in rows if d.get("status") == "invalid")},
+                      "invalid": sum(1 for d in rows if d.get("status") == "invalid"),
+                      LANGUAGE_MISMATCH: sum(1 for d in rows if d.get("status") == LANGUAGE_MISMATCH)},
         "deterministic": deterministic,
         "arbiter_status": status,
         "arbiter_problems": problems[:12],
@@ -482,6 +561,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "narrative": narrative,
         "diff": diff,
         "digest": digest,
+        "behaviour": behaviour_metrics(world, round_num, rows),
         "snapshot_before": before,
     }
     record["headline"] = world_update_headline(world, round_num, record)

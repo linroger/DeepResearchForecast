@@ -71,7 +71,12 @@
     </section>
 
     <!-- ===== World state (reflexive simulation) ===== -->
-    <WorldStatePanel :simulation-id="props.simulationId" :refresh-token="refreshToken" />
+    <WorldStatePanel
+      :simulation-id="props.simulationId"
+      :refresh-token="refreshToken"
+      :round="selectedRound"
+      @update:selected-round="onSelectRound"
+    />
 
     <!-- ===== Two columns ===== -->
     <div class="sv-columns">
@@ -118,6 +123,12 @@
         <div class="col-head">
           <span class="diamond sm">◇</span>
           <span class="col-label">{{ L('信息流','Feed') }} ({{ posts.length }})</span>
+          <span class="feed-period mono" v-if="selectedRound !== null">
+            · {{ selectedPeriodLabel }}
+          </span>
+          <button type="button" class="feed-all mono" v-if="selectedRound !== null" @click="showAllPeriods">
+            ↩ {{ L('全部时段','all periods') }}
+          </button>
         </div>
 
         <div class="col-body scroll" v-if="posts.length">
@@ -135,6 +146,7 @@
                 <span class="post-sub">
                   <span class="plat-tag">{{ platformTag }}</span>
                   <span class="post-time mono" v-if="relativeTime(post)">· {{ relativeTime(post) }}</span>
+                  <span class="post-period mono" v-if="periodNote(post)">· {{ periodNote(post) }}</span>
                 </span>
               </div>
             </div>
@@ -173,6 +185,11 @@
           </article>
         </div>
 
+        <div class="empty-state" v-else-if="!loading && selectedRound !== null">
+          <span class="empty-icon">◇</span>
+          <span class="empty-text">{{ L('本时段无帖子','No posts in this period') }} · {{ selectedPeriodLabel }}</span>
+        </div>
+
         <div class="empty-state" v-else-if="!loading">
           <span class="empty-icon">◇</span>
           <span class="empty-text">{{ L('模拟尚未运行或暂无数据','Simulation not started or no data yet') }}</span>
@@ -195,9 +212,11 @@ import {
   getSimulationProfilesRealtime,
   getSimulationPosts,
   getSimulationComments,
+  getFeedRounds,
   getAgentStats,
   getRunStatus
 } from '../../api/simulation'
+import { feedRequest, postPeriodNote, roundLabel as periodRoundLabel, selectionFromPanel } from '../../utils/feedRounds'
 
 const props = defineProps({
   simulationId: { type: String, default: '' }
@@ -208,6 +227,11 @@ const platform = ref('twitter') // 'twitter' | 'reddit'
 const profiles = ref([])
 const posts = ref([])
 const comments = ref([])
+// PERIOD VIEW: the committed round pinned in the World State panel (null = latest posts),
+// the feed's round index (labels + counts) and the label the server returned for the page
+const selectedRound = ref(null)
+const feedRounds = ref([])
+const feedPeriodLabel = ref('')
 const stats = ref({})
 const runState = ref({})
 const userMap = ref({})
@@ -371,6 +395,25 @@ function repliesFor(post) {
   return commentsByPost.value[String(pid)] || []
 }
 
+// ===== Period view (the World State panel's selection drives the feed) =====
+const selectedPeriodLabel = computed(() =>
+  selectedRound.value === null ? '' : periodRoundLabel(feedRounds.value, selectedRound.value, feedPeriodLabel.value))
+
+function onSelectRound(value) {
+  const next = selectionFromPanel(value)
+  if (next === selectedRound.value) return
+  selectedRound.value = next
+  loadAll()
+}
+
+function showAllPeriods() {
+  onSelectRound(null)
+}
+
+function periodNote(post) {
+  return postPeriodNote(post, selectedRound.value, feedRounds.value, L('发表于', 'posted in'))
+}
+
 // ===== Time formatting =====
 function relativeTime(post) {
   if (!isPlainObject(post)) return ''
@@ -515,22 +558,32 @@ async function loadAll() {
   refreshToken.value += 1
   const simId = props.simulationId
   const plat = platform.value
+  const feedReq = feedRequest(selectedRound.value)
 
   const results = await Promise.allSettled([
     getSimulationProfilesRealtime(simId, plat),
-    getSimulationPosts(simId, plat, 60, 0),
-    getSimulationComments(simId, plat, 200, 0),
+    getSimulationPosts(simId, plat, feedReq.limit, 0, feedReq.round),
+    getSimulationComments(simId, plat, feedReq.commentLimit, 0, feedReq.round),
     getAgentStats(simId),
-    getRunStatus(simId)
+    getRunStatus(simId),
+    getFeedRounds(simId, plat)
   ])
 
-  // Guard against a stale response landing after a platform/sim switch
-  if (props.simulationId !== simId || platform.value !== plat) {
+  // Guard against a stale response landing after a platform/sim/period switch
+  if (props.simulationId !== simId || platform.value !== plat || selectedRound.value !== feedReq.round) {
     loading.value = false
     return
   }
 
-  const [profilesRes, postsRes, commentsRes, statsRes, runRes] = results
+  const [profilesRes, postsRes, commentsRes, statsRes, runRes, roundsRes] = results
+
+  // Feed rounds (period labels + counts); absent on runs without an action log
+  if (roundsRes.status === 'fulfilled') {
+    const data = roundsRes.value && roundsRes.value.data
+    feedRounds.value = asArray(isPlainObject(data) ? data.rounds : null)
+  } else {
+    feedRounds.value = []
+  }
 
   // Profiles
   if (profilesRes.status === 'fulfilled') {
@@ -547,8 +600,10 @@ async function loadAll() {
   if (postsRes.status === 'fulfilled') {
     const data = postsRes.value && postsRes.value.data
     posts.value = asArray(isPlainObject(data) ? data.posts : null)
+    feedPeriodLabel.value = isPlainObject(data) && data.period_label ? String(data.period_label) : ''
   } else {
     posts.value = []
+    feedPeriodLabel.value = ''
   }
 
   // Comments (replies) — grouped under their parent post in the template
@@ -613,6 +668,9 @@ onMounted(() => {
 watch(
   () => props.simulationId,
   () => {
+    selectedRound.value = null
+    feedRounds.value = []
+    feedPeriodLabel.value = ''
     loadAll()
   }
 )
@@ -1032,6 +1090,13 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
+.feed-period { font-size: 12px; opacity: 0.8; margin-left: 6px; }
+.feed-all {
+  margin-left: auto; font-size: 11px; padding: 1px 8px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border, #e5e7eb); background: transparent; color: inherit;
+}
+.feed-all:hover { background: var(--panel-bg, rgba(0, 0, 0, 0.04)); }
+.post-period { font-size: 11px; opacity: 0.7; }
 .post-time {
   color: var(--faint);
   font-size: 11px;
