@@ -1,0 +1,23 @@
+# Unresolved diagnostics and default-release readiness
+
+The user requests fixing the unresolved issue, establishing robustness, and then making world-v1 the default. The existing authorization covers implementation and a conditional default change, but it does not renew the original USD25 evaluation ceiling. Remaining original allowance is USD5.990519044336. Error-free behavior for all model outputs cannot be guaranteed; the measurable release criteria remain the existing offline scenarios, full36case behavior gate with all18contrasts and independent review, usable fresh-run admission, and preserved historical modes/results.
+
+## Current evidence and first concrete defect
+
+The phase12 withheld response has a known consistency_unresolved code and metering, but its already-validated decision and assessment were discarded. Its underlying rationale cannot be reconstructed. Ordinary resume must not replace it, and changing unresolved toclear or forcing wait would defeat the check. The first repair is private diagnosability: preserve only normalized structurally valid unresolved data on NEW directed-study failed rows, bind it to exact input/candidate identity, validate it on read, never admit or score it. Malformed/raw provider text remains excluded; old failed rows remain valid and untouched. Production store behavior is initially unchanged, pending evidence of a concrete cause.
+
+## Work sequence and ownership
+
+1. Coordinator preserves all prior artifacts and closed budget hashes, implements a narrowly reviewed diagnostic journal extension with regression-first realSDK tests and exact-source guarded closure. Existing prompts, transport, price, two-call allowance and scoring remain unchanged.
+2. Run one newly preregistered fixed12call diagnostic confirmation cappedUSD1.25 inside the remaining original allowance. Retain all outcomes and the validated explanation for any new unresolved row. Independently inspect cause and distinguish a legitimate unresolved choice from a software/prompt defect. No old-slot reset or forcedclear.
+3. Based on concrete evidence, implement any needed narrow behavior fix and test it. Avoid speculative additional prompts or new review modes solely to obtain a pass.
+4. In parallel, Mill audits fresh default creation/API/UI/modeling readiness versus historical absent pins, explicit legacy overrides and forks. Do not switch a global historical fallback or silently launch an unsupported provider. Default promotion must be usable from a normal new request with a verified configured policy and must fail preflight before research spending when inputs are missing.
+5. Prepare a fresh full36case candidate+revision study with same criteria and independent qualitative review. Historical data suggest roughlyUSD10-11 model use before uncertainty: prior36case generation cost4.815778 over695calls; current revisions average0.008009USD each. Original remainder alone may not fund complete reviewed trajectories. Obtain explicit additional budget if needed after concrete release preflight; never reset the original ledger or launch a knowingly underfunded matrix as proof of readiness.
+6. Run broad current-source offline/API/recovery/consumer gates and the reviewed full live gate. Fix concrete defects without weakening criteria. Only after required gates pass, promote NEW run defaults with tested legacy compatibility and an explicit release receipt; retain default legacy if gates remain incomplete/failed. The requested default change is authorized conditional on this evidence, not on a zero-error claim.
+7. Preserve every original study; close each new phase and exact exposure; update bilingual docs, issues, feature and handoff; independent final review and scoped local commit. Remote rejected credentials remain untouched.
+
+## Acceptance
+
+Diagnostic success: a valid unresolved response remains failed/unadmitted, preserves known usage and its exact validated explanation privately, survives repeat read/resume without provider calls, and rejects altered input bindings/schema/content while old rows still summarize. No raw malformed text or public observation leakage.
+
+Behavior/default success: all mandatory offline gates and existing regression controls pass; full36cases, all18contrasts, per-domain and reflexive-arm80percent thresholds plus independent hard-boundary/explanation review pass; no budget/safety/legacy regression; a normal configured fresh request selects and pins world-v1 while historical missing pins and explicit oasis-legacy requests keep their meaning. If unavailable proof or legitimate unresolved behavior persists, report it and withhold promotion rather than inventing success.

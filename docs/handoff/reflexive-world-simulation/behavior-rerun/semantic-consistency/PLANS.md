@@ -1,0 +1,26 @@
+# Semantic consistency repair
+
+The user renewed the implementation request: “fix the issues.” This bounded repair addresses the two retained legal-but-inconsistent choices from phase7: a stated two-unit purchase submitted as three, and opposition before the actor's conditional goal is triggered. Work stays on codex/reflexive-world-simulation from95ebd04. Original results, v1/v2 scoring, case matrix and opt-in default remain unchanged. The original USD25 authorization has USD6.470047044336 remaining; no new budget is implied.
+
+## Acceptance
+
+1. Actual saved failing observations and responses exercise a general consistency mechanism, with no case IDs, expected routes/quantities/votes, evaluator labels or hidden state in actor prompts.
+2. Mechanically invalid and semantically inconsistent drafts can be revised before their consequences are committed. A failed/unknown call retains its usage or full reservation. Every actual HTTP call is separately reserved and durable; total existing maxAttemptsPerSlot remains two.
+3. A resumed run reuses any persisted draft and completed final decision without duplicate calls or consequences. Changed observation, stale writer, corrupted draft and exhausted allowance fail closed.
+4. Legacy specs/cached receipts and historical rejected-action replays retain their current semantics. New behavior is explicitly pinned to the spec identity.
+5. Real SDK/mock HTTP and controller/store tests cover preserved failures, unrelated legitimate actions/waits, immutable input, private observation boundaries, metering and crash recovery. Independent review applies to exact tested bytes.
+6. Any live confirmation follows a new reviewed preregistration, uses only the original remaining authorization and preserves previous records. Limited replay confirmation cannot clear the full36case release gate; keep world-v1 opt-in.
+
+## Proposed implementation sequence
+
+First inspect the controller/store boundary and obtain an independent design check. Prefer an explicitly pinned two-call candidate→consistency-revision protocol over interpreting arbitrary rationale text with domain-specific patterns. The second actor request receives only the exact original observation and its own durable candidate/error, checks conditional goal triggers, arithmetic and action/explanation agreement, and emits the complete final decision. It has no power to overwrite a saved decision, create hidden retries, or mutate world state directly. Only the final validated response can enter the kernel. Existing nonreviewed policies remain unchanged.
+
+Record the precise candidate persistence and usage transaction API before edits. The first call must not be hidden inside the HTTP adapter; the controller/store continue to own reservations, cancellation and call limits. Preserve unknown exposure and avoid dispatch after an uncertain candidate call unless allowance remains. Keep the schema/version and review audit explicit so deliberate review calls are not mislabeled as failed repair attempts.
+
+Then build behavioral red cases, implement the smallest reviewed change, run the relevant frozen guarded suites, inspect evidence and obtain independent source review. A targeted live confirmation may use the retained decision contexts and unrelated controls within a fixed allocation; do not spend the entire remainder trying to obtain a favorable matrix result. The consistency revision is a model check, not a mathematical guarantee of correct goal interpretation; report remaining semantic failures honestly.
+
+Status: independent design recommendation accepted within the renewed bug-fix request. Frozen interfaces are in contract.md. Coordinator/worker implementation and guarded acceptance are underway; no provider calls yet. Unusable candidate stops without using a second call for an unreviewed fallback. The opt-in pin is policy.decisionReview=actor-consistency-v1; absent metadata preserves old behavior.
+
+A behavioral red against the accepted prior source reproduced both actual effects: investment commits3units instead of2, and coalition commits premature opposition. Both tests reach real controller/store/kernel. Receipt: /private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-red-lluhvj1_/evidence (2failed,21deselected). New review.py is copied only to satisfy the test helper; old controller does not use it. This is an exercised behavior difference, not a missing-API failure.
+
+Directed confirmation is preregistered as exactly twelve total revision RPCs: the two retained failures and four positive contexts, each repeated twice, with a USD1.25 maximum inside the remaining original USD6.470047044336. These are new confirmation identities seeded with historical candidate/observation hashes; old slots and charges remain untouched. Failed, unknown or budget-stopped rows are never replaced. Expected semantic actions stay in evaluator code and analyst metadata, never actor inputs. All twelve final responses require independent review. A directed pass cannot clear the full36case promotion gate. The public pricing/parameter documents were refetched2026-10-17 and byte-identical to the prior source, preserving existing tariffs/outputbounds.

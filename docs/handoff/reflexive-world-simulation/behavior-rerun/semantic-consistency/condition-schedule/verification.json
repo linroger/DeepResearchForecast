@@ -1,0 +1,20 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-condition-schedule-green-20261017T134705Z-vbztgcx2",
+  "passed": 376,
+  "seconds": "9.35",
+  "sourceDrift": [],
+  "files": 535,
+  "manifestHash": "c98520b9d53e3d11825c698a5e1017d4ddff028bb7ea57557585f5443d6e675e",
+  "calls": 12,
+  "maxUsd": "1.25",
+  "remainingOriginalUsdBeforePhase": "6.086631044336",
+  "priorArtifactsUnchanged": 416,
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "sourceReview": "Epicurus independently checked exact hashes,376pass/no drift535; no findings.",
+  "fullBehaviorGateClaim": false
+}

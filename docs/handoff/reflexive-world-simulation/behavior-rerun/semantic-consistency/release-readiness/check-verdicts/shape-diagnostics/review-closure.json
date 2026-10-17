@@ -1,0 +1,10 @@
+{
+  "reviewedUtc": "2026-10-17T16:40:44.394832+00:00",
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "verdict": "No findings in exact bounded structural diagnostics and known-charge preservation",
+  "runtime": "453passed13.89s/no drift548",
+  "sourceManifestSha256": "0b45cadf59807789e7270f90545c298ae63e424a1eadf8f4ae150d2eaac0e0f9",
+  "diagnosticOnly": true,
+  "liveBehaviorClaim": false
+}

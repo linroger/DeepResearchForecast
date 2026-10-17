@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "world-offline-delivery/v1",
+  "branch": "codex/reflexive-world-simulation",
+  "baseMain": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "currentSourceReviews": [
+    "kernel-implementation.md",
+    "store-implementation.md",
+    "compiler-implementation.md",
+    "policy-implementation.md",
+    "lifecycle-implementation.md",
+    "report-implementation.md",
+    "ui-implementation.md",
+    "heldout-evaluation.md",
+    "final-review.json"
+  ],
+  "gates": [
+    {
+      "label": "combined world+legacy+guard",
+      "passed": 615,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-offline-release-20261016T162734Z-ec6dh0hm",
+      "scope": "Historical full gate before live contract fixes."
+    },
+    {
+      "label": "reflection normalization",
+      "passed": 496,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-reflection-release-20261016T163859Z-uvwubuvi",
+      "scope": "All world consumer suites after response validation fix."
+    },
+    {
+      "label": "actual plus unresolved exposure accounting",
+      "passed": 81,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-exposure-budget-green-20261016T164517Z-l9asji3o",
+      "scope": "Evaluator and controller after conservative-quote accounting correction."
+    },
+    {
+      "label": "bounded actor repair combined",
+      "passed": 273,
+      "failed": 1,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-bounded-repair-release-20261016T165630Z-5ukrn2x2",
+      "scope": "Production checks passed; one test incorrectly reacquired a writer after completed horizon."
+    },
+    {
+      "label": "bounded actor repair closure",
+      "passed": 18,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-bounded-repair-final-20261016T165906Z-gx4ufi1k",
+      "scope": "Corrected success/exhaustion/reopen SDK test and controller suite; no source drift."
+    },
+    {
+      "label": "request-owned execution envelope",
+      "passed": 212,
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-request-bound-release-20261016T171030Z-uzeo4cfz",
+      "scope": "Policy152/controller16/store44; exact immutable serialized call binding; no source drift and independent review closure."
+    },
+    {
+      "label": "final-combined",
+      "passed": 691,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sourceDrift": [],
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-delivery-20261016T181720Z-kz74vt5f",
+      "durableReceipt": "offline-evidence/final-combined",
+      "scope": "Full world, existing world delta, legacy simulation/reuse and guard controls; includes16queue tests.",
+      "guardEvents": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 2,
+        "blocked:process:subprocess.Popen": 6,
+        "quarantine:oasis_import_cwd": 3,
+        "blocked:external_read": 20,
+        "allowed:guarded_child": 3,
+        "blocked:child_process_limit": 3,
+        "blocked:credential_path": 6,
+        "blocked:external_write": 10,
+        "blocked:identity_environment": 1,
+        "blocked:sqlite_uri": 9,
+        "blocked:network:socket.getaddrinfo": 3,
+        "blocked:network:socket.bind": 1,
+        "blocked:saved_data": 1,
+        "blocked:changed_child_script": 1
+      }
+    },
+    {
+      "label": "list-status-closure",
+      "passed": 73,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sourceDrift": [],
+      "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h",
+      "durableReceipt": "offline-evidence/list-status-closure",
+      "scope": "Final project-filter-before-runtime-projection fix; all lifecycle/admission/legacyreuse checks. Other production hashes unchanged from691gate.",
+      "guardEvents": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 2
+      }
+    }
+  ],
+  "frontend": {
+    "focusedTests": 24,
+    "build": "passed",
+    "browser": "browser-evidence/receipt.json"
+  },
+  "static": {
+    "newWorldCodeAndTests": "Ruff F,E9 passed",
+    "legacyTouchedFiles": "25 findings unchanged from main; lint-baseline.json",
+    "smoke": "init.sh passed with DRF_SMOKE_PYTHON override",
+    "whitespace": "Source/prose diff check passed; exact copied investment review EOF and unified-patch context whitespace preserved as hash-bound evidence."
+  },
+  "limits": [
+    "Counts are separate runs and must not be added as unique coverage.",
+    "Guard negative controls and library discovery generated explicitly blocked attempts; not zero-attempt or OS-sandbox proof.",
+    "Live behavior evaluation and default promotion are separate; see live-budget.json and heldout-evaluation.md."
+  ],
+  "finalSource": {
+    "files": 515,
+    "matchesFinalFocusedSnapshot": true,
+    "changedAfter691": [
+      "backend/app/services/simulation_manager.py",
+      "backend/tests/test_world_lifecycle.py"
+    ],
+    "checkedAt": "2026-10-16T18:21:03.693918+00:00"
+  }
+}

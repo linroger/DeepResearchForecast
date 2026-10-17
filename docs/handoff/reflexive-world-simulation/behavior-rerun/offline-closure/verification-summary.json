@@ -1,0 +1,21 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 519,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-closure-20261016T185206Z-mnx62v88/evidence",
+    "-q",
+    "backend/tests/test_world_evaluation.py::test_v2_message_projection_real_controller_pairs_keep_required_contrast",
+    "backend/tests/test_world_evaluation.py::test_all_v1_case_digests_match_original_frozen_preregistration",
+    "backend/tests/test_world_evaluation.py::test_original_archived_v1_scoring_controls_preserve_receipt_points",
+    "backend/tests/test_world_evaluation_launch.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-closure-20261016T185206Z-mnx62v88/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-closure-20261016T185206Z-mnx62v88/evidence"
+}

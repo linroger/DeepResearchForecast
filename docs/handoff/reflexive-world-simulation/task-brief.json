@@ -1,0 +1,8 @@
+{
+  "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "branch": "codex/reflexive-world-simulation",
+  "worktree": "/Users/rogerlin/.codex/worktrees/reflexive-world-simulation/DeepResearchForecast",
+  "created_utc": "2026-10-16T13:31:11.495268+00:00",
+  "scope": "Planning and architecture approval before implementation; requested full evolving actor-world simulation on a new branch from main.",
+  "implementation_authorized_after": "User approval of the concrete PLANS.md per supplied AGENTS.md complex-feature requirement."
+}

@@ -176,6 +176,8 @@ class SimulationRunState:
     # 保证 hours 模式 run_state.json 逐字节不变。
     options: Dict[str, Any] = field(default_factory=dict)
 
+    simulation_engine: str = "oasis-legacy"
+
     # EXECPLAN2 F-6-1：守护本对象可变标量计数器的可重入锁。
     # get_run_state() 返回缓存的同一个对象；监控线程持续 mutate（add_action / current_round /
     # twitter_*/reddit_* / counts），而 Flask 请求线程并发调用 to_dict()/to_detail_dict() 序列化。
@@ -210,6 +212,7 @@ class SimulationRunState:
         result = {
             "simulation_id": self.simulation_id,
             "runner_status": self.runner_status.value,
+            "simulation_engine": self.simulation_engine,
             "current_round": self.current_round,
             "total_rounds": self.total_rounds,
             "simulated_hours": self.simulated_hours,
@@ -289,6 +292,7 @@ class SimulationRunner:
     
     # 内存中的运行状态
     _run_states: Dict[str, SimulationRunState] = {}
+    _world_simulations: set[str] = set()
     # SIM-13: 每个模拟上次「落盘」run_state.json 的单调时刻，用于按
     # SIM_RUNSTATE_SAVE_INTERVAL 节流磁盘写入（内存态仍每次刷新）。
     _run_state_last_save: Dict[str, float] = {}
@@ -307,8 +311,50 @@ class SimulationRunner:
     _run_state_lock: threading.RLock = threading.RLock()
     
     @classmethod
+    def simulation_engine(cls, simulation_id: str) -> str:
+        """Read the saved admission pin before any legacy mutation or IPC."""
+        from pathlib import Path
+        from .simulation_manager import validate_simulation_engine
+        from .world_simulation.service import WorldSimulationService
+        directory = WorldSimulationService.directory(simulation_id, root=cls.RUN_STATE_DIR)
+        path = Path(directory) / "state.json"
+        prepared = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        engine = validate_simulation_engine(prepared.get("simulation_engine", "oasis-legacy"))
+        if engine != "world-v1" and (Path(directory) / "world_input_manifest.json").exists():
+            raise ValueError("World input manifest has no matching saved engine pin")
+        return engine
+
+    @classmethod
+    def _validate_world(cls, simulation_id: str):
+        from .simulation_manager import SimulationManager
+        manager = SimulationManager()
+        manager.SIMULATION_DATA_DIR = cls.RUN_STATE_DIR
+        manager.validate_prepared_simulation_config(simulation_id)
+        return manager.get_simulation(simulation_id)
+
+    @staticmethod
+    def _world_run_state(data: dict) -> SimulationRunState:
+        return SimulationRunState(
+            simulation_id=data["simulation_id"], simulation_engine="world-v1",
+            runner_status=RunnerStatus(data["runner_status"]),
+            current_round=data["current_round"], total_rounds=data["total_rounds"],
+            process_pid=data.get("process_pid"), error=data.get("error"),
+            temporal_mode="calendar", current_period_end=data.get("current_period_end"),
+            horizon_date=data.get("horizon_date"))
+
+    @classmethod
+    def require_interview_capability(cls, simulation_id: str) -> None:
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            raise ValueError("unsupported_capability: world-v1 does not support interviews")
+
+    @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
         """获取运行状态"""
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            cls._validate_world(simulation_id)
+            data = WorldSimulationService.status(simulation_id, root=cls.RUN_STATE_DIR)
+            return cls._world_run_state(data) if data is not None else None
         if simulation_id in cls._run_states:
             return cls._run_states[simulation_id]
         
@@ -471,6 +517,17 @@ class SimulationRunner:
         Returns:
             SimulationRunState
         """
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            prepared = cls._validate_world(simulation_id)
+            if sim_seed is not None or max_rounds is not None or enable_graph_memory_update or resume is False:
+                raise ValueError("World execution settings are sealed; fork a new generation to change them")
+            data = WorldSimulationService.start(
+                simulation_id, root=cls.RUN_STATE_DIR,
+                expected_manifest_sha256=prepared.world_input_manifest_sha256)
+            cls._world_simulations.add(simulation_id)
+            cls.register_cleanup()
+            return cls._world_run_state(data)
         if platform not in {"twitter", "reddit", "parallel"}:
             raise ValueError(
                 f"不支持的模拟平台: {platform}; expected twitter, reddit, or parallel"
@@ -1587,6 +1644,9 @@ class SimulationRunner:
                 try:
                     if sim_id in cls._processes:
                         continue  # 本进程自己起的，不是孤儿
+                    if cls.simulation_engine(sim_id) == "world-v1":
+                        cls.get_run_state(sim_id)
+                        continue
                     state = cls._load_run_state(sim_id)
                     if not state or state.runner_status not in active:
                         continue
@@ -1704,6 +1764,9 @@ class SimulationRunner:
     @classmethod
     def stop_simulation(cls, simulation_id: str) -> SimulationRunState:
         """停止模拟"""
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            return cls._world_run_state(WorldSimulationService.stop(simulation_id, root=cls.RUN_STATE_DIR))
         state = cls.get_run_state(simulation_id)
         if not state:
             raise ValueError(f"模拟不存在: {simulation_id}")
@@ -2074,6 +2137,10 @@ class SimulationRunner:
         top_posts（按互动量近似的高传播帖）、可选 communities（派系，来自 T2.4）。
         best-effort：任何子步骤失败都不抛，返回已聚合的部分（或 None）。
         """
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            from .world_simulation.service import WorldSimulationService
+            cls._validate_world(simulation_id)
+            return WorldSimulationService.require_complete(simulation_id, root=cls.RUN_STATE_DIR)
         try:
             agent_stats = cls.get_agent_stats(simulation_id)
             timeline = cls.get_timeline(simulation_id)
@@ -2375,6 +2442,8 @@ class SimulationRunner:
         Returns:
             清理结果信息
         """
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            raise ValueError("Prepared world history is immutable; fork instead of force restart")
         import shutil
         
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
@@ -2449,6 +2518,10 @@ class SimulationRunner:
         
         在服务器关闭时调用，确保所有子进程被终止
         """
+        from .world_simulation.service import WorldSimulationService
+        for simulation_id in tuple(cls._world_simulations):
+            WorldSimulationService.stop(simulation_id, root=cls.RUN_STATE_DIR)
+        cls._world_simulations.clear()
         # 防止重复清理
         if cls._cleanup_done:
             return
@@ -2657,6 +2730,8 @@ class SimulationRunner:
         Returns:
             True 表示环境存活，False 表示环境已关闭
         """
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            return False
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         if not os.path.exists(sim_dir):
             return False
@@ -2675,6 +2750,10 @@ class SimulationRunner:
         Returns:
             状态详情字典，包含 status, twitter_available, reddit_available, timestamp
         """
+        if cls.simulation_engine(simulation_id) == "world-v1":
+            return {"status": "unsupported", "simulation_engine": "world-v1",
+                    "interview_supported": False, "error": "unsupported_capability",
+                    "twitter_available": False, "reddit_available": False}
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         status_file = os.path.join(sim_dir, "env_status.json")
         
@@ -2729,6 +2808,7 @@ class SimulationRunner:
             ValueError: 模拟不存在或环境未运行
             TimeoutError: 等待响应超时
         """
+        cls.require_interview_capability(simulation_id)
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
@@ -2818,6 +2898,7 @@ class SimulationRunner:
             ValueError: 模拟不存在或环境未运行
             TimeoutError: 等待响应超时
         """
+        cls.require_interview_capability(simulation_id)
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
@@ -2881,6 +2962,7 @@ class SimulationRunner:
         Returns:
             全局采访结果字典
         """
+        cls.require_interview_capability(simulation_id)
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
@@ -2934,6 +3016,7 @@ class SimulationRunner:
         Returns:
             操作结果字典
         """
+        cls.require_interview_capability(simulation_id)
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         if not os.path.exists(sim_dir):
             raise ValueError(f"模拟不存在: {simulation_id}")
@@ -3045,6 +3128,7 @@ class SimulationRunner:
         Returns:
             Interview历史记录列表
         """
+        cls.require_interview_capability(simulation_id)
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         
         results = []

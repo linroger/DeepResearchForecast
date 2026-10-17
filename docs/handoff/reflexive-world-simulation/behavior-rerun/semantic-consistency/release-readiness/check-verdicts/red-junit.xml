@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.181" timestamp="2026-10-17T22:41:34.952686" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_consistency_v3" name="test_explicit_verdicts_are_valid_without_a_generated_aggregate" time="0.008"><failure message="app.services.world_simulation.contracts.WorldError: Unsupported consistency assessment mode">def test_explicit_verdicts_are_valid_without_a_generated_aggregate():
+        value = checked()
+&gt;       assert validate_assessment(value, {}, {}, mode=MODE_V3) == value
+
+backend/tests/test_world_consistency_v3.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/app/services/world_simulation/review.py:51: in validate_assessment
+    require(isinstance(mode, str) and mode in REVIEW_MODES,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+condition = False, code = 'invalid_assessment'
+message = 'Unsupported consistency assessment mode'
+
+    def require(condition: bool, code: str, message: str) -&gt; None:
+        if not condition:
+&gt;           raise WorldError(code, message)
+E           app.services.world_simulation.contracts.WorldError: Unsupported consistency assessment mode
+
+backend/app/services/world_simulation/contracts.py:47: WorldError</failure></testcase></testsuite></testsuites>

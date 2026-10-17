@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-10-17T12:19:17.710623+00:00",
+  "sources": {
+    "pricing": {
+      "url": "https://docs.bigmodel.cn/cn/guide/start/pricing.md",
+      "path": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-sources-ggl34irp/pricing.md",
+      "sha256": "e47e492fffffdd7d0cdb3fb6b61f0ed33b2ab829dd3973c9d55e8a1f1c537e4a",
+      "unchangedFromPrior": true
+    },
+    "parameters": {
+      "url": "https://docs.bigmodel.cn/cn/guide/start/concept-param.md",
+      "path": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-sources-ggl34irp/parameters.md",
+      "sha256": "4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05",
+      "unchangedFromPrior": true
+    }
+  },
+  "pricingAndParametersUnchanged": true,
+  "note": "Public HTTPS bytes only; no provider credential or model calls. Same pinned conservative USD2/6 per million tariff and inclusive4096 output cap retained; not audited billing.",
+  "newProtocol": {
+    "decisionReview": "actor-consistency-v3",
+    "responseFormat": "json_object",
+    "candidateRepair": "known-output-error-v1",
+    "nativeJsonCapabilityRecord": "../public-api-verification.json",
+    "sameNumericTariffsAndBounds": true
+  }
+}

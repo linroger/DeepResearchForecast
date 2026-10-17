@@ -1,3 +1,5 @@
+> Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.
+
 # Handoff.md — DeepResearchForecast Analysis Suite
 
 **Last Updated (UTC):** 2026-09-27T05:00:00Z

@@ -393,7 +393,10 @@ def test_run_stage_wiring_characterization():
                        '"run_reused_completed_simulation"')
     i_gate = src.index("_require_run_completion_evidence(")
     i_meter = src.index("self._record_sim_run_telemetry(state, sim_state.simulation_id)")
-    i_complete = src.index("STAGE_RUN,\n                _run_completion_message")
+    import re
+    completion = re.search(r"STAGE_RUN,\s+_run_completion_message", src)
+    assert completion is not None, "Legacy RUN completion must remain wired"
+    i_complete = completion.start()
     assert i_detect < i_launch, "探测必须先于子进程重启决策"
     assert i_fold < i_launch, "复用折叠必须先于 start_simulation 分支"
     assert i_gate < i_complete, "完成证据门必须先于 RUN 阶段 seal"

@@ -32,6 +32,15 @@ from ..utils.atomic import write_json_atomic
 logger = get_logger('mirofish.simulation')
 
 
+SUPPORTED_SIMULATION_ENGINES = frozenset({"oasis-legacy", "world-v1"})
+
+
+def validate_simulation_engine(engine: str) -> str:
+    if not isinstance(engine, str) or engine not in SUPPORTED_SIMULATION_ENGINES:
+        raise ValueError(f"Unsupported simulation_engine: {engine}")
+    return engine
+
+
 SIMULATION_CONFIG_MANIFEST_VERSION = "simulation-config-manifest/v1"
 
 
@@ -604,6 +613,8 @@ class SimulationStatus(str, Enum):
     CREATED = "created"
     PREPARING = "preparing"
     READY = "ready"
+    STARTING = "starting"
+    STOPPING = "stopping"
     RUNNING = "running"
     PAUSED = "paused"
     STOPPED = "stopped"      # 模拟被手动停止
@@ -663,12 +674,21 @@ class SimulationState:
     # 错误信息
     error: Optional[str] = None
     
+    simulation_engine: str = "oasis-legacy"
+    world_generation_id: Optional[str] = None
+    world_input_manifest_sha256: Optional[str] = None
+    world_spec_sha256: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """完整状态字典（内部使用）"""
         return {
             "simulation_id": self.simulation_id,
             "project_id": self.project_id,
             "graph_id": self.graph_id,
+            "simulation_engine": self.simulation_engine,
+            "world_generation_id": self.world_generation_id,
+            "world_input_manifest_sha256": self.world_input_manifest_sha256,
+            "world_spec_sha256": self.world_spec_sha256,
             "enable_twitter": self.enable_twitter,
             "enable_reddit": self.enable_reddit,
             "status": self.status.value,
@@ -704,6 +724,10 @@ class SimulationState:
             "simulation_id": self.simulation_id,
             "project_id": self.project_id,
             "graph_id": self.graph_id,
+            "simulation_engine": self.simulation_engine,
+            "world_generation_id": self.world_generation_id,
+            "world_input_manifest_sha256": self.world_input_manifest_sha256,
+            "world_spec_sha256": self.world_spec_sha256,
             "status": self.status.value,
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
@@ -771,10 +795,8 @@ class SimulationManager:
     
     def _load_simulation_state(self, simulation_id: str) -> Optional[SimulationState]:
         """从文件加载模拟状态"""
-        if simulation_id in self._simulations:
-            return self._simulations[simulation_id]
-        
-        sim_dir = self._get_simulation_dir(simulation_id)
+        from .world_simulation.service import WorldSimulationService
+        sim_dir = str(WorldSimulationService.directory(simulation_id, root=self.SIMULATION_DATA_DIR))
         state_file = os.path.join(sim_dir, "state.json")
         
         if not os.path.exists(state_file):
@@ -782,11 +804,22 @@ class SimulationManager:
         
         with open(state_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
+
+        engine = validate_simulation_engine(data.get("simulation_engine", "oasis-legacy"))
+        if engine != "world-v1" and (
+            os.path.exists(os.path.join(sim_dir, "world_input_manifest.json"))
+            or any(data.get(key) for key in ("world_generation_id", "world_spec_sha256", "world_input_manifest_sha256"))
+        ):
+            raise ValueError("World artifacts require the saved world-v1 engine pin")
         
         state = SimulationState(
             simulation_id=simulation_id,
             project_id=data.get("project_id", ""),
             graph_id=data.get("graph_id", ""),
+            simulation_engine=validate_simulation_engine(data.get("simulation_engine", "oasis-legacy")),
+            world_generation_id=data.get("world_generation_id"),
+            world_input_manifest_sha256=data.get("world_input_manifest_sha256"),
+            world_spec_sha256=data.get("world_spec_sha256"),
             enable_twitter=data.get("enable_twitter", True),
             enable_reddit=data.get("enable_reddit", True),
             status=SimulationStatus(data.get("status", "created")),
@@ -829,6 +862,7 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        simulation_engine: str = "oasis-legacy",
     ) -> SimulationState:
         """
         创建新的模拟
@@ -842,6 +876,7 @@ class SimulationManager:
         Returns:
             SimulationState
         """
+        validate_simulation_engine(simulation_engine)
         import uuid
         simulation_id = f"sim_{uuid.uuid4().hex[:12]}"
         
@@ -849,8 +884,9 @@ class SimulationManager:
             simulation_id=simulation_id,
             project_id=project_id,
             graph_id=graph_id,
-            enable_twitter=enable_twitter,
-            enable_reddit=enable_reddit,
+            simulation_engine=simulation_engine,
+            enable_twitter=enable_twitter if simulation_engine == "oasis-legacy" else False,
+            enable_reddit=enable_reddit if simulation_engine == "oasis-legacy" else False,
             status=SimulationStatus.CREATED,
         )
         
@@ -859,6 +895,50 @@ class SimulationManager:
         
         return state
     
+    def prepare_world_simulation(self, simulation_id: str, *, raw_spec: Optional[dict],
+                                 research_report: str, research_generation_id: str,
+                                 research_engine: str, actor_bundle=None, policy_spec=None,
+                                 ontology=None, simulation_requirement="") -> SimulationState:
+        from .world_simulation.service import WorldSimulationService
+        from .world_simulation.contracts import require
+        require(raw_spec is not None or policy_spec is not None, "world_model_not_ready",
+                "World preparation requires raw world_spec or an explicit modeling policy")
+        state = self.get_simulation(simulation_id)
+        if state is None:
+            raise ValueError("Simulation does not exist")
+        if validate_simulation_engine(state.simulation_engine) != "world-v1":
+            raise ValueError("Engine mismatch: world preparation requires world-v1")
+        prepared = WorldSimulationService.prepare_model(
+            simulation_id, raw_spec=raw_spec, research_report=research_report,
+            research_generation_id=research_generation_id,
+            research_engine=research_engine, actor_bundle=actor_bundle,
+            policy_spec=policy_spec, ontology=ontology,
+            simulation_requirement=simulation_requirement, root=self.SIMULATION_DATA_DIR)
+        return self._pin_world_preparation(state, prepared)
+
+    def _pin_world_preparation(self, state: SimulationState, prepared: dict) -> SimulationState:
+        state.world_generation_id = prepared["spec"]["generationId"]
+        state.world_input_manifest_sha256 = prepared["manifest_sha256"]
+        state.world_spec_sha256 = prepared["manifest"]["specSha256"]
+        state.status = SimulationStatus.READY
+        state.config_generated = True
+        state.enable_twitter = state.enable_reddit = False
+        self._save_simulation_state(state)
+        self.validate_prepared_simulation_config(state.simulation_id)
+        return state
+
+    def fork_world_simulation(self, simulation_id: str, *, seed=None) -> SimulationState:
+        from .world_simulation.service import WorldSimulationService
+        parent = self.get_simulation(simulation_id)
+        self.validate_prepared_simulation_config(simulation_id)
+        if parent.simulation_engine != "world-v1":
+            raise ValueError("Engine mismatch: world fork requires world-v1")
+        child = self.create_simulation(parent.project_id, parent.graph_id,
+                                       simulation_engine="world-v1")
+        prepared = WorldSimulationService.fork(simulation_id, child.simulation_id,
+                                               root=self.SIMULATION_DATA_DIR, seed=seed)
+        return self._pin_world_preparation(child, prepared)
+
     def prepare_simulation(
         self,
         simulation_id: str,
@@ -903,6 +983,9 @@ class SimulationManager:
         if not state:
             raise ValueError(f"模拟不存在: {simulation_id}")
         
+        if validate_simulation_engine(state.simulation_engine) != "oasis-legacy":
+            raise ValueError("World preparation requires raw world_spec and source bindings")
+
         try:
             state.status = SimulationStatus.PREPARING
             self._save_simulation_state(state)
@@ -1328,6 +1411,8 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if state is None:
             raise ValueError(f"模拟不存在: {simulation_id}")
+        if validate_simulation_engine(state.simulation_engine) != "oasis-legacy":
+            raise ValueError("Prepared world generations are immutable; fork instead")
         sim_dir = self._get_simulation_dir(simulation_id)
         (
             state.simulation_config_sha256,
@@ -1363,6 +1448,21 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if state is None:
             raise ValueError(f"模拟不存在: {simulation_id}")
+        if validate_simulation_engine(state.simulation_engine) == "world-v1":
+            from .world_simulation.artifacts import load_inputs
+            from .world_simulation.contracts import require
+            from .world_simulation.service import WorldSimulationService
+            require(bool(state.world_input_manifest_sha256 and state.world_spec_sha256
+                         and state.world_generation_id), "input_binding_mismatch",
+                    "Prepared world state is missing generation bindings")
+            spec, manifest = load_inputs(
+                WorldSimulationService.directory(simulation_id, root=self.SIMULATION_DATA_DIR),
+                simulation_id=simulation_id,
+                expected_manifest_sha256=state.world_input_manifest_sha256)
+            require(spec["generationId"] == state.world_generation_id
+                    and manifest["specSha256"] == state.world_spec_sha256,
+                    "input_binding_mismatch", "Prepared world state bindings changed")
+            return manifest
         sim_dir = self._get_simulation_dir(simulation_id)
         discovered_role_counts: List[int] = []
         discovered_role_versions: List[str] = []
@@ -1452,9 +1552,21 @@ class SimulationManager:
         )
 
     def get_simulation(self, simulation_id: str) -> Optional[SimulationState]:
-        """获取模拟状态"""
-        return self._load_simulation_state(simulation_id)
-    
+        """Read saved admission plus the authoritative world runtime projection."""
+        state = self._load_simulation_state(simulation_id)
+        return self._project_world_status(state)
+
+    def _project_world_status(self, state: Optional[SimulationState]) -> Optional[SimulationState]:
+        """Project one selected saved state without persisting runtime fields."""
+        if state is not None and state.simulation_engine == "world-v1" and state.world_input_manifest_sha256:
+            from .world_simulation.service import WorldSimulationService
+            run = WorldSimulationService.status(state.simulation_id, root=self.SIMULATION_DATA_DIR)
+            if run is not None and run["runner_status"] != "idle":
+                state.status = SimulationStatus(run["runner_status"])
+                state.current_round = run["current_round"]
+                state.error = run.get("error")
+        return state
+
     def list_simulations(self, project_id: Optional[str] = None) -> List[SimulationState]:
         """列出所有模拟"""
         simulations = []
@@ -1469,7 +1581,7 @@ class SimulationManager:
                 state = self._load_simulation_state(sim_id)
                 if state:
                     if project_id is None or state.project_id == project_id:
-                        simulations.append(state)
+                        simulations.append(self._project_world_status(state))
         
         return simulations
     

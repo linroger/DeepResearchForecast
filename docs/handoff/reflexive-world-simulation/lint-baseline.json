@@ -1,0 +1,50 @@
+[
+  {
+    "path": "backend/app/api/report.py",
+    "baselineFindings": 1,
+    "currentFindings": 1,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/api/simulation.py",
+    "baselineFindings": 7,
+    "currentFindings": 7,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "baselineFindings": 0,
+    "currentFindings": 0,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "baselineFindings": 7,
+    "currentFindings": 7,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/services/report_visualizer.py",
+    "baselineFindings": 1,
+    "currentFindings": 1,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "baselineFindings": 4,
+    "currentFindings": 4,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "baselineFindings": 5,
+    "currentFindings": 5,
+    "introduced": []
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "baselineFindings": 0,
+    "currentFindings": 0,
+    "introduced": []
+  }
+]

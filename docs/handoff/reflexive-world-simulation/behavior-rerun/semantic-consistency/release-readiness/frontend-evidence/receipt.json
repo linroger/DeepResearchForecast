@@ -1,0 +1,12 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-default-ui-final-trhhwui5",
+  "testsPassed": 54,
+  "testsFailed": 0,
+  "build": "passed",
+  "buildSeconds": "1.22",
+  "nodeDependencies": "Existingprimarycheckoutnode_modules, noinstallation",
+  "sourceDrift": [],
+  "reviewer": "Parfit",
+  "review": "NoP1/P2inboundedUI/API delta",
+  "scope": "ActualSFC/reactivity/SSR+APIadapter; browsernotyetexecuted"
+}

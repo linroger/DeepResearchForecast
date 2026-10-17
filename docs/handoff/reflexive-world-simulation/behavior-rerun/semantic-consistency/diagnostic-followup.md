@@ -1,0 +1,9 @@
+# Directed review diagnostic follow-up
+
+Phase8 completed12revision RPCs with9admissible responses (all9consequential-action matches) and3known-metered invalid_assessment failures. The unchanged twelve-row denominator remains incomplete. Both original semantic defects were corrected in successful repetitions, but the new review schema was not consistently satisfied. No original world or prior result is changed.
+
+The harness currently records only the fixed error code. Its exception handler discards the fixed validation message, so saved evidence does not identify whether a check exceeded its explanation bound, referenced a missing path, or failed another structural rule. Do not infer a cause from completion token counts or passing sibling responses. Raw failed response bodies were not retained and cannot be reconstructed.
+
+After phase8 independent review and budget closure, the smallest next step is to preserve a bounded fixed validation message for known WorldError failures, with a regression proving that opaque provider bodies are excluded. The actor policy, model, prompts, fixture observations/candidates and scorer remain unchanged. A separately registered repeat of the same twelve fixed calls, maximumUSD1.25 within the original budget remainder, can identify the structural failure rule if it recurs. All twelve calls, including failed/unknown responses, count against that limit; no replacement rows. This repeat is diagnostic, not evidence that instrumentation improves behavior or a fresh full-world study. Do not relax any assessment rule until the preserved error evidence supports a specific correction.
+
+Current runtime sources remain frozen until phase8 review and report/budget closure. The exact follow-up policy and manifest must be checked by the guarded runner before any further provider call. World-v1 remains opt-in; no full-matrix or forecasting-calibration claim follows.

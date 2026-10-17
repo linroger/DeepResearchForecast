@@ -1,0 +1,14 @@
+{
+  "checkedUtc": "2026-10-17T13:29:05.870167+00:00",
+  "sourceDelta": "Only _REVIEW_SYSTEM_V2; AST outside that assignment identical to d184eb5.",
+  "ruff": "F,E9 passed for world_simulation and consistency/policy/launcher tests.",
+  "whitespace": "git diff --check passed for current tracked changes. Immutable older captured receipts were not rewritten.",
+  "currentFrozenSourceFiles": 535,
+  "priorStudyArtifactsUnchanged": 410,
+  "allClosedPhaseReportHashesValid": 11,
+  "jsonAndReportLinks": "passed",
+  "featurePromotionPasses": false,
+  "remainingBehaviorIssues": 2,
+  "liveProviderActive": false,
+  "remotePublication": "Previously rejected credentials not retried; unrelated primary checkout untouched."
+}

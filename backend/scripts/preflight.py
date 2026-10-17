@@ -59,7 +59,8 @@ if _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
 
 from app.config import Config  # noqa: E402
-from app.services.pipeline_orchestrator import preflight_pipeline  # noqa: E402
+from app.services.pipeline_orchestrator import preflight_pipeline, simulation_readiness  # noqa: E402
+from app.services.world_simulation.admission import UNSET  # noqa: E402
 
 # Severity ordering: a "bad" check blocks (exit 1); a "warn" only nudges exit to 2.
 SEVERITY_OK = "ok"
@@ -76,6 +77,7 @@ def environment_report(
     *,
     deep: bool = False,
     pull: bool = False,
+    simulation_engine=UNSET,
 ) -> dict:
     """Build the structured readiness document (EXECPLAN2 I-8-0).
 
@@ -117,6 +119,13 @@ def environment_report(
             }
         )
 
+    simulation = simulation_readiness(mode=mode, simulation_engine=simulation_engine)
+    for err in simulation["errors"]:
+        checks.append({
+            "id": "simulation.admission", "severity": SEVERITY_BAD,
+            "ok": False, "message": err, "fix": err,
+        })
+
     # Lightweight informational checks the run gate does not block on but which
     # are genuinely useful in a readiness panel: placeholder credentials.
     _append_placeholder_checks(checks, df_model)
@@ -146,6 +155,9 @@ def environment_report(
         "data_dir": getattr(Config, "GRAPHITI_DATA_DIR", None),
         "embed_model": getattr(Config, "GRAPHITI_EMBED_MODEL", None),
         "mode": mode,
+        "simulation_engine": simulation["simulation_engine"],
+        "default_simulation_engine": simulation["default_simulation_engine"],
+        "simulation_admission": simulation["simulation_admission"],
         "ready": exit_code != 1,
         "exit_code": exit_code,
         "checks": checks,
@@ -471,6 +483,8 @@ def main(argv: list[str] | None = None) -> int:
         help="research_only skips graph/report/simulation checks",
     )
     ap.add_argument("--model", default=None, help="override the DeerFlow research model checked")
+    ap.add_argument("--simulation-engine", choices=("oasis-legacy", "world-v1"), default=UNSET,
+                    help="fresh simulation selection; omission checks the configured default")
     ap.add_argument(
         "--deep",
         action="store_true",
@@ -499,7 +513,8 @@ def main(argv: list[str] | None = None) -> int:
                 worst = 2
         return worst
 
-    report = environment_report(mode=args.mode, model=args.model, deep=args.deep, pull=args.pull)
+    report = environment_report(mode=args.mode, model=args.model, deep=args.deep, pull=args.pull,
+                                simulation_engine=args.simulation_engine)
 
     if args.json:
         # Structured environment_report() document (Settings UI / CI gating).

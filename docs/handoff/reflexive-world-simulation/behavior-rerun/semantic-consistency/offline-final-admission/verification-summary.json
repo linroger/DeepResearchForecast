@@ -1,0 +1,19 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 532,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0/evidence",
+    "-q",
+    "backend/tests/test_world_consistency_evaluation.py",
+    "backend/tests/test_world_evaluation_launch.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-final-admission-20261017T123111Z-obpcoyj0/evidence"
+}

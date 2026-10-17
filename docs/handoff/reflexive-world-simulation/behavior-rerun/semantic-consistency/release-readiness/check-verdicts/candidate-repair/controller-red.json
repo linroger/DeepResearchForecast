@@ -1,0 +1,20 @@
+{
+  "exitCode": 1,
+  "sourceDrift": [],
+  "files": 545,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/evidence",
+    "-q",
+    "backend/tests/test_world_candidate_repair_controller.py",
+    "-k",
+    "error_context_labels or known_local_validation or effective_pin_mismatch"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/evidence"
+}

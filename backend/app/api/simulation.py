@@ -221,6 +221,7 @@ def create_simulation():
             graph_id=graph_id,
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
+            simulation_engine=data.get('simulation_engine', 'oasis-legacy'),
         )
         # 项目归属于已完成研究的管线时，把手动模拟绑定到该管线的研究代际，
         # 使世界简报、手动报告与对话获得同一份研究档案与官方数据（失败仅记日志）。
@@ -233,6 +234,9 @@ def create_simulation():
             "data": state.to_dict()
         })
         
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
     except Exception as e:
         logger.error(f"创建模拟失败: {str(e)}")
         return jsonify({
@@ -261,6 +265,12 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     import os
     from ..config import Config
     
+    manager = SimulationManager()
+    state = manager.get_simulation(simulation_id)
+    if state is not None and state.simulation_engine == 'world-v1':
+        manager.validate_prepared_simulation_config(simulation_id)
+        return True, {"simulation_engine": "world-v1", "world_generation_id": state.world_generation_id}
+
     simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
     
     # 检查目录是否存在
@@ -467,6 +477,32 @@ def prepare_simulation():
                 "error": f"模拟不存在: {simulation_id}"
             }), 404
         
+        from ..services.simulation_manager import validate_simulation_engine
+        from ..services.world_simulation.contracts import WorldError
+        requested_engine = validate_simulation_engine(data.get('simulation_engine', state.simulation_engine))
+        if requested_engine != state.simulation_engine:
+            return jsonify({"success": False, "error": "Engine mismatch with saved simulation"}), 409
+        if requested_engine == 'world-v1':
+            try:
+                if state.world_input_manifest_sha256:
+                    if data.get('force_regenerate'):
+                        raise WorldError('generation_exists', 'Prepared world is immutable; fork instead')
+                    manager.validate_prepared_simulation_config(simulation_id)
+                    return jsonify({"success": True, "data": {
+                        **state.to_dict(), "already_prepared": True}})
+                state = manager.prepare_world_simulation(
+                    simulation_id, raw_spec=data.get('world_spec'),
+                    research_report=data.get('research_report'),
+                    research_generation_id=data.get('research_generation_id'),
+                    research_engine=data.get('research_engine', 'v3'),
+                    actor_bundle=data.get('actors'), policy_spec=data.get('world_policy_spec'),
+                    ontology=data.get('ontology'),
+                    simulation_requirement=data.get('simulation_requirement', ''))
+                return jsonify({"success": True, "data": {
+                    **state.to_dict(), "already_prepared": False}})
+            except WorldError as exc:
+                return jsonify({"success": False, "error": str(exc), "code": exc.code}), 409
+
         # 检查是否强制重新生成
         force_regenerate = data.get('force_regenerate', False)
         logger.info(f"开始处理 /prepare 请求: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
@@ -667,11 +703,8 @@ def prepare_simulation():
         })
         
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 404
-        
+        return jsonify({"success": False, "error": str(e)}), 400
+
     except Exception as e:
         logger.error(f"启动准备任务失败: {str(e)}")
         return jsonify({
@@ -1577,6 +1610,25 @@ def start_simulation():
                 "error": f"模拟不存在: {simulation_id}"
             }), 404
 
+        prepared_engine = getattr(state, 'simulation_engine', 'oasis-legacy')
+        requested_engine = data.get('simulation_engine', prepared_engine)
+        if not isinstance(requested_engine, str) or requested_engine not in {'oasis-legacy', 'world-v1'}:
+            return jsonify({"success": False, "error": "Unsupported simulation_engine"}), 400
+        if requested_engine != prepared_engine:
+            return jsonify({
+                "success": False,
+                "error": f"Engine mismatch: requested {requested_engine}, prepared {prepared_engine}",
+            }), 409
+
+        if requested_engine == 'world-v1':
+            if force:
+                return jsonify({"success": False, "error": "World history is immutable; fork instead"}), 409
+            manager.validate_prepared_simulation_config(simulation_id)
+            run_state = SimulationRunner.start_simulation(
+                simulation_id=simulation_id, max_rounds=max_rounds,
+                enable_graph_memory_update=enable_graph_memory_update)
+            return jsonify({"success": True, "data": run_state.to_dict()})
+
         force_restarted = False
         
         # 智能处理状态：如果准备工作已完成，允许重新启动
@@ -1723,7 +1775,7 @@ def stop_simulation():
         # 更新模拟状态
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
-        if state:
+        if state and state.simulation_engine == "oasis-legacy":
             state.status = SimulationStatus.PAUSED
             manager._save_simulation_state(state)
         
@@ -2669,6 +2721,7 @@ def interview_agent():
             }), 400
         
         # 检查环境状态
+        SimulationRunner.require_interview_capability(simulation_id)
         if not SimulationRunner.check_env_alive(simulation_id):
             return jsonify({
                 "success": False,
@@ -2804,6 +2857,7 @@ def interview_agents_batch():
                 }), 400
 
         # 检查环境状态
+        SimulationRunner.require_interview_capability(simulation_id)
         if not SimulationRunner.check_env_alive(simulation_id):
             return jsonify({
                 "success": False,
@@ -2911,6 +2965,7 @@ def interview_all_agents():
             }), 400
 
         # 检查环境状态
+        SimulationRunner.require_interview_capability(simulation_id)
         if not SimulationRunner.check_env_alive(simulation_id):
             return jsonify({
                 "success": False,
@@ -3158,3 +3213,34 @@ def close_simulation_env():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@simulation_bp.route('/<simulation_id>/world', methods=['GET'])
+def get_world_result(simulation_id: str):
+    """Read a single committed revision; cursor conflicts require caller refresh."""
+    from ..services.world_simulation.contracts import WorldError
+    from ..services.world_simulation.results import read_result
+    from ..services.world_simulation.service import WorldSimulationService
+    try:
+        manager = SimulationManager()
+        # Read only the admission record here; the result reader below owns
+        # the sole committed revision snapshot for this response.
+        state = manager._load_simulation_state(simulation_id)
+        if state is None:
+            return jsonify({"success": False, "error": "Simulation not found"}), 404
+        if state.simulation_engine != 'world-v1':
+            return jsonify({"success": False, "error": "World view requires world-v1"}), 409
+        manager.validate_prepared_simulation_config(simulation_id)
+        round_arg = request.args.get('round')
+        result = read_result(
+            WorldSimulationService.directory(simulation_id, root=manager.SIMULATION_DATA_DIR),
+            view=request.args.get('view', 'public'), actor_id=request.args.get('actor_id'),
+            round_index=int(round_arg) if round_arg is not None else None,
+            revision=request.args.get('revision'))
+        return jsonify({"success": True, "data": result})
+    except WorldError as exc:
+        conflict = exc.code in {'stale_revision', 'input_binding_mismatch', 'missing_artifact',
+                                'result_binding_mismatch', 'world_incomplete'}
+        return jsonify({"success": False, "error": str(exc), "code": exc.code}), 409 if conflict else 400
+    except (ValueError, TypeError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400

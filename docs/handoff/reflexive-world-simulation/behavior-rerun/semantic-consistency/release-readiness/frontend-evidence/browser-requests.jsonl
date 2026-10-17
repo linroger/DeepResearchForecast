@@ -1,0 +1,8 @@
+{"method":"GET","path":"/api/research/preflight","query":{"mode":"full"},"body":null}
+{"method":"POST","path":"/api/research/run","query":{},"body":{"prompt":"Synthetic admission acceptance: explore a general market scenario.","mode":"full","depth":"deep"}}
+{"method":"GET","path":"/api/research/preflight","query":{"mode":"full","simulation_engine":"oasis-legacy"},"body":null}
+{"method":"POST","path":"/api/research/run","query":{},"body":{"prompt":"Synthetic admission acceptance: explore a general market scenario.","mode":"full","depth":"deep","max_rounds":4,"simulation_engine":"oasis-legacy"}}
+{"method":"GET","path":"/api/research/preflight","query":{"mode":"full","simulation_engine":"world-v1"},"body":null}
+{"method":"GET","path":"/api/research/preflight","query":{"mode":"full","simulation_engine":"world-v1"},"body":null}
+{"method":"GET","path":"/api/research/preflight","query":{"mode":"full","simulation_engine":"world-v1"},"body":null}
+{"method":"POST","path":"/api/research/run","query":{},"body":{"prompt":"Synthetic admission acceptance: explore a general market scenario.","mode":"full","depth":"deep","simulation_engine":"world-v1"}}

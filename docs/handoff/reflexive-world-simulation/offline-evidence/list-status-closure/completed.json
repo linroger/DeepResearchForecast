@@ -1,0 +1,29 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 62888,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/scripts/main_offline_pytest.py": "b2bd4469cdeb5f94097aafc5b81b0bf634fefd2fe1810dd3b3d0c0d42ff0a15b",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/tests/test_world_lifecycle.py": "fdd8f3848baf48b4324814918ee15f1d0ffec048673acc1229fb0d77f0ecef1d",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/tests/test_world_engine_admission.py": "eb770ea64b3535fc3abc330d8cc53de4125b4cfd7443b4701c8735981050dfb7",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/tests/test_sim_resume_reuse.py": "6f79e3736915e60917597fde72407a27dac067d976b5964cb0e4243964c4da2b",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/app/config.py": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source/backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

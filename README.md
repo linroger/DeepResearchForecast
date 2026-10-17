@@ -18,6 +18,18 @@ DeepAgentForecast is a forecasting engine that runs on your own machine. You typ
 
 The report is only served after it passes a strict citation and consistency audit. One dashboard shows every stage while it runs.
 
+### Reflexive world simulation (explicit opt-in)
+
+`simulation_engine: "world-v1"` adds a concrete world that evolves after each round: actors propose feasible actions, counterparties independently consent, and declared mechanisms update resources, projects, rules, coalitions and delayed obligations. Actors receive the resulting permitted state and their own action outcomes in the next round. Historical runs and the default engine remain `oasis-legacy` until the separate model-behavior release gate is accepted.
+
+World preparation accepts an explicit `world_spec`, or `world_policy_spec` for bounded automatic modeling from research and actor evidence. Every modeled quantity needs evidence or a labeled assumption. The HTTP policy pins provider, model, prices, input/output limits and a total run budget; opaque CLI transports are not admitted. Each decision slot has at most two durable actual requests across retries and resume. Fresh full-world requests validate configuration before research tasks or files are created. Supply the profile directly or set `WORLD_POLICY_SPEC_PATH` to a non-secret JSON file containing `policy`, `limits` and an optional safe `forecastEffect`. Missing configuration blocks launch; an explicit legacy-engine choice remains available.
+
+The simulation tab shows World, Decisions/Actions, Commitments and Assumptions with public, actor and analyst views. Reports consume one frozen result. `diagnostic_only` displays conditional pathways without changing evidence-only probability inputs; `no_update` omits world reasoning and plots. These are conditional simulations, not calibrated forecasts. See the [source-linked architecture and diagrams](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md), [executable contracts](docs/handoff/reflexive-world-simulation/implementation-contract.md) and [current verification/release status](docs/handoff/reflexive-world-simulation/handoff.md).
+
+Fresh world admission on this branch pins `policy.decisionReview: "actor-consistency-v4"`, `policy.responseFormat: "json_object"`, `policy.candidateRepair: "known-output-error-v1"` and a two-request slot limit. A candidate is followed by one reviewed final decision. Known candidate-format failures may use that unused second request; an invalid or unresolved final review cannot obtain a third request. V4 retains bounded, untrusted review fields in private audit receipts without turning them into actions, authority or forecast evidence. Historical v1/v2/v3 generations retain their original validation and recovery rules.
+
+The latest completed full behavior study remains at 16 of 18 required comparisons, so default promotion is still pending. Subsequent diagnostics preserved both structural failures and factual explanation errors; retaining more review data is not proof that it is correct. The [current release record](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md) and [v4 contract](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md) distinguish source verification from live acceptance. All prior results remain preserved. The evaluation authorization is USD40 total, including all spending carried forward from the original USD25 authorization.
+
 ```mermaid
 flowchart TB
     Q(["Your question"]):::io --> ROW1

@@ -23,6 +23,7 @@ from typing import Dict, Any, List, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 
 from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
@@ -42,6 +43,173 @@ from .zep_tools import (
 )
 
 logger = get_logger('mirofish.report_agent')
+
+
+def load_simulation_world(simulation_id: str) -> Optional[Dict[str, Any]]:
+    """Mandatory, read-only admission for saved world runs; absent pins mean legacy
+    only when no world artifacts exist. The service validates the saved input
+    byte pins before its call to results.load_frozen_result.
+    """
+    from .world_simulation.artifacts import file_digest, read_json
+    from .world_simulation.contracts import ENGINE, require
+    from .world_simulation.results import report_context
+    from .world_simulation.service import WorldSimulationService
+
+    directory = WorldSimulationService.directory(simulation_id)
+    state_path = directory / "state.json"
+    state = read_json(state_path) if state_path.exists() or state_path.is_symlink() else {}
+    engine = state.get("simulation_engine", "oasis-legacy")
+    require(engine in {"oasis-legacy", ENGINE}, "unsupported_engine", "Unknown saved simulation engine")
+    markers = ("world_spec.json", "world_input_manifest.json", "world.sqlite3",
+               "world_result.json", "world_result_manifest.json")
+    if engine != ENGINE:
+        require(not any((directory / name).exists() or (directory / name).is_symlink()
+                        for name in markers), "engine_mismatch", "World artifacts require their saved engine pin")
+        return None
+    result = WorldSimulationService.require_complete(simulation_id)
+    report_context(result)  # validates the pinned safe policy, including no_update
+    manifest = read_json(directory / "world_result_manifest.json")
+    result_bytes = (directory / "world_result.json").read_bytes()
+    manifest_bytes = (directory / "world_result_manifest.json").read_bytes()
+    require(json.loads(result_bytes) == result
+            and hashlib.sha256(result_bytes).hexdigest() == manifest["resultSha256"]
+            and json.loads(manifest_bytes) == manifest,
+            "result_binding_mismatch", "World export changed while being consumed")
+    reference = {"schemaVersion": "report-world-reference/v1", "engine": ENGINE,
+                 "simulationId": simulation_id, "generationId": result["generationId"],
+                 "revision": result["revision"], "specHash": result["specHash"],
+                 "forecastEffect": result["forecastEffect"], "resultSha256": manifest["resultSha256"],
+                 "manifestSha256": hashlib.sha256(manifest_bytes).hexdigest(),
+                 "inputManifestSha256": file_digest(directory / "world_input_manifest.json")}
+    return {"result": result, "manifest": manifest, "reference": reference,
+            "result_bytes": result_bytes, "manifest_bytes": manifest_bytes}
+
+
+def read_report_world(report_dir: str, *, metadata: Optional[dict] = None) -> Optional[Dict[str, Any]]:
+    """Check report-owned bytes against their reference AND the frozen producer.
+
+    Never copies, repairs, or substitutes latest projections on a read. This
+    boundary is shared by publication, chat, charts, translation and export.
+    """
+    from .world_simulation.artifacts import file_digest, read_json
+    from .world_simulation.contracts import ENGINE, require
+
+    folder = Path(report_dir)
+    if metadata is None:
+        metadata = read_json(folder / "meta.json") if (folder / "meta.json").exists() else {}
+    reference = metadata.get("world_result_ref")
+    names = ("world_result.json", "world_result_manifest.json", "world_result_ref.json")
+    present = any((folder / name).exists() or (folder / name).is_symlink() for name in names)
+    simulation_id = metadata.get("simulation_id")
+    current = load_simulation_world(simulation_id) if simulation_id else None
+    if not (present or reference or current or metadata.get("simulation_engine") == ENGINE):
+        return None
+    require(current is not None and metadata.get("simulation_engine") == ENGINE,
+            "result_binding_mismatch", "Report lost its saved world identity")
+    require(isinstance(reference, dict) and reference == current["reference"]
+            and read_json(folder / "world_result_ref.json") == reference,
+            "result_binding_mismatch", "Report references a different frozen world result")
+    require(file_digest(folder / "world_result.json") == reference["resultSha256"]
+            and file_digest(folder / "world_result_manifest.json") == reference["manifestSha256"],
+            "result_binding_mismatch", "Report-owned world bytes changed")
+    result = read_json(folder / "world_result.json")
+    manifest = read_json(folder / "world_result_manifest.json")
+    require(result == current["result"] and manifest == current["manifest"],
+            "result_binding_mismatch", "Report and simulation world results disagree")
+    viz_path = folder / "viz_manifest.json"
+    if viz_path.exists() or viz_path.is_symlink():
+        viz = read_json(viz_path)
+        require((viz.get("provenance") or {}).get("world_result_ref") == reference,
+                "result_binding_mismatch", "Chart manifest references a different world result")
+        for item in viz.get("items", []):
+            require(isinstance(item, dict), "invalid_chart_manifest", "Chart record must be an object")
+            hashes = item.get("artifact_sha256")
+            require(isinstance(hashes, dict) and item.get("path") in hashes,
+                    "invalid_chart_manifest", "World report chart lacks its byte seal")
+            require(not item.get("png_path") or item["png_path"] in hashes,
+                    "invalid_chart_manifest", "World report chart lacks its static companion seal")
+            for name, expected in hashes.items():
+                path = folder / name
+                require(isinstance(name, str) and name.startswith("charts/")
+                        and path.resolve().is_relative_to(folder.resolve() / "charts")
+                        and not any(parent.is_symlink() for parent in (path, *path.parents)
+                                    if parent != folder and folder in parent.parents)
+                        and file_digest(path) == expected,
+                        "result_binding_mismatch", "Report chart bytes changed")
+            if str(item["path"]).endswith(".html"):
+                from ..utils.chart_html import _PLOTLY_SRC_RE
+                html_path = folder / item["path"]
+                if _PLOTLY_SRC_RE.search(html_path.read_text(encoding="utf-8")):
+                    bundle = (Path(item["path"]).parent / "plotly.min.js").as_posix()
+                    require(bundle in hashes, "invalid_chart_manifest", "World chart script dependency is not sealed")
+    return {"result": result, "manifest": manifest, "reference": reference}
+
+
+def render_world_pathway(result: Dict[str, Any], *, chinese: bool = False) -> str:
+    """Exact public conditional trajectory, kept separate from observed evidence."""
+    from .world_simulation.results import report_context
+    if not report_context(result):
+        return ""
+    def cell(value):
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        return str(value).replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+    lines = ["## 条件世界路径" if chinese else "## Conditional world pathway", "",
+             ("以下为声明假设下的模拟路径，不是观察事实或经校准的概率预测。" if chinese else
+              "Simulated pathway under declared assumptions; not observed facts or a calibrated probability forecast."),
+             f"{result['asOf']} → {result['horizon']}",
+             (f"模拟：`{result['simulationId']}`；版本：`{result['revision']}`。" if chinese else
+              f"Simulation: `{result['simulationId']}`; revision: `{result['revision']}`."), "",
+             ("| 期末时间 (UTC) | 指标 | 数值 | 单位 | 依据 |" if chinese else
+              "| Period end (UTC) | Metric | Value | Unit | Basis |"), "|---|---|---|---|---|"]
+    for row in result["trajectory"]:
+        for key, metric in sorted(row["metrics"].items()):
+            value = metric.get("value")
+            lines.append("| " + " | ".join("`" + cell(v).replace("`", "&#96;") + "`" for v in (
+                row["simulatedAt"], key, "unknown" if value is None else value,
+                metric["unit"], metric["basis"])) + " |")
+    # Entire public records preserve causal IDs, exact effect values and pending
+    # obligations; nothing is normalized into scenario shares or inferred zero.
+    for title, records in (
+        ("因果事件" if chinese else "Causal events", result["events"]),
+        ("期末承诺" if chinese else "Commitments at horizon", result["world"]["commitments"]),
+        ("期末交互" if chinese else "Interactions at horizon", result["world"]["interactions"]),
+        ("规则与关系" if chinese else "Rules and relations", {k: result["world"][k] for k in ("rules", "relations")}),
+        ("假设" if chinese else "Assumptions", result["assumptions"]),
+    ):
+        # JSON fences retain decimal strings, timestamps and visibility/basis
+        # labels without interpreting model-produced strings as Markdown.
+        payload = json.dumps(records, ensure_ascii=False, sort_keys=True, indent=2).replace("`", "\\u0060")
+        lines.extend(["", "### " + title, "", "```json", payload, "```"])
+    return "\n".join(lines)
+
+
+def _world_appendix(pathway: str) -> str:
+    return "<!-- world-pathway:start -->\n" + pathway + "\n<!-- world-pathway:end -->" if pathway else ""
+
+
+def _insert_world_appendix(markdown: str, pathway: str) -> str:
+    if not pathway:
+        return markdown
+    block = _world_appendix(pathway)
+    reference = next((h for h in _REFS_HEADINGS if h in markdown), None)
+    if reference:
+        before, after = markdown.split(reference, 1)
+        return before.rstrip() + "\n\n" + block + "\n\n" + reference + after
+    return markdown.rstrip() + "\n\n" + block + "\n"
+
+
+def _world_prose(markdown: str, pathway: str) -> str:
+    """Exclude only the exact validated deterministic appendix from prose audits."""
+    from .world_simulation.contracts import require
+    block = _world_appendix(pathway)
+    if not block:
+        require("<!-- world-pathway:" not in markdown, "world_policy_mismatch",
+                "no_update report contains a world pathway")
+        return markdown
+    require(markdown.count(block) == 1 and markdown.count("<!-- world-pathway:") == 2,
+            "result_binding_mismatch", "Report pathway differs from its frozen world result")
+    return markdown.replace(block, "").replace("\n\n\n", "\n\n")
 
 # EXECPLAN2 F-7-1: 并发报告生成时，每份报告的 console_log.txt 此前都挂在进程级共享 logger
 # （'mirofish.report_agent' / 'mirofish.zep_tools'）上，导致两份报告的日志互相串扰，且 handler
@@ -565,6 +733,8 @@ class Report:
     # 仅在 REPORT_BILINGUAL 开启且成功翻译时填充；否则为 None，to_dict 输出与历史完全一致
     # （向后兼容，旧 reader 不受影响）。
     translations: Optional[List[Dict[str, Any]]] = None
+    simulation_engine: Optional[str] = None
+    world_result_ref: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {
@@ -592,6 +762,9 @@ class Report:
         # BILINGUAL：仅在有翻译版本时附加 translations 键（向后兼容，旧报告无此键）
         if self.translations is not None:
             d["translations"] = self.translations
+        if self.simulation_engine is not None:
+            d["simulation_engine"] = self.simulation_engine
+            d["world_result_ref"] = self.world_result_ref
         return d
 
 
@@ -2239,6 +2412,9 @@ class ReportAgent:
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
+        # Admission precedes all model/tool construction. No optional constructor
+        # keyword can bypass the persisted engine or its mandatory frozen result.
+        self._world_binding = load_simulation_world(simulation_id)
 
         # T4.1: 钉入研究档案。背景块 + 来源索引在构造时一次性渲染，规划与每个章节复用。
         self.situation_brief = situation_brief or ""
@@ -2303,6 +2479,7 @@ class ReportAgent:
         # 引用最终化 / 悬空修复 / 解析度审计解析同一套编号（单一事实源）。
         self._sources_index, self._citation_index = self._build_sources_index()
         self._data_pack = self._build_data_pack()
+        self._world_probability_input = self._build_world_probability_input()
         # EXECPLAN2 I-3-2: 模拟量化信号包（确定性接地下限），懒构建一次后缓存；
         # 关闭 REPORT_SIGNAL_PACK 时始终为空串，_prepend_research_background 自动跳过（行为不变）。
         self._signal_pack = ""
@@ -2331,7 +2508,7 @@ class ReportAgent:
         self._outline_summary = ""
 
         self.llm = llm_client or LLMClient()
-        self.zep_tools = zep_tools or ZepToolsService()
+        self.zep_tools = zep_tools if self._world_binding else (zep_tools or ZepToolsService())
         
         # 工具定义
         self.tools = self._define_tools()
@@ -2366,6 +2543,69 @@ class ReportAgent:
             pass
 
         logger.info(f"ReportAgent 初始化完成: graph_id={graph_id}, simulation_id={simulation_id}")
+
+    def _verify_world(self, report_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        binding = getattr(self, "_world_binding", None)
+        if not binding:
+            return None
+        from .world_simulation.contracts import require
+        current = load_simulation_world(self.simulation_id)
+        require(current is not None and current["reference"] == binding["reference"],
+                "result_binding_mismatch", "World changed after report construction")
+        if report_id:
+            owned = ReportManager.load_world_result(report_id)
+            require(owned is not None and owned["reference"] == binding["reference"],
+                    "result_binding_mismatch", "Report and agent world references disagree")
+        return binding
+
+    def _bind_world_report(self, report: "Report") -> None:
+        binding = self._verify_world()
+        if not binding:
+            return
+        folder = Path(ReportManager._get_report_folder(report.report_id))
+        report.simulation_engine = "world-v1"
+        report.world_result_ref = dict(binding["reference"])
+        # A retry may verify an existing binding, but cannot overwrite corruption.
+        names = ("world_result.json", "world_result_manifest.json", "world_result_ref.json")
+        if any((folder / name).exists() or (folder / name).is_symlink() for name in names):
+            read_report_world(str(folder), metadata=report.to_dict())
+            return
+        write_text_atomic(str(folder / names[0]), binding["result_bytes"].decode("utf-8"))
+        write_text_atomic(str(folder / names[1]), binding["manifest_bytes"].decode("utf-8"))
+        write_json_atomic(str(folder / names[2]), report.world_result_ref)
+
+    def _build_world_probability_input(self) -> str:
+        if not getattr(self, "_world_binding", None):
+            return ""
+        from ..utils.actors import forecast_inputs_block
+        evidence = {"research_report": self.research_report, "situation_brief": self.situation_brief,
+                    "forecast_inputs": forecast_inputs_block(self.actors) if self.actors else "",
+                    "official_data": self.official_data}
+        if not any(evidence.values()):
+            return ""
+        return json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    def _probability_source(self, legacy_prose: str) -> str:
+        if not getattr(self, "_world_binding", None):
+            return legacy_prose
+        from .world_simulation.contracts import require
+        self._verify_world()
+        source = self._world_probability_input
+        require(bool(source), "forecast_evidence_unavailable",
+                "World forecast requires external research evidence; simulated report prose is inadmissible")
+        return source
+
+    def _simulation_forecast_effect(self) -> str:
+        binding = getattr(self, "_world_binding", None)
+        if binding:
+            return binding["result"]["forecastEffect"]
+        return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+                   or "diagnostic_only").strip().lower()
+
+    def _world_pathway(self) -> str:
+        binding = self._verify_world()
+        chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
+        return render_world_pathway(binding["result"], chinese=chinese) if binding else ""
 
     def _interview_env_alive(self) -> bool:
         """探活 OASIS 模拟 IPC 环境是否在线（interview_agents 的前置依赖）。
@@ -3716,8 +3956,13 @@ class ReportAgent:
         # Foglamp WP1 (1D, I-11/I-16)：SIMULATION_FORECAST_EFFECT=no_update 时整包自抑制
         # （连诊断散文也不注入）。默认 diagnostic_only：允许作为「显式标注模拟来源」的
         # 诊断分析进入章节散文，但绝不进入概率生成路径（见 _derive_and_pin_forecast_spine）。
-        _effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
-                      or "diagnostic_only").strip().lower()
+        if getattr(self, "_world_binding", None):
+            # Diagnostic output is appended deterministically after all prose
+            # repair/synthesis. Feeding it into general chapters would let legacy
+            # editorial rules turn simulated quantities into observed claims.
+            self._verify_world()
+            return ""
+        _effect = self._simulation_forecast_effect()
         if _effect == "no_update":
             return ""
         parts: List[str] = []
@@ -4009,6 +4254,8 @@ class ReportAgent:
     def _temporal_horizon_date(self) -> str:
         """日历模式的判定日 horizon_date（轨迹 v3 优先，其次 simulation_config 的
         temporal_config）；hours 模式/无产物 → ""（调用方回退旧行为，degrade-safe）。"""
+        if getattr(self, "_world_binding", None):
+            return self._world_binding["result"]["horizon"][:10]
         try:
             sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
                                    str(self.simulation_id or ""))
@@ -4329,8 +4576,9 @@ class ReportAgent:
             # **不得进入概率生成输入**——研究先验已经播种了 WorldState，再喂回骨架就是同一
             # 意见走两条路径被数成两份独立证据（circular corroboration）。仅
             # legacy_prompt（特征化 fixture 专用）保留旧行为，运行期显式告警。
-            _sim_effect = str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
-                              or "diagnostic_only").strip().lower()
+            if getattr(self, "_world_binding", None):
+                forecast_inputs = self._probability_source("")  # clean evidence even without an actor spine
+            _sim_effect = self._simulation_forecast_effect()
             if _sim_effect == "legacy_prompt":
                 logger.warning(
                     "SIMULATION_FORECAST_EFFECT=legacy_prompt：模拟信号包将直接进入概率生成"
@@ -4440,11 +4688,13 @@ class ReportAgent:
         from .forecast_extractor import (
             extract_structured_forecast, audit_citation_grounding, self_critique_forecast,
         )
+        if getattr(self, "_world_binding", None):
+            self._probability_source("")
         if self._forecast_spine and self._forecast_spine.get("scenarios"):
             forecast = dict(self._forecast_spine)        # 骨架已由信号驱动且 MECE
         else:
             forecast = extract_structured_forecast(
-                report_markdown, self.llm,
+                self._probability_source(report_markdown), self.llm,
                 situation_brief=getattr(self, "situation_brief", None),
                 language=getattr(self, "output_language", None) or "",
                 **self._official_pack_kwargs(),
@@ -4529,7 +4779,7 @@ class ReportAgent:
                 )
                 _lang = (getattr(self, "output_language", None)
                          or getattr(Config, "DEERFLOW_RESEARCH_LANGUAGE", None) or "English")
-                _bsrc = self.research_report or report_markdown or ""
+                _bsrc = self._probability_source(self.research_report or report_markdown or "")
                 # RPT-6: 主题从配置/需求书派生，不再由抽取器硬编码 Bridgewater 三元组。
                 _themes = getattr(Config, "FORECAST_BINARY_THEMES", None)
                 if isinstance(_themes, str):
@@ -4544,12 +4794,15 @@ class ReportAgent:
                         _themes = None
                 # XRUN-1(b): 注入模拟量化信号包（缺失时为骨架单独构建一次），让 Part-1 概率
                 # 对模拟敏感——两次不同模拟产出逐字节相同的概率向量即证明此前模拟被完全忽略。
-                _sig = self._signal_pack
-                if not _sig and getattr(Config, "FORECAST_SIM_SENSITIVITY", True):
+                _sig = "" if getattr(self, "_world_binding", None) else self._signal_pack
+                if (not getattr(self, "_world_binding", None)
+                        and not _sig and getattr(Config, "FORECAST_SIM_SENSITIVITY", True)):
                     try:
                         _sig = self._build_signal_pack()
                     except Exception:  # noqa: BLE001
                         _sig = ""
+                if getattr(self, "_world_binding", None):
+                    _sig = ""  # pinned safe policy; ambient extractor config cannot admit simulation
                 # PM-3：二元预测抽取前对已缓存快照再重报价一次，使 market_anchor 用现价
                 # （报告成稿到抽取之间市场会漂移）。就地刷新 _prediction_markets + _market_pack；
                 # 无缓存/未开/失败 → 原样（degrade-safe，_refresh_market_prices_for_extraction 内部兜底）。
@@ -4671,7 +4924,7 @@ class ReportAgent:
             pass
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True):
+        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
             _cs: Dict[str, Any] = {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
             try:
                 from .forecast_ledger import calibration_summary as _cal
@@ -4701,7 +4954,7 @@ class ReportAgent:
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
         # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True):
+        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
             try:
                 from .forecast_ledger import append_forecast as _append
                 _append(forecast, report_id=report_id,
@@ -8044,10 +8297,15 @@ class ReportAgent:
             for row in marker_rows if isinstance(row, dict) and row.get("tag")
         }
 
-        source_body, source_refs, _source_heading = self._translation_reference_parts(source_md)
-        variant_body, variant_refs, variant_heading = self._translation_reference_parts(variant_md)
-        source_markers = self._translation_marker_multiset(source_md)
-        variant_markers = self._translation_marker_multiset(variant_md)
+        world = ReportManager.load_world_result(report_id)
+        source_prose = (_world_prose(source_md, render_world_pathway(world["result"], chinese=source_lang == "zh"))
+                        if world else source_md)
+        variant_prose = (_world_prose(variant_md, render_world_pathway(world["result"], chinese=target_lang == "zh"))
+                         if world else variant_md)
+        source_body, source_refs, _source_heading = self._translation_reference_parts(source_prose)
+        variant_body, variant_refs, variant_heading = self._translation_reference_parts(variant_prose)
+        source_markers = self._translation_marker_multiset(source_prose)
+        variant_markers = self._translation_marker_multiset(variant_prose)
         source_body_markers = self._translation_marker_multiset(source_body)
         variant_body_markers = self._translation_marker_multiset(variant_body)
 
@@ -8287,6 +8545,10 @@ class ReportAgent:
                 "disclosed_lines": disclosed_lines,
                 "undisclosed_lines": contamination,
             }
+        world = ReportManager.load_world_result(report_id)
+        if world:
+            audit["world_result_ref"] = world["reference"]
+            citations_payload["world_result_ref"] = world["reference"]
         return audit, citations_payload
 
     @staticmethod
@@ -9407,6 +9669,7 @@ class ReportAgent:
         ``keep_existing_on_failure`` (regenerating a published variant): a rejected
         attempt leaves the published variant and its audit untouched.
         """
+        world = ReportManager.load_world_result(report_id)
         with LLMCache.bypass(), llm_call_timeout(
             getattr(Config, "REPORT_TRANSLATION_CALL_TIMEOUT_S", 240)
         ):
@@ -9425,6 +9688,10 @@ class ReportAgent:
                         except Exception as exc:  # noqa: BLE001 — observability only
                             logger.warning("双语报告进度回调失败（忽略）: %s", exc)
                     dashboards.join()
+        if world:
+            from .world_simulation.contracts import require
+            require(ReportManager.load_world_result(report_id) == world,
+                    "result_binding_mismatch", "World reference changed during translation")
 
     def _start_dashboard_localization(
         self, report_id: str, report: "Report"
@@ -9511,7 +9778,10 @@ class ReportAgent:
 
         _progress(1, "translation initialized")
 
-        chunks = self._split_markdown_h2_sections(md)
+        world = ReportManager.load_world_result(report_id)
+        translation_md = (_world_prose(md, render_world_pathway(world["result"], chinese=src_code == "zh"))
+                          if world else md)
+        chunks = self._split_markdown_h2_sections(translation_md)
         if not chunks:
             return
         translated, citation_drift = self._translate_chunks_with_integrity(
@@ -9585,6 +9855,10 @@ class ReportAgent:
         translated_md = self._lint_variant_to_audit_fixed_point(
             translated_md, lint_lang, lint_spine
         )
+
+        if world:
+            translated_md = _insert_world_appendix(
+                translated_md, render_world_pathway(world["result"], chinese=target_is_cjk))
 
         primary_citations: Dict[str, Any] = {}
         try:
@@ -10481,7 +10755,9 @@ class ReportAgent:
         # Audit forecast claims without letting the deterministic References
         # appendix inflate citation coverage.  Marker integrity still scans the
         # complete published document below.
-        chunks = self._split_markdown_h2_sections(md)
+        world = self._verify_world(report_id)
+        audit_md = _world_prose(md, self._world_pathway()) if world else md
+        chunks = self._split_markdown_h2_sections(audit_md)
         reference_chunks = [
             chunk for chunk in chunks
             if chunk.split("\n", 1)[0].strip() in _REFS_HEADINGS
@@ -10503,7 +10779,7 @@ class ReportAgent:
             exclude_authored_forecasts=True,
         )
         body_marker_audit = _vcm(body, index_map)
-        marker_audit = _vcm(md, index_map)
+        marker_audit = _vcm(audit_md, index_map)
         semantic_citation_audit = self._audit_semantic_citations(body, index_map)
         citation_artifacts = self._audit_final_citation_artifacts(
             folder,
@@ -10550,7 +10826,7 @@ class ReportAgent:
         stat_audit = self._audit_stat_plausibility(body)
         lang = getattr(self, "output_language", None) or "English"
         _candidate_cleaned, lint_audit = _rl.lint_report(
-            md,
+            audit_md,
             lang,
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
@@ -10561,7 +10837,7 @@ class ReportAgent:
             # above and keeps publisher names/units verbatim in any language.
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
                 "\n".join("" if self._official_canonical_line(line) else line
-                          for line in md.split("\n")), lang)
+                          for line in audit_md.split("\n")), lang)
 
         audit: Dict[str, Any] = {
             "schema_version": 2,
@@ -10647,6 +10923,10 @@ class ReportAgent:
             ).hexdigest()
             self._forecast_spine = forecast
 
+        world = self._verify_world(report_id)
+        if world:
+            audit["world_result_ref"] = world["reference"]
+            audit["world_viz_sha256"] = ReportManager._sha256_file(os.path.join(folder, "viz_manifest.json"))
         write_json_atomic(
             os.path.join(folder, "final_audit.json"), audit, allow_nan=False
         )
@@ -10822,7 +11102,8 @@ class ReportAgent:
             parts.append("[Prediction market signals]\n" + str(mp))
         if getattr(self, "_data_pack", ""):
             parts.append(self._data_pack)
-        key_points = self._section_key_points(report_markdown)
+        key_points = (self._probability_source("") if getattr(self, "_world_binding", None)
+                      else self._section_key_points(report_markdown))
         if key_points:
             parts.append("[Section key points]\n" + key_points)
         if not parts:
@@ -10960,6 +11241,8 @@ class ReportAgent:
         try:
             manifest = ReportVisualizer().build_all(report_id, folder, artifacts)
         except Exception as _be:  # noqa: BLE001 — 生成失败不影响主报告
+            if getattr(self, "_world_binding", None):
+                raise
             logger.warning(f"ReportVisualizer.build_all 失败（忽略，成稿不含图区）: {_be}")
             return
         if not manifest:
@@ -11067,6 +11350,13 @@ class ReportAgent:
             arts["graph_priors"] = self.graph_priors
         if isinstance(getattr(self, "graph_priors_structural", None), dict) and self.graph_priors_structural:
             arts["graph_priors_structural"] = self.graph_priors_structural
+        # World runs consume only the report-owned public result; no legacy
+        # mutable latest trajectory may enter charts or comparisons.
+        world = self._verify_world(report_id)
+        if world:
+            arts["world_result"] = world["result"]
+            arts["world_result_ref"] = world["reference"]
+            return arts
         # world_state_trajectory.json（决策通道产物，模拟数据目录）
         try:
             wst_path = os.path.join(
@@ -11259,7 +11549,7 @@ class ReportAgent:
             if not code:
                 return ""
             return f"{marker}\n**{cap}**\n\n{code}"
-        if vtype == "png":
+        if vtype in {"png", "svg"}:
             return f"{marker}\n![{cap}]({path})\n\n*{cap}*"
         if vtype == "html":
             link_txt = "交互版" if zh else "interactive version"
@@ -11685,6 +11975,16 @@ class ReportAgent:
                 "description": "反事实对比：基线模拟 vs 当前情景模拟的结构化差异（总动作量/峰值轮次/逐轮 delta/Top-actor 活跃度 delta）。撰写『情景对比』章节时必须调用，引用具体差值。",
                 "parameters": {}
             }
+        if getattr(self, "_world_binding", None):
+            # World report reasoning uses its admitted research and frozen public
+            # result. Graph-backed tools can include legacy simulated statements
+            # and interviews can write to the observed graph.
+            tools = {"research_evidence": {"name": "research_evidence", "parameters": {},
+                     "description": "Read the admitted external research evidence for this report."}}
+            if (getattr(self, "_world_chat_mode", False)
+                    and self._simulation_forecast_effect() == "diagnostic_only"):
+                tools["world_pathway"] = {"name": "world_pathway", "parameters": {},
+                    "description": "Read the frozen conditional world pathway, exact dated metrics, events and pending obligations. Simulated; never probability evidence."}
         return tools
 
     def _execute_tool(self, tool_name: str, parameters: Dict[str, Any], report_context: str = "") -> str:
@@ -11700,7 +12000,13 @@ class ReportAgent:
             工具执行结果（文本格式）
         """
         logger.info(f"执行工具: {tool_name}, 参数: {parameters}")
-        
+        if getattr(self, "_world_binding", None):
+            self._verify_world(getattr(self, "_active_report_id", None))
+            if tool_name == "research_evidence":
+                return self._world_probability_input or "External research evidence is unavailable."
+            if tool_name == "world_pathway":
+                return self._world_pathway() if getattr(self, "_world_chat_mode", False) else ""
+            return "Unsupported for world-v1; use admitted research evidence or its pinned conditional pathway."
         try:
             if tool_name == "insight_forge":
                 query = parameters.get("query", "")
@@ -12030,7 +12336,8 @@ class ReportAgent:
         _sq = self._compact_retrieval_query()
         if _sq and _sq != self.simulation_requirement:
             _ctx_kwargs["search_query"] = _sq
-        context = self.zep_tools.get_simulation_context(**_ctx_kwargs)
+        world = self._verify_world(getattr(self, "_active_report_id", None))
+        context = {} if world else self.zep_tools.get_simulation_context(**_ctx_kwargs)
         
         if progress_callback:
             progress_callback("planning", 30, "正在生成报告大纲...")
@@ -12053,7 +12360,7 @@ class ReportAgent:
         sweeps = []
         try:
             # XRUN-5: 全局扫描的 query 用紧凑查询（整段需求书会被钳制到只剩引言句）。
-            forge = self.zep_tools.insight_forge(
+            forge = "" if world else self.zep_tools.insight_forge(
                 graph_id=self.graph_id,
                 query=self._compact_retrieval_query(),
                 simulation_requirement=self.simulation_requirement,
@@ -12065,7 +12372,7 @@ class ReportAgent:
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
         try:
-            outcomes = self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+            outcomes = "" if world else self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
             if outcomes:
                 # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
                 # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
@@ -12081,7 +12388,7 @@ class ReportAgent:
             user_prompt = user_prompt + "\n\n" + "\n\n".join(sweeps)
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
-        if self.base_simulation_id:
+        if self.base_simulation_id and not world:
             try:
                 diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff_text:
@@ -13457,6 +13764,9 @@ class ReportAgent:
         # 如果没有传入 report_id，则自动生成
         if not report_id:
             report_id = f"report_{uuid.uuid4().hex[:12]}"
+        if getattr(self, "_world_binding", None):
+            self._world_chat_mode = False
+            self.tools = self._define_tools()
         self._active_report_id = report_id
         start_time = datetime.now()
         
@@ -13496,6 +13806,7 @@ class ReportAgent:
         try:
             # 初始化：创建报告文件夹并保存初始状态
             ReportManager._ensure_report_folder(report_id)
+            self._bind_world_report(report)
             # RPT-12 (fix contract §1.7): keep the exact stored carrier with the report.
             if getattr(self, "official_data", None):
                 self._persist_official_data(report_id)
@@ -13846,6 +14157,8 @@ class ReportAgent:
                     try:
                         self._inject_visualizations(report_id, report)
                     except Exception as _viz_err:  # noqa: BLE001
+                        if getattr(self, "_world_binding", None):
+                            raise
                         logger.warning(f"报告可视化注入失败（忽略，成稿不含图区）: {_viz_err}")
                 # B2: 三部结构骨架——Part 1（二元预测表）之后插入 Part 2「框架与综合」
                 # （一次 LLM 紧凑综合），再以 Part 3「附录：详细分析」标题包住既有章节。
@@ -13869,6 +14182,11 @@ class ReportAgent:
                         self._apply_language_purity(report_id, report)
                     except Exception as _lp_err:  # noqa: BLE001
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
+
+            if (getattr(self, "_world_binding", None)
+                    and not getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
+                    and getattr(Config, "REPORT_VISUALIZATIONS", True)):
+                self._inject_visualizations(report_id, report)
 
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
@@ -13896,6 +14214,11 @@ class ReportAgent:
                     max_passes=int(os.environ.get(
                         "REPORT_PUBLISH_STABILIZER_PASSES", "6") or "6"),
                 )
+
+            # Preserve exact public facts after prose rewriting, before the seal.
+            if self._verify_world(report_id):
+                report.markdown_content = _insert_world_appendix(report.markdown_content, self._world_pathway())
+                write_text_atomic(ReportManager._get_report_markdown_path(report_id), report.markdown_content)
 
             # LOOP-010: authoritative, read-only audit of the exact publishable
             # Markdown.  Nothing below mutates the main report (bilingual output is
@@ -13984,6 +14307,7 @@ class ReportAgent:
                 )
 
             # 保存最终报告
+            self._verify_world(report_id)
             # XRUN-7: 终态 progress.json 如实记账——占位符章节单列 failed_sections（并从
             # completed_sections 剔除），附 forecast.json 是否产出；status 语义保持不变。
             _forecast_ok = os.path.exists(
@@ -14074,6 +14398,15 @@ class ReportAgent:
             }
         """
         logger.info(f"Report Agent对话: {message[:50]}...")
+        world = self._verify_world()
+        if world:
+            self._world_chat_mode = True
+            self.tools = self._define_tools()
+            # Keep mandatory integrity failures outside legacy best-effort chat
+            # context handling, including its cached-report path.
+            saved = self._resolve_report_cached()
+            if saved:
+                self._verify_world(saved.report_id)
         
         chat_history = chat_history or []
         
@@ -14095,6 +14428,10 @@ class ReportAgent:
             report_content=report_content if report_content else "（暂无报告）",
             tools_description=self._get_tools_description(),
         )
+        if world:
+            system_prompt += "\n\n" + self._world_pathway()
+            system_prompt += ("\nWorld quantities are conditional simulated outputs under the declared assumptions. "
+                              "Preserve this attribution in every answer; never infer or revise probabilities from them.")
         # RPT-14: questions about the indicators are answered from the stored
         # observations (the pack is empty, and the prompt unchanged, without data).
         if getattr(self, "_data_pack", ""):
@@ -14247,6 +14584,10 @@ class ReportManager:
     OFFICIAL_DATA_FILENAME = "official_data.json"
 
     @classmethod
+    def load_world_result(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        return read_report_world(cls._get_report_folder(report_id))
+
+    @classmethod
     def save_official_data(cls, report_id: str, official_data: Dict[str, Any], *,
                            source_tags: Dict[str, str],
                            research_binding: Optional[Dict[str, Any]] = None) -> None:
@@ -14289,6 +14630,7 @@ class ReportManager:
         cls, report_id: str
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """``load_structured_forecast`` plus the sealed SHA-256 of forecast.json."""
+        cls.load_world_result(report_id)
         audit_path = cls._get_report_final_audit_path(report_id)
         try:
             with open(audit_path, encoding="utf-8") as handle:
@@ -14837,6 +15179,11 @@ class ReportManager:
             return result
         if not isinstance(meta, dict) or meta.get("status") != ReportStatus.COMPLETED.value:
             result["reasons"].append("report status is not completed")
+        try:
+            world = read_report_world(cls._get_report_folder(report_id), metadata=meta)
+        except (ValueError, OSError, KeyError) as exc:
+            result["reasons"].append(f"world result integrity failed: {exc}")
+            return result
         failed_sections = list(meta.get("failed_sections") or [])
         if failed_sections or meta.get("partial"):
             result["reasons"].append("report contains failed or partial sections")
@@ -14883,6 +15230,11 @@ class ReportManager:
             result["reasons"].append("final audit contains hard issues")
         if audit.get("markdown_sha256") != markdown_sha:
             result["reasons"].append("final audit fingerprint does not match Markdown")
+        if world and audit.get("world_result_ref") != world["reference"]:
+            result["reasons"].append("final audit world reference does not match report")
+        if world and not lang and audit.get("world_viz_sha256") != cls._sha256_file(
+                os.path.join(cls._get_report_folder(report_id), "viz_manifest.json")):
+            result["reasons"].append("final audit chart manifest fingerprint does not match report")
         gate = audit.get("publish_gate") or {}
         if gate.get("enabled") and gate.get("passed") is not True:
             result["reasons"].append("professional publication gate did not pass")
@@ -15105,6 +15457,7 @@ class ReportManager:
     def _pdf_input_fingerprint(
         cls, report_id: str, lang: Optional[str], md_path: str, folder: str
     ) -> Dict[str, Any]:
+        world = cls.load_world_result(report_id)
         audit_path = cls._get_report_final_audit_path(report_id, lang)
         citations_path = cls._get_report_citations_path(report_id, lang)
         charts_dir = os.path.realpath(os.path.join(folder, "charts"))
@@ -15140,6 +15493,7 @@ class ReportManager:
                 os.path.join(folder, "viz_manifest.json")
             ),
             "chart_assets": chart_rows,
+            **({"world_result_ref": world["reference"]} if world else {}),
             "renderer": cls._pdf_renderer_fingerprint(),
         }
 
@@ -16686,6 +17040,8 @@ class ReportManager:
         # EXECPLAN2 F-7-3: 非报告结构（如索引/旧版无关 JSON）容错，返回 None 而非抛错
         if not isinstance(data, dict) or 'report_id' not in data or 'simulation_id' not in data:
             return None
+        if data.get("status") == ReportStatus.COMPLETED.value:
+            read_report_world(cls._get_report_folder(report_id), metadata=data)
 
         # 重建Report对象
         outline = None
@@ -16726,7 +17082,9 @@ class ReportManager:
             # 部分完成信息：从 meta.json 还原失败章节标题列表（旧报告无此键 → 空列表，partial=False）
             failed_sections=data.get('failed_sections') or [],
             telemetry=data.get('telemetry'),  # EXECPLAN2 I-5-4: 从 meta.json 还原紧凑遥测，经 API 暴露
-            translations=data.get('translations')  # BILINGUAL：从 meta.json 还原双语版本清单
+            translations=data.get('translations'),  # BILINGUAL：从 meta.json 还原双语版本清单
+            simulation_engine=data.get('simulation_engine'),
+            world_result_ref=data.get('world_result_ref'),
         )
     
     @classmethod
@@ -16764,12 +17122,18 @@ class ReportManager:
             item_path = os.path.join(cls.REPORTS_DIR, item)
             # 新格式：文件夹
             if os.path.isdir(item_path):
+                meta = cls._read_report_meta(item)
+                if not meta or meta.get("simulation_id") != simulation_id:
+                    continue
                 report = cls.get_report(item)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
+                meta = cls._read_report_meta(report_id)
+                if not meta or meta.get("simulation_id") != simulation_id:
+                    continue
                 report = cls.get_report(report_id)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
@@ -16802,6 +17166,18 @@ class ReportManager:
         """列出报告"""
         cls._ensure_reports_dir()
         
+        from .world_simulation.contracts import WorldError
+
+        def load_candidate(report_id):
+            meta = cls._read_report_meta(report_id)
+            if simulation_id is not None and (not meta or meta.get("simulation_id") != simulation_id):
+                return None
+            try:
+                return cls.get_report(report_id)
+            except (WorldError, OSError, ValueError):
+                logger.warning("Invalid report omitted from enumeration: %s", report_id)
+                return None
+
         reports = []
         for item in os.listdir(cls.REPORTS_DIR):
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
@@ -16809,14 +17185,14 @@ class ReportManager:
             item_path = os.path.join(cls.REPORTS_DIR, item)
             # 新格式：文件夹
             if os.path.isdir(item_path):
-                report = cls.get_report(item)
+                report = load_candidate(item)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
                         reports.append(report)
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
-                report = cls.get_report(report_id)
+                report = load_candidate(report_id)
                 if report:
                     if simulation_id is None or report.simulation_id == simulation_id:
                         reports.append(report)

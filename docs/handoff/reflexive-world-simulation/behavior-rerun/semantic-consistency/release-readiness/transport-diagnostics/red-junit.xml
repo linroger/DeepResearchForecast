@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="3.319" timestamp="2026-10-17T22:28:18.199522" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_withheld_diagnostics" name="test_directed_transport_stop_uses_actual_journal_and_finishes_remaining_rows" time="1.055"><failure message="assert 12 == 3">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_directed_transport_stop_u0')
+
+    def test_directed_transport_stop_uses_actual_journal_and_finishes_remaining_rows(tmp_path):
+        from test_world_evaluation_launch import load_launcher
+    
+        config, manifest = admitted()
+        calls = []
+        original, clients = factory_for(manifest, calls, first_failure='transport')
+        root = tmp_path / 'run'
+        launcher = load_launcher()
+        def factory(spec):
+            if launcher.provider_failure_stop(root):
+                raise WorldError('provider_failure_stop', 'Stopped repeated transport failures')
+            return original(spec)
+        factory.evaluation_mode = 'external'
+        try:
+            report = replay.run_evaluation(root, factory, config)
+&gt;           assert len(calls) == report['attempts'] == 3
+E           assert 12 == 3
+
+backend/tests/test_world_withheld_diagnostics.py:179: AssertionError</failure></testcase><testcase classname="tests.test_world_evaluation_launch" name="test_explicit_additional_authorization_keeps_all_prior_consumption" time="0.042"><failure message="ValueError: Only the recorded active evaluation phase may dispatch">launch = (&lt;module 'world_evaluation_launch_fixture' from '/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transpor...T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_explicit_additional_autho0/new-v2', ...}]})
+
+    def test_explicit_additional_authorization_keeps_all_prior_consumption(launch):
+        module, repo, notes, offline, output, budget = launch
+        budget['authorizedUsd'] = '40'
+        budget['phases'][-1]['limitUsd'] = '30'
+        write(notes / 'live-budget.json', budget)
+        with pytest.raises(ValueError):
+            module.admit_launch(repo, notes, offline, output)
+        authorization = {'schemaVersion': 'world-evaluation-authorization/v1', 'originalAuthorizedUsd': '25',
+                         'totalAuthorizedUsd': '40', 'amendments': [
+                             {'previousTotalUsd': '25', 'additionalUsd': '15', 'newTotalUsd': '40',
+                              'confirmedUtc': '2026-10-17T14:25:00Z', 'userReply': 'Raise total ceiling to $40',
+                              'scope': 'Diagnostic and full release study, all prior exposure counted.'}]}
+        write(notes / 'evaluation-budget-authorization.json', authorization)
+&gt;       assert module.admit_launch(repo, notes, offline, output)['maximum'] == '30'
+
+backend/tests/test_world_evaluation_launch.py:218: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+repository = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_explicit_additional_autho0/source')
+notes = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_explicit_additional_autho0/source/notes')
+offline_run = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_explicit_additional_autho0/offline')
+output = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-red-20261017T142817Z-32vzipao/evidence/pytest-tmp/test_explicit_additional_autho0/new-v2')
+
+    def admit_launch(repository, notes, offline_run, output):
+        """Read-only admission against the global ledger and exact offline snapshot."""
+        approval = json.loads((notes / 'implementation-approval.json').read_text())
+        if approval.get('live_evaluation_max_usd') != '25.00':
+            raise ValueError('Expected explicit US$25 approval record')
+        completed = json.loads((offline_run / 'evidence/completed.json').read_text())
+        verified = json.loads((offline_run / 'verification-summary.json').read_text())
+        if completed['exit_code'] != 0 or not completed['shutdown_complete'] or verified['sourceDrift']:
+            raise ValueError('Offline release gate is incomplete')
+        frozen = json.loads((offline_run / 'source-manifest.json').read_text())
+        if not frozen:
+            raise ValueError('Offline source manifest is empty')
+        for name, expected in frozen.items():
+            if hashlib.sha256((repository / name).read_bytes()).hexdigest() != expected:
+                raise ValueError('Source changed after offline acceptance: ' + name)
+        destination = str(output.resolve())
+        budget = json.loads((notes / 'live-budget.json').read_text())
+        if budget.get('authorizedUsd') != '25' or destination != budget.get('activeOutput'):
+&gt;           raise ValueError('Only the recorded active evaluation phase may dispatch')
+E           ValueError: Only the recorded active evaluation phase may dispatch
+
+docs/handoff/reflexive-world-simulation/run_live_evaluation.py:36: ValueError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,13 @@
+{
+  "sessionId": 46428,
+  "output": "/private/tmp/drf-world-behavior-v2-20261016",
+  "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+  "status": "finished_exit_0",
+  "sourceFreeze": "No source/test/launcher/pricing edits until this batch finishes; resume monitoring, never relaunch into a new budget.",
+  "reviewers": {
+    "investment": "01a145b6-1094-74e3-b1be-c67cd7b50260",
+    "trade": "01a145c2-9a84-7070-bf66-1129a6fcd070",
+    "coalition": "01a145c2-9b3c-7171-9f1e-95de9e722f99"
+  },
+  "providerProcessActive": false
+}

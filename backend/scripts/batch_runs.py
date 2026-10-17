@@ -271,6 +271,10 @@ def fork_question(
     if PipelineManager.is_incompatible(base) is not None:
         raise RuntimeError(f"基础管线 {base_pipeline_id} 状态文件 schema 不兼容（请升级后端）")
     base_state = PipelineState.from_dict(base)
+    # This batch path has no world fork/manifest contract. Reject before child
+    # directories, tasks or state, including unpinned parents with world artifacts.
+    if PipelineOrchestrator._simulation_engine(base_state) != "oasis-legacy":
+        raise RuntimeError("Batch question forks support oasis-legacy only; world parents require a world scenario fork")
     if not base_state.graph_id:
         raise RuntimeError("基础管线尚未建图，无法分叉问题")
     if shared_simulation and not base_state.simulation_id:
@@ -298,6 +302,7 @@ def fork_question(
         new_state.stages[name] = st
 
     options: dict[str, Any] = {
+        "simulation_engine": "oasis-legacy",
         "base_pipeline_id": base_pipeline_id,
         "project_name": (base_state.options or {}).get("project_name"),
         # 透传研究语言/模型/深度，使 run.json 清单与锚点一致（纯记账，研究阶段已被跳过）。
@@ -449,6 +454,7 @@ def start_batch(
         max_rounds=max_rounds,
         language=language,
         model=model,
+        simulation_engine="oasis-legacy",  # batch children currently implement the legacy contract only
     )
     # 锚点 options 里也打上 batch_id（供前端把锚点与子问题归到一组）。
     try:

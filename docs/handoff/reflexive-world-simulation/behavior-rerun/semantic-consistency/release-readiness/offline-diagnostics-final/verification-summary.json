@@ -1,0 +1,21 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 536,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-closure-20261017T142247Z-ou76bvi3/evidence",
+    "-q",
+    "backend/tests/test_world_withheld_diagnostics.py",
+    "backend/tests/test_world_consistency_v2.py",
+    "-k",
+    "failed_atomic_diagnostic_write or v2_directed_preregistration"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-closure-20261017T142247Z-ou76bvi3/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-closure-20261017T142247Z-ou76bvi3/evidence"
+}

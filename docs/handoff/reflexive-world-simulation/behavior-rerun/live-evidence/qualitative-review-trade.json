@@ -1,0 +1,149 @@
+{
+  "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+  "reviews": [
+    {
+      "evaluationId": "m5-e2-trade-v1-s0-reflexive",
+      "traceHash": "ff28a60cf14ad1f22a68078feee29b04fcdd102eb8c98d8119b953251a1621cc",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Both focal rationales correctly implement recurring demand. Round-2 decision 15055c24dd075fecbbba954858394600 distinguishes the Jan-1 settled offer 323454d654715906abf03547cd029aa5 from the Jan-2 period, cites own cash 28 and A=true/B=true, and proposes order_a at 2 versus B at 3 with no current-period pending duplicate. Intent 99434bfb42ae51e299d3b70a86a373f1 is accepted; supplier_a consents to new offer 40391eeca19250cf93e1e8c839fe3282 and settlement brings cash to 26 and stock to 2. Round-3 decision c8fe0ac313bc51d1a5fa9cf2c7ee8c32 correctly sees A=false/B=true, treats both prior settlements as earlier-period demand, and proposes B at 3 with cash 26. Intent 3b98c8d8e6295214814685ece76ebbdb is accepted, followed by supplier_b consent and settlement. Both explanations correctly say they await consent rather than claiming proposal acceptance alone completes a purchase. Both focal message lists are empty; own consent/history is preserved and no hidden regulator commitment is needed. Physical transfers and authority checks pass. Automatic scores/comparisons are unchanged.",
+      "evidenceRefs": [
+        "15055c24dd075fecbbba954858394600",
+        "c8fe0ac313bc51d1a5fa9cf2c7ee8c32"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v1-s0-external-feedback-ablation",
+      "traceHash": "c7d031587ae3418813a93d14bdff858dc3cbdb1453648607066880eb4f7d2421",
+      "score": 0,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Material explanation/record disagreement at round 2: decision 15055c24dd075fecbbba954858394600 emits intents=[] and says the Jan-1 accepted/settled order satisfies the current period because periodEnd is Jan 3. Its actual observation starts Jan 2, ends Jan 3, and explicitly says earlier-period goods do not satisfy one additional good per decision period. Offer 323454d654715906abf03547cd029aa5 was created in round 1 and accepted, and commitment f2e9f06adab056abb153e939be430467 settled on Jan 1; there is no current-period pending order. Cash 28, stock 1, A=true and B=true do not justify this wait. Its claimed current-period fulfillment and expanded duplicate prohibition are materially false. No intents means no focal resolution; observedAction=null is an actual wait, not message projection. Round-3 decision c8fe0ac313bc51d1a5fa9cf2c7ee8c32 correctly distinguishes the old settlement from current demand and proposes order_a at 2 using observed A=true and cash 28. Intent 3b98c8d8e6295214814685ece76ebbdb is accepted as a proposal; supplier_a, seeing physical A=false, defers the new offer d779b2e342e854b3b707193f2625545a, so no round-3 delivery occurs. The latter explanation is grounded in the masked observation and does not fabricate consent. Both focal messages lists are empty; own history/consent are intact. Case score 0 follows the material round-2 explanation error, independently of unchanged automatic goal/consequence/comparison scores.",
+      "evidenceRefs": [
+        "15055c24dd075fecbbba954858394600",
+        "c8fe0ac313bc51d1a5fa9cf2c7ee8c32"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v1-s1-reflexive",
+      "traceHash": "719331071cc29d7d49338365ad7412f4d08c00e51396cdd604d035bfa2438f22",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision fb8a9e04f6755efa9af2642aa06a89e2 correctly identifies accepted offer 3cc3ffca7e9952b99b2b764400d67839 and settled commitment c37e6ef22acb5bc2b62971d8bd479789 as Jan-1 history, not fulfillment of the Jan-2 additional demand. Cash 28, A=true/B=true and prices 2/3 support its single order_a proposal, intent 3ce1d9371df957bf9666852559f636b9. Supplier_a then accepts new offer dd4935f6e3d35b2ea10e7d4ebc74249e and settlement leaves cash 26/stock 2. Round-3 decision be09467f486156b2ae4579502bdb349b accurately observes A=false/B=true, cash 26 and no current-period pending eligible order, and proposes order_b for 3. Its intent 23fd140c12585eb3b14529e98ed20cd1 receives an accepted resolution; supplier_b consents and the transfer settles. The explanations match actual intents and permitted observations, without claiming consent before it occurs. Nonbinding messages are absent at both focal times, while own history and immediate protocol are retained. No automated score is inferred or changed.",
+      "evidenceRefs": [
+        "fb8a9e04f6755efa9af2642aa06a89e2",
+        "be09467f486156b2ae4579502bdb349b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v1-s1-external-feedback-ablation",
+      "traceHash": "625a574f170275bb2a10488282e606cc0c4fea93bc2e94478d263ab5a2f23869",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision fb8a9e04f6755efa9af2642aa06a89e2 accurately treats Jan-1 settlement c37e6ef22acb5bc2b62971d8bd479789 as historical, cites cash 28 and prices A=2/B=3 with both eligible, and proposes a new order_a for current-period demand. Intent 3ce1d9371df957bf9666852559f636b9 is accepted, supplier_a consents to dd4935f6e3d35b2ea10e7d4ebc74249e, and cash/stock become 26/2. Round-3 decision be09467f486156b2ae4579502bdb349b accurately cites the MASKED observation A=true, no current-period pending order and cash 26, and proposes A for 2 subject to consent. Intent 23fd140c12585eb3b14529e98ed20cd1 is accepted as a proposal; supplier_a sees physical A=false and validly defers offer 7870a6a0b2d956a7b893ad10b303ff58. No round-3 transfer settles. That later deferral does not contradict the importer's contemporaneous explanation, which makes no unsupported consent/settlement claim. Both focal message lists are empty; own protocol remains intact. The score concerns explanation agreement, not physical route optimality under hidden information or a regraded action contrast.",
+      "evidenceRefs": [
+        "fb8a9e04f6755efa9af2642aa06a89e2",
+        "be09467f486156b2ae4579502bdb349b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v2-s0-reflexive",
+      "traceHash": "068b4e8d7b4922e705100941def713f5dda85b8d17dca3d1c567169553a90d46",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision ebfb041cee915b58b24f51fcb09fc2b7 correctly treats Jan-1 settled commitment f18d5324ba1e5cd5ad4f30f686459830 as past demand, cites cash 27, A=true/B=true and prices 3/4, and proposes a new order_a without a current-period pending duplicate. Intent 59d5e1244242511f882c3e243dbb4156 is accepted; supplier_a accepts f9ee3f27cf405e0b97e05a9895517b58 and the transfer leaves cash 24/stock 2. Round-3 decision 56bf82e08ff6518eb5ddf494bb658b1b accurately observes A=false, B=true and cash 24 and proposes order_b at 4 for the new period. Intent 256cccc34d3f59129ec3902703f07336 is accepted, followed by supplier_b consent and settlement. Both short rationales distinguish earlier receipts from current demand and proposals from completed purchases. Focal nonbinding messages are empty; own accounts, prior settlements and consent are preserved. The visible-rule reasoning, actual resolutions and authorized physical transfers agree; automated scores and paired comparisons remain untouched.",
+      "evidenceRefs": [
+        "ebfb041cee915b58b24f51fcb09fc2b7",
+        "56bf82e08ff6518eb5ddf494bb658b1b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v2-s0-external-feedback-ablation",
+      "traceHash": "6897c5e3a42d90871d25d9788571d8f0f8554ace61d1317ea110ae2e9f48a0b4",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision ebfb041cee915b58b24f51fcb09fc2b7 accurately cites the settled round-1 A purchase, cash 27, eligible A priced 3 versus B 4 and no current-period pending order; it proposes another A good for recurring demand. Intent 59d5e1244242511f882c3e243dbb4156 is accepted, supplier_a consents to f9ee3f27cf405e0b97e05a9895517b58 and cash/stock become 24/2. Round-3 decision 56bf82e08ff6518eb5ddf494bb658b1b accurately describes the MASKED actor observation A=true, own cash 24 and two historical settlements, and proposes order_a at 3 without claiming supplier consent. Intent 256cccc34d3f59129ec3902703f07336 receives an accepted proposal resolution. Supplier_a sees physical A=false and validly rejects offer 310abcdd9ed95037ba9724fe0966c4d5; cash/stock do not change in round 3. The supplier's reject intent is itself accepted, not a rejected engine action. Both focal messages lists are empty; retained protocol is intact. Later refusal is not information available at the focal choice and does not make the contemporaneous explanation inaccurate. No automatic score is regraded.",
+      "evidenceRefs": [
+        "ebfb041cee915b58b24f51fcb09fc2b7",
+        "56bf82e08ff6518eb5ddf494bb658b1b"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v2-s1-reflexive",
+      "traceHash": "e50e0445bd708ac0d610be767c616bce9b8a27e12a4cc9be3554ac423e602b05",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 8d1da79a6ee25bd59f10570e843c9301 correctly separates the prior accepted offer fffbc44d03be531cab590c32d04e3d44 and Jan-1 settlement 6a0b37f823475bb1b46df0f0f451a73d from current-period demand. Cash 27, A=true/B=true, prices 3/4 and no current pending offer support its order_a proposal. Intent a3ed679c3a6458b19c18d1d7153ab3fe is accepted; supplier_a accepts c82da705e6235f44a4cf7470eba98f56 and settlement yields cash 24/stock 2. Round-3 decision 2e16a096604d576b8477125974dd157d correctly sees A=false/B=true, recognizes that both A purchases are historical, and proposes B at 4 using available cash 24. Intent 9f824a309aa859979c89c7887b48524c is accepted, followed by supplier_b consent and the authorized transfer. Both explanations match their precise period, permitted record and action. Focal messages are empty and own protocol is unchanged; no automated comparison is altered.",
+      "evidenceRefs": [
+        "8d1da79a6ee25bd59f10570e843c9301",
+        "2e16a096604d576b8477125974dd157d"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v2-s1-external-feedback-ablation",
+      "traceHash": "9d69ebee100aae3b8cc88b264805875091e3554a73425f4a2fbe00bbccb3ad06",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 8d1da79a6ee25bd59f10570e843c9301 accurately states that the prior A purchase is settled historical demand, A=3 is cheaper than B=4 with both visible eligible, cash is 27, and no current pending order exists. Its order_a intent a3ed679c3a6458b19c18d1d7153ab3fe is accepted; supplier_a consents to c82da705e6235f44a4cf7470eba98f56 and settlement leaves cash 24/stock 2. Round-3 decision 2e16a096604d576b8477125974dd157d correctly describes two earlier settled A offers, current additional demand, available 24 and the MASKED A=true flag, and proposes A at 3. Intent 9f824a309aa859979c89c7887b48524c is accepted as a proposal; supplier_a sees physical A=false and defers offer 24e5d3ec64825a33821865e36e69f3d6. There is no round-3 settlement. The rationale does not promise consent or delivery, so this legitimate later counterpart response is consistent with its bounded explanation. Both focal message lists are empty and own protocol is preserved. The qualitative score is independent of unchanged action proxies and comparisons.",
+      "evidenceRefs": [
+        "8d1da79a6ee25bd59f10570e843c9301",
+        "2e16a096604d576b8477125974dd157d"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v3-s0-reflexive",
+      "traceHash": "e86d36fd39caacf40838bfa71b32ba2cd183a2535170e5f7ce64e36ed54ea34c",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 9702cc8bcd2e563192575a24be305a90 accurately distinguishes Jan-1 settled commitment 00593a49bd0d5988981530508579ba76 from Jan-2 additional demand. Own cash 26, A=true/B=true, prices A=4/B=5 and no current pending offer support its order_a proposal. Intent 819e3d56b52e5582934847f1d16064d5 is accepted; supplier_a accepts b01bbbdf7d995f0babb71bc4806dc58c and settlement leaves cash 22/stock 2. Round-3 decision 1c4cbb311e845da3b8bc1029fccbf117 correctly states that only B is currently eligible, cites available 22 and price 5, and proposes B for the new period. Intent 28d4a01674e65ee88184da72d7ca241b is accepted, supplier_b consents and the authorized transfer settles. Both explanations match recurring demand, observed rules and actual intents without claiming consent in advance. Focal messages are empty and own protocol is preserved. No automatic action score or preregistered comparison is changed.",
+      "evidenceRefs": [
+        "9702cc8bcd2e563192575a24be305a90",
+        "1c4cbb311e845da3b8bc1029fccbf117"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v3-s0-external-feedback-ablation",
+      "traceHash": "2beb818bb45bcb010f421c78872c31888b0aac95fa4c76e4b458b43cb16e13b7",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 9702cc8bcd2e563192575a24be305a90 correctly identifies Jan-1 accepted/settled offer bd69b0c3bb75555681ad9d4a5c0c7967 as past demand, uses cash 26 and observed eligible A at 4 versus B at 5, and proposes a new A order subject to supplier consent. Intent 819e3d56b52e5582934847f1d16064d5 is accepted, supplier_a accepts b01bbbdf7d995f0babb71bc4806dc58c and the transfer leaves cash 22/stock 2. Round-3 decision 1c4cbb311e845da3b8bc1029fccbf117 correctly describes both Jan-1/Jan-2 settlements as historical, new demand through Jan 4, masked A=true, cash 22 and no pending current order, and proposes A at 4. Intent 28d4a01674e65ee88184da72d7ca241b is accepted as a proposal; supplier_a then sees physical A=false and validly rejects offer 94293d54f937507f947a94f361d0516c, with no round-3 transfer. Its own correction message is available to the supplier, not delivered to the focal importer. Both focal delivered-message lists are empty; own protocol is retained. The contemporaneous explanation is accurate for permitted information, independent of unchanged action/contrast scores.",
+      "evidenceRefs": [
+        "9702cc8bcd2e563192575a24be305a90",
+        "1c4cbb311e845da3b8bc1029fccbf117"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v3-s1-reflexive",
+      "traceHash": "21ccca3371e5619b249d01a1f317536c18ba6d207dd77ff7835e50b322f07571",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 700b7b641c435bd8ac0e77f60741fec0 accurately treats accepted offer 3bddd20974e05984bd26a772a7ed54a2 and settled Jan-1 commitment da900c062da85f2db6154ad5aece7b31 as earlier demand. With cash 26, A=true/B=true, prices 4/5 and no current pending order, it proposes order_a. Intent 430fd2589cf85b38a9a09e40cc86de6f is accepted; supplier_a consents to 0b3b3700c9c2587eacc767619312ae9e and settlement leaves cash 22/stock 2. Round-3 decision c00e013e1136543d84ce4500e76b9071 correctly cites A=false/B=true, price B=5 and cash 22, and proposes B while explicitly awaiting supplier consent. Intent 65b52cd2e95a592b8c66cb6c767eb67a is accepted, supplier_b consents and the transfer settles. Both explanations agree with current-period demand, visible history and actual resolutions. Both focal messages lists are empty and own protocol remains intact. No automatic score is used to infer this judgment or changed.",
+      "evidenceRefs": [
+        "700b7b641c435bd8ac0e77f60741fec0",
+        "c00e013e1136543d84ce4500e76b9071"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-trade-v3-s1-external-feedback-ablation",
+      "traceHash": "2e4ad7c6a637d2883a893d82b0a3f8a33659bb76def98a850db6fec056a85c99",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "trade qualitative reviewer",
+      "note": "Round-2 decision 700b7b641c435bd8ac0e77f60741fec0 accurately describes the Jan-1 purchase as past demand, visible A=true/B=true, prices 4/5 and cash 26, and proposes a new order_a. Prior offer 3bddd20974e05984bd26a772a7ed54a2 is accepted and commitment da900c062da85f2db6154ad5aece7b31 settled; no current-period order is pending. Intent 430fd2589cf85b38a9a09e40cc86de6f is accepted, supplier_a accepts 0b3b3700c9c2587eacc767619312ae9e and settlement yields cash 22/stock 2. Round-3 decision c00e013e1136543d84ce4500e76b9071 accurately describes both previous purchases as settled historical demand, available 22, masked A=true and no current pending offer, and proposes A at 4. Intent 65b52cd2e95a592b8c66cb6c767eb67a is accepted as a proposal; supplier_a sees physical A=false and rejects eae9f99dee2e564ea4c81b862f708a84, so no round-3 transfer settles. Its own correction message is retained for that supplier but not delivered to the importer. Both focal messages lists are empty; own protocol is intact. An auxiliary plan labels the two real offer interaction IDs as commitments; those offers link to settled commitments, and the short rationale and actual intent do not misidentify consent or completion. No automated score or comparison is changed.",
+      "evidenceRefs": [
+        "700b7b641c435bd8ac0e77f60741fec0",
+        "c00e013e1136543d84ce4500e76b9071"
+      ]
+    }
+  ]
+}

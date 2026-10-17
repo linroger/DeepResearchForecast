@@ -1,0 +1,31 @@
+{
+  "mode": "external",
+  "policyId": "glm-5.3-actor-consistency-v2-server-bound-review",
+  "maxTokensPerCase": 250000,
+  "maxOutputTokens": 4096,
+  "policy": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "timeoutSeconds": 120,
+    "maxInputTokens": 60000,
+    "reasoningEffort": "low",
+    "pricing": {
+      "provider": "glm",
+      "model": "glm-5.3",
+      "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "inputUsdPerMillion": "2",
+      "outputUsdPerMillion": "6",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 131072,
+      "inputOverheadTokens": 1024,
+      "outputTokenParameter": "max_tokens",
+      "maxOutputIncludesReasoning": true,
+      "source": {
+        "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+        "asOf": "2026-10-16T16:20:00Z"
+      }
+    },
+    "decisionReview": "actor-consistency-v2"
+  }
+}

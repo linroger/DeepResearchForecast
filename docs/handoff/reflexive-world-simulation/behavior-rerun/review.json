@@ -1,0 +1,27 @@
+{
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "verdict": "Approved; all assigned evaluator/policy/launcher findings closed before live dispatch",
+  "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+  "sourceHashes": {
+    "contracts.py": "781ecb0fb4f8a30f8f4bbe0fa72069cf31c56d464d30bd1d1660cedd87b61857",
+    "controller.py": "89022e1f7b0f1a8e18b8a5dfbae3177622db5342a9baab112a146628fa460413",
+    "evaluation.py": "8fa6886842df49cf25c4d2725e25b7b0b1c1f14af2c9a2ff03edab4e6c1dab1a",
+    "examples.py": "8b7e51091544a21275baa93aae661e3adb2c88f466294ebbc8a6de6ddeb4e473",
+    "kernel.py": "15eacdbdc81bdee09ac0a1a18e6289f8f3f03d7a2a4756d55b1cd9ee7946de74",
+    "observations.py": "80e87afcbfbf6d2a39c859e0061238e318df2bcb3e45b7ae9f3c4847b7381e39",
+    "policy.py": "f44d2faab9c0d1471d76da7e038d28f74b7fa0f205ce48537f8b1bd95077ee67",
+    "service.py": "df105588782b46609e5b344d414085382a233d6ef161f366fdb126a564c1abe5",
+    "store.py": "0e140cee894f90b652105216d516341f79748723d992fed2f26b1edf42e02407"
+  },
+  "launcherSha256": "10e3865f7eabc261b1713baab6dbf5ccb044a1a60a74d96324ec9c5598d74fde",
+  "testHash": "a975091594f3fca5e88d32e8c42ea2f9bf8cc8243f47347451ad5f81aee11e98",
+  "gate": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-behavior-v2-closure-20261016T185206Z-mnx62v88",
+  "testsPassed": 29,
+  "priorCombined": {
+    "passed": 372,
+    "failed": 2,
+    "reason": "Two test-only feasibility expectations, closed by exact rejection assertions; production unchanged."
+  },
+  "promotionApproved": false
+}

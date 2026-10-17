@@ -1,0 +1,11 @@
+# Fresh research admission UI/API contract (implementation in progress)
+
+Backend fresh default remains oasis-legacy until release evidence passes. Only NEW admissions resolve Config.DEFAULT_SIMULATION_ENGINE and Config.WORLD_POLICY_SPEC_PATH. Historical missing pins remain legacy. Research-only may defer world configuration; full world requests validate before tasks/files/threads. No provider dispatch occurs during readiness.
+
+GET /api/research/preflight accepts existing mode and optional research model plus simulation_engine. Omitted engine uses configured fresh default; explicit invalid/null POST values reject. Short response remains success/data with mode,ready,errors, and adds simulation_engine (effective selection), default_simulation_engine, simulation_admission (small readiness metadata only; no profile contents/path/credentials). Full environment report must retain old fields/checks and include the same simulation readiness. POST revalidates independently.
+
+POST /api/research/run accepts optional simulation_engine, world_spec or world_policy_spec. Ordinary UI sends no raw policy, so full world uses the operator's configured non-secret JSON profile. An explicit legacy choice stays available. Full world rejects max_rounds as an unsupported override rather than silently changing the modeled horizon; the UI hides and omits that legacy-only control for world. This slice adds no new model/calendar inference.
+
+Frontend getPreflight(mode='full', options={}) stays compatible with existing string callers; options can contain model and simulation_engine. ResearchView provides server-default/world/social-legacy selection, checks readiness on mode/model/engine/provider changes, and ignores stale responses using request identity. A failed readiness fetch is unknown/blocked with retry, never a green configuration-ready claim. POST includes the explicit engine only when selected; the backend pins the resolved default. Saved pipeline viewing continues to use saved engine data.
+
+No default activation or provider/model call is authorized by frontend changes. Tests exercise request payload, readiness, A-B-A response races, error/retry, research-only and legacy round controls using the existing SFC harness; coordinator owns execution/build/browser checks.

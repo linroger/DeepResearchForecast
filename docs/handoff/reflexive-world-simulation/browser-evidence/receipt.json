@@ -1,0 +1,18 @@
+{
+  "scenario": "Production Vue components rendered against frozen real compiler/controller/Flask API responses, isolated localhost fixture server.",
+  "fixture": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-final-core-20261016T161417Z-dnxo9pg8/evidence/browser-api-fixture.json",
+  "checks": [
+    "Public round4 capacity7 goods_per_day; earlier round1 capacity4",
+    "Actor buyer view shows owncash27/stock3 and excludesproducer_cash",
+    "Analyst view explicitly labeledprivate modeled state",
+    "EN/ZH labels use actual locale module",
+    "ArrowRight selects nexttab; Home/End focus correct endpoints",
+    "390x844 viewportcontrols visible; screenshot saved; viewport reset",
+    "Saved legacy run renders Twitter/Reddit feed; no world fallback"
+  ],
+  "limits": [
+    "Isolated component/browser acceptance; not a live production pipeline or full research-page browser run.",
+    "Initial fixture server plugin extension/root canonical-path setup failed and was corrected before acceptance.",
+    "A/B/A stale response behavior verified in24compiled Vue/SSR tests, not artificially delayed browser traffic."
+  ]
+}

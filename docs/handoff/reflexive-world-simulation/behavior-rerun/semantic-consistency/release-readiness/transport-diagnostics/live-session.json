@@ -1,0 +1,21 @@
+{
+  "sessionId": 2944,
+  "output": "/private/tmp/drf-world-consistency-transport-diagnostics-20261017",
+  "manifestHash": "6c67c2d06ad68821994bd03e61f82a7e315faa7bdc02990e2fd927065da3d9cc",
+  "status": "closed_reviewed_incomplete",
+  "recordedUtc": "2026-10-17T14:33:36.431686+00:00",
+  "maximumUsd": "1.25",
+  "maximumPlannedCalls": 12,
+  "stopAfterQualifyingFailures": 3,
+  "sourceFreeze": true,
+  "defaultPromotion": false,
+  "exitCode": 0,
+  "completedCases": 8,
+  "failedCases": 4,
+  "exposureUsd": "0.10012",
+  "unknownUsd": "0",
+  "qualitativePasses": 5,
+  "qualitativeFailures": 3,
+  "diagnosticGate": "incomplete",
+  "closedUtc": "2026-10-17T14:40:17.890565+00:00"
+}

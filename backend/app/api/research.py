@@ -26,9 +26,13 @@ from ..services.pipeline_orchestrator import (
     PipelineOrchestrator,
     PipelineState,
     preflight_pipeline,
+    simulation_admission_error,
+    simulation_readiness,
     refresh_research_artifact_manifest,
     research_dossier_is_sealed,
 )
+from ..services.world_simulation.admission import UNSET
+from ..services.world_simulation.contracts import WorldError
 from ..services.research_progress import (
     ResearchProgressLimitError,
     merged_research_progress_full,
@@ -97,6 +101,11 @@ def run_pipeline():
         if model:
             model = model.lower()
 
+        # Preserve omission versus explicit null. start() resolves and revalidates
+        # against the current configuration before creating any pipeline state.
+        world_options = {key: data[key] for key in
+                         ('simulation_engine', 'world_spec', 'world_policy_spec') if key in data}
+
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         preflight_errors = preflight_pipeline(mode=mode, model=model)
         if preflight_errors:
@@ -114,6 +123,7 @@ def run_pipeline():
             max_rounds=max_rounds,
             language=language,
             model=model,
+            **world_options,
         )
         return jsonify({
             "success": True,
@@ -124,6 +134,9 @@ def run_pipeline():
                 "status": state.status,
             },
         })
+    except WorldError as error:
+        body, status = simulation_admission_error(error)
+        return jsonify(body), status
     except Exception as e:
         logger.error(f"启动管线失败: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e), "traceback": traceback.format_exc()}), 500
@@ -189,7 +202,8 @@ def continue_pipeline(pipeline_id: str):
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
         # 继续会跑完整管线（建图/模拟/报告），按 full 模式预检配置
-        preflight_errors = preflight_pipeline(mode="full")
+        preflight_errors = preflight_pipeline(
+            mode="full", model=(existing.get("options") or {}).get("research_model"))
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -209,6 +223,9 @@ def continue_pipeline(pipeline_id: str):
         })
     except FileNotFoundError:
         return jsonify({"success": False, "error": "管线不存在"}), 404
+    except WorldError as error:
+        body, status = simulation_admission_error(error)
+        return jsonify(body), status
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 409
     except Exception as e:
@@ -364,6 +381,8 @@ def preflight():
     mode = request.args.get('mode', 'full')
     if mode not in ('full', 'research_only'):
         mode = 'full'
+    model = (request.args.get('model') or '').strip() or None
+    engine = request.args.get('simulation_engine', UNSET)
 
     if (request.args.get('format') or '').strip().lower() == 'full':
         # 复用 backend/scripts/preflight.py 的 environment_report()（同一引擎，零漂移）。
@@ -376,14 +395,16 @@ def preflight():
                 sys.path.insert(0, _scripts_dir)
             from preflight import environment_report  # type: ignore
             deep = (request.args.get('deep') or '').strip().lower() in ('1', 'true', 'yes')
-            model = (request.args.get('model') or '').strip() or None
-            report = environment_report(mode=mode, model=model, deep=deep)
+            report = environment_report(mode=mode, model=model, deep=deep, simulation_engine=engine)
             return jsonify({"success": True, "data": report})
-        except Exception as e:
-            logger.warning(f"preflight format=full 降级到精简响应: {e}")
+        except Exception:
+            logger.warning("preflight format=full 降级到精简响应")
 
-    errors = preflight_pipeline(mode=mode)
-    return jsonify({"success": True, "data": {"ready": not errors, "errors": errors, "mode": mode}})
+    simulation = simulation_readiness(mode=mode, simulation_engine=engine)
+    errors = preflight_pipeline(mode=mode, model=model) + simulation["errors"]
+    return jsonify({"success": True, "data": {
+        **simulation, "ready": not errors, "errors": errors, "mode": mode,
+    }})
 
 
 @research_bp.route('/<pipeline_id>/dossier', methods=['GET'])

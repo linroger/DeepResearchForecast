@@ -1,0 +1,334 @@
+TAP version 13
+# Subtest: API keeps no-argument and mode-only callers compatible and allows only model/engine options
+ok 1 - API keeps no-argument and mode-only callers compatible and allows only model/engine options
+  ---
+  duration_ms: 0.567792
+  type: 'test'
+  ...
+# Subtest: initial and pending readiness block actual launch; template offers all engines in both languages
+ok 2 - initial and pending readiness block actual launch; template offers all engines in both languages
+  ---
+  duration_ms: 10.295584
+  type: 'test'
+  ...
+# Subtest: failed fetch clears prior readiness; the rendered retry button performs a fresh check
+ok 3 - failed fetch clears prior readiness; the rendered retry button performs a fresh check
+  ---
+  duration_ms: 2.523333
+  type: 'test'
+  ...
+# Subtest: mode, model, engine and the actual provider event each recheck with current request parameters
+ok 4 - mode, model, engine and the actual provider event each recheck with current request parameters
+  ---
+  duration_ms: 1.352125
+  type: 'test'
+  ...
+# Subtest: mode same-tick A→B→A rejects stale success and cannot clear the latest loading state
+ok 5 - mode same-tick A→B→A rejects stale success and cannot clear the latest loading state
+  ---
+  duration_ms: 0.900917
+  type: 'test'
+  ...
+# Subtest: mode same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+ok 6 - mode same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+  ---
+  duration_ms: 1.00025
+  type: 'test'
+  ...
+# Subtest: researchModel same-tick A→B→A rejects stale success and cannot clear the latest loading state
+ok 7 - researchModel same-tick A→B→A rejects stale success and cannot clear the latest loading state
+  ---
+  duration_ms: 0.6725
+  type: 'test'
+  ...
+# Subtest: researchModel same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+ok 8 - researchModel same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+  ---
+  duration_ms: 0.62275
+  type: 'test'
+  ...
+# Subtest: simulationEngine same-tick A→B→A rejects stale success and cannot clear the latest loading state
+ok 9 - simulationEngine same-tick A→B→A rejects stale success and cannot clear the latest loading state
+  ---
+  duration_ms: 0.588166
+  type: 'test'
+  ...
+# Subtest: simulationEngine same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+ok 10 - simulationEngine same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+  ---
+  duration_ms: 0.885583
+  type: 'test'
+  ...
+# Subtest: provider same-tick A→B→A rejects stale success and cannot clear the latest loading state
+ok 11 - provider same-tick A→B→A rejects stale success and cannot clear the latest loading state
+  ---
+  duration_ms: 0.41375
+  type: 'test'
+  ...
+# Subtest: provider same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+ok 12 - provider same-tick A→B→A rejects stale reject and cannot clear the latest loading state
+  ---
+  duration_ms: 0.403
+  type: 'test'
+  ...
+# Subtest: missing effective engine is unknown and blocked rather than configuration-ready
+ok 13 - missing effective engine is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 0.882167
+  type: 'test'
+  ...
+# Subtest: unknown effective engine is unknown and blocked rather than configuration-ready
+ok 14 - unknown effective engine is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 0.686125
+  type: 'test'
+  ...
+# Subtest: wrong mode is unknown and blocked rather than configuration-ready
+ok 15 - wrong mode is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 1.180625
+  type: 'test'
+  ...
+# Subtest: failed envelope is unknown and blocked rather than configuration-ready
+ok 16 - failed envelope is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 0.671708
+  type: 'test'
+  ...
+# Subtest: non-boolean readiness is unknown and blocked rather than configuration-ready
+ok 17 - non-boolean readiness is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 0.598042
+  type: 'test'
+  ...
+# Subtest: malformed errors is unknown and blocked rather than configuration-ready
+ok 18 - malformed errors is unknown and blocked rather than configuration-ready
+  ---
+  duration_ms: 0.554833
+  type: 'test'
+  ...
+# Subtest: server refusal remains blocked with escaped actionable errors, and explicit engine mismatch is rejected
+ok 19 - server refusal remains blocked with escaped actionable errors, and explicit engine mismatch is rejected
+  ---
+  duration_ms: 1.070708
+  type: 'test'
+  ...
+# Subtest: full: server default resolving to oasis-legacy controls rendered rounds and the actual POST
+ok 20 - full: server default resolving to oasis-legacy controls rendered rounds and the actual POST
+  ---
+  duration_ms: 1.213917
+  type: 'test'
+  ...
+# Subtest: full: server default resolving to world-v1 controls rendered rounds and the actual POST
+ok 21 - full: server default resolving to world-v1 controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.962625
+  type: 'test'
+  ...
+# Subtest: research_only: server default resolving to oasis-legacy controls rendered rounds and the actual POST
+ok 22 - research_only: server default resolving to oasis-legacy controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.885042
+  type: 'test'
+  ...
+# Subtest: research_only: server default resolving to world-v1 controls rendered rounds and the actual POST
+ok 23 - research_only: server default resolving to world-v1 controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.779667
+  type: 'test'
+  ...
+# Subtest: full: world-v1 resolving to world-v1 controls rendered rounds and the actual POST
+ok 24 - full: world-v1 resolving to world-v1 controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.815833
+  type: 'test'
+  ...
+# Subtest: research_only: world-v1 resolving to world-v1 controls rendered rounds and the actual POST
+ok 25 - research_only: world-v1 resolving to world-v1 controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.730667
+  type: 'test'
+  ...
+# Subtest: full: oasis-legacy resolving to oasis-legacy controls rendered rounds and the actual POST
+ok 26 - full: oasis-legacy resolving to oasis-legacy controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.82575
+  type: 'test'
+  ...
+# Subtest: research_only: oasis-legacy resolving to oasis-legacy controls rendered rounds and the actual POST
+ok 27 - research_only: oasis-legacy resolving to oasis-legacy controls rendered rounds and the actual POST
+  ---
+  duration_ms: 0.8965
+  type: 'test'
+  ...
+# Subtest: legacy round value survives a world selection but is hidden until fresh legacy readiness returns
+ok 28 - legacy round value survives a world selection but is hidden until fresh legacy readiness returns
+  ---
+  duration_ms: 1.857458
+  type: 'test'
+  ...
+# Subtest: restoring a saved run skips fresh admission; New requests readiness and old responses cannot cross run boundaries
+ok 29 - restoring a saved run skips fresh admission; New requests readiness and old responses cannot cross run boundaries
+  ---
+  duration_ms: 0.541083
+  type: 'test'
+  ...
+# Subtest: unmount invalidates an outstanding preflight and late completion cannot restore readiness
+ok 30 - unmount invalidates an outstanding preflight and late completion cannot restore readiness
+  ---
+  duration_ms: 0.311125
+  type: 'test'
+  ...
+# Subtest: world projection preserves decimals, zero, false, unknowns and the selected snapshot
+ok 31 - world projection preserves decimals, zero, false, unknowns and the selected snapshot
+  ---
+  duration_ms: 0.792042
+  type: 'test'
+  ...
+# Subtest: public and actor projections do not expose extra private records or other actors decisions
+ok 32 - public and actor projections do not expose extra private records or other actors decisions
+  ---
+  duration_ms: 0.2745
+  type: 'test'
+  ...
+# Subtest: response reader rejects mismatched run, generation, cursor, round, view and actor
+ok 33 - response reader rejects mismatched run, generation, cursor, round, view and actor
+  ---
+  duration_ms: 0.440667
+  type: 'test'
+  ...
+# Subtest: actual world template renders EN/ZH, exact values, semantic controls, caveat and identity
+ok 34 - actual world template renders EN/ZH, exact values, semantic controls, caveat and identity
+  ---
+  duration_ms: 9.592709
+  type: 'test'
+  ...
+# Subtest: analyst rendering labels private modeled state, escapes model output and links visible causal records
+ok 35 - analyst rendering labels private modeled state, escapes model output and links visible causal records
+  ---
+  duration_ms: 4.355833
+  type: 'test'
+  ...
+# Subtest: simulation A→B→A discards stale success, including loading/error writes
+ok 36 - simulation A→B→A discards stale success, including loading/error writes
+  ---
+  duration_ms: 1.285792
+  type: 'test'
+  ...
+# Subtest: simulation A→B→A discards stale envelope, including loading/error writes
+ok 37 - simulation A→B→A discards stale envelope, including loading/error writes
+  ---
+  duration_ms: 1.471958
+  type: 'test'
+  ...
+# Subtest: simulation A→B→A discards stale reject, including loading/error writes
+ok 38 - simulation A→B→A discards stale reject, including loading/error writes
+  ---
+  duration_ms: 0.928167
+  type: 'test'
+  ...
+# Subtest: view A→B→A clears private content immediately and refuses late privileged results
+ok 39 - view A→B→A clears private content immediately and refuses late privileged results
+  ---
+  duration_ms: 1.636458
+  type: 'test'
+  ...
+# Subtest: actor selection is explicit; actor A→B→A errors and unmount cannot publish
+ok 40 - actor selection is explicit; actor A→B→A errors and unmount cannot publish
+  ---
+  duration_ms: 2.015916
+  type: 'test'
+  ...
+# Subtest: round cursor conflicts stop with a useful message; explicit refresh removes the cursor
+ok 41 - round cursor conflicts stop with a useful message; explicit refresh removes the cursor
+  ---
+  duration_ms: 1.453166
+  type: 'test'
+  ...
+# Subtest: round A→B→A and generation changes invalidate old responses and cursor state
+ok 42 - round A→B→A and generation changes invalidate old responses and cursor state
+  ---
+  duration_ms: 1.618458
+  type: 'test'
+  ...
+# Subtest: parent uses saved engine, preserves legacy feed, and makes no social calls for world runs
+ok 43 - parent uses saved engine, preserves legacy feed, and makes no social calls for world runs
+  ---
+  duration_ms: 3.836292
+  type: 'test'
+  ...
+# Subtest: parent does not fall back on unknown pins, failed saved-state envelopes or mismatched runner pins
+ok 44 - parent does not fall back on unknown pins, failed saved-state envelopes or mismatched runner pins
+  ---
+  duration_ms: 1.773542
+  type: 'test'
+  ...
+# Subtest: parent engine A→B→A ignores stale success
+ok 45 - parent engine A→B→A ignores stale success
+  ---
+  duration_ms: 0.717542
+  type: 'test'
+  ...
+# Subtest: parent engine A→B→A ignores stale envelope
+ok 46 - parent engine A→B→A ignores stale envelope
+  ---
+  duration_ms: 0.54825
+  type: 'test'
+  ...
+# Subtest: parent engine A→B→A ignores stale reject
+ok 47 - parent engine A→B→A ignores stale reject
+  ---
+  duration_ms: 0.829875
+  type: 'test'
+  ...
+# Subtest: world API preserves round zero and sends only the chosen view/cursor with cancellation
+ok 48 - world API preserves round zero and sends only the chosen view/cursor with cancellation
+  ---
+  duration_ms: 0.329125
+  type: 'test'
+  ...
+# Subtest: real contract claim/span references remain readable, assumptions are explicit and disputed values stay labeled
+ok 49 - real contract claim/span references remain readable, assumptions are explicit and disputed values stay labeled
+  ---
+  duration_ms: 2.159625
+  type: 'test'
+  ...
+# Subtest: current HTTP conflicts and timeouts finish loading without exposing backend diagnostics
+ok 50 - current HTTP conflicts and timeouts finish loading without exposing backend diagnostics
+  ---
+  duration_ms: 1.191125
+  type: 'test'
+  ...
+# Subtest: legacy platform A→B→A drops late feed success and errors without changing the legacy presentation
+ok 51 - legacy platform A→B→A drops late feed success and errors without changing the legacy presentation
+  ---
+  duration_ms: 0.947958
+  type: 'test'
+  ...
+# Subtest: parent disposal and empty identity invalidate unresolved engine requests
+ok 52 - parent disposal and empty identity invalidate unresolved engine requests
+  ---
+  duration_ms: 0.743416
+  type: 'test'
+  ...
+# Subtest: round invalidation clears actor suggestions before loading and after failure
+ok 53 - round invalidation clears actor suggestions before loading and after failure
+  ---
+  duration_ms: 0.877791
+  type: 'test'
+  ...
+# Subtest: causal joins scale linearly with cumulative history and keep actor-bound resolutions
+ok 54 - causal joins scale linearly with cumulative history and keep actor-bound resolutions
+  ---
+  duration_ms: 3.08025
+  type: 'test'
+  ...
+1..54
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 241.398417

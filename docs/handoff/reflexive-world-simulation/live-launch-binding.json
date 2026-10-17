@@ -1,0 +1,28 @@
+{
+  "manifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
+  "sourceHashes": {
+    "evaluation.py": "576f5fac2662a6546d1044f19833d1b025b385746f35fd174c6299379144dba5",
+    "contracts.py": "aca700b29cb866d34bd47171fa0ac9ae5f8e42f4c38cc34680026d2a22ebc678",
+    "controller.py": "89022e1f7b0f1a8e18b8a5dfbae3177622db5342a9baab112a146628fa460413",
+    "examples.py": "8b7e51091544a21275baa93aae661e3adb2c88f466294ebbc8a6de6ddeb4e473",
+    "kernel.py": "25844f944213eb59c1f02431b87b921429c7063a0432bcec69169df65165f6c9",
+    "observations.py": "86ffd8ec7a15400f2ee90fbcc13c5d59b3628c98c5a34f52c61cafd53509a7f2",
+    "policy.py": "4c20a835d9d8f8a53aa9f98e11603c150885013d3e93a7d442b0dc9ab59d1579",
+    "store.py": "0e140cee894f90b652105216d516341f79748723d992fed2f26b1edf42e02407",
+    "service.py": "efaecc4090717edccd0dded7a59a2e96746b6d738ee470853c50a6acc7732d70"
+  },
+  "allocatedUsd": "20.662905044304",
+  "policyId": "world-v1-strict-glm53-low-request-bound-v5",
+  "output": "/private/tmp/drf-world-live-evaluation-20261016-request-bound",
+  "authorization": {
+    "pricingVerified": true,
+    "offlineGatesPassed": true,
+    "manifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
+    "coordinator": "Codex implementation coordinator",
+    "evidenceRefs": [
+      "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-request-bound-release-20261016T171030Z-uzeo4cfz",
+      "/Users/rogerlin/.codex/worktrees/reflexive-world-simulation/DeepResearchForecast/docs/handoff/reflexive-world-simulation/live-policy-sources.json",
+      "/Users/rogerlin/.codex/worktrees/reflexive-world-simulation/DeepResearchForecast/docs/handoff/reflexive-world-simulation/implementation-approval.json"
+    ]
+  }
+}

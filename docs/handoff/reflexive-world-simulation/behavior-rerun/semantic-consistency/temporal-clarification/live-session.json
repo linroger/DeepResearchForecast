@@ -1,0 +1,20 @@
+{
+  "sessionId": 55432,
+  "output": "/private/tmp/drf-world-consistency-temporal-20261017",
+  "manifestHash": "d8fc180c2e1414dda53182de171ada13d7aa88b8e5d3b2c072a83b3bab6c248e",
+  "status": "closed_qualitative_gate_failed",
+  "recordedUtc": "2026-10-17T13:22:14.054589+00:00",
+  "maximumUsd": "1.25",
+  "totalRevisionCalls": 12,
+  "sourceFreeze": true,
+  "fullBehaviorGateClaim": false,
+  "exitCode": 0,
+  "completedCases": 12,
+  "failedCases": 0,
+  "exposureUsd": "0.09028",
+  "unknownUsd": "0",
+  "qualitativePasses": 10,
+  "qualitativeFailures": 2,
+  "diagnosticGate": "failed",
+  "closedUtc": "2026-10-17T13:27:55.805779+00:00"
+}

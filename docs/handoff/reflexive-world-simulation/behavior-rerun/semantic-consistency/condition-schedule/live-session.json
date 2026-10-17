@@ -1,0 +1,21 @@
+{
+  "sessionId": 93550,
+  "output": "/private/tmp/drf-world-consistency-condition-schedule-20261017",
+  "manifestHash": "c98520b9d53e3d11825c698a5e1017d4ddff028bb7ea57557585f5443d6e675e",
+  "status": "closed_confirmation_incomplete",
+  "recordedUtc": "2026-10-17T13:48:40.118045+00:00",
+  "maximumUsd": "1.25",
+  "totalRevisionCalls": 12,
+  "sourceFreeze": true,
+  "fullBehaviorGateClaim": false,
+  "exitCode": 0,
+  "completedCases": 11,
+  "failedCases": 1,
+  "exposureUsd": "0.096112",
+  "unknownUsd": "0",
+  "qualitativePasses": 11,
+  "qualitativeFailures": 0,
+  "unresolvedCalls": 1,
+  "diagnosticGate": "incomplete",
+  "closedUtc": "2026-10-17T13:53:18.797303+00:00"
+}

@@ -1,0 +1,38 @@
+{
+  "preparedUtc": "2026-10-17T17:12:41.238768+00:00",
+  "status": "Separate capability-source and opening-request quote review accepted; live behavior remains unverified",
+  "policyFile": "live-policy.json",
+  "changesFromV3": {
+    "decisionReview": "actor-consistency-v4",
+    "reasoningEffort": "high",
+    "maxOutputTokens": 8192
+  },
+  "unchanged": [
+    "provider glm",
+    "model glm-5.3",
+    "endpoint",
+    "numeric tariffs",
+    "input bound",
+    "per-case token cap",
+    "two calls per slot",
+    "full study scoring"
+  ],
+  "capabilityEvidence": {
+    "url": "https://docs.bigmodel.cn/cn/guide/start/concept-param.md",
+    "localPath": "/Users/rogerlin/.local/share/DeepResearchForecast/public-sources/concept-param-4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05.md",
+    "sha256": "4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05",
+    "observation": "Official source supports low/high/max for GLM-5.3; high is enhanced thinking. This is a capability assertion, not proof of semantic improvement.",
+    "refreshedUtc": "2026-10-17T18:01:56.284092+00:00",
+    "unchangedHash": true
+  },
+  "budget": {
+    "totalAuthorizedUsd": "40",
+    "remainingAfter17ClosedPhasesUsd": "19.925161044336",
+    "plannedDirectedMaximumUsd": "1.25",
+    "plannedFullMaximumUsd": "18",
+    "newAuthorization": false
+  },
+  "feasibility": "Opening quotes and sum of directed reservations must pass current frozen offline preflight; actual high-effort cost remains unknown before measurement.",
+  "reviewClosedUtc": "2026-10-17T18:12:04.542155+00:00",
+  "directedReservationMaximumUsd": "0.990360000000"
+}

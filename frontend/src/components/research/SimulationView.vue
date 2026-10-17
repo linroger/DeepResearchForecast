@@ -1,5 +1,11 @@
 <template>
-  <div class="sim-view">
+  <WorldSimulationView
+    v-if="engine === WORLD_ENGINE"
+    :key="simulationId + ':' + worldGenerationId"
+    :simulation-id="simulationId"
+    :generation-id="worldGenerationId"
+  />
+  <div v-else-if="engine === LEGACY_ENGINE" class="sim-view">
     <!-- ===== Header ===== -->
     <header class="sv-header">
       <div class="sv-title">
@@ -202,13 +208,24 @@
       </section>
     </div>
   </div>
+  <section v-else class="sim-view" :aria-busy="loading">
+    <p :role="error ? 'alert' : 'status'">{{ error || (loading
+      ? L('正在读取已保存的模拟…', 'Reading saved simulation…')
+      : L('尚未选择模拟', 'No simulation selected')) }}</p>
+    <button v-if="simulationId" type="button" class="refresh-btn" :disabled="loading" @click="loadAll">
+      {{ L('重试', 'Retry') }}
+    </button>
+  </section>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { L } from '../../i18n'
 import WorldStatePanel from './WorldStatePanel.vue'
+import WorldSimulationView from './WorldSimulationView.vue'
+import { WORLD_ENGINE, LEGACY_ENGINE, WORLD_REQUEST_TIMEOUT_MS, savedSimulationEngine, createRequestGate } from '../../utils/worldSimulationView'
 import {
+  getSimulation,
   getSimulationProfilesRealtime,
   getSimulationPosts,
   getSimulationComments,
@@ -238,6 +255,10 @@ const userMap = ref({})
 const loading = ref(false)
 const error = ref('')
 const refreshToken = ref(0) // bumps on every loadAll so the world-state panel reloads with the feed
+const engine = ref(null)
+const worldGenerationId = ref('')
+const requests = createRequestGate()
+let refreshTimer = null
 
 // ===== Defensive helpers =====
 function asArray(v) {
@@ -542,6 +563,8 @@ function formatNumber(n) {
 
 // ===== Data loading =====
 async function loadAll() {
+  if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
+  const request = requests.begin()
   if (!props.simulationId) {
     profiles.value = []
     posts.value = []
@@ -550,6 +573,8 @@ async function loadAll() {
     runState.value = {}
     userMap.value = {}
     error.value = ''
+    engine.value = null
+    loading.value = false
     return
   }
 
@@ -560,22 +585,54 @@ async function loadAll() {
   const plat = platform.value
   const feedReq = feedRequest(selectedRound.value)
 
-  const results = await Promise.allSettled([
-    getSimulationProfilesRealtime(simId, plat),
-    getSimulationPosts(simId, plat, feedReq.limit, 0, feedReq.round),
-    getSimulationComments(simId, plat, feedReq.commentLimit, 0, feedReq.round),
-    getAgentStats(simId),
-    getRunStatus(simId),
-    getFeedRounds(simId, plat)
-  ])
-
-  // Guard against a stale response landing after a platform/sim/period switch
-  if (props.simulationId !== simId || platform.value !== plat || selectedRound.value !== feedReq.round) {
+  // Route by the saved pin, never by deployment defaults or by social data being
+  // empty. This also covers prepared world runs that have no runner state yet.
+  try {
+    const response = await getSimulation(simId, { signal: request.signal, timeout: WORLD_REQUEST_TIMEOUT_MS })
+    if (!request.isCurrent()) return
+    if (response?.success !== true || response.data?.simulation_id !== simId) throw new Error('Invalid saved state')
+    const savedEngine = savedSimulationEngine(response.data)
+    if (![WORLD_ENGINE, LEGACY_ENGINE].includes(savedEngine)) {
+      engine.value = null
+      error.value = L('此模拟保存的引擎尚不受支持。', 'This simulation uses an unsupported saved engine.')
+      loading.value = false
+      return
+    }
+    worldGenerationId.value = response.data.world_generation_id || ''
+    engine.value = savedEngine
+    if (savedEngine === WORLD_ENGINE) { loading.value = false; return }
+  } catch {
+    if (!request.isCurrent()) return
+    engine.value = null
+    error.value = L('无法读取已保存的模拟，请重试。', 'Could not read the saved simulation. Please retry.')
     loading.value = false
     return
   }
 
+  const options = { signal: request.signal, timeout: WORLD_REQUEST_TIMEOUT_MS }
+  // PERIOD VIEW: the selected committed round narrows posts and replies (sent as `round`)
+  const feedOptions = { ...options, round: feedReq.round }
+  const results = await Promise.allSettled([
+    getSimulationProfilesRealtime(simId, plat, options),
+    getSimulationPosts(simId, plat, feedReq.limit, 0, feedOptions),
+    getSimulationComments(simId, plat, feedReq.commentLimit, 0, feedOptions),
+    getAgentStats(simId, options),
+    getRunStatus(simId, options),
+    getFeedRounds(simId, plat, options)
+  ])
+
+  // Guard against a stale response landing after a platform/sim/period switch (each switch starts
+  // a new request through the gate; the period check is a second line of defence)
+  if (!request.isCurrent() || selectedRound.value !== feedReq.round) return
+
   const [profilesRes, postsRes, commentsRes, statsRes, runRes, roundsRes] = results
+  if (runRes.status === 'fulfilled' && runRes.value?.data?.simulation_engine !== undefined
+      && runRes.value.data.simulation_engine !== engine.value) {
+    engine.value = null
+    error.value = L('模拟身份已变更，请重新加载。', 'Simulation identity changed. Please reload.')
+    loading.value = false
+    return
+  }
 
   // Feed rounds (period labels + counts); absent on runs without an action log
   if (roundsRes.status === 'fulfilled') {
@@ -651,7 +708,6 @@ function switchPlatform(next) {
 // ===== Lifecycle / live auto-refresh =====
 // While the simulation is still running, re-poll every 10s so personas/feed/stats update
 // live without a manual refresh. Stops automatically once the run completes.
-let refreshTimer = null
 function scheduleAutoRefresh() {
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
   const rs = isPlainObject(runState.value) ? runState.value : {}
@@ -661,21 +717,23 @@ function scheduleAutoRefresh() {
   }
 }
 
-onMounted(() => {
-  loadAll()
-})
-
 watch(
   () => props.simulationId,
   () => {
+    engine.value = null
+    worldGenerationId.value = ''
+    profiles.value = []; posts.value = []; comments.value = []
+    stats.value = {}; runState.value = {}; userMap.value = {}
     selectedRound.value = null
     feedRounds.value = []
     feedPeriodLabel.value = ''
     loadAll()
-  }
+  },
+  { immediate: true, flush: 'sync' }
 )
 
 onUnmounted(() => {
+  requests.invalidate()
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
 })
 </script>

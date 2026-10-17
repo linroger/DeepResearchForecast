@@ -1,0 +1,21 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 536,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-green-20261017T142030Z-upsi6fmv/evidence",
+    "-q",
+    "backend/tests/test_world_withheld_diagnostics.py",
+    "backend/tests/test_world_consistency_evaluation.py",
+    "backend/tests/test_world_evaluation_launch.py",
+    "backend/tests/test_world_consistency_v2.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-green-20261017T142030Z-upsi6fmv/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-green-20261017T142030Z-upsi6fmv/evidence"
+}

@@ -1,0 +1,29 @@
+{
+  "manifestHash": "9969cb8b2f3cdb2e3d638ba07e74775398af67975fe7c773bfd02390451a34f1",
+  "originalOutput": "/private/tmp/drf-world-consistency-replay-20261017",
+  "verification": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-closeout-e36pkuai/evidence",
+  "beforeSummary": {
+    "report.json": "09058c4d0319db13dc3ee5c2ac595f6c30fde8c2210d71cb8436fb074957946f",
+    "journal.json": "60a956f599339db35104bfa44a35b51e98263b7a624e4db6174656ba823d0840",
+    "preregistration.json": "e50cb753ae96997552710d6ad89993a7ba37af80b13d0ea897a41db953f474b7",
+    "qualitative-review.json": "80bc27df31ef3965964cdb59301c9633fff0dd815de78e1e3f7b3eb102e8ae2c"
+  },
+  "artifactHashes": {
+    "report.json": "4eccb26ec710bc37f358f33bc80bbac78443128b7b4c825770f43b75a2a6f136",
+    "summary-junit.xml": "abc85c963aef3ade64d88b30e9ed543858dec205fac64008245b562668754e81",
+    "report-before-qualitative.json": "09058c4d0319db13dc3ee5c2ac595f6c30fde8c2210d71cb8436fb074957946f",
+    "qualitative-review.md": "18a2a9f49e003b543d6204ebe401744bedae590355b9d91e9f39e69b722cdbd1",
+    "summary-completed.json": "51446fd5c9f1cafb45f9395984ef0caa3f416c734f13300cb53187ca9d12a2ec",
+    "journal.json": "60a956f599339db35104bfa44a35b51e98263b7a624e4db6174656ba823d0840",
+    "preregistration.json": "e50cb753ae96997552710d6ad89993a7ba37af80b13d0ea897a41db953f474b7",
+    "qualitative-review.json": "80bc27df31ef3965964cdb59301c9633fff0dd815de78e1e3f7b3eb102e8ae2c"
+  },
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "originalsUnchanged": 392,
+  "reviewedCompletedCases": 9,
+  "failedCasesRetained": 3
+}

@@ -1,0 +1,27 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 548,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-first-20261017T163814Z-hji9d75i/evidence",
+    "-q",
+    "backend/tests/test_world_review_shape.py",
+    "backend/tests/test_world_review_shape_policy.py",
+    "backend/tests/test_world_review_shape_evaluation.py",
+    "backend/tests/test_world_consistency_evaluation.py",
+    "backend/tests/test_world_withheld_diagnostics.py",
+    "backend/tests/test_world_policy.py",
+    "backend/tests/test_world_consistency_v3_policy.py",
+    "backend/tests/test_world_candidate_repair_controller.py",
+    "backend/tests/test_world_candidate_repair_store.py",
+    "backend/tests/test_world_consistency_v3.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-first-20261017T163814Z-hji9d75i/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-first-20261017T163814Z-hji9d75i/evidence"
+}

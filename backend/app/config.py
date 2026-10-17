@@ -1562,6 +1562,10 @@ class Config:
     #                      PromotionDecision）后才可用；当前一律回落 diagnostic_only。
     #   legacy_prompt   —— 仅供特征化 fixture 复现旧行为（模拟数字直接喂概率生成），
     #                      绝非生产回退；运行期使用会被显式告警。
+    # Fresh pipeline admission only. Historical missing engine pins stay legacy.
+    # Default activation is a separate release gate; do not infer it from a profile.
+    DEFAULT_SIMULATION_ENGINE = os.environ.get('DEFAULT_SIMULATION_ENGINE', 'oasis-legacy').strip()
+    WORLD_POLICY_SPEC_PATH = os.environ.get('WORLD_POLICY_SPEC_PATH', '').strip() or None
     SIMULATION_FORECAST_EFFECT = (
         os.environ.get('SIMULATION_FORECAST_EFFECT', 'diagnostic_only').strip().lower()
         if os.environ.get('SIMULATION_FORECAST_EFFECT', 'diagnostic_only').strip().lower()

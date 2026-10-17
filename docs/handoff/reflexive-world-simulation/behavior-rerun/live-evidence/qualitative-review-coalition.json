@@ -1,0 +1,149 @@
+{
+  "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+  "reviews": [
+    {
+      "evaluationId": "m5-e2-coalition-v1-s0-reflexive",
+      "traceHash": "0d8b52a45f2bbf0975dfbee5423dde5fb513c25eb6601a4821d6fa1e01335839",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 explains waiting with coalition_ab=none, no offers/messages/inbox and no authorization; the actual intent list is empty and those observation fields match. Round 2 sees allied and explains C's own opposing vote. Intent d0056a72c59556a1aafaa2c0505cbdd4 executes program_vote(support=false) and is accepted. The visible menu supplies weights 30/20/50 and threshold 55; opposing C leaves at most 50 supporting weight, and the physical ledger indeed stays unauthorized with budget 80 and sink 0. Neither focal observation contains message bodies or A/B private consent records. B accepted its own immediate round-1 offer separately; no vote is attributed to that consent. Both focal explanations agree with C's wait-then-oppose objective and realized actions.",
+      "evidenceRefs": [
+        "6990e064627f5efe8dc3a52864d8841e",
+        "56f665fa681f5c6f97f54d008a7b2cb6"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v1-s0-external-feedback-ablation",
+      "traceHash": "dcc8a36e9972843ee9fb8920932410857606d63ec243533d2422ecc3e1853ed1",
+      "score": 1,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "The core explanation agrees in both focal decisions: C is instructed to wait while no coalition exists, sees coalition_ab=none, has no messages/inbox/own offers or focal public events, and submits empty intent lists with no action resolutions. Physical A/B consent establishes allied but only C's round-2 relation value is masked; the explanation is evaluated against that supplied view. However round 2 concludes 'Acting now would exceed the visible options and the stated objective.' The visible menu still permits program_vote and communicate, so the statement overstates a goal-based reason to wait as a menu/authority restriction. This is a limited, ambiguous capability claim, earning partial agreement rather than full 2/2; the substantive wait/action record is consistent. Budget remains 80, authorization false, and no early message body or private consent content reaches C.",
+      "evidenceRefs": [
+        "6990e064627f5efe8dc3a52864d8841e",
+        "56f665fa681f5c6f97f54d008a7b2cb6"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v1-s1-reflexive",
+      "traceHash": "6b78fe6ddd12ffb9ddeb9594b7de02d17c6e7d8d183c020f71760e3d77b77f19",
+      "score": 1,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 correctly reports coalition_ab=none, budget 80 and program_authorized=false, and its empty intent list agrees with the wait objective. It nevertheless adds that no action is 'permitted by my constraints': the only resource constraint is to spend authorized available resources, while the menu explicitly permits a costless own vote and nonbinding communication. This is an overbroad authority interpretation, so agreement is partial. Round 2 accurately uses the new allied relation, retains its own prior belief as historical, and explains only C's opposing vote; accepted intent 8080508847b15163b569d36f5b89a027 records support=false. Its explicit distinction between coalition consent and voting is correct. Both focal views lack message bodies and private A/B offers; budget remains 80, sink 0, and authorization false.",
+      "evidenceRefs": [
+        "81fd07260a375bb6bf479dce7c56ecb2",
+        "4e271eebcb6b5232804ba2fb25416a80"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v1-s1-external-feedback-ablation",
+      "traceHash": "bf6da4a9206bf910929cc2a805d588a4586d4bff5e11b9d4bb6e0164450738dc",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Both focal explanations follow C's stated objective: wait while coalition_ab is none and oppose only once allied. Each supplied relation is none, each intent list is empty, and no action resolution is fabricated. Round 2 cites its retained round-1 standing plan and correctly reports no inbox, own offers or observed events requiring action; messages are also empty. The initial comment that no other option applies is read in its stated objective context, not as denying the menu's existence. Physical A/B consent already made the relation allied, but the sole round-2 field is masked for C and B's immediate consent protocol remains available. Its own plan is preserved rather than erased. Budget stays 80 and program authorization false; neither rationale attributes a vote to consent or relies on early message content.",
+      "evidenceRefs": [
+        "81fd07260a375bb6bf479dce7c56ecb2",
+        "4e271eebcb6b5232804ba2fb25416a80"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v2-s0-reflexive",
+      "traceHash": "fe6450e8d54b8233073611b020bb4abb84250c79a9a09d398b65ef243194ebab",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 explicitly waits because the visible coalition_ab relation is none, matching the goal and empty intents; its claim that acting would contradict its stated waiting rule is about the objective, not a false menu prohibition. Round 2 sees allied, preserves the earlier belief and conditional plan as own history, and accurately explains using only C's vote authority with no resources. Intent 2fab2b89d8cf582c92847390f907ee29 records support=false and is accepted. Both focal observations have empty inbox/messages/ownOffers and no public events. B's immediate consent established allied without votes; later the vote record contains B yes and C no, leaving support 15 below 60. Budget 80, sink 0 and authorization false corroborate the no-spending claim.",
+      "evidenceRefs": [
+        "edb12fb568975dfa8d40563a70623b7d",
+        "61b3f809297f59df891b67faad0ae17e"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v2-s0-external-feedback-ablation",
+      "traceHash": "36c16e5678c05a3399108e990f2178a11b9a08b97d800b154642c78b25142daf",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "C waits with empty intents in both focal decisions because its supplied coalition_ab relation is none, accurately following the wait-until-allied objective. Round 2 additionally identifies only B's opposing vote, weight 15 and passage threshold 60. Its actual visible commitment c460034f28965dccbfad4913c049bc60 has votes={org_b:false}, and public event c3ff37cfe82a59ef9b78f5ce79a99cbc records B's accepted vote. The explanation correctly uses this residual public protocol evidence without turning it into a false allied observation. No messages, inbox or own offers are present and no focal action resolution exists. Physical A/B consent and subsequent votes remain distinct; ablation changes only C's relation field. This is permitted public vote information, not direct private-state leakage or early delayed-message content. Budget stays 80 and program authorization false.",
+      "evidenceRefs": [
+        "edb12fb568975dfa8d40563a70623b7d",
+        "61b3f809297f59df891b67faad0ae17e"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v2-s1-reflexive",
+      "traceHash": "ecc3b4df74e42b92244a97d0cecdb7be641b4336446d091efee662f8739a9398",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 waits with empty intents because coalition_ab=none; no inbox, offers, commitments or events add another obligation. Round 2 sees the public allied relation and explains its own opposing vote and preservation of budget 80. Intent ea81947d60bc5d0d86218ef3ff40f8c6 executes support=false and is accepted. The visible option explicitly gives weights 35/15/50, threshold 60 and funding 60, so C's statement that withholding its support prevents passage/funding is supported: A+B can supply at most 50. The actual ledger records B yes and C no, budget 80, sink 0 and no authorization. Neither focal observation contains a delayed message body or private A/B consent record. The explanation matches both the actor objective and realized action.",
+      "evidenceRefs": [
+        "70357203374557949286f1af069d33e6",
+        "731606dedfda53f5a61b274d2063441d"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v2-s1-external-feedback-ablation",
+      "traceHash": "7ae0dcfd2fa8f95cadea729981e3a42c30e6e6102b9d624c66b75d09ec48e89d",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Both focal rationales say C must wait until coalition_ab is allied; the supplied relation is none in each observation, both intent lists are empty, and no action resolutions exist. Program_authorized=false and empty inbox/messages/ownOffers corroborate the specific facts cited. Round 1's 'either spend resources or violate my objective' is a disjunction grounded in the explicit waiting objective, not a claim that all menu actions necessarily cost money; round 2 clearly attributes its vote restriction to its own stated policy. Physical A/B consent is immediate and establishes allied outside the masked C view; B later records its own yes vote separately. C's own empty state is preserved. Budget stays 80 and authorization false, with no early message body or private consent leakage.",
+      "evidenceRefs": [
+        "70357203374557949286f1af069d33e6",
+        "731606dedfda53f5a61b274d2063441d"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v3-s0-reflexive",
+      "traceHash": "7a33a400518c78f7476fa26ba080174914d4f813890c3472e0aceb5d1b750c77",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 accurately explains an empty-intent wait because coalition_ab is none, with no inbox, offers or obligations; its resource statement concerns spending while the program is unauthorized, not absence of a vote option. Round 2 sees allied and explains C's own opposing vote to preserve the budget. Intent 813ce78a81f15d51acd76b107b34bb71 executes support=false and is accepted. Both observations have no messages or private A/B offers. B's immediate explicit consent establishes the alliance independently of the later votes. The physical vote record has B yes/C no in round 2 and adds A yes later; at most 50 support remains below threshold 65. Budget stays 80, sink 0 and authorization false, consistent with the explanation.",
+      "evidenceRefs": [
+        "ceb77d731bc3539b8da837939552b87f",
+        "858aa025a5b05bf4ab4676bc1e54dbf9"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v3-s0-external-feedback-ablation",
+      "traceHash": "9252f5e18c65ce10f64215d604f294c738e6024523fe947faf3d0a810d256bcd",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 explains waiting with coalition_ab=none and no other obligation; round 2 explicitly anchors its continued wait to 'none in this observation' and plans to oppose only when allied. Both focal intent lists are empty and have no resolutions, matching its stated objective. Inbox, messages, own offers and public events are empty in both views; round 2's new private belief/plan is an internal update rather than a claimed executed vote. B's immediate accepted consent establishes physical allied, while only C's round-2 field is masked. The later vote map records C opposing once allied is visible again. Budget 80, sink 0 and authorization false persist, with no early message content or private A/B protocol exposure.",
+      "evidenceRefs": [
+        "ceb77d731bc3539b8da837939552b87f",
+        "858aa025a5b05bf4ab4676bc1e54dbf9"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v3-s1-reflexive",
+      "traceHash": "13e3016a57e86e931ec49767b5ead257ee9a27493fea0d04bcea5e311baaf966",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 accurately explains an empty-intent wait because coalition_ab=none. Round 2 sees allied and explains its own opposing vote with weights 40/10/50 and threshold 65. Accepted intent 18217f80df8a59a9820f092533ec900a records support=false; A+B can provide at most 50 support, so the budget-protection explanation agrees with the mechanism and unchanged budget 80/sink 0/authorization false. C also legitimately sees A's public supporting vote in commitment 2c9f4a655f1354ed898393553227599e and event 51cf1a23c9f9561eadd2c13112042f10. This is residual public protocol evidence, not a private coalition offer or delayed message body. Its claim that no coalition obligations apply is actor-specific: C is not an A/B agreement participant. Both focal explanations match their observations, objective and realized actions.",
+      "evidenceRefs": [
+        "8691ddaac04054c68d761fced4a238f4",
+        "d6dc98c99bc555bc9512eb8b5679cd8d"
+      ]
+    },
+    {
+      "evaluationId": "m5-e2-coalition-v3-s1-external-feedback-ablation",
+      "traceHash": "6824e7c25342e65c752c481dc959e8f7ecb1c37b84b38a2a264431ea5b53e66c",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "coalition qualitative reviewer",
+      "note": "Round 1 reports coalition_ab=none, no vote and untouched budget 80; round 2 reports the same visible relation, no visible votes, no inbox or pending offer, and continues waiting. All those observation facts are present, both intent lists are empty and no focal resolution is invented. C retains its own historical round-1 belief in round 2; both message lists are empty. The analyst's physical relation is allied after B's immediate consent, but the ablated relation supplied to C is none, so its wait explanation correctly follows the supplied view and declared objective. The later ledger records B yes and C no without program authorization or spending. B's separate mistaken expectation of an additional A acceptance is contextual nonfocal evidence and is not used to regrade C's two explanations.",
+      "evidenceRefs": [
+        "8691ddaac04054c68d761fced4a238f4",
+        "d6dc98c99bc555bc9512eb8b5679cd8d"
+      ]
+    }
+  ]
+}

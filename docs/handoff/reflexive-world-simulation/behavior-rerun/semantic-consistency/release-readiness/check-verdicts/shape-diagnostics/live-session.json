@@ -1,0 +1,17 @@
+{
+  "sessionId": 25831,
+  "startedUtc": "2026-10-17T16:41:08.461944+00:00",
+  "output": "/private/tmp/drf-world-review-shape-diagnostics-20261017",
+  "manifestHash": "a3e795fa22c7b4911fe249fb11ce28269089042265c01b6a42c553600e38e427",
+  "status": "finished_awaiting_independent_review",
+  "limitUsd": "1.25",
+  "totalAuthorizationUsd": "40",
+  "sourceFrozen": true,
+  "diagnosticOnly": true,
+  "exitCode": 0,
+  "finishedUtc": "2026-10-17T16:43:51.980058+00:00",
+  "completed": 5,
+  "knownFailed": 7,
+  "actualUsd": "0.11104",
+  "unknownUsd": "0"
+}

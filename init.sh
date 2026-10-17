@@ -4,11 +4,14 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 test -f "$project_root/backend/pyproject.toml"
-test -x "$project_root/backend/.venv/bin/python"
+smoke_python="${DRF_SMOKE_PYTHON:-$project_root/backend/.venv/bin/python}"
+test -x "$smoke_python"
 test -f "$project_root/frontend/package.json"
 test -f "$project_root/deerflow_bridge/deerflow_research.py"
 
-"$project_root/backend/.venv/bin/python" -m compileall -q \
+"$smoke_python" -m compileall -q \
+  "$project_root/backend/app/services/world_simulation" \
+  "$project_root/backend/scripts/run_world_simulation.py" \
   "$project_root/backend/app/services/actor_context.py" \
   "$project_root/backend/app/services/actor_dossier_compactor.py" \
   "$project_root/backend/app/services/actor_role_prompt.py" \

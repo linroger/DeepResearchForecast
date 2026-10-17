@@ -1,0 +1,20 @@
+{
+  "exitCode": 1,
+  "sourceDrift": [],
+  "files": 535,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-condition-schedule-red-20261017T134624Z-zvko33tm/evidence",
+    "-q",
+    "backend/tests/test_world_consistency_v2_policy.py",
+    "-k",
+    "embedded_conditions"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-condition-schedule-red-20261017T134624Z-zvko33tm/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-condition-schedule-red-20261017T134624Z-zvko33tm/evidence"
+}

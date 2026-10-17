@@ -1,0 +1,18 @@
+{
+  "exitCode": 1,
+  "sourceDrift": [],
+  "files": 546,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-red-20261017T163228Z-rhtdpzxb/evidence",
+    "-q",
+    "backend/tests/test_world_review_shape_evaluation.py::test_real_sdk_known_invalid_v3_check_records_private_bound_shape"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-red-20261017T163228Z-rhtdpzxb/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-red-20261017T163228Z-rhtdpzxb/evidence"
+}
