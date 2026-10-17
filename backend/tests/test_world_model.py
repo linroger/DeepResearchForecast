@@ -372,6 +372,26 @@ def test_json_round_trip_preserves_state():
     assert clone.to_dict() == world.to_dict()
 
 
+def test_state_variable_never_keeps_a_kind_name_as_unit():
+    """Arbiter-created facts of the live run carried unit='boolean' / 'text' / 'date' (the kind
+    echoed into the unit field) and rendered as "yes boolean"; a unit belongs to numeric facts
+    only, and a kind name is never a unit — in the kernel, on load and in format_value."""
+    assert StateVariable("t", "Talks opened", True, unit="boolean", kind="boolean").unit == ""
+    assert StateVariable("d", "Deadline", "2027-03-10", unit="date", kind="text").unit == ""
+    assert StateVariable("n", "Backlog", 12, unit="numeric", kind="numeric").unit == ""
+    assert StateVariable("p", "Tariff", 10, unit="%", kind="numeric").unit == "%"
+    var = StateVariable("c", "Capacity", 120, unit="MW", kind="numeric")
+    assert var.set_value("suspended", round_num=1, source="arbiter", cause="test") is True
+    assert var.kind == "text" and var.unit == ""
+    loaded = StateVariable.from_dict({"id": "t", "name": "Talks opened", "value": True, "unit": "boolean",
+                                      "kind": "boolean"})
+    assert loaded.unit == "" and loaded.value is True
+    assert format_value(True, "boolean") == "yes"
+    assert format_value("2027-03-10", "date") == "2027-03-10"
+    assert format_value(12.0, "numeric") == "12"
+    assert format_value(12.0, "MW") == "12 MW"
+
+
 def test_state_variable_and_relationship_dicts():
     var = StateVariable("x", "X", "12%", kind="numeric")
     assert var.value == 12.0 and var.unit == "" and var.kind == "numeric"

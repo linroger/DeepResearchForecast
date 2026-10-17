@@ -5,6 +5,7 @@ fixture lets generator/report code be exercised deterministically without
 burning API calls (I-7-4: record/replay-style stub).
 """
 
+import json
 import os
 import sys
 
@@ -81,6 +82,81 @@ class FakeLLMClient:
 
     def supports_native_tools(self):
         return False
+
+
+def content_filter_error(role="user"):
+    """A provider content-moderation rejection shaped like the live Zhipu / GLM one
+    (``sim_d6ebcc77e22d``: HTTP 400, provider code 1301): the real ``openai.BadRequestError``
+    when the SDK is importable, else a duck-typed stub with the same ``status_code`` /
+    ``body`` / message so ``app.utils.llm_errors`` sees identical attributes."""
+    message = ("Error code: 400 - {'contentFilter': [{'level': 1, 'role': '" + role + "'}], "
+               "'error': {'code': '1301', 'message': '系统检测到输入或生成内容可能包含不安全或敏感内容，"
+               "请您避免输入易产生敏感内容的提示语，感谢您的配合。'}}")
+    body = {"contentFilter": [{"level": 1, "role": role}],
+            "error": {"code": "1301", "message": "系统检测到输入或生成内容可能包含不安全或敏感内容"}}
+    try:
+        import httpx
+        import openai
+        response = httpx.Response(400, request=httpx.Request("POST", "http://provider.test/v1/chat/completions"))
+        return openai.BadRequestError(message, response=response, body=body)
+    except Exception:  # noqa: BLE001 — minimal environments without the SDK
+        class BadRequestError(Exception):
+            status_code = 400
+
+        exc = BadRequestError(message)
+        exc.body = body
+        return exc
+
+
+@pytest.fixture
+def scripted_failover(monkeypatch):
+    """Factory for a real ``LLMClient`` with scripted, offline transports: the primary raises
+    ``primary_error``; the configured fallback provider (the S9 failover inside
+    ``LLMClient.chat``) answers ``fallback_response`` or raises ``fallback_error``.
+    ``fallback_provider=None`` leaves the fallback unconfigured.  Returns
+    ``(client, transports)``; ``transports`` records ``(provider, is_fallback)`` per attempt
+    so tests can pin "one primary attempt, exactly one fallback retry"."""
+    import app.utils.llm_client as lc
+
+    def _reset():
+        lc._FB_AUTH_UNAVAILABLE_UNTIL.clear()
+        lc._FB_OPENAI_CLIENTS.clear()
+        lc._CB_STATE.clear()
+        getattr(lc, "_FB_MISCONFIG_WARNED", set()).clear()
+
+    _reset()
+
+    def _make(primary_error, fallback_response=None, *, fallback_error=None,
+              primary_provider="glm", fallback_provider="kimi"):
+        if fallback_provider:
+            monkeypatch.setenv("LLM_FALLBACK_PROVIDER", fallback_provider)
+            monkeypatch.setenv("LLM_FALLBACK_MODEL", "fallback-model")
+            monkeypatch.setenv("LLM_FALLBACK_API_KEY", "sk-fallback")
+            monkeypatch.setenv("LLM_FALLBACK_BASE_URL", "http://127.0.0.1:1/v1")
+        else:
+            for env in ("LLM_FALLBACK_PROVIDER", "LLM_FALLBACK_MODEL", "LLM_FALLBACK_API_KEY",
+                        "LLM_FALLBACK_BASE_URL"):
+                monkeypatch.delenv(env, raising=False)
+        monkeypatch.setattr(lc.Config, "LLM_CACHE_ENABLED", False, raising=False)
+        monkeypatch.setattr(lc.Config, "LLM_TELEMETRY_ENABLED", False, raising=False)
+        monkeypatch.setattr(lc, "_retry_delay", lambda exc, attempt: 0.0)
+        transports = []
+
+        def _transport(self, messages, temperature, max_tokens, response_format=None, tier="strong"):
+            transports.append((self.provider, bool(self._is_fallback)))
+            if not self._is_fallback:
+                raise primary_error
+            if fallback_error is not None:
+                raise fallback_error
+            return fallback_response if isinstance(fallback_response, str) else json.dumps(fallback_response)
+
+        monkeypatch.setattr(lc.LLMClient, "_chat_openai", _transport)
+        client = lc.LLMClient(provider=primary_provider, api_key="sk-primary",
+                              base_url="http://127.0.0.1:1/v1", model="primary-model")
+        return client, transports
+
+    yield _make
+    _reset()
 
 
 @pytest.fixture(autouse=True)

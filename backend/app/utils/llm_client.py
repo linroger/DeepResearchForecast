@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
 
 from ..config import Config
+from .llm_errors import describe_llm_error, is_content_filter_error
 from .logger import get_logger
 
 logger = get_logger('mirofish.llm_client')
@@ -92,7 +93,7 @@ def _err_brief(exc: Exception) -> str:
     """Short, classified error description for failover logging (S9)."""
     s = str(exc)
     low = s.lower()
-    if "new_sensitive" in low or "content" in low and "filter" in low:
+    if is_content_filter_error(exc):
         kind = "content-filter(422)"
     elif "429" in s or "rate_limit" in low or "quota" in low or "usage limit" in low:
         kind = "quota/rate-limit(429)"
@@ -124,9 +125,23 @@ except ValueError:
 
 
 def _is_content_filter(exc: Exception) -> bool:
-    s = str(exc).lower()
-    return ("new_sensitive" in s or "unprocessable" in s
-            or ("content" in s and "filter" in s) or " 422" in s or "code: 422" in s)
+    """Content-moderation rejection (MiniMax 422 new_sensitive, Zhipu 400/1301, OpenAI
+    content_filter …); the shared classification lives in ``llm_errors``."""
+    return is_content_filter_error(exc)
+
+
+def _note_failover(exc: Optional[BaseException], note: str) -> None:
+    """Attach the failover outcome to the primary error that is about to propagate
+    (``BaseException.add_note``), so callers' failure records can say whether the fallback
+    provider took the call over and, if not, why (unconfigured / skipped / failed).  One
+    note per error; a note is a courtesy and never becomes a new failure."""
+    if exc is None:
+        return
+    try:
+        if not any(str(n).startswith("fallback") for n in (getattr(exc, "__notes__", None) or [])):
+            exc.add_note(note)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # LLM-3: 429/quota 熔断（与 422 熔断共用 tripped_until）。MiniMax 硬配额耗尽后 ~1h 内每次调用
@@ -442,8 +457,8 @@ class LLMClient:
         # Circuit breaker: if the primary is in a content-filter/quota cooldown, skip the doomed
         # primary attempt entirely and go straight to the fallback (prevents the futile-call flood).
         if _cb_tripped(self.provider) and not self._is_fallback:
-            _fb = self._try_fallback(messages, temperature, max_tokens, response_format,
-                                     RuntimeError(f"circuit-breaker: {self.provider} in 422/429 cooldown"))
+            _cb_err = RuntimeError(f"circuit-breaker: {self.provider} in 422/429 cooldown")
+            _fb = self._try_fallback(messages, temperature, max_tokens, response_format, _cb_err)
             if _fb is not None:
                 result = _fb
                 served_by_fallback = True
@@ -452,10 +467,13 @@ class LLMClient:
                 # 完整的 3 次主重试（指数退避睡眠）+ 第二次回退 —— 双中断期间每次 chat()
                 # 白烧 5 次注定失败的调用（2026-07-08 实测：最高 231 错误/分钟持续 26 小时）。
                 # 直接抛出（复用穷尽路径的异常类型），让调用方快速失败。
-                raise RuntimeError(
+                _err = RuntimeError(
                     f"LLM 调用失败：主提供方 {self.provider} 处于 422/429 熔断冷却，"
                     f"且回退提供方不可用"
                 )
+                for _note in getattr(_cb_err, "__notes__", None) or []:
+                    _note_failover(_err, str(_note))
+                raise _err
         for attempt in range(MAX_RETRIES):
             if result is not None:
                 break
@@ -528,9 +546,14 @@ class LLMClient:
         primary exhausts retries / hits a content-filter. Off unless LLM_FALLBACK_PROVIDER is
         set; never recurses (the fallback client has failover disabled). Returns text or None."""
         if getattr(self, "_is_fallback", False):
-            return None
+            return None  # the fallback client never recurses (its error is reported by the primary)
         fb_provider = (os.environ.get("LLM_FALLBACK_PROVIDER", "") or "").strip().lower()
-        if not fb_provider or fb_provider == self.provider:
+        if not fb_provider:
+            _note_failover(primary_error, "fallback: not configured (LLM_FALLBACK_PROVIDER unset)")
+            return None
+        if fb_provider == self.provider:
+            _note_failover(primary_error,
+                           f"fallback: skipped (LLM_FALLBACK_PROVIDER={fb_provider} is the primary provider)")
             return None
         fb_model = (os.environ.get("LLM_FALLBACK_MODEL", "") or None)
         fb_base_url = (os.environ.get("LLM_FALLBACK_BASE_URL", "") or None)
@@ -549,6 +572,7 @@ class LLMClient:
                     "（会导致必然的 400 invalid-model）；请设置 LLM_FALLBACK_MODEL",
                     fb_provider, Config.LLM_MODEL_NAME,
                 )
+            _note_failover(primary_error, f"fallback {fb_provider}: skipped (LLM_FALLBACK_MODEL unset)")
             return None
         auth_key = (fb_provider, fb_model or "", fb_base_url or "")
         with _CB_LOCK:
@@ -558,6 +582,7 @@ class LLMClient:
                 "Skipping fallback provider %s during deterministic-failure cooldown",
                 fb_provider,
             )
+            _note_failover(primary_error, f"fallback {fb_provider}: skipped (deterministic-failure cooldown)")
             return None
         try:
             fb = LLMClient(
@@ -592,6 +617,8 @@ class LLMClient:
                         time.monotonic() + _FB_AUTH_COOLDOWN_S
                     )
             logger.error(f"回退提供方 {fb_provider} 也失败: {_err_brief(e)}")
+            _note_failover(primary_error,
+                           f"fallback {fb_provider}: failed ({describe_llm_error(e, max_chars=80)})")
             return None
 
     def chat_json(
