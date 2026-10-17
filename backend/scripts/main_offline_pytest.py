@@ -229,6 +229,33 @@ class Guard:
             self.deny("external_read", path=display[:240], category=category)
         return candidate
 
+    def traversal_directory(self, path, flags, dir_fd=None):
+        """Authorize only no-follow directory handles leading to allowed roots.
+
+        This grants no directory listing, file read, write, or cwd permission:
+        those operations still pass through path(). Secure openat readers need
+        ancestor handles to reach an otherwise already-allowed fixture file.
+        """
+        required = getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        allowed = required | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+        if not getattr(os, "O_DIRECTORY", 0) or not getattr(os, "O_NOFOLLOW", 0):
+            return None
+        if flags & required != required or flags & ~allowed or isinstance(path, int):
+            return None
+        raw = Path(os.fsdecode(path))
+        if dir_fd not in (None, -1) and not raw.is_absolute():
+            raw = self.directory_fd(dir_fd) / raw
+        if self.protected_reason(raw):
+            return None
+        candidate = raw.resolve()
+        if candidate in self.read_files or any(candidate.is_relative_to(base) for base in self.read_roots):
+            return None  # Ordinary read permission already covers this path.
+        roots = [*self.read_roots, *(path.parent for path in self.read_files)]
+        if not any(base.is_relative_to(candidate) for base in roots):
+            return None
+        self.record("allow:directory_traversal")
+        return candidate
+
     def audit(self, event, args):
         if event in {"os.putenv", "os.unsetenv"} and self.configured:
             name = os.fsdecode(args[0])
@@ -362,7 +389,9 @@ class Guard:
         original_open, original_close = os.open, os.close
 
         def tracked_open(path, flags, mode=0o777, *, dir_fd=None):
-            checked = self.path(path, write=bool(flags & WRITE_FLAGS), dir_fd=dir_fd, allow_devnull=True)
+            checked = self.traversal_directory(path, flags, dir_fd)
+            if checked is None:
+                checked = self.path(path, write=bool(flags & WRITE_FLAGS), dir_fd=dir_fd, allow_devnull=True)
             # Authorization resolves paths; execution retains the caller's
             # path/flags so O_NOFOLLOW and O_EXCL keep their normal semantics.
             self.open_ticket.value = (os.fspath(path), flags & ~getattr(os, "O_CLOEXEC", 0))

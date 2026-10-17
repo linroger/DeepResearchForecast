@@ -1,0 +1,27 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 9961,
+  "status": "completed",
+  "exit_code": 1,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/source/backend/scripts/main_offline_pytest.py": "b2bd4469cdeb5f94097aafc5b81b0bf634fefd2fe1810dd3b3d0c0d42ff0a15b",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/source/backend/tests/test_world_withheld_diagnostics.py": "78c9b94a8851be2e11090e1b15fa27a0d483d034e0ffda0de7e1a331689152f4",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/source/backend/app/config.py": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/source/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/source/backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

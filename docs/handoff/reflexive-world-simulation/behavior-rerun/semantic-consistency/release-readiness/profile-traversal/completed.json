@@ -1,0 +1,66 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 74999,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 3,
+    "blocked:child_process_limit": 3,
+    "blocked:credential_path": 7,
+    "blocked:external_write": 11,
+    "blocked:identity_environment": 1,
+    "blocked:sqlite_uri": 9,
+    "blocked:network:socket.__new__": 2,
+    "blocked:network:socket.getaddrinfo": 3,
+    "blocked:network:socket.bind": 1,
+    "quarantine:oasis_import_cwd": 3,
+    "blocked:external_read": 25,
+    "blocked:process:subprocess.Popen": 6,
+    "blocked:saved_data": 1,
+    "blocked:changed_child_script": 1,
+    "allow:directory_traversal": 312
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/tests/test_main_offline_runner.py": "712a89649c4e6cab78c74dc3177458cd6e1811eac850a0e3bbb88894b5126447",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/tests/test_world_default_admission.py": "a80ef587fc5c899f9927d050df41298527a02125a3861c186673052cb998bce7",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/tests/test_world_fresh_launch.py": "05b8540ae738e4ac169168d3af2de9d2368749a4f7f92e491cedc2a0698d8503",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/app/config.py": "5fa9964eeabdc9c9a8db8935d5bdd7514bc67d23e037f8b1ea8c4270dbba206c",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source/backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0",
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence/tmp/control-bt5d2oww/bounded_fixture.py": "33a92591099f3ffa6d5f79e5bcce5f86829bea3c1378af36fb7dc8481bd72284",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence/tmp/control-is7yvfj1/fixture.py": "91b4dda132c6c71455351219f79239c8504e1f6678e95c5e2d4ebf0086ef8310",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence/tmp/control-4ckc2ai7/relative_fixture.py": "b63bb08cbf0190fe96f1069bc9d1cf6953181c013484b3619cf58641c6cba6a9",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence/tmp/control-f7t1wnsm/changed.py": "0e0e7eaed7cbb486356c6101499ffe3dfbb88d49e884aaa1d604f970fb8c214c"
+  },
+  "children": {
+    "75021": {
+      "exit_code": 0,
+      "receipt": "process-75021.json"
+    },
+    "75022": {
+      "exit_code": 0,
+      "receipt": "process-75022.json"
+    },
+    "75396": {
+      "exit_code": 0,
+      "receipt": "process-75396.json"
+    }
+  },
+  "identity_preserved": true
+}

@@ -200,3 +200,29 @@ def test_conflicting_binding_cannot_write_first_location(tmp_path):
     with pytest.raises(ValueError, match='conflicts'):
         module.persist_phase_records(records, {'output': 'new'}, {'manifestHash': 'new'})
     assert not (records / 'live-evaluation-location.json').exists()
+
+
+def test_explicit_additional_authorization_keeps_all_prior_consumption(launch):
+    module, repo, notes, offline, output, budget = launch
+    budget['authorizedUsd'] = '40'
+    budget['phases'][-1]['limitUsd'] = '20'
+    write(notes / 'live-budget.json', budget)
+    with pytest.raises(ValueError):
+        module.admit_launch(repo, notes, offline, output)
+    authorization = {'schemaVersion': 'world-evaluation-authorization/v1', 'originalAuthorizedUsd': '25',
+                     'totalAuthorizedUsd': '40', 'amendments': [
+                         {'previousTotalUsd': '25', 'additionalUsd': '15', 'newTotalUsd': '40',
+                          'confirmedUtc': '2026-10-17T14:25:00Z', 'userReply': 'Raise total ceiling to $40',
+                          'scope': 'Diagnostic and full release study, all prior exposure counted.'}]}
+    write(notes / 'evaluation-budget-authorization.json', authorization)
+    assert module.admit_launch(repo, notes, offline, output)['maximum'] == '20'
+    budget['phases'][-1]['limitUsd'] = '31'
+    write(notes / 'live-budget.json', budget)
+    with pytest.raises(ValueError):
+        module.admit_launch(repo, notes, offline, output)
+    budget['phases'][-1]['limitUsd'] = '20'
+    write(notes / 'live-budget.json', budget)
+    authorization['amendments'][0]['additionalUsd'] = '16'
+    write(notes / 'evaluation-budget-authorization.json', authorization)
+    with pytest.raises(ValueError):
+        module.admit_launch(repo, notes, offline, output)

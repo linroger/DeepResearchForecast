@@ -85,6 +85,38 @@ class MainOfflineControls(unittest.TestCase):
         finally:
             os.close(fd)
 
+    def test_secure_directory_traversal_does_not_allow_listing_or_external_files(self):
+        target = self.work / "profile.json"
+        target.write_text('{"fixture":true}')
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+        with self.assertRaisesRegex(PermissionError, "external_read"):
+            os.open("/", os.O_RDONLY)
+        fd = os.open("/", flags)
+        try:
+            with self.assertRaisesRegex(PermissionError, "external_read"):
+                os.listdir(fd)
+            with self.assertRaisesRegex(PermissionError, "external_read"):
+                os.scandir(fd)
+            with self.assertRaisesRegex(PermissionError, "external_read"):
+                os.open("etc/passwd", os.O_RDONLY, dir_fd=fd)
+            with self.assertRaisesRegex(PermissionError, "credential_path"):
+                os.open(str(self.work / ".env").lstrip("/"), os.O_RDONLY, dir_fd=fd)
+            with self.assertRaisesRegex(PermissionError, "external_write"):
+                os.open("outside.txt", os.O_WRONLY | os.O_CREAT, dir_fd=fd)
+            with self.assertRaisesRegex(PermissionError, "external_read"):
+                os.open(str(self.guard.root.parent / "unallowed-sibling").lstrip("/"), flags, dir_fd=fd)
+            for part in self.work.parts[1:]:
+                child = os.open(part, flags, dir_fd=fd)
+                os.close(fd)
+                fd = child
+            leaf = os.open("profile.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                self.assertEqual(os.read(leaf, 100), b'{"fixture":true}')
+            finally:
+                os.close(leaf)
+        finally:
+            os.close(fd)
+
     def test_guarded_child_propagation_with_minimal_env(self):
         script = self.work / "fixture.py"
         script.write_text('''import atexit, json, os, socket, sys, tempfile

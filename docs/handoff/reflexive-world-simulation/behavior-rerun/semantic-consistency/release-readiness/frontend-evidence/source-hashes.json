@@ -1,0 +1,7 @@
+{
+  "frontend/src/views/ResearchView.vue": "0b6f4108d954147f3f9eda3f479ea7c9789b3824da202dd4390c3dfa125624c3",
+  "frontend/src/api/research.js": "e65941c6fdefa87cbb8d3e12f60103acd5dee3df99e39959cc58cf89a56b5e57",
+  "frontend/tests/researchWorldAdmission.test.mjs": "1eec75380407a690d216fa3736d33dac39ae8b691b611d8caacba6f458b8efda",
+  "frontend/src/components/research/SimulationView.vue": "6cfc7141aba01767e89d8129b1c392671e90cea7e98128cd544beb19f70fa68d",
+  "frontend/src/components/research/WorldSimulationView.vue": "e95be7d1ba19bcffbe3e2f61e0e9f319d50bfae9d1aa8c979a14081e81cd469a"
+}

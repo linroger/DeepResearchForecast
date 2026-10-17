@@ -382,6 +382,8 @@ def _bind_external_policy(policy, spec):
         '_input_rate': decimal(tariff['inputUsdPerMillion']), '_output_rate': decimal(tariff['outputUsdPerMillion']),
         '_overhead': tariff['inputOverheadTokens'], '_output_parameter': tariff['outputTokenParameter'],
         '_reasoning_effort': config.get('reasoningEffort'), 'decision_review': config.get('decisionReview'),
+        '_response_format': config.get('responseFormat'),
+        'candidate_repair': config.get('candidateRepair'),
         'max_intents': limits['maxIntentsPerPhase'], '_max_messages': limits['maxInboxItems'],
         '_max_message_chars': limits['maxMessageChars'], '_actors': frozenset(a['actorId'] for a in spec['actors']),
     }
@@ -402,6 +404,7 @@ class _ReservedPolicy:
         self.external = bool(getattr(policy, 'external', False))
         self.supports_feedback = getattr(policy, 'supports_feedback', False) is True
         self.decision_review = getattr(policy, 'decision_review', None)
+        self.candidate_repair = getattr(policy, 'candidate_repair', None)
         self._lock = threading.Lock()
         self.calls = []
         if mode == 'external':
@@ -433,6 +436,9 @@ class _ReservedPolicy:
                           'elapsedNs': time.monotonic_ns() - start}
                 if self.decision_review is not None:
                     record['purpose'] = 'revision' if review is not None else 'candidate'
+                    if self.candidate_repair is not None and review is not None:
+                        record['reviewInputKind'] = ('candidate_error' if review.get('schemaVersion') ==
+                                                    'actor-candidate-error/v1' else 'candidate')
                 self.calls.append(record)
 
 
@@ -738,7 +744,7 @@ def _operational_report(cases, receipts):
     known = [receipts[c['evaluationId']] for c in cases if c['evaluationId'] in receipts]
     attempts = [a for r in known for a in r['budget']['attempts']]
     operations = [r['operations'] for r in known if 'operations' in r]
-    return {'knownAttempts': len(attempts), 'knownRetries': sum(a['ordinal'] > 1 and a.get('purpose') != 'revision' for a in attempts),
+    report = {'knownAttempts': len(attempts), 'knownRetries': sum(a['ordinal'] > 1 and a.get('purpose') != 'revision' for a in attempts),
                 'unobservedCases': len(cases) - len(operations),
                 'rejectedCommittedIntents': sum(op['rejectedCommittedIntents'] for op in operations),
                 'totalCommittedIntents': sum(op['totalCommittedIntents'] for op in operations),
@@ -748,6 +754,18 @@ def _operational_report(cases, receipts):
                 'measuredTokensPerAttempt': _distribution([a['usage']['tokens'] for a in attempts
                                                        if a['status'] in {'succeeded', 'failed'}]),
                 'unknownAttempts': sum(a['status'] == 'unknown' for a in attempts)}
+    report.update(_candidate_repair_counts(attempts))
+    return report
+
+
+def _candidate_repair_counts(attempts):
+    # Old reports retain their exact shape. New pinned runs distinguish a
+    # reviewed usable candidate from repair of a charged failed generation.
+    if not any('reviewInputKind' in attempt for attempt in attempts):
+        return {}
+    return {'candidateRepairCalls': sum(a.get('reviewInputKind') == 'candidate_error' for a in attempts),
+            'candidateRevisionCalls': sum(a.get('reviewInputKind') == 'candidate' for a in attempts),
+            'failedGenerationAttempts': sum(a['status'] == 'failed' for a in attempts)}
 
 
 def _contrasts(cases, receipts):
@@ -800,6 +818,7 @@ def _summarize(root, manifest, state):
                              'passed' if all(c['status'] == 'passed' for c in contrasts) else 'failed')
     if any(a.get('purpose') == 'revision' for a in attempts):
         report['revisionCalls'] = sum(a.get('purpose') == 'revision' for a in attempts)
+    report.update(_candidate_repair_counts(attempts))
     report['promotionAuthorized'] = False
     _write(root / 'report.json', report)
     return report

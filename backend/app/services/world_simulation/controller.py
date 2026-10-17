@@ -8,7 +8,8 @@ from typing import Callable
 from .contracts import WorldError, clone, require, validate_decision
 from .kernel import resolve_round, stage_interactions
 from .observations import build_observation, response_actors
-from .review import review_mode, validate_assessment
+from .review import (CANDIDATE_OUTPUT_ERRORS, MODE_V3, MODE_V4, assessment_status,
+                     candidate_repair_enabled, review_mode, validate_assessment)
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ def _cancelled(cancel: Callable[[], bool]) -> None:
 
 def _consistent_decision(store, policy, slot, observation, actor_id, phase, fence, cancel):
     """Use two separately reserved stages; only the final revision can act."""
+    spec = store.spec
+    repair_enabled = candidate_repair_enabled(spec)
     state = store.consistency_state(slot)
 
     def dispatch(stage, candidate=None):
@@ -40,6 +43,9 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
         attempt = store.reserve_consistency_attempt(slot, stage, fence, reserved_tokens=reservation["tokens"],
                                                     reserved_cost=reservation["costUsd"])
         usage = None
+        withheld = False
+        decision = assessment = None
+        output_validation_error = None
         try:
             output = policy.decide(clone(observation), **kwargs)
             if isinstance(output, PolicyResponse):
@@ -47,30 +53,53 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
             else:
                 require(not getattr(policy, "external", False), "missing_usage", "External policy must return accountable output")
                 raw, usage, assessment = output, {"tokens": 0, "costUsd": "0"}, None
-            decision = validate_decision(store.spec, raw, actor_id, observation, phase=phase)
+            try:
+                decision = validate_decision(spec, raw, actor_id, observation, phase=phase)
+            except WorldError as error:
+                # Only this exact output-validation boundary supplies local
+                # origin proof. A policy's code/usage alone does not qualify.
+                output_validation_error = error
+                raise
             if stage == "revision":
                 assessment = validate_assessment(assessment, observation, decision, mode=review_mode(store.spec))
-                require(assessment["status"] == "clear", "consistency_unresolved",
+                status = assessment_status(assessment, mode=review_mode(store.spec))
+                withheld = review_mode(store.spec) in {MODE_V3, MODE_V4} and status == "unresolved" and usage is not None
+                require(status == "clear", "consistency_unresolved",
                         "The actor revision retains an unresolved consistency conflict")
         except Exception as error:
             usage = usage if usage is not None else getattr(error, "usage", None)
+            repair_eligible = False
+            if (repair_enabled and stage == "candidate" and usage is not None
+                    and isinstance(error, WorldError) and error.code in CANDIDATE_OUTPUT_ERRORS):
+                from .policy import is_candidate_output_failure
+                repair_eligible = (output_validation_error is error or is_candidate_output_failure(error))
             diagnostic = {"code": error.code if isinstance(error, WorldError) else "policy_decision_failed",
                           "message": str(error)[:400] if isinstance(error, WorldError) else "The decision was unavailable."}
             store.finish_consistency_attempt(attempt, status="failed" if usage is not None else "unknown",
-                                             usage=usage or reservation, fence=fence, error=diagnostic)
+                                             usage=usage or reservation, fence=fence, error=diagnostic,
+                                             decision=decision if withheld else None,
+                                             assessment=assessment if withheld else None,
+                                             **({"repair_eligible": True} if repair_eligible else {}))
+            if repair_eligible:
+                # A failed persistence/fence/metering check above propagates;
+                # only a durable failed candidate opens the unused revision.
+                return
             raise WorldError("required_decision_failed", "A required consistency stage failed without a replacement allowance",
                              details={"lastErrorCode": diagnostic["code"], "lastErrorMessage": diagnostic["message"]}) from None
         store.finish_consistency_attempt(attempt, status="succeeded", usage=usage, fence=fence,
                                          decision=decision, assessment=assessment if stage == "revision" else None)
 
-    if state["candidate"] is None:
+    review_input = store.consistency_review_input(slot) if repair_enabled else state["candidate"]
+    if review_input is None:
         require(state["candidateAttempt"] is None, "consistency_candidate_unavailable",
                 "A prior candidate attempt has no usable durable response; ordinary resume cannot replace it")
         dispatch("candidate")
         state = store.consistency_state(slot)
+        review_input = store.consistency_review_input(slot) if repair_enabled else state["candidate"]
     require(state["reviewAttempt"] is None, "consistency_revision_exhausted",
             "A prior revision consumed the remaining allowance; ordinary resume cannot replace it")
-    dispatch("revision", state["candidate"])
+    require(review_input is not None, "consistency_candidate_unavailable", "No durable consistency review input is available")
+    dispatch("revision", review_input)
     return store.decision(slot)
 
 
@@ -80,6 +109,8 @@ def _collect(store, policy, fence: int, snapshot: dict, round_index: int, phase:
     mode = review_mode(spec)
     require(getattr(policy, "decision_review", None) == mode, "policy_review_mismatch",
             "Effective actor review mode must match the prepared specification")
+    require(getattr(policy, "candidate_repair", None) == spec.get("policy", {}).get("candidateRepair"),
+            "policy_review_mismatch", "Effective candidate repair pin must match the prepared specification")
     store.freeze_phase(round_index, phase, actor_ids, fence)
 
     def decide(actor_id):

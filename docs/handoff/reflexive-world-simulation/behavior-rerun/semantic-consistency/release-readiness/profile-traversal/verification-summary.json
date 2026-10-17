@@ -1,0 +1,20 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 543,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence",
+    "-q",
+    "backend/tests/test_main_offline_runner.py",
+    "backend/tests/test_world_default_admission.py",
+    "backend/tests/test_world_fresh_launch.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-profile-traversal-green-20261017T145819Z-b0x1_20r/evidence"
+}

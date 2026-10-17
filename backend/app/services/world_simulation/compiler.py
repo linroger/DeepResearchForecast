@@ -443,7 +443,7 @@ def _ready_basis(basis: dict, sources: _Sources) -> bool:
 def _policy_metadata(policy: Any) -> None:
     """Preserve caller-pinned metadata; transport preflight owns full admission."""
     require(isinstance(policy, dict) and set(policy) <= {
-        "provider", "model", "baseUrl", "timeoutSeconds", "maxInputTokens", "pricing", "reasoningEffort", "decisionReview"},
+        "provider", "model", "baseUrl", "timeoutSeconds", "maxInputTokens", "pricing", "reasoningEffort", "decisionReview", "responseFormat", "candidateRepair"},
         "invalid_policy_metadata", "Policy must contain only pinned transport metadata, never credentials")
     from .policy import _endpoint
     from .review import review_mode
@@ -456,6 +456,9 @@ def _policy_metadata(policy: Any) -> None:
     if 'reasoningEffort' in policy:
         require(policy['reasoningEffort'] in {'low', 'high', 'max'},
                 'invalid_policy_metadata', 'Unsupported pinned reasoning effort')
+    if 'responseFormat' in policy:
+        require(isinstance(policy['responseFormat'], str) and policy['responseFormat'] == 'json_object',
+                'invalid_policy_metadata', 'Unsupported pinned response format')
     for key in ("timeoutSeconds", "maxInputTokens"):
         if key in policy:
             require(type(policy[key]) is int and policy[key] > 0,

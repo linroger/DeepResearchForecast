@@ -40,6 +40,8 @@ def factory_for(manifest, calls, *, first_failure=None):
         assert obs == case['actorPayload']['observation']
         assert case['caseId'] not in body['messages'][0]['content']
         assert 'analystOnly' not in request.content.decode()
+        if first_failure == 'transport':
+            return httpx.Response(429, text='SECRET_PROVIDER_ERROR_BODY')
         if len(calls) == 1 and first_failure == 'unknown':
             raise httpx.ReadTimeout('SENTINEL_PROVIDER_BODY', request=request)
         decision = raw(case['actorPayload']['candidateDecision'])
@@ -52,10 +54,19 @@ def factory_for(manifest, calls, *, first_failure=None):
         review = assessment(obs, decision)
         if manifest['pricing']['policy'].get('decisionReview') == 'actor-consistency-v2':
             review['checks'] = [{'kind': c['kind'], 'explanation': c['explanation']} for c in review['checks']]
+        elif manifest['pricing']['policy'].get('decisionReview') in {'actor-consistency-v3', 'actor-consistency-v4'}:
+            review = {'checks': [{'kind': c['kind'], 'verdict': 'consistent', 'explanation': c['explanation']}
+                                 for c in review['checks']]}
         if len(calls) == 1 and first_failure == 'unresolved':
-            review['status'] = 'unresolved'
+            if manifest['pricing']['policy'].get('decisionReview') in {'actor-consistency-v3', 'actor-consistency-v4'}:
+                review['checks'][0]['verdict'] = 'unknown'
+            else:
+                review['status'] = 'unresolved'
         if len(calls) == 1 and first_failure == 'invalid_assessment':
-            review['checks'][0]['evidencePaths'] = [['world', 'NO_SUCH_FIELD']]
+            if manifest['pricing']['policy'].get('decisionReview') == 'actor-consistency-v4':
+                review['checks'][0]['status'] = 'clear'  # reserved alternate control
+            else:
+                review['checks'][0]['evidencePaths'] = [['world', 'NO_SUCH_FIELD']]
             review['checks'][0]['explanation'] = 'SENTINEL_PROVIDER_BODY'
         return httpx.Response(200, json={'id': 'fixture', 'object': 'chat.completion', 'created': 1,
             'model': manifest['pricing']['policy']['model'],
@@ -114,8 +125,10 @@ def test_failed_replay_keeps_exposure_and_never_retries(tmp_path, failure):
         assert row['status'] == ('unknown' if failure == 'unknown' else 'failed')
         assert row['usage'] is None if failure == 'unknown' else row['usage']['tokens'] == 30
         assert 'SENTINEL_PROVIDER_BODY' not in json.dumps(journal)
-        assert row['errorMessage'] == ('Assessment evidence path is unavailable'
-                                       if failure == 'invalid_assessment' else replay._GENERIC_FAILURE)
+        expected = {'invalid_assessment': 'Assessment evidence path is unavailable',
+                    'unknown': 'Actor HTTP dispatch timed out; exposure is unknown',
+                    'unresolved': replay._GENERIC_FAILURE}
+        assert row['errorMessage'] == expected[failure]
         replay.run_evaluation(tmp_path / 'run', factory, config)
         assert len(calls) == 12
     finally:

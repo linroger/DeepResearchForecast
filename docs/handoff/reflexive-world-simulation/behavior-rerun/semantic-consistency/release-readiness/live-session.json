@@ -1,0 +1,18 @@
+{
+  "sessionId": 68438,
+  "output": "/private/tmp/drf-world-consistency-withheld-diagnostics-20261017",
+  "manifestHash": "1e1de6f225af086812c7d7f845a05517647194d0e51cac4b124ae2633749c9c7",
+  "status": "closed_transport_failures",
+  "recordedUtc": "2026-10-17T14:23:40.479611+00:00",
+  "maximumUsd": "1.25",
+  "totalRevisionCalls": 12,
+  "sourceFreeze": true,
+  "fullBehaviorGateClaim": false,
+  "exitCode": 0,
+  "completedCases": 0,
+  "unknownCalls": 12,
+  "unknownUsd": "0.640872",
+  "exposureUsd": "0.640872",
+  "diagnosticGate": "incomplete",
+  "closedUtc": "2026-10-17T14:27:06.532085+00:00"
+}

@@ -4,7 +4,8 @@
 Credentials are read in-process from the existing primary checkout configuration;
 they never appear in arguments, artifacts or output. Reuse the recorded active
 phase directory. A versioned repair phase requires closed-phase accounting in
-live-budget.json and can spend only the original authorization's remainder.
+live-budget.json and can spend only the recorded authorization's remainder.
+Explicit human amendments retain all earlier exposure; they never reset it.
 """
 import argparse
 import hashlib
@@ -12,7 +13,42 @@ import json
 import os
 from pathlib import Path
 import sys
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+
+
+def authorized_ceiling(notes):
+    """Preserve the original approval and require recorded human amendments."""
+    total = Decimal('25')
+    path = notes / 'evaluation-budget-authorization.json'
+    if not path.exists():
+        return total
+    if path.is_symlink():
+        raise ValueError('Budget authorization must be a local recorded document')
+    value = json.loads(path.read_text())
+    if (not isinstance(value, dict) or value.get('schemaVersion') != 'world-evaluation-authorization/v1'
+            or value.get('originalAuthorizedUsd') != '25' or not isinstance(value.get('amendments'), list)):
+        raise ValueError('Invalid evaluation authorization record')
+    def amount(raw):
+        if not isinstance(raw, str):
+            raise ValueError('Authorization amounts must be decimal strings')
+        try:
+            parsed = Decimal(raw)
+        except InvalidOperation:
+            raise ValueError('Authorization amounts must be decimal strings') from None
+        if not parsed.is_finite() or parsed <= 0:
+            raise ValueError('Authorization amounts must be positive and finite')
+        return parsed
+    for amendment in value['amendments']:
+        if (not isinstance(amendment, dict) or amount(amendment.get('previousTotalUsd')) != total
+                or not all(isinstance(amendment.get(key), str) and amendment[key].strip()
+                           for key in ('confirmedUtc', 'userReply', 'scope'))):
+            raise ValueError('Budget amendment must bind the previous authorization and human confirmation')
+        total += amount(amendment.get('additionalUsd'))
+        if amount(amendment.get('newTotalUsd')) != total:
+            raise ValueError('Budget amendment arithmetic does not reconcile')
+    if amount(value.get('totalAuthorizedUsd')) != total:
+        raise ValueError('Total budget authorization does not reconcile')
+    return total
 
 
 def admit_launch(repository, notes, offline_run, output):
@@ -32,7 +68,8 @@ def admit_launch(repository, notes, offline_run, output):
             raise ValueError('Source changed after offline acceptance: ' + name)
     destination = str(output.resolve())
     budget = json.loads((notes / 'live-budget.json').read_text())
-    if budget.get('authorizedUsd') != '25' or destination != budget.get('activeOutput'):
+    authorized = authorized_ceiling(notes)
+    if str(authorized) != budget.get('authorizedUsd') or destination != budget.get('activeOutput'):
         raise ValueError('Only the recorded active evaluation phase may dispatch')
     phases = [phase for phase in budget['phases'] if phase['output'] == destination]
     if len(phases) != 1 or not phases[0]['status'].startswith('authorized_after_'):
@@ -54,8 +91,8 @@ def admit_launch(repository, notes, offline_run, output):
         if not ceiling.is_finite() or ceiling < 0:
             raise ValueError('Prior phase exposure must be finite and nonnegative')
         consumed += ceiling
-    if consumed + maximum > Decimal('25'):
-        raise ValueError('Combined evaluation phases exceed original approval')
+    if consumed + maximum > authorized:
+        raise ValueError('Combined evaluation phases exceed recorded total approval')
     version = active.get('evaluationVersion')
     if version not in {'m5-behavior/v1', 'm5-behavior/v2', 'world-consistency-replay/v1'}:
         raise ValueError('Unknown evaluation version')
@@ -116,8 +153,16 @@ def provider_failure_stop(output):
     """Stop new cases after three terminal transport/metering failures."""
     failures = {'policy_transport_failed', 'policy_usage_unavailable', 'policy_identity_mismatch'}
     receipts = [json.loads(p.read_text()) for p in output.glob('*/receipt.json')]
-    return sum(r.get('errorCode') == 'required_decision_failed'
-               and r.get('errorDetails', {}).get('lastErrorCode') in failures for r in receipts) >= 3
+    count = sum(r.get('errorCode') == 'required_decision_failed'
+                and r.get('errorDetails', {}).get('lastErrorCode') in failures for r in receipts)
+    journal_path = output / 'journal.json'
+    if journal_path.exists():
+        rows = json.loads(journal_path.read_text())['cases']
+        if not isinstance(rows, dict):
+            raise ValueError('Directed transport journal must contain case records')
+        count += sum(row.get('status') in {'failed', 'unknown'} and row.get('errorCode') in failures
+                     for row in rows.values())
+    return count >= 3
 
 
 def main():

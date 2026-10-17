@@ -50,15 +50,15 @@
       <section v-if="!pipelineId" class="setup-section">
         <div class="tag-row">
           <span class="orange-tag">{{ L('一句话 · 从调研到推演', 'One prompt · research to forecast') }}</span>
-          <span class="version-text">/ DeerFlow × OASIS</span>
+          <span class="version-text">/ {{ L('DeerFlow × 多智能体模拟', 'DeerFlow × Multi-agent simulation') }}</span>
         </div>
         <h1 class="main-title">
           {{ L('输入一个问题', 'Ask one question') }}<br>
           <span class="gradient-text">{{ L('自动调研、构建世界、推演未来', 'auto-research, build a world, simulate the future') }}</span>
         </h1>
         <p class="lead">
-          {{ L('深度研究 Agent（DeerFlow）联网搜集资料、提取关键参与者并生成研究档案；据此构建知识图谱、生成数字人设、运行多智能体群体模拟（OASIS 双平台），最终由报告 Agent 产出可交互的预测报告。',
-               'A deep-research agent (DeerFlow) searches the web, extracts the key actors and builds a research dossier; the system then constructs a knowledge graph, generates digital personas, runs a multi-agent population simulation (OASIS, dual-platform), and a report agent synthesizes an interactive forecast.') }}
+          {{ L('深度研究 Agent（DeerFlow）联网搜集资料、提取关键参与者并生成研究档案；据此构建知识图谱、建立参与者模型并运行所选的多智能体模拟，最终由报告 Agent 产出可交互的预测报告。',
+               'A deep-research agent (DeerFlow) searches the web, extracts the key actors and builds a research dossier; the system then constructs a knowledge graph, models the actors, runs the selected multi-agent simulation, and a report agent synthesizes an interactive forecast.') }}
         </p>
 
         <div class="console-box">
@@ -90,9 +90,25 @@
                 <button v-for="d in depths" :key="d" :class="{active: depth===d}" @click="depth=d" :disabled="starting">{{ depthLabel(d) }}</button>
               </div>
             </div>
-            <div class="param" v-if="mode==='full'">
-              <label>{{ L('回合上限（日历模式下将粗化时间粒度，不截断预测期）','Round cap (calendar mode coarsens time granularity, never truncates the horizon)') }}</label>
-              <input v-model.number="maxRounds" type="number" min="1" :placeholder="L('留空=按时长自动','blank = auto')" class="num-input" :disabled="starting"/>
+            <div class="param">
+              <label for="simulation-engine">{{ L('模拟引擎','Simulation engine') }}</label>
+              <select id="simulation-engine" v-model="simulationEngine" class="adv-select" :disabled="starting" aria-describedby="simulation-engine-hint">
+                <option value="">{{ L('服务器默认','Server default') }}</option>
+                <option value="world-v1">{{ L('世界模拟','World simulation') }}</option>
+                <option value="oasis-legacy">{{ L('社交模拟（传统）','Social simulation (legacy)') }}</option>
+              </select>
+              <p id="simulation-engine-hint" class="param-hint">
+                {{ mode === 'research_only'
+                  ? L('仅研究模式不会运行模拟。','Research-only mode does not run a simulation.')
+                  : L('服务器默认由启动前检查确认；世界模拟的时间范围由服务器配置。','Preflight confirms the server default; the server configures the world simulation horizon.') }}
+              </p>
+              <p v-if="effectiveSimulationEngine" class="param-hint">
+                {{ L('检查确认的引擎：','Engine confirmed by preflight:') }} {{ simulationEngineLabel(effectiveSimulationEngine) }}
+              </p>
+            </div>
+            <div class="param" v-if="showRoundCap">
+              <label for="max-rounds">{{ L('回合上限（日历模式下将粗化时间粒度，不截断预测期）','Round cap (calendar mode coarsens time granularity, never truncates the horizon)') }}</label>
+              <input id="max-rounds" v-model.number="maxRounds" type="number" min="1" :placeholder="L('留空=按时长自动','blank = auto')" class="num-input" :disabled="starting"/>
             </div>
           </div>
 
@@ -118,14 +134,24 @@
           </div>
 
           <!-- T5.6: 就绪检查横幅 -->
-          <div v-if="preflightChecked && !preflightReady" class="preflight-banner err-banner">
-            <div class="pf-title">⚠ {{ L('启动前检查未通过','Not ready to launch') }}</div>
-            <ul class="pf-list">
-              <li v-for="(e, i) in preflightErrors" :key="i">{{ e }}</li>
-            </ul>
-          </div>
-          <div v-else-if="preflightChecked && preflightReady" class="preflight-banner ok-banner">
-            ✓ {{ L('配置就绪，可以启动','Configuration ready') }}
+          <div aria-live="polite" :aria-busy="preflightLoading">
+            <div v-if="preflightLoading" class="preflight-banner">
+              {{ L('正在检查启动配置…','Checking launch configuration…') }}
+            </div>
+            <div v-else-if="!preflightReady" class="preflight-banner err-banner">
+              <div class="pf-title">⚠ {{ preflightFailed
+                ? L('无法确认启动配置，请重试检查。','Unable to confirm launch configuration. Retry the check.')
+                : L('启动前检查未通过','Not ready to launch') }}</div>
+              <ul v-if="preflightErrors.length" class="pf-list">
+                <li v-for="(e, i) in preflightErrors" :key="i">{{ e }}</li>
+              </ul>
+              <button type="button" class="ghost-btn preflight-retry" :disabled="starting" @click="checkPreflight">
+                {{ L('重试检查','Retry check') }}
+              </button>
+            </div>
+            <div v-else-if="preflightChecked" class="preflight-banner ok-banner">
+              ✓ {{ L('配置就绪，可以启动','Configuration ready') }}
+            </div>
           </div>
 
           <div class="console-section btn-section">
@@ -261,6 +287,7 @@ function depthLabel(d) {
   return { quick: L('快速', 'Quick'), standard: L('标准', 'Standard'), deep: L('深度', 'Deep') }[d] || d
 }
 const maxRounds = ref(null)
+const simulationEngine = ref('') // Empty means the server resolves and pins its fresh default.
 const starting = ref(false)
 const error = ref('')
 const showSettings = ref(false)
@@ -278,20 +305,62 @@ const LANGUAGE_OPTIONS = [
 ]
 
 // —— T5.6: 启动前就绪检查 ——
-const preflightReady = ref(true)
+const preflightReady = ref(false)
 const preflightErrors = ref([])
 const preflightChecked = ref(false)
+const preflightLoading = ref(false)
+const preflightFailed = ref(false)
+const effectiveSimulationEngine = ref('')
+const showRoundCap = computed(() => mode.value === 'full' && effectiveSimulationEngine.value === 'oasis-legacy')
+let preflightRequestId = 0
+
+function simulationEngineLabel(engine) {
+  return engine === 'world-v1'
+    ? L('世界模拟', 'World simulation')
+    : L('社交模拟（传统）', 'Social simulation (legacy)')
+}
+
+function invalidatePreflight() {
+  preflightRequestId += 1
+  preflightReady.value = false
+  preflightErrors.value = []
+  preflightChecked.value = false
+  preflightLoading.value = false
+  preflightFailed.value = false
+  effectiveSimulationEngine.value = ''
+}
+
 async function checkPreflight() {
+  invalidatePreflight()
+  if (pipelineId.value) return
+  const requestId = preflightRequestId
+  const requestedMode = mode.value
+  const options = {}
+  if (researchModel.value) options.model = researchModel.value
+  if (simulationEngine.value) options.simulation_engine = simulationEngine.value
+  preflightLoading.value = true
   try {
-    const res = await getPreflight(mode.value)
-    preflightReady.value = !!(res && res.data && res.data.ready)
-    preflightErrors.value = (res && res.data && res.data.errors) || []
-  } catch (e) {
-    // 检查接口本身失败：不阻塞用户，按就绪处理（真正的错误会在 /run 时拦截）
-    preflightReady.value = true
-    preflightErrors.value = []
+    const res = await getPreflight(requestedMode, options)
+    if (requestId !== preflightRequestId) return
+    const data = res?.data
+    // Missing/mismatched admission metadata is unknown, never an inferred legacy default.
+    if (res?.success !== true || data?.mode !== requestedMode || typeof data.ready !== 'boolean' ||
+        !['world-v1', 'oasis-legacy'].includes(data.simulation_engine) ||
+        (options.simulation_engine && data.simulation_engine !== options.simulation_engine) ||
+        !Array.isArray(data.errors) || data.errors.some(item => typeof item !== 'string')) {
+      throw new Error('Invalid preflight response')
+    }
+    effectiveSimulationEngine.value = data.simulation_engine
+    preflightErrors.value = data.errors
+    preflightReady.value = data.ready && data.errors.length === 0
+  } catch {
+    if (requestId !== preflightRequestId) return
+    preflightFailed.value = true
   } finally {
-    preflightChecked.value = true
+    if (requestId === preflightRequestId) {
+      preflightChecked.value = true
+      preflightLoading.value = false
+    }
   }
 }
 
@@ -417,9 +486,10 @@ function stageLabel(name) {
   }[name] || name
 }
 
-// T5.6: 就绪检查未通过时禁用启动（preflightChecked 前不阻塞，避免初次加载抖动）
+// Only the latest completed readiness check can authorize a fresh launch.
 const canStart = computed(() =>
-  prompt.value.trim().length > 0 && (!preflightChecked.value || preflightReady.value)
+  !pipelineId.value && prompt.value.trim().length > 0 &&
+  preflightChecked.value && !preflightLoading.value && preflightReady.value
 )
 const statusTitle = computed(() => {
   if (status.value === 'completed') return mode.value === 'research_only' ? L('研究完成', 'Research complete') : L('推演完成 · 预测就绪', 'Done · forecast ready')
@@ -441,7 +511,7 @@ const tabs = computed(() => {
 })
 
 function toggleLocale() { setLocale(locale.value === 'en' ? 'zh' : 'en') }
-function onProviderChanged() { /* provider applies to new runs; nothing to refresh here */ }
+function onProviderChanged() { return checkPreflight() }
 
 function pickTab(key) {
   const t = tabs.value.find(x => x.key === key)
@@ -466,7 +536,8 @@ async function start() {
       prompt: prompt.value.trim(),
       mode: mode.value,
       depth: depth.value,
-      max_rounds: maxRounds.value || undefined,
+      ...(showRoundCap.value && maxRounds.value ? { max_rounds: maxRounds.value } : {}),
+      ...(simulationEngine.value ? { simulation_engine: simulationEngine.value } : {}),
       language: researchLanguage.value || undefined,  // T5.5
       model: researchModel.value || undefined          // T5.5
     })
@@ -863,9 +934,11 @@ onMounted(() => {
   if (saved) beginPipeline(saved)
   else checkPreflight()  // T5.6: 落地即检查就绪状态
 })
-// T5.6: 切换模式时重新检查（research_only 跳过图谱/报告 LLM 检查）
-watch(mode, () => { if (!pipelineId.value) checkPreflight() })
+// Synchronous invalidation gives each A→B→A change its own request identity,
+// even in one tick. Entering saved runs invalidates fresh readiness without fetching.
+watch([mode, researchModel, simulationEngine, pipelineId], checkPreflight, { flush: 'sync' })
 onUnmounted(() => {
+  invalidatePreflight()
   stopPolling()
   if (pidCopiedTimer) { clearTimeout(pidCopiedTimer); pidCopiedTimer = null }
 })
@@ -936,6 +1009,7 @@ onUnmounted(() => {
 .adv-row { margin-top:6px; }
 .adv-select { border:1px solid #DDD; border-radius:var(--radius, 2px); padding:8px 10px; font-family:var(--mono); font-size:.85rem; width:200px; outline:none; background:#fff; cursor:pointer; transition:border-color var(--dur-2, 180ms) var(--ease, ease); }
 .adv-select:focus { border-color:var(--orange); }
+.param-hint { max-width:340px; margin:6px 0 0; color:#666; font-size:.78rem; line-height:1.5; }
 /* T5.6 就绪横幅 */
 .preflight-banner { margin-top:14px; padding:10px 14px; font-family:var(--mono); font-size:.8rem; border-radius:var(--radius, 2px); }
 .preflight-banner.ok-banner { color:var(--color-ok, #16A34A); background:var(--color-ok-soft, #F0FDF4); border:1px solid #b7ebc6; }
@@ -943,6 +1017,7 @@ onUnmounted(() => {
 .pf-title { font-weight:700; margin-bottom:6px; }
 .pf-list { margin:0; padding-left:18px; }
 .pf-list li { margin:3px 0; line-height:1.5; }
+.preflight-retry { margin-top:8px; }
 .start-engine-btn { width:100%; background:#000; color:#fff; border:none; border-radius:var(--radius, 2px); padding:18px; font-family:var(--mono); font-weight:700; font-size:1.05rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer; transition:background var(--dur-2, 180ms) var(--ease, ease), transform var(--dur-2, 180ms) var(--ease, ease), box-shadow var(--dur-2, 180ms) var(--ease, ease); letter-spacing:1px; }
 .start-engine-btn:hover:not(:disabled) { background:var(--orange); transform:translateY(-2px); box-shadow:var(--shadow-md, 0 2px 10px rgba(10,10,10,.08)); }
 .start-engine-btn:active:not(:disabled) { transform:translateY(0); box-shadow:none; }

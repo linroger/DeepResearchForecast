@@ -1,0 +1,35 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 48015,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "source_sha256": {
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_policy.py": "b20f285710701fd096ba2f517db70b94c08dcb735d47f3e533a5ee7887267046",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_policy.py": "8e61ab7040629b20643977671a2a35f9c4092830d1773ae1202f0252120f404f",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_v2_policy.py": "3e4ef7ae8801ccf3085fd828a6de1bf62aebdccff2ea6505071afdced2f58d1d",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_v3_policy.py": "69debc3b7d9541945a0799e0dc9713f9dacf0c3da4ab988dc01ca2480b08a2de",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_controller.py": "dbbd2d21436363a496c41b94e4e11bd2faae6a8a6a7a645773f62972fc8e75a0",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_store.py": "3095d4c691920b26b6b0bc21b53fc0857e08429d965cd0ee5e6ab0e366833b8e",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_candidate_repair_controller.py": "42f0797497d70fddc4573a0f641922bd932fa3c7c5a79ce22afa5e488307c12a",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_candidate_repair_store.py": "b0917f3534b5f56711d40b6b567ebdacf0a72cc995c7d2654686f44847b66854",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/tests/test_world_consistency_v3.py": "48dc5b57b2c05dacbe08dfb6ea6b4b7add5f493687af756ca13f30a93eaf31ef",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/app/config.py": "5fa9964eeabdc9c9a8db8935d5bdd7514bc67d23e037f8b1ea8c4270dbba206c",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-clarification-20261017T162023Z-ec9k_jy6/source/backend/app/services/simulation_manager.py": "0c191685d94b14115d2238ac8bc67d9aed493affa22a63c988c5fe28154617f0"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

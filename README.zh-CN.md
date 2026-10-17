@@ -22,11 +22,13 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 `simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
 
-准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策阶段槽位在重试和恢复之后仍最多允许两次真实请求。
+准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策阶段槽位在重试和恢复之后仍最多允许两次真实请求。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。
 
 模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
 
-最近一次完整行为复测完成了全部 36 个案例及独立审查。交易领域的 6 对比较全部通过，总体 18 对必需比较中有 16 对通过。保留的投资数量与解释不一致、联盟行动早于触发条件的问题，促成了新建模拟可选的一致性复核：固定 `policy.decisionReview: "actor-consistency-v2"` 与 `limits.maxAttemptsPerSlot: 2`。一次候选决策调用后进行一次修订调用，只有有效且标记为 clear 的最终决策才可执行；失败或 unresolved 的复核会停止本回合，不增加第三次调用。历史运行及未启用该模式的行为保持不变。[一致性修复与确认报告](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/condition-schedule/REPORT.md) 区分了基于已保存上下文的定向证据与尚未通过的完整行为发布门。最新定向确认产生了 11 个有效决策，均通过行动与完整定性审查；另一次 unresolved 响应被保留为未准入，仍计入 12 次调用的分母。该确认尚不完整，完整行为发布门仍未通过。世界模式继续保持实验性显式启用；所有原始研究结果及原始 25 美元总预算均保留。
+本分支的新建世界模拟固定使用 `policy.decisionReview: "actor-consistency-v4"`、`policy.responseFormat: "json_object"`、`policy.candidateRepair: "known-output-error-v1"`，并将每个决策槽位限制为两次请求。候选决策之后进行一次最终复核；计量已知的候选格式错误可以使用尚未消耗的第二次请求，但无效或 unresolved 的最终复核不能获得第三次请求。V4 在私有审计记录中保留有界、不可信的复核字段，不将其转化为行动、权限或预测证据。历史 v1/v2/v3 运行保留各自的验证和恢复规则。
+
+最近一次完成的完整行为研究仍为 18 对必需比较中通过 16 对，因此尚未切换默认引擎。后续诊断保留了结构错误和事实性解释错误；保留更多复核数据不代表其内容正确。[当前发布记录](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md)与 [v4 契约](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md)区分源码验证与真实模型验收。所有既有结果均保留。评估授权现为总计 40 美元，包含原始 25 美元授权下已发生的全部消耗，并未重置预算。
 
 ```mermaid
 flowchart TB

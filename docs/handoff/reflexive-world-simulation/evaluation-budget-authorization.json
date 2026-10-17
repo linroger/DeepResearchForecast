@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "world-evaluation-authorization/v1",
+  "originalAuthorizedUsd": "25",
+  "totalAuthorizedUsd": "40",
+  "amendments": [
+    {
+      "previousTotalUsd": "25",
+      "additionalUsd": "15",
+      "newTotalUsd": "40",
+      "confirmedUtc": "2026-10-17T14:25:50.088479+00:00",
+      "userReply": "Raise total ceiling to $40",
+      "scope": "Diagnostic repairs and full world-v1 release evaluation; all prior exposure continues to count."
+    }
+  ]
+}

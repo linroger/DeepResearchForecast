@@ -49,6 +49,10 @@ _REVIEW_COLUMNS = {"attempt_id", "slot", "stage", "observation_hash", "candidate
 def _review_pin(spec):
     # Unpinned worlds have no dependency on, or migration to, the new journal.
     policy = spec.get("policy", {})
+    if isinstance(policy, dict) and "candidateRepair" in policy:
+        from .review import candidate_repair_enabled
+
+        candidate_repair_enabled(spec)  # Reject an invalid explicit pin before creating/opening a database.
     if not isinstance(policy, dict) or "decisionReview" not in policy:
         return None
     from .review import review_mode
@@ -450,6 +454,9 @@ class WorldStore:
                     attempts[-1]["purpose"] = entry["stage"]
                     if entry["error"] is not None:
                         attempts[-1]["errorCode"] = entry["error"]["code"]
+                    if entry["stage"] == "revision" and self._candidate_repair_enabled():
+                        first = review_entries[entry["candidate_attempt_id"]]
+                        attempts[-1]["reviewInputKind"] = "candidate" if first["status"] == "succeeded" else "candidate_error"
             # Historical allowance may exceed the per-run exposure ceiling as
             # known usage releases unused reservations. Do not apply the scalar
             # input magnitude limit to this cumulative audit total.
@@ -535,20 +542,67 @@ class WorldStore:
                 "corrupt_consistency_journal", "Pinned consistency journal is missing or has an invalid schema")
 
     @staticmethod
-    def _consistency_error(error):
+    def _consistency_error(error, *, repair_eligible=False):
         if error is None:
             return None
         require(isinstance(error, dict) and set(error) == {"code", "message"}
                 and isinstance(error["code"], str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", error["code"])
                 and isinstance(error["message"], str), "invalid_consistency_error", "Failure requires a bounded error code and message")
         # Never store an opaque exception/provider/model string, even privately.
-        return {"code": error["code"], "message": "Consistency attempt did not produce an admissible response."}
+        safe = {"code": error["code"], "message": "Consistency attempt did not produce an admissible response."}
+        if repair_eligible:
+            safe["candidateRepairEligible"] = True
+        return safe
+
+    def _candidate_repair_enabled(self):
+        policy = self._spec.get("policy", {})
+        if not isinstance(policy, dict) or "candidateRepair" not in policy:
+            return False
+        from .review import candidate_repair_enabled
+
+        return candidate_repair_enabled(self._spec)
+
+    def _candidate_repair_context(self, entry, observation):
+        """Validate a stored eligibility marker; code/usage alone never qualify."""
+        from .review import CANDIDATE_OUTPUT_ERRORS, candidate_error_context, validate_candidate_error_context
+
+        error = entry["error"]
+        require(self._candidate_repair_enabled() and entry["stage"] == "candidate" and entry["status"] == "failed"
+                and entry["usage"] is not None and entry["decision"] is None and entry["assessment"] is None
+                and isinstance(error, dict) and set(error) == {"code", "message", "candidateRepairEligible"}
+                and error["candidateRepairEligible"] is True and isinstance(error["code"], str)
+                and error["code"] in CANDIDATE_OUTPUT_ERRORS,
+                "invalid_candidate_repair", "Only explicitly eligible known candidate-output failures permit repair")
+        safe = self._consistency_error({key: error[key] for key in ("code", "message")}, repair_eligible=True)
+        require(safe == error, "invalid_candidate_repair", "Candidate repair diagnostic is not canonical")
+        context = candidate_error_context(observation, error["code"])
+        return validate_candidate_error_context(context, observation)
+
+    def _consistency_review_input(self, entry, observation):
+        if entry["stage"] == "candidate" and entry["status"] == "succeeded":
+            return entry["decision"]
+        if isinstance(entry["error"], dict) and "candidateRepairEligible" in entry["error"]:
+            return self._candidate_repair_context(entry, observation)
+        return None
 
     def _consistency_hash(self, entry):
         return digest({"schemaVersion": "world-consistency-receipt/v1", "mode": self._review_mode,
                        "specHash": digest(self._spec), **{key: entry[key] for key in (
                            "attempt_id", "slot", "stage", "observation_hash", "candidate_attempt_id", "candidate_hash",
                            "ordinal", "reserved_tokens", "reserved_cost", "status", "usage", "decision", "assessment", "error")}})
+
+    def _validated_withheld_consistency(self, entry, observation):
+        from .review import MODE_V3, MODE_V4, assessment_status, validate_assessment
+
+        require(self._review_mode in {MODE_V3, MODE_V4} and entry["stage"] == "revision" and entry["status"] == "failed"
+                and entry["usage"] is not None and entry["decision"] is not None and entry["assessment"] is not None
+                and isinstance(entry["error"], dict) and entry["error"].get("code") == "consistency_unresolved",
+                "invalid_consistency_payload", "Only validated v4 unresolved revisions may retain private evidence"
+                if self._review_mode == MODE_V4 else "Only validated v3 unresolved revisions may retain private evidence")
+        self._validated_decision(entry["decision"], observation, observation["actorId"], observation["phase"])
+        assessment = validate_assessment(entry["assessment"], observation, entry["decision"], mode=self._review_mode)
+        require(assessment_status(assessment, mode=self._review_mode) == "unresolved",
+                "invalid_consistency_payload", "Withheld evidence must retain an unresolved verdict")
 
     def _verified_consistency(self, slot):
         """Validate private state before returning any candidate or final receipt."""
@@ -589,10 +643,11 @@ class WorldStore:
                             "corrupt_consistency_journal", "Candidate has an invalid predecessor")
                 else:
                     candidate = entries[0]
-                    require(candidate["status"] == "succeeded" and candidate["decision"] is not None
+                    review_input = self._consistency_review_input(candidate, observation)
+                    require(review_input is not None
                             and entry["candidate_attempt_id"] == candidate["attempt_id"]
-                            and entry["candidate_hash"] == digest(candidate["decision"]),
-                            "corrupt_consistency_journal", "Revision is not bound to a successful candidate")
+                            and entry["candidate_hash"] == digest(review_input),
+                            "corrupt_consistency_journal", "Revision is not bound to its eligible review input")
                 require(entry["receipt_hash"] == self._consistency_hash(entry),
                         "corrupt_consistency_journal", "Consistency receipt hash changed")
                 if entry["usage"] is None:
@@ -612,14 +667,18 @@ class WorldStore:
                         if ordinal == 1:
                             require(entry["assessment"] is None, "corrupt_consistency_journal", "Candidate contains a final assessment")
                         else:
-                            from .review import validate_assessment
+                            from .review import assessment_status, validate_assessment
 
                             assessment = validate_assessment(entry["assessment"], observation, entry["decision"], mode=self._review_mode)
-                            require(assessment["status"] == "clear", "corrupt_consistency_journal", "Final assessment is not clear")
+                            require(assessment_status(assessment, mode=self._review_mode) == "clear", "corrupt_consistency_journal", "Final assessment is not clear")
                     else:
-                        require(entry["decision"] is None and entry["assessment"] is None
-                                and self._consistency_error(entry["error"]) == entry["error"],
-                                "corrupt_consistency_journal", "Failed consistency attempt has an invalid payload")
+                        if isinstance(entry["error"], dict) and "candidateRepairEligible" in entry["error"]:
+                            self._candidate_repair_context(entry, observation)
+                        else:
+                            require(self._consistency_error(entry["error"]) == entry["error"],
+                                    "corrupt_consistency_journal", "Failed consistency attempt has an invalid payload")
+                        if entry["decision"] is not None or entry["assessment"] is not None:
+                            self._validated_withheld_consistency(entry, observation)
                 attempt = {"attemptId": entry["attempt_id"], "status": entry["status"], "stage": stage}
                 if entry["error"] is not None:
                     attempt["errorCode"] = entry["error"]["code"]
@@ -657,6 +716,15 @@ class WorldStore:
             state, _ = self._verified_consistency(slot)
             return _json(state)
 
+    def consistency_review_input(self, slot):
+        """Private review input derived only from validated durable records."""
+        with self._consistency_read():
+            _, entries = self._verified_consistency(slot)
+            if not entries:
+                return None
+            observation = self._receipt(slot, "observation")
+            return _json(self._consistency_review_input(entries[0], observation))
+
     def consistency_receipt(self, slot):
         """Private audit only; public world/result exports never include this."""
         with self._consistency_read():
@@ -664,14 +732,33 @@ class WorldStore:
             if len(entries) != 2 or entries[1]["status"] != "succeeded":
                 return None
             candidate, final = entries
-            return _json({"mode": self._review_mode, "slot": slot,
+            receipt = {"mode": self._review_mode, "slot": slot,
                           "observationId": final["decision"]["observationId"], "observationHash": final["observation_hash"],
                           "candidate": state["candidate"], "candidateHash": final["candidate_hash"],
                           "finalDecisionId": final["decision"]["decisionId"], "finalDecisionHash": digest(final["decision"]),
                           "assessment": final["assessment"], "receiptHash": final["receipt_hash"],
                           "stages": [{"attemptId": item["attempt_id"], "stage": item["stage"], "status": item["status"],
                                       "usage": item["usage"], "reserved": {"tokens": item["reserved_tokens"],
-                                      "costUsd": item["reserved_cost"]}} for item in (candidate, final)]})
+                                      "costUsd": item["reserved_cost"]}} for item in (candidate, final)]}
+            if self._candidate_repair_enabled():
+                review_input = self._consistency_review_input(candidate, self._receipt(slot, "observation"))
+                kind = "candidate" if candidate["status"] == "succeeded" else "candidate_error"
+                receipt.update(reviewInputKind=kind, reviewInput=review_input, reviewInputHash=final["candidate_hash"])
+                if kind == "candidate_error":
+                    receipt["candidateHash"] = None
+            return _json(receipt)
+
+    def withheld_consistency_receipt(self, slot):
+        """Private, non-admitted v3/v4 evidence; never used by world/API exporters."""
+        with self._consistency_read():
+            _, entries = self._verified_consistency(slot)
+            if len(entries) != 2 or entries[1]["status"] != "failed" or entries[1]["assessment"] is None:
+                return None
+            entry = entries[1]  # Full mode, provenance and unresolved validation happened above.
+            return _json({"schemaVersion": "world-withheld-consistency-receipt/v1", "state": "withheld",
+                          "mode": self._review_mode, "slot": slot, "observationHash": entry["observation_hash"],
+                          "candidateHash": entry["candidate_hash"], "withheldDecision": entry["decision"],
+                          "assessment": entry["assessment"], "usage": entry["usage"], "receiptHash": entry["receipt_hash"]})
 
     def reserve_consistency_attempt(self, slot, stage, fence, reserved_tokens=0, reserved_cost="0"):
         require(stage in ("candidate", "revision"), "invalid_consistency_stage", "Unknown consistency stage")
@@ -681,10 +768,11 @@ class WorldStore:
             self._require_consistency()
             row = self._slot(slot)
             require(row["observation"] is not None, "missing_observation", "Attempt requires its persisted observation")
-            state, entries = self._verified_consistency(slot)
+            _, entries = self._verified_consistency(slot)
+            review_input = self._consistency_review_input(entries[0], json.loads(row["observation"])) if entries else None
             require(row["decision"] is None, "decision_already_saved", "A completed decision cannot dispatch again")
             require((stage == "candidate" and not entries) or (
-                    stage == "revision" and len(entries) == 1 and state["candidate"] is not None),
+                    stage == "revision" and len(entries) == 1 and review_input is not None),
                     "consistency_stage_exhausted", "Consistency stages cannot be skipped or replaced")
             exposure = self._budget()["exposure"]
             with localcontext() as context:
@@ -695,7 +783,7 @@ class WorldStore:
             attempt_id = uuid4().hex
             entry = {"attempt_id": attempt_id, "slot": slot, "stage": stage, "observation_hash": digest(json.loads(row["observation"])),
                      "candidate_attempt_id": entries[0]["attempt_id"] if entries else None,
-                     "candidate_hash": digest(state["candidate"]) if entries else None,
+                     "candidate_hash": digest(review_input) if entries else None,
                      "ordinal": len(entries) + 1, "reserved_tokens": reserved["tokens"], "reserved_cost": reserved["costUsd"],
                      "status": "unknown", "usage": None, "decision": None, "assessment": None, "error": None}
             self._db.execute("INSERT INTO attempts VALUES (?,?,?,?,?,'unknown',NULL)",
@@ -705,7 +793,9 @@ class WorldStore:
                               entry["candidate_hash"], self._consistency_hash(entry)))
         return attempt_id
 
-    def finish_consistency_attempt(self, attempt_id, *, status, usage, fence, decision=None, assessment=None, error=None):
+    def finish_consistency_attempt(self, attempt_id, *, status, usage, fence, decision=None, assessment=None, error=None,
+                                   repair_eligible=False):
+        require(type(repair_eligible) is bool, "invalid_candidate_repair", "Candidate repair eligibility must be explicit boolean metadata")
         require(status in ("succeeded", "failed", "unknown"), "invalid_attempt_status", "Invalid attempt outcome")
         require(isinstance(usage, dict) and set(usage) == {"tokens", "costUsd"}, "invalid_usage", "Usage must contain tokens and costUsd")
         normalized = self._usage(usage["tokens"], usage["costUsd"])
@@ -720,6 +810,11 @@ class WorldStore:
             _, entries = self._verified_consistency(attempt["slot"])
             entry = next((item for item in entries if item["attempt_id"] == attempt_id), None)
             require(entry is not None, "corrupt_consistency_journal", "Attempt has no consistency purpose")
+            if repair_eligible:
+                require(error is not None, "invalid_candidate_repair", "Eligible candidate failure requires a safe diagnostic")
+                error = self._consistency_error(error, repair_eligible=True)
+                marked = {**entry, "status": status, "usage": normalized, "decision": decision, "assessment": assessment, "error": error}
+                self._candidate_repair_context(marked, self._receipt(entry["slot"], "observation"))
             payload = {"status": status, "usage": normalized, "decision": decision, "assessment": assessment, "error": error}
             if entry["usage"] is not None:
                 require(all(entry[key] == value for key, value in payload.items()),
@@ -736,13 +831,14 @@ class WorldStore:
                 if entry["stage"] == "candidate":
                     require(assessment is None, "invalid_consistency_payload", "Candidate cannot contain a final assessment")
                 else:
-                    from .review import validate_assessment
+                    from .review import assessment_status, validate_assessment
 
                     assessment = validate_assessment(assessment, observation, decision, mode=self._review_mode)
-                    require(assessment["status"] == "clear", "consistency_unresolved", "Consistency assessment remains unresolved")
+                    require(assessment_status(assessment, mode=self._review_mode) == "clear", "consistency_unresolved", "Consistency assessment remains unresolved")
                     payload["assessment"] = assessment
             else:
-                require(decision is None and assessment is None, "invalid_consistency_payload", "Failed attempts cannot admit a decision or assessment")
+                if decision is not None or assessment is not None:
+                    self._validated_withheld_consistency({**entry, **payload}, json.loads(row["observation"]))
             entry.update(payload)
             self._db.execute("UPDATE attempts SET status=?,usage=? WHERE attempt_id=?", (status, canonical_json(normalized), attempt_id))
             self._db.execute("UPDATE consistency_journal SET decision=?,assessment=?,error=?,receipt_hash=? WHERE attempt_id=?",

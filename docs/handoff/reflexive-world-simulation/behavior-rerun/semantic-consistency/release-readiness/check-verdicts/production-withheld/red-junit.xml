@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.023" timestamp="2026-10-17T23:12:15.983424" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_consistency_v3" name="test_production_unresolved_reason_is_private_durable_and_not_an_action" time="0.078"><failure message="AssertionError: A validated current concern must not be discarded&#10;assert None is not None">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-production-withheld-red-20261017T151215Z-bq1uxymv/evidence/pytest-tmp/test_production_unresolved_rea0')
+
+    def test_production_unresolved_reason_is_private_durable_and_not_an_action(tmp_path):
+        from app.services.world_simulation.controller import PolicyResponse, run_round
+        from app.services.world_simulation.store import WorldStore
+        from test_world_consistency_controller import RevisingPolicy, specification
+    
+        class Concerned(RevisingPolicy):
+            decision_review = MODE_V3
+            def decide(self, obs, *, review=None):
+                output = super().decide(obs, review=review)
+                if review is None:
+                    return output
+                value = checked()
+                if obs['actorId'] == 'buyer':
+                    value['checks'][0].update(verdict='unknown', explanation='PRIVATE_VALIDATED_CONCERN')
+                return PolicyResponse(output.decision, output.usage, assessment=value)
+        spec = specification()
+        spec['policy']['decisionReview'] = MODE_V3
+        path = tmp_path / 'world.sqlite3'
+        policy = Concerned('investment')
+        with WorldStore(path, spec) as store:
+            before = store.head()
+            fence = store.acquire_writer('writer')
+            with pytest.raises(WorldError, match='consistency stage'):
+                run_round(store, policy, fence)
+            entry = store._verified_consistency('1:proposal:buyer')[1][-1]
+&gt;           assert entry['assessment'] is not None, 'A validated current concern must not be discarded'
+E           AssertionError: A validated current concern must not be discarded
+E           assert None is not None
+
+backend/tests/test_world_consistency_v3.py:52: AssertionError</failure></testcase></testsuite></testsuites>

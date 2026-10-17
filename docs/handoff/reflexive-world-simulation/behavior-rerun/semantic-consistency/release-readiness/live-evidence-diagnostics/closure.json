@@ -1,0 +1,21 @@
+{
+  "originalOutput": "/private/tmp/drf-world-consistency-withheld-diagnostics-20261017",
+  "verification": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-transport-closeout-t3b5dc8v/evidence",
+  "artifactHashes": {
+    "report.json": "e2e5327964ec9bdf13ba043e8eecb26fda91dc5e0637beb1932fbfc6f5c47e8d",
+    "summary-junit.xml": "248a4375659f0d0e31e33dc1da4a2541ed2cffcb120da45960f364257dd167bd",
+    "evidence-review.json": "da4e23cd5fd0b5e7c7dc74d818736e42eac52ac8caaa046fe028c798b38a6736",
+    "summary-completed.json": "74b77a4108c93beee3678d82a1e60e2197ddd9bc1f478d9a48a162902c14e6de",
+    "journal.json": "1ac7ecce3de0b93da371b14856bcc644c602e8906d4987dea7bb6c7a2884175b",
+    "preregistration.json": "bc3deac074d55354587ec9c872e715fdc3a94985cbd2d1a2cf7957b8113990c3"
+  },
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "priorArtifactsUnchanged": 422,
+  "frozenSourceFiles": 536,
+  "diagnosticGate": "incomplete",
+  "semanticEvidence": false
+}

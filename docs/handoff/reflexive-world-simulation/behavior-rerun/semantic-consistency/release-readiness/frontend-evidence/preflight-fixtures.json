@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "research-preflight-browser-fixtures/v1",
+  "responses": {
+    "configured_world": {
+      "method": "GET",
+      "path": "/api/research/preflight",
+      "query": {
+        "mode": "full",
+        "model": "codex"
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "default_simulation_engine": "world-v1",
+          "errors": [],
+          "mode": "full",
+          "ready": true,
+          "simulation_admission": {
+            "profile_sha256": "ae9c5a92e044536a839512ee4112fc7d9161ebada6a75af7b8f46409fe0826ad",
+            "source": "operator_profile",
+            "status": "ready",
+            "version": "simulation-admission/v1"
+          },
+          "simulation_engine": "world-v1"
+        },
+        "success": true
+      }
+    },
+    "explicit_legacy": {
+      "method": "GET",
+      "path": "/api/research/preflight",
+      "query": {
+        "mode": "full",
+        "model": "codex",
+        "simulation_engine": "oasis-legacy"
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "default_simulation_engine": "world-v1",
+          "errors": [],
+          "mode": "full",
+          "ready": true,
+          "simulation_admission": {
+            "source": "legacy",
+            "status": "ready",
+            "version": "simulation-admission/v1"
+          },
+          "simulation_engine": "oasis-legacy"
+        },
+        "success": true
+      }
+    },
+    "missing_profile": {
+      "method": "GET",
+      "path": "/api/research/preflight",
+      "query": {
+        "mode": "full",
+        "model": "codex"
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "default_simulation_engine": "world-v1",
+          "errors": [
+            "Supply a world policy or configure WORLD_POLICY_SPEC_PATH."
+          ],
+          "mode": "full",
+          "ready": false,
+          "simulation_admission": {
+            "error_code": "world_configuration_required",
+            "status": "blocked",
+            "version": "simulation-admission/v1"
+          },
+          "simulation_engine": "world-v1"
+        },
+        "success": true
+      }
+    }
+  }
+}

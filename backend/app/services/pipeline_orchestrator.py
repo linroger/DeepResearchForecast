@@ -64,6 +64,8 @@ from ..services.research_progress import (
 )
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
+from .world_simulation.admission import UNSET, resolve_fresh_simulation_request
+from .world_simulation.contracts import WorldError
 from ..services.text_processor import TextProcessor
 from ..services.zep_graph_memory_updater import ZepGraphMemoryManager
 from ..utils.actors import (
@@ -7263,6 +7265,77 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     return out
 
 
+def simulation_admission_error(error: WorldError) -> tuple[dict, int]:
+    """Public admission failure; never serialize exception/provider details."""
+    request_errors = {
+        "unsupported_engine": "Select oasis-legacy or world-v1; null is not an engine.",
+        "invalid_world_request": "World inputs must be supported JSON objects with one policy authority.",
+        "world_calendar_override": "World periods are modeled; omit max_rounds for a full world run.",
+    }
+    configuration_errors = {
+        "world_configuration_required": "Supply a world policy or configure WORLD_POLICY_SPEC_PATH.",
+        "invalid_world_profile": "The configured world profile is not valid bounded JSON.",
+        "invalid_limit": "World policy limits are invalid.",
+        "invalid_modeling_budget": "World policy needs explicit positive budgets covering one request envelope.",
+        "invalid_policy_metadata": "World policy needs supported HTTP metadata, v3 review and json_object responses.",
+        "invalid_policy_client": "World HTTP client configuration is not ready.",
+        "missing_policy_metadata": "World policy needs explicit provider, pricing and request bounds.",
+        "missing_policy_credentials": "The configured world HTTP provider needs authentication.",
+        "invalid_policy_endpoint": "World policy needs a supported credential-free HTTP endpoint.",
+        "unbounded_transport": "World policy requires a supported bounded HTTP transport; CLI is unsupported.",
+        "unsupported_policy": "World policy must match the pinned safe forecast effect and HTTP configuration.",
+        "policy_identity_mismatch": "World policy identity does not match the configured HTTP provider.",
+        "world_admission_required": "Saved world selection needs explicit policy admission; ambient policy replacement is refused.",
+        "engine_mismatch": "Pipeline and saved simulation engine pins differ.",
+    }
+    code = error.code if error.code in request_errors or error.code in configuration_errors else "world_admission_failed"
+    message = request_errors.get(code) or configuration_errors.get(code) or "World simulation configuration is not ready."
+    return {"success": False, "error": message, "error_code": code}, 400 if code in request_errors else 409
+
+
+def _fresh_simulation_options(*, mode, safety_policy, simulation_engine=UNSET,
+                              world_spec=None, world_policy_spec=None, max_rounds=None,
+                              profile_path=UNSET):
+    """Shared authoritative resolver for readiness and POST/direct admission."""
+    return resolve_fresh_simulation_request(
+        mode=mode, simulation_engine=simulation_engine, world_spec=world_spec,
+        world_policy_spec=world_policy_spec, max_rounds=max_rounds,
+        forecast_effect=safety_policy["simulation_forecast_effect"],
+        default_engine=Config.DEFAULT_SIMULATION_ENGINE,
+        profile_path=Config.WORLD_POLICY_SPEC_PATH if profile_path is UNSET else profile_path,
+    )
+
+
+def simulation_readiness(mode: str = "full", *, simulation_engine=UNSET) -> dict:
+    """Offline simulation readiness only; pair with preflight_pipeline(mode, model).
+
+    Full-world readiness constructs/closes a client without dispatch. Research-only
+    selection is deferred. Return only small metadata, never the resolved profile.
+    POST uses the same resolver in start and does not trust this earlier snapshot.
+    """
+    default = Config.DEFAULT_SIMULATION_ENGINE
+    selected = default if simulation_engine is UNSET else simulation_engine
+    result = {
+        "simulation_engine": selected if selected in ("oasis-legacy", "world-v1") else None,
+        "default_simulation_engine": default if default in ("oasis-legacy", "world-v1") else None,
+        "ready": False, "errors": [],
+        "simulation_admission": {"version": "simulation-admission/v1", "status": "blocked"},
+    }
+    try:
+        options = _fresh_simulation_options(
+            mode=mode, simulation_engine=simulation_engine,
+            safety_policy=capture_safety_policy_v1("readiness"),
+        )
+    except WorldError as error:
+        public, _ = simulation_admission_error(error)
+        result["errors"] = [public["error"]]
+        result["simulation_admission"]["error_code"] = public["error_code"]
+    else:
+        result.update(ready=True, simulation_engine=options["simulation_engine"],
+                      simulation_admission=options["simulation_admission_v1"])
+    return result
+
+
 def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[str]:
     """启动管线前的快速体检：把会在几十分钟后才暴露的配置错误提前到 POST /run 时。
 
@@ -7318,7 +7391,9 @@ def preflight_pipeline(mode: str = "full", model: Optional[str] = None) -> list[
         )
 
     # 4) 研究模型的凭据（T5.5：per-run model 覆盖时校验覆盖模型的 Key，而非 Config 默认）
-    df_model = (model or Config.DEERFLOW_MODEL or 'claude').lower()
+    df_model = (model or Config.DEERFLOW_MODEL or 'claude').strip().lower()
+    if df_model not in Config.SUPPORTED_DEERFLOW_MODELS:
+        errors.append("研究模型不受支持；请从 SUPPORTED_DEERFLOW_MODELS 中选择。")
     # T6.4: 单一真源 Config.DEERFLOW_KEY_ENV（与 validate()/doctor.sh 共用，避免三处漂移）
     _df_key_env = Config.DEERFLOW_KEY_ENV
     if df_model in _df_key_env and not os.environ.get(_df_key_env[df_model], '').strip():
@@ -8419,7 +8494,7 @@ class PipelineOrchestrator:
         """PREPARE and RUN remain pipeline stages; the service owns world execution."""
         from pathlib import Path
         from .world_simulation.artifacts import load_inputs, read_json
-        from .world_simulation.contracts import clone, require
+        from .world_simulation.contracts import clone, digest, require
         from .world_simulation.service import WorldSimulationService
         require(self._simulation_engine(state) == "world-v1", "engine_mismatch", "World pipeline required")
         manager = SimulationManager()
@@ -8455,16 +8530,35 @@ class PipelineOrchestrator:
                 require(self._validate_reuse(state, STAGE_PREPARE), "input_binding_mismatch", "World PREPARE artifacts changed")
         else:
             raw_spec = state.options.get("world_spec")
+            handoff_candidate = False
             if raw_spec is None:
                 candidate = Path(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)) / "world_modeling_candidate.json"
                 if candidate.exists():
                     raw_spec = read_json(candidate)
+                    require(isinstance(raw_spec, dict), "invalid_spec", "World modeling candidate must be an object")
                     raw_spec = raw_spec.get("world_spec", raw_spec)
+                    handoff_candidate = True
             policy_spec = clone(state.options.get("world_policy_spec"))
             require(raw_spec is not None or policy_spec is not None, "world_model_not_ready",
                     "World preparation requires world_spec, a modeling candidate, or explicit modeling policy")
             raw_spec = clone(raw_spec)
             require(raw_spec is None or isinstance(raw_spec, dict), "invalid_spec", "world_spec must be an object")
+            if handoff_candidate and "simulation_admission_v1" in state.options:
+                # A raw candidate bypasses the service's modeling policy argument.
+                # Bind its entire authority before any world creation/sealing;
+                # never fill missing pins or merge a conflicting candidate.
+                admission = state.options["simulation_admission_v1"]
+                require(isinstance(admission, dict)
+                        and admission.get("version") == "simulation-admission/v1"
+                        and admission.get("status") == "ready",
+                        "input_binding_mismatch", "Handoff candidate requires completed fresh admission")
+                authority_fields = ("policy", "limits", "forecastEffect")
+                require(isinstance(policy_spec, dict) and isinstance(raw_spec, dict)
+                        and all(key in policy_spec and key in raw_spec for key in authority_fields),
+                        "input_binding_mismatch", "Handoff candidate lacks admitted policy authority")
+                authority = {key: raw_spec[key] for key in authority_fields}
+                require(digest(policy_spec) == admission.get("profile_sha256") == digest(authority),
+                        "input_binding_mismatch", "Handoff candidate authority differs from fresh admission")
             safety = state.options.get("safety_policy_v1", {})
             policy = safety.get("simulation_forecast_effect", (raw_spec or {}).get("forecastEffect", "diagnostic_only"))
             if raw_spec is not None:
@@ -8568,13 +8662,19 @@ class PipelineOrchestrator:
         max_rounds: Optional[int] = None,
         language: Optional[str] = None,
         model: Optional[str] = None,
-        simulation_engine: str = "oasis-legacy",
+        simulation_engine=UNSET,
         world_spec: Optional[dict] = None,
         world_policy_spec: Optional[dict] = None,
     ) -> PipelineState:
         """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。"""
-        from .simulation_manager import validate_simulation_engine
-        validate_simulation_engine(simulation_engine)
+        # Resolve before directories, tasks, state writes or thread registration.
+        # Reuse this exact snapshot for persisted containment semantics.
+        safety_policy = capture_safety_policy_v1("admission")
+        simulation_options = _fresh_simulation_options(
+            mode=mode, simulation_engine=simulation_engine, world_spec=world_spec,
+            world_policy_spec=world_policy_spec, max_rounds=max_rounds,
+            safety_policy=safety_policy,
+        )
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
 
@@ -8604,16 +8704,14 @@ class PipelineOrchestrator:
             # ""=auto（不传 --target-language，模型自选）；具体值=覆盖。model: None=用 Config 默认。
             "research_language": language,
             "research_model": model or None,
-            "simulation_engine": simulation_engine,
-            "world_spec": world_spec,
-            "world_policy_spec": world_policy_spec,
+            **simulation_options,
         })
         state.options["actor_intelligence_policy_v1"] = (
             admission_actor_intelligence_policy_v1()
         )
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
-        state.options["safety_policy_v1"] = capture_safety_policy_v1("admission")
+        state.options["safety_policy_v1"] = safety_policy
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -8898,6 +8996,30 @@ class PipelineOrchestrator:
                 raise RuntimeError("缺少 research_report.md，无法继续（请重跑研究）")
 
             state = PipelineState.from_dict(data)
+            # This is first FULL admission, not resume. Never infer a saved
+            # selection from the fresh default or replace an explicit policy.
+            try:
+                engine = cls._simulation_engine(state)
+            except ValueError:
+                raise WorldError("engine_mismatch", "Saved simulation selection is invalid") from None
+            if engine == "world-v1":
+                options = state.options
+                admission = options.get("simulation_admission_v1") or {}
+                deferred = (admission.get("version") == "simulation-admission/v1"
+                            and admission.get("status") == "deferred"
+                            and admission.get("source") == "deferred")
+                if options.get("world_spec") is None and options.get("world_policy_spec") is None and not deferred:
+                    raise WorldError("world_admission_required", "Saved world policy is absent")
+                safety = options.get("safety_policy_v1")
+                if not isinstance(safety, dict) or "simulation_forecast_effect" not in safety:
+                    raise WorldError("world_admission_required", "Saved world safety policy is absent")
+                resolved = _fresh_simulation_options(
+                    mode="full", simulation_engine=engine,
+                    world_spec=options.get("world_spec"), world_policy_spec=options.get("world_policy_spec"),
+                    max_rounds=options.get("max_rounds"), safety_policy=safety,
+                    profile_path=Config.WORLD_POLICY_SPEC_PATH if deferred else None,
+                )
+                state.options = {**options, **resolved}
             # 翻转为完整模式；研究阶段保持 completed，其余阶段重置为 pending
             state.mode = "full"
             for name in STAGE_BANDS.keys():

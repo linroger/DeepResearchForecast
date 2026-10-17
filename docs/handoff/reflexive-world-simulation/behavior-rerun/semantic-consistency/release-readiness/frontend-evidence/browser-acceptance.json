@@ -1,0 +1,22 @@
+{
+  "verifiedUtc": "2026-10-17T16:12:09.622452+00:00",
+  "actualBuild": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-default-ui-final-trhhwui5/frontend/dist",
+  "fixtureSource": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-release-broad-20261017T160733Z-sx0qtt_n/evidence/research-preflight-browser-fixture.json",
+  "controls": [
+    "default world ready without round cap",
+    "legacy choice includes explicit cap4",
+    "missing profile disables launch",
+    "HTTP503 readiness disables launch",
+    "retry recovers readiness",
+    "explicit world drops stale legacy cap",
+    "English and Chinese UI headings and controls inspected"
+  ],
+  "requestsCaptured": 3,
+  "realPipelineStarts": 0,
+  "providerCalls": 0,
+  "scope": "Actual built ResearchView with actual guarded Flask preflight envelopes; run endpoint intentionally captures and refuses all launches. No full paid pipeline or mobile viewport claim.",
+  "initialHarnessErrors": [
+    "Wrong dist path fixed in isolated fixture server",
+    "Explicit IAB visibility unsupported in worker context; omitted visibility successfully opened background tab"
+  ]
+}

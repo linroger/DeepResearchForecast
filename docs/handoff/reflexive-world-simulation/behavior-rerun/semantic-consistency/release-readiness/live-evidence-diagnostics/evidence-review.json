@@ -1,0 +1,10 @@
+{
+  "reviewer": "Epicurus",
+  "scope": "Phase13journal/report,no semanticoutputs",
+  "attempts": 12,
+  "completed": 0,
+  "unknownTransportFailures": 12,
+  "unknownExposureUsd": "0.640872",
+  "behaviorCredit": false,
+  "notes": "Actualusage0isnotproofzerocharge;metadataGET200doesnotidentifycompletionfailurecause. No previousrowreset."
+}
