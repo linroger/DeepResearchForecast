@@ -19,6 +19,7 @@ per-actor decision prompts and the arbiter prompt.  Pins:
 import asyncio
 import json
 import os
+import random
 import re
 import sys
 
@@ -541,3 +542,84 @@ def test_world_round_lines_reach_simulation_log(tmp_path, monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))
+
+
+# ===========================================================================
+# OFFERS in the loop (live findings sim_1838cf014c0b): the history rows must carry the
+# round's offer lists and the behaviour block (the run summary's behaviour badge and the
+# report line are computed from them), and an actor that owes an answer decides even when
+# the activity sampler left it out of the round.
+# ===========================================================================
+class _OfferLLM(_WorldLLM):
+    def chat_json(self, messages, temperature=0.3, max_tokens=4096, **kwargs):
+        content = messages[-1]["content"]
+        rnd = self._round_of(content)
+        if "# DECIDE YOUR MOVE FOR THIS PERIOD" in content:
+            actor = re.search(r"# DECIDE YOUR MOVE FOR THIS PERIOD — (.+)", content).group(1).strip()
+            _WorldLLM.calls.append({"kind": "decision", "round": rnd, "actor": actor, "content": content,
+                                    "system": messages[0]["content"] if messages[0]["role"] == "system" else ""})
+            if actor == "Actor0" and rnd == 1:
+                return {"option_id": "open_talks", "targets": ["Actor1"], "magnitude": 0.7,
+                        "terms": "Joint review of the tariff schedule before 2026-Q4",
+                        "public_statement": "We invite Actor1 to a joint review of the tariff schedule (round 1).",
+                        "private_rationale": "lock in the importer before the schedule is published",
+                        "scenario_commitment": {"scenario": "A", "confidence": 0.8}}
+            if actor == "Actor1" and "[accept:i1_1]" in content:
+                return {"option_id": "accept:i1_1", "magnitude": 0.6,
+                        "public_statement": "Actor1 accepts the joint review of the tariff schedule.",
+                        "private_rationale": "a seat at the table beats a decree",
+                        "scenario_commitment": "abstain"}
+            return {"option_id": "hold_position", "scenario_commitment": "abstain"}
+        if "consequence arbiter" in content:
+            _WorldLLM.calls.append({"kind": "arbiter", "round": None, "actor": None, "content": content})
+            return {"narrative": "Quiet period.", "variable_changes": [], "events": [], "action_resolutions": [],
+                    "scenario_pressure": {}}
+        raise AssertionError(f"unexpected prompt: {content[:80]}")
+
+
+def test_offer_recipient_decides_and_history_rows_carry_offers_and_behaviour(tmp_path, monkeypatch):
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    monkeypatch.setattr("app.utils.llm_client.LLMClient", _OfferLLM)
+    cfg = _world_config()
+
+    class _NeverActivates(random.Random):          # the activity sampler draws 1.0 → no sampled agent
+        def random(self):                          # is ever active; only the principal (Actor0) decides
+            return 1.0                             # unless the world says an actor owes a move
+
+    monkeypatch.setattr(rps, "_RNG", _NeverActivates(7))
+    _run(cfg, sim_dir)
+
+    decisions = [c for c in _WorldLLM.calls if c["kind"] == "decision"]
+    # asked to answer in round 2 although never sampled, and again in round 3 when its obligation fell due
+    assert [c["round"] for c in decisions if c["actor"] == "Actor1"] == [2, 3]
+    actions_rows = _read_jsonl(os.path.join(sim_dir, "world_actions.jsonl"))
+    answer = [r for r in actions_rows if r["actor_name"] == "Actor1"]
+    assert [(r["round"], r["option"]["id"], r["status"]) for r in answer] == [(2, "accept:i1_1", "ok"),
+                                                                              (3, "hold_position", "ok")]
+    offer = [r for r in actions_rows if r["actor_name"] == "Actor0" and r["round"] == 1][0]
+    assert offer["option"]["id"] == "open_talks" and offer["terms"] == "Joint review of the tariff schedule before 2026-Q4"
+
+    history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
+    assert [h["round"] for h in history] == [1, 2, 3]
+    det1, det2, det3 = (h["deterministic"] for h in history)
+    for det in (det1, det2, det3):
+        assert set(det) >= {"offers_opened", "offers_answered", "offers_lapsed", "breaches"}
+    assert len(det1["offers_opened"]) == 1 and det1["offers_opened"][0].startswith("Actor0 made an offer to Actor1 [i1_1]")
+    assert det2["offers_answered"] == ["Agreement [i1_1]: Actor1 accepted Actor0's offer — Joint review of the tariff "
+                                       "schedule before 2026-Q4 (both sides' obligations due 2027-Q1)"]
+    assert det3["offers_lapsed"] == [] and det3["breaches"] == []
+    assert history[0]["behaviour"]["responsive_share"] is None and history[0]["behaviour"]["moves"] == 1
+    assert history[1]["behaviour"]["offers_answered"] == 1 and history[1]["behaviour"]["responsive_share"] == 1.0
+    assert history[1]["diff"]["interactions_changed"][0]["to"] == "accepted"
+
+    state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
+    assert state["summary"]["offers"] == {"opened": 1, "open": 0, "accepted": 1, "rejected": 0, "countered": 0,
+                                          "lapsed": 0, "breached": 0}
+    # round 1 has no prior period and round 3 has no non-hold move → only round 2 is scored
+    assert state["summary"]["behaviour"] == {"rounds_scored": 1, "moves": 1, "responsive_moves": 1,
+                                             "responsive_share": 1.0, "offers_answered": 1}
+    inter = state["world"]["interactions"][0]
+    assert inter["status"] == "accepted" and len(inter["obligations"]) == 2
+    assert all(c["source"] == "agreement:i1_1" for a in state["world"]["actors"][:2] for c in a["commitments"])

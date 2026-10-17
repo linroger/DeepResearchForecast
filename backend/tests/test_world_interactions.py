@@ -165,6 +165,29 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
     assert "Ministry withdrew" in det["breaches"][0]
 
 
+def test_answering_an_offer_counts_as_acting_on_a_due_obligation():
+    """Live finding (sim_1838cf014c0b, 2027-01): the Secretariat answered a second offer in the
+    period its first agreement fell due and was branded a breacher — the answer branch skipped the
+    "acting when due honours the obligation" rule that every other non-hold move gets."""
+    w = _world()
+    _round(w, 1, [_decision(0, "sign_agreement", targets=["Agency"], terms="Deliver audits in November"),
+                  _decision(2, "open_talks", targets=["Agency"], terms="Joint hearing in December")])
+    w.commit_round(1)
+    _round(w, 2, [_decision(1, "accept:i1_1", lag=1)])                 # Agency's obligation to Ministry due round 3
+    w.commit_round(2)
+    assert w.actors[1].pending_commitments()[0]["due_round"] == 3
+    # round 3: the Ministry acts; the Agency's only move is its answer to the Union's open offer
+    det = _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0),
+                        _decision(1, "accept:i1_2", lag=1)])
+    assert w.interactions["i1_2"].status == "accepted"
+    assert all(c["status"] == "fulfilled" for c in w.actors[1].commitments if c.get("source") == "agreement:i1_1")
+    assert not det["breaches"] and not w.events_in_round(3, ("breach",))
+    w.commit_round(3)
+    det4 = _round(w, 4, [_decision(0, "public_statement", kind="communication", lag=0),
+                         _decision(1, "public_statement", kind="communication", lag=0)])
+    assert w.interactions["i1_1"].status == "accepted" and not det4["breaches"]
+
+
 # ----------------------------------------------------------------------------- contract, prompt, persistence
 def test_decision_contract_carries_terms_and_bound_answers_parse():
     w = _world()

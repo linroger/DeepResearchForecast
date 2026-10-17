@@ -911,6 +911,16 @@ class WorldModel:
                 option_id=option_id, action_kind=kind, period_label=label)))
             if status != "ok":
                 continue
+            if option_id != "hold_position":
+                # a commitment that fell due this period is honoured by acting on it — any move,
+                # an answer to an offer included (live finding sim_1838cf014c0b: an actor that
+                # answered a second offer in the period its agreement fell due was branded a
+                # breacher); a holder lets it lapse (see lapse_overdue_commitments) — mechanical,
+                # no LLM judgement
+                for c in actor.commitments:
+                    if c.get("status") == "due":
+                        c["status"] = "fulfilled"
+                        c["fulfilled_round"] = int(round_num)
             if option_id.startswith(RESPONSE_PREFIXES):
                 # OFFERS: the recipient's answer settles the offer; nothing else in this decision
                 # can create an agreement (consent rule)
@@ -922,13 +932,6 @@ class WorldModel:
             if option.get("reversibility") == "irreversible" and option_id != "hold_position":
                 if option_id not in actor.irreversible_option_ids:
                     actor.irreversible_option_ids.append(option_id)
-            if option_id != "hold_position":
-                # a commitment that fell due this period is honoured by acting on it; a holder
-                # lets it lapse (see lapse_overdue_commitments) — mechanical, no LLM judgement
-                for c in actor.commitments:
-                    if c.get("status") == "due":
-                        c["status"] = "fulfilled"
-                        c["fulfilled_round"] = int(round_num)
             commitment = d.get("commitment") if isinstance(d.get("commitment"), dict) else None
             if commitment and _text(commitment.get("description"), 220):
                 try:
