@@ -1,8 +1,8 @@
 # Handoff.md — consolidating the two world engines (claude reflexive world model × Codex world-v1)
 
-**Last Updated (UTC):** 2026-10-17T19:35Z
-**Status:** In Progress — code complete and verified; the OPEC+ run has completed, so the merge into `main` is next
-**Current Focus:** merge `claude/world-engines-consolidation` into `main` and push `main` (`pipe_fd2799f3ad41` completed at 03:21:45 +08).
+**Last Updated (UTC):** 2026-10-17T19:45Z
+**Status:** Complete — merged into `main` as 609d5fa and pushed (`legacy/main` f78397e..609d5fa)
+**Current Focus:** none in this record; the world-v1 follow-up plan is in §9.
 
 Interpret MUST/SHOULD/MAY per RFC 2119.
 
@@ -25,7 +25,7 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
 | R2 world-v1 reviewed | four parallel read-only reviews (core engine; persistence and lifecycle; model-facing; integration and UI) with every finding triaged | `reviews/*.md`; triage in §5 and §9 |
 | R3 engines combined | both engines selectable in one tree; the simulation tab routes by the saved engine; report/API keep both paths; OASIS default unchanged | §5 decisions, §7 scenarios, coexistence tests |
 | R4 suites | full plain backend suite, all guarded tests under the runner, frontend tests, build, ruff, env drift, compileall | §8 |
-| R5 merged into main | after the OPEC+ run: merge into `main`, push `main` | pending (§9) |
+| R5 merged into main | after the OPEC+ run: merge into `main`, push `main` | 609d5fa on `legacy/main` (§4) |
 
 ## 3) Plan
 1. Consolidation worktree from the branch tip (dcff768); merge the three follow-ups. **Done.**
@@ -33,7 +33,7 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
 3. Reviews in parallel with the merge; triage; fix what affects OASIS runs, the integration, or stops a world-v1 run cheaply and certainly. **Done** (§4–§6).
 4. Docs: README (EN/ZH, line-aligned) — two engines and world-v1's known limits; review reports saved under `reviews/`. **Done.**
 5. Suites as R4. **Done** (§8).
-6. After the OPEC+ run: merge into `main`, push. **Pending.**
+6. After the OPEC+ run: merge into `main`, push. **Done** (609d5fa).
 
 ## 4) To-Do & Progress Ledger
 - [x] Worktree and follow-up merges — 06ae11b (zealous-fermi), e51d621 (epic-villani), ecf4cf3 (translation chain); conflicts resolved in date order; world + translation suites 261 passed, frontend 163 passed.
@@ -50,7 +50,7 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
   - 1bbe6df — pure kernel and grammar suites run in the normal gate (102 tests).
   - 98e9c91 — engine selector names and order.
 - [x] Suites — §8.
-- [ ] Merge into `main` after the OPEC+ run; push `main`.
+- [x] Merge into `main` — 609d5fa, a `--no-ff` merge whose tree is byte-identical to the tested tip 9045c9d (parents f78397e and 9045c9d), made with `git commit-tree` + `git update-ref` (old-value checked) because no worktree has `main` checked out; pushed with `env -u GH_TOKEN git push legacy main` (f78397e..609d5fa); `git ls-remote` confirms. The merge changes nothing under `docs/` outside `docs/handoff/`, so the demo site's pages are unchanged. This record's final update is the commit after 609d5fa.
 
 ## 5) Findings, Decisions, Assumptions
 - **Finding:** the Codex branch moved after the 2026-10-17 study (95ebd04 → a6fbbc0: decision review modes v2–v4, candidate repair, consistency controller, default/fresh admission, transport diagnostics); its worktree was clean at the merge. Something else wrote untracked files into the Codex worktree at 02:44 (`docs/handoff/reflexive-world-simulation/behavior-rerun/.../evidence-recovery/`); the branch tip did not move, and those files are not part of this merge.
@@ -101,7 +101,7 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
   The evidence directory MUST be new for each run; in zsh, split a list variable with `${=VAR}`.
 
 ## 9) Remaining Work & Next Steps
-- **Merge (critical path):** when `pipe_fd2799f3ad41` is terminal and nothing resumes it, record a `--no-ff` merge of `claude/world-engines-consolidation` into `main` (legacy/main = local main = f78397e, an ancestor of the branch), push with `env -u GH_TOKEN git push legacy main`, and confirm `legacy/main` matches. The deployment checkout is on `claude-reflexive-world-state-model`, so updating `main` does not touch the running pipelines.
+- **Deployment (owner's call):** the deployment checkout still serves `claude-reflexive-world-state-model` (dcff768) plus another process's uncommitted edits on ports 5001/5013; it does not run the merged code until someone switches it to `main` after those edits are settled.
 - **world-v1 follow-up (not fixed here; owner decides when):**
   - *Stops a run:* PID-reuse writer liveness after a reboot (use the launch flock, SIGTERM → cancel-and-release, log pre-fence failures); boundary effects that raise in `_advance` (record `*_failed` events or tighten admission); any 429/1302 is terminal (classify with `llm_errors`, back off with Retry-After, share `model_call_lease`, stop resumably); mandatory v4 review makes `unknown`/`inconsistent` terminal; the per-round event limit kills a round; resume burns non-restorable attempts.
   - *Usable on real dossiers:* the compiler/modeler cannot cite v3 research (no claims, offsets plus SHA-256, JSON-parsable quotes), modeler requests exceed the pinned 60k input bound, no repair path, attempt rows lack error codes; NFKC rejects CJK names with full-width parentheses; 1301 handling; truncation and a `thinking: disabled` pin; bind world runs to their research generation so reports get official data.
@@ -111,9 +111,10 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
 - **Risks:** none of the deferred items affects OASIS runs; world-v1 remains opt-in, and an operator who selects it on a real dossier will hit the known limits the README states.
 - **OPEC+ run:** completed at 2026-10-18 03:21:45 +08 (`report_11f6161e92c9`), so the merge gate is met.
 - **Live check of the merged tree (03:24–03:30 +08, :5021, read-only, real uploads):** preflight ready with engine `oasis-legacy` and no errors; `/api/simulation/history` and `/list` 200 (55 each); all 76 report folders through `/api/report/<id>`: 73 × 200, 3 × 404 (test folders without `meta.json`, also 404 on the deployment), no 409; the dashboard's engine selector shows the new names and order, Start enables once a question is typed (not pressed); the OPEC+ simulation tab renders the OASIS view, world state and feed for 2027-01 (`round=4` requests 200); its report renders with all report requests 200.
-- **Next working interval:** merge and push; update the memory record; stop the :5021 test backend and remove the worktree's `backend/uploads` symlink.
+- **Cleanup done:** the :5021 test backend is stopped and the consolidation worktree's `backend/uploads` symlink removed; the branch `claude/world-engines-consolidation` is fast-forwarded to `main`.
 
 ## 10) Updates to This File (append-only)
 - 2026-10-17T18:40Z: created after the follow-up and Codex merges; reviews and suites running.
 - 2026-10-17T19:25Z: reviews saved under `reviews/`; findings triaged; eight fix commits recorded (§4); final-tree suites recorded (§8); world-v1 follow-up plan (§9); the merge waits because the OPEC+ run was resumed on :5013 at 03:12 +08.
 - 2026-10-17T19:35Z: plain-suite totals recorded from JUnit (the `-qq` trap in §6); OPEC+ run completed; live read-only check of the merged tree on :5021 recorded (§9).
+- 2026-10-17T19:45Z: merged into `main` as 609d5fa and pushed; status Complete; deployment note and cleanup recorded (§9).
