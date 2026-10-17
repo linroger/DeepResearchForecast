@@ -2520,7 +2520,12 @@ class SimulationRunner:
         """
         from .world_simulation.service import WorldSimulationService
         for simulation_id in tuple(cls._world_simulations):
-            WorldSimulationService.stop(simulation_id, root=cls.RUN_STATE_DIR)
+            # one broken world (corrupt or half-initialised store, deleted directory) must not
+            # stop the OASIS teardown below from running inside the signal handler
+            try:
+                WorldSimulationService.stop(simulation_id, root=cls.RUN_STATE_DIR)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"停止 world-v1 模拟失败（继续清理其余进程）: {simulation_id}: {exc}")
         cls._world_simulations.clear()
         # 防止重复清理
         if cls._cleanup_done:

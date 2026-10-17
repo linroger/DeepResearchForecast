@@ -1578,10 +1578,15 @@ class SimulationManager:
                 if sim_id.startswith('.') or not os.path.isdir(sim_path):
                     continue
                 
-                state = self._load_simulation_state(sim_id)
-                if state:
-                    if project_id is None or state.project_id == project_id:
+                # One unloadable entry (a Finder duplicate such as "sim_x copy", a symlinked
+                # directory, a corrupt state.json or a broken world store) must not take the whole
+                # list down for every engine; single-simulation reads still fail loudly.
+                try:
+                    state = self._load_simulation_state(sim_id)
+                    if state and (project_id is None or state.project_id == project_id):
                         simulations.append(self._project_world_status(state))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"跳过无法加载的模拟目录 {sim_id!r}: {type(exc).__name__}: {exc}")
         
         return simulations
     
