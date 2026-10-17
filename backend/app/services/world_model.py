@@ -54,6 +54,20 @@ EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "
 PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concession", "sign_agreement",
                                  "partnership_deal", "bargain", "convene", "program_decision"})
 RESPONSE_PREFIXES = ("accept:", "reject:", "counter:", "defer:")
+# OFFERS, mirror-image rule: an ``accept:`` answer adopts the offer's terms verbatim.  When the
+# acceptor writes its own ``terms`` the kernel compares them with the offer (``terms_restate_offer``).
+# Terms that are empty, a word-bounded fragment of the offer, or too short to state terms of their
+# own (fewer than ACCEPT_TERMS_MIN_TOKENS content tokens — "Accepted as proposed") bind as an
+# acceptance, as do terms whose content tokens overlap the offer's by at least
+# ACCEPT_TERMS_OVERLAP_MIN and that introduce no figure (token with a digit) the offer lacks.
+# Anything else — a narrowing, an added condition, a changed number or date — is recorded as a
+# counter-offer back to the proposer, never as an agreement.  Live finding 2026-10-17
+# (sim_1838cf014c0b): the OPEC Secretariat chose ``accept:`` on Iraq's baseline bargain with terms
+# that only acknowledged conformity data, and the kernel bound it to a baseline it never agreed to.
+# 0.6 is deliberately strict: a wrongly recorded counter costs one round (the proposer can accept
+# it); a wrongly recorded acceptance binds an actor to terms it did not consent to.
+ACCEPT_TERMS_OVERLAP_MIN = 0.6
+ACCEPT_TERMS_MIN_TOKENS = 3
 INTERACTION_TTL_PERIODS = 2          # an unanswered offer lapses after this many periods
 INTERACTION_MAX_DEFERRALS = 2        # a deferral moves the deadline one period, at most this often
 INTERACTION_TERMS_MAX_CHARS = 300
@@ -80,6 +94,22 @@ _SCALE_WORDS = (
 _CURRENCY_PREFIX = re.compile(r"^(?:us\$|usd|eur|gbp|cny|rmb|jpy|hk\$|a\$|c\$|[$€£¥￥]|美元|人民币|元)\s*",
                               re.IGNORECASE)
 _NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
+
+# terms comparison (``terms_restate_offer``): CJK ideographs / kana / hangul carry no word spaces,
+# so they are compared as character bigrams; everything else as casefolded word / digit runs
+_CJK_RANGE = "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af"
+_CJK_CHAR_RE = re.compile(f"[{_CJK_RANGE}]")
+_TERMS_TOKEN_RE = re.compile(f"[{_CJK_RANGE}]|[^\\W_{_CJK_RANGE}]+")
+_OFFER_ID_RE = re.compile(r"\[?\bi\d+_\d+\]?")
+# function words and acceptance boilerplate: saying yes to an offer is not stating terms of one's own
+_TERMS_STOPWORDS = frozenset((
+    "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "with", "as", "is", "are",
+    "be", "will", "that", "this", "it", "its", "we", "our", "you", "your", "i", "s",
+    "accept", "accepts", "accepted", "accepting", "acceptance", "agree", "agreed", "agrees", "yes", "ok",
+    "okay", "offer", "offers", "proposal", "proposed", "terms", "stated",
+    "我们", "我方", "贵方", "对方", "接受", "同意",
+    "要约", "提议", "条款", "按照", "如上", "所述",
+))
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +153,50 @@ def _items(values: Any, limit: int = 6, max_chars: int = 200) -> List[str]:
         if len(out) >= limit:
             break
     return out
+
+
+def _terms_tokens(text: Any) -> List[str]:
+    """Comparable units of an offer's or an answer's terms: NFKC-casefolded word and digit runs,
+    CJK runs as character bigrams (a lone character stays itself); offer ids such as ``[i1_1]``
+    are dropped so that quoting the id never counts as new content."""
+    norm = _OFFER_ID_RE.sub(" ", unicodedata.normalize("NFKC", str(text or "")).casefold())
+    out: List[str] = []
+    run: List[str] = []
+
+    def flush() -> None:
+        if len(run) == 1:
+            out.append(run[0])
+        elif run:
+            out.extend(a + b for a, b in zip(run, run[1:], strict=False))   # bigrams: lengths differ by one
+        run.clear()
+
+    for tok in _TERMS_TOKEN_RE.findall(norm):
+        if _CJK_CHAR_RE.fullmatch(tok):
+            run.append(tok)
+        else:
+            flush()
+            out.append(tok)
+    flush()
+    return out
+
+
+def terms_restate_offer(offer_terms: Any, answer_terms: Any) -> bool:
+    """True when an acceptor's ``terms`` adopt the offer (so ``accept`` binds), False when they
+    differ materially (so the answer is recorded as a counter-offer).  Deterministic, see the
+    comment at ``ACCEPT_TERMS_OVERLAP_MIN`` / ``ACCEPT_TERMS_MIN_TOKENS``."""
+    answer = _terms_tokens(answer_terms)
+    if not answer:
+        return True
+    offer = _terms_tokens(offer_terms)
+    if f" {' '.join(answer)} " in f" {' '.join(offer)} ":      # identical, a prefix or a fragment
+        return True
+    content = {t for t in answer if t not in _TERMS_STOPWORDS}
+    if len(content) < ACCEPT_TERMS_MIN_TOKENS:                  # a bare acknowledgement
+        return True
+    offered = set(offer)
+    if any(t not in offered and any(ch.isdigit() for ch in t) for t in content):
+        return False                                            # a figure or date the offer lacks
+    return len(content & offered) / len(content) >= ACCEPT_TERMS_OVERLAP_MIN
 
 
 def normalize_label(value: Any) -> str:
@@ -1030,6 +1104,11 @@ class WorldModel:
         inter.resolved_round = int(round_num)
         label = str((self.period or {}).get("label") or "")
         events: List[WorldEvent] = []
+        accept_as_counter = False
+        if verb == "accept" and not terms_restate_offer(inter.terms, terms):
+            # OFFERS, mirror-image rule: an acceptance on materially different terms is a
+            # counter-offer — the acceptor never agreed to the proposer's text (ACCEPT_TERMS_*)
+            verb, accept_as_counter = "counter", True
         if verb == "accept":
             inter.status = "accepted"
             due = int(round_num) + max(1, int(lag or 0))
@@ -1063,8 +1142,15 @@ class WorldModel:
             inter.status = "countered"
             new_terms = (_text(terms, INTERACTION_TERMS_MAX_CHARS)
                          or _text(statement, INTERACTION_TERMS_MAX_CHARS) or inter.terms)
+            if accept_as_counter:
+                # (the round record lists this under offers_answered: no " made an " in the text)
+                description = (f"{rname} answered {pname}'s offer [{inter.id}] with different terms — recorded "
+                               f"as a counter-offer, not an acceptance, because accept adopts the offer's terms "
+                               f"verbatim")
+            else:
+                description = f"{rname} countered {pname}'s offer [{inter.id}]"
             events.append(self._add_event(WorldEvent(
-                round_num, "offer", f"{rname} countered {pname}'s offer [{inter.id}]",
+                round_num, "offer", description,
                 actors=[rname], targets=[pname], source="interaction", statement=statement,
                 option_id=inter.option_id, period_label=label)))
             events.append(self.open_interaction(round_num, inter.recipient, inter.proposer, inter.option_id,

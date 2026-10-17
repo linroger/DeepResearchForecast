@@ -8,11 +8,15 @@ and pulls them closer, rejecting pushes them apart, countering opens a counter-o
 proposer must answer, deferring keeps it open; unanswered offers lapse after the TTL; a
 lapsed obligation under an agreement, or an explicit withdrawal, is a breach that costs
 reputation and the relationship; everything survives a save/load round-trip and shows up
-in the briefs, the digest, the arbiter prompt and the round record.
+in the briefs, the digest, the arbiter prompt and the round record.  Mirror-image rule: an
+``accept:`` answer adopts the offer's terms verbatim — acceptor ``terms`` that differ materially
+are recorded as a counter-offer, never as an agreement (``world_model.terms_restate_offer``).
 """
 
 import os
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -58,6 +62,9 @@ def test_proposal_opens_an_offer_the_recipient_must_answer():
     assert not any(i.startswith("respond_") for i in ids)
     assert menu[0]["suggested_targets"] == ["Ministry"] and menu[0]["interaction_id"] == "i1_1"
     assert "Lift the ban" in menu[0]["label"] and "binds both sides" in menu[0]["label"]
+    assert "on exactly these terms" in menu[0]["label"]
+    assert "adopts the offer's terms verbatim" in menu[0]["why"] and "recorded as a counter-offer" in menu[0]["why"]
+    assert "counter-offer" not in menu[1]["why"]
     # the proposer's menu carries no answer entry
     assert not any(":" in o["id"] for o in build_option_menu(w.actors[0], w, 2))
     # briefs
@@ -200,6 +207,8 @@ def test_decision_contract_carries_terms_and_bound_answers_parse():
                                    private_brief=w.render_private_brief(1, upto_round=1), options=menu,
                                    scenarios=w.scenarios, cast_names=["Ministry", "Agency", "Union"])
     assert '"terms": "<offer or counter-offer terms> | null"' in prompt and "binds nobody until the other side accepts" in prompt
+    assert "an accept answer adopts the offer's terms verbatim" in prompt
+    assert "an accept whose terms differ materially is recorded as a counter-offer, not an agreement" in prompt
     assert "[counter:i1_1]" in prompt
     d = parse_decision({"option_id": "counter:i1_1", "terms": "  T minus clause 3  ", "public_statement": "We counter.",
                         "magnitude": 0.7}, actor=actor, world=w, options=menu, scenarios=w.scenarios, round_num=2)
@@ -229,3 +238,91 @@ def test_arbiter_prompt_lists_offers_and_state_round_trips():
     again.start_round(3, {"label": "2026-12"})
     ev = again.open_interaction(3, 2, 0, "bargain", "X")
     assert ev.description.startswith("Union made an offer to Ministry [i3_2]")
+
+
+# ----------------------------------------------------------------------------- accept on different terms (mirror-image rule)
+_OFFER = "Compensation conformity in exchange for a 2027 baseline anchored to 4.87 mb/d"
+_NARROWED = "The Secretariat records the conformity data submitted and circulates it to members"
+
+
+@pytest.mark.parametrize("answer, restates", [
+    ("", True),                                                                   # no terms: adopts the offer
+    (_OFFER, True),                                                               # verbatim
+    ("a 2027 baseline anchored to 4.87 mb/d", True),                             # a fragment of the offer
+    ("Accepted as proposed.", True),                                              # a bare acknowledgement
+    ("We accept the offer [i1_1] as stated.", True),                              # boilerplate plus the offer id
+    ("Agreed: compensation conformity for a 2027 baseline anchored at 4.87 mb/d", True),   # a restatement
+    (_NARROWED, False),                                                           # the live narrowing (sim_1838cf014c0b)
+    (_OFFER + ", plus $2bn in compensation", False),                              # an added figure
+    ("Compensation conformity in exchange for a 2028 baseline anchored to 4.87 mb/d", False),   # a changed date
+    ("Conformity data first; the baseline question goes to the ministerial", False),         # different substance
+])
+def test_terms_restate_offer_rule(answer, restates):
+    assert wm.terms_restate_offer(_OFFER, answer) is restates
+
+
+def test_terms_restate_offer_compares_cjk_text_as_character_bigrams():
+    offer = "十二月前成立联合工作组"
+    assert wm.terms_restate_offer(offer, "我们接受：十二月前成立联合工作组") is True
+    assert wm.terms_restate_offer(offer, "成立联合工作组") is True
+    assert wm.terms_restate_offer(offer, "仅记录贵方提交的数据并转发成员国") is False
+    assert wm._terms_tokens("2027年基线 [i3_4]") == ["2027", "年基", "基线"]
+    assert wm.ACCEPT_TERMS_OVERLAP_MIN == 0.6 and wm.ACCEPT_TERMS_MIN_TOKENS == 3
+
+
+def test_accept_on_materially_different_terms_is_recorded_as_a_counter():
+    w = _world()
+    _round(w, 1, [_decision(2, "open_talks", targets=["Agency"], terms=_OFFER)])
+    w.commit_round(1)
+    before = w.snapshot()
+    polarity = w._relationship_between(2, 1).polarity
+    det = _round(w, 2, [_decision(1, "accept:i1_1", statement="We take note of the conformity data.", terms=_NARROWED)])
+    inter = w.interactions["i1_1"]
+    # no agreement: no obligations on either side, no acceptance bonus to the relationship
+    assert inter.status == "countered" and inter.resolved_round == 2 and inter.obligations == []
+    assert inter.response == "We take note of the conformity data."
+    assert not w.events_in_round(2, ("agreement",)) and w.agreements_between(1, 2) == []
+    assert all(a.commitments == [] for a in w.actors.values())
+    assert w._relationship_between(2, 1).polarity == polarity
+    # the round record says what happened and why
+    [answered] = det["offers_answered"]
+    assert answered.startswith("Agency answered Union's offer [i1_1] with different terms")
+    assert "recorded as a counter-offer, not an acceptance" in answered and "adopts the offer's terms verbatim" in answered
+    # a counter-offer carrying the acceptor's terms goes back to the proposer
+    child = w.interactions["i2_2"]
+    assert (child.kind, child.proposer, child.recipient, child.parent_id, child.status) == ("counter", 1, 2, "i1_1", "open")
+    assert child.terms == _NARROWED
+    assert len(det["offers_opened"]) == 1 and "counter-offer to Union [i2_2]" in det["offers_opened"][0]
+    changed = {c["id"]: (c["from"], c["to"]) for c in w.diff(before)["interactions_changed"]}
+    assert changed["i1_1"] == ("open", "countered") and changed["i2_2"][1] == "open"
+    digest = wu.build_round_digest(w, 2, before, [])
+    assert "recorded as a counter-offer" in digest and "Agreement" not in digest
+    # the proposer now owes the answer; the acceptor has nothing left to answer
+    w.commit_round(2)
+    assert [o["id"] for o in build_option_menu(w.actors[2], w, 3)][:4] == ["accept:i2_2", "counter:i2_2", "reject:i2_2", "defer:i2_2"]
+    assert not any(":" in o["id"] for o in build_option_menu(w.actors[1], w, 3))
+    # accepting the counter as it stands binds both sides to the acceptor's terms
+    det = _round(w, 3, [_decision(2, "accept:i2_2", lag=1)])
+    assert w.interactions["i2_2"].status == "accepted"
+    assert det["offers_answered"][0].startswith("Agreement [i2_2]: Union accepted Agency's offer — The Secretariat records")
+    for aid in (1, 2):
+        pend = w.actors[aid].pending_commitments()
+        assert len(pend) == 1 and pend[0]["source"] == "agreement:i2_2" and _NARROWED in pend[0]["description"]
+
+
+@pytest.mark.parametrize("terms", ["", "Joint task force by December", "joint task force",
+                                   "Agreed — joint task force by December.", "Accepted as proposed.",
+                                   "We accept your offer [i1_1]."])
+def test_accept_with_empty_or_restated_terms_binds_as_an_acceptance(terms):
+    w = _world()
+    _round(w, 1, [_decision(0, "form_alliance", targets=["Agency"], terms="Joint task force by December")])
+    w.commit_round(1)
+    det = _round(w, 2, [_decision(1, "accept:i1_1", terms=terms, lag=1)])
+    inter = w.interactions["i1_1"]
+    assert inter.status == "accepted" and len(inter.obligations) == 2 and len(w.interactions) == 1
+    assert det["offers_opened"] == [] and len(det["offers_answered"]) == 1
+    assert det["offers_answered"][0].startswith("Agreement [i1_1]: Agency accepted Ministry's offer — Joint task force by December")
+    # both obligations carry the offer's terms, never the acceptor's wording
+    for aid in (0, 1):
+        pend = w.actors[aid].pending_commitments()
+        assert len(pend) == 1 and pend[0]["description"].endswith("Joint task force by December")
