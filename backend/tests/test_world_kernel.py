@@ -1,4 +1,4 @@
-"""Synthetic kernel scenarios. Execute only through the coordinator's guard."""
+"""Synthetic kernel scenarios (pure; the normal suite and the guarded runner both run them)."""
 from copy import deepcopy
 
 import pytest
@@ -9,7 +9,7 @@ from app.services.world_simulation.contracts import (
 from app.services.world_simulation.kernel import initialize_world, resolve_round, stage_interactions, validate_mechanisms
 from app.services.world_simulation.observations import build_observation
 
-pytestmark = pytest.mark.guarded_runner
+# Pure: no I/O, clock or network, so the normal suite runs it (the guarded runner still can).
 BASIS = {"kind": "scenario_assumption", "refs": ["kernel-fixture-v1"]}
 PUBLIC = {"kind": "public"}
 START = "2030-01-01T00:00:00Z"
@@ -933,3 +933,18 @@ def test_counteroffer_feedback_uses_new_offer_delivery_boundary():
     delivered = build_observation(spec, later["snapshot"], "b", 5)
     assert receipt in delivered["privateState"]["lastObservedEvents"]
     assert delivered["inbox"][0]["terms"] == {"quantity": "2", "price": "3"}
+
+
+@pytest.mark.parametrize("bundle", ["buy and expand", "x" * 200, 7, ""])
+def test_malformed_bundle_id_is_a_repairable_intent_error_not_a_fatal_round(bundle):
+    """Before the admission check a malformed bundleId passed validate_decision, was saved, and
+    then failed stage_interactions/resolve_round with invalid_identity on every replay."""
+    spec = fixture()
+    state = initialize_world(spec)
+    with pytest.raises(WorldError) as caught:
+        decision(spec, state, "a", [action("say", parameters={"text": "hi"}, bundleId=bundle)])
+    assert caught.value.code == "invalid_intent"
+    ok = decision(spec, state, "a", [action("say", parameters={"text": "hi"}, bundleId="bundle_1")])
+    result = advance(spec, state, [ok])
+    assert result["snapshot"]["round"] == 1
+    assert [r["accepted"] for r in result["resolutions"]] == [True]

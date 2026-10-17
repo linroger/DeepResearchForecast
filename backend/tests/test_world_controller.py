@@ -210,3 +210,31 @@ def test_exhaustion_reports_safe_validation_code_not_provider_exception(tmp_path
         assert error.value.details['lastErrorCode'] == 'policy_decision_failed'
         assert 'SENTINEL' not in canonical_json(error.value.to_dict())
         assert store.head()['round'] == 0
+
+
+def test_malformed_bundle_id_is_retried_not_saved_for_every_replay(tmp_path):
+    """Probe p1b (2026-10-18 review): a policy that emitted "bundleId": "buy and expand" got its
+    decision saved, and run_round then failed with invalid_identity on every resume.  Admission
+    now rejects it as invalid_intent, the slot retries, and the round commits."""
+    spec = example_spec('investment', periods=2)
+
+    class OnceMalformedPolicy(ExamplePolicy):
+        sent_bad = False
+
+        def decide(self, observation):
+            raw = super().decide(observation)
+            if not self.sent_bad and raw['intents']:
+                self.sent_bad = True
+                for intent in raw['intents']:
+                    intent['bundleId'] = 'buy and expand'   # plausible model output
+            return raw
+
+    policy = OnceMalformedPolicy('investment')
+    with WorldStore(tmp_path / 'world.sqlite3', spec) as store:
+        fence = store.acquire_writer('test')
+        run_round(store, policy, fence)
+        assert policy.sent_bad
+        assert store.head()['round'] == 1
+        for actor in spec['actors']:
+            saved = store.decision(f"1:proposal:{actor['actorId']}") or {'intents': []}
+            assert all(intent.get('bundleId') is None for intent in saved['intents'])

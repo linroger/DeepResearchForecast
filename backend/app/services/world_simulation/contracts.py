@@ -326,6 +326,12 @@ def validate_decision(spec: dict, raw: Any, actor_id: str, observation: dict, *,
         require(isinstance(intent, dict) and set(intent) <= {
             "templateId", "operation", "parameters", "interactionId", "termsVersion", "priority", "bundleId"
         }, "invalid_intent", "Action intent contains unsupported fields")
+        bundle = intent.get("bundleId")
+        # The kernel groups intents by bundleId and re-checks it as an identifier outside the
+        # per-group rollback; checking it here makes a malformed one an ordinary, repairable
+        # invalid_intent instead of a saved decision that fails every replay of the round.
+        require(bundle is None or (isinstance(bundle, str) and bool(_ID.fullmatch(bundle))),
+                "invalid_intent", "bundleId must be an identifier (letters, digits, _ . : -; at most 128)")
         tid = intent.get("templateId")
         operation = intent.setdefault("operation", "execute")
         require(tid in menu and operation in menu[tid]["operations"] and operation in OPERATIONS,
