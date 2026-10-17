@@ -1,0 +1,17 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-diagnostics-20261017T124014Z-u0d4j6ms",
+  "passed": 31,
+  "seconds": "4.54",
+  "sourceDrift": [],
+  "files": 532,
+  "sourceReview": "Epicurus: nofindings; only whitelisted diagnostic vocabulary; no actor/request/scorer/accounting changes.",
+  "manifestHash": "68a737cf23135ddb84310c35c69fce5cac14f7485159a30e42f09317695c0b89",
+  "sameActorInputsPricingAndCriteriaAsPhase8": true,
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "preservedPriorArtifacts": 398
+}

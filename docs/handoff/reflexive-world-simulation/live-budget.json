@@ -114,10 +114,26 @@
       "reportedActualUpperUsd": "0.102994",
       "unknownCeilingUsd": "0",
       "reportSha256": "4eccb26ec710bc37f358f33bc80bbac78443128b7b4c825770f43b75a2a6f136"
+    },
+    {
+      "phase": "directed-consistency-diagnostics",
+      "output": "/private/tmp/drf-world-consistency-diagnostics-20261017",
+      "status": "closed_diagnostic_evidence_collected",
+      "limitUsd": "1.25",
+      "evaluationVersion": "world-consistency-replay/v1",
+      "policyFile": "behavior-rerun/semantic-consistency/live-policy.json",
+      "recordDirectory": "behavior-rerun/semantic-consistency/diagnostics",
+      "manifestHash": "68a737cf23135ddb84310c35c69fce5cac14f7485159a30e42f09317695c0b89",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-diagnostics-20261017T124014Z-u0d4j6ms",
+      "reason": "12calls10admissible/all10actionmatches;6independentpasses,4wrongoption-citationassessments;2failed(indexvalidation andstrictJSON). Evidence supportsv2server-owned scopebinding; no oldresultregrade.",
+      "settledCeilingUsd": "0.102118",
+      "reportedActualUpperUsd": "0.102118",
+      "unknownCeilingUsd": "0",
+      "reportSha256": "2c639d85b81f8fdbd6fc3e51357aecc6588880a2ea17a4cc5d40edd56fa91b05"
     }
   ],
-  "status": "closed_pending_diagnostic_followup",
-  "conservativeConsumedUsd": "18.632946955664",
-  "remainingAuthorizedUsd": "6.367053044336",
+  "status": "closed_pending_server_bound_review",
+  "conservativeConsumedUsd": "18.735064955664",
+  "remainingAuthorizedUsd": "6.264935044336",
   "billingClaim": false
 }

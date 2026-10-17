@@ -52,6 +52,9 @@ def factory_for(manifest, calls, *, first_failure=None):
         review = assessment(obs, decision)
         if len(calls) == 1 and first_failure == 'unresolved':
             review['status'] = 'unresolved'
+        if len(calls) == 1 and first_failure == 'invalid_assessment':
+            review['checks'][0]['evidencePaths'] = [['world', 'NO_SUCH_FIELD']]
+            review['checks'][0]['explanation'] = 'SENTINEL_PROVIDER_BODY'
         return httpx.Response(200, json={'id': 'fixture', 'object': 'chat.completion', 'created': 1,
             'model': manifest['pricing']['policy']['model'],
             'choices': [{'index': 0, 'finish_reason': 'stop', 'message': {'role': 'assistant',
@@ -95,7 +98,7 @@ def test_directed_replay_all_saved_inputs_metered_once_and_reviewed(tmp_path):
             client.close()
 
 
-@pytest.mark.parametrize('failure', ['unknown', 'unresolved'])
+@pytest.mark.parametrize('failure', ['unknown', 'unresolved', 'invalid_assessment'])
 def test_failed_replay_keeps_exposure_and_never_retries(tmp_path, failure):
     config, manifest = admitted()
     calls = []
@@ -109,6 +112,8 @@ def test_failed_replay_keeps_exposure_and_never_retries(tmp_path, failure):
         assert row['status'] == ('unknown' if failure == 'unknown' else 'failed')
         assert row['usage'] is None if failure == 'unknown' else row['usage']['tokens'] == 30
         assert 'SENTINEL_PROVIDER_BODY' not in json.dumps(journal)
+        assert row['errorMessage'] == ('Assessment evidence path is unavailable'
+                                       if failure == 'invalid_assessment' else replay._GENERIC_FAILURE)
         replay.run_evaluation(tmp_path / 'run', factory, config)
         assert len(calls) == 12
     finally:
@@ -200,3 +205,9 @@ def test_directed_manifest_satisfies_actual_shared_launcher_records(tmp_path):
     assert saved['manifestHash'] == manifest['manifestHash'] and saved['allocatedUsd'] == '1.25'
     assert saved['authorization'] == config['authorization']
     assert not (tmp_path / 'new-run').exists()
+
+
+def test_diagnostic_cannot_echo_arbitrary_world_error_text():
+    error = WorldError('invalid_assessment', 'SECRET_PROVIDER_BODY')
+    assert replay._error_message(error) == replay._GENERIC_FAILURE
+    assert replay._error_message(ValueError('SECRET_PROVIDER_BODY')) == replay._GENERIC_FAILURE

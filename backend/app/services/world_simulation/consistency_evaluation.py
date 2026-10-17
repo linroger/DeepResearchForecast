@@ -15,6 +15,30 @@ from .review import MODE, validate_assessment
 VERSION = 'world-consistency-replay/v1'
 FIXTURE = Path(__file__).resolve().parents[3] / 'tests/fixtures/world_consistency_cases.json'
 
+_ASSESSMENT_ERRORS = frozenset({
+    'Revision requires a typed consistency assessment',
+    'Revision must assess all four consistency dimensions',
+    'Unsupported assessment check fields',
+    'Assessment kinds must be complete and unique',
+    'Assessment indexes must identify actual unique records',
+    'Goal review must reference every supplied objective',
+    'Explanation review must reference every final intent',
+    'Each assessment needs a bounded explanation',
+    'Assessment needs bounded visible evidence references',
+    'Assessment evidence must refer to the original observation',
+    'Assessment evidence path is unavailable',
+    'Assessment evidence index is unavailable',
+    'Assessment evidence path does not resolve',
+})
+_GENERIC_FAILURE = 'The bounded revision did not produce an admissible response.'
+
+
+def _error_message(error):
+    # Preserve only fixed validator vocabulary, never opaque provider/model text.
+    if isinstance(error, WorldError) and error.code == 'invalid_assessment' and str(error) in _ASSESSMENT_ERRORS:
+        return str(error)
+    return _GENERIC_FAILURE
+
 
 def preregister(pricing_spec, max_usd='1.25', *, evaluation_version=VERSION):
     require(evaluation_version == VERSION, 'evaluation_version', 'Unknown directed replay version')
@@ -88,6 +112,10 @@ def _validate_journal(manifest, journal):
         require(isinstance(row, dict) and isinstance(row.get('status'), str) and row['status'] in {
             'planned', 'budget_stopped', 'unknown', 'failed', 'completed'},
             'evaluation_evidence', 'Directed replay status is invalid')
+        if 'errorMessage' in row:
+            require(row['status'] in {'unknown', 'failed'} and isinstance(row['errorMessage'], str)
+                    and row['errorMessage'] in _ASSESSMENT_ERRORS | {_GENERIC_FAILURE},
+                    'evaluation_evidence', 'Replay diagnostic must use fixed safe vocabulary')
         consumed = row['status'] in {'unknown', 'failed', 'completed'}
         require(('reservation' in row) == consumed and ('usage' in row) == consumed,
                 'evaluation_evidence', 'Consumed request allowance cannot become planned')
@@ -220,7 +248,8 @@ def run_evaluation(outputdir, policy_factory, pricing_spec, max_usd='1.25', *, e
                 except Exception as error:
                     usage = usage if usage is not None else getattr(error, 'usage', None)
                     row.update(status='failed' if usage is not None else 'unknown',
-                               errorCode=error.code if isinstance(error, WorldError) else 'policy_decision_failed')
+                               errorCode=error.code if isinstance(error, WorldError) else 'policy_decision_failed',
+                               errorMessage=_error_message(error))
                 if usage is not None:
                     require(type(usage.get('tokens')) is int and 0 <= usage['tokens'] <= reservation['tokens']
                             and Decimal(0) <= decimal(usage['costUsd']) <= decimal(reservation['costUsd']),
