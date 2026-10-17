@@ -1,8 +1,8 @@
 # Handoff.md — Bilingual translation vs. the provider content filter
 
-**Last Updated (UTC):** 2026-10-16T21:00Z
-**Status:** Complete (offline); live re-run owed to the owner's approval
-**Current Focus:** none open — the live re-run of the Chinese translation on `report_0f2e07d62a34` is the next check (paid GLM calls).
+**Last Updated (UTC):** 2026-10-17T14:15Z
+**Status:** Complete for the content-filter objective (validated live); the Chinese version of `report_0f2e07d62a34` is still withheld by a different, pre-existing limitation (FRED unit phrases vs. the number guard) — follow-up proposed
+**Current Focus:** none open here; see §9.
 
 The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 2119.
 
@@ -34,7 +34,8 @@ The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 211
 - [x] Lint / env drift — **done**; ruff F,E9 with the project ignores clean, `check_env_drift.py --strict` exit 0.
 - [x] Regression — **done**; wide subset 720 passed (701 existing + 19 new) after the spy-compatibility fix in §6; the wider report/translation/research subset ran 700 passed / 1 failed before that fix, the one failure being the spy case.
 - [x] agent-progress.txt entry, this record, side-session note — **done**.
-- [ ] Live re-run on `report_0f2e07d62a34` — needs the owner's approval.
+- [x] Live re-run on `report_0f2e07d62a34` — **done** 2026-10-17 21:51–22:02 +08 (owner-approved paid GLM calls); outcome in §7/§8, evidence `live-run-2026-10-17.md` beside this file.
+- [x] Merge of the moved `claude-reflexive-world-state-model` tip (f78397e) into this branch — **done** (f59c1db; one progress-log conflict, resolved chronologically). The reverse fast-forward of that branch was NOT done: its checkout had 84 files of uncommitted work (incl. `report_agent.py`) and a backend another session had just started on :5001, so the live run used a second backend on :5012 from this worktree instead.
 
 ## 5) Findings, Decisions, Assumptions
 - **Finding (falsifies the brief's hypothesis):** the current code already keeps source text when a translation call fails, so the 16 failures did not drop text. The numeric-multiset failure came from one translated section: the model glued two restored placeholders ("2025-Q4" + "3667亿美元" → "2025-Q43667亿美元"), which `translation_quantities` reads as 43667亿 = 4.37 trillion. Reproduced offline on the rejected file (`qty:4366700000000` vs `qty:366700000000`).
@@ -49,6 +50,7 @@ The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 211
 - **Fixed-signature spy in `test_sessionb_translation_reallm.py`** → the first version always passed the new keyword arguments to `_translate_from_source_skeleton`, breaking a two-argument spy → the new keywords (and `chunk_index` / `separate_numbers` on the other call sites) now travel only while the ladder is armed, which also makes the unarmed primary path's call signatures byte-identical to before → guard: the wider subset.
 
 ## 7) Scenario-Focused Resolution Tests
+- **Live re-run (`POST /api/report/report_0f2e07d62a34/translations/zh` on the :5012 backend serving f59c1db, glm-5.3, 11 minutes, 10 code-1301 events):** the ladder fired on three H2 chunks (11, 13, 7 — "改小切分（5–6 段）并以机构语体重试一次") and on two prose-slot batches; **every retry rung translated**, so no verbatim region was recorded; `number_parity.passed = True` (the 2025-Q4/3667亿 fusion is gone); failed calls 5 (was 16). The audit still rejected the variant: "translation contains 3 target-language contamination lines" (tolerance 1, `disclosed: 0`). The three lines are the binary-forecast rows F4, F11, F13, whose statements read "(fred:IMPCH) are below 25000 Millions of Dollars in 2027年6月": the FRED unit phrase "N Millions of Dollars" is not a recognised quantity, so the numeral is frozen as a plain token and every faithful rendering ("250亿美元") changes the numeric multiset and is rejected by the slot / segment / whole-line guards — the model's candidates were rejected (purity escalation "采纳 0，保留原文 3"), not filtered. **Verdict: content-filter objective resolved live; the report's Chinese version is still withheld by a separate defect** (§9).
 - **Live scenario, replayed offline (`test_end_to_end_partial_translation_is_published_and_disclosed`):** primary published, a scripted provider rejects two paragraphs of the "Executive Summary" chunk on every attempt (code 1301, role assistant). Change applied: the ladder. Post-change: the rejected paragraphs stay in English, the rest of the chunk and the table translate, `full_report.zh.md` is published, `translation_status.zh.json` = `partial` with two `verbatim_chunks` (chunk 1, "Executive Summary", `content_filter`, `unit`), meta entry `translation_quality: partial`, API `partial: true` / `can_update: true` / `residual_source_lines: 2`, the primary bytes unchanged, exactly two requests carried the sensitive paragraph (whole unit, then the directive retry) — **resolved**.
 - **Same scenario with the knob off:** rejected as before (`failed`, "2 target-language contamination lines", provider-failure note), no directive ever sent — **previous behaviour preserved**.
 - **Directive succeeds on the retry:** full translation, not partial, `translation_quality: ok` — **resolved**.
@@ -58,12 +60,14 @@ The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 211
 ## 8) Verification Summary
 - **Fast checks:** `tests/test_report_bilingual_filter_safe.py` 19 passed; ruff (`--select F,E9 --ignore F401,F841`, the project's ignores) clean on every touched file; `python -m compileall` ok; `scripts/check_env_drift.py --strict` exit 0 ("every Config env var is documented").
 - **Regression runs:** translation/report suites (`test_report_bilingual`, `test_translation_robustness`, `test_report_filter_safe`, `test_sessionb_translation_structure`, `test_research_dossier_translation`, `test_translation_dates`, `test_translation_quantities`) 149 passed; wider subset (every `tests/test_report*`, `test_translation*`, `test_research_dossier*`, `test_sessionb_translation*`, `test_backfill_report_visuals`, `test_env_drift*`) 700 passed / 1 failed (the spy case, fixed, §6); re-run after the fix: affected modules 154 passed, then the whole wide subset plus the new module 720 passed in 107 s.
-- **Evidence:** this file, `agent-progress.txt` (2026-10-17T04:50+08:00), the side-session note `bilingual-filter-safe.md`, the commit on `claude/gifted-elion-7c02f2`.
+- **Live run:** `live-run-2026-10-17.md` (poll + backend translation lines); artifacts in the primary checkout `backend/uploads/reports/report_0f2e07d62a34/` (`translation_status.zh.json` status failed, `final_audit.zh.json` number_parity passed / residual 3 / disclosed 0, `full_report.zh.rejected.md`).
+- **Evidence:** this file, `agent-progress.txt` (2026-10-17T04:50+08:00 and the live-run bullet), the side-session note `bilingual-filter-safe.md`, commits 0329979 and f59c1db on `claude/gifted-elion-7c02f2`.
 
 ## 9) Remaining Work & Next Steps
-- Live re-run of the Chinese translation on `report_0f2e07d62a34` (`POST /api/report/<id>/translations/zh`) needs the owner's approval (paid GLM calls).
-- Frontend: a "retry partial translation" affordance keyed on `translation_status.partial` / `can_update` (the backend exposes both).
+- **FRED-style amounts as value-aware quantities (proposed as its own session):** extend `translation_quantities.QUANTITY_PATTERN` / `interpret_quantity_match` / `render_quantity` to "N Millions|Billions|Thousands of Dollars" (FRED unit labels, any case, optional thousands separators) so the phrase becomes one `⟦Q…⟧` token rendered "250亿美元" with `qty:` parity; tests in `test_translation_quantities.py`; then re-run the Chinese translation on `report_0f2e07d62a34` (paid). Without it the three F4/F11/F13 rows can never pass the number guard and the variant stays withheld (tolerance is 1 line for this body length regardless of `REPORT_TRANSLATION_RESIDUAL_LINES`).
+- **Branches to land together:** `claude/gifted-elion-7c02f2` (this work, incl. the merge of f78397e) and `claude/musing-saha-e992e1` (3621805, partial-translation banner + retry button, 172 frontend tests). `claude-reflexive-world-state-model` can be fast-forwarded to this branch once its checkout is clean: `git merge --ff-only claude/gifted-elion-7c02f2`.
 
 ## 10) Updates to This File
 - 2026-10-16T20:30Z: created (T0) with the diagnosis and the plan.
 - 2026-10-16T21:00Z: code, tests and checks recorded (§4, §6–§8); status Complete (offline); live re-run left to the owner (§9).
+- 2026-10-17T14:15Z: merge of f78397e (§4), live re-run outcome and the FRED-unit diagnosis (§7, §8), follow-ups and branch landing notes (§9).
