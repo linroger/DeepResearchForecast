@@ -488,5 +488,56 @@ def test_resume_restores_partial_trajectory_and_continues_remaining_rounds(tmp_p
     assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 3
 
 
+# ===========================================================================
+# observability: the coordinator's per-round lines reach simulation.log intact
+# ===========================================================================
+def test_world_round_lines_reach_simulation_log(tmp_path, monkeypatch):
+    """The backend streams the runner's stdout/stderr into simulation.log through its own handle
+    while the runner's SimulationLogManager writes the same file: both append, so the per-round
+    world lines are on disk, whole, in the main logger's format (the live run found them torn)."""
+    import contextlib
+    from action_logger import SimulationLogManager
+    from app.services.simulation_runner import SimulationRunner
+
+    sim_dir = str(tmp_path)
+    envs = []
+    _patch_world(monkeypatch, sim_dir, envs)
+    cfg = _world_config()
+    sink = SimulationRunner._open_main_log(sim_dir)            # the backend's stdout/stderr capture handle
+    assert sink.mode == "a"
+    manager = None
+    try:
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            manager = SimulationLogManager(sim_dir)             # as in main(): after the capture exists
+            print("library banner printed before the first round")
+            asyncio.run(rps.run_twitter_simulation(cfg, sim_dir, action_logger=PlatformActionLogger("twitter", sim_dir),
+                                                   main_logger=manager))
+    finally:
+        sink.close()
+        if manager is not None:
+            for handler in list(manager._main_logger.handlers):
+                handler.close()
+            manager._main_logger.handlers.clear()
+
+    with open(os.path.join(sim_dir, "simulation.log"), "rb") as f:
+        text = f.read().decode("utf-8")                         # strict: no torn multi-byte characters anywhere
+    lines = text.splitlines()
+    records = [line.split(" - INFO - ", 1)[1] for line in lines if " - INFO - " in line]
+    world = [r for r in records if r.startswith("[Twitter] round") or r.startswith("[Twitter] world update committed")]
+    assert [re.match(r"\[Twitter\] round (\d) decisions: \d+ actors → \{", r).group(1)
+            for r in world if " decisions: " in r] == ["1", "2", "3"]
+    assert [r.split(": ", 1)[1].split(":", 1)[0] for r in world if r.startswith("[Twitter] world update committed")] == [
+        "2026-Q3", "2026-Q4", "2027-Q1"]
+    kinds = ["decide" if " decisions: " in r else "commit" if "committed" in r else "publish" for r in world]
+    assert kinds == ["decide", "publish", "commit"] * 3                   # each round: decide → publish → commit
+    assert any(r.startswith("[Twitter] reflexive world complete: leader=A") for r in records)
+    # the captured console copies land whole too, and the file keeps what was printed before the manager existed
+    assert "library banner printed before the first round" in lines
+    assert "[Twitter] round 1 decisions: " in "\n".join(lines) and sum(
+        1 for line in lines if line.startswith("[Twitter] world update committed: 2026-Q3")) == 1
+    assert not any(re.match(r"^\[\d\d:\d\d:\d\d\] ", line) for line in lines)   # no console-handler echo into the same file
+    assert json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))["committed_round"] == 3
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-x", "-q"]))

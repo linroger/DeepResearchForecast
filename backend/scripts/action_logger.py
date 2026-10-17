@@ -15,8 +15,25 @@
 import json
 import os
 import logging
+import sys
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+
+def _stdio_points_at(path: str) -> bool:
+    """True when this process's stdout or stderr already is the file at ``path``: the launching
+    backend (app/services/simulation_runner.py) captures the runner's console into simulation.log."""
+    try:
+        target = os.stat(path)
+    except OSError:
+        return False
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if os.path.samestat(os.fstat(stream.fileno()), target):
+                return True
+        except (AttributeError, OSError, ValueError):
+            continue
+    return False
 
 
 class PlatformActionLogger:
@@ -171,16 +188,28 @@ class SimulationLogManager:
         self._setup_main_logger()
     
     def _setup_main_logger(self):
-        """设置主模拟日志"""
+        """设置主模拟日志。
+
+        The launching backend streams this process's stdout/stderr into the same ``simulation.log``
+        through its own append-only handle (SimulationRunner._open_main_log), so the file handler
+        appends as well — a second non-appending writer overwrites the other's bytes at its private
+        offset and the world-model round lines came out torn or missing.  The file is truncated only
+        when no standard stream already points at it (a standalone run starts a fresh log; a
+        backend capture is never discarded), and the console handler is skipped when stderr IS the
+        log file, where it would only repeat every record."""
         log_path = os.path.join(self.simulation_dir, "simulation.log")
+        shared = _stdio_points_at(log_path)
+        if not shared:
+            with open(log_path, 'w', encoding='utf-8'):
+                pass
         
         # 创建 logger
         self._main_logger = logging.getLogger(f"simulation.{os.path.basename(self.simulation_dir)}")
         self._main_logger.setLevel(logging.INFO)
         self._main_logger.handlers.clear()
         
-        # 文件处理器
-        file_handler = logging.FileHandler(log_path, encoding='utf-8', mode='w')
+        # 文件处理器（追加写：与后端捕获的 stdout/stderr 共用同一文件）
+        file_handler = logging.FileHandler(log_path, encoding='utf-8', mode='a')
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(logging.Formatter(
             '%(asctime)s - %(levelname)s - %(message)s',
@@ -188,14 +217,15 @@ class SimulationLogManager:
         ))
         self._main_logger.addHandler(file_handler)
         
-        # 控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(message)s',
-            datefmt='%H:%M:%S'
-        ))
-        self._main_logger.addHandler(console_handler)
+        # 控制台处理器（stderr 已经就是日志文件时省略，避免每条记录写两遍）
+        if not shared:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(logging.Formatter(
+                '[%(asctime)s] %(message)s',
+                datefmt='%H:%M:%S'
+            ))
+            self._main_logger.addHandler(console_handler)
         
         self._main_logger.propagate = False
     

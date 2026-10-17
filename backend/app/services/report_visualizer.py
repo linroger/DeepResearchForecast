@@ -305,6 +305,95 @@ _TIER_COLOR = {"S1": "#184f95", "S2": "#3987e5", "S3": "#9ec5f4", "S4": "#cde2fb
 _TIER_WEIGHT = {"S1": 3.0, "S2": 2.0, "S3": 1.0, "S4": 0.5}
 
 
+def world_variable_series(world: Any, *, max_variables: int = 12) -> List[Dict[str, Any]]:
+    """REFLEXIVE WORLD: chart series of the numeric world variables of a ``world_state.json``
+    ``world`` block, one point per period.
+
+    The seed value sits at the research as-of date (index 100).  Each committed period then gets
+    the LAST value recorded in it — a delayed effect and the arbiter can both write the same
+    period, which used to draw a vertical pair of points — and a period without a change carries
+    the previous value forward, so every series spans the whole run and no two points share an x.
+    A variable the arbiter created in a later period starts at that period.  Rows are
+    ``{"id", "name", "unit", "rounds", "x", "y", "hover", "raw"}``; variables need
+    ``kind == "numeric"`` and ≥2 numeric history rows, and anything malformed is skipped."""
+    if not isinstance(world, dict):
+        return []
+    labels: Dict[int, str] = {}
+    raw_labels = world.get("period_labels")
+    if isinstance(raw_labels, dict):
+        for k, v in raw_labels.items():
+            try:
+                labels[int(k)] = str(v)
+            except (TypeError, ValueError):
+                continue
+    as_of = str(world.get("as_of_date") or "")[:10]
+    committed = 0
+    for key in ("committed_round", "round"):
+        try:
+            committed = max(committed, int(world.get(key) or 0))
+        except (TypeError, ValueError):
+            continue
+
+    def _label(rnd: int) -> str:
+        return labels.get(rnd) or f"period {rnd}"
+
+    out: List[Dict[str, Any]] = []
+    for var in (world.get("variables") or [])[:max_variables]:
+        if not isinstance(var, dict) or var.get("kind") != "numeric":
+            continue
+        last_by_round: Dict[int, Dict[str, Any]] = {}
+        numeric_rows = 0
+        for h in var.get("history") or []:
+            if not isinstance(h, dict):
+                continue
+            value = h.get("value")
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                continue
+            try:
+                rnd = max(0, int(h.get("round") or 0))
+            except (TypeError, ValueError):
+                continue
+            numeric_rows += 1
+            last_by_round[rnd] = h                       # later rows of the same period win
+        if numeric_rows < 2:
+            continue
+        first = min(last_by_round)
+        seed_row = last_by_round[first]
+        seed = float(seed_row["value"])
+        unit = str(var.get("unit") or "")
+
+        def _index(raw: float) -> float:
+            return raw / seed * 100.0 if seed not in (0.0, -0.0) else raw
+
+        def _fmt(raw: float) -> str:
+            return f"{raw:g} {unit}".strip()
+
+        if first == 0:
+            x0 = as_of or "seed"
+            source = str(seed_row.get("source") or "research")
+            hover0 = _fmt(seed) + f" — seed ({source}" + (f", as of {as_of})" if as_of else ")")
+        else:
+            x0 = _label(first)
+            hover0 = _fmt(seed) + " — " + (str(seed_row.get("cause") or "").strip() or "created")
+        rounds, xs, ys, hover, raws = [first], [x0], [_index(seed)], [hover0], [seed]
+        current = seed
+        for rnd in range(first + 1, max(committed, max(last_by_round)) + 1):
+            row = last_by_round.get(rnd)
+            if row is not None:
+                current = float(row["value"])
+                cause = str(row.get("cause") or "").strip() or "changed"
+            else:
+                cause = "unchanged"
+            rounds.append(rnd)
+            xs.append(_label(rnd))
+            ys.append(_index(current))
+            hover.append(_fmt(current) + f" — {cause}")
+            raws.append(current)
+        out.append({"id": str(var.get("id") or ""), "name": str(var.get("name") or var.get("id") or ""),
+                    "unit": unit, "rounds": rounds, "x": xs, "y": ys, "hover": hover, "raw": raws})
+    return out
+
+
 def _apply_layout(fig, title: str, height: int = 520, **kwargs) -> None:
     """统一 plotly 布局：浅色画布 + 细网格 + 固定分类色板 + CJK 安全字体栈。就地修改 fig。"""
     fig.update_layout(
@@ -3108,61 +3197,36 @@ class ReportVisualizer:
             return None
 
     def build_world_variables_html(self, world_state: Any, charts_dir: str) -> Optional[str]:
-        """REFLEXIVE WORLD: one line per numeric world variable with ≥2 history points, indexed
-        to its seed value (= 100) so variables of different units share one axis; hover shows
-        the raw value + unit and the cause recorded for that period.  Fewer than one qualifying
+        """REFLEXIVE WORLD: one line per numeric world variable with ≥2 history rows, indexed to
+        its seed value (= 100) so variables of different units share one axis.  The seed sits at
+        the research as-of date and every committed period gets exactly one point (the last value
+        recorded in it, carried forward when nothing changed — see ``world_variable_series``);
+        hover shows the raw value + unit and the cause recorded for that period.  No qualifying
         variable → None (degrade-safe).  Labeled simulated, never observed."""
         if not self._interactive_ok():
             return None
         try:
             world = world_state.get("world") if isinstance(world_state, dict) else None
-            if not isinstance(world, dict):
+            series = world_variable_series(world)
+            if not series:
                 return None
-            labels: Dict[int, str] = {}
-            for k, v in (world.get("period_labels") or {}).items() if isinstance(world.get("period_labels"), dict) else []:
-                try:
-                    labels[int(k)] = str(v)
-                except (TypeError, ValueError):
-                    continue
             fig = go.Figure()
-            plotted = 0
-            round_labels: Dict[int, str] = {}
-            for var in (world.get("variables") or [])[:12]:
-                if not isinstance(var, dict) or var.get("kind") != "numeric":
-                    continue
-                hist = [h for h in (var.get("history") or []) if isinstance(h, dict)
-                        and isinstance(h.get("value"), (int, float)) and not isinstance(h.get("value"), bool)]
-                if len(hist) < 2:
-                    continue
-                seed = float(hist[0]["value"])
-                if seed in (0.0, -0.0):
-                    continue
-                xs, ys, hover = [], [], []
-                for h in hist:
-                    rnd = int(h.get("round") or 0)
-                    label = labels.get(rnd) or (f"period {rnd}" if rnd else "seed")
-                    round_labels[rnd] = label
-                    xs.append(label)
-                    raw = float(h["value"])
-                    ys.append(raw / seed * 100.0)
-                    unit = str(var.get("unit") or "")
-                    hover.append(f"{raw:g} {unit}".strip() + (f" — {h.get('cause')}" if h.get("cause") else ""))
+            axis_by_round: Dict[int, str] = {}
+            for s in series:
+                for rnd, x in zip(s["rounds"], s["x"]):
+                    axis_by_round.setdefault(int(rnd), str(x))
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, mode="lines+markers",
-                    name=_html_text(str(var.get("name") or var.get("id")), max_len=40),
-                    text=hover, hovertemplate="%{x}: %{text}<extra>"
-                                               + _html_text(str(var.get("name") or ""), max_len=40) + "</extra>",
+                    x=s["x"], y=s["y"], mode="lines+markers",
+                    name=_html_text(s["name"], max_len=40),
+                    text=s["hover"], hovertemplate="%{x}: %{text}<extra>"
+                                                   + _html_text(s["name"], max_len=40) + "</extra>",
                 ))
-                plotted += 1
-            if plotted == 0:
-                return None
             _apply_layout(fig, "Simulated World Variables (indexed, seed = 100)", height=460)
-            category_array = [name for _, name in sorted(round_labels.items(), key=lambda kv: kv[0])]
-            fig.update_layout(
-                xaxis_title="Simulated period",
-                yaxis_title="Index (seed value = 100)",
-                xaxis=dict(categoryorder="array", categoryarray=category_array),
-            )
+            # categorical x in run order: the as-of seed first, then the periods — independent of
+            # which series (a research seed or a variable the arbiter added later) is drawn first
+            fig.update_layout(xaxis_title="Simulated period", yaxis_title="Index (seed value = 100)",
+                              xaxis=dict(type="category", categoryorder="array",
+                                         categoryarray=[axis_by_round[r] for r in sorted(axis_by_round)]))
             return self._save_pair(fig, charts_dir, "world_variables", "world_variables")
         except Exception as exc:  # noqa: BLE001
             logger.debug("build_world_variables_html 失败（跳过该图）：%s", exc)
