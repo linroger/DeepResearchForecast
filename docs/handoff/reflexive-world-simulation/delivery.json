@@ -3,7 +3,7 @@
   "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
   "implementation_commit": "e902aedb1a8307c024da950060c4d7bb30f34220",
   "phase": "Condition and timing instructions repaired;11completed qualitativepasses with1withheld response;fullpromotiongateunmet",
-  "updatedUtc": "2026-10-17T13:53:58.282377+00:00",
+  "updatedUtc": "2026-10-17T13:56:42.894910+00:00",
   "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
   "application_tests_run": true,
   "live_provider_calls_run": true,
@@ -88,7 +88,7 @@
   "latestOfflineTestsPassed": 376,
   "latestSummaryTestsPassed": 1,
   "latestReport": "behavior-rerun/semantic-consistency/condition-schedule/REPORT.md",
-  "latestImplementationCommit": "bfbc31107d0dbfae55b7972a66e9b1cc19c10eec",
+  "latestImplementationCommit": "7d72c951cf8f8846e083989d593c8c4090f877c7",
   "worktreeCleanAtImplementationCommit": true,
   "priorPublicGrammarDelivery": {
     "branch": "codex/reflexive-world-simulation",
