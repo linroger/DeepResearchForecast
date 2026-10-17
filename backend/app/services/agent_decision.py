@@ -391,16 +391,21 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
         who = world.actor_name(it.proposer)
         until = world._period_label_for_round(it.expires_round)
         for verb, label, kind, cost, lag in (
-            ("accept", f"Accept {who}'s offer [{it.id}]: {_text(it.terms, 110)} — binds both sides", "coalition", 1, 1),
+            ("accept", f"Accept {who}'s offer [{it.id}] on exactly these terms: {_text(it.terms, 110)} — binds both sides",
+             "coalition", 1, 1),
             ("counter", f"Counter {who}'s offer [{it.id}] with your own terms (state them in `terms`)", "coalition", 1, 0),
             ("reject", f"Reject {who}'s offer [{it.id}]", "communication", 1, 0),
             ("defer", f"Defer your answer to {who}'s offer [{it.id}] (open until {until})", "communication", 0, 0),
         ):
             if cost <= remaining:
+                why = f"an offer from {who} awaits your answer (lapses after {until})"
+                if verb == "accept":
+                    # mirror-image rule (world_model.terms_restate_offer): accept adopts the offer verbatim
+                    why += ("; accept adopts the offer's terms verbatim — leave `terms` null or restate them; "
+                            "an accept whose terms differ materially is recorded as a counter-offer, not an agreement")
                 push({"id": f"{verb}:{it.id}", "label": label, "kind": kind, "cost": cost, "lag": lag,
                       "reversibility": "sticky" if verb == "accept" else "reversible", "targets_actor": False,
-                      "suggested_targets": [who], "interaction_id": it.id,
-                      "why": f"an offer from {who} awaits your answer (lapses after {until})"})
+                      "suggested_targets": [who], "interaction_id": it.id, "why": why})
     # 1) responses to what was aimed at this actor last period (offers are answered above)
     aimed = [e for e in world.events_in_round(last_round)
              if actor.name in e.targets and e.kind not in ("offer", "agreement", "breach")
@@ -525,7 +530,9 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         "announce this period (1-3 sentences, concrete: decision, numbers, dates, conditions); "
         "private_rationale is for your own record; terms states the exact terms when your move makes "
         "an offer to another actor or counters one (what you give, what you expect, by when) — an "
-        "offer binds nobody until the other side accepts it; commitment is what you bind yourself to and when "
+        "offer binds nobody until the other side accepts it, and an accept answer adopts the offer's terms "
+        "verbatim (leave terms null or restate them — an accept whose terms differ materially is recorded as a "
+        "counter-offer, not an agreement); commitment is what you bind yourself to and when "
         "(due_periods ≥ 1) or null; alliance_moves lists any alliance you propose/strengthen/break; "
         "scenario_commitment names which candidate scenario your move pushes toward, or \"abstain\" "
         f"if your move has no real bearing on the outcome. Candidate scenarios: {sc}.\n"

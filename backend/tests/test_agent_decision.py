@@ -169,6 +169,10 @@ def test_decision_prompt_carries_briefs_options_scenarios_and_contract():
     assert "you gain if: timetable holds" in prompt
     assert "Write public_statement in English." in prompt
     assert '"scenario_commitment"' in prompt and "Return ONLY JSON" in prompt
+    # the terms contract: an offer binds nobody until accepted; accept adopts the offer's terms verbatim
+    assert "offer binds nobody until the other side accepts it" in prompt
+    assert "an accept answer adopts the offer's terms verbatim" in prompt
+    assert "an accept whose terms differ materially is recorded as a counter-offer, not an agreement" in prompt
 
 
 # ----------------------------------------------------------------------------- parsing
