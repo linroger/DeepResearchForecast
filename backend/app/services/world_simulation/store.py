@@ -614,7 +614,7 @@ class WorldStore:
                         else:
                             from .review import validate_assessment
 
-                            assessment = validate_assessment(entry["assessment"], observation, entry["decision"])
+                            assessment = validate_assessment(entry["assessment"], observation, entry["decision"], mode=self._review_mode)
                             require(assessment["status"] == "clear", "corrupt_consistency_journal", "Final assessment is not clear")
                     else:
                         require(entry["decision"] is None and entry["assessment"] is None
@@ -738,7 +738,7 @@ class WorldStore:
                 else:
                     from .review import validate_assessment
 
-                    assessment = validate_assessment(assessment, observation, decision)
+                    assessment = validate_assessment(assessment, observation, decision, mode=self._review_mode)
                     require(assessment["status"] == "clear", "consistency_unresolved", "Consistency assessment remains unresolved")
                     payload["assessment"] = assessment
             else:

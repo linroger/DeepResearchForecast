@@ -10,7 +10,7 @@ from pathlib import Path
 from .artifacts import atomic_json, read_json
 from .contracts import WorldError, clone, decimal, digest, quantity, require, validate_decision
 from .evaluation import _batch_lock, _bind_external_policy, _source_hashes
-from .review import MODE, validate_assessment
+from .review import REVIEW_MODES, review_mode, validate_assessment
 
 VERSION = 'world-consistency-replay/v1'
 FIXTURE = Path(__file__).resolve().parents[3] / 'tests/fixtures/world_consistency_cases.json'
@@ -45,7 +45,7 @@ def preregister(pricing_spec, max_usd='1.25', *, evaluation_version=VERSION):
     pricing = clone(pricing_spec)
     pricing.pop('authorization', None)
     require(set(pricing) <= {'mode', 'policy', 'maxTokensPerCase', 'maxOutputTokens', 'policyId'}
-            and pricing.get('mode') == 'external' and pricing.get('policy', {}).get('decisionReview') == MODE,
+            and pricing.get('mode') == 'external' and review_mode(pricing) in REVIEW_MODES,
             'evaluation_admission', 'Directed replay requires pinned actor consistency review')
     maximum = decimal(max_usd, nonnegative=True)
     require(0 < maximum <= Decimal('1.25'), 'evaluation_budget', 'Directed replay ceiling is at most USD1.25')
@@ -145,7 +145,7 @@ def _validate_journal(manifest, journal):
                               for i in raw['intents']]
             require(validate_decision(case['spec'], raw, obs['actorId'], obs, phase=obs['phase']) == value,
                     'evaluation_evidence', 'Saved revised decision binding changed')
-            require(validate_assessment(row['assessment'], obs, value)['status'] == 'clear'
+            require(validate_assessment(row['assessment'], obs, value, mode=review_mode(case['spec']))['status'] == 'clear'
                     and type(row['matches']) is bool and row['matches'] == _matches(case, value),
                     'evaluation_evidence', 'Saved revision assessment or diagnostic score changed')
 
@@ -241,7 +241,7 @@ def run_evaluation(outputdir, policy_factory, pricing_spec, max_usd='1.25', *, e
                     usage = response.usage
                     decision = validate_decision(case['spec'], response.decision, observation['actorId'], observation,
                                                  phase=observation['phase'])
-                    assessment = validate_assessment(response.assessment, observation, decision)
+                    assessment = validate_assessment(response.assessment, observation, decision, mode=review_mode(case['spec']))
                     require(assessment['status'] == 'clear', 'consistency_unresolved', 'Revision did not clear its assessment')
                     row.update(status='completed', decision=decision, assessment=assessment,
                                matches=_matches(case, decision))

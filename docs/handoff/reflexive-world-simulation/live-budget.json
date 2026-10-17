@@ -130,10 +130,26 @@
       "reportedActualUpperUsd": "0.102118",
       "unknownCeilingUsd": "0",
       "reportSha256": "2c639d85b81f8fdbd6fc3e51357aecc6588880a2ea17a4cc5d40edd56fa91b05"
+    },
+    {
+      "phase": "server-bound-consistency-v2",
+      "output": "/private/tmp/drf-world-consistency-v2-20261017",
+      "status": "closed_v2_temporal_followup_required",
+      "limitUsd": "1.25",
+      "evaluationVersion": "world-consistency-replay/v1",
+      "policyFile": "behavior-rerun/semantic-consistency/server-bound-review/live-policy.json",
+      "recordDirectory": "behavior-rerun/semantic-consistency/server-bound-review",
+      "manifestHash": "1c120c359ba91644ec3713048a513d7c8138f9584735b98e252e085d5007986a",
+      "offlineRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-v2-admission-20261017T130022Z-_igaybv8",
+      "reason": "12structurallyvalidresponses;11cleared/all11actions+rationalescorrect,9qualitativepasses+2condition/timingassessmentdefects,1unresolvedwithheld. Preserve12denominator; promptclarificationnext,no regrading.",
+      "settledCeilingUsd": "0.088024",
+      "reportedActualUpperUsd": "0.088024",
+      "unknownCeilingUsd": "0",
+      "reportSha256": "c1b2ebbd3b7d895ee4cb63c930e7a82284ec211d6a5e6d8bc73a379f62baedca"
     }
   ],
-  "status": "closed_pending_server_bound_review",
-  "conservativeConsumedUsd": "18.735064955664",
-  "remainingAuthorizedUsd": "6.264935044336",
+  "status": "closed_pending_temporal_clarification",
+  "conservativeConsumedUsd": "18.823088955664",
+  "remainingAuthorizedUsd": "6.176911044336",
   "billingClaim": false
 }

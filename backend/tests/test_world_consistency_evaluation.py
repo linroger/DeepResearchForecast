@@ -50,6 +50,8 @@ def factory_for(manifest, calls, *, first_failure=None):
             decision['status'] = 'wait'
             decision['rationale'] = 'The visible conditional trigger has not occurred.'
         review = assessment(obs, decision)
+        if manifest['pricing']['policy'].get('decisionReview') == 'actor-consistency-v2':
+            review['checks'] = [{'kind': c['kind'], 'explanation': c['explanation']} for c in review['checks']]
         if len(calls) == 1 and first_failure == 'unresolved':
             review['status'] = 'unresolved'
         if len(calls) == 1 and first_failure == 'invalid_assessment':

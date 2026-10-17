@@ -1,6 +1,6 @@
 # Server-bound consistency review v2
 
-The user asked to fix remaining issues. Directed phase9 now provides concrete evidence that reviewer-generated objective/action indexes can fail validation; a separate response failed strict JSON. The exact invalid index/value and malformed response body were not retained, so no narrower cause is asserted. Both prior directed runs remain unchanged and incomplete.
+The user asked to fix remaining issues. Directed phase9 now provides concrete evidence that reviewer-generated objective/action indexes can fail validation; a separate response recorded policy_invalid_response. The exact invalid index/value and discarded response contents were not retained, so no narrower cause is asserted. Both prior directed runs remain unchanged and incomplete.
 
 Independent design review approved a distinct optional policy.decisionReview=actor-consistency-v2. Do not change v1's prompt/schema, old journals, ordinary no-review requests, the world mechanisms or the two-RPC-per-slot allowance. No native provider/price/reasoning/output changes are planned. World-v1 remains opt-in and directed confirmation cannot satisfy its full36case gate.
 

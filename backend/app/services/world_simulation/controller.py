@@ -49,7 +49,7 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
                 raw, usage, assessment = output, {"tokens": 0, "costUsd": "0"}, None
             decision = validate_decision(store.spec, raw, actor_id, observation, phase=phase)
             if stage == "revision":
-                assessment = validate_assessment(assessment, observation, decision)
+                assessment = validate_assessment(assessment, observation, decision, mode=review_mode(store.spec))
                 require(assessment["status"] == "clear", "consistency_unresolved",
                         "The actor revision retains an unresolved consistency conflict")
         except Exception as error:
