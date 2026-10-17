@@ -105,9 +105,9 @@
               class="translate-btn"
               type="button"
               :disabled="translationBusy"
-              :title="L('此译文由旧版翻译引擎生成（例如日期中的月份可能丢失），重新生成后替换', 'This translation was made by an older translation engine (for example, months in dates may be missing); regenerate it')"
+              :title="translationUpdateTitle"
               @click="generateTranslation(true)"
-            >{{ translationBusy ? L('正在更新翻译…', 'Updating translation…') : L('更新翻译', 'Update translation') }}</button>
+            >{{ translationUpdateLabel }}</button>
             <!-- BILINGUAL：语种切换（仅在存在自动翻译版本时出现）。 -->
             <div v-if="langOptions.length > 1" class="lang-toggle" role="group" :aria-label="L('语言','Language')">
               <button
@@ -153,6 +153,22 @@
             </ul>
           </div>
         </div>
+
+        <!-- FILTER-SAFE：译文不完整（部分段落因内容过滤/完整性审计保留原文）→ 列出保留段落并提示重试。 -->
+        <details v-if="translationPartial" class="partial-translation">
+          <summary class="partial-translation-summary">
+            <span class="partial-translation-caret" aria-hidden="true">▸</span>
+            <span class="partial-translation-text">{{ translationPartialNote }}</span>
+            <span v-if="translationPartialHint" class="partial-translation-hint">{{ translationPartialHint }}</span>
+          </summary>
+          <ul v-if="translationPartial.chunks.length" class="partial-translation-list">
+            <li v-for="(chunk, idx) in translationPartial.chunks" :key="(chunk.chunk == null ? 'x' : chunk.chunk) + '-' + idx">
+              <span class="ptc-heading">{{ chunk.heading || L('未命名章节', 'Untitled section') }}</span>
+              <span class="ptc-meta">{{ chunkSummary(chunk) }}</span>
+              <span v-if="chunk.sample" class="ptc-sample" :title="chunk.detail || null">{{ chunk.sample }}</span>
+            </li>
+          </ul>
+        </details>
 
         <div ref="scrollEl" class="report-scroll">
           <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片 + 官方指标瓦片）。
@@ -342,7 +358,13 @@ import {
   reportLanguageOptions,
   reportTranslationAction,
   reportTranslationIssues,
+  reportTranslationPartial,
+  reportTranslationPartialNote,
   reportTranslationPollOutcome,
+  reportTranslationUpdateAction,
+  reportTranslationUpdateLabel,
+  reportTranslationUpdateTitle,
+  verbatimChunkSummary,
 } from '../../utils/reportLanguages'
 import {
   distinctSeriesNames,
@@ -633,21 +655,38 @@ const langOptions = computed(() => {
 
 const translationAction = computed(() => reportTranslationAction(meta.value))
 
-// A published translation made by an older engine (backend reports `outdated`) can be
-// regenerated in place; the published one stays until the new one passes the audit.
-const translationUpdateAction = computed(() => {
-  const state = meta.value?.translation_status
-  if (!state || state.available !== true || state.outdated !== true || state.can_update !== true) {
-    return null
-  }
-  const lang = String(state.target_lang || '').toLowerCase()
-  return lang === 'en' || lang === 'zh' ? { targetLang: lang } : null
+// A published translation made by an older engine (backend reports `outdated`) or one
+// that keeps disclosed source-language passages (`partial`, FILTER-SAFE) can be
+// regenerated in place when the backend allows it (`can_update`); the published one
+// stays until the new one passes the audit.
+const translationUpdateAction = computed(() => reportTranslationUpdateAction(meta.value))
+const translationUpdateLabel = computed(() => reportTranslationUpdateLabel(
+  translationUpdateAction.value, L, translationBusy.value,
+))
+const translationUpdateTitle = computed(() => reportTranslationUpdateTitle(
+  translationUpdateAction.value, L,
+))
+
+// FILTER-SAFE: while a partial translation is shown, say which passages stayed in the
+// source language (provider content filter / integrity audit) and point at the retry.
+const translationPartial = computed(() => (
+  activeLang.value ? reportTranslationPartial(meta.value, activeLang.value) : null
+))
+const translationPartialNote = computed(() => reportTranslationPartialNote(translationPartial.value, L))
+const translationPartialHint = computed(() => {
+  if (!translationPartial.value || !translationUpdateAction.value || translationBusy.value) return ''
+  const label = reportTranslationUpdateLabel(translationUpdateAction.value, L)
+  return L(`点击“${label}”可重新生成`, `Use “${label}” to regenerate`)
 })
+function chunkSummary(chunk) {
+  return verbatimChunkSummary(chunk, L)
+}
 
 // The audit may publish a translation that keeps a few source-language lines
 // (REPORT_TRANSLATION_RESIDUAL_LINES); say so rather than imply full coverage.
+// A partial translation reports those lines in its own banner instead.
 const translationResidualNote = computed(() => {
-  if (!activeLang.value) return ''
+  if (!activeLang.value || translationPartial.value) return ''
   const row = normalizeReportTranslations(meta.value)
     .find(entry => String(entry?.lang || '').toLowerCase() === activeLang.value)
   const count = Number(row?.residual_source_lines || 0)
@@ -1278,6 +1317,7 @@ onBeforeUnmount(() => {
   --faint: #999;
   --ok: #16a34a;
   --err: #b91c1c;
+  --warn: #d97706;
   --soft: #FAFAFA;
 
   height: 100%;
@@ -1517,6 +1557,69 @@ onBeforeUnmount(() => {
   color: var(--ink);
 }
 .partial-list li { margin: 2px 0; word-break: break-word; }
+
+/* FILTER-SAFE: partial translation banner (disclosed source-language passages). */
+.partial-translation {
+  margin: 16px 28px 0;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  background: var(--soft);
+}
+.partial-translation-summary {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.partial-translation-summary::-webkit-details-marker { display: none; }
+.partial-translation-caret {
+  flex-shrink: 0;
+  color: var(--warn);
+  font-size: 12px;
+  line-height: 1.6;
+  transition: transform 0.12s ease;
+}
+.partial-translation[open] .partial-translation-caret { transform: rotate(90deg); }
+.partial-translation-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: var(--warn);
+}
+.partial-translation-hint {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.partial-translation-list {
+  margin: 0;
+  padding: 0 16px 12px 38px;
+  font-family: var(--display);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.partial-translation-list li { margin: 4px 0; word-break: break-word; }
+.ptc-heading { font-weight: 600; }
+.ptc-meta {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.ptc-sample {
+  display: block;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+}
 
 .report-scroll {
   flex: 1;
@@ -2269,6 +2372,7 @@ onBeforeUnmount(() => {
   .report-scroll { padding: 20px 18px 48px; }
   .report-head { padding: 16px 18px 14px; }
   .partial-warning { margin: 14px 18px 0; }
+  .partial-translation { margin: 14px 18px 0; }
   .report-title { font-size: 19px; }
 }
 
