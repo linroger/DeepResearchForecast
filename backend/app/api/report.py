@@ -971,17 +971,27 @@ def generate_report_translation(report_id: str, lang: str):
                 force=regenerate,
             )
             if result.get("available") and result.get("updated", True):
+                # A partial translation (sections the provider content filter kept in
+                # the source language) is published and disclosed, not a failure.
+                verified = result.get("translation")
+                verified = verified if isinstance(verified, dict) else {}
+                verbatim_chunks = list(verified.get("verbatim_chunks") or [])
                 ReportManager._set_translation_runtime_status(
                     report_id,
                     lang,
-                    "available",
+                    "partial" if verbatim_chunks else "available",
                     source_markdown_sha256=source_sha,
                     task_id=task_id,
                     owner=owner,
                     markdown_sha256=result.get("markdown_sha256"),
                     progress=100,
-                    message="translation passed isolated publication audit",
+                    message=(
+                        "translation passed isolated publication audit"
+                        + (f" with {len(verbatim_chunks)} source-language region(s) kept verbatim"
+                           if verbatim_chunks else "")
+                    ),
                     issues=[],
+                    verbatim_chunks=verbatim_chunks,
                 )
                 task_manager.complete_task(task_id, result=result)
                 return

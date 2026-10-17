@@ -537,9 +537,16 @@ def _run_research_translation(pipeline_id: str, lang: str) -> None:
             with open(tmp, "w", encoding="utf-8") as handle:
                 handle.write(text)
             os.replace(tmp, path)
+        # FILTER-SAFE: sections the provider content filter kept in the source language
+        # are disclosed beside the (still "available") status; the readers of this file
+        # key on "available", so the status value itself does not change.
+        partial = audit.get("partial") if isinstance(audit.get("partial"), dict) else {}
+        verbatim_chunks = list(partial.get("verbatim_regions") or [])
         _write_research_status(status_path, {
             "status": "available", "available": True, "source_sha256": source_sha,
             "target_lang": lang, "source_lang": result.get("src"), "issues": [],
+            "partial": bool(verbatim_chunks),
+            **({"verbatim_chunks": verbatim_chunks} if verbatim_chunks else {}),
         })
     except Exception as exc:  # noqa: BLE001 — worker must never crash the process
         logger.error(f"研究报告翻译失败: {exc}", exc_info=True)

@@ -532,18 +532,18 @@ def normalize_citation_variants(md: str, paren_labels: bool = True) -> Tuple[str
     return "\n".join(lines), n
 
 
-def detect_language_contamination(md: str, lang: str) -> Dict[str, Any]:
-    """Detect foreign-language report text across structured Markdown.
+def language_contamination_lines(md: str, lang: str) -> List[Tuple[int, str, List[str]]]:
+    """Return every foreign-language line as ``(line index, stripped line, foreign runs)``.
 
-    Fenced code is excluded. Headings, quotes, tables, and linked prose are included;
-    only inline-code and URL destination tokens are masked, so a URL never exempts the
-    rest of its line or a human-readable link label.
+    The walk :func:`detect_language_contamination` counts: fenced code is excluded, the
+    References appendix is excluded, inline-code and URL destination tokens are masked.
+    The runs are the fragments that made the line count, so a caller can tell a line
+    whose foreign text is disclosed source material from real contamination.
     """
     zh_target = _is_zh(lang)
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
-    hits = 0
-    samples: List[str] = []
+    rows: List[Tuple[int, str, List[str]]] = []
     in_references = False
     for i, ln in enumerate(lines):
         if mask[i]:
@@ -564,10 +564,19 @@ def detect_language_contamination(md: str, lang: str) -> Dict[str, Any]:
         else:
             found = _CJK_RUN_RE.findall(scan)
         if found:
-            hits += 1
-            if len(samples) < 5:
-                samples.append(s[:90])
-    return {"lines": hits, "samples": samples}
+            rows.append((i, s, list(found)))
+    return rows
+
+
+def detect_language_contamination(md: str, lang: str) -> Dict[str, Any]:
+    """Detect foreign-language report text across structured Markdown.
+
+    Fenced code is excluded. Headings, quotes, tables, and linked prose are included;
+    only inline-code and URL destination tokens are masked, so a URL never exempts the
+    rest of its line or a human-readable link label.
+    """
+    rows = language_contamination_lines(md, lang)
+    return {"lines": len(rows), "samples": [s[:90] for _i, s, _runs in rows[:5]]}
 
 
 def _looks_like_title_cell(cell: str) -> bool:
