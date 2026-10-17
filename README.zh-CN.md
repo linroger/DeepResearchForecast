@@ -18,9 +18,11 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 报告必须通过严格的引用与一致性审计才会对外提供。运行过程中，一个仪表盘实时展示每个阶段。
 
-### 自反式世界模拟（显式启用）
+### 两个世界引擎
 
-`simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
+**默认引擎（`oasis-legacy`）与反身世界模型。** 除非运行固定了其他引擎，每次运行都使用 OASIS 社交模拟。在 `SIM_WORLD_MODEL=true`（默认，日历模式）下，它为每个时段维护显式的世界状态：每个参与者从依据其角色与当前世界生成的菜单中做一次结构化决策，要约在对方接受之前对任何一方都不具约束力，每轮一次世界更新以有记录的原因推动事实变化，仪表盘的「世界状态」面板与分时段信息流可打开任一已提交时段（[阶段 5](#阶段-5--模拟)、[设计说明](docs/handoff/reflexive-world-state/design.md)）。已在真实运行中验证。
+
+**可选引擎（`world-v1`）。** `simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
 
 准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策阶段槽位在重试和恢复之后仍最多允许两次真实请求。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。
 
@@ -933,6 +935,8 @@ flowchart TB
 
 ### 阶段 5 · 模拟
 
+> 固定了 `simulation_engine: "world-v1"` 的运行以可选的 world-v1 引擎取代本阶段的社交模拟；见[两个世界引擎](#两个世界引擎)。
+
 阶段 5 在一个子进程中运行 [OASIS](https://github.com/camel-ai/oasis)。这个进程同时驱动 Twitter 与 Reddit（一个事件循环里的两个 asyncio 任务），每个回合对应一个日历时段。
 
 **从问题到回合**
@@ -1507,6 +1511,7 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 |---|---|---|
 | `SIM_TEMPORAL_MODE` | `calendar` | `calendar`，或旧式的 `hours` |
 | `SIM_WORLD_MODEL` · `SIM_WORLD_ARBITER` | `true` · `true` | 反身世界模型（结构化角色决策、每轮一次世界更新）及其仲裁调用；`false` 保留旧的情景份额演化 |
+| `DEFAULT_SIMULATION_ENGINE` · `WORLD_POLICY_SPEC_PATH` | `oasis-legacy` · 空 | 未固定引擎的运行所用引擎（`world-v1` 需显式启用）；自动建立 `world-v1` 模型所用的不含密钥的 JSON 配置（`policy`、`limits` 及可选的 `forecastEffect`） |
 | `SIM_WORLD_DECISION_MAX_ACTORS` · `SIM_WORLD_MAX_CHANGE_RATIO` | `24` · `0.5` | 每轮决策角色数；仲裁数值变动的单轮钳制 |
 | `SIM_CALENDAR_TARGET_MAX_ROUNDS` · `OASIS_DEFAULT_MAX_ROUNDS` | `36` · `36` | 选择日历单位时使用的回合预算 |
 | `ACTOR_CAST_MAX` | `20` | 研究阵容的最大规模 |
@@ -1595,9 +1600,12 @@ FIRECRAWL_API_KEY=fc-...         # 可选，但推荐
 |---|---|---|
 | `GET` | `/<sim_id>/run-status` | 实时运行状态 |
 | `GET` | `/<sim_id>/profiles/realtime?platform=` | 智能体档案 |
-| `GET` | `/<sim_id>/posts?platform=&limit=` · `/<sim_id>/comments` | 模拟的帖子与回复 |
+| `GET` | `/<sim_id>/posts?platform=&limit=&round=` · `/<sim_id>/comments?round=` | 模拟的帖子与回复；`round=` 只保留一个已提交时段（该时段的帖子及其中有人回复的讨论串） |
 | `GET` | `/<sim_id>/agent-stats` | 智能体汇总统计 |
 | `GET` | `/<sim_id>/actions` · `/<sim_id>/timeline` · `/<sim_id>/trajectory` | 行为日志、回合时间线与世界态轨迹 |
+| `GET` | `/<sim_id>/feed-rounds?platform=` | 信息流的各回合：时段标签与帖子/回复数（分时段视图） |
+| `GET` | `/<sim_id>/world-state?rows=` | OASIS 运行的反身世界模型：已提交的世界、逐回合历史、要约与建模缺口 |
+| `GET` | `/<sim_id>/world?view=&actor_id=&round=&revision=` | `world-v1` 运行：一个已提交的世界投影（公开、参与者或分析者视图） |
 
 **报告（`/api/report`）**
 
