@@ -58,17 +58,100 @@ export function variableDelta(variable) {
   return { from: a, to: b, direction, cause: last.cause || '', round: last.round ?? null }
 }
 
+function objectRows(history) {
+  return Array.isArray(history) ? history.filter((r) => r && typeof r === 'object') : []
+}
+
+function roundOf(row) {
+  const n = Number(row && row.round)
+  return Number.isFinite(n) ? n : null
+}
+
+function hasRound(history, round) {
+  return objectRows(history).some((r) => roundOf(r) === round)
+}
+
 /** Latest history row (highest round), or null. */
 export function latestHistoryRow(history) {
-  const rows = Array.isArray(history) ? history.filter((r) => r && typeof r === 'object') : []
+  const rows = objectRows(history)
   if (!rows.length) return null
   return rows.reduce((best, r) => (best === null || Number(r.round || 0) >= Number(best.round || 0) ? r : best), null)
 }
 
-/** View model for the panel, built from the /world-state payload. Defensive against partial data. */
-export function summarizeWorldState(data) {
+/** Highest round among the history rows, or null when there is none. */
+export function latestHistoryRound(history) {
+  const row = latestHistoryRow(history)
+  return row ? roundOf(row) : null
+}
+
+/**
+ * The round the panel shows: the stored selection while that round still exists in the
+ * history, otherwise the latest round (so a live refresh never resets a valid selection
+ * and a vanished round — a rerun, a rotated artifact — falls back to the live world).
+ */
+export function resolveSelectedRound(history, selectedRound) {
+  const latest = latestHistoryRound(history)
+  if (selectedRound === null || selectedRound === undefined || latest === null) return latest
+  const wanted = Number(selectedRound)
+  return Number.isFinite(wanted) && hasRound(history, wanted) ? wanted : latest
+}
+
+/**
+ * Stored selection after a tick is clicked: null means "follow the live world", so the
+ * latest round (and an unknown one) maps to null and any past round pins that round.
+ */
+export function nextSelectedRound(history, round) {
+  const latest = latestHistoryRound(history)
+  const wanted = Number(round)
+  if (!Number.isFinite(wanted) || latest === null || wanted === latest) return null
+  return hasRound(history, wanted) ? wanted : null
+}
+
+/** "2026-12: 5 decisions · 2 facts changed · 4 events · arbiter=applied" — the headline without its narrative tail. */
+export function headlineSummary(headline) {
+  const parts = String(headline || '').split(' · ')
+  const idx = parts.findIndex((p) => /^arbiter=/.test(p.trim()))
+  return (idx >= 0 ? parts.slice(0, idx + 1) : parts).join(' · ').trim()
+}
+
+/** "5 decisions · 5 ok · 1 held": a round's decision counts; zero holds/failures/invalids are left out. */
+export function decisionsSummary(decisions, labels = {}) {
+  const d = decisions && typeof decisions === 'object' ? decisions : null
+  if (!d || d.total === null || d.total === undefined || !Number.isFinite(Number(d.total))) return ''
+  const lab = { decisions: 'decisions', ok: 'ok', held: 'held', failed: 'failed', invalid: 'invalid', ...labels }
+  const parts = [`${Number(d.total)} ${lab.decisions}`]
+  if (d.ok !== null && d.ok !== undefined && Number.isFinite(Number(d.ok))) parts.push(`${Number(d.ok)} ${lab.ok}`)
+  for (const key of ['held', 'failed', 'invalid']) {
+    const n = Number(d[key])
+    if (d[key] !== null && d[key] !== undefined && Number.isFinite(n) && n > 0) parts.push(`${n} ${lab[key]}`)
+  }
+  return parts.join(' · ')
+}
+
+function textItems(list, max = 12) {
+  if (!Array.isArray(list)) return []
+  return list.slice(0, max).map((x) => {
+    if (x && typeof x === 'object') return String(x.description || x.label || x.name || '').trim()
+    return String(x ?? '').trim()
+  }).filter(Boolean)
+}
+
+/**
+ * View model for the panel, built from the /world-state payload. Defensive against partial data.
+ * `selectedRound` (null = follow the latest committed round) picks which history row the
+ * narrative, arbiter verdict, decisions, moves, consequences, diff and digest describe; the
+ * tracked variables and open commitments always describe the latest world.
+ */
+export function summarizeWorldState(data, selectedRound = null) {
   const d = data && typeof data === 'object' ? data : {}
-  const latest = latestHistoryRow(d.history)
+  const rows = objectRows(d.history).slice().sort((a, b) => Number(a.round || 0) - Number(b.round || 0))
+  const committed = Number(d.committed_round || 0)
+  const latestRow = latestHistoryRow(rows)
+  const latestRound = latestRow ? roundOf(latestRow) : (committed || null)
+  const shownRound = resolveSelectedRound(rows, selectedRound) ?? latestRound
+  const isPast = shownRound !== null && latestRound !== null && shownRound !== latestRound
+  const row = rows.find((r) => roundOf(r) === shownRound) || (isPast ? null : latestRow)
+  const focusRound = shownRound ?? committed
   const variables = (Array.isArray(d.variables) ? d.variables : [])
     .filter((v) => v && typeof v === 'object')
     .map((v) => {
@@ -86,24 +169,50 @@ export function summarizeWorldState(data) {
       }
     })
     .sort((a, b) => Number(Boolean(b.delta && b.delta.direction !== 'flat')) - Number(Boolean(a.delta && a.delta.direction !== 'flat')))
-  const committed = Number(d.committed_round || 0)
   const events = Array.isArray(d.recent_events) ? d.recent_events.filter((e) => e && typeof e === 'object') : []
-  const moves = events
-    .filter((e) => e.kind === 'action' && Number(e.round) === committed && !/holds position|no recorded move/.test(String(e.description || '')))
+  const eventRounds = events.map((e) => Number(e.round)).filter((n) => Number.isFinite(n))
+  // the API carries only the last N events: older rounds fall back to the history row's deterministic lists
+  const eventsInWindow = eventRounds.length > 0 && focusRound >= Math.min(...eventRounds)
+  const det = row && row.deterministic && typeof row.deterministic === 'object' ? row.deterministic : {}
+  let moves = events
+    .filter((e) => e.kind === 'action' && Number(e.round) === focusRound && !/holds position|no recorded move/.test(String(e.description || '')))
     .map((e) => ({
       actor: Array.isArray(e.actors) && e.actors.length ? e.actors[0] : 'Actor',
       description: String(e.description || ''),
       statement: String(e.statement || ''),
       targets: Array.isArray(e.targets) ? e.targets : []
     }))
-  const consequences = events
-    .filter((e) => e.kind !== 'action' && Number(e.round) === committed)
+  let consequences = events
+    .filter((e) => e.kind !== 'action' && Number(e.round) === focusRound)
     .map((e) => ({ kind: e.kind || 'event', description: String(e.description || '') }))
-  const diff = latest && latest.diff && typeof latest.diff === 'object' ? latest.diff : {}
+  if (isPast && !eventsInWindow) {
+    moves = textItems(det.actions).filter((a) => !/holds position|no recorded move/.test(a))
+      .map((a) => ({ actor: '', description: a, statement: '', targets: [] }))
+    consequences = [
+      ...textItems(det.effects_fired).map((x) => ({ kind: 'effect', description: x })),
+      ...textItems(det.scheduled_events).map((x) => ({ kind: 'scheduled', description: x })),
+      ...textItems(det.commitments_lapsed).map((x) => ({ kind: 'lapsed', description: x }))
+    ]
+  }
+  const diff = row && row.diff && typeof row.diff === 'object' ? row.diff : {}
   const relationshipChanges = (Array.isArray(diff.relationships_changed) ? diff.relationships_changed : [])
+    .filter((rc) => rc && typeof rc === 'object')
     .map((rc) => ({
       source: rc.source, target: rc.target, to: rc.to || '', direction: rc.direction || ''
     }))
+  const variablesChanged = (Array.isArray(diff.variables_changed) ? diff.variables_changed : [])
+    .filter((ch) => ch && typeof ch === 'object')
+    .map((ch) => {
+      let direction = 'changed'
+      if (typeof ch.from === 'number' && typeof ch.to === 'number') direction = ch.to > ch.from ? 'up' : ch.to < ch.from ? 'down' : 'flat'
+      return {
+        id: ch.id, name: ch.name || ch.id || '', direction,
+        display: `${formatWorldValue(ch.from, ch.unit)} → ${formatWorldValue(ch.to, ch.unit)}`
+      }
+    })
+  const variablesAdded = (Array.isArray(diff.variables_added) ? diff.variables_added : [])
+    .filter((nv) => nv && typeof nv === 'object')
+    .map((nv) => ({ id: nv.id, name: nv.name || nv.id || '', display: formatWorldValue(nv.value, nv.unit) }))
   const pending = []
   for (const a of Array.isArray(d.actors) ? d.actors : []) {
     if (!a || typeof a !== 'object') continue
@@ -115,27 +224,44 @@ export function summarizeWorldState(data) {
     if (fx && fx.description) pending.push({ actor: 'Expected', description: fx.description, dueRound: fx.due_round ?? null, status: 'effect' })
   }
   const summary = d.summary && typeof d.summary === 'object' ? d.summary : {}
+  const problems = textItems(row && row.arbiter_problems, 12)
+  if (row && row.error) problems.push(String(row.error))
+  const headline = isPast
+    ? String((row && row.headline) || '')
+    : String(d.headline || (row && row.headline) || '')
   return {
     committedRound: committed,
-    periodLabel: (d.period && d.period.label) || (latest && latest.period_label) || '',
-    headline: String(d.headline || (latest && latest.headline) || ''),
-    narrative: String((latest && latest.narrative) || d.digest || ''),
-    arbiterStatus: (latest && latest.arbiter_status) || '',
+    latestRound,
+    latestLabel: latestRow ? String(latestRow.period_label || `#${latestRow.round}`) : ((d.period && d.period.label) || ''),
+    selectedRound: shownRound,
+    isPast,
+    periodLabel: isPast
+      ? String((row && row.period_label) || `#${shownRound}`)
+      : ((d.period && d.period.label) || (row && row.period_label) || ''),
+    headline,
+    headlineSummary: headlineSummary(headline),
+    narrative: row ? String(row.narrative || '') : String(d.digest || ''),
+    digest: String((row && row.digest) || (!isPast ? d.digest || '' : '')),
+    arbiterStatus: (row && row.arbiter_status) || '',
+    arbiterProblems: problems,
     arbiterFailedRounds: Number(summary.arbiter_failed_rounds || 0),
-    decisions: latest && latest.decisions && typeof latest.decisions === 'object' ? latest.decisions : null,
+    decisions: row && row.decisions && typeof row.decisions === 'object' ? row.decisions : null,
     variables,
+    variablesChanged,
+    variablesAdded,
     moves,
     consequences,
+    eventsInWindow,
     relationshipChanges,
     pending,
-    history: (Array.isArray(d.history) ? d.history : [])
-      .filter((r) => r && typeof r === 'object')
-      .slice()
-      .sort((a, b) => Number(a.round || 0) - Number(b.round || 0))
-      .map((r) => ({
-        round: r.round, label: r.period_label || `#${r.round}`, headline: String(r.headline || ''),
-        arbiterStatus: r.arbiter_status || '', factsChanged: Array.isArray(r.diff && r.diff.variables_changed) ? r.diff.variables_changed.length : 0
-      }))
+    history: rows.map((r) => ({
+      round: r.round, label: r.period_label || `#${r.round}`, headline: String(r.headline || ''),
+      arbiterStatus: r.arbiter_status || '',
+      factsChanged: Array.isArray(r.diff && r.diff.variables_changed) ? r.diff.variables_changed.length : 0,
+      factsAdded: Array.isArray(r.diff && r.diff.variables_added) ? r.diff.variables_added.length : 0,
+      isCurrent: roundOf(r) === latestRound,
+      isSelected: roundOf(r) === shownRound
+    }))
   }
 }
 

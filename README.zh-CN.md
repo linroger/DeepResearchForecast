@@ -1006,7 +1006,7 @@ sequenceDiagram
   - *行动。* 声明作为该角色的帖子在两个平台发布（每轮每个角色一次决策，跨平台共享），回应步骤让所有人回复。
   - *世界更新。* 两个平台都交付本轮后，只运行**一次**更新：确定性内核消耗容量、登记承诺（到期时以行动兑现，否则失效）、推移关系、触发到期的延迟效应与研究事件；随后一次有界的仲裁调用裁决争议行动、移动状态变量（受 `SIM_WORLD_MAX_CHANGE_RATIO` 钳制）、产生涌现事件与延迟效应。情景份额 WorldState 依据角色的情景承诺、按日历惯性与熵下限推进。任一平台在第 *i* 轮更新提交前绝不开始第 *i+1* 轮。
 
-  保存 `world_state.json`（最新世界）、`world_state_history.jsonl`、`world_actions.jsonl`、`world_state_trajectory.json` 与 `decisions.jsonl`；报告的诊断信号包渲染世界演化与世界变量图，仪表盘的模拟页显示实时「世界状态」面板。`SIM_WORLD_MODEL=false` 时旧的环内情景演化原样运行。
+  保存 `world_state.json`（最新世界）、`world_state_history.jsonl`、`world_actions.jsonl`、`world_state_trajectory.json` 与 `decisions.jsonl`；报告的诊断信号包渲染世界演化与世界变量图，仪表盘的模拟页显示实时「世界状态」面板，其时段条可打开任一已提交轮次。`SIM_WORLD_MODEL=false` 时旧的环内情景演化原样运行。
 - **监控与完成判定。**
   - 后端的一个监控线程每 2 秒把行为日志汇总进 `run_state.json`。
   - 管线每 5 秒轮询一次；连续 30 分钟没有回合进展的模拟会被停止。

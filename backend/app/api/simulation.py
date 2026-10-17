@@ -2109,6 +2109,35 @@ def get_simulation_trajectory(simulation_id: str):
 WORLD_STATE_MAX_BYTES = 8 * 1024 * 1024
 WORLD_STATE_MAX_HISTORY = 200
 WORLD_STATE_MAX_EVENTS = 40
+WORLD_STATE_MAX_PROBLEMS = 12      # arbiter problems kept per history row (the kernel records at most 12)
+WORLD_STATE_MAX_DIGEST = 2000      # per-round digest text, the same bound as the latest digest
+
+
+def _bounded_jsonl_rows(path: str):
+    """Dict rows of a per-run JSONL artifact, in file order, or [] when the file is missing.
+
+    Same posture as the world-state file: a regular file only (symlinks refused), the
+    WORLD_STATE_MAX_BYTES size cap, malformed or non-object lines skipped.
+    """
+    import json
+    if os.path.islink(path) or not os.path.isfile(path) or os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+        return []
+    rows = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+    except OSError:
+        return []
+    return rows
 
 
 def _contained_sim_dir(simulation_id: str):
@@ -2131,7 +2160,10 @@ def get_simulation_world_state(simulation_id: str):
 
     404 while the world has not committed a round yet (early rounds, hours mode, legacy
     runs); path containment + symlink refusal + size bounds as for the trajectory route.
-    ``?rows=N`` bounds the history (default 24, max 200).
+    ``?rows=N`` bounds the history (default 24, max 200).  Each history row carries the
+    round's bounded ``arbiter_problems`` (and ``error`` when the update itself failed) plus
+    the agent-facing ``digest`` of that round, joined from ``world_digest.jsonl`` under the
+    same containment rules, so the panel can show any committed period, not only the latest.
     """
     try:
         sim_dir = _contained_sim_dir(simulation_id)
@@ -2156,34 +2188,30 @@ def get_simulation_world_state(simulation_id: str):
             rows_wanted = max(1, min(WORLD_STATE_MAX_HISTORY, int(request.args.get("rows", 24))))
         except (TypeError, ValueError):
             rows_wanted = 24
+        # per-round digests (what the agents were shown), keyed by round; the latest one is
+        # also the top-level ``digest`` below.  Only the text travels — never the shares.
+        digests = {}
+        for drow in _bounded_jsonl_rows(os.path.join(sim_dir, "world_digest.jsonl")):
+            if drow.get("round") is not None:
+                digests[drow.get("round")] = str(drow.get("digest") or "")[:WORLD_STATE_MAX_DIGEST]
         history = []
-        hist_path = os.path.join(sim_dir, "world_state_history.jsonl")
-        if os.path.isfile(hist_path) and not os.path.islink(hist_path) \
-                and os.path.getsize(hist_path) <= WORLD_STATE_MAX_BYTES:
-            try:
-                with open(hist_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                for line in lines[-rows_wanted:]:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        row = json.loads(line)
-                    except ValueError:
-                        continue
-                    if isinstance(row, dict):
-                        history.append({
-                            "round": row.get("round"), "period_label": row.get("period_label"),
-                            "headline": str(row.get("headline") or "")[:300],
-                            "narrative": str(row.get("narrative") or "")[:700],
-                            "arbiter_status": row.get("arbiter_status"),
-                            "decisions": row.get("decisions"),
-                            "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
-                            "scenario_pressure": row.get("scenario_pressure") or {},
-                            "deterministic": row.get("deterministic") or {},
-                        })
-            except OSError:
-                history = []
+        for row in _bounded_jsonl_rows(os.path.join(sim_dir, "world_state_history.jsonl"))[-rows_wanted:]:
+            problems = row.get("arbiter_problems") if isinstance(row.get("arbiter_problems"), list) else []
+            entry = {
+                "round": row.get("round"), "period_label": row.get("period_label"),
+                "headline": str(row.get("headline") or "")[:300],
+                "narrative": str(row.get("narrative") or "")[:700],
+                "arbiter_status": row.get("arbiter_status"),
+                "arbiter_problems": [str(p)[:200] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
+                "decisions": row.get("decisions"),
+                "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
+                "scenario_pressure": row.get("scenario_pressure") or {},
+                "deterministic": row.get("deterministic") or {},
+                "digest": digests.get(row.get("round"), ""),
+            }
+            if row.get("error"):
+                entry["error"] = str(row.get("error"))[:200]
+            history.append(entry)
         variables = []
         for v in (world.get("variables") or [])[:64]:
             if not isinstance(v, dict):

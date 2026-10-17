@@ -68,20 +68,39 @@ def _history_rows():
                                                                     "to": "adversarial", "direction": "farther"}]},
          "scenario_pressure": {"A": "up"}},
         {"round": 2, "period_label": "2026-Q4", "headline": "2026-Q4: quiet", "narrative": "",
-         "arbiter_status": "failed", "decisions": {"total": 3}, "deterministic": {"actions": []}, "diff": {}},
+         "arbiter_status": "failed", "arbiter_problems": ["llm error: BadRequestError"],
+         "error": "BadRequestError: content filter",
+         "decisions": {"total": 3}, "deterministic": {"actions": []}, "diff": {}, "shares": {"A": 0.6, "B": 0.4}},
         {"round": 3, "period_label": "2027-Q1", "headline": "2027-Q1: 3 decisions", "narrative": "Importers protest.",
-         "arbiter_status": "applied", "decisions": {"total": 3}, "deterministic": {"actions": ["Open an inquiry → Actor0"]},
+         "arbiter_status": "applied", "arbiter_problems": ["unknown variable 'x'"],
+         "decisions": {"total": 3}, "deterministic": {"actions": ["Open an inquiry → Actor0"]},
          "diff": {"variables_changed": [], "variables_added": [], "relationships_changed": []}},
     ]
 
 
-def _write_world(sim_dir, with_history=True, committed=3):
+def _digest_rows():
+    # one audit row per stepped round (round 2 has none: the shares step was isolated that round),
+    # plus a duplicate for round 3 (the later row wins) and junk lines the reader must skip
+    return [
+        {"round": 1, "period_end": "2026-09-30", "digest": "Digest 1.", "shares": {"A": 0.5, "B": 0.5}},
+        {"round": 3, "period_end": "2027-03-31", "digest": "Stale digest 3.", "shares": {"A": 0.7, "B": 0.3}},
+        {"round": 3, "period_end": "2027-03-31", "digest": "Digest 3.\nMoves:\n- Actor0: Open an inquiry", "shares": {"A": 0.7, "B": 0.3}},
+        {"round": 9, "digest": "Digest of a round outside the slice."},
+    ]
+
+
+def _write_world(sim_dir, with_history=True, committed=3, with_digest=False):
     os.makedirs(sim_dir, exist_ok=True)
     with open(os.path.join(sim_dir, "world_state.json"), "w", encoding="utf-8") as f:
         json.dump(_world_state_payload(committed), f, ensure_ascii=False)
     if with_history:
         with open(os.path.join(sim_dir, "world_state_history.jsonl"), "w", encoding="utf-8") as f:
             for row in _history_rows():
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    if with_digest:
+        with open(os.path.join(sim_dir, "world_digest.jsonl"), "w", encoding="utf-8") as f:
+            f.write("{not json\n\n[1, 2]\n")
+            for row in _digest_rows():
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
@@ -136,6 +155,45 @@ def test_world_state_api_bad_json_and_bad_rows(client, tmp_path):
     _write_world(str(tmp_path / "sim_ok"), with_history=False)
     res = client.get("/api/simulation/sim_ok/world-state?rows=zzz")
     assert res.status_code == 200 and res.get_json()["data"]["history"] == []
+
+
+def test_world_state_api_history_rows_carry_problems_and_digests(client, tmp_path):
+    """The panel's round selector needs each committed round's arbiter problems, the update
+    error (when the update itself failed) and the agent-facing digest of that round."""
+    _write_world(str(tmp_path / "sim_hist"), with_digest=True)
+    data = client.get("/api/simulation/sim_hist/world-state?rows=2").get_json()["data"]
+    rows = {h["round"]: h for h in data["history"]}
+    assert list(rows) == [2, 3]
+    assert rows[2]["arbiter_status"] == "failed" and rows[2]["arbiter_problems"] == ["llm error: BadRequestError"]
+    assert rows[2]["error"] == "BadRequestError: content filter"
+    assert rows[3]["arbiter_problems"] == ["unknown variable 'x'"] and "error" not in rows[3]
+    assert rows[2]["digest"] == ""                                              # no digest row → empty, never missing
+    assert rows[3]["digest"] == "Digest 3.\nMoves:\n- Actor0: Open an inquiry"   # the later duplicate wins
+    assert "shares" not in rows[2] and "shares" not in rows[3]                 # quantitative shares never travel
+    assert data["digest"] == "Tariff shock ripples."                            # top-level latest digest unchanged
+    # rows without a problems list (older runs) → []
+    _write_world(str(tmp_path / "sim_plain"))
+    plain = client.get("/api/simulation/sim_plain/world-state").get_json()["data"]["history"]
+    assert [h["arbiter_problems"] for h in plain][0] == [] and all(h["digest"] == "" for h in plain)
+    # bounds: at most 12 problems of 200 chars, digest text capped at 2000 chars, error at 200
+    sim_big = tmp_path / "sim_big"
+    _write_world(str(sim_big), with_history=False)
+    with open(sim_big / "world_state_history.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "arbiter_status": "invalid", "arbiter_problems": ["p" * 500] * 20,
+                            "error": "e" * 500, "diff": {}}) + "\n")
+    with open(sim_big / "world_digest.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "digest": "d" * 5000}) + "\n")
+    big = client.get("/api/simulation/sim_big/world-state").get_json()["data"]["history"][0]
+    assert len(big["arbiter_problems"]) == 12 and all(len(p) == 200 for p in big["arbiter_problems"])
+    assert len(big["error"]) == 200 and len(big["digest"]) == 2000
+    # a non-list problems field is tolerated; a symlinked digest file is refused like the other artifacts
+    sim_link = tmp_path / "sim_dlink"
+    _write_world(str(sim_link), with_history=False)
+    with open(sim_link / "world_state_history.jsonl", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"round": 1, "arbiter_status": "applied", "arbiter_problems": "oops", "diff": {}}) + "\n")
+    os.symlink(str(sim_big / "world_digest.jsonl"), str(sim_link / "world_digest.jsonl"))
+    linked = client.get("/api/simulation/sim_dlink/world-state").get_json()["data"]["history"][0]
+    assert linked["arbiter_problems"] == [] and linked["digest"] == ""
 
 
 # ----------------------------------------------------------------------------- run summary + run state
