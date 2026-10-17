@@ -4,6 +4,7 @@ Step2: Zep实体读取与过滤、OASIS模拟准备与运行（全程自动化�
 """
 
 import os
+import re
 import traceback
 from flask import request, jsonify, send_file
 
@@ -2153,6 +2154,97 @@ def _contained_sim_dir(simulation_id: str):
     return sim_dir
 
 
+_FEED_PLATFORM_RE = re.compile(r"[a-z0-9_]{1,32}")
+
+
+def _feed_rows_for_round(simulation_id: str, platform: str, round_arg, kind: str, limit, offset):
+    """PERIOD VIEW: the posts (or comments) of one round of a platform's feed.
+
+    Posts of round r are those created in r plus the parents of replies written in r, so a
+    thread discussed this period shows with only this period's replies; every row carries
+    ``round`` and the response carries the round's ``period_label``.  Containment and bounds
+    follow the world-state route (``_contained_sim_dir``); the index comes from
+    ``services.feed_rounds`` (read-only, cached on the artefacts' mtime/size).
+    """
+    import sqlite3
+    from ..services.feed_rounds import cached_feed_round_index, ids_for_round, load_platform_rows
+    try:
+        rnd = int(round_arg)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "round 必须是整数"}), 400
+    platform = str(platform or "reddit")
+    if not _FEED_PLATFORM_RE.fullmatch(platform):
+        return jsonify({"success": False, "error": "platform 非法"}), 400
+    sim_dir = _contained_sim_dir(simulation_id)
+    if sim_dir is None or not os.path.isdir(sim_dir):
+        return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+    try:
+        limit = max(1, min(int(limit or 50), 2000))
+        offset = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        limit, offset = 50, 0
+    index = cached_feed_round_index(sim_dir, platform)
+    labels = {r["round"]: r["period_label"] for r in index["rounds"]}
+    db_path = os.path.join(sim_dir, f"{platform}_simulation.db")
+    _posts, comments, _agents = load_platform_rows(db_path)
+    post_ids, comment_ids = ids_for_round(index, rnd, comments)
+    if kind == "posts":
+        table, id_col, ids, rounds_map = "post", "post_id", post_ids, index["post_round"]
+    else:
+        table, id_col, ids, rounds_map = "comment", "comment_id", comment_ids, index["comment_round"]
+    rows = []
+    if ids and os.path.isfile(db_path) and not os.path.islink(db_path):
+        uri = "file:" + os.path.abspath(db_path).replace("?", "%3F") + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                marks = ",".join("?" for _ in chunk)
+                try:
+                    cur.execute(f"SELECT * FROM {table} WHERE {id_col} IN ({marks})", chunk)
+                    rows.extend(dict(r) for r in cur.fetchall())
+                except sqlite3.OperationalError:
+                    break
+        finally:
+            conn.close()
+    rows.sort(key=lambda r: (str(r.get("created_at") or ""), int(r.get(id_col) or 0)), reverse=True)
+    for r in rows:
+        r["round"] = rounds_map.get(int(r.get(id_col) or -1))
+    page = rows[offset:offset + limit]
+    return jsonify({
+        "success": True,
+        "data": {
+            "platform": platform,
+            "round": rnd,
+            "period_label": labels.get(rnd, ""),
+            "total": len(rows),
+            "count": len(page),
+            kind: page,
+        }
+    })
+
+
+@simulation_bp.route('/<simulation_id>/feed-rounds', methods=['GET'])
+def get_simulation_feed_rounds(simulation_id: str):
+    """PERIOD VIEW: the rounds of a platform's feed with their period labels, headlines and
+    post/reply counts (``services.feed_rounds``).  Empty ``rounds`` when the run has no
+    action log yet; 404 for an unknown or uncontained simulation id."""
+    try:
+        from ..services.feed_rounds import cached_feed_round_index, public_index
+        platform = str(request.args.get('platform', 'reddit') or "reddit")
+        if not _FEED_PLATFORM_RE.fullmatch(platform):
+            return jsonify({"success": False, "error": "platform 非法"}), 400
+        sim_dir = _contained_sim_dir(simulation_id)
+        if sim_dir is None or not os.path.isdir(sim_dir):
+            return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+        return jsonify({"success": True, "data": public_index(cached_feed_round_index(sim_dir, platform))})
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"读取信息流轮次索引失败: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @simulation_bp.route('/<simulation_id>/world-state', methods=['GET'])
 def get_simulation_world_state(simulation_id: str):
     """REFLEXIVE WORLD: the latest committed world (facts, actors, relationships, events)
@@ -2305,6 +2397,11 @@ def get_simulation_posts(simulation_id: str):
         platform = request.args.get('platform', 'reddit')
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
+        # PERIOD VIEW: ``round=N`` → only the posts of that round (plus the parents of its
+        # replies), each row carrying its ``round``; without it the legacy path below is unchanged.
+        round_arg = request.args.get('round')
+        if round_arg not in (None, ''):
+            return _feed_rows_for_round(simulation_id, platform, round_arg, 'posts', limit, offset)
         
         sim_dir = os.path.join(
             os.path.dirname(__file__),
@@ -2383,6 +2480,10 @@ def get_simulation_comments(simulation_id: str):
         post_id = request.args.get('post_id')
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
+        # PERIOD VIEW: ``round=N`` → only the replies written in that round (legacy path unchanged).
+        round_arg = request.args.get('round')
+        if round_arg not in (None, ''):
+            return _feed_rows_for_round(simulation_id, platform, round_arg, 'comments', limit, offset)
 
         sim_dir = os.path.join(
             os.path.dirname(__file__),

@@ -147,8 +147,13 @@ const props = defineProps({
   simulationId: { type: String, default: '' },
   // bump to force a reload (the parent passes its refresh counter)
   refreshToken: { type: Number, default: 0 },
-  pollMs: { type: Number, default: 15000 }
+  pollMs: { type: Number, default: 15000 },
+  // PERIOD VIEW: the parent's copy of the selection (null = latest). Leave undefined to let
+  // the panel own it; pass a value to push a reset (e.g. the feed's "all periods" button).
+  round: { default: undefined }
 })
+// PERIOD VIEW: every change of the selected round is announced so the feed can follow it
+const emit = defineEmits(['update:selectedRound'])
 
 // history rows requested per poll: four years of monthly rounds; the API caps at 200
 const HISTORY_ROWS = 48
@@ -233,6 +238,10 @@ function stopPolling() {
 }
 
 watch(() => props.simulationId, () => { selectedRound.value = null; load(); startPolling() })
+watch(selectedRound, (value) => { emit('update:selectedRound', value) })
+watch(() => props.round, (value) => {
+  if (value !== undefined && value !== selectedRound.value) selectedRound.value = value
+})
 watch(() => props.refreshToken, () => { load() })
 onMounted(() => { load(); startPolling() })
 onUnmounted(stopPolling)

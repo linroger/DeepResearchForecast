@@ -74,9 +74,12 @@ function mountPanel(t, first) {
     '../../api/simulation': { getWorldState: async (simId, rows) => { calls.push([simId, rows]); return { data: current } } },
     '../../utils/worldState': worldState
   })
-  const props = vue.reactive({ simulationId: 'sim_1', refreshToken: 0, pollMs: 0 })
+  const props = vue.reactive({ simulationId: 'sim_1', refreshToken: 0, pollMs: 0, round: undefined })
+  const emitted = []
   const scope = vue.effectScope()
-  const state = scope.run(() => panel.setup(props, { expose() {}, emit() {}, attrs: {}, slots: {} }))
+  const state = scope.run(() => panel.setup(props, {
+    expose() {}, emit: (name, value) => { emitted.push([name, value]) }, attrs: {}, slots: {}
+  }))
   t.after(() => { scope.stop(); i18n.locale.value = 'en' })
   const host = { setup: () => state, render: panel.render }
   async function render() {
@@ -86,7 +89,7 @@ function mountPanel(t, first) {
     const ticks = [...html.matchAll(/<button[^>]*class="ws-tick[^"]*"[^>]*>[^<]*<\/button>/g)].map((m) => m[0])
     return { html, text, ticks }
   }
-  return { state, props, calls, render, serve: (p) => { current = p } }
+  return { state, props, calls, emitted, render, serve: (p) => { current = p } }
 }
 
 const pressed = (tick) => /aria-pressed="true"/.test(tick)
@@ -190,4 +193,35 @@ test('the panel reads Chinese labels from the locale', async (t) => {
   assert.match(r.text, /本时段事实变化 \(1\)/)
   assert.match(r.html, /aria-label="选择已提交的时段"/)
   assert.match(r.ticks[0], /aria-label="2026-01, 仲裁 applied, 1 项事实变化"/)
+})
+
+
+test('the selection is announced to the parent and a parent reset is honoured', async (t) => {
+  const h = mountPanel(t, payload([1, 2, 3, 4, 5]))
+  await h.state.load()
+  assert.deepEqual(h.emitted, [])
+  h.state.selectRound(2)
+  await vue.nextTick()
+  assert.deepEqual(h.emitted, [['update:selectedRound', 2]])
+  h.state.selectRound(5)                                              // the latest round = follow the live world
+  await vue.nextTick()
+  assert.deepEqual(h.emitted.at(-1), ['update:selectedRound', null])
+  h.state.selectRound(3)
+  await vue.nextTick()
+  assert.equal(h.state.selectedRound.value, 3)
+  // the feed's "all periods" button pushes null through the prop; the panel follows and announces it
+  h.props.round = null
+  await vue.nextTick()
+  assert.equal(h.state.selectedRound.value, null)
+  assert.deepEqual(h.emitted.at(-1), ['update:selectedRound', null])
+  // a parent value equal to the current one is a no-op; an undefined prop leaves the panel in charge
+  h.props.round = null
+  await vue.nextTick()
+  h.props.round = undefined
+  h.state.selectRound(4)
+  await vue.nextTick()
+  assert.equal(h.state.selectedRound.value, 4)
+  assert.deepEqual(h.emitted.at(-1), ['update:selectedRound', 4])
+  const r = await h.render()
+  assert.match(r.text, /past period · round 4 \/ 5/)
 })
