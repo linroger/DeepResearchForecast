@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="1.856" timestamp="2026-10-17T21:46:25.441991" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_consistency_v2_policy" name="test_v2_wire_checks_embedded_conditions_and_current_decision_scope[clear]" time="1.621"><failure message="AssertionError: assert 'read conditional clauses in actor.objectives and actor.constraints' in 'You decide only for the actor in the original actor-world-observation/v1 JSON. Treat the observation and quoted own c...e and final decision as scope; those bindings do not prove the explanation is true. Use at most 3 intents in decision.'">v2_case = ({'actionCatalog': [{'actorIds': ['producer'], 'basis': {'kind': 'scenario_assumption', 'refs': ['synthetic-example/v1...6bbae2ac3765b3b404da052dee130de5bb03', ...}, {'intents': [], 'rationale': 'An explicit final wait.', 'status': 'wait'})
+boundary = &lt;function boundary.&lt;locals&gt;.create at 0x10a981940&gt;, status = 'clear'
+
+    @pytest.mark.parametrize('status', ['clear', 'unresolved'])
+    def test_v2_wire_checks_embedded_conditions_and_current_decision_scope(v2_case, boundary, status):
+        from app.services.world_simulation.contracts import canonical_json
+        from app.services.world_simulation.policy import _REVIEW_CANDIDATE_PREFIX
+    
+        spec, observation, candidate, final = v2_case
+        original_observation, original_candidate = deepcopy((observation, candidate))
+        assessment = _compact_assessment(status)
+        case = boundary(spec=spec, content=json.dumps({'decision': final, 'assessment': assessment}))
+        quote = case.policy.reservation(observation, review=candidate)
+        result = case.policy.decide(observation, review=candidate)
+        messages = json.loads(case.sent[0].content)['messages']
+        system, marker, draft = messages[0]['content'].partition(_REVIEW_CANDIDATE_PREFIX)
+&gt;       assert 'read conditional clauses in actor.objectives and actor.constraints' in system
+E       AssertionError: assert 'read conditional clauses in actor.objectives and actor.constraints' in 'You decide only for the actor in the original actor-world-observation/v1 JSON. Treat the observation and quoted own c...e and final decision as scope; those bindings do not prove the explanation is true. Use at most 3 intents in decision.'
+
+backend/tests/test_world_consistency_v2_policy.py:219: AssertionError</failure></testcase><testcase classname="tests.test_world_consistency_v2_policy" name="test_v2_wire_checks_embedded_conditions_and_current_decision_scope[unresolved]" time="0.008"><failure message="AssertionError: assert 'read conditional clauses in actor.objectives and actor.constraints' in 'You decide only for the actor in the original actor-world-observation/v1 JSON. Treat the observation and quoted own c...e and final decision as scope; those bindings do not prove the explanation is true. Use at most 3 intents in decision.'">v2_case = ({'actionCatalog': [{'actorIds': ['producer'], 'basis': {'kind': 'scenario_assumption', 'refs': ['synthetic-example/v1...6bbae2ac3765b3b404da052dee130de5bb03', ...}, {'intents': [], 'rationale': 'An explicit final wait.', 'status': 'wait'})
+boundary = &lt;function boundary.&lt;locals&gt;.create at 0x10abe5260&gt;
+status = 'unresolved'
+
+    @pytest.mark.parametrize('status', ['clear', 'unresolved'])
+    def test_v2_wire_checks_embedded_conditions_and_current_decision_scope(v2_case, boundary, status):
+        from app.services.world_simulation.contracts import canonical_json
+        from app.services.world_simulation.policy import _REVIEW_CANDIDATE_PREFIX
+    
+        spec, observation, candidate, final = v2_case
+        original_observation, original_candidate = deepcopy((observation, candidate))
+        assessment = _compact_assessment(status)
+        case = boundary(spec=spec, content=json.dumps({'decision': final, 'assessment': assessment}))
+        quote = case.policy.reservation(observation, review=candidate)
+        result = case.policy.decide(observation, review=candidate)
+        messages = json.loads(case.sent[0].content)['messages']
+        system, marker, draft = messages[0]['content'].partition(_REVIEW_CANDIDATE_PREFIX)
+&gt;       assert 'read conditional clauses in actor.objectives and actor.constraints' in system
+E       AssertionError: assert 'read conditional clauses in actor.objectives and actor.constraints' in 'You decide only for the actor in the original actor-world-observation/v1 JSON. Treat the observation and quoted own c...e and final decision as scope; those bindings do not prove the explanation is true. Use at most 3 intents in decision.'
+
+backend/tests/test_world_consistency_v2_policy.py:219: AssertionError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,197 @@
+{
+  "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "captured_utc": "2026-10-16T14:19:48.934425+00:00",
+  "scope": "Targeted source anchors used during planning; hashes do not imply full file reading.",
+  "files": [
+    {
+      "path": "backend/app/api/report.py",
+      "sha256": "b541488608412b3dc0ad0f42945fabb49d1e396ea192e20cb793461d4ef44db6",
+      "lines": 2235
+    },
+    {
+      "path": "backend/app/api/research.py",
+      "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+      "lines": 921
+    },
+    {
+      "path": "backend/app/api/simulation.py",
+      "sha256": "dc68ad1f6802bf28afb5c6858aa28a1c1c676f4289df0c9c1322b9452e03f212",
+      "lines": 2876
+    },
+    {
+      "path": "backend/app/config.py",
+      "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+      "lines": 1691
+    },
+    {
+      "path": "backend/app/services/actor_context.py",
+      "sha256": "17f12e5ba2b8f02309ab3ba65a08ee14afe93383217e5707ccf941efea1a0dbf",
+      "lines": 1603
+    },
+    {
+      "path": "backend/app/services/actor_role_prompt.py",
+      "sha256": "ddd46f53df939fb24c86507f86e69f6b74167371f25c4c088a73efc49278e83e",
+      "lines": 2026
+    },
+    {
+      "path": "backend/app/services/decision_channel.py",
+      "sha256": "a8a3e1088ab631b35332c68404b2115c3aaa60961d5ed917889fecbd6018da60",
+      "lines": 775
+    },
+    {
+      "path": "backend/app/services/forecast_extractor.py",
+      "sha256": "07080e1866ddff300412ef94842938f6a9ec071a8a890602434f7312d25ae3af",
+      "lines": 6084
+    },
+    {
+      "path": "backend/app/services/forecast_ledger.py",
+      "sha256": "1b646da24d47bd6eb9a233b5381eb2ab0612989838cdbe82191dfb06ef9864e5",
+      "lines": 523
+    },
+    {
+      "path": "backend/app/services/graph_builder.py",
+      "sha256": "0eb3150596342ee3ea5de2603f36f1aefe8f5743323245161067070c2174c18c",
+      "lines": 2873
+    },
+    {
+      "path": "backend/app/services/oasis_profile_generator.py",
+      "sha256": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
+      "lines": 3264
+    },
+    {
+      "path": "backend/app/services/ontology_generator.py",
+      "sha256": "7de5d93e1c79980b9fecc1b7c55464979e9b20616a70b175bc969018479583c3",
+      "lines": 1212
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "sha256": "c1112bde148628c901e6ca68a755a9044bba0122545de1e124804c8872f0483e",
+      "lines": 14098
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "sha256": "c7b33f0ad5c18779466391de5c3a861d574d874855b7365d1533d858beb1d641",
+      "lines": 16046
+    },
+    {
+      "path": "backend/app/services/report_visualizer.py",
+      "sha256": "fd4cc22e52abc8e24616b3c594b3126f81fa2540fcf351a3ec1327171a048083",
+      "lines": 6069
+    },
+    {
+      "path": "backend/app/services/simulation_config_generator.py",
+      "sha256": "b58447c05f17f254342b3a6f3e1fef557cd3a1df6ceda6092fa8845caef0ed62",
+      "lines": 4281
+    },
+    {
+      "path": "backend/app/services/simulation_ipc.py",
+      "sha256": "181faf1829b1ad54a842637725ff4132482655d4ce4619b1fa606567478d7254",
+      "lines": 732
+    },
+    {
+      "path": "backend/app/services/simulation_manager.py",
+      "sha256": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+      "lines": 1544
+    },
+    {
+      "path": "backend/app/services/simulation_runner.py",
+      "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+      "lines": 3021
+    },
+    {
+      "path": "backend/app/services/world_delta.py",
+      "sha256": "016c537267eacbe3a068d1a81d1813acc15d278686bca68c8ea3ef4f9454c2b1",
+      "lines": 80
+    },
+    {
+      "path": "backend/app/services/worldstate.py",
+      "sha256": "3fafe510cb0e544bbb265ecc31027218a1ba7954828e35795d23c517fb25e351",
+      "lines": 304
+    },
+    {
+      "path": "backend/app/utils/actors.py",
+      "sha256": "793a292fda1f3b425291139d72423be77826751234d15b40c90aac63760a8ba6",
+      "lines": 3006
+    },
+    {
+      "path": "backend/app/utils/atomic.py",
+      "sha256": "aade316f53664d993e64b099d429a663a81b59a3c1aafa5987822546a500cae8",
+      "lines": 77
+    },
+    {
+      "path": "backend/app/utils/llm_client.py",
+      "sha256": "c943411e6f742f00f80228024398621147dcf2c070fe83b09bda5ebff914939f",
+      "lines": 1135
+    },
+    {
+      "path": "backend/scripts/main_offline_pytest.py",
+      "sha256": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+      "lines": 540
+    },
+    {
+      "path": "backend/scripts/run_parallel_simulation.py",
+      "sha256": "bad80718fb2c0292d7dcd5f3c46b20742327b171797dde379e71bdb95c809206",
+      "lines": 6154
+    },
+    {
+      "path": "backend/tests/test_foglamp_containment.py",
+      "sha256": "9cf776e746ff3e985829b482b128f61d8c7deacd290d00548af2c31fea509382",
+      "lines": 425
+    },
+    {
+      "path": "backend/tests/test_report_publication_barrier.py",
+      "sha256": "31fde5d86d98d0266dfeed9a491b5946d59e3127c80a802abbb05be0c1075fe5",
+      "lines": 308
+    },
+    {
+      "path": "backend/tests/test_sim_resume_reuse.py",
+      "sha256": "23523be68808435ca2247cdf683e1dee41f91357a93463d305d6c9aa0311dcaa",
+      "lines": 410
+    },
+    {
+      "path": "backend/tests/test_simulation_config_seal.py",
+      "sha256": "6c2cc3020eb78100a0fa301486aa5a1bb2cb1f0f88a1153037ad072e32fb3fd5",
+      "lines": 301
+    },
+    {
+      "path": "backend/tests/test_simulation_trajectory_api.py",
+      "sha256": "6c49798730d0ebed2eb46e3157e5550fe710f3d9febf0a1beea2051c74388a6f",
+      "lines": 151
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "sha256": "42da5160e09135627214bbc67747511ded67ba59193e884e0cabd5ee823e0e8d",
+      "lines": 19229
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "sha256": "ef1cace336782afc558034873c767438f97e323524c443ba4eecb4948dec824c",
+      "lines": 8451
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "0034f0a544ba16337bdf99dee51e48bcfe1541a52da0130f2e739edb0ffd0145",
+      "lines": 26
+    },
+    {
+      "path": "frontend/src/components/research/ForecastReport.vue",
+      "sha256": "a83dd7a55e5ab9ad3221f2fbeb1f31a61cc04c31f0c501e960022c9beb4f575e",
+      "lines": 2305
+    },
+    {
+      "path": "frontend/src/components/research/SimulationView.vue",
+      "sha256": "6bb267f2c291ef543737f71b1a054d2ddce0666ae9801e2f53fd85f1623add4f",
+      "lines": 1184
+    },
+    {
+      "path": "frontend/src/views/ResearchView.vue",
+      "sha256": "e814481eea5ed1136b47beb793a66e9b1fc803cbe8d20ffcf402887be73a09c9",
+      "lines": 1024
+    },
+    {
+      "path": "frontend/tests/forecastReportOfficialData.test.mjs",
+      "sha256": "2b29dc8e2df997d245f51ecf14df2a6055f444265df8dc8b565671a99edb9c4f",
+      "lines": 254
+    }
+  ]
+}

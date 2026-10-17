@@ -1,0 +1,18 @@
+{
+  "exitCode": 1,
+  "sourceDrift": [],
+  "files": 553,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-safe-reason-red-20261017T181749Z-s1tdqb68/evidence",
+    "-q",
+    "backend/tests/test_world_consistency_v4.py::test_v4_known_validator_failure_keeps_specific_safe_reason_and_charge"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-safe-reason-red-20261017T181749Z-s1tdqb68/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-safe-reason-red-20261017T181749Z-s1tdqb68/evidence"
+}

@@ -1,0 +1,25 @@
+{
+  "originalOutput": "/private/tmp/drf-world-behavior-v2-20261016",
+  "manifestHash": "ed1b98a2f40b0597e8e053b83dfd19c8982b1b51d04eaa8961550a59b1bcc850",
+  "allCasesComplete": true,
+  "actual": {
+    "costUsd": "4.492024",
+    "tokens": 2003752
+  },
+  "unknown": {
+    "costUsd": "0",
+    "tokens": 0
+  },
+  "exposure": {
+    "costUsd": "4.492024",
+    "tokens": 2003752
+  },
+  "priorConservativeUsd": "9.222150955664",
+  "remainingOriginalUsd": "11.285825044336",
+  "nextEqualShareUsd": "0.3134951401204444444444444444",
+  "largestObservedActualPlusTwoQuotes": {
+    "case": "m5-e2-trade-v3-s1-reflexive",
+    "actualPlusTwoLargestQuotes": "0.293552"
+  },
+  "limits": "Observed quote headroom is not a guarantee for new model outputs. Future dispatch remains transactionally budget-bound and needs a fresh reviewed manifest. Source still frozen pending last qualitative review."
+}

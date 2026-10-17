@@ -1,0 +1,20 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 515,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/evidence",
+    "-q",
+    "backend/tests/test_world_lifecycle.py",
+    "backend/tests/test_world_engine_admission.py",
+    "backend/tests/test_sim_resume_reuse.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-world-list-final-20261016T182017Z-ubafw52h/evidence"
+}

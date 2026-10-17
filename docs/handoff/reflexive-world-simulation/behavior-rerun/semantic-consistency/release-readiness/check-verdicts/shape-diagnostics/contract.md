@@ -1,0 +1,22 @@
+# Proposed shape diagnostic interface
+
+Do not implement until phase16 closeout and design review. This narrows the diagnostic-only plan; it never changes model acceptance or budgets.
+
+Parent review.py helpers:
+
+- build_revision_shape(raw) -> detached shape dictionary.
+- validate_revision_shape(value) -> detached validated shape dictionary, or typed invalid_review_shape.
+
+Exact shape fields: schemaVersion='actor-revision-shape/v1', nodes, checksItemCount. nodes has exactly root, decision, assessment, checks, check0, check1, check2, check3. Each node has exactly type, recognizedKeys, missingRequiredKeys, unknownKeyCount, unknownKeyOverflow. type is missing|null|boolean|number|string|array|object. recognizedKeys is a sorted unique subset of this literal global schema-key allowlist: decision, assessment, intents, stateUpdates, rationale, status, actorId, observationId, checks, kind, verdict, explanation, objectiveIndices, intentIndices, evidencePaths, round, phase, decisionId, intentId. No unknown key name is retained.
+
+Required keys: root={decision,assessment}, decision={intents}, assessment={checks}, check0..3={kind,verdict,explanation}, checks={}. missingRequiredKeys is exactly the sorted required-minus-recognized set for objects and all required keys for other types. For nonobjects recognizedKeys=[] and unknownKeyCount=0/overflow=false. unknownKeyCount=min(actual unknown key count,4); overflow means >4 and requires count4. checksItemCount is null for nonarray, otherwise min(actual length,5), where5 means at least5. Only first4check items are inspected; no deeper descent or string/value content is read. Missing child nodes are represented explicitly. Validation checks parent presence/type and item-count relationships. Unknown names, kind/verdict values, arbitrary paths, IDs, free text, raw bodies and their hashes are excluded.
+
+Policy getter: revision_shape_diagnostic(error) -> detached validated shape or None. Only controlled local v3 revision envelope and assessment validator WorldErrors with codes invalid_review_response or invalid_assessment after known usage may carry an opaque origin receipt. Getter verifies exact error class, code, unchanged usage and shape integrity. Bare code+usage, copied/tampered diagnostics, candidate/modeler/parser/transport/identity/internal errors receive None. A diagnostic builder/getter failure must not replace the original failure, its usage or its existing fixed safe message. Existing public reservation/decide/PolicyFailure-constructor APIs unchanged.
+
+Parent directed evaluator stores optional reviewShape only on failed known-metered v3 revision rows with one of those two codes and no withheldReview. Wrapper fields: schemaVersion='world-review-shape-diagnostic/v1', manifestHash, evaluationId, purpose='revision', observationHash, candidateHash, errorCode, usage, shape, receiptHash. The hashes bind server input identities and structural receipt, never raw failed output. Reopening reconstructs this wrapper from the existing case/row and validates shape+hash; completed/unknown/other-code/old-mode or partial/mismatched wrappers reject. Old rows without the field remain valid. Optional diagnostic failures cannot trigger another call or remove the known charge. No diagnostic enters actor observations, review inputs, actions, scores or retry admission.
+
+Ownership: Curie policy.py plus a new dedicated bounded SDK test file and shape-diagnostics/policy.md; parent review.py, consistency_evaluation.py and focused pure/journal tests. Existing code/test bytes otherwise preserved where feasible. Guarded runtime and all provider calls remain coordinator-owned. No live diagnostic is authorized by this draft alone.
+
+## Approved release 2026-10-17T16:30:27.465871+00:00
+
+Phase16 closed with7qualitativepasses/5knownschemafailures, exposure0.110254USD, all545source and459prior artifacts preserved. Epicurus approved this exact diagnostic design with original-exception-instance origin binding, strict nonboolean counts and parent/type/missing/null relationships. Source edits released; no provider calls yet. Updated disjoint owners: Mill review.py plus new test_world_review_shape.py and helper.md; Poincare consistency_evaluation.py plus new test_world_review_shape_evaluation.py and evaluator.md; Curie policy.py plus new test_world_review_shape_policy.py and policy.md. Coordinator owns all guarded execution/budget. No changes to existing admission/default, schemas, prompts, parsing acceptance, attempts or scoring.

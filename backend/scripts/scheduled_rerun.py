@@ -56,7 +56,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 from urllib import error as _urlerror
 from urllib import request as _urlrequest
 
@@ -690,6 +690,11 @@ class Scheduler:
         sid = record["schedule_id"]
         opts = record.get("options") or {}
         try:
+            # Schedules are saved selections, never consumers of a new ambient
+            # engine default. World scheduling requires a persisted policy/spec.
+            engine = opts.get("simulation_engine", "oasis-legacy")
+            if engine == "world-v1" and opts.get("world_spec") is None and opts.get("world_policy_spec") is None:
+                raise ValueError("World schedules require a saved world_spec or world_policy_spec")
             state = PipelineOrchestrator.start(
                 record["prompt"],
                 mode=str(opts.get("mode") or "full"),
@@ -698,6 +703,9 @@ class Scheduler:
                 max_rounds=opts.get("max_rounds"),
                 language=record.get("research_language"),
                 model=record.get("research_model") or None,
+                simulation_engine=engine,
+                world_spec=opts.get("world_spec"),
+                world_policy_spec=opts.get("world_policy_spec"),
             )
         except Exception as e:  # noqa: BLE001 — 起管线失败不应杀循环；记录并推迟到下次。
             logger.error("[scheduler] 调度 %s 起管线失败：%s", sid, e, exc_info=True)

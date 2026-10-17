@@ -238,5 +238,19 @@
     ],
     "passes": true,
     "note": "Offline: tests/test_world_model*.py, test_agent_decision.py, test_world_update.py, test_world_model_loop.py (2026-10-16). Live (owner-approved, 2026-10-16/17): pipe_d569f211eb14 / sim_d6ebcc77e22d on glm-5.3, 9 monthly rounds, 7 agents: arbiter applied 7/9 (2 provider content-filter rejections committed mechanically), 50 valid decisions with 12 distinct option ids by agency class, one decision per actor per round on both platforms, 11 caused fact changes inside the clamp, rounds 39-140 s vs the 1800 s barrier, dashboard panel + run_summary + report chart/block verified. Evidence: docs/handoff/reflexive-world-state/handoff.md section 7 'Live run'. Follow-ups listed there (section 9)."
+  },
+  {
+    "id": "feature_reflexive_world_simulation",
+    "category": "cross-stage",
+    "description": "Replace social-only simulation with an explicitly pinned world engine whose actors change concrete resources, commitments, rules and relationships over time and respond to permitted consequences, preserving legacy runs and forecast evidence boundaries.",
+    "steps": [
+      "Compile research and actor evidence into versioned world and role models with explicit assumptions and private knowledge boundaries.",
+      "Execute investment/supply, policy/trade and coalition/institution scenarios through one causal proposal-response-resolution-commit loop.",
+      "Verify conservation, authority, consent, timing, private prompts, durable attempts and crash/resume closure.",
+      "Run the actual pipeline/direct API child lifecycle with immutable input pins, cancellation, forks and strict committed completion.",
+      "Read matching world/decisions/commitments/assumptions through UI, report, chat, charts, translation and export; isolate evidence-only probabilities under pinned safe policy.",
+      "Complete reviewed offline gates and the approved maximum US$25 held-out live evaluation before default admission or model-realism claims."
+    ],
+    "passes": false
   }
 ]

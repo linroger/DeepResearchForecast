@@ -1,0 +1,104 @@
+--- a/backend/app/services/world_simulation/contracts.py
++++ b/backend/app/services/world_simulation/contracts.py
+@@ -179,6 +179,9 @@
+ def validate_spec(raw: Any) -> dict:
+     require(isinstance(raw, dict), "invalid_spec", "World specification must be an object")
+     spec = clone(raw)
++    if "interactionQueuePolicy" in spec:
++        require(spec["interactionQueuePolicy"] == "presented-v1", "unsupported_queue_policy",
++                "Unknown interaction queue policy")
+     require(spec.get("schemaVersion") == SPEC_SCHEMA and spec.get("engine") == ENGINE,
+             "unsupported_engine", "Unsupported world specification or engine")
+     identifier(spec.get("simulationId"), "simulationId")
+--- a/backend/app/services/world_simulation/observations.py
++++ b/backend/app/services/world_simulation/observations.py
+@@ -7,7 +7,7 @@
+ )
+ 
+ 
+-def delivered_inbox(spec: dict, snapshot: dict, actor_id: str, round_index: int) -> list[dict]:
++def _eligible_inbox(spec: dict, snapshot: dict, actor_id: str, round_index: int) -> list[dict]:
+     now = parse_time(period_for(spec, round_index)['start'])
+     inbox = []
+     for item in snapshot.get('interactions', {}).values():
+@@ -18,8 +18,16 @@
+                 or actor_id in item.get('acceptedBy', [])):
+             continue
+         inbox.append(item)
+-    inbox.sort(key=lambda item: (item.get('lastResponseRound', 0), item['deliverAt'], item['interactionId']))
+-    return clone(inbox[:spec['limits']['maxInboxItems']])
++    if spec.get('interactionQueuePolicy') == 'presented-v1':
++        presented = snapshot.get('interactionQueueState', {}).get(actor_id, {})
++        inbox.sort(key=lambda item: (presented.get(item['interactionId'], 0), item['deliverAt'], item['interactionId']))
++    else:
++        inbox.sort(key=lambda item: (item.get('lastResponseRound', 0), item['deliverAt'], item['interactionId']))
++    return inbox
++
++
++def delivered_inbox(spec: dict, snapshot: dict, actor_id: str, round_index: int) -> list[dict]:
++    return clone(_eligible_inbox(spec, snapshot, actor_id, round_index)[:spec['limits']['maxInboxItems']])
+ 
+ 
+ def response_actors(spec: dict, snapshot: dict, round_index: int) -> list[str]:
+--- a/backend/app/services/world_simulation/kernel.py
++++ b/backend/app/services/world_simulation/kernel.py
+@@ -944,6 +944,31 @@
+         return state
+ 
+ 
++def _presented_queue_updates(spec: dict, opening: dict, decisions: list, round_index: int) -> dict:
++    """Versioned response-phase service accounting, separate from actor consent.
++
++    A valid empty response still consumed the presented inbox opportunity.
++    Never add cursor state to legacy specs or queues that have never overflowed.
++    The root-level cursor is intentionally outside all actor/API projections.
++    """
++    if spec.get("interactionQueuePolicy") != "presented-v1":
++        return {}
++    from .observations import _eligible_inbox
++
++    proposals = [decision for decision in decisions if decision["phase"] == "proposal"]
++    staged = stage_interactions(spec, opening, proposals, round_index)
++    updates = {}
++    limit = spec["limits"]["maxInboxItems"]
++    for decision in decisions:
++        if decision["phase"] != "response":
++            continue
++        aid = decision["actorId"]
++        pending = _eligible_inbox(spec, staged, aid, round_index)
++        if len(pending) > limit:
++            updates[aid] = {item["interactionId"]: round_index for item in pending[:limit]}
++    return updates
++
++
+ def resolve_round(spec: dict, snapshot: dict, decisions: list, round_index: int) -> dict:
+     """Resolve normalized receipts and advance one complete physical period."""
+     with localcontext() as ctx:
+@@ -951,11 +976,16 @@
+         spec, state, period = _prepare(spec, snapshot, round_index)
+         decisions = _decisions(spec, decisions, round_index)
+         state["round"] = round_index
++        presented = _presented_queue_updates(spec, snapshot, decisions, round_index)
+         # Validate provenance against the opening observation, before any effects.
+         _actor_updates(spec, state, snapshot, decisions)
+         state, events, resolutions = _run_intents(spec, state, decisions, period["start"])
+         _advance(spec, state, events, period["start"], period["end"])
+         _summarize_flow_feedback(spec, state, events, period["start"], period["end"])
+         _record_actor_feedback(spec, state, events, resolutions)
++        if presented:
++            queue = state.setdefault("interactionQueueState", {})
++            for aid, seen in presented.items():
++                queue.setdefault(aid, {}).update(seen)
+         _state_check(spec, state)
+         return {"snapshot": state, "events": events, "resolutions": resolutions}
+--- a/backend/app/services/world_simulation/service.py
++++ b/backend/app/services/world_simulation/service.py
+@@ -87,6 +87,8 @@
+             generation_id='world_' + uuid.uuid4().hex, research_report=research_report,
+             research_generation_id=research_generation_id, research_engine=research_engine,
+             actor_bundle=actor_bundle)
++        # Pin scheduling semantics only for genuinely new preparation, never load/fork.
++        spec['interactionQueuePolicy'] = 'presented-v1'
+         if preparation is not None:
+             spec['sourceBindings']['modelPreparation'] = preparation
+         manifest = seal_inputs(directory, spec)

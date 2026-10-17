@@ -18,6 +18,22 @@ DeepAgentForecast is a forecasting engine that runs on your own machine. You typ
 
 The report is only served after it passes a strict citation and consistency audit. One dashboard shows every stage while it runs.
 
+### Two world engines
+
+**Default engine (`oasis-legacy`) with the reflexive world model.** Every run uses the OASIS social simulation unless it pins another engine. With `SIM_WORLD_MODEL=true` (the default, calendar mode) it keeps an explicit world state per period: each actor makes one structured move from a menu grounded in its role and the current world, an offer binds nobody until the other side accepts it, one world update per round moves facts with recorded causes, and the dashboard's World State panel and per-period feed open any committed period ([Stage 5](#stage-5--simulation), [design](docs/handoff/reflexive-world-state/design.md)). It is live-validated on real runs.
+
+**Opt-in engine (`world-v1`).** `simulation_engine: "world-v1"` adds a concrete world that evolves after each round: actors propose feasible actions, counterparties independently consent, and declared mechanisms update resources, projects, rules, coalitions and delayed obligations. Actors receive the resulting permitted state and their own action outcomes in the next round. Historical runs and the default engine remain `oasis-legacy` until the separate model-behavior release gate is accepted.
+
+World preparation accepts an explicit `world_spec`, or `world_policy_spec` for bounded automatic modeling from research and actor evidence. Every modeled quantity needs evidence or a labeled assumption. The HTTP policy pins provider, model, prices, input/output limits and a total run budget; opaque CLI transports are not admitted. Each decision slot has at most two durable actual requests across retries and resume. Fresh full-world requests validate configuration before research tasks or files are created. Supply the profile directly or set `WORLD_POLICY_SPEC_PATH` to a non-secret JSON file containing `policy`, `limits` and an optional safe `forecastEffect`. Missing configuration blocks launch; an explicit legacy-engine choice remains available.
+
+The simulation tab shows World, Decisions/Actions, Commitments and Assumptions with public, actor and analyst views. Reports consume one frozen result. `diagnostic_only` displays conditional pathways without changing evidence-only probability inputs; `no_update` omits world reasoning and plots. These are conditional simulations, not calibrated forecasts. See the [source-linked architecture and diagrams](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md), [executable contracts](docs/handoff/reflexive-world-simulation/implementation-contract.md) and [current verification/release status](docs/handoff/reflexive-world-simulation/handoff.md).
+
+Fresh world admission on this branch pins `policy.decisionReview: "actor-consistency-v4"`, `policy.responseFormat: "json_object"`, `policy.candidateRepair: "known-output-error-v1"` and a two-request slot limit. A candidate is followed by one reviewed final decision. Known candidate-format failures may use that unused second request; an invalid or unresolved final review cannot obtain a third request. V4 retains bounded, untrusted review fields in private audit receipts without turning them into actions, authority or forecast evidence. Historical v1/v2/v3 generations retain their original validation and recovery rules.
+
+The latest completed full behavior study remains at 16 of 18 required comparisons, so default promotion is still pending. Subsequent diagnostics preserved both structural failures and factual explanation errors; retaining more review data is not proof that it is correct. The [current release record](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md) and [v4 contract](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md) distinguish source verification from live acceptance. All prior results remain preserved. The evaluation authorization is USD40 total, including all spending carried forward from the original USD25 authorization.
+
+**Known limits (review of 2026-10-18).** world-v1 cannot yet build a world from a real research dossier here: the default research engine leaves the compiler no citable claims, modeling requests exceed the pinned input limit, and a compile error has no repair path. A provider 429 (code 1302) or an unresolved v4 review ends a world run for good, and a reboot mid-run can leave it reported as running. Treat it as a research preview on hand-built `world_spec` inputs. The review findings, the fixes made during the merge and the follow-up plan are in the [engine consolidation record](docs/handoff/world-engines-consolidation/handoff.md).
+
 ```mermaid
 flowchart TB
     Q(["Your question"]):::io --> ROW1
@@ -921,6 +937,8 @@ flowchart TB
 
 ### Stage 5 · Simulation
 
+> A run that pins `simulation_engine: "world-v1"` replaces this stage's social simulation with the opt-in world-v1 engine; see [Two world engines](#two-world-engines).
+
 Stage 5 runs [OASIS](https://github.com/camel-ai/oasis) in a single child process. That process drives Twitter and Reddit concurrently (two asyncio tasks in one event loop), and each round is one calendar period.
 
 **From your question to rounds**
@@ -1495,6 +1513,7 @@ Provider credentials are optional environment inputs, passed only to the relevan
 |---|---|---|
 | `SIM_TEMPORAL_MODE` | `calendar` | `calendar` or the legacy `hours` |
 | `SIM_WORLD_MODEL` · `SIM_WORLD_ARBITER` | `true` · `true` | Reflexive world model (structured actor decisions, one world update per round) and its arbiter call; `false` keeps the legacy scenario-share evolution |
+| `DEFAULT_SIMULATION_ENGINE` · `WORLD_POLICY_SPEC_PATH` | `oasis-legacy` · empty | Engine for runs that do not pin one (`world-v1` is opt-in); a non-secret JSON profile (`policy`, `limits`, optional `forecastEffect`) for automatic `world-v1` modeling |
 | `SIM_WORLD_DECISION_MAX_ACTORS` · `SIM_WORLD_MAX_CHANGE_RATIO` | `24` · `0.5` | Deciding actors per round; per-round clamp on arbiter numeric changes |
 | `SIM_CALENDAR_TARGET_MAX_ROUNDS` · `OASIS_DEFAULT_MAX_ROUNDS` | `36` · `36` | Round budget used to choose the calendar unit |
 | `ACTOR_CAST_MAX` | `20` | Maximum researched cast size |
@@ -1583,9 +1602,12 @@ These are the routes the dashboard uses. The complete list follows in a collapsi
 |---|---|---|
 | `GET` | `/<sim_id>/run-status` | Live run status |
 | `GET` | `/<sim_id>/profiles/realtime?platform=` | Agent profiles |
-| `GET` | `/<sim_id>/posts?platform=&limit=` · `/<sim_id>/comments` | Simulated posts and replies |
+| `GET` | `/<sim_id>/posts?platform=&limit=&round=` · `/<sim_id>/comments?round=` | Simulated posts and replies; `round=` keeps one committed period (its posts and the threads replied to in it) |
 | `GET` | `/<sim_id>/agent-stats` | Aggregate agent statistics |
 | `GET` | `/<sim_id>/actions` · `/<sim_id>/timeline` · `/<sim_id>/trajectory` | The action log, the round timeline and the world-state trajectory |
+| `GET` | `/<sim_id>/feed-rounds?platform=` | The feed's rounds with period labels and post/reply counts (per-period view) |
+| `GET` | `/<sim_id>/world-state?rows=` | Reflexive world model of an OASIS run: the committed world, per-round history, offers and modelling gaps |
+| `GET` | `/<sim_id>/world?view=&actor_id=&round=&revision=` | A `world-v1` run: one committed world projection (public, actor or analyst view) |
 
 **Report (`/api/report`)**
 

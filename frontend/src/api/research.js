@@ -20,9 +20,9 @@ export function researchChartUrl(pipelineId, rel) {
  * 启动统一研究→预测管线（Step 0）
  *
  * 注意：此请求 **非幂等** —— 每次 /run 都会新建一条 pipeline 并拉起一个 DeerFlow 子进程
- * 与一整轮 OASIS 模拟。因此绝不能用 requestWithRetry 包裹：一次因超时/网络抖动而丢失响应的
+ * 与一整轮模拟。因此绝不能用 requestWithRetry 包裹：一次因超时/网络抖动而丢失响应的
  * 重试会启动第二条不可见的管线，白白消耗 Claude 额度与算力。改用单次 service() 调用。
- * @param {Object} data { prompt, mode, project_name, depth, max_rounds }
+ * @param {Object} data { prompt, mode, project_name, depth, model, simulation_engine?, max_rounds? }
  * @returns {Promise}
  */
 export function runPipeline(data) {
@@ -99,13 +99,17 @@ export function getArtifact(pipelineId, name) {
 /**
  * 启动前就绪检查（不发起管线）。T5.6
  * @param {String} mode full | research_only
+ * @param {Object} options Optional research model and explicit simulation_engine; omit engine for server default.
  * @returns {Promise}
  */
-export function getPreflight(mode = 'full') {
+export function getPreflight(mode = 'full', options = {}) {
+  const params = { mode }
+  if (options.model) params.model = options.model
+  if (options.simulation_engine) params.simulation_engine = options.simulation_engine
   return service({
     url: '/api/research/preflight',
     method: 'get',
-    params: { mode }
+    params
   })
 }
 

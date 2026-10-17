@@ -1,0 +1,30 @@
+{
+  "reviewer": "Parfit",
+  "verdict": "NoP1/P2inboundedguardchange",
+  "guardSha256": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+  "controlSha256": "712a89649c4e6cab78c74dc3177458cd6e1811eac850a0e3bbb88894b5126447",
+  "passed": 213,
+  "seconds": "13.44",
+  "sourceDrift": [],
+  "scope": "Read-onlyNOFOLLOW directoryancestorhandles only; file/list/scandir/write/cwd/credential/networkcontrols unchanged. CPythonboundarynotOSsandbox.",
+  "events": {
+    "blocked:network:socket.__new__": 3,
+    "blocked:external_write": 13,
+    "blocked:credential_path": 8,
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 3,
+    "blocked:child_process_limit": 3,
+    "blocked:identity_environment": 1,
+    "blocked:sqlite_uri": 9,
+    "blocked:network:socket.getaddrinfo": 3,
+    "blocked:network:socket.bind": 1,
+    "quarantine:oasis_import_cwd": 3,
+    "blocked:external_read": 25,
+    "blocked:process:subprocess.Popen": 6,
+    "blocked:saved_data": 1,
+    "blocked:changed_child_script": 1,
+    "allow:directory_traversal": 312
+  }
+}

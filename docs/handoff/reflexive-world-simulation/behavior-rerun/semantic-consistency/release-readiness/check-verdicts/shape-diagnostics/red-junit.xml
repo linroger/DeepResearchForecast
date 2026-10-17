@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.439" timestamp="2026-10-18T00:32:28.767222" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_review_shape_evaluation" name="test_real_sdk_known_invalid_v3_check_records_private_bound_shape" time="0.463"><failure message="AssertionError: A real SDK v3 check-field validation failure was charged and saved, but its optional private structural reviewShape evidence was discarded&#10;assert 'reviewShape' in {'errorCode': 'invalid_assessment', 'errorMessage': 'Unsupported assessment check fields', 'reservation': {'costUsd': '0.061280000000', 'tokens': 22448}, 'status': 'failed', ...}">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v3-shape-diagnostics-red-20261017T163228Z-rhtdpzxb/evidence/pytest-tmp/test_real_sdk_known_invalid_v30')
+
+    def test_real_sdk_known_invalid_v3_check_records_private_bound_shape(tmp_path):
+        """RED must be missing reviewShape after a known charged validation failure."""
+        config, manifest = admitted()
+        calls = []
+        factory, clients = factory_for(manifest, calls, first_failure="invalid_assessment")
+        root = tmp_path / "run"
+        try:
+            report = replay.run_evaluation(root, factory, config)
+            journal = json.loads((root / "journal.json").read_text())
+            case = manifest["cases"][0]
+            row = journal["cases"][case["evaluationId"]]
+            assert len(calls) == report["attempts"] == 12 and report["retries"] == 0
+            assert row["status"] == "failed" and row["errorCode"] == "invalid_assessment"
+            assert row["errorMessage"] == "Unsupported assessment check fields"
+            assert row["usage"]["tokens"] == 30 and row["usage"]["costUsd"] != "0"
+            assert report["completedCases"] == 11 and report["diagnosticGate"] == "incomplete"
+            assert "withheldReview" not in row and "decision" not in row and "matches" not in row
+            assert "SENTINEL_PROVIDER_BODY" not in json.dumps(journal)
+&gt;           assert "reviewShape" in row, (
+                "A real SDK v3 check-field validation failure was charged and saved, "
+                "but its optional private structural reviewShape evidence was discarded"
+            )
+E           AssertionError: A real SDK v3 check-field validation failure was charged and saved, but its optional private structural reviewShape evidence was discarded
+E           assert 'reviewShape' in {'errorCode': 'invalid_assessment', 'errorMessage': 'Unsupported assessment check fields', 'reservation': {'costUsd': '0.061280000000', 'tokens': 22448}, 'status': 'failed', ...}
+
+backend/tests/test_world_review_shape_evaluation.py:45: AssertionError</failure></testcase></testsuite></testsuites>

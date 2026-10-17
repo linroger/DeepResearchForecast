@@ -1,0 +1,22 @@
+{
+  "broadRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-v2-release-20261017T125633Z-94djanpo",
+  "broadPassed": 882,
+  "broadSeconds": "130.43",
+  "finalRun": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-v2-admission-20261017T130022Z-_igaybv8",
+  "finalPassed": 56,
+  "finalSeconds": "5.25",
+  "sourceDrift": [],
+  "files": 535,
+  "sourceReview": "Epicurus approved all mode isolation/captured scope/call accounting and test-only delta; documentation specificity corrected.",
+  "manifestHash": "1c120c359ba91644ec3713048a513d7c8138f9584735b98e252e085d5007986a",
+  "maxUsd": "1.25",
+  "calls": 12,
+  "priorArtifactsUnchanged": 404,
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "fullBehaviorGateClaim": false
+}

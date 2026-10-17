@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "world-live-price-check/v1",
+  "usdCeiling": "25",
+  "paidRequestsSoFar": 0,
+  "providerSlot": "existing LLM config",
+  "endpoint": "existing coding chat endpoint",
+  "tariffInterpretation": "Conservative standard API USD-equivalent exposure, not an account billing statement. Existing coding-plan quota charges may differ.",
+  "observedCnyRatesPerMillion": {
+    "input": "8",
+    "output": "28",
+    "cacheHit": "2"
+  },
+  "ecbDate": "2026-10-16",
+  "eurUsd": "1.1253",
+  "eurCny": "7.5240",
+  "reservedUsdRatesPerMillion": {
+    "input": "2",
+    "output": "6"
+  },
+  "outputBoundInterpretation": "Official max_tokens limits all generated tokens; reasoning is generated content and consumes the same output allowance. Inclusive provider usage is validated on every response; missing/inconsistent usage retains full exposure.",
+  "inputBoundInterpretation": "One token per UTF8 byte of complete request messages plus 1024 framing tokens; conservative bound relative to published no-tool chat template.",
+  "sourceFiles": {
+    "model": {
+      "path": "/private/tmp/drf-glm53-model.md",
+      "sha256": "2ae550297e839b51498db0f487d9ba5cb0c44f996236546d0eb2e07ce43ef8d8"
+    },
+    "pricing": {
+      "path": "/private/tmp/drf-glm53-pricing.md",
+      "sha256": "e47e492fffffdd7d0cdb3fb6b61f0ed33b2ab829dd3973c9d55e8a1f1c537e4a"
+    },
+    "parameters": {
+      "path": "/private/tmp/drf-glm53-param.md",
+      "sha256": "4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05"
+    },
+    "api": {
+      "path": "/private/tmp/drf-glm53-api.md",
+      "sha256": "99fe91a6cbe1b74e7aefdac84950ce246fb03afddb2089ec5e5031d47e097153"
+    },
+    "template": {
+      "path": "/private/tmp/drf-glm53-chat-template.jinja",
+      "sha256": "0e2b6268ac54f04d2bc1157e8cfb896cb66f25c0b5e319ea12e56014c3914f24"
+    },
+    "fx": {
+      "path": "/private/tmp/drf-eurofxref.xml",
+      "sha256": "4422161311c3c02cf2d1571db07bdf9884b3f42fdeb16a4926903236ae6ab42d"
+    }
+  },
+  "revisedEvaluationOutputCap": 1024,
+  "outputCapRationale": "The 30 pilot requests with known usage used at most281 output tokens under the inclusive tariff calculation. A1024-token request cap retains more than3.6x that observed maximum and the official recommended minimum, reducing unnecessary worst-case reservations in the corrected preregistration. Length failures remain failures."
+}

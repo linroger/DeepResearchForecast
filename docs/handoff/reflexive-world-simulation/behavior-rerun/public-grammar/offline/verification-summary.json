@@ -1,0 +1,26 @@
+{
+  "exitCode": 0,
+  "sourceDrift": [],
+  "files": 523,
+  "command": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-I",
+    "-S",
+    "-B",
+    "backend/scripts/main_offline_pytest.py",
+    "--evidence-dir",
+    "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-grammar-first-20261016T193911Z-6at6fp8z/evidence",
+    "-q",
+    "backend/tests/test_world_policy.py",
+    "backend/tests/test_world_public_grammar.py",
+    "backend/tests/test_world_kernel.py",
+    "backend/tests/test_world_controller.py",
+    "backend/tests/test_world_store.py",
+    "backend/tests/test_world_queue_fairness.py",
+    "backend/tests/test_world_evaluation.py",
+    "backend/tests/test_world_evaluation_launch.py",
+    "backend/tests/test_world_modeler.py"
+  ],
+  "source": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-grammar-first-20261016T193911Z-6at6fp8z/source",
+  "evidence": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-grammar-first-20261016T193911Z-6at6fp8z/evidence"
+}

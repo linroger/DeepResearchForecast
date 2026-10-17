@@ -247,7 +247,22 @@ the social simulation, is live-validated and feeds the report and the dashboard)
   breached/released). Offers appear in both briefs, the digest, the arbiter prompt (which must
   never assume consent), the round record (`offers_opened/answered/lapsed`, `breaches`), the
   run summary (`offers` counts), the `/world-state` API (`interactions`), the panel card and the
-  report block. Tests: `tests/test_world_interactions.py`.
+  report block. Tests: `tests/test_world_interactions.py`. Live validation (2026-10-17,
+  `sim_1838cf014c0b`, 8 offers) added two rules: any non-hold move — an answer included — honours
+  an obligation that fell due in that period, and an actor that owes an answer to an open offer or
+  whose agreement obligation falls due decides in that round even when the activity sampler did
+  not activate it (`_ReflexiveWorldCoordinator.owed_decision_ids`); without them every breach of
+  that run was an artefact of the mechanics, not of the actors.
+  *Mirror-image rule (2026-10-17, after the live run `sim_1838cf014c0b`, where the OPEC
+  Secretariat chose `accept:` with terms that only acknowledged conformity data and was bound to
+  Iraq's baseline anchor):* an `accept:` answer adopts the offer's terms verbatim; acceptor `terms`
+  that are empty, a fragment of the offer, a bare acknowledgement (fewer than
+  `ACCEPT_TERMS_MIN_TOKENS` = 3 content tokens) or that share at least `ACCEPT_TERMS_OVERLAP_MIN`
+  = 0.6 of their content tokens with the offer without introducing a figure the offer lacks bind
+  as an acceptance; anything else is recorded as a counter-offer back to the proposer carrying the
+  acceptor's terms (`status=countered`, round record "recorded as a counter-offer, not an
+  acceptance"), never as an agreement (`world_model.terms_restate_offer`; CJK text is compared as
+  character bigrams; the menu label and the decision contract tell the actor so).
 - **Modelling gaps instead of invention.** `world_model_seed.seed_gaps` lists what the research
   could not ground (numeric facts without units or as-of dates, actors without goals / plans /
   an agency class, a cast without relationships, a world without facts); the sealed block, the

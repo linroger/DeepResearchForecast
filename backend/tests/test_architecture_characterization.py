@@ -19,6 +19,7 @@ and network-free.
 """
 
 import inspect
+import re
 import json
 import os
 
@@ -172,8 +173,9 @@ def test_characterizes_fork_seed_shared_mutation():
     from app.services.pipeline_orchestrator import PipelineOrchestrator
 
     src = _src(PipelineOrchestrator._run_one_seed)
-    assert "create_simulation(\n            project.project_id, graph_id" in src or \
-        "create_simulation(project.project_id, graph_id" in src
+    # the OASIS seed path (world-v1 seeds are forks with child-owned stores) still creates a
+    # fresh simulation on the SAME graph; indentation-insensitive since the engine branch
+    assert re.search(r"create_simulation\(\s*project\.project_id, graph_id", src)
     assert "overlay" not in src.lower()
     assert int(getattr(Config, "N_FORECAST_SEEDS", 1)) >= 1  # containment default is 1
 

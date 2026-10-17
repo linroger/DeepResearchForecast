@@ -21,13 +21,20 @@ The fix mirrors ``translation_dates``:
   million are written without a magnitude word in English ("40万" → "400,000"), so
   their fact is that grouped numeral, which the English rendering carries as a
   plain number.
+* FRED unit labels ("25000 Millions of Dollars", "20,000 Thousands of Dollars",
+  "1.2 Billions of U.S. Dollars") are the same kind of amount written the way the
+  data series is labelled: the whole phrase is one ``⟦Q…⟧`` token worth number ×
+  magnitude in dollars ("250亿美元", ``qty:25000000000``).  With only the numeral
+  frozen, the binary-forecast rows of report_0f2e07d62a34 could never be
+  translated: every faithful "250亿美元" changed the numeric multiset.
 
 Currency is rendered but is not part of the fact: a translator may legitimately
 move a currency word ("3 billion in US dollars" → "30亿美元"); the error guarded
-here is magnitude.  "thousand" is left alone (Chinese 千 is the same unit, so the
-frozen numeral stays right), single-letter suffixes ("$125M", "€2B") count only
-after a currency symbol so a company name like 3M stays intact, a year followed
-by a spaced 万-word ("2025 万科", Vanke) is not an amount, and a mixed Chinese form
+here is magnitude.  A bare "thousand" is left alone (Chinese 千 is the same unit,
+so the frozen numeral stays right; only the FRED label "Thousands of Dollars"
+scales its numeral), single-letter suffixes ("$125M", "€2B") count only after a
+currency symbol so a company name like 3M stays intact, a year followed by a
+spaced 万-word ("2025 万科", Vanke) is not an amount, and a mixed Chinese form
 ("1亿5000万") is read as two amounts, which fails closed.
 """
 
@@ -50,6 +57,11 @@ _EN_CURRENCY_WORD = (
 _ZH_SCALE_WORD = r"(?:万亿|千亿|百亿|十亿|亿|千万|百万|十万|万)"
 _ZH_PREFIX = r"(?:US\$|\$|€|£|¥|人民币)"
 _ZH_CURRENCY_WORD = r"(?:美元|欧元|英镑|日元|元人民币|人民币|元)"
+# FRED unit labels: a plural magnitude, "of", and the dollar word in any case
+# ("Millions of Dollars", "millions of U.S. dollars", "Thousands of Dollars").
+_FRED_PREFIX = r"(?:US\$|\$)"
+_FRED_SCALE_WORD = r"(?i:thousands|millions|billions|trillions)"
+_FRED_CURRENCY_WORD = r"(?i:(?:U\.S\.|US)" + _SP + r"?dollars|dollars)"
 # A year never opens an amount range: "fell from $237 billion in 2024 to $200 billion"
 # is two amounts, not 2024–200 billion.
 _NOT_AFTER_YEAR = r"(?<!(?<![\d.,])(?:19|20)\d{2})"
@@ -67,6 +79,17 @@ QUANTITY_PATTERN = (
     rf"(?:(?:{_SP}*|-)(?P<qa_s>{_EN_SCALE_WORD})(?![A-Za-z])"
     r"|(?(qa_p)(?P<qa_l>[mMbBT])(?![A-Za-z0-9])|(?!)))"
     rf"(?:{_SP}+(?P<qa_c>{_EN_CURRENCY_WORD})(?![A-Za-z]))?"
+    # FRED unit labels: "25000 Millions of Dollars", "30,000 millions of U.S. dollars",
+    # "20,000 Thousands of Dollars".  The plural magnitude keeps these out of the
+    # English alternative above (its scale word must not be followed by a letter),
+    # so the form is a separate branch the engine reaches only after that one fails:
+    # every match the English alternative made before is unchanged.
+    rf"|(?:(?<![A-Za-z0-9_])(?P<qf_p>{_FRED_PREFIX}){_SP}?|(?<![A-Za-z0-9_.,]))"
+    rf"(?P<qf_n1>{_NUM})"
+    rf"(?:{_NOT_AFTER_YEAR}(?:{_SP}*[–—-]{_SP}*|{_SP}+to{_SP}+)"
+    rf"{_FRED_PREFIX}?(?P<qf_n2>{_NUM}))?"
+    rf"{_SP}+(?P<qf_s>{_FRED_SCALE_WORD}){_SP}+(?i:of){_SP}+"
+    rf"(?P<qf_c>{_FRED_CURRENCY_WORD})(?![A-Za-z])"
     # Chinese: "37亿美元", "$37亿", "1.5–1.65亿美元", "8,200亿", "40万"
     rf"|(?:(?P<qz_p>{_ZH_PREFIX})[ ]?|(?<![\d.,]))"
     rf"(?P<qz_n1>{_NUM})"
@@ -82,6 +105,7 @@ _EN_SCALE: Dict[str, int] = {
     "million": 6, "billion": 9, "trillion": 12, "mn": 6, "bn": 9, "tn": 12,
     "m": 6, "b": 9, "t": 12,
 }
+_FRED_SCALE: Dict[str, int] = {"thousands": 3, "millions": 6, "billions": 9, "trillions": 12}
 _ZH_SCALE: Dict[str, int] = {
     "万": 4, "十万": 5, "百万": 6, "千万": 7, "亿": 8, "十亿": 9, "百亿": 10,
     "千亿": 11, "万亿": 12,
@@ -143,6 +167,12 @@ def interpret_quantity_match(match: "re.Match[str]") -> Optional[Quantity]:
         currency = _normalize_currency(match.group("qa_p")) or _normalize_currency(
             match.group("qa_c")
         )
+    elif match.group("qf_n1") is not None:
+        # FRED unit label: the phrase always names dollars, so the currency is fixed.
+        lang = "en"
+        exponent = _FRED_SCALE.get((match.group("qf_s") or "").lower())
+        numbers = (match.group("qf_n1"), match.group("qf_n2"))
+        currency = "USD"
     else:
         lang = "zh"
         exponent = _ZH_SCALE.get(match.group("qz_s") or "")

@@ -1,0 +1,11 @@
+{
+  "reviewedUtc": "2026-10-17T16:12:09.622452+00:00",
+  "coreReviewer": "Epicurus 01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "coreVerdict": "No outstanding bounded v3, candidate-repair or private-withheld findings",
+  "admissionReviewer": "Parfit 01a14a59-0b23-7ec2-adab-64271bdeb4fb",
+  "admissionVerdict": "Handoff candidate P1 closed; no outstanding bounded P1/P2",
+  "runtime": "1399 passed; zero failures/errors/skips; no source drift545",
+  "sourceManifestSha256": "16ad232c253675d0994484efc68c947f3fb99dd3ff1c28cd60ae7e8d8ec6d0b9",
+  "liveBehaviorClaim": false,
+  "promotionAuthorized": false
+}

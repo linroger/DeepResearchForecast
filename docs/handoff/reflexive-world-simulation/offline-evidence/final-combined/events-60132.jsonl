@@ -1,0 +1,4 @@
+{"pid": 60132, "event": "blocked:network:socket.__new__"}
+{"pid": 60132, "event": "blocked:external_write"}
+{"pid": 60132, "event": "blocked:credential_path"}
+{"pid": 60132, "event": "blocked:external_write"}

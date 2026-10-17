@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="2.335" timestamp="2026-10-17T22:19:50.367960" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_withheld_diagnostics" name="test_validated_unresolved_is_retained_privately_but_never_admitted_or_retried[actor-consistency-v1]" time="0.673"><failure message="KeyError: 'withheldReview'">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/evidence/pytest-tmp/test_validated_unresolved_is_r0')
+mode = 'actor-consistency-v1'
+
+    @pytest.mark.parametrize('mode', ['actor-consistency-v1', 'actor-consistency-v2'])
+    def test_validated_unresolved_is_retained_privately_but_never_admitted_or_retried(tmp_path, mode):
+        config, manifest = admitted(mode)
+        calls = []
+        factory, clients = factory_for(manifest, calls, first_failure='unresolved')
+        root = tmp_path / 'run'
+        try:
+            report = replay.run_evaluation(root, factory, config)
+            case = manifest['cases'][0]
+            journal = json.loads((root / 'journal.json').read_text())
+            row = journal['cases'][case['evaluationId']]
+            assert row['status'] == 'failed' and row['errorCode'] == 'consistency_unresolved'
+&gt;           retained = row['withheldReview']
+E           KeyError: 'withheldReview'
+
+backend/tests/test_world_withheld_diagnostics.py:35: KeyError</failure></testcase><testcase classname="tests.test_world_withheld_diagnostics" name="test_validated_unresolved_is_retained_privately_but_never_admitted_or_retried[actor-consistency-v2]" time="0.256"><failure message="KeyError: 'withheldReview'">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-withheld-diagnostic-red-20261017T141949Z-ubbqy3yo/evidence/pytest-tmp/test_validated_unresolved_is_r1')
+mode = 'actor-consistency-v2'
+
+    @pytest.mark.parametrize('mode', ['actor-consistency-v1', 'actor-consistency-v2'])
+    def test_validated_unresolved_is_retained_privately_but_never_admitted_or_retried(tmp_path, mode):
+        config, manifest = admitted(mode)
+        calls = []
+        factory, clients = factory_for(manifest, calls, first_failure='unresolved')
+        root = tmp_path / 'run'
+        try:
+            report = replay.run_evaluation(root, factory, config)
+            case = manifest['cases'][0]
+            journal = json.loads((root / 'journal.json').read_text())
+            row = journal['cases'][case['evaluationId']]
+            assert row['status'] == 'failed' and row['errorCode'] == 'consistency_unresolved'
+&gt;           retained = row['withheldReview']
+E           KeyError: 'withheldReview'
+
+backend/tests/test_world_withheld_diagnostics.py:35: KeyError</failure></testcase></testsuite></testsuites>

@@ -3984,6 +3984,29 @@ class _ReflexiveWorldCoordinator:
             log_info(f"reflexive world: LLM unavailable ({_llm_err}); decisions hold, arbiter skipped")
 
     # ------------------------------------------------------------------ helpers
+    def owed_decision_ids(self, world_round: int) -> List[int]:
+        """Actors who owe the world a move in ``world_round`` (1-based): recipients of open offers
+        and parties whose agreement obligations fall due by then.  They decide even if the activity
+        sampler did not activate them this round (an unanswered offer or a lapsed obligation must
+        be the actor's doing, never the sampler's)."""
+        world = self._world
+        if world is None:
+            return []
+        owed = set()
+        try:
+            for inter in world.interactions.values():
+                if inter.is_open():
+                    owed.add(int(inter.recipient))
+            for aid, actor in world.actors.items():
+                for c in actor.commitments:
+                    if (str(c.get("source") or "").startswith("agreement:")
+                            and c.get("status") in ("pending", "due")
+                            and int(c.get("due_round") or 0) <= int(world_round)):
+                        owed.add(int(aid))
+        except Exception:  # noqa: BLE001
+            return []
+        return sorted(owed)
+
     @property
     def world(self):
         return self._world
@@ -4376,10 +4399,15 @@ class _ReflexiveWorldCoordinator:
             history_row = {
                 "round": rnd, "period": period, "period_label": label,
                 "decisions": record.get("decisions"),
+                # OFFERS / BREACHES travel with the round: the panel's per-period view and the run
+                # summary's behaviour badge are computed from these rows (live finding
+                # sim_1838cf014c0b: the whitelist dropped them and the badge never showed)
                 "deterministic": {k: v for k, v in (record.get("deterministic") or {}).items()
-                                  if k in ("scheduled_events", "actions", "commitments_lapsed")} | {
+                                  if k in ("scheduled_events", "actions", "commitments_lapsed",
+                                           "offers_opened", "offers_answered", "offers_lapsed", "breaches")} | {
                     "effects_fired": [fx.get("description") for fx in (record.get("deterministic") or {}).get("effects_fired", [])]
                 },
+                "behaviour": record.get("behaviour") if isinstance(record.get("behaviour"), dict) else {},
                 "arbiter_status": record.get("arbiter_status"),
                 "arbiter_problems": record.get("arbiter_problems") or [],
                 "arbiter": record.get("arbiter") or {},
@@ -4536,6 +4564,13 @@ async def _world_decision_step(coord: _ReflexiveWorldCoordinator, env, db_path: 
         active_map = {int(aid): agent for aid, agent in active_agents}
         roster = [aid for aid in deciding_roster(config.get("agent_configs") or [], list(active_map),
                                                  max_actors=coord.decision_max) if aid in active_map]
+        # OFFERS (consent rule): an actor that owes an answer to an open offer, or whose agreement
+        # obligation falls due this period, decides even when the activity sampler left it out —
+        # otherwise offers lapse and agreements are "breached" because nobody asked the actor
+        # (live finding sim_1838cf014c0b: Nigeria's obligation lapsed in a period it was not sampled)
+        for aid in coord.owed_decision_ids(round_num + 1):
+            if aid not in roster and len(roster) < max(1, int(coord.decision_max)):
+                roster.append(aid)
 
         def _lookup(aid: int) -> str:
             agent = active_map.get(aid)

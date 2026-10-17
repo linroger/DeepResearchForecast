@@ -36,7 +36,6 @@ backtest 评分器），从而杜绝 v1 与底层路由的语义漂移（见 des
 
 import json
 import os
-import traceback
 
 from flask import Blueprint, jsonify, request
 
@@ -45,7 +44,9 @@ from ..services.pipeline_orchestrator import (
     PipelineManager,
     PipelineOrchestrator,
     preflight_pipeline,
+    simulation_admission_error,
 )
+from ..services.world_simulation.contracts import WorldError
 from ..services.report_agent import ReportManager
 from ..services.backtest import score_forecast
 from ..utils.atomic import write_json_atomic
@@ -88,6 +89,8 @@ def v1_run():
         max_rounds: int   OASIS 最大轮数（可选）
         language: str     Chinese | English | auto（可选）
         model: str        研究模型（可选；须在 Config.SUPPORTED_DEERFLOW_MODELS 内）
+        simulation_engine: str  可选；省略采用 fresh default，显式 null 无效
+        world_spec / world_policy_spec: dict  可选；使用同一 fresh admission 契约
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -141,6 +144,8 @@ def v1_run():
             max_rounds=max_rounds,
             language=language,
             model=model,
+            **{key: data[key] for key in
+               ('simulation_engine', 'world_spec', 'world_policy_spec') if key in data},
         )
         return _ok({
             "pipeline_id": state.pipeline_id,
@@ -148,6 +153,9 @@ def v1_run():
             "mode": state.mode,
             "status": state.status,
         })
+    except WorldError as error:
+        body, status = simulation_admission_error(error)
+        return jsonify(body), status
     except Exception as e:
         logger.error(f"[v1] 启动管线失败: {e}", exc_info=True)
         return _err(str(e), 500)

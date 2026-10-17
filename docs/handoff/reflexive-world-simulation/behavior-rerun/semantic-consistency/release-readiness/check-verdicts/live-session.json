@@ -1,0 +1,16 @@
+{
+  "sessionId": 92488,
+  "startedUtc": "2026-10-17T16:12:23.250893+00:00",
+  "output": "/private/tmp/drf-world-consistency-v3-20261017",
+  "manifestHash": "8c1ba3116350aa474e1712646928296888f55c180cf6f2f5df3e03c420a8f8fc",
+  "status": "finished_awaiting_independent_review",
+  "limitUsd": "1.25",
+  "totalAuthorizationUsd": "40",
+  "sourceFrozen": true,
+  "exitCode": 0,
+  "finishedUtc": "2026-10-17T16:14:48.725324+00:00",
+  "completed": 8,
+  "knownFailed": 4,
+  "actualUsd": "0.103072",
+  "unknownUsd": "0"
+}

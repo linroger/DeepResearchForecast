@@ -1,0 +1,20 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-transport-stop-closure-20261017T143125Z-bamy9l8d",
+  "passed": 70,
+  "seconds": "12.84",
+  "sourceDrift": [],
+  "files": 539,
+  "manifestHash": "6c67c2d06ad68821994bd03e61f82a7e315faa7bdc02990e2fd927065da3d9cc",
+  "maxUsd": "1.25",
+  "maximumPlannedCalls": 12,
+  "stopAfterQualifyingFailures": 3,
+  "sourceReview": "Epicurus closed exact current policy/evaluator/launcher and70passed receipt; no findings.",
+  "priorArtifactsUnchanged": 425,
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "defaultAdmissionTested": false
+}

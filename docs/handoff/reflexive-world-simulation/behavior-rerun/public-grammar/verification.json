@@ -1,0 +1,36 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-grammar-first-20261016T193911Z-6at6fp8z",
+  "passed": 537,
+  "failures": 0,
+  "errors": 0,
+  "skips": 0,
+  "sourceDrift": [],
+  "files": 523,
+  "guardEvents": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "manifestHash": "6c5be0e1f3dbabe812bd7e8a5db58fa7ef26de093a6c67af571d86ef5b426081",
+  "sourceReview": {
+    "reviewer": "Epicurus",
+    "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+    "verdict": "Approved; no findings in actor-only post-meter public grammar, explicit None helper mode, exact3historical replay fixtures and preflight config/wrapper scope."
+  },
+  "sourceHashes": {
+    "contracts.py": "781ecb0fb4f8a30f8f4bbe0fa72069cf31c56d464d30bd1d1660cedd87b61857",
+    "controller.py": "89022e1f7b0f1a8e18b8a5dfbae3177622db5342a9baab112a146628fa460413",
+    "evaluation.py": "8fa6886842df49cf25c4d2725e25b7b0b1c1f14af2c9a2ff03edab4e6c1dab1a",
+    "examples.py": "8b7e51091544a21275baa93aae661e3adb2c88f466294ebbc8a6de6ddeb4e473",
+    "kernel.py": "bc8d936d8dbb27a7882bc140e13307c502efd38b7740a5a72f93e817f2ec114a",
+    "observations.py": "80e87afcbfbf6d2a39c859e0061238e318df2bcb3e45b7ae9f3c4847b7381e39",
+    "policy.py": "d408d53ae56700976aa101dfde38817699b839c5056b7dcd515a2d732f782e68",
+    "service.py": "df105588782b46609e5b344d414085382a233d6ef161f366fdb126a564c1abe5",
+    "store.py": "0e140cee894f90b652105216d516341f79748723d992fed2f26b1edf42e02407"
+  },
+  "maxUsd": "11.285825044336",
+  "allocatedUsd": "11.28582504432",
+  "originalArtifactsUnchanged": 273,
+  "calibrationClaim": false
+}

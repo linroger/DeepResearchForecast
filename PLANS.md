@@ -1,3 +1,9 @@
+# Active proposal: reflexive world simulation
+
+The current branch proposal is [docs/handoff/reflexive-world-simulation/PLANS.md](docs/handoff/reflexive-world-simulation/PLANS.md). It includes the actor/world contracts and cross-domain acceptance scenarios. Status: independent review passed; awaiting user plan approval before application implementation. The completed earlier main-branch plan is preserved below.
+
+---
+
 # Main-branch fixes and official quantitative-data integration
 
 **Date:** 2026-10-12 Asia/Shanghai

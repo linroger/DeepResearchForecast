@@ -1,0 +1,34 @@
+{
+  "originalOutput": "/private/tmp/drf-world-consistency-transport-diagnostics-20261017",
+  "verification": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-safe-transport-closeout-_virpqkj/evidence",
+  "beforeSummary": {
+    "report.json": "feb4b438c1b2dc38ed7bdba52d8761561b7c5a17d26089292cfb588734cb5d51",
+    "qualitative-review.md": "1945610c892e75db38ab5adc5e339da6978b8725a35663de6f6da00ed498efdc",
+    "journal.json": "b1db1403577a2fbc17f8d0ae175190d55826fe3104078d9c85b5e6409765a092",
+    "preregistration.json": "1bfc7d6cdbb3ad00e9b5631671974ee0ec9cdd11d88793e35b32ffd4066c0ccc",
+    "qualitative-review.json": "cc30ad0af2d190dab320e6d5e4d3528525e0a9110006f7463c6db3b6a0d4eefd"
+  },
+  "artifactHashes": {
+    "report.json": "f994f2cd65c4787675009e7558caa7f5e43239c4dc14a7a619592b30c2e32758",
+    "summary-junit.xml": "95608fd43862349a5dfa8a0fa63c307186cce9f1e7b3624eae160617f49b4c32",
+    "report-before-qualitative.json": "feb4b438c1b2dc38ed7bdba52d8761561b7c5a17d26089292cfb588734cb5d51",
+    "qualitative-review.md": "1945610c892e75db38ab5adc5e339da6978b8725a35663de6f6da00ed498efdc",
+    "summary-completed.json": "87571563e405c24d2653ce276f4e1fd6fa50b6e3b2d83991bba7a7aaf27226e0",
+    "journal.json": "b1db1403577a2fbc17f8d0ae175190d55826fe3104078d9c85b5e6409765a092",
+    "preregistration.json": "1bfc7d6cdbb3ad00e9b5631671974ee0ec9cdd11d88793e35b32ffd4066c0ccc",
+    "qualitative-review.json": "cc30ad0af2d190dab320e6d5e4d3528525e0a9110006f7463c6db3b6a0d4eefd"
+  },
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "priorArtifactsUnchanged": 425,
+  "frozenSourceFiles": 539,
+  "completedCases": 8,
+  "qualitativePasses": 5,
+  "qualitativeFailures": 3,
+  "failedCalls": 4,
+  "withheldReviewEvidenceOnly": 1,
+  "diagnosticGate": "incomplete"
+}

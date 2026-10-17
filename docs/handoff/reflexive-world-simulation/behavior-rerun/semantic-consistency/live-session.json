@@ -1,0 +1,19 @@
+{
+  "sessionId": 12465,
+  "output": "/private/tmp/drf-world-consistency-replay-20261017",
+  "manifestHash": "9969cb8b2f3cdb2e3d638ba07e74775398af67975fe7c773bfd02390451a34f1",
+  "status": "closed_reviewed_incomplete",
+  "startedUtc": "2026-10-17T12:32:36.633639+00:00",
+  "maximumUsd": "1.25",
+  "totalRevisionCalls": 12,
+  "originalGlobalRemainderBeforePhase": "6.470047044336",
+  "sourceFreeze": true,
+  "freshCandidateGeneration": false,
+  "fullBehaviorGateClaim": false,
+  "exitCode": 0,
+  "completedCases": 9,
+  "failedCases": 3,
+  "actualExposureUsd": "0.102994",
+  "reviewedCases": 9,
+  "completedUtc": "2026-10-17T12:38:28.082001+00:00"
+}

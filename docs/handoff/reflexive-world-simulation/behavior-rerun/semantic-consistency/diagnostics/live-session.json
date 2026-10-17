@@ -1,0 +1,16 @@
+{
+  "sessionId": 39423,
+  "output": "/private/tmp/drf-world-consistency-diagnostics-20261017",
+  "manifestHash": "68a737cf23135ddb84310c35c69fce5cac14f7485159a30e42f09317695c0b89",
+  "status": "closed_reviewed_incomplete",
+  "startedUtc": "2026-10-17T12:43:45.556040+00:00",
+  "maximumUsd": "1.25",
+  "totalRevisionCalls": 12,
+  "sourceFreeze": true,
+  "requestPolicyUnchanged": true,
+  "exitCode": 0,
+  "completedCases": 10,
+  "failedCases": 2,
+  "qualitativePasses": 6,
+  "exposureUsd": "0.102118"
+}

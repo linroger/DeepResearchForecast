@@ -87,6 +87,93 @@ def test_mask_dates_keeps_loose_numbers_and_adds_one_fact_per_date():
     assert "31 firms" in masked and "2033 targets" in masked
 
 
+# ───────────────────────────── day ranges ─────────────────────────────
+# Regression for the live Chinese re-translation of report_0f2e07d62a34 (2026-10-17):
+# "November 9–10, 2026" came out as "11月9日–10、2026" because only "November 9" was a
+# date expression and "–10, 2026" stayed loose numerals.
+@pytest.mark.parametrize(
+    "text, span, facts, zh, en",
+    [
+        ("the summit on November 9–10, 2026 drew", "November 9–10, 2026",
+         ["date:2026-11-09", "date:2026-11-10"], "2026年11月9日–10日", "November 9–10, 2026"),
+        ("November 9-10, 2026", "November 9-10, 2026",
+         ["date:2026-11-09", "date:2026-11-10"], "2026年11月9日–10日", "November 9–10, 2026"),
+        ("held 9–10 November 2026 in", "9–10 November 2026",
+         ["date:2026-11-09", "date:2026-11-10"], "2026年11月9日–10日", "November 9–10, 2026"),
+        ("Nov. 9th–10th 2026", "Nov. 9th–10th 2026",
+         ["date:2026-11-09", "date:2026-11-10"], "2026年11月9日–10日", "November 9–10, 2026"),
+        ("before the December 8-9 meeting", "December 8-9",
+         ["date:--12-08", "date:--12-09"], "12月8日–9日", "December 8–9"),
+        ("the week of 7–13 September", "7–13 September",
+         ["date:--09-07", "date:--09-13"], "9月7日–13日", "September 7–13"),
+        ("closure by July 15-31 and 9%", "July 15-31",
+         ["date:--07-15", "date:--07-31"], "7月15日–31日", "July 15–31"),
+        ("定于2026年11月9日–10日举行", "2026年11月9日–10日",
+         ["date:2026-11-09", "date:2026-11-10"], "2026年11月9日–10日", "November 9–10, 2026"),
+        ("在 11月9日–10日 之前", "11月9日–10日",
+         ["date:--11-09", "date:--11-10"], "11月9日–10日", "November 9–10"),
+        ("2026年3月3日至8日，伊朗", "2026年3月3日至8日",
+         ["date:2026-03-03", "date:2026-03-08"], "2026年3月3日–8日", "March 3–8, 2026"),
+        ("3月3日 到 8日", "3月3日 到 8日", ["date:--03-03", "date:--03-08"], "3月3日–8日", "March 3–8"),
+    ],
+)
+def test_day_ranges_within_one_month_are_one_expression(text, span, facts, zh, en):
+    [found] = td.find_dates(text)
+    assert text[found.start:found.end] == span
+    assert (found.day, found.end_day) == (int(facts[0][-2:]), int(facts[1][-2:]))
+    # Two facts, one per endpoint, each with the range's year and month.
+    assert td.canonical_date_facts(found) == facts
+    assert td.canonical_date_fact(found) == facts[0]
+    assert td.render_date(found, "zh") == zh
+    assert td.render_date(found, "en") == en
+    masked, masked_facts = td.mask_dates(text)
+    assert masked_facts == facts and span not in masked
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("the July 9-3 contested hold", [("July 9", "date:--07-09")]),       # vote tally
+        ("a clean 12-0 December hike", []),                                   # vote tally
+        ("November 9–9, 2026", [("November 9", "date:--11-09")]),            # not a range
+        ("reconvenes September 22 — 42 days from Election Day",               # clause break
+         [("September 22", "date:--09-22")]),
+        ("from November 9 to 2026", [("November 9", "date:--11-09")]),
+        ("November 9–10.5 percent", [("November 9", "date:--11-09")]),       # amount
+        ("in November 9–10% of firms", [("November 9", "date:--11-09")]),    # amount
+        ("November 9–100 firms", [("November 9", "date:--11-09")]),          # not a day
+        ("Long March 5–6 launches", []),                                      # rockets
+        ("第一个是11月9日–10、2026的", [("11月9日", "date:--11-09")]),            # old rendering
+        ("7月9日-3 那次有争议的", [("7月9日", "date:--07-09")]),                  # vote tally
+    ],
+)
+def test_non_ranges_keep_the_single_day_grammar_byte_identical(text, expected):
+    found = td.find_dates(text)
+    assert [(text[d.start:d.end], td.canonical_date_fact(d)) for d in found] == expected
+    assert all(d.end_day is None for d in found)
+    masked, facts = td.mask_dates(text)
+    assert facts == [fact for _span, fact in expected if fact]
+    # Every numeral outside the recognised date survives masking as a loose number.
+    rest = text
+    for span, _fact in expected:
+        rest = rest.replace(span, " ", 1)
+    for number in re.findall(r"\d+", rest):
+        assert number in masked
+
+
+def test_day_pair_grammar_accepts_exactly_the_ascending_pairs():
+    pair = re.compile(td._EN_DAY_PAIR)
+    for first in range(0, 33):
+        for last in range(0, 33):
+            accepted = pair.fullmatch(f"{first}–{last}") is not None
+            assert accepted == (1 <= first < last <= 31), (first, last)
+    assert pair.fullmatch("09-10") and pair.fullmatch("9th—10")
+    assert pair.fullmatch("9 – 10") is None                     # unspaced only
+    chinese = re.compile(td._ZH_DAY_PAIR)                       # the last 日 follows the pair
+    assert chinese.fullmatch("9日至10") and chinese.fullmatch("9日 – 10") and chinese.fullmatch("9号到31")
+    assert chinese.fullmatch("10日至9") is None and chinese.fullmatch("9–10") is None
+
+
 def test_target_code_for_language_labels():
     assert td.target_code_for_language("简体中文（Simplified Chinese）") == "zh"
     assert td.target_code_for_language("professional analyst-grade English") == "en"
@@ -158,6 +245,66 @@ def test_fact_multiset_matches_across_languages_but_still_catches_real_drift():
     )
     # Same-language checks (PDF text extraction) keep the plain numeral multiset.
     assert ReportAgent._translation_number_multiset(faithful)["12"] == 2
+
+
+def test_a_day_range_is_one_token_rendered_in_the_target_language():
+    text = (
+        "The legal cliffs of November 9–10, 2026 carry 45% odds [S1]; the "
+        "December 8-9 FOMC meeting follows."
+    )
+    hidden, mapping = ReportAgent._protect_translation_tokens(text, date_target="zh")
+    dates = [raw for placeholder, raw in mapping if placeholder.startswith("⟦D")]
+    assert dates == ["2026年11月9日–10日", "12月8日–9日"]
+    # No day, year or month of either range is left for the model to translate.
+    assert not re.search(r"November|December|(?<![A-Za-z0-9])(?:8|9|10|2026)(?![A-Za-z0-9])", hidden)
+    assert "FOMC" in hidden
+    restored, issues = ReportAgent._restore_translation_tokens(hidden, mapping)
+    assert issues == []
+    assert "2026年11月9日–10日" in restored and "12月8日–9日" in restored and "45%" in restored
+    # A unit the model appends to the complete range token is dropped.
+    hidden, mapping = ReportAgent._protect_translation_tokens(
+        "held on November 9–10, 2026.", date_target="zh"
+    )
+    [(placeholder, _raw)] = mapping
+    restored, issues = ReportAgent._restore_translation_tokens(f"于{placeholder}日举行。", mapping)
+    assert (restored, issues) == ("于2026年11月9日–10日举行。", [])
+
+
+def test_english_target_keeps_an_english_range_byte_identical():
+    """The primary report's purity pass shares the token grammar: an English range
+    protected for the English target restores to its exact source bytes."""
+    text = "between November 9-10, 2026 and 13–14 August 2026 [S2], then Sept 9–10."
+    hidden, mapping = ReportAgent._protect_translation_tokens(text, date_target="en")
+    dates = [raw for placeholder, raw in mapping if placeholder.startswith("⟦D")]
+    assert dates == ["November 9-10, 2026", "13–14 August 2026", "Sept 9–10"]
+    assert ReportAgent._restore_translation_tokens(hidden, mapping) == (text, [])
+
+
+def test_a_chinese_range_renders_english_for_the_english_target():
+    hidden, mapping = ReportAgent._protect_translation_tokens(
+        "峰会定于2026年11月9日至10日举行，12月8日–9日的会议随后。", date_target="en"
+    )
+    dates = [raw for placeholder, raw in mapping if placeholder.startswith("⟦D")]
+    assert dates == ["November 9–10, 2026", "December 8–9"]
+    assert "日" not in hidden.replace("举行", "").replace("的会议随后", "")
+
+
+def test_range_facts_agree_across_languages_and_still_catch_drift():
+    source = "on November 9–10, 2026 with 45% odds [S1]"
+    facts = ReportAgent._translation_fact_multiset(source)
+    assert facts == {"date:2026-11-09": 1, "date:2026-11-10": 1, "45%": 1}
+    for faithful in (
+        "于2026年11月9日–10日，概率为45% [S1]",
+        "于2026年11月9日至10日，概率为45% [S1]",
+        "于2026年11月9日和2026年11月10日，概率为45% [S1]",   # the two days spelled out
+    ):
+        assert ReportAgent._translation_fact_multiset(faithful) == facts, faithful
+    for drifted in (
+        "于2026年11月9日–11日，概率为45% [S1]",               # wrong last day
+        "于11月9日–10日，概率为45% [S1]",                     # year dropped
+        "于2026年11月9日–10、2026，概率为45% [S1]",           # the pre-fix rendering
+    ):
+        assert ReportAgent._translation_fact_multiset(drifted) != facts, drifted
 
 
 # ───────────────── end-to-end: the user's failing sentence ─────────────────
@@ -245,6 +392,25 @@ def test_user_sentence_translates_and_passes_the_publication_audit():
     assert "2024年12月" in translated and "2025年10月" in translated
     assert "2033年12月31日" in translated
     assert "December" not in translated and "demonstrated" not in translated
+
+
+_RANGE_SOURCE = (
+    "# Legal Cliffs\n\n"
+    "## Calendar\n\n"
+    "The legal cliffs of November 9–10, 2026 and the December 8-9 FOMC meeting carry 45% "
+    "odds [S1].\n"
+)
+
+
+def test_day_range_sentence_translates_whole_and_passes_the_publication_audit():
+    result = _worker(GlmLikeTranslator()).translate_research_markdown(_RANGE_SOURCE)
+    audit = result["audit"]
+    assert result["available"] is True, audit["issues"]
+    assert audit["number_parity"]["passed"] is True
+    translated = result["translated_md"]
+    assert "2026年11月9日–10日" in translated and "12月8日–9日" in translated
+    assert "November" not in translated and "December" not in translated
+    assert "–10、2026" not in translated
 
 
 def test_pre_fix_pipeline_reproduces_the_contamination_failure(monkeypatch):

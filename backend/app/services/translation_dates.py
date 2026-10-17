@@ -26,6 +26,17 @@ Recognition is deliberately conservative: English month names are
 case-sensitive, a bare month name needs a date-like preposition in front of it
 ("in May", "by March", "mid-October") or a dashed range partner
 ("March–June 2025"), and "Long March 5" (a rocket) is never a date.
+
+A day range within one month ("November 9–10, 2026", "9–10 November 2026",
+"December 8-9", "2026年11月9日–10日", "3月3日至8日") is one expression rather than a
+date followed by loose numerals, so it renders whole ("2026年11月9日–10日") and the
+model never sees its second day as a bare number.  The two days must ascend (a
+vote tally "9-3" or "12-0" is never a range) and the English dash is unspaced
+("September 22 — 42 days" is a clause break).  A range carries two facts, one
+per endpoint with the range's year and month (``date:2026-11-09``,
+``date:2026-11-10``): a translation that drops the year, moves the month or
+changes either day then disagrees on at least one fact, while one that spells
+the two days out as separate full dates still agrees.
 """
 
 from __future__ import annotations
@@ -69,6 +80,44 @@ _BARE_PREFIX = (
 # matched by the Month-YYYY branch) or of a proper noun ("in March Congress").
 _BARE_TAIL = rf"(?![A-Za-z])(?!,?{_SP}(?:of{_SP})?\d)(?!{_SP}[A-Z])"
 
+
+def _day_span(low: int, high: int) -> str:
+    """Regex for the calendar days ``low``..``high`` (1–31); one digit may be zero-padded."""
+    parts: List[str] = []
+    if low <= 9:
+        top = min(high, 9)
+        parts.append(f"0?[{low}-{top}]" if low < top else f"0?{low}")
+    for tens, last in ((1, 19), (2, 29), (3, 31)):
+        first, final = max(low, tens * 10), min(high, last)
+        if first > final:
+            continue
+        units = f"[{first % 10}-{final % 10}]" if first < final else f"{first % 10}"
+        parts.append(f"{tens}{units}")
+    return parts[0] if len(parts) == 1 else "(?:" + "|".join(parts) + ")"
+
+
+def _ascending_day_pair(connector: str) -> str:
+    """Every strictly ascending day pair ("9–10", "15–31"; never "9-3" or "10–10")
+    joined by ``connector``.  Enumerated per first day because a regex cannot compare
+    numbers: the first day is 1–30, the last one later day up to 31."""
+    return "(?:" + "|".join(
+        f"{_day_span(first, first)}{connector}{_day_span(first + 1, 31)}"
+        for first in range(1, 31)
+    ) + ")"
+
+
+# "9–10", "9th–10" (the ordinal of the last day follows the pair); the dash is
+# unspaced: "September 22 — 42 days from Election Day" is a clause break.  The
+# lookahead gate is implied by the pair; it only spares the engine the thirty
+# alternatives at every position that cannot start one.
+_EN_DAY_PAIR = rf"(?=\d\d?{_ORD}[–—-]\d)" + _ascending_day_pair(rf"{_ORD}[–—-]")
+# "9日–10" / "9日至10" (the last 日 follows the pair); both days carry 日, so the
+# old loose rendering "11月9日–10、2026" and a tally "7月9日-3" are not ranges.
+_ZH_DAY_PAIR = (
+    r"(?=\d\d?[ ]*[日号][ ]*(?:[–—~～-]|至|到)[ ]*\d)"
+    + _ascending_day_pair(r"[ ]*[日号][ ]*(?:[–—~～-]|至|到)[ ]*")
+)
+
 # One alternation shared by the translator (inside its inline-token regex) and
 # ``mask_dates``.  Every branch is case-sensitive via the scoped ``(?-i:…)`` flag
 # so embedding it in an IGNORECASE regex cannot turn "may" into a month.  Named
@@ -76,6 +125,11 @@ _BARE_TAIL = rf"(?![A-Za-z])(?!,?{_SP}(?:of{_SP})?\d)(?!{_SP}[A-Z])"
 # branches apart; group names are unique so the pattern can be embedded.
 DATE_PATTERN = (
     r"(?P<date>(?-i:"
+    # Each day-range alternative (k, m, n, q) sits after the dated forms that
+    # cannot match at the start of a dash-joined pair and right before the
+    # single-day form it extends; it matches only an ascending day pair, so text
+    # without one falls through to the alternatives below in their original
+    # order: every match the single-day grammar made before is byte-identical.
     # English: Month D, YYYY  ("December 31, 2033", "Dec. 5th 2025")
     rf"(?<![A-Za-z])(?<!Long )(?P<a_m>{_MONTH}){_SP}(?P<a_d>{_DAY}){_ORD}(?![\dA-Za-z]),?{_SP}"
     rf"(?P<a_y>{_YEAR})(?!\d)"
@@ -85,14 +139,28 @@ DATE_PATTERN = (
     # English: Month YYYY  ("December 2024", "Sept 2025", "March of 2026").  No comma
     # form: "by March, 2026 targets" is a clause break, not a date.
     rf"|(?<![A-Za-z])(?<!Long )(?P<c_m>{_MONTH}){_SP}(?:of{_SP})?(?P<c_y>{_YEAR})(?!\d)"
+    # Chinese day range with a year: YYYY年M月D日–D日 / YYYY年M月D日至D日
+    rf"|(?<!\d)(?P<n_y>{_YEAR})[ ]*年[ ]*(?P<n_m>{_ZH_MONTH})[ ]*月[ ]*(?P<n_r>{_ZH_DAY_PAIR})"
+    r"[ ]*[日号]"
     # Chinese: YYYY年M月D日 / YYYY年M月
     rf"|(?<!\d)(?P<g_y>{_YEAR})[ ]*年[ ]*(?P<g_m>{_ZH_MONTH})[ ]*月[ ]*(?P<g_d>{_DAY})[ ]*[日号]"
     rf"|(?<!\d)(?P<h_y>{_YEAR})[ ]*年[ ]*(?P<h_m>{_ZH_MONTH})[ ]*月"
+    # English day range: Month D–D[, YYYY]  ("November 9–10, 2026", "Nov. 9th–10th
+    # 2026", "the December 8-9 meeting") under the Month-D guards below, and no "%"
+    # after a year-less pair ("9–10%" is an amount range).  The uppercase gate
+    # only spares the month alternation at lowercase positions.
+    rf"|(?<![A-Za-z])(?<!Long )(?=[A-Z])(?P<k_m>{_MONTH}){_SP}(?P<k_r>{_EN_DAY_PAIR}){_ORD}"
+    rf"(?![\dA-Za-z])(?:,?{_SP}(?P<k_y>{_YEAR})(?!\d)|(?![.,]\d)(?![ ]*%))"
+    # English day range: D–D Month[ YYYY]  ("9–10 November 2026", "7–13 September")
+    rf"|(?<![\d.,])(?P<m_r>{_EN_DAY_PAIR}){_ORD}{_SP}(?:of{_SP})?(?P<m_m>{_MONTH})(?![A-Za-z])"
+    rf"(?:,?{_SP}(?P<m_y>{_YEAR})(?!\d))?"
     # English: Month D  ("March 5", never "Long March 5")
     rf"|(?<![A-Za-z])(?<!Long )(?P<d_m>{_MONTH}){_SP}(?P<d_d>{_DAY}){_ORD}(?![\dA-Za-z])"
     r"(?![.,]\d)"
     # English: D Month  ("9 October", "the 14th of March")
     rf"|(?<![\d.,])(?P<e_d>{_DAY}){_ORD}{_SP}(?:of{_SP})?(?P<e_m>{_MONTH})(?![A-Za-z])"
+    # Chinese day range without a year: M月D日–D日 / M月D日至D日
+    rf"|(?<![\d.])(?P<q_m>{_ZH_MONTH})[ ]*月[ ]*(?P<q_r>{_ZH_DAY_PAIR})[ ]*[日号]"
     # Chinese: M月D日 / bare M月 ("去年3月" — a relative year is not a date year)
     rf"|(?<![\d.])(?P<i_m>{_ZH_MONTH})[ ]*月[ ]*(?P<i_d>{_DAY})[ ]*[日号]"
     rf"|(?<![\d.])(?P<j_m>{_ZH_MONTH})[ ]*月"
@@ -120,11 +188,22 @@ _BRANCHES: Tuple[Tuple[str, Optional[str], Optional[str], str], ...] = (
     ("l_m", None, None, "en"),
 )
 
+# Day ranges: (branch month group, day-pair group, year group, language); the
+# English year groups are optional.
+_RANGE_BRANCHES: Tuple[Tuple[str, str, Optional[str], str], ...] = (
+    ("k_m", "k_r", "k_y", "en"),
+    ("m_m", "m_r", "m_y", "en"),
+    ("n_m", "n_r", "n_y", "zh"),
+    ("q_m", "q_r", None, "zh"),
+)
+
 
 class DateExpression(NamedTuple):
     """One recognized date.  ``start``/``end`` delimit the text a translator
     replaces (for "in December" only the month word); ``year``/``day`` are None
-    when the expression does not state them."""
+    when the expression does not state them.  A day range within one month
+    ("November 9–10, 2026") runs from ``day`` to ``end_day``; ``end_day`` is None
+    for a single date."""
 
     start: int
     end: int
@@ -132,6 +211,7 @@ class DateExpression(NamedTuple):
     month: int
     day: Optional[int]
     lang: str
+    end_day: Optional[int] = None
 
 
 def _month_number(token: str, lang: str) -> Optional[int]:
@@ -149,6 +229,17 @@ def interpret_date_match(match: "re.Match[str]") -> Optional[DateExpression]:
     """
     if match.group("date") is None:
         return None
+    for month_group, pair_group, year_group, lang in _RANGE_BRANCHES:
+        month_text = match.group(month_group)
+        if month_text is None:
+            continue
+        month = _month_number(month_text, lang)
+        days = [int(value) for value in re.findall(r"\d+", match.group(pair_group))]
+        if month is None or len(days) != 2 or not 1 <= days[0] < days[1] <= 31:
+            return None
+        year = int(match.group(year_group)) if year_group and match.group(year_group) else None
+        start, end = match.span("date")
+        return DateExpression(start, end, year, month, days[0], lang, days[1])
     for month_group, day_group, year_group, lang in _BRANCHES:
         month_text = match.group(month_group)
         if month_text is None:
@@ -169,21 +260,29 @@ def interpret_date_match(match: "re.Match[str]") -> Optional[DateExpression]:
 
 
 def render_date(expression: DateExpression, lang: str) -> str:
-    """Render a date in the target language's standard written form."""
+    """Render a date in the target language's standard written form.
+
+    A day range keeps both days joined by an en dash: "2026年11月9日–10日" and
+    "November 9–10, 2026" (year-less: "11月9日–10日" / "November 9–10").
+    """
     year, month, day = expression.year, expression.month, expression.day
+    end_day = expression.end_day
     if lang == "zh":
         text = f"{year}年" if year is not None else ""
         text += f"{month}月"
         if day is not None:
             text += f"{day}日"
+            if end_day is not None:
+                text += f"–{end_day}日"
         return text
     name = MONTH_NAMES[month - 1]
+    days = f"{day}–{end_day}" if end_day is not None else f"{day}"
     if year is not None and day is not None:
-        return f"{name} {day}, {year}"
+        return f"{name} {days}, {year}"
     if year is not None:
         return f"{name} {year}"
     if day is not None:
-        return f"{name} {day}"
+        return f"{name} {days}"
     return name
 
 
@@ -191,7 +290,8 @@ def canonical_date_fact(expression: DateExpression) -> Optional[str]:
     """Language-neutral identity of a date that states a year and/or a day.
 
     A bare month has no fact: it carries no number beyond its own month, and a
-    translator may legitimately render it with or without a numeral.
+    translator may legitimately render it with or without a numeral.  For a day
+    range this is the fact of its first day; ``canonical_date_facts`` lists both.
     """
     if expression.year is None and expression.day is None:
         return None
@@ -200,6 +300,19 @@ def canonical_date_fact(expression: DateExpression) -> Optional[str]:
     if expression.day is not None:
         fact += f"-{expression.day:02d}"
     return fact
+
+
+def canonical_date_facts(expression: DateExpression) -> List[str]:
+    """Every fact of an expression: none for a bare month, one for a date, and
+    one per endpoint for a day range ("November 9–10, 2026" → ``date:2026-11-09``
+    and ``date:2026-11-10``, each carrying the range's year and month)."""
+    fact = canonical_date_fact(expression)
+    if fact is None:
+        return []
+    if expression.end_day is None:
+        return [fact]
+    last = canonical_date_fact(expression._replace(day=expression.end_day, end_day=None))
+    return [fact] if last is None else [fact, last]
 
 
 def find_dates(text: str) -> List[DateExpression]:
@@ -226,9 +339,7 @@ def mask_dates(text: str) -> Tuple[str, List[str]]:
         pieces.append(source[cursor:expression.start])
         pieces.append(" ")
         cursor = expression.end
-        fact = canonical_date_fact(expression)
-        if fact is not None:
-            facts.append(fact)
+        facts.extend(canonical_date_facts(expression))
     pieces.append(source[cursor:])
     return "".join(pieces), facts
 

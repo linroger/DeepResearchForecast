@@ -1,0 +1,24 @@
+{
+  "run": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-consistency-core-first-20261017T121931Z-s69xvk8s",
+  "passed": 154,
+  "seconds": "7.34",
+  "sourceDrift": [],
+  "files": 531,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "scope": [
+    "test_world_consistency_store",
+    "test_world_consistency_controller",
+    "test_world_store",
+    "test_world_controller",
+    "test_world_public_grammar"
+  ],
+  "sourceHashes": {
+    "backend/app/services/world_simulation/store.py": "e5a3b7792c1095cbfbbad5d2fd2de0a93dbfda8b7b07b30fa9377498b02890e7",
+    "backend/app/services/world_simulation/controller.py": "fe252205002bfe15094ee0ed3a2489b3c2db9fe924a33689ab94f3c6f3b36c7b",
+    "backend/app/services/world_simulation/review.py": "9ac4ea18e63bed128a9c7d90e48770a5ac5b8bbb4028217895e160af97cd90df"
+  }
+}

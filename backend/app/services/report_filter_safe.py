@@ -30,6 +30,15 @@ trigger -- so this module does not redact names.  It supplies:
   chapters with no retrieval tools (retrieved passages are the input-side trigger).
 
 The report records which chapters needed which rung (``Report.filter_safe_sections``).
+
+Bilingual pass (``report_0f2e07d62a34``, same run): sixteen translation calls were rejected
+by the same filter and the Chinese version was lost to its own integrity audit.  The
+translation rung is :func:`translation_register_directive`: a rejected chunk is split
+smaller and retried once with that rule, and a chunk that is still rejected keeps its
+source bytes and is disclosed as a partial translation (``ReportAgent`` bilingual code,
+``REPORT_BILINGUAL_FILTER_SAFE``).  Unlike the generation directive it never asks for a
+name to be replaced by an office: that rewrite is itself filtered, and a translation has to
+reproduce the source names anyway.
 """
 
 from __future__ import annotations
@@ -88,6 +97,29 @@ def register_directive(level: int) -> str:
     if level >= LEVEL_NO_TOOLS:
         text += _DIRECTIVE_L2
     return text
+
+
+#: Translation rung (bilingual pass): appended to the translator's system prompt for the one
+#: retry of a chunk the provider content filter rejected.  Same neutral institutional register
+#: as :data:`_DIRECTIVE_L1`, but fidelity-preserving: every personal, office and organisation
+#: name stays exactly as written in the source.
+_TRANSLATION_DIRECTIVE = (
+    "INSTITUTIONAL-REGISTER RETRY — the provider's content filter rejected the previous "
+    "attempt at this passage. Render it in the neutral, formal register of official "
+    "institutional reporting (ministry communiqués, central-bank bulletins): standard official "
+    "terminology, no colloquial, emotive or inflammatory wording, no added commentary. Fidelity "
+    "is unchanged: translate every sentence and keep every personal, office and organisation "
+    "name exactly as written in the source — never replace a name with a descriptor such as "
+    "'the country's leader'.\n"
+    "【机构语体重试】上一次尝试被提供方内容审查拒绝：以正式、中性的机构公文语体逐句翻译，使用规范的"
+    "官方术语，不用口语化、情绪化或煽动性措辞，不增删内容；所有人名、职务与机构名称保持原文写法，"
+    "不得以职务描述替代人名。"
+)
+
+
+def translation_register_directive() -> str:
+    """Prompt rule for the single retry of a content-filtered translation chunk."""
+    return _TRANSLATION_DIRECTIVE
 
 
 def cap_observation(result: object, level: int) -> str:

@@ -1,0 +1,28 @@
+{
+  "closedUtc": "2026-10-17T18:06:21.188100+00:00",
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "verdict": "No production findings; separate high/8192 capability-source evidence gap closed",
+  "broadReceipt": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-release-broad-20261017T175455Z-9a1rr257",
+  "broadTestsPassed": 1526,
+  "finalReceipt": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-profile-final-20261017T180239Z-ifjb3fv9",
+  "finalTestsPassed": 16,
+  "sourceManifestSha256": "919d4ecc9380f97376be952b44aa9c5009edf4b49f511ba2aeb6b5e53bc249e9",
+  "sourceFiles": 553,
+  "directedQuoteMaximumUsd": "0.990360000000",
+  "directedCapUsd": "1.25",
+  "fullStudyCapUsd": "18",
+  "completeTrajectoryAffordabilityGuaranteed": false,
+  "semanticImprovementClaim": false,
+  "promotionAuthorized": false,
+  "publicParameterSourceSha256": "4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05",
+  "profileSha256": "5bdaf11b73f819f4fa587969d454d720eb86f9a9f1793efd7df94f9e17440bd0",
+  "admissionDocClosure": {
+    "sourceChange": "Only stale v3 docstring replaced by explicitly pinned; executable AST unchanged",
+    "receipt": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-v4-admission-doc-closure-20261017T180926Z-8o52gm6p",
+    "passed": 206,
+    "sourceFiles": 553,
+    "sourceDrift": [],
+    "sourceManifestSha256": "a5f9a88e6f22794d32e252489463ba223146f6dcf0d913ecf806175545feb567"
+  }
+}

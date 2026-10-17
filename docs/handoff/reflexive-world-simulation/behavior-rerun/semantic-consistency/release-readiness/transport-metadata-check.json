@@ -1,0 +1,7 @@
+{
+  "check": "authenticated_models_metadata",
+  "httpStatus": 200,
+  "modelDispatches": 0,
+  "bodyRetained": false,
+  "checkedUtc": "2026-10-17T14:24:59.930415+00:00"
+}

@@ -1,0 +1,36 @@
+{
+  "checkedUtc": "2026-10-16T20:17:22.040531+00:00",
+  "sourceManifest": "offline/source-manifest.json",
+  "frozenFilesUnchanged": 523,
+  "priorArtifactsUnchanged": 273,
+  "ruffSelect": [
+    "F",
+    "E9"
+  ],
+  "ruffPassed": true,
+  "gitDiffCheckPassed": false,
+  "featurePromotionPasses": false,
+  "defaultEngine": "oasis-legacy",
+  "liveOutput": "/private/tmp/drf-world-behavior-v2-public-grammar-20261016",
+  "activeProviderBatch": null,
+  "knownFailureGate": "16of18requiredcontrasts; strictgatefailed",
+  "exactSummaryCheck": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-grammar-closeout-frsytbmv/evidence",
+  "originalsPreserved": true,
+  "finalSourceReview": "verification.json",
+  "report": "REPORT.md",
+  "finalDocumentationReview": "final-review.json",
+  "allSubagentsComplete": true,
+  "reportSha256": "c8f7b26ad69948ab82d05b8579ef5effd68dbe1e37ae0c9943b21a958ec38beb",
+  "sourceAndEditableDocsWhitespacePassed": true,
+  "immutableEvidenceWhitespaceExceptions": [
+    {
+      "path": "docs/handoff/reflexive-world-simulation/behavior-rerun/public-grammar/live-evidence/qualitative-review-investment.md",
+      "diagnostic": "new blank line at EOF",
+      "reason": "Preserve exact independently reviewed evidence bytes and closure hashes; exclude only this archived file from whitespace gate."
+    }
+  ],
+  "implementationCommit": "095b9ef94ca83cab43491b1d32497e186937dda2",
+  "postCommitSourceHashesUnchanged": 523,
+  "postCommitPriorArtifactsUnchanged": 273,
+  "worktreeCleanAtImplementationCommit": true
+}

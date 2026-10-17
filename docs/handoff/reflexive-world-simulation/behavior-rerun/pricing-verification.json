@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-10-16T18:31:02.282969+00:00",
+  "sources": {
+    "pricing": {
+      "path": "/private/tmp/drf-behavior-rerun-sources/pricing.md",
+      "sha256": "e47e492fffffdd7d0cdb3fb6b61f0ed33b2ab829dd3973c9d55e8a1f1c537e4a"
+    },
+    "parameters": {
+      "path": "/private/tmp/drf-behavior-rerun-sources/parameters.md",
+      "sha256": "4b7b116c1fe477e6f3defeb55f5714dd6a65576f0c565af1d89f3557dffe9a05"
+    },
+    "thinking": {
+      "path": "/private/tmp/drf-behavior-rerun-sources/thinking.md",
+      "sha256": "280bf00451b2ad210439f95d2c6bee3ee7c9145db6da85ba23348aa0a98f12a2"
+    }
+  },
+  "pricingUnchangedFromOriginal": true,
+  "parametersUnchangedFromOriginal": true,
+  "tariffsUsdPerMillion": {
+    "input": "2",
+    "output": "6"
+  },
+  "reasoningEffort": "low",
+  "maxOutputTokens": 4096,
+  "note": "Official public pricing and parameter documents refetched without credentials. Pricing/parameter bytes identical to original verification. Existing conservative tariffs and low reasoning/output policy retained; no billing claim. Browser reader did not support Markdown content type; fetched official HTTPS bytes directly."
+}

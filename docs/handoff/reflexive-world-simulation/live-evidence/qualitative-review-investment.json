@@ -1,0 +1,149 @@
+{
+  "manifestHash": "5e95577eb3ffa2fec8c1a03cf11c558ea00bd0d5a33e90e0dce6efbefb7a1f97",
+  "reviews": [
+    {
+      "evaluationId": "m5-investment-v1-s0-reflexive",
+      "traceHash": "ec33e88d2e20b6620bee310478d82b7cf9635a02c04a9072998825131d72c162",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal buyer explanations match the linked observations and declared capacity-minus-one objective. At round 2, decision 61068d96564f537fad57974126cfcca3 observes capacity 3 and cash 28, explains 3-1=2, and proposes quantity=price=2; its intent is accepted. At round 3, fbce96b62623558b938920ef956f50f7 observes capacity 5 and cash 26, explains 5-1=4 and the schema limits, and proposes quantity=price=4; its intent is accepted. Own offers from earlier rounds are accepted, and both rationales describe proposals rather than claiming supplier consent or settlement prematurely.",
+      "evidenceRefs": [
+        "61068d96564f537fad57974126cfcca3",
+        "fbce96b62623558b938920ef956f50f7"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v1-s0-external-feedback-ablation",
+      "traceHash": "3abda393ade39d4fe3482260437ec2d72ec539bc10277c5901f27b6edfc27b61",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "At round 2, 61068d96564f537fad57974126cfcca3 accurately derives quantity=price=2 from visible capacity 3 and cash 28; the proposal intent is accepted. At round 3, fbce96b62623558b938920ef956f50f7 still sees masked capacity 3, cash 28 and own offer 5d91f0ed47eb5c008b67498501fea26b pending with quantity=price=2 and acceptedBy=[]. Its rationale explicitly identifies that offer and waits to avoid duplication, matching empty intents and no resolution. This is a consistent explanation of the observed pending-consent situation, even though it differs from the behavioral proxy's expected fresh proposal. No automated score was used to infer explanation quality.",
+      "evidenceRefs": [
+        "61068d96564f537fad57974126cfcca3",
+        "fbce96b62623558b938920ef956f50f7"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v1-s1-reflexive",
+      "traceHash": "628e0d61dc7eee664cbea06155a9380b3324d1b5091fe1aef13b5cb8efda8900",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 decision 90c2eb08437a58f09b6c2cf3d7099e15 correctly cites visible capacity 3 and cash 28 and submits quantity=price=2 within the option schema. Round-3 dbdb8a59a64157f3a11897f2738e52ee correctly cites capacity 5 and cash 28 and submits quantity=price=4. Both proposal intents are accepted. The additional statement that the producer has 11 stock and intends to fulfill orders is supported by the producer's round-2 public message in this actual observation; it is a communicated claim, not independent access to or verification of the current private producer balance. The rationale does not claim the new proposal is already consented or settled.",
+      "evidenceRefs": [
+        "90c2eb08437a58f09b6c2cf3d7099e15",
+        "dbdb8a59a64157f3a11897f2738e52ee"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v1-s1-external-feedback-ablation",
+      "traceHash": "a36b34c02b3c8963e573e5ae03d350a7f66a6c23223f96d5f8b31ed3f82ba2d1",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal rationales accurately follow the buyer's visible-capacity-minus-one objective. At round 2, 90c2eb08437a58f09b6c2cf3d7099e15 sees capacity 3 and cash 28 and explains/submits quantity=price=2. At round 3, dbdb8a59a64157f3a11897f2738e52ee sees masked capacity 3 and current cash 26 and again explains/submits quantity=price=2. Both proposal intents have accepted resolution receipts. The prior belief of cash 28 is historical, and the round-3 rationale and new belief correctly use current cash 26. Existing offers are accepted, so the rationale does not misdescribe a pending offer or claim settlement for the new proposal.",
+      "evidenceRefs": [
+        "90c2eb08437a58f09b6c2cf3d7099e15",
+        "dbdb8a59a64157f3a11897f2738e52ee"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v2-s0-reflexive",
+      "traceHash": "94329a6170e170749ab06454a73e73f1f84b12fa6f559fa1467b0be30c875078",
+      "score": 1,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 decision 1d05e8b976df560884c30a8c5d13103f is accurate: visible capacity 4 implies quantity=price=3, cash is 27, the stated input bounds match the menu, and prior offer a96492ac6ff35aa09b8f470344134b26 is accepted by the producer. Round-3 1efcaf29c9b85257857257402e16f5e0 correctly uses capacity 7, cash 27 and quantity=price=6; both focal proposal intents are accepted. However, its plural claim that past offers of this form were accepted is imprecise: the observation contains one accepted round-1 offer and the round-2 offer f8e02d723e0454b5b6134dc3b36dcb1b still pending with no accepting party. It does not distinguish proposal admission from supplier consent for that outstanding offer. This is partial/ambiguous consent-history agreement, not a material contradiction of the quantity calculation and not an inference from automated scores.",
+      "evidenceRefs": [
+        "1d05e8b976df560884c30a8c5d13103f",
+        "1efcaf29c9b85257857257402e16f5e0"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v2-s0-external-feedback-ablation",
+      "traceHash": "5c503130821da3afd177627bdc85dee97697dbb58ccdbb1c2e625596371e642c",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 1d05e8b976df560884c30a8c5d13103f correctly observes capacity 4 and cash 27, derives 4-1=3 and proposes quantity=price=3. Round-3 1efcaf29c9b85257857257402e16f5e0 sees masked capacity 4 and cash 27 and again submits quantity=price=3. Its rationale explicitly acknowledges a matching pending offer, which is present as f8e02d723e0454b5b6134dc3b36dcb1b with status pending and acceptedBy=[], and explains the fresh proposal using the actor's at-each-decision objective. Both focal intents have accepted proposal resolutions; the rationale and state updates correctly reserve supplier consent as future/pending rather than asserting fulfillment.",
+      "evidenceRefs": [
+        "1d05e8b976df560884c30a8c5d13103f",
+        "1efcaf29c9b85257857257402e16f5e0"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v2-s1-reflexive",
+      "traceHash": "c33c96750bd6a9e7aafb96846ffcb5940c4f011be1cd74df9ba563ced37392f3",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal rationales accurately connect current observations to the buyer's capacity-minus-one objective. At round 2, 24400411d38c584aa763df013d000886 sees capacity 4 and cash 27 and proposes quantity=price=3; its statement that the prior identical offer was accepted and settled is supported by offer 82f61af2a4925c25aa2e17cc29c54734 and settled commitment 807383fa85865acd8ecf813228a7c22b. At round 3, 0c49dfae00605c5eb4ee55e5ba7941ee sees capacity 7 and cash 24 and proposes quantity=price=6. Both earlier offers are accepted, with settled commitments, supporting its plural prior-acceptance statement. Both focal proposal intents are accepted. Historical beliefs/messages still mention capacity 4, but the later rationale correctly uses the current metric 7 and awaits new consent.",
+      "evidenceRefs": [
+        "24400411d38c584aa763df013d000886",
+        "0c49dfae00605c5eb4ee55e5ba7941ee"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v2-s1-external-feedback-ablation",
+      "traceHash": "9c46897e385638adfa517ef366cfeb10ab514f3902e7fd725829c6542e4dae05",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "At round 2, 24400411d38c584aa763df013d000886 accurately uses capacity 4 and cash 27 to explain and propose quantity=price=3 within the option limits. At round 3, 0c49dfae00605c5eb4ee55e5ba7941ee accurately uses the actual masked capacity field 4 and cash 24 to explain and propose quantity=price=3, explicitly leaving supplier consent open. Both intents have accepted proposal resolutions, and earlier offers are accepted. A visible producer message reports a pending +3 capacity expansion due at this epoch; that is an ablation information-isolation limit, but the rationale does not claim completion or rely on the unmasked capacity.",
+      "evidenceRefs": [
+        "24400411d38c584aa763df013d000886",
+        "0c49dfae00605c5eb4ee55e5ba7941ee"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v3-s0-reflexive",
+      "traceHash": "df5b5fa13987fe7ae1a7feceecfa9d5594ebb3b349fde30898938486e91a992b",
+      "score": 0,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 a174cae1b75b5357b681bbe2627c1969 is consistent: capacity 5, cash 26 and quantity=price=4. Round-3 f0814ba3489a5ea990a035446894737b correctly calculates quantity=price=8 from capacity 9 and cash 22, and both focal proposal intents are accepted. However, its justification says prior identical offers were accepted, although both visible prior offers da29653974e95ce5b87eaa830724ca02 and f640d2bfa90f5d2395b54f7f84e8ef5f have quantity=price=4, not the new 8-for-8 terms. Its linked belief update additionally says capacity remains 9 per authority message, whereas the only delivered authority message states capacity 5 and input limit 9; capacity 9 is supported by the current metric, not that message. These are concrete disagreements about the cited precedent and source of the changed decision, so the explanation is materially unreliable despite correct arithmetic. Score is independent of automated behavior scores.",
+      "evidenceRefs": [
+        "a174cae1b75b5357b681bbe2627c1969",
+        "f0814ba3489a5ea990a035446894737b"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v3-s0-external-feedback-ablation",
+      "traceHash": "c8b6474b039f2e2c3b524336ff3a008340c93f12e545fa8ba58a2150bc3304bd",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Both focal rationales match the observed buyer objective, resources and purchase intents. Round-2 a174cae1b75b5357b681bbe2627c1969 sees capacity 5 and cash 26 and proposes quantity=price=4; its reference to an identical previously accepted offer is accurate (da29653974e95ce5b87eaa830724ca02, 4-for-4, acceptedBy producer). Round-3 f0814ba3489a5ea990a035446894737b sees masked capacity 5, public permit true and cash 22 and again explains/submits quantity=price=4. Both proposal intents are accepted. The explanation follows the actual public metric and avoids claiming the new offer is already consented or settled.",
+      "evidenceRefs": [
+        "a174cae1b75b5357b681bbe2627c1969",
+        "f0814ba3489a5ea990a035446894737b"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v3-s1-reflexive",
+      "traceHash": "8a18a43100d1912d3f385c0af62243444f995447f14c6915c45f6414bb435d39",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 4bda53a2076e554eb02b227be9306e9d correctly applies the buyer's objective to visible capacity 5 (5-1=4), cites cash 26, and proposes quantity=price=4. Round-3 b4ccfc28f6125b2fa544e61a2cf51633 observes capacity 9, cash 22 and permit=true, accurately explains 9-1=8, and proposes quantity=price=8. Both focal proposal intents are accepted. The round-3 rationale and linked belief/plan use the current capacity and cash rather than the historical 4-for-4 plan and do not invent earlier identical terms or claim advance supplier consent.",
+      "evidenceRefs": [
+        "4bda53a2076e554eb02b227be9306e9d",
+        "b4ccfc28f6125b2fa544e61a2cf51633"
+      ]
+    },
+    {
+      "evaluationId": "m5-investment-v3-s1-external-feedback-ablation",
+      "traceHash": "a30ae53746b8162e4f42bbc0736dc0f2baf66097eec9110640e5aa40367a886b",
+      "score": 2,
+      "reviewerType": "independent-agent",
+      "reviewer": "investment qualitative reviewer",
+      "note": "Round-2 4bda53a2076e554eb02b227be9306e9d correctly sees capacity 5 and cash 26, derives 5-1=4 and proposes quantity=price=4; its prior-identical-acceptance claim matches round-1 offer ae0b3c4704c95a6d8759a0845ede7279. Round-3 b4ccfc28f6125b2fa544e61a2cf51633 sees masked capacity 5 and unchanged cash 26 and again proposes 4-for-4. Its rationale explicitly acknowledges the prior identical offer is pending and invokes the at-each-decision objective; eac143e198845893a43d66aa296d416c is indeed pending with acceptedBy=[]. Both focal proposal intents have accepted resolutions, and neither rationale treats proposal admission as completed supplier consent.",
+      "evidenceRefs": [
+        "4bda53a2076e554eb02b227be9306e9d",
+        "b4ccfc28f6125b2fa544e61a2cf51633"
+      ]
+    }
+  ]
+}

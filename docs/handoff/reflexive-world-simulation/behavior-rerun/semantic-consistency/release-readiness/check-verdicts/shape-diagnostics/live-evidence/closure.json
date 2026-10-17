@@ -1,0 +1,13 @@
+{
+  "closedUtc": "2026-10-17T17:05:59.614579+00:00",
+  "sourceFilesPreserved": 548,
+  "priorArtifactsPreserved": 465,
+  "summaryReceipt": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-review-shape-closeout-in7c833a/evidence",
+  "sourceFreezeReleased": true,
+  "diagnosticGate": "incomplete",
+  "promotionAuthorized": false,
+  "knownSchemaFailures": 7,
+  "qualitativePasses": 3,
+  "qualitativeFailures": 2,
+  "remainingUsd": "19.925161044336"
+}

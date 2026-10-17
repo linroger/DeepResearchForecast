@@ -1,0 +1,7 @@
+# Diagnostic replication, preserved result
+
+Exactly12calls repeated the phase8 actor requests and scoring without any actor-policy change. Ten revisions were admissible and all ten consequential actions matched; independent review passed six and found four investment assessments pointing at the communicate option while discussing purchase rules. Those four reference defects remain failures. Both coalition-before-trigger calls failed: one fixed diagnostic identifies invalid objective/action indexes, and the other recorded code is policy_invalid_response (which does not establish a specific malformed-JSON cause). No discarded raw response is reconstructed or credited.
+
+The twelve-row diagnostic gate remains incomplete. This is not evidence that instrumentation improved behavior. All398priorartifacts remained unchanged, and report refresh used the frozen source under the existing guard (1pass). Actual/conservative exposureUSD0.102118, unknown0; global original25budget consumptionUSD18.735064955664, remainderUSD6.264935044336. No provider process remains active.
+
+A separately pinned actor-consistency-v2 design removes redundant model-copied reference fields. Server-generated observation/candidate/final-decision hashes will be described as scope bindings, not selected citations or proof of correct reasoning. V1 will retain its original schema and results. Full semantic checks, 400-character explanations, complete final decisions, strict admission and two total calls remain. No runtime changes were made during this replication.

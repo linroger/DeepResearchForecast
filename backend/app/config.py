@@ -498,9 +498,13 @@ class Config:
     SIMULATION_RECLAIM_PORT_PROBE = os.environ.get(
         'SIMULATION_RECLAIM_PORT_PROBE', 'true'
     ).strip().lower() == 'true'
-    # 报告阶段起飞前 ~10 token 探测主/回退提供方可用性；双双不可用时 <60s 内以可恢复的
+    # 报告阶段起飞前发一次短 ping 探测主/回退提供方可用性；双双不可用时 <60s 内以可恢复的
     # REPORT 阶段失败收场，而不是烧完全部章节成本后才被健康门拦下。
     REPORT_LLM_PREFLIGHT = os.environ.get('REPORT_LLM_PREFLIGHT', 'true').strip().lower() == 'true'
+    # 探测的输出预算：推理模型（如编码套餐上的 glm-5.3）关闭推理后仍会输出推理 token 并计入
+    # max_tokens；64 曾让三次探测都以空 content（finish_reason=length）收场、把健康提供方误判
+    # 为不可用（2026-10-18）。被长度截断的探测回复视为提供方可达（_report_llm_preflight）。
+    REPORT_LLM_PREFLIGHT_MAX_TOKENS = int(os.environ.get('REPORT_LLM_PREFLIGHT_MAX_TOKENS', '1024') or '1024')
     # claude CLI 子进程隔离操作员的全局 ~/.claude hooks（--settings 内联 disableAllHooks，
     # 保留 OAuth；--bare 会丢登录态故不用）。SessionEnd 钩子曾让 2769+ 次管线调用空错误失败。
     LLM_CLI_ISOLATE_HOOKS = os.environ.get('LLM_CLI_ISOLATE_HOOKS', 'true').strip().lower() == 'true'
@@ -716,6 +720,17 @@ class Config:
     REPORT_TRANSLATION_CALL_TIMEOUT_S = max(0.0, float(os.environ.get('REPORT_TRANSLATION_CALL_TIMEOUT_S', '240') or '240'))
     # Still-contaminated lines that get one last whole-line retranslation (2 prompts each).
     REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES = max(0, int(os.environ.get('REPORT_TRANSLATION_RESIDUAL_LINE_RETRIES', '12') or '12'))
+    # FILTER-SAFE (bilingual): survive provider content-filter rejections of translation calls
+    # (glm-5.3 HTTP 400 code 1301 / 422) instead of losing the whole variant.  A rejected chunk
+    # is split smaller and retried once with the institutional-register directive (names stay
+    # verbatim — rewriting them as offices is itself filtered); a chunk that is still rejected,
+    # or a section whose integrity retry still drifts numbers / citations / structure, keeps its
+    # source text and is disclosed (translation_status.<lang>.json verbatim_chunks, status
+    # "partial", meta translations[].translation_quality "partial"); undisclosed residual lines
+    # and number drift stay fail-closed.  Restored numeric tokens are kept apart from adjacent
+    # alphanumerics ("2025-Q4" + "3667亿美元" used to fuse into 43667亿).  false = the previous
+    # all-or-nothing behaviour.
+    REPORT_BILINGUAL_FILTER_SAFE = os.environ.get('REPORT_BILINGUAL_FILTER_SAFE', 'true').strip().lower() == 'true'
 
     # —— PM-2：确定性逐预测市场锚定（forecast_extractor 经 getattr 读取）——
     # 抽取二元预测后跑一次批处理 LLM 匹配（陈述表 × 相关性门控市场表），确定性回填
@@ -1547,6 +1562,10 @@ class Config:
     #                      PromotionDecision）后才可用；当前一律回落 diagnostic_only。
     #   legacy_prompt   —— 仅供特征化 fixture 复现旧行为（模拟数字直接喂概率生成），
     #                      绝非生产回退；运行期使用会被显式告警。
+    # Fresh pipeline admission only. Historical missing engine pins stay legacy.
+    # Default activation is a separate release gate; do not infer it from a profile.
+    DEFAULT_SIMULATION_ENGINE = os.environ.get('DEFAULT_SIMULATION_ENGINE', 'oasis-legacy').strip()
+    WORLD_POLICY_SPEC_PATH = os.environ.get('WORLD_POLICY_SPEC_PATH', '').strip() or None
     SIMULATION_FORECAST_EFFECT = (
         os.environ.get('SIMULATION_FORECAST_EFFECT', 'diagnostic_only').strip().lower()
         if os.environ.get('SIMULATION_FORECAST_EFFECT', 'diagnostic_only').strip().lower()

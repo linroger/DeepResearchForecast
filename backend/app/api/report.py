@@ -12,7 +12,7 @@ from flask import request, jsonify, send_file, send_from_directory, Response
 
 from . import report_bp
 from ..config import Config
-from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
+from ..services.report_agent import ReportAgent, ReportManager, ReportStatus, load_simulation_world
 from ..services.pipeline_orchestrator import load_research_dossier_for_simulation
 from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
@@ -21,6 +21,34 @@ from ..utils.chart_html import inline_plotly_bundle
 from ..utils.logger import get_logger
 
 logger = get_logger('mirofish.api.report')
+
+
+@report_bp.before_request
+def _verify_world_report_request():
+    """One read-only world gate for normal, cached and auxiliary consumers."""
+    from ..services.world_simulation.contracts import WorldError
+    if request.method == "OPTIONS":
+        return None  # CORS preflight carries no report data
+    try:
+        report_id = (request.view_args or {}).get("report_id")
+        if report_id and request.method != "DELETE":
+            ReportManager.load_world_result(report_id)
+        elif request.endpoint in {"report.generate_report", "report.chat_with_report_agent"}:
+            data = request.get_json(silent=True) or {}
+            if data.get("simulation_id"):
+                load_simulation_world(data["simulation_id"])
+    except (WorldError, OSError, ValueError, KeyError, TypeError):
+        return jsonify({"success": False, "error": "World result integrity verification failed",
+                        "code": "world_result_integrity"}), 409
+
+
+@report_bp.route('/<report_id>/world-result', methods=['GET'])
+def get_report_world_result(report_id: str):
+    """Public frozen diagnostics remain available even under no_update."""
+    world = ReportManager.load_world_result(report_id)
+    if world is None:
+        return jsonify({"success": False, "error": "Report has no world result"}), 404
+    return jsonify({"success": True, "data": world})
 
 
 def _withhold_outline_drafts(outline):
@@ -971,17 +999,27 @@ def generate_report_translation(report_id: str, lang: str):
                 force=regenerate,
             )
             if result.get("available") and result.get("updated", True):
+                # A partial translation (sections the provider content filter kept in
+                # the source language) is published and disclosed, not a failure.
+                verified = result.get("translation")
+                verified = verified if isinstance(verified, dict) else {}
+                verbatim_chunks = list(verified.get("verbatim_chunks") or [])
                 ReportManager._set_translation_runtime_status(
                     report_id,
                     lang,
-                    "available",
+                    "partial" if verbatim_chunks else "available",
                     source_markdown_sha256=source_sha,
                     task_id=task_id,
                     owner=owner,
                     markdown_sha256=result.get("markdown_sha256"),
                     progress=100,
-                    message="translation passed isolated publication audit",
+                    message=(
+                        "translation passed isolated publication audit"
+                        + (f" with {len(verbatim_chunks)} source-language region(s) kept verbatim"
+                           if verbatim_chunks else "")
+                    ),
                     issues=[],
+                    verbatim_chunks=verbatim_chunks,
                 )
                 task_manager.complete_task(task_id, result=result)
                 return
@@ -1352,6 +1390,18 @@ def get_report_chart(report_id: str, filename: str):
             return _publication_rejection(report_id)
         reports_root = os.path.realpath(ReportManager.REPORTS_DIR)
         report_dir = os.path.realpath(ReportManager._get_report_folder(report_id))
+        if ReportManager.load_world_result(report_id):
+            from ..services.world_simulation.artifacts import read_json
+            from pathlib import Path
+            manifest = read_json(Path(report_dir) / "viz_manifest.json")
+            requested = "charts/" + str(filename or "")
+            registered = any(
+                requested in (item.get("path"), item.get("png_path"))
+                and requested in (item.get("artifact_sha256") or {})
+                for item in manifest.get("items", []) if isinstance(item, dict)
+            )
+            if not registered:
+                return jsonify({"success": False, "error": "Chart is not in the sealed report manifest"}), 404
         charts_dir = os.path.realpath(os.path.join(report_dir, "charts"))
         raw = str(filename or "")
         parts = raw.split("/")

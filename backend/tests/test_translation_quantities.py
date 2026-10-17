@@ -192,3 +192,169 @@ def test_chinese_report_translates_amounts_into_english_scale_words():
     translated = result["translated_md"]
     for amount in ("$820 billion", "600,000", "RMB 25 billion"):
         assert amount in translated
+
+
+# ───────────── FRED unit labels: "25000 Millions of Dollars" (report_0f2e07d62a34) ─────────────
+# The live Chinese re-run of 2026-10-17 was withheld by three residual English lines: the
+# binary-forecast rows F4, F11 and F13 quote FRED thresholds as "<number> Millions of
+# Dollars".  The phrase was not an amount, so only the numeral was frozen and every
+# faithful "250亿美元" changed the numeric multiset; the rows stayed English.
+FRED_ROW = "(fred:IMPCH) are below 25000 Millions of Dollars in June 2027."
+FRED_ROW_ZH = "(fred:IMPCH) 在2027年6月低于250亿美元。"
+
+
+@pytest.mark.parametrize(
+    "source, rendered, facts",
+    [
+        ("are below 25000 Millions of Dollars in June 2027", ["250亿美元"], ["qty:25000000000"]),
+        ("fall below 30,000 millions of dollars", ["300亿美元"], ["qty:30000000000"]),
+        ("fall below 20,000 millions of dollars", ["200亿美元"], ["qty:20000000000"]),
+        ("27133.8159 Millions of Dollars (2026-08)", ["271.338159亿美元"], ["qty:27133815900"]),
+        ("306.398 Billions of Dollars", ["3063.98亿美元"], ["qty:306398000000"]),
+        ("1.2 Billions of U.S. Dollars", ["12亿美元"], ["qty:1200000000"]),
+        ("450 Millions of US Dollars", ["4.5亿美元"], ["qty:450000000"]),
+        ("2.5 Trillions of Dollars", ["2.5万亿美元"], ["qty:2500000000000"]),
+        ("20,000 Thousands of Dollars", ["2000万美元"], ["qty:20000000"]),
+        ("500 Thousands of Dollars", ["50万美元"], ["500,000"]),
+        ("$25,000 Millions of Dollars", ["250亿美元"], ["qty:25000000000"]),
+        ("25,000–30,000 MILLIONS OF DOLLARS", ["250–300亿美元"],
+         ["qty:25000000000", "qty:30000000000"]),
+    ],
+)
+def test_fred_unit_phrases_are_one_amount_worth_number_times_magnitude(source, rendered, facts):
+    assert _render(source, "zh") == rendered
+    assert [fact for q in tq.find_quantities(source) for fact in tq.quantity_facts(q)] == facts
+
+
+def test_fred_unit_phrase_is_matched_whole_with_a_fixed_dollar_currency():
+    [found] = tq.find_quantities(FRED_ROW)
+    assert FRED_ROW[found.start:found.end] == "25000 Millions of Dollars"
+    assert [str(value) for value in found.values] == ["25000000000"]
+    assert found.currency == "USD" and found.lang == "en"
+    masked, facts = tq.mask_quantities(FRED_ROW)
+    assert facts == ["qty:25000000000"]
+    assert "Millions" not in masked and "25000" not in masked and "June 2027" in masked
+
+
+def test_fred_amounts_round_trip_through_the_english_rendering():
+    assert _render("25000 Millions of Dollars", "en") == ["$25 billion"]
+    assert _render("250亿美元", "en") == ["$25 billion"]  # the Chinese → English direction
+    assert _render("20,000 Thousands of Dollars", "en") == ["$20 million"]
+    assert _render("500 Thousands of Dollars", "en") == ["$500,000"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Millions of Dollars; Monthly; NSA",            # a bare unit label
+        "| Billions of Dollars | 306.398 |",            # unit and value in separate cells
+        "hundreds of millions of dollars",
+        "tens of billions of dollars",
+        "150 Thousands of Persons",                     # not a dollar amount
+        "306 Billions of Chained 2017 Dollars",         # real terms: left frozen, fails closed
+    ],
+)
+def test_fred_unit_labels_without_a_dollar_amount_are_left_alone(text):
+    assert tq.find_quantities(text) == []
+
+
+@pytest.mark.parametrize(
+    "text, span",
+    [
+        ("25000 Million of Dollars", "25000 Million"),
+        ("$3.7 billion dollars", "$3.7 billion dollars"),
+        ("5bn of dollars", "5bn"),
+        ("USD 150 billion", "USD 150 billion"),
+    ],
+)
+def test_existing_english_forms_never_reach_the_fred_branch(text, span):
+    """The FRED alternative is tried only after the English one fails, so every match
+    the English alternative made before this branch existed is byte-identical."""
+    [found] = tq.find_quantities(text)
+    assert text[found.start:found.end] == span
+    assert tq.QUANTITY_RE.search(text).group("qf_n1") is None
+
+
+def test_fred_facts_compare_values_not_numerals():
+    facts = ReportAgent._translation_fact_multiset
+    assert facts(FRED_ROW) == facts(FRED_ROW_ZH)
+    assert facts(FRED_ROW) != facts("(fred:IMPCH) 在2027年6月低于25亿美元。")     # ten times too small
+    assert facts(FRED_ROW) != facts("(fred:IMPCH) 在2027年6月低于25000亿美元。")  # the frozen numeral
+    assert ReportAgent._folded_fact_multiset("500 Thousands of Dollars") == (
+        ReportAgent._folded_fact_multiset("50万美元")
+    )
+
+
+def test_pre_fix_guard_rejected_every_faithful_rendering_of_a_fred_row(monkeypatch):
+    """Guard the guard: without the FRED branch the numeral is frozen alone and the
+    faithful Chinese row fails the number guard, exactly as the live rows did."""
+    monkeypatch.setattr(tq, "_FRED_SCALE", {})
+    assert tq.find_quantities(FRED_ROW) == []
+    facts = ReportAgent._translation_fact_multiset
+    assert facts(FRED_ROW) != facts(FRED_ROW_ZH)
+    protected, mapping = ReportAgent._protect_translation_tokens(FRED_ROW, date_target="zh")
+    assert "Millions of Dollars" in protected
+    assert not any(placeholder.startswith("⟦Q") for placeholder, _raw in mapping)
+
+
+def test_fred_row_is_protected_as_one_rendered_token_and_restores_in_chinese():
+    protected, mapping = ReportAgent._protect_translation_tokens(FRED_ROW, date_target="zh")
+    tokens = dict(mapping)
+    amount = next(key for key in tokens if key.startswith("⟦Q"))
+    date = next(key for key in tokens if key.startswith("⟦D"))
+    assert tokens[amount] == "250亿美元" and tokens[date] == "2027年6月"
+    assert "Millions" not in protected and "25000" not in protected
+    restored, issues = ReportAgent._restore_translation_tokens(
+        f"(fred:IMPCH) 在{date}低于{amount}。", mapping
+    )
+    assert issues == [] and restored == FRED_ROW_ZH
+    assert ReportAgent._translation_fact_multiset(restored) == (
+        ReportAgent._translation_fact_multiset(FRED_ROW)
+    )
+    # A magnitude or currency the model copies from the label is dropped next to the token.
+    restored, issues = ReportAgent._restore_translation_tokens(
+        f"(fred:IMPCH) 在{date}低于{amount}百万美元。", mapping
+    )
+    assert issues == [] and restored == FRED_ROW_ZH
+
+
+def test_fred_amount_translates_back_to_the_english_rendering():
+    protected, mapping = ReportAgent._protect_translation_tokens(FRED_ROW_ZH, date_target="en")
+    tokens = dict(mapping)
+    amount = next(key for key in tokens if key.startswith("⟦Q"))
+    date = next(key for key in tokens if key.startswith("⟦D"))
+    assert tokens[amount] == "$25 billion" and tokens[date] == "June 2027"
+    restored, issues = ReportAgent._restore_translation_tokens(
+        f"(fred:IMPCH) are below {amount} in {date}.", mapping
+    )
+    assert issues == [] and restored == "(fred:IMPCH) are below $25 billion in June 2027."
+    assert ReportAgent._translation_fact_multiset(restored) == (
+        ReportAgent._translation_fact_multiset(FRED_ROW)
+    )
+
+
+def test_fred_phrase_keeps_its_bytes_when_the_target_is_english():
+    """The primary report's purity pass protects with the English target: the phrase is
+    one token whose restored bytes are the source bytes, so English output is unchanged;
+    without a date target the historical grammar still sees only the numeral."""
+    protected, mapping = ReportAgent._protect_translation_tokens(FRED_ROW, date_target="en")
+    amount = next(key for key, _raw in mapping if key.startswith("⟦Q"))
+    assert dict(mapping)[amount] == "25000 Millions of Dollars"
+    restored, issues = ReportAgent._restore_translation_tokens(protected, mapping)
+    assert issues == [] and restored == FRED_ROW
+    legacy, legacy_map = ReportAgent._protect_translation_tokens(FRED_ROW)
+    assert "Millions of Dollars" in legacy
+    assert not any(placeholder.startswith("⟦Q") for placeholder, _raw in legacy_map)
+
+
+def test_english_report_translates_fred_unit_phrases_with_the_right_magnitude():
+    source = (
+        "# Trade 2027\n\n## Binary Forecasts\n\n"
+        "U.S. imports of goods from China (fred:IMPCH) are below 25000 Millions of Dollars "
+        "in June 2027 [S11], after 27133.8159 Millions of Dollars in August 2026.\n"
+    )
+    result = _worker(GlmLikeTranslator()).translate_research_markdown(source)
+    assert result["available"] is True, result["audit"]["issues"]
+    translated = result["translated_md"]
+    assert "250亿美元" in translated and "271.338159亿美元" in translated
+    assert "Millions" not in translated and "25000" not in translated

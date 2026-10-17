@@ -1,0 +1,10 @@
+{
+  "reviewedUtc": "2026-10-17T16:22:28.154297+00:00",
+  "reviewer": "Epicurus",
+  "agentId": "01a1456a-d751-7cd2-b625-f0592ed430ad",
+  "verdict": "No findings in exact two prompt constants and new full-study preflight",
+  "runtime": "486passed7.31s/no drift545",
+  "sourceManifestSha256": "c84b31ea761ec214ef65ec934c0f90e8be04c6251651af8826498252712536a4",
+  "priorBroadGate": "1399passed125.68s; only policy2constants+2testfiles differ",
+  "liveBehaviorClaim": false
+}

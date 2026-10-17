@@ -1,0 +1,9 @@
+{
+  "url": "https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8.md",
+  "retrievedUtc": "2026-10-17T14:35:55.306984+00:00",
+  "sha256": "99fe91a6cbe1b74e7aefdac84950ce246fb03afddb2089ec5e5031d47e097153",
+  "localEvidencePath": "/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-public-api-evidence-1tmvkka_/chat-completion.md",
+  "observation": "OfficialAPI declares response_format types text and json_object; text is default. No JSON-schema option inferred.",
+  "status": "Publicdocumentation only; capability notyetenabled orliveverified.",
+  "credentialsRead": false
+}

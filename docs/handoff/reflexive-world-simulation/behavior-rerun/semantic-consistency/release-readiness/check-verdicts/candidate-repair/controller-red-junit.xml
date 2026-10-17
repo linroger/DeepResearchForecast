@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="4" time="1.083" timestamp="2026-10-18T00:03:42.224420" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_world_candidate_repair_controller" name="test_error_context_labels_and_binds_actual_identity[actorId]" time="0.006" /><testcase classname="tests.test_world_candidate_repair_controller" name="test_error_context_labels_and_binds_actual_identity[observationId]" time="0.001" /><testcase classname="tests.test_world_candidate_repair_controller" name="test_known_local_validation_failure_uses_unused_review_and_separates_reporting" time="0.038"><failure message="app.services.world_simulation.contracts.WorldError: A required consistency stage failed without a replacement allowance">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/evidence/pytest-tmp/test_known_local_validation_fa0')
+
+    def test_known_local_validation_failure_uses_unused_review_and_separates_reporting(tmp_path):
+        from app.services.world_simulation.evaluation import _ReservedPolicy, _operational_report
+        spec = repair_spec()
+        policy = RepairingPolicy()
+        wrapped = _ReservedPolicy(policy, spec, 'scripted')
+        path = tmp_path / 'world.sqlite3'
+        with WorldStore(path, spec) as store:
+            fence = store.acquire_writer('first')
+&gt;           head = run_round(store, wrapped, fence)
+
+backend/tests/test_world_candidate_repair_controller.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/app/services/world_simulation/controller.py:161: in run_round
+    proposals = _collect(store, policy, fence, before, round_index, 'proposal', participants, cancelled)
+backend/app/services/world_simulation/controller.py:151: in _collect
+    raise errors[0]
+backend/app/services/world_simulation/controller.py:147: in _collect
+    decisions.append(future.result())
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+backend/app/services/world_simulation/controller.py:99: in decide
+    return _consistent_decision(store, policy, slot, observation, actor_id, phase, fence, cancel)
+backend/app/services/world_simulation/controller.py:75: in _consistent_decision
+    dispatch("candidate")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stage = 'candidate', candidate = None
+
+    def dispatch(stage, candidate=None):
+        _cancelled(cancel)
+        kwargs = {"review": clone(candidate)} if stage == "revision" else {}
+        reservation = policy.reservation(clone(observation), **kwargs) if getattr(policy, "external", False) else {
+            "tokens": 0, "costUsd": "0"}
+        require(not getattr(policy, "external", False) or reservation["tokens"] &gt; 0,
+                "unbounded_transport", "External policy must reserve its complete request bound")
+        attempt = store.reserve_consistency_attempt(slot, stage, fence, reserved_tokens=reservation["tokens"],
+                                                    reserved_cost=reservation["costUsd"])
+        usage = None
+        withheld = False
+        decision = assessment = None
+        try:
+            output = policy.decide(clone(observation), **kwargs)
+            if isinstance(output, PolicyResponse):
+                raw, usage, assessment = output.decision, output.usage, output.assessment
+            else:
+                require(not getattr(policy, "external", False), "missing_usage", "External policy must return accountable output")
+                raw, usage, assessment = output, {"tokens": 0, "costUsd": "0"}, None
+            decision = validate_decision(store.spec, raw, actor_id, observation, phase=phase)
+            if stage == "revision":
+                assessment = validate_assessment(assessment, observation, decision, mode=review_mode(store.spec))
+                status = assessment_status(assessment, mode=review_mode(store.spec))
+                withheld = review_mode(store.spec) == MODE_V3 and status == "unresolved" and usage is not None
+                require(status == "clear", "consistency_unresolved",
+                        "The actor revision retains an unresolved consistency conflict")
+        except Exception as error:
+            usage = usage if usage is not None else getattr(error, "usage", None)
+            diagnostic = {"code": error.code if isinstance(error, WorldError) else "policy_decision_failed",
+                          "message": str(error)[:400] if isinstance(error, WorldError) else "The decision was unavailable."}
+            store.finish_consistency_attempt(attempt, status="failed" if usage is not None else "unknown",
+                                             usage=usage or reservation, fence=fence, error=diagnostic,
+                                             decision=decision if withheld else None,
+                                             assessment=assessment if withheld else None)
+&gt;           raise WorldError("required_decision_failed", "A required consistency stage failed without a replacement allowance",
+                             details={"lastErrorCode": diagnostic["code"], "lastErrorMessage": diagnostic["message"]}) from None
+E           app.services.world_simulation.contracts.WorldError: A required consistency stage failed without a replacement allowance
+
+backend/app/services/world_simulation/controller.py:67: WorldError</failure></testcase><testcase classname="tests.test_world_candidate_repair_controller" name="test_effective_pin_mismatch_rejected_before_any_dispatch" time="0.031"><failure message="AssertionError: Regex pattern did not match.&#10; Regex: 'repair'&#10; Input: 'A required consistency stage failed without a replacement allowance'">tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/evidence/pytest-tmp/test_effective_pin_mismatch_re0')
+
+    def test_effective_pin_mismatch_rejected_before_any_dispatch(tmp_path):
+        policy = RepairingPolicy()
+        policy.candidate_repair = None
+        with WorldStore(tmp_path / 'world.sqlite3', repair_spec()) as store:
+            fence = store.acquire_writer('first')
+            with pytest.raises(WorldError, match='repair'):
+&gt;               run_round(store, policy, fence)
+
+backend/tests/test_world_candidate_repair_controller.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/app/services/world_simulation/controller.py:161: in run_round
+    proposals = _collect(store, policy, fence, before, round_index, 'proposal', participants, cancelled)
+backend/app/services/world_simulation/controller.py:151: in _collect
+    raise errors[0]
+backend/app/services/world_simulation/controller.py:147: in _collect
+    decisions.append(future.result())
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+backend/app/services/world_simulation/controller.py:99: in decide
+    return _consistent_decision(store, policy, slot, observation, actor_id, phase, fence, cancel)
+backend/app/services/world_simulation/controller.py:75: in _consistent_decision
+    dispatch("candidate")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stage = 'candidate', candidate = None
+
+    def dispatch(stage, candidate=None):
+        _cancelled(cancel)
+        kwargs = {"review": clone(candidate)} if stage == "revision" else {}
+        reservation = policy.reservation(clone(observation), **kwargs) if getattr(policy, "external", False) else {
+            "tokens": 0, "costUsd": "0"}
+        require(not getattr(policy, "external", False) or reservation["tokens"] &gt; 0,
+                "unbounded_transport", "External policy must reserve its complete request bound")
+        attempt = store.reserve_consistency_attempt(slot, stage, fence, reserved_tokens=reservation["tokens"],
+                                                    reserved_cost=reservation["costUsd"])
+        usage = None
+        withheld = False
+        decision = assessment = None
+        try:
+            output = policy.decide(clone(observation), **kwargs)
+            if isinstance(output, PolicyResponse):
+                raw, usage, assessment = output.decision, output.usage, output.assessment
+            else:
+                require(not getattr(policy, "external", False), "missing_usage", "External policy must return accountable output")
+                raw, usage, assessment = output, {"tokens": 0, "costUsd": "0"}, None
+            decision = validate_decision(store.spec, raw, actor_id, observation, phase=phase)
+            if stage == "revision":
+                assessment = validate_assessment(assessment, observation, decision, mode=review_mode(store.spec))
+                status = assessment_status(assessment, mode=review_mode(store.spec))
+                withheld = review_mode(store.spec) == MODE_V3 and status == "unresolved" and usage is not None
+                require(status == "clear", "consistency_unresolved",
+                        "The actor revision retains an unresolved consistency conflict")
+        except Exception as error:
+            usage = usage if usage is not None else getattr(error, "usage", None)
+            diagnostic = {"code": error.code if isinstance(error, WorldError) else "policy_decision_failed",
+                          "message": str(error)[:400] if isinstance(error, WorldError) else "The decision was unavailable."}
+            store.finish_consistency_attempt(attempt, status="failed" if usage is not None else "unknown",
+                                             usage=usage or reservation, fence=fence, error=diagnostic,
+                                             decision=decision if withheld else None,
+                                             assessment=assessment if withheld else None)
+&gt;           raise WorldError("required_decision_failed", "A required consistency stage failed without a replacement allowance",
+                             details={"lastErrorCode": diagnostic["code"], "lastErrorMessage": diagnostic["message"]}) from None
+E           app.services.world_simulation.contracts.WorldError: A required consistency stage failed without a replacement allowance
+
+backend/app/services/world_simulation/controller.py:67: WorldError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = PosixPath('/private/var/folders/sh/z3hsvy7526b8xcjjphdq8hs00000gn/T/drf-candidate-repair-controller-red-20261017T160341Z-von3b369/evidence/pytest-tmp/test_effective_pin_mismatch_re0')
+
+    def test_effective_pin_mismatch_rejected_before_any_dispatch(tmp_path):
+        policy = RepairingPolicy()
+        policy.candidate_repair = None
+        with WorldStore(tmp_path / 'world.sqlite3', repair_spec()) as store:
+            fence = store.acquire_writer('first')
+&gt;           with pytest.raises(WorldError, match='repair'):
+E           AssertionError: Regex pattern did not match.
+E            Regex: 'repair'
+E            Input: 'A required consistency stage failed without a replacement allowance'
+
+backend/tests/test_world_candidate_repair_controller.py:182: AssertionError</failure></testcase></testsuite></testsuites>

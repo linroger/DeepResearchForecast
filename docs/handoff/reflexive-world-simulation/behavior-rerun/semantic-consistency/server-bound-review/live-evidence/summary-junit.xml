@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="1.355" timestamp="2026-10-17T21:14:06.342999" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_consistency_v2_closeout" name="test_v2_review_preserves_unresolved_and_explanation_failures" time="0.034" /></testsuite></testsuites>
