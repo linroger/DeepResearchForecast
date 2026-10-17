@@ -3,7 +3,7 @@
   "base_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
   "implementation_commit": "e902aedb1a8307c024da950060c4d7bb30f34220",
   "phase": "Optional actor consistency repair implemented; directed action checks pass, qualitative and full promotion gates withheld",
-  "updatedUtc": "2026-10-17T13:28:28.440189+00:00",
+  "updatedUtc": "2026-10-17T13:31:46.244483+00:00",
   "remote_status": "Not attempted in this phase; prior configured GitHub authentication was rejected and no credential change was provided.",
   "application_tests_run": true,
   "live_provider_calls_run": true,
@@ -87,7 +87,7 @@
   "latestOfflineTestsPassed": 308,
   "latestSummaryTestsPassed": 1,
   "latestReport": "behavior-rerun/semantic-consistency/REPORT.md",
-  "latestImplementationCommit": "095b9ef94ca83cab43491b1d32497e186937dda2",
+  "latestImplementationCommit": "bfbc31107d0dbfae55b7972a66e9b1cc19c10eec",
   "worktreeCleanAtImplementationCommit": true,
   "priorPublicGrammarDelivery": {
     "branch": "codex/reflexive-world-simulation",
@@ -140,5 +140,6 @@
     "diagnosticGate": "failed",
     "freshCandidateGeneration": false,
     "fullMatrixRun": false
-  }
+  },
+  "consistencyReport": "behavior-rerun/semantic-consistency/REPORT.md"
 }
