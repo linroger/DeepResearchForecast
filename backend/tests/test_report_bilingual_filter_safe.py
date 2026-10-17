@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 import pytest
@@ -557,3 +558,83 @@ def test_end_to_end_directive_retry_publishes_a_full_translation(reports_tmp):
     assert meta["translations"][0]["translation_quality"] == "ok"
     assert "verbatim_chunks" not in meta["translations"][0]
     assert ReportManager._load_translation_runtime_status(rid, "zh")["status"] == "available"
+
+
+# ───────────── FRED unit phrases in the binary-forecast table (live residual lines) ─────────────
+# The 2026-10-17 live re-run of report_0f2e07d62a34 translated every filtered chunk, yet the
+# audit still withheld the Chinese version: rows F4, F11 and F13 quote their FRED threshold
+# as "25000 Millions of Dollars", which was not a recognised amount, so the frozen numeral
+# made every faithful "250亿美元" fail the number guard and the rows stayed English
+# (3 undisclosed lines against a tolerance of 1).
+FRED_ROW_F4 = (
+    "U.S. Imports of Goods by Customs Basis from China (fred:IMPCH) are below "
+    "25000 Millions of Dollars in June 2027."
+)
+FRED_ROW_F13 = (
+    "US goods imports from China (fred:IMPCH) fall below 20,000 millions of dollars in "
+    "June 2027, sliding toward the June 2025 trough."
+)
+FRED_SRC = f"""# Trade Outlook Report
+
+## Binary Forecasts
+
+| ID | Statement | Probability | Resolution |
+|---|---|---|---|
+| F4 | {FRED_ROW_F4} | 35% | Resolves YES if fred:IMPCH < 25000 Millions of Dollars in 2027-06 (source: FRED). |
+| F13 | {FRED_ROW_F13} | 15% | Resolves YES if fred:IMPCH < 20000 Millions of Dollars in 2027-06 (source: FRED/Census). |
+"""
+
+_FRED_ZH = [
+    (r"^# Trade Outlook Report$", "# 贸易展望报告"),
+    (r"^## Binary Forecasts$", "## 二元预测"),
+    (r"^\| ID \| Statement \| Probability \| Resolution \|$", "| ID | 陈述 | 概率 | 判定 |"),
+    (r"U\.S\. Imports of Goods by Customs Basis from China \(fred:IMPCH\) are below "
+     r"(⟦Q[A-Z]+⟧) in (⟦D[A-Z]+⟧)\.",
+     r"美国自中国商品进口额（海关口径）(fred:IMPCH) 在\2低于\1。"),
+    (r"US goods imports from China \(fred:IMPCH\) fall below (⟦Q[A-Z]+⟧) in (⟦D[A-Z]+⟧), "
+     r"sliding toward the (⟦D[A-Z]+⟧) trough\.",
+     r"美国自中国商品进口额 (fred:IMPCH) 在\2跌破\1，滑向\3的低谷。"),
+    (r"Resolves YES if fred:IMPCH < (⟦Q[A-Z]+⟧) in 2027-06 \(source: ([A-Za-z/]+)\)\.",
+     r"若 fred:IMPCH 在 2027-06 低于\1，则判定为 YES（来源：\2）。"),
+]
+
+
+def _translate_fred(user: str) -> str:
+    """Faithful translator: every ⟦Q…⟧ / ⟦D…⟧ token is copied where the amount or date belongs."""
+    out = user
+    for pattern, replacement in _FRED_ZH:
+        out = re.sub(pattern, replacement, out, flags=re.M)
+    return out
+
+
+def test_binary_forecast_rows_with_fred_unit_phrases_translate_and_pass_the_number_guard(
+    reports_tmp,
+):
+    rid = "report_fred_units"
+    _publish_primary(rid, FRED_SRC)
+    llm = _FilterLLM(_translate_fred, sensitive=())
+
+    status = ReportManager.generate_translation_variant(rid, "zh", llm_client=llm)
+
+    assert status["available"] is True and status["status"] == "available", status.get("issues")
+    assert status["partial"] is False and status["translation"]["verbatim_chunks"] == []
+    zh = open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8").read()
+    assert ("| F4 | 美国自中国商品进口额（海关口径）(fred:IMPCH) 在2027年6月低于250亿美元。 | 35% | "
+            "若 fred:IMPCH 在 2027-06 低于250亿美元，则判定为 YES（来源：FRED）。 |") in zh
+    assert ("| F13 | 美国自中国商品进口额 (fred:IMPCH) 在2027年6月跌破200亿美元，滑向2025年6月的低谷。"
+            " | 15% | 若 fred:IMPCH 在 2027-06 低于200亿美元，则判定为 YES（来源：FRED/Census）。 |") in zh
+    assert "## 二元预测" in zh and "| ID | 陈述 | 概率 | 判定 |" in zh
+    for english in ("Millions", "millions", "25000", "20,000", "20000", "June"):
+        assert english not in zh
+    # Every ⟦Q…⟧ the model saw was the whole phrase, already rendered in Chinese.
+    unit_call = next(c for c in llm.calls if FRED_ROW_F4.split(" are below ")[0] in c["user"])
+    assert "Millions of Dollars" not in unit_call["user"] and "25000" not in unit_call["user"]
+    assert "⟦Q" in unit_call["user"]
+
+    with open(ReportManager._get_report_final_audit_path(rid, "zh"), encoding="utf-8") as handle:
+        audit = json.load(handle)
+    assert audit["hard_passed"] is True and audit["number_parity"]["passed"] is True
+    assert audit["residual_source_lines"]["count"] == 0
+    assert audit["residual_source_lines"]["disclosed"] == 0
+    assert ReportAgent._translation_fact_multiset(zh) == ReportAgent._translation_fact_multiset(FRED_SRC)
+    assert open(ReportManager._get_report_markdown_path(rid), encoding="utf-8").read() == FRED_SRC
