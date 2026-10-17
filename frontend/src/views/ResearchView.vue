@@ -94,8 +94,8 @@
               <label for="simulation-engine">{{ L('模拟引擎','Simulation engine') }}</label>
               <select id="simulation-engine" v-model="simulationEngine" class="adv-select" :disabled="starting" aria-describedby="simulation-engine-hint">
                 <option value="">{{ L('服务器默认','Server default') }}</option>
-                <option value="world-v1">{{ L('世界模拟','World simulation') }}</option>
-                <option value="oasis-legacy">{{ L('社交模拟（传统）','Social simulation (legacy)') }}</option>
+                <option value="oasis-legacy">{{ L('社交模拟 + 反身世界模型','Social simulation + reflexive world model') }}</option>
+                <option value="world-v1">{{ L('世界引擎 v1（实验性）','World engine v1 (experimental)') }}</option>
               </select>
               <p id="simulation-engine-hint" class="param-hint">
                 {{ mode === 'research_only'
@@ -316,8 +316,8 @@ let preflightRequestId = 0
 
 function simulationEngineLabel(engine) {
   return engine === 'world-v1'
-    ? L('世界模拟', 'World simulation')
-    : L('社交模拟（传统）', 'Social simulation (legacy)')
+    ? L('世界引擎 v1（实验性）', 'World engine v1 (experimental)')
+    : L('社交模拟 + 反身世界模型', 'Social simulation + reflexive world model')
 }
 
 function invalidatePreflight() {

@@ -142,14 +142,16 @@ test('initial and pending readiness block actual launch; template offers all eng
   assert.doesNotMatch(text(en), /Configuration ready|OASIS/)
   // SSR may serialize the empty default value as either `value` or `value=""`.
   assert.match(en, /<option value(?:="")?(?=[\s>])[^>]*>Server default<\/option>/)
-  assert.match(en, /<option value="world-v1"[^>]*>World simulation<\/option>/)
-  assert.match(en, /<option value="oasis-legacy"[^>]*>Social simulation \(legacy\)<\/option>/)
+  assert.match(en, /<option value="world-v1"[^>]*>World engine v1 \(experimental\)<\/option>/)
+  assert.match(en, /<option value="oasis-legacy"[^>]*>Social simulation \+ reflexive world model<\/option>/)
+  // The default engine is listed before the opt-in one.
+  assert.ok(en.indexOf('value="oasis-legacy"') < en.indexOf('value="world-v1"'))
   assert.doesNotMatch(en, /id="max-rounds"/)
   i18n.locale.value = 'zh'
   const zhHtml = await h.render()
   assert.match(zhHtml, /<option value(?:="")?(?=[\s>])[^>]*>服务器默认<\/option>/)
   const zh = text(zhHtml)
-  assert.match(zh, /服务器默认 世界模拟 社交模拟（传统）/)
+  assert.match(zh, /服务器默认 社交模拟 \+ 反身世界模型 世界引擎 v1（实验性）/)
   assert.match(zh, /正在检查启动配置/)
   assert.doesNotMatch(zh, /OASIS/)
   await h.accept()
@@ -295,8 +297,8 @@ for (const selection of ['', 'world-v1', 'oasis-legacy']) {
         const html = await h.render()
         assert.equal(html.includes('id="max-rounds"'), legacyFull)
         assert.match(text(html), engine === 'world-v1'
-          ? /Engine confirmed by preflight: World simulation/
-          : /Engine confirmed by preflight: Social simulation \(legacy\)/)
+          ? /Engine confirmed by preflight: World engine v1 \(experimental\)/
+          : /Engine confirmed by preflight: Social simulation \+ reflexive world model/)
         if (mode === 'research_only') assert.match(text(html), /Research-only mode does not run a simulation/)
         await h.state.start()
         assert.equal(h.launches.length, 1)
