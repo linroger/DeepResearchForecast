@@ -1,0 +1,236 @@
+{
+ "takenAt": "2026-10-18T08:21+08:00",
+ "source": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads (deployment checkout, read-only copy)",
+ "selection": {
+  "newest12": "the 12 newest completed full pipelines with research_report.md and actors.json, by pipeline_state.created_at",
+  "cjkSupplement": "the 4 older dossiers whose actor names contain fullwidth parentheses (NFKC check)"
+ },
+ "sets": {
+  "newest12": [
+   {
+    "pipeline": "pipe_baddcd338811",
+    "createdAt": "2026-10-17T17:51:10.571447+00:00",
+    "files": {
+     "pipeline_state.json": "91de1ad79b5ed5c836a329cd91c4c51a31efe8915e0fdd2343f33039cd817c9d",
+     "handoff/actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8",
+     "handoff/meta.json": "5e0b030e13cf286b0e912a43128f981e5619dba537501c7d476bdfaa14cd4d41",
+     "handoff/ontology.json": "c7591cd5f1a9c418f4b285adcf7628c4ba7b53cfbd9ff1b27367e094e1dd7912",
+     "handoff/prediction_requirement.txt": "b1b674b72acac9d59ee211449ec22ad74fc46bdab4a2bd3b3f7ecd3ee4052212",
+     "handoff/research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "handoff/sources.json": "03e73549e215b522e8c16beb61edba5fc1d0dab463f21265fdae75f09d8e4092",
+     "project/project.json": "ba66d3f3694c62854875936d7cb23fdb70f072b5f9c7da3e7f53530c8d1f21b4"
+    }
+   },
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "createdAt": "2026-10-17T17:51:10.551678+00:00",
+    "files": {
+     "pipeline_state.json": "117d0ea10206ff7bd7bef297f8bbb564e18f17535aa1c82dd03e1a548f7a00c0",
+     "handoff/actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894",
+     "handoff/meta.json": "8409abd9ab6b547061d688ca2aba98c4e757c4d2b8d9b3857c44a21cc0a0d8cc",
+     "handoff/ontology.json": "3e570820a7f10c492cfbd7a68e942c626c43a41839c8adf5152c9a0dcb699e3d",
+     "handoff/prediction_requirement.txt": "34f276923ee101e79dfcee5ed6c9e7470a2870b88c3397b1a6780356780d5393",
+     "handoff/research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "handoff/sources.json": "fd7d333b602db4e04b4c0f965bdbfd883fc213b22e7b6a46bd88563a01b297cf",
+     "project/project.json": "5a34bfeafc51855f9fe622f514644e6e370620f111a66e14a24c52f6beb97b16"
+    }
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "createdAt": "2026-10-17T17:51:10.530978+00:00",
+    "files": {
+     "pipeline_state.json": "2850a47efa1112a6272cd9e7423b7ebc0bd79892309fef81e8ab69aeffdc7787",
+     "handoff/actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15",
+     "handoff/meta.json": "3b0771209d3ccd96581e80c81a3fc624e1b8bf3f4405f30b7e995cbe1da59554",
+     "handoff/ontology.json": "af4087c117768a9aecba7486243bc82e815b58c2275d63d83bb5703f144aa62b",
+     "handoff/prediction_requirement.txt": "a62edd1a78858abd6f62645aedf7479b8d859b2a9c7e42204d70a0f48470e1ba",
+     "handoff/research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "handoff/sources.json": "005bab181f00ea5299f91dc3ecdc139024271d814386face07817553f8d109e9",
+     "project/project.json": "a1f2af8af5de949bc8ea076edade72c8eb4947e06c7fc5368242fd57b24f4422"
+    }
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "createdAt": "2026-10-17T13:46:33.200421+00:00",
+    "files": {
+     "pipeline_state.json": "41faab85a4df9734cff4f71885bd079f2d5b4c8818e37883bcb8bc831afa05fb",
+     "handoff/actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836",
+     "handoff/meta.json": "974b2b2d0b52505374c162c22738ebd428c6ef1d8332326d1d3a6d8228c18652",
+     "handoff/ontology.json": "0f8c0717c1fb320953f5befdba2d7c01b5aab0829449613edbf2978148574707",
+     "handoff/prediction_requirement.txt": "7137d9e074b39a6f2fcee5e87bfc41e84a3071d52e0f5a8e6be4cb4dbb80659f",
+     "handoff/research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "handoff/sources.json": "a8db78105f8e6c9628cb25c207ce3079140c3cc5cc94f4420e20896db18760ce",
+     "project/project.json": "0ffb4cf15c672e144a284f83693d614d8a50954b1e1ed13c4fc77f2a2ff74bbc"
+    }
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "createdAt": "2026-10-16T20:07:50.812453+00:00",
+    "files": {
+     "pipeline_state.json": "a337c9633e323e55f5e36aee61022a6de488e4a4d99b57670d59125d478871e2",
+     "handoff/actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d",
+     "handoff/meta.json": "4d660e078da335c3985a044383d9582b74931c37d242f2cbb451f24b1b8a62c6",
+     "handoff/ontology.json": "f9a7ce768ee4f1566d5050f5f03bd47366bffa3d6b2c8f20916fed90425a9d4e",
+     "handoff/prediction_requirement.txt": "1209d73a12dee662e447ee5c32567f787862f38fee23cc804622cd9d24c10cf4",
+     "handoff/research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "handoff/sources.json": "1e70aac38592faeb8f31fa318cd6d9f2893c7481b26349d5f7fc6b9887b78019",
+     "project/project.json": "2587659ac7a7dc6c178dcd3699a3171fa128a4dcf7c0f3cbcab9985228e6b31a"
+    }
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "createdAt": "2026-10-16T20:07:50.785265+00:00",
+    "files": {
+     "pipeline_state.json": "86d2fabe37ecab31e11beb18008a762f12d1020af4b4fa39619299b268b744bf",
+     "handoff/actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6",
+     "handoff/meta.json": "085d6a9011ac3ed73351bd1016690b70c5d63f1c83694bfe8b531626d9134238",
+     "handoff/ontology.json": "8fc7e627dfef0bc8496cfda0575499d14d91ccefa34d487639226d274f188504",
+     "handoff/prediction_requirement.txt": "61f371ed9b738f782a502574f911ea0ba1982be530c8543d87ac409d74a583bc",
+     "handoff/research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "handoff/sources.json": "fbfc202e320139587adc2a944c91f7307d22d9056186aa05f208e9577f847992",
+     "project/project.json": "71b42b0bb4a985692b5a94d8821cb42aeab3ff8fe93e827e59aee65e19b79ff5"
+    }
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "createdAt": "2026-10-16T16:02:27.082149+00:00",
+    "files": {
+     "pipeline_state.json": "e269fd9e6aca5bce03296e8a7870184d3c50bfcf22a8a5ee70575dda447e23ba",
+     "handoff/actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5",
+     "handoff/meta.json": "f7c02cdf1a6f8fd0fa01a19785fffda6fc421aee115667d600d15e80b72a6c81",
+     "handoff/ontology.json": "57db859b41a588c82e0161c286c14d907e8452504637f8114460140f8f590b1c",
+     "handoff/prediction_requirement.txt": "8a44a101e43101462c3d1e2dd29301140b177e5b474cc81a5276ee3be0ac4214",
+     "handoff/research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "handoff/sources.json": "b598cf6c840b04ebb85a87b11a03187e1182fd0bb0cddf8ec60d51fbfdc8c718",
+     "project/project.json": "379fa96dff00c29bb5f2227a0ae9d442bce3617c0c4e81fbdf7c69c25f17f2d9"
+    }
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "createdAt": "2026-10-15T19:50:29.751802+00:00",
+    "files": {
+     "pipeline_state.json": "b902ba6155d9ca3ff517c2a80c5fc4449792970791592a81977f4a6efdd9b3fd",
+     "handoff/actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1",
+     "handoff/meta.json": "686585635a871480da3a79821359bd47673c4ca43ea4f8c87ba1c30ea4b8f1b9",
+     "handoff/ontology.json": "0ca702b02490608982a6d24001d09f86354f7c955df411eb8f80e1144d9d0d2e",
+     "handoff/prediction_requirement.txt": "57dd6ba92f71b54d3e7cffb1b4af4af65ba7d432e78ae6d82aedf4faba998d45",
+     "handoff/research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "handoff/sources.json": "eadc3eb3ea84218e6309278516fe060739b33828339ff976e3753d64dc276acc",
+     "project/project.json": "a474bb2d41d24c9ad155ee380964f28cf2163d26df0a781440b17c59d035fc34"
+    }
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "createdAt": "2026-10-15T19:50:25.795789+00:00",
+    "files": {
+     "pipeline_state.json": "82c24b9f636f536eacf7c2de9e8122162f2ad740e87eab5e74a8828fe390b1e1",
+     "handoff/actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e",
+     "handoff/meta.json": "227c223bb76f930fb10061f40982bc3023e986460b8da03684bb91badb956803",
+     "handoff/ontology.json": "6493a1cc7da62a501d2bd01c8e023f540f4e48a5538a3b8656bf7b6f40441405",
+     "handoff/prediction_requirement.txt": "41031b1dd56a9edc2452ba7fc466266b4cdcc358550d6d6c322961653a72022c",
+     "handoff/research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "handoff/sources.json": "0f3f88c5132cf4940f2f3e18e1903011cdb473968ff4fa0a6c31ec4ebacad2d4",
+     "project/project.json": "69c8d2a0e37cdfb87c8004abb072fd064c8cc9842743b813fd56461b2a8610c5"
+    }
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "createdAt": "2026-10-11T21:48:36.060635+00:00",
+    "files": {
+     "pipeline_state.json": "5043222c23688e1a1a78f3601ef4b3e8c10886c422f09f7e132c5aa25de76f05",
+     "handoff/actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644",
+     "handoff/meta.json": "a40cb341d596b7757a1df7654f7616e7381d010b531e60d2d864dba6e580b3b8",
+     "handoff/ontology.json": "b9a4af3893a3f8450682745140419c9185ee97a2af2a41ffe566bd2d912eb7d6",
+     "handoff/prediction_requirement.txt": "535c418d33f66831ef21c9426bd15b9eee721445ec42ca45ce74dc3aafa73072",
+     "handoff/research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "handoff/sources.json": "bb937fe488a69c68f62dab2740ddd7ab8b3c701d16c978881817f572cfb1dc87",
+     "project/project.json": "13384f1aa039fcbdd5104376535bf352341f4fa56bba0993157618702cf5805f"
+    }
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "createdAt": "2026-09-28T18:57:59.783086+00:00",
+    "files": {
+     "pipeline_state.json": "3a8c8b222e1ce89e4067285e73047dbecc9d19287dc9f87ffc10a8c4997d35f7",
+     "handoff/actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d",
+     "handoff/meta.json": "0de2029a2e67aa33fa583916762d8dbfdf99dd6bb2549c2ff176feef5fbc72c1",
+     "handoff/ontology.json": "eeb57b86e65be0c5d645b84332d13c96c2b8029eb61c171a98e22682a4a1bfd0",
+     "handoff/prediction_requirement.txt": "26c39956784781e0547d94dc7ae4c73b4e26c2329759eccf5d8daad5dcb2f692",
+     "handoff/research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "handoff/sources.json": "54b3b011e7a4c17e22b2ed4938a0fe5ae4e0f4cb83858f5bb71c255ff3319084",
+     "project/project.json": "c8ff7e4d57b28dd40df582be96069e49b83fa20a31197f2690aaed3c4e6c05b0"
+    }
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "createdAt": "2026-09-17T13:56:24.960773+00:00",
+    "files": {
+     "pipeline_state.json": "2537fb8d443306cb2cd7ca6c7423a8af3f2877ffb34978c122ab6d302330e1a3",
+     "handoff/actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468",
+     "handoff/meta.json": "432af3efa2f091f9736a3c4d9f8bd5285d48f2cf67dedac4dab56270989a6d08",
+     "handoff/ontology.json": "d10b26dd0a125fb62e932b085c75a7fe3415e1e932b9d3d9ea022f38b40c4acd",
+     "handoff/prediction_requirement.txt": "0ef1383e2627fe8efa5331b00e1adc218fa4d443a480efbf99e08d484a516b02",
+     "handoff/research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "handoff/sources.json": "07856cf3f4f6878ead4ee3b74bef82f3ebe9ab58bb97e26f7aee04261119c39a",
+     "project/project.json": "ec6dcd59513066db93303175cdaf54fbfa78f34d54eebbc84881fd4e459c36bc"
+    }
+   }
+  ],
+  "cjkSupplement": [
+   {
+    "pipeline": "pipe_7ef597666938",
+    "createdAt": "2026-07-05T20:40:51.138907+00:00",
+    "files": {
+     "pipeline_state.json": "d9d884c0961420cf0370f06095c3e30b258a46349eb68d725e0edca1b714966a",
+     "handoff/actor_dossier.md": "c42b5c19cebf9bb4cc242324d0a16b35314d19ccb02ac01a66971460db12f910",
+     "handoff/actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828",
+     "handoff/meta.json": "12381df64ac5129c0068912596d73e42315a9c75dfa5d876ac9b55cdd9f21882",
+     "handoff/ontology.json": "38b4d1ffe24ae5623e4790e8b845eb3ee783c6d1412c0ae85c85de2a3b552e4a",
+     "handoff/prediction_requirement.txt": "cc698faedb0f3f06d1f792c510c15ecc46f3f0b552dffedc82a15901871daf46",
+     "handoff/research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "handoff/sources.json": "b8e2329856e8f07469f84a7c757e85a3c48ac764b2c41e9ce98f383611ff5429",
+     "project/project.json": "fd177399f36158b28fa33fe9728a7cf5aef349ea0cbb93a992101bb8c09b3fa0"
+    }
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "createdAt": "2026-06-20T19:34:51.783165+00:00",
+    "files": {
+     "pipeline_state.json": "2fb7c908f1159fc3ee60914fc66261480e9b5eb46d112385954f0800975f2660",
+     "handoff/actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b",
+     "handoff/meta.json": "5b15c2e9ae5aa2d24b21c92dc9104cd0fa5a098e4b8031675ed2a4a0964a657b",
+     "handoff/ontology.json": "ad32a28f76d2eb9859d1403e5f756a802717f8b9365c038dc1514afe21be18b6",
+     "handoff/prediction_requirement.txt": "2270448afce06b7ad292281b6adadd36db6ef152d904c500a0955d55afef1e49",
+     "handoff/research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "handoff/sources.json": "0655fded1ff5a9080ac760f3f0a2dff10102fee5ee945a2e1031066b97b16a3c",
+     "project/project.json": "229c37c0ce702af138960fb2ef9c4aba31d56473730336a2944d3fe265326409"
+    }
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "createdAt": "2026-06-13T20:36:05.149934+00:00",
+    "files": {
+     "pipeline_state.json": "78195344ace339609a828a1d9b68635d97a49d9bde293c32202c467d956c96b3",
+     "handoff/actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257",
+     "handoff/prediction_requirement.txt": "cb2aad7c2389ecc02835d9424f945b3af52548ec2677f94c29ae6592876b958d",
+     "handoff/research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "handoff/sources.json": "f4b453f7b3252765313c7030ba85ccb98333658d4a7812ce840d95f8adb372cb",
+     "project/project.json": "adafb89f4be293a1c54f6c15aa182840c4a3a9c922acc963057a7a187c6e4f81"
+    }
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "createdAt": "2026-06-11T19:22:03.541561+00:00",
+    "files": {
+     "pipeline_state.json": "35bb9f324404951c76a4871c40d5b7ca39b8896857754840a60ee96a771dfe19",
+     "handoff/actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca",
+     "handoff/meta.json": "4cf2b78748c9e4cd5e80eabea0065cc60d7d39716381a9f9c649dadc5d4faa79",
+     "handoff/prediction_requirement.txt": "8e7e683bd6e04dd8df42d77342e3e5525a3e1dfabb01f2a6ee0942bf212b3baa",
+     "handoff/research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "handoff/sources.json": "a49633bae61279cd750e0e20ecbbda926f316985d1db5b185df2dc732253d63d",
+     "project/project.json": "9f0b8d797e9e2df7a16d24f1e2531da0d2dcfe8f6a8cb6fd0f7520d437b7a402"
+    }
+   }
+  ]
+ }
+}
