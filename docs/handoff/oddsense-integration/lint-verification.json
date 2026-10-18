@@ -1,0 +1,33 @@
+{
+  "rule_scope": "F,E9",
+  "files_checked": 23,
+  "current_findings": 8,
+  "baseline_findings": 8,
+  "introduced_findings": [],
+  "source_sha256": {
+    "backend/app/api/report.py": "e5e394f7c9cbbb46a413228e6829a7a6f5cb11d40cc9d566eba80fd728334cea",
+    "backend/app/api/research.py": "6d0c1ab9fab189540ab2da9bee602510a6b33aa662f9addcc652e993dead2a37",
+    "backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "backend/app/services/news_market_context.py": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+    "backend/app/services/official_data.py": "43498ff019b2dac0f5b3cb0ee6a680579dcfe4805116f4214f29e45a764e6963",
+    "backend/app/services/pipeline_orchestrator.py": "a15e36fda51101added494a829d1f1f578b3d3fab53ed259aa5cc540fa8fc894",
+    "backend/app/services/report_agent.py": "06f1ab0068d9de12c3e7a0246fabcc040bdbe07ba69c550cbe077a21b54e054c",
+    "backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "backend/tests/test_news_context_pipeline.py": "3dc2d555414e25d41054beb2b5c18a41d68a27c9584dd002b38ab800f00931a8",
+    "backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "backend/tests/test_news_signals.py": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+    "backend/tests/test_oddsense_workflow.py": "5d9799ca0efa09a386bf7255fa51840a28024dfa5a036042b87f6fdbf839891c",
+    "backend/tests/test_research_engine_v3.py": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+    "deerflow_bridge/deerflow_research.py": "f7ff138fdbaa0cf84625bd92212a13ee8fa914c374c42fe57d7318d0b6214d87",
+    "deerflow_bridge/linear_research.py": "d34299e79d751848052c25ab999782cb94068a98d82d0daead97444052b68cd1",
+    "deerflow_bridge/market_intelligence.py": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f",
+    "deerflow_bridge/news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "deerflow_bridge/news_tools.py": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+    "deerflow_bridge/research_gateway.py": "f99839713cd2d50bed1580acaa843cc049ed7fe187219372b253e4b9e13b2003",
+    "scripts/oddsense_live_probe.py": "78d967527a45091a8dd4ada19536f0bec666b6878b787f9b40c23de193fcbe10",
+    "scripts/oddsense_source_mirror.py": "844a012257ac71ecf95f2da1f6facceaf4c3a8f86aeb847c5e14f6930ab7b844"
+  },
+  "note": "Existing baseline findings are preserved; no new F/E9 findings."
+}

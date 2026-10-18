@@ -49,7 +49,10 @@ def _report_publication_payload(report):
     assembled Markdown and every outline section's draft content are withheld.
     """
     publication = ReportManager.publication_status(report.report_id)
+    if any("news context" in str(reason) for reason in publication.get("reasons") or []):
+        raise ValueError("Report news context generation is invalid")
     payload = report.to_dict()
+    payload["news_market_context"] = ReportManager.load_report_news_market_context(report.report_id)
     payload["publishable"] = bool(publication.get("publishable"))
     payload["publication_issues"] = list(publication.get("reasons") or [])
     payload["draft_withheld"] = not payload["publishable"]
@@ -385,6 +388,7 @@ def generate_report():
                     sources=_dossier.get("sources"),
                     research_report=_dossier.get("research_report"),
                     official_data=_dossier.get("official_data"),
+                    news_market_context=_dossier.get("news_market_context"),
                 )
                 
                 # 进度回调
@@ -1616,6 +1620,7 @@ def chat_with_report_agent():
             sources=_dossier.get("sources"),
             research_report=_dossier.get("research_report"),
             official_data=_dossier.get("official_data"),
+            news_market_context=_dossier.get("news_market_context"),
         )
 
         result = agent.chat(message=message, chat_history=chat_history)

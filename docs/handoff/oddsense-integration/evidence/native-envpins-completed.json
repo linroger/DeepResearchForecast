@@ -1,0 +1,12 @@
+{
+  "boundary": "macOS sandbox-exec; separate from CPython guard",
+  "exit_code": 0,
+  "controls": {
+    "outside_read": true,
+    "outside_write": true,
+    "network_connect": true
+  },
+  "test_sha256": "5901c49ea95f0df3706b15aac5738e7d90fb43ce5832611f197a69afe09e8aed",
+  "script_sha256": "5f416461f4e472ab95e87b8d4e5a883f8b16b68dd0e6b4baf07db06ddab4ba57",
+  "profile_sha256": "962c0c7cc9651d576e944ee5f06869de6773dff1c5dbb9ff692f868d889625b7"
+}

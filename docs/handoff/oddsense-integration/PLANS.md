@@ -1,7 +1,7 @@
 # Oddsense capabilities in the DeepResearchForecast workflow
 
 **Date:** 2026-10-18, Asia/Singapore.
-**Status:** Proposed. Application coding awaits the user's plan approval.
+**Status:** All three user-approved slices implemented and accepted locally on 2026-10-18. See final-verification.md for exact evidence, limits and remote-authentication status. Historical reviewed source/plan hashes remain intact.
 **Evidence:** [source study](STUDY.md), [research seams](research-paths.md), [downstream seams](downstream-paths.md), [upstream hashes/coverage](upstream-inventory.json).
 
 ## Objective and recommended approach
@@ -33,7 +33,7 @@ The following invariants bind implementation:
 
 **Change:** Add a small DRF-owned `deerflow_bridge/news_signals.py` provider/normalization/persistence module and `news_tools.py` wrappers. Expose `news_search` for NewsAPI and an independently controlled `social_search` for Reddit discussion context. Register the tools in both v3 and legacy through their existing tool owners; add one bounded topic-level NewsAPI prefetch when configured so a normal run uses the new source, while repeated/parallel identical requests share cached results. The plan specifies independent Python adaptation, not installation/execution of vendor scripts.
 
-NewsAPI defaults: enabled when configured, at most two distinct requests per run/track generation, at most 20 items per request, one page, a 10-second aggregate stage deadline and a shorter per-request timeout. Reuse the existing budget and cancellation mechanisms; do not add a second process-wide budget service. Multi-track orchestration must allocate that request allowance once across lanes. No automatic retry for 401/403/429. Bound response bytes and sanitize errors before any logging.
+NewsAPI defaults: enabled when configured, at most two distinct requests per run/track generation, at most 20 items per request, one page, a 10-second cumulative acquisition allowance (excluding model-planning/idle gaps, preserving shorter caller deadlines) and a shorter per-request timeout. Reuse the existing budget and cancellation mechanisms; do not add a second process-wide budget service. Multi-track orchestration must allocate that request allowance once across lanes. No automatic retry for 401/403/429. Bound response bytes and sanitize errors before any logging.
 
 Reddit is separately configurable and initially disabled unless selected; one bounded query per topic, one recent-result page, explicit forbidden/rate-limited/unavailable status. Preserve native post IDs, canonical links, subreddit and publication time. Access limitations do not fail unrelated research. Do not promise public API access without a compatibility probe.
 

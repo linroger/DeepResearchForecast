@@ -1,0 +1,122 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 37690,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "allowed:guarded_child": 22,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/scripts/main_offline_pytest.py": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_news_signals.py": "0692d703dcf68055a2e3424ab7db47e986438a031f1d2f738d04879a590091b0",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_oddsense_workflow.py": "5d9799ca0efa09a386bf7255fa51840a28024dfa5a036042b87f6fdbf839891c",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/app/services/simulation_manager.py": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_news_signals.py": "0692d703dcf68055a2e3424ab7db47e986438a031f1d2f738d04879a590091b0",
+    "/private/tmp/drf-oddsense-idle-budget-final-t8hxvw7r/backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e"
+  },
+  "children": {
+    "37842": {
+      "exit_code": 0,
+      "receipt": "process-37842.json"
+    },
+    "37843": {
+      "exit_code": 0,
+      "receipt": "process-37843.json"
+    },
+    "37844": {
+      "exit_code": 0,
+      "receipt": "process-37844.json"
+    },
+    "37845": {
+      "exit_code": 0,
+      "receipt": "process-37845.json"
+    },
+    "37846": {
+      "exit_code": 0,
+      "receipt": "process-37846.json"
+    },
+    "37847": {
+      "exit_code": 0,
+      "receipt": "process-37847.json"
+    },
+    "37848": {
+      "exit_code": 0,
+      "receipt": "process-37848.json"
+    },
+    "37849": {
+      "exit_code": 0,
+      "receipt": "process-37849.json"
+    },
+    "37850": {
+      "exit_code": 0,
+      "receipt": "process-37850.json"
+    },
+    "37851": {
+      "exit_code": 0,
+      "receipt": "process-37851.json"
+    },
+    "37852": {
+      "exit_code": 0,
+      "receipt": "process-37852.json"
+    },
+    "37853": {
+      "exit_code": 0,
+      "receipt": "process-37853.json"
+    },
+    "37854": {
+      "exit_code": 0,
+      "receipt": "process-37854.json"
+    },
+    "37856": {
+      "exit_code": 0,
+      "receipt": "process-37856.json"
+    },
+    "37857": {
+      "exit_code": 0,
+      "receipt": "process-37857.json"
+    },
+    "37858": {
+      "exit_code": 0,
+      "receipt": "process-37858.json"
+    },
+    "37868": {
+      "exit_code": 23,
+      "receipt": "process-37868.json"
+    },
+    "37873": {
+      "exit_code": 0,
+      "receipt": "process-37873.json"
+    },
+    "37874": {
+      "exit_code": 0,
+      "receipt": "process-37874.json"
+    },
+    "37875": {
+      "exit_code": 0,
+      "receipt": "process-37875.json"
+    },
+    "37876": {
+      "exit_code": 0,
+      "receipt": "process-37876.json"
+    },
+    "37878": {
+      "exit_code": -15,
+      "receipt": "process-37878.json"
+    }
+  },
+  "identity_preserved": true
+}

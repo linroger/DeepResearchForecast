@@ -1,0 +1,198 @@
+{
+  "observed_at": "2026-10-18T12:33:35.730258+00:00",
+  "head": "495000ea98d6bcd20daa7eff1398ed5ad2663310",
+  "branch": "codex/oddsense-integration",
+  "scope": "Committed source only. Unrelated original checkout dirty changes are deliberately absent. Historical study hashes are not replaced.",
+  "files": [
+    {
+      "path": "backend/app/api/research.py",
+      "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/config.py",
+      "sha256": "fd315a4bd981193cdeab442186df9d1baf9a5478d28e032dc6d16f8edccee588",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "sha256": "93f09d7de6781ab08b60d83adbaf887332ef4d93d60a5627346fd33175c22d39",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/app/utils/prediction_markets.py",
+      "sha256": "39fabbe003ba1d5741ca3795939da27f4fb39b9b49ea508b743ce6d61c103081",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "sha256": "ef1cace336782afc558034873c767438f97e323524c443ba4eecb4948dec824c",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/research_gateway.py",
+      "sha256": "831dc381b7eafa5fdf443cce48da805ba4f23639111e047184fd24768d2e3929",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "sha256": "42da5160e09135627214bbc67747511ded67ba59193e884e0cabd5ee823e0e8d",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "deerflow_bridge/search_tools.py",
+      "sha256": "f03651f926dafb4a5d9b80fd9abc59d7f9179631d2bbc972402bb0126cc55f3c",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/cached_fetch.py",
+      "sha256": "1e187e30f25fc816a4a74dcb629d7d752734cde789a612fc159430cae0c686fb",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/market_tools.py",
+      "sha256": "eed4d54cf31202a07c4ad88091b6f5cdb57292c0001f4b6e9f12c827ea2bc061",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/research_budget.py",
+      "sha256": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/data_sources.py",
+      "sha256": "8090d2d26fda2a65b190144b40d48daf38151ebbe1a619d1778b71705b8f635c",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/research_skills.py",
+      "sha256": "abb480e1f8ee3a661b0779b56e302770fcf180f59af526627137864e052a1530",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/config.yaml",
+      "sha256": "f7122c6feaaf03a8b344e791cb3dfabc176d044517b3d881b978f8c9a9ce7c26",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "deerflow_bridge/skills/prediction-markets/SKILL.md",
+      "sha256": "f168caad332f486b75a7cec133236f649ac32b333bfa79f56ec3c23d524a10d2",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "setup.sh",
+      "sha256": "a2a9bc506c423ed1a549c4ed5c14c2f76d9fdb9df44450bcfb5c11cf865556fb",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/utils/prediction_markets.py",
+      "sha256": "39fabbe003ba1d5741ca3795939da27f4fb39b9b49ea508b743ce6d61c103081",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "sha256": "93f09d7de6781ab08b60d83adbaf887332ef4d93d60a5627346fd33175c22d39",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "sha256": "a6be3782ce9968d5afbb5e8d772a2ae619f6eaea5ea3d1623de480fa621efd48",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/app/services/forecast_extractor.py",
+      "sha256": "07080e1866ddff300412ef94842938f6a9ec071a8a890602434f7312d25ae3af",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/app/services/report_visualizer.py",
+      "sha256": "7f1394235292656be322e4b77482b536af032596b49e288cf1245ea9f0fc2eb8",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/app/services/simulation_config_generator.py",
+      "sha256": "a48acaa3f64c01823bcfe530c68d09f0ff96febaa6ec52da416e3eeac7ac3e0a",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/services/oasis_profile_generator.py",
+      "sha256": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/config.py",
+      "sha256": "fd315a4bd981193cdeab442186df9d1baf9a5478d28e032dc6d16f8edccee588",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/api/research.py",
+      "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/app/api/report.py",
+      "sha256": "b541488608412b3dc0ad0f42945fabb49d1e396ea192e20cb793461d4ef44db6",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/scripts/run_parallel_simulation.py",
+      "sha256": "ee8bdded4e2b06abb7c12dbd96d27afbc6f7d9ef5df30c6a0ce240c5225b6310",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/scripts/resolution_monitor.py",
+      "sha256": "2d994b9f46053aeffbc46f5b4ec3b66bbeccaaa4e72d0403806bf10ffb9fa1fe",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "frontend/src/components/research/DossierViewer.vue",
+      "sha256": "d7d8ab0cbbe41595417fc17c3fac9e40e4583f49f0b210bae883a538704e4964",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "frontend/src/components/research/ForecastReport.vue",
+      "sha256": "a83dd7a55e5ab9ad3221f2fbeb1f31a61cc04c31f0c501e960022c9beb4f575e",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "frontend/src/components/research/BinaryForecastTable.vue",
+      "sha256": "e6f9787eb61d4485ca1a170d33743c7ab314af1bb29143fd6768ef83adc7d9c8",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "frontend/src/utils/binaryForecasts.js",
+      "sha256": "51971ec20945c98783ae0cbcc113b42210ff75c83179bb0bdc71965ee8a6a314",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/tests/test_prediction_markets.py",
+      "sha256": "0bf36218e151287174ee5a943033812be81114fdcfc3bb9efd791b8bfd1d46bf",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/tests/test_parallel_research_merge.py",
+      "sha256": "0c28885c686040beaeee0ffcb1922c4791b5ea4049f54d1c9d21e46fe7569a88",
+      "matches_prior_dirty_study": false
+    },
+    {
+      "path": "backend/tests/test_market_influence_boundary.py",
+      "sha256": "38f89dbf8c1dc02bf0053bdf890b12bd4b556a9e27c653ff1ed01749a10c398c",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/tests/test_report_market_crosscheck.py",
+      "sha256": "6e4c9156bf1e9849001f5c4dd8028cee289cc6614b4a9b12e756da097a59ba0c",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "backend/tests/test_report_market_evidence.py",
+      "sha256": "7dbb9a26eb06500ff6ac7abe9d83b51aeb7d3847667a7210581bc965b30ec82a",
+      "matches_prior_dirty_study": true
+    },
+    {
+      "path": "frontend/tests/binaryForecasts.test.mjs",
+      "sha256": "a54888faaee9658a88edf6c2ef3cf2c61fcd6984c847e8c9a6fc158b11c8bded",
+      "matches_prior_dirty_study": true
+    }
+  ]
+}

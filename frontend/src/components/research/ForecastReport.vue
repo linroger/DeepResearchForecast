@@ -263,6 +263,7 @@
           <!-- LOOP-017：一等公民二元预测表（forecast.binary_forecasts，与仪表盘同源同门）。
                行模型在 utils/binaryForecasts.js（纯函数）；无二元预测 → 组件整体不渲染。 -->
           <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" />
+          <SourceContextPanel v-if="meta.news_market_context" :context="meta.news_market_context" />
           <!-- VIZ-1：图表画廊（确定性生成的 PNG/SVG 图表 + 图注）。无工件时整体不渲染。 -->
           <section v-if="galleryCharts.length" class="chart-gallery">
             <div class="gallery-head">
@@ -318,7 +319,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, defineAsyncComponent } from 'vue'
 import {
   getReport, getVizManifest, getSectionsPartial,
   getReportTranslationMd, requestReportTranslation, getReportTranslationStatus,
@@ -354,6 +355,8 @@ import {
 } from '../../utils/officialData'
 import { saveTextFile } from '../../utils/saveTextFile'
 import { L } from '../../i18n'
+
+const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPanel.vue'))
 
 const props = defineProps({
   reportId: { type: String, default: '' }

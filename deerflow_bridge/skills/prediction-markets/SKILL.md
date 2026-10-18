@@ -91,3 +91,9 @@ populated from the tool's `question`, `implied_yes_prob`, `volume`, `end_date`, 
 - ❌ Presenting the snapshot as live truth without the freshness caveat.
 - ❌ Re-running market search phase after phase once `no_market_coverage` is recorded (§1 stop rule; one synthesis refresh only).
 - ❌ Retrying a transport-failing market path within the same phase instead of recording the degraded status and moving on.
+
+## 6. Source-aware contextual comparisons
+
+When `market_compare` is exposed, it supplements this Polymarket anchor workflow with source-aware research context. Retain provider and native IDs, literal outcome labels, bid/ask/last basis, contract-volume units, timestamps, resolution rules and horizon. Kalshi and community-forecast rows stay outside the Polymarket anchor registry; never pass their IDs to Gamma/CLOB or automatic settlement. Topic overlap is a discovery lead, not event equivalence or executable arbitrage.
+
+Use `news_search` for article discovery and fetch selected publisher pages through `web_fetch` before factual claims. Optional `social_search` supplies attributed opinion, not factual confirmation. Do not turn headline tone into a probability, call missing evidence neutral, or label a source outage as absence of a relevant market. Preserve explicit provider statuses and reuse the sealed contextual snapshot. These tools are available only when enabled; their absence does not change the existing permitted Polymarket paths above.

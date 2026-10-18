@@ -1,0 +1,36 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 22565,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2,
+    "blocked:external_read": 18,
+    "blocked:process:os.kill": 3
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/scripts/main_offline_pytest.py": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/tests/test_report_bilingual.py": "7077e6270e033cef236708fcb391eb310dfe2e73e4b358c4696ea0b2b56652ca",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/tests/test_oddsense_workflow.py": "d298dad0628c4e4f74eaf8eefb6091e9d991bb2792b9dadce5b2be3abf98be8f",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-oddsense-mixed-metadata-green-pw2mud3p/backend/app/services/simulation_manager.py": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

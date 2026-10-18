@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="7" time="1.022" timestamp="2026-10-18T22:44:21.104572" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_news_signals" name="test_pending_write_and_transport_share_one_absolute_deadline[0.5-ok]" time="0.743"><failure message="AssertionError: assert 'timeout' == 'ok'&#10;  &#10;  - ok&#10;  + timeout">tmp_path = PosixPath('/private/tmp/drf-os-timing-review-red-20261018-1/pytest-tmp/test_pending_write_and_transpo0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x107c3b980&gt;
+acquisition_clock = [100.8], transport_seconds = 0.5, expected = 'ok'
+
+    @pytest.mark.parametrize("transport_seconds,expected", [(.5, "ok"), (.8, "timeout")])
+    def test_pending_write_and_transport_share_one_absolute_deadline(
+        tmp_path, monkeypatch, acquisition_clock, transport_seconds, expected,
+    ):
+        monkeypatch.setenv("NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS", "1")
+        write = news._write
+        writes = []
+        def slow_pending(descriptor, value):
+            write(descriptor, value)
+            if not writes:
+                acquisition_clock[0] += .3
+            writes.append(1)
+        def acquire(_):
+            acquisition_clock[0] += transport_seconds
+            return response(article())
+        monkeypatch.setattr(news, "_write", slow_pending)
+        transport = Transport(acquire)
+        instance = client(tmp_path, transport)
+&gt;       state(instance.search_news("bounded"), expected, attempted=True)
+
+backend/tests/test_news_signals.py:506: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = {'capture_id': '326b469a0a174f3b83661fb96857e1d7:492563d2beb96e2c3455c96edf08f0764db0a6021b46e205da29d34c960b5b5c', 'items': [], 'provider': 'newsapi', 'query': 'bounded', ...}
+expected = 'ok'
+
+    def state(result, expected, *, attempted):
+        assert result["status"]["state"] in CANONICAL_STATES
+&gt;       assert result["status"]["state"] == expected
+E       AssertionError: assert 'timeout' == 'ok'
+E         
+E         - ok
+E         + timeout
+
+backend/tests/test_news_signals.py:102: AssertionError</failure></testcase><testcase classname="tests.test_news_signals" name="test_pending_write_and_transport_share_one_absolute_deadline[0.8-timeout]" time="0.007" /><testcase classname="tests.test_news_signals" name="test_legacy_positive_market_counts_without_time_marker_cannot_regain_time[root]" time="0.009"><failure message="Failed: unknown spent time">tmp_path = PosixPath('/private/tmp/drf-os-timing-review-red-20261018-1/pytest-tmp/test_legacy_positive_market_co0')
+counter = 'root'
+
+    @pytest.mark.parametrize("counter", ["root", "request_count", "network_requests"])
+    def test_legacy_positive_market_counts_without_time_marker_cannot_regain_time(tmp_path, counter):
+        instance = client(tmp_path)
+        instance.record_result("kalshi", "legacy", external_result("kalshi", "legacy"))
+        value = instance.snapshot()
+        value.pop("acquisition_seconds", None)
+        value.pop("network_started_at", None)
+        if counter == "root":
+            value["network_requests"] = {"market": 1}
+        else:
+            value["queries"][0][counter] = 1
+        value["sha256"] = digest(value)
+        (tmp_path / news.CONTEXT_FILENAME).write_text(json.dumps(value))
+        reopened = client(tmp_path)
+        replay = reopened.capture_market("kalshi", "legacy", lambda _: pytest.fail("replay"))
+        assert replay["status"]["state"] == "verified_empty"
+&gt;       state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+              "timeout", attempted=False)
+
+backend/tests/test_news_signals.py:528: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+deerflow_bridge/news_signals.py:1021: in capture_market
+    result = acquire(reserve_request)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_ = &lt;function ContextClient.capture_market.&lt;locals&gt;.reserve_request at 0x108bb1760&gt;
+
+&gt;   state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+          "timeout", attempted=False)
+E   Failed: unknown spent time
+
+backend/tests/test_news_signals.py:528: Failed</failure></testcase><testcase classname="tests.test_news_signals" name="test_legacy_positive_market_counts_without_time_marker_cannot_regain_time[request_count]" time="0.008"><failure message="Failed: unknown spent time">tmp_path = PosixPath('/private/tmp/drf-os-timing-review-red-20261018-1/pytest-tmp/test_legacy_positive_market_co1')
+counter = 'request_count'
+
+    @pytest.mark.parametrize("counter", ["root", "request_count", "network_requests"])
+    def test_legacy_positive_market_counts_without_time_marker_cannot_regain_time(tmp_path, counter):
+        instance = client(tmp_path)
+        instance.record_result("kalshi", "legacy", external_result("kalshi", "legacy"))
+        value = instance.snapshot()
+        value.pop("acquisition_seconds", None)
+        value.pop("network_started_at", None)
+        if counter == "root":
+            value["network_requests"] = {"market": 1}
+        else:
+            value["queries"][0][counter] = 1
+        value["sha256"] = digest(value)
+        (tmp_path / news.CONTEXT_FILENAME).write_text(json.dumps(value))
+        reopened = client(tmp_path)
+        replay = reopened.capture_market("kalshi", "legacy", lambda _: pytest.fail("replay"))
+        assert replay["status"]["state"] == "verified_empty"
+&gt;       state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+              "timeout", attempted=False)
+
+backend/tests/test_news_signals.py:528: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+deerflow_bridge/news_signals.py:1021: in capture_market
+    result = acquire(reserve_request)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_ = &lt;function ContextClient.capture_market.&lt;locals&gt;.reserve_request at 0x108c940e0&gt;
+
+&gt;   state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+          "timeout", attempted=False)
+E   Failed: unknown spent time
+
+backend/tests/test_news_signals.py:528: Failed</failure></testcase><testcase classname="tests.test_news_signals" name="test_legacy_positive_market_counts_without_time_marker_cannot_regain_time[network_requests]" time="0.008"><failure message="Failed: unknown spent time">tmp_path = PosixPath('/private/tmp/drf-os-timing-review-red-20261018-1/pytest-tmp/test_legacy_positive_market_co2')
+counter = 'network_requests'
+
+    @pytest.mark.parametrize("counter", ["root", "request_count", "network_requests"])
+    def test_legacy_positive_market_counts_without_time_marker_cannot_regain_time(tmp_path, counter):
+        instance = client(tmp_path)
+        instance.record_result("kalshi", "legacy", external_result("kalshi", "legacy"))
+        value = instance.snapshot()
+        value.pop("acquisition_seconds", None)
+        value.pop("network_started_at", None)
+        if counter == "root":
+            value["network_requests"] = {"market": 1}
+        else:
+            value["queries"][0][counter] = 1
+        value["sha256"] = digest(value)
+        (tmp_path / news.CONTEXT_FILENAME).write_text(json.dumps(value))
+        reopened = client(tmp_path)
+        replay = reopened.capture_market("kalshi", "legacy", lambda _: pytest.fail("replay"))
+        assert replay["status"]["state"] == "verified_empty"
+&gt;       state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+              "timeout", attempted=False)
+
+backend/tests/test_news_signals.py:528: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+deerflow_bridge/news_signals.py:1021: in capture_market
+    result = acquire(reserve_request)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_ = &lt;function ContextClient.capture_market.&lt;locals&gt;.reserve_request at 0x108c960c0&gt;
+
+&gt;   state(reopened.capture_market("polymarket", "fresh", lambda _: pytest.fail("unknown spent time")),
+          "timeout", attempted=False)
+E   Failed: unknown spent time
+
+backend/tests/test_news_signals.py:528: Failed</failure></testcase><testcase classname="tests.test_news_signals" name="test_untouched_legacy_generation_still_has_acquisition_allowance" time="0.007" /><testcase classname="tests.test_news_signals" name="test_sealed_legacy_counts_replay_preserves_exact_bytes" time="0.008" /></testsuite></testsuites>

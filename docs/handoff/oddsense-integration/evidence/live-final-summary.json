@@ -1,0 +1,46 @@
+{
+  "checked_at": "2026-10-18T13:58:25.836669+00:00",
+  "providers": {
+    "kalshi": {
+      "attempted": true,
+      "reason": "bounded_catalog_scan",
+      "state": "partial"
+    },
+    "metaculus": {
+      "attempted": false,
+      "reason": "authenticated_community_forecast_access_not_established",
+      "state": "unsupported"
+    },
+    "newsapi": {
+      "attempted": true,
+      "returned": 19,
+      "state": "ok",
+      "unknown_publication_dates": 0
+    },
+    "polymarket": {
+      "attempted": true,
+      "state": "ok"
+    },
+    "reddit": {
+      "attempted": true,
+      "reason": "http_403",
+      "state": "forbidden"
+    }
+  },
+  "network_requests": {
+    "market": 3,
+    "newsapi": 1,
+    "reddit": 1
+  },
+  "items_by_provider": {
+    "newsapi": 19,
+    "polymarket": 8
+  },
+  "items_by_kind": {
+    "news_snippet": 19,
+    "market_quote": 8
+  },
+  "capture_sha256": "e5b8c8a712f2bfd2ba08def28e0e6f16b8a0758ed8a608342e359509114f9f83",
+  "full_live_capture": "/private/tmp/drf-oddsense-live-final-20261018-1/news_market_context.json",
+  "note": "Only counts/statuses/digests retained in Git; live article/market payloads remain outside the repository. Credential not retained."
+}

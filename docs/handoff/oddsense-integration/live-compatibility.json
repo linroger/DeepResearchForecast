@@ -1,0 +1,34 @@
+{
+  "newsapi": {
+    "schema": "oddsense-live-compatibility/v1",
+    "checked_at": "2026-10-18T12:57:47.862870+00:00",
+    "model_calls": 0,
+    "saved_runs_accessed": false,
+    "results": [
+      {
+        "provider": "newsapi",
+        "status": {
+          "attempted": true,
+          "returned": 19,
+          "state": "ok",
+          "unknown_publication_dates": 0
+        },
+        "items": 19
+      }
+    ],
+    "snapshot_sha256": "3b9630714641dbc75bb368a3a0fac3b63938c165ef4a664c37aca0b2353ca05d",
+    "source_sha256": {
+      "news_signals.py": "214b975346551161ffabbd49ac0205a73cf433b19ea9f21046aacb78f16fe0a3",
+      "market_intelligence.py": "6fb7dbb8622460e9be39dbedeb37bd647f8fb2b04e48ffe1b311695d65e2733a"
+    },
+    "scope": "Live source compatibility only; not paid-model, forecast-quality or deployment proof."
+  },
+  "capture_path": "/private/tmp/drf-oddsense-live-news-20261018-1/news_market_context.json",
+  "capture_items": 19,
+  "credential_retained": false,
+  "notes": [
+    "The single user-supplied credential was used transiently from this chat only; no key was written to code, argv, configuration or artifacts.",
+    "One real NewsAPI client request succeeded and retained 19 articles. This is source compatibility evidence; controlled engine/report acceptance is separate.",
+    "Provider code may change after this probe; exact tested hashes are retained in the receipt rather than silently reassigned."
+  ]
+}

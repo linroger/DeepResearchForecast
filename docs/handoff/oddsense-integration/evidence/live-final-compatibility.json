@@ -1,0 +1,41 @@
+{
+  "schema": "oddsense-live-compatibility/v1",
+  "checked_at": "2026-10-18T13:58:25.836669+00:00",
+  "model_calls": 0,
+  "saved_runs_accessed": false,
+  "results": [
+    {
+      "provider": "newsapi",
+      "status": {
+        "attempted": true,
+        "returned": 19,
+        "state": "ok",
+        "unknown_publication_dates": 0
+      },
+      "items": 19
+    },
+    {
+      "provider": "reddit",
+      "status": {
+        "attempted": true,
+        "reason": "http_403",
+        "state": "forbidden"
+      },
+      "items": 0
+    },
+    {
+      "provider": "market_compare",
+      "status": {
+        "state": "partial",
+        "attempted": true
+      },
+      "items": 8
+    }
+  ],
+  "snapshot_sha256": "e5b8c8a712f2bfd2ba08def28e0e6f16b8a0758ed8a608342e359509114f9f83",
+  "source_sha256": {
+    "news_signals.py": "dc0dca47e0dc1c2d07878eb1a851c0c37a9b0c968a80b009e6fcbc97002f287b",
+    "market_intelligence.py": "e5f5525f0c34d651417808c5fd16453df00e0061cb3e02cf6ca4f31c2c796cae"
+  },
+  "scope": "Live source compatibility only; not paid-model, forecast-quality or deployment proof."
+}

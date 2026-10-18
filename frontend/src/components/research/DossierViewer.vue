@@ -84,6 +84,7 @@
           <div class="empty-title">{{ L('暂无研究报告', 'No research report yet') }}</div>
           <div class="empty-sub">{{ L('research_report.md 尚未生成或为空。', 'research_report.md has not been generated or is empty.') }}</div>
         </div>
+        <SourceContextPanel v-if="dossier && dossier.news_market_context" :context="dossier.news_market_context" />
       </div>
     </section>
 
@@ -342,7 +343,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, defineAsyncComponent } from 'vue'
 import { renderMarkdown } from '../../utils/markdown'
 import { L, locale } from '../../i18n'
 import {
@@ -352,6 +353,8 @@ import {
 import { detectTranslationTarget } from '../../utils/researchTranslation'
 import { datasetManifestRows, distinctSeriesNames } from '../../utils/officialData'
 import { saveTextFile } from '../../utils/saveTextFile'
+
+const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPanel.vue'))
 
 const props = defineProps({
   dossier: {
