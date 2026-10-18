@@ -118,11 +118,24 @@ cannot be told from another refusal after the fact; attempt rows now also keep t
 status message (`errorMessage`, e.g. "…failed with status 429…"). Files:
 [live-2026-10-18/live-run-2-receipts.json](live-2026-10-18/live-run-2-receipts.json).
 
+## Live run 3 and the refusal's cause (2026-10-18 20:45–20:47 +08)
+
+Run 3 (owner: "Try again"; e7eff90, rows now keep the status): both requests refused in 1.3 s with
+**HTTP 400** ([live-run-3-receipts.json](live-2026-10-18/live-run-3-receipts.json)). The exact request,
+resent once with the plain SDK to read GLM's error body ([diagnose_400.py](live-2026-10-18/diagnose_400.py),
+[diagnose-400.json](live-2026-10-18/diagnose-400.json)), answered **code 1210**, "该模型始终思考，不支持关闭思考；
+请使用 low、high 或 max" (the model always thinks; disabling thinking is not supported; use low, high or max).
+Run 1 sent the same `thinking: {"type": "disabled"}` at 20:15 and was accepted, so glm-5.3 changed between
+20:15 and 20:37. Changes: the modeler stops after one deterministic 4xx refusal (`provider_request_rejected`)
+instead of resending it, and `profiles` adds `after_effort_low` (the *after* profile with
+`reasoningEffort: "low"` instead of `thinking`), which passes admission without a request. Neither run 2 nor
+run 3 reached the model, so the revised prompt is still untested live.
+
 ## What this does not show
 
 - The scripted model is not GLM. Live run 1 showed glm-5.3 did not follow the earlier prompt's implicit
-  shapes; run 2 was refused by the provider before generation, so whether glm-5.3 compiles under the
-  revised prompt is still open.
+  shapes; runs 2 and 3 were refused before generation (GLM 1210, see above), so whether glm-5.3 compiles
+  under the revised prompt is still open.
 - Actor decisions ran only with scripted waiting actors for one round. Real decision quality, multi-round
   behaviour and the engine's known limits (429/1302, unresolved v4 verdicts, reboot liveness; ../handoff.md
   §9) are outside this replay.

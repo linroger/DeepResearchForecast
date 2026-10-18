@@ -14,6 +14,7 @@ from collections import Counter
 from pathlib import Path
 
 SRC, DOSSIER, PROFILES, WORK = (Path(arg).resolve() for arg in sys.argv[1:5])
+PROFILE = sys.argv[5] if len(sys.argv) > 5 else "after"
 DEPLOY = "/Users/rogerlin/Downloads/DeepResearchForecast/"
 ENV_FILE = DEPLOY + ".env"
 ALLOWED_HOST = "open.bigmodel.cn"
@@ -63,11 +64,11 @@ def main():
     generation = "research_" + __import__("hashlib").sha256(json.dumps(
         {"report": report, "actors": actors}, ensure_ascii=False, sort_keys=True,
         separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
-    profile = json.loads(PROFILES.read_text(encoding="utf-8"))["after"]
+    profile = json.loads(PROFILES.read_text(encoding="utf-8"))[PROFILE]
     sim_id = "sim_live_" + DOSSIER.name.split("_", 1)[1]
     root = WORK / "sims"
     root.mkdir()
-    out = {"pipeline": DOSSIER.name, "simulationId": sim_id, "profile": "after", "startedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    out = {"pipeline": DOSSIER.name, "simulationId": sim_id, "profile": PROFILE, "startedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
     started = time.monotonic()
     try:
         prepared = WorldSimulationService.prepare_model(

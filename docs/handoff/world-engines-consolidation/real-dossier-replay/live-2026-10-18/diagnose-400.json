@@ -1,0 +1,3 @@
+{"at": "2026-10-18T20:47+08:00", "request": "the exact run-3 modeler request (revised prompt e7eff90, after profile: thinking disabled, json_object, max_tokens 32768), resent once with the plain SDK",
+ "status": 400, "providerCode": "1210", "providerMessage": "该模型始终思考，不支持关闭思考；请使用 low、high 或 max。", "seconds": 1.1,
+ "note": "Run 1 at 20:15 sent the same thinking: disabled parameter and was accepted; glm-5.3 refuses it from at least 20:37."}
