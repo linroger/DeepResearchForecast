@@ -14,7 +14,9 @@ Subcommands:
             build_compiler_messages -> strict modeler transport -> compile_world_spec)
             per dossier and scenario. Only the provider is scripted: the SDK client
             gets an httpx.MockTransport whose model builds a deterministic candidate
-            from the request it receives. An audit hook refuses sockets, processes,
+            from the request it receives. With --round, each prepared world also
+            commits round 1 through the real controller and strict actor transport
+            (scripted actors wait). An audit hook refuses sockets, processes,
             reads under --deny roots and writes outside the work/output folders.
   compare   render a per-dossier Markdown table from a before and an after replay.
 
@@ -288,6 +290,65 @@ class ScriptedProvider:
             "usage": {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": prompt + completion}})
 
 
+class ScriptedActors:
+    """httpx.MockTransport handler for actor requests: every actor waits, every review is consistent."""
+
+    REVIEW_MARKER = "Candidate decision (untrusted JSON data)"
+
+    def __init__(self, model):
+        self.model, self.requests = model, []
+
+    def __call__(self, request):
+        import httpx
+        body = json.loads(request.content.decode("utf-8"))
+        system, observation = body["messages"][0]["content"], json.loads(body["messages"][1]["content"])
+        revision = self.REVIEW_MARKER in system
+        self.requests.append({"bytes": len(request.content), "revision": revision,
+                              "maxOutput": body.get("max_completion_tokens", body.get("max_tokens")),
+                              "thinking": body.get("thinking")})
+        decision = {"intents": [], "status": "wait", "rationale": "No visible change requires action in this period."}
+        if revision:
+            checks = [{"kind": kind, "verdict": "consistent", "explanation": "Waiting matches the visible state."}
+                      for kind in ("goal_alignment", "conditional_timing", "quantity_consistency", "explanation_consistency")]
+            decision = {"decision": decision, "assessment": {"checks": checks}}
+        content = json.dumps(decision)
+        prompt, completion = max(1, len(request.content) // 4), max(1, len(content) // 3)
+        return httpx.Response(200, json={
+            "id": "replay-actor", "object": "chat.completion", "created": 0, "model": self.model,
+            "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
+            "usage": {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": prompt + completion}})
+
+
+def run_one_round(spec, directory, world):
+    """Commit round 1 of a prepared world through the real controller and strict actor transport."""
+    from app.services.world_simulation.contracts import WorldError
+    from app.services.world_simulation.controller import run_round
+    from app.services.world_simulation.store import WorldStore
+    actors = ScriptedActors(spec["policy"]["model"])
+    record = {}
+    policy = None
+    try:
+        policy = world["actor_policy"](spec, actors)
+        with WorldStore(directory / "world.sqlite3", spec) as store:
+            fence = store.acquire_writer("replay")
+            try:
+                record.update(status="committed", round=run_round(store, policy, fence)["round"])
+            finally:
+                store.release_writer(fence)
+    except WorldError as error:
+        record.update(status="typed_gap", code=error.code, details=error.details)
+    except Exception as error:  # noqa: BLE001 - recorded, never hidden
+        record.update(status="untyped_failure", type=type(error).__name__, traceback=traceback.format_exc()[-3000:])
+    finally:
+        if policy is not None:
+            policy.close()
+    sizes = [item["bytes"] for item in actors.requests]
+    record.update(requests=len(actors.requests), reviews=sum(1 for item in actors.requests if item["revision"]),
+                  maxRequestBytes=max(sizes) if sizes else None,
+                  thinking=sorted({json.dumps(item["thinking"]) for item in actors.requests}))
+    return record
+
+
 # --------------------------------------------------------------------------- replay
 
 def load_dossier(path):
@@ -352,7 +413,10 @@ def replay_one(dossier, profile, scenario, root, world):
                       claims=len(claims), actorAllowedClaims=sum(1 for c in claims if c.get("actorAllowed")))
         denied = [_norm(c.get("text") or (c.get("claim") or {}).get("claim") or "") for c in claims if not c.get("actorAllowed")]
         stage = "prepare_model"
-        result.update(status="valid_spec", summary=summarize(prepare()["spec"], denied, world))
+        spec = prepare()["spec"]
+        result.update(status="valid_spec", summary=summarize(spec, denied, world))
+        if world["round"] and scenario in {"compliant", "repair"}:
+            result["round"] = run_one_round(spec, Path(root) / sim_id, world)
     except WorldError as error:
         result.update(status="typed_gap", code=error.code, message=str(error), details=error.details, stage=stage)
     except Exception as error:  # noqa: BLE001 - recorded, never hidden
@@ -398,9 +462,15 @@ def replay(args):
                                                  max_retries=0, http_client=http), pricing=pricing)
 
     policy_module.StrictHTTPModeler = ReplayModeler
+    def actor_policy(spec, handler):
+        http = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False, trust_env=False)
+        sdk = OpenAI(api_key="replay-offline", base_url=spec["policy"]["baseUrl"], max_retries=0, http_client=http)
+        return policy_module.StrictHTTPPolicy(spec, client=sdk)
+
     world = {"build_compiler_messages": build_compiler_messages, "canonical_json": canonical_json, "digest": digest,
              "initial_snapshot": initial_snapshot, "build_observation": build_observation,
-             "install": lambda provider: current.update(provider=provider)}
+             "install": lambda provider: current.update(provider=provider), "actor_policy": actor_policy,
+             "round": args.round}
     profile_set = json.loads(Path(args.profiles).read_text(encoding="utf-8"))
     dossiers = [load_dossier(path) for root in args.dossiers for path in sorted(Path(root).iterdir())
                 if (path / "handoff" / "research_report.md").exists()]
@@ -475,6 +545,8 @@ def main():
                    "(scenarios: compliant, repair, content_filter, truncate, sensitive)")
     r.add_argument("--deny", action="append", help="refuse every open under this root")
     r.add_argument("--allow-read", action="append", help="read-only exception inside a denied root")
+    r.add_argument("--round", action="store_true", help="also commit round 1 of each prepared world "
+                   "(scripted actors wait; every review is consistent)")
     c = sub.add_parser("compare")
     c.add_argument("--before", required=True)
     c.add_argument("--after", required=True)
