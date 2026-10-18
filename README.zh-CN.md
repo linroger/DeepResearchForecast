@@ -24,7 +24,7 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 **可选引擎（`world-v1`）。** `simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
 
-准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策槽位最多计入两次有结果记录的请求；随写入进程一起丢失（崩溃、重启）或因提供方容量被拒绝的请求仍计入预算敞口，但不占用槽位次数，恢复时可以重新发出。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。自动建模需要单独的请求上限 `policy.modeler`（`maxInputTokens`、`maxOutputTokens`，以及不超过 1800 秒的 `timeoutSeconds`）；缺少时建模请求沿用参与者的上限，真实研究档案会在发出任何请求前以 `policy_context_limit` 停止。`policy.thinking: "disabled"` 会在每次请求中发送提供方的关闭推理开关（否则 GLM 的推理 token 会占用输出上限），不能与 `reasoningEffort` 同时设置。
+准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策槽位最多计入两次有结果记录的请求；随写入进程一起丢失（崩溃、重启）或因提供方容量被拒绝的请求仍计入预算敞口，但不占用槽位次数，恢复时可以重新发出。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。自动建模需要单独的请求上限 `policy.modeler`（`maxInputTokens`、`maxOutputTokens`，以及不超过 1800 秒的 `timeoutSeconds`）；缺少时建模请求沿用参与者的上限，真实研究档案会在发出任何请求前以 `policy_context_limit` 停止。`policy.thinking: "disabled"` 会在每次请求中发送提供方的关闭推理开关，不能与 `reasoningEffort` 同时设置；glm-5.3 自 2026-10-18 起拒绝该参数（HTTP 400，代码 1210：该模型始终思考），因此 GLM 请固定 `reasoningEffort`（`low`、`high` 或 `max`）。
 
 模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
 
@@ -32,7 +32,7 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 最近一次完成的完整行为研究仍为 18 对必需比较中通过 16 对，因此尚未切换默认引擎。后续诊断保留了结构错误和事实性解释错误；保留更多复核数据不代表其内容正确。[当前发布记录](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md)与 [v4 契约](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md)区分源码验证与真实模型验收。所有既有结果均保留。评估授权现为总计 40 美元，包含原始 25 美元授权下已发生的全部消耗，并未重置预算。
 
-**已知限制（2026-10-18 审查；当天已部分修复）。** 自动建模现已能用真实的 v3 研究档案编译世界：编译器自行从 `actors.json` 字段派生可引用的论断，报告摘录改为按原文引用、由服务端计算偏移量与哈希，含全角标点的中日韩名称可被接受，一次编译错误会带着编译器反馈在两次请求的额度内修复。内容过滤拒绝（智谱 1301）或输出被截断时，建模以带类型的错误码停止，不再重发同一请求。以上已在最新 12 份档案上用脚本化模型离线验证；尚未在真实档案上进行实时建模运行。建模与世界运行现在都能承受提供方返回 429（先等待，再以可恢复状态停止，不占用请求次数）；世界运行还能承受复核结论未能解决、运行中途重启、崩溃后恢复、到期时已无法执行的边界效果，以及参与者行动占满每轮事件上限。请把 world-v1 当作研究预览。审查结论、修复与后续计划见[引擎合并记录](docs/handoff/world-engines-consolidation/handoff.md)。
+**已知限制（2026-10-18 审查；当天已部分修复）。** 自动建模现已能用真实的 v3 研究档案编译世界：编译器自行从 `actors.json` 字段派生可引用的论断，报告摘录改为按原文引用、由服务端计算偏移量与哈希，含全角标点的中日韩名称可被接受，一次编译错误会带着编译器反馈在两次请求的额度内修复。内容过滤拒绝（智谱 1301）或输出被截断时，建模以带类型的错误码停止，不再重发同一请求。以上已在最新 12 份档案上用脚本化模型离线验证。首次在真实档案上用 glm-5.3 实时建模以带类型的错误码停止（其提案未遵循规格的记录结构）；提示词现已写明这些结构，第二次实时运行尚未进行。建模与世界运行现在都能承受提供方返回 429（先等待，再以可恢复状态停止，不占用请求次数）；世界运行还能承受复核结论未能解决、运行中途重启、崩溃后恢复、到期时已无法执行的边界效果，以及参与者行动占满每轮事件上限。请把 world-v1 当作研究预览。审查结论、修复与后续计划见[引擎合并记录](docs/handoff/world-engines-consolidation/handoff.md)。
 
 ```mermaid
 flowchart TB

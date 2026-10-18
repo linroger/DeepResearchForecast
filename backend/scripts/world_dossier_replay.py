@@ -7,8 +7,9 @@ Subcommands:
             prompt, engine) for the N newest completed pipelines into a new folder,
             so a replay never reads a live deployment while it writes.
   profiles  derive the replayed policy profiles from a pinned live policy file:
-            ``before`` (as pinned), ``after`` (+ thinking disabled, + policy.modeler)
-            and ``after_unpinned`` (+ thinking, no modeler envelope).
+            ``before`` (as pinned), ``after`` (+ thinking disabled, + policy.modeler),
+            ``after_unpinned`` (+ thinking, no modeler envelope) and ``after_effort_low``
+            (+ policy.modeler, reasoningEffort low: what glm-5.3 accepts since 2026-10-18).
   replay    run the real preparation path of one source tree
             (WorldSimulationService.prepare_model -> generate_candidate ->
             build_compiler_messages -> strict modeler transport -> compile_world_spec)
@@ -146,8 +147,13 @@ def profiles(args):
                         "maxOutputTokens": live["maxOutputTokens"]}}
     unpinned = copy.deepcopy(after)
     unpinned["policy"].pop("modeler")
-    Path(args.out).write_text(json.dumps({"before": before, "after": after, "after_unpinned": unpinned}, indent=1),
-                              encoding="utf-8")
+    # glm-5.3 has refused thinking: disabled since 2026-10-18 (HTTP 400, code 1210: the model
+    # always thinks; use low, high or max), so live GLM runs pin a low reasoning effort instead.
+    effort = copy.deepcopy(after)
+    effort["policy"].pop("thinking")
+    effort["policy"]["reasoningEffort"] = "low"
+    Path(args.out).write_text(json.dumps({"before": before, "after": after, "after_unpinned": unpinned,
+                                          "after_effort_low": effort}, indent=1), encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- scripted model

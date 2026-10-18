@@ -275,3 +275,34 @@ def test_repair_drops_the_proposal_when_only_the_shorter_request_fits_the_budget
     repair = transport.requests[1][0]["content"]
     assert "Compiler feedback on your previous proposal" in repair and "Rejected previous proposal" not in repair
     assert ledger(tmp_path)["attempts"][1]["reservation"]["tokens"] == 1000
+
+
+def test_transport_failures_keep_only_their_closed_status_message(tmp_path):
+    # Live run 2 (2026-10-18) lost both requests to HTTP errors whose status the ledger did not keep.
+    status = PolicyFailure("policy_transport_failed", "Actor HTTP dispatch failed with status 429; exposure is unknown")
+    opaque = PolicyFailure("policy_transport_failed", "PRIVATE_PROVIDER_BODY")
+    with pytest.raises(WorldError) as error:
+        run(tmp_path, Scripted(status, opaque))
+    assert error.value.code == "modeling_attempts_exhausted"
+    first, second = ledger(tmp_path)["attempts"]
+    assert first["errorMessage"] == "Actor HTTP dispatch failed with status 429; exposure is unknown"
+    assert "errorMessage" not in second and first["status"] == second["status"] == "unknown"
+
+
+@pytest.mark.parametrize("status,stops", [(400, True), (401, True), (422, True), (429, False), (408, False), (500, False)])
+def test_a_deterministic_provider_refusal_is_not_resent(tmp_path, status, stops):
+    # Live runs 2-3: GLM refused the request with HTTP 400 (code 1210) and the identical retry was refused again.
+    refused = PolicyFailure("policy_transport_failed", f"Actor HTTP dispatch failed with status {status}; exposure is unknown")
+    transport = Scripted(refused, proposal())
+    if stops:
+        with pytest.raises(WorldError) as error:
+            run(tmp_path, transport)
+        assert error.value.code == "provider_request_rejected"
+        assert error.value.details == {"attempt": 1, "status": status} and len(transport.requests) == 1
+        resumed = Scripted(proposal())
+        with pytest.raises(WorldError):
+            run(tmp_path, resumed)
+        assert resumed.requests == []
+    else:
+        run(tmp_path, transport)
+        assert len(transport.requests) == 2 and ledger(tmp_path)["attempts"][1]["kind"] == "retry"

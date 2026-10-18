@@ -1,6 +1,6 @@
 {
- "src": "/private/tmp/claude-501/-Users-rogerlin-Downloads-DeepResearchForecast--claude-worktrees-zen-feistel-8b9b86/425fd604-5cae-45e4-b38d-ccd0b2967d0a/scratchpad/runs/full2-20261018-195404/rsrc",
- "startedAt": "2026-10-18T19:55:12+0800",
+ "src": "/private/tmp/claude-501/-Users-rogerlin-Downloads-DeepResearchForecast--claude-worktrees-zen-feistel-8b9b86/425fd604-5cae-45e4-b38d-ccd0b2967d0a/scratchpad/runs/full3-20261018-202256/rsrc",
+ "startedAt": "2026-10-18T20:23:06+0800",
  "profiles": {
   "before": {
    "policy": {
@@ -123,7 +123,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "valid_spec",
@@ -147,7 +147,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "0be4a5c2e7cc6abfde35b287216ae108bb89568adb03fe6aed395f8bf5c7f291"
+     "specSha256": "0e6af3ab8999b4a34cc9899014084cac24a883bbaac11d7da9860f99d31290eb"
     },
     "round": {
      "status": "committed",
@@ -166,25 +166,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.114902000000",
-       "tokens": 49477
+       "costUsd": "0.115936000000",
+       "tokens": 49994
       }
      }
     ],
     "requests": [
      {
-      "bytes": 181961,
+      "bytes": 184031,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "16b7585c2126dd15"
      }
     ],
-    "seconds": 1.118,
+    "seconds": 1.434,
     "engine": "v3",
     "actorCount": 15
    },
@@ -196,7 +196,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "valid_spec",
@@ -217,7 +217,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "dea9d302e49701605ba4ace1a76867c7ac8fc2b28bdce071e77657a5c15b9ebf"
+     "specSha256": "9b728fd79a5db77229e9ce64e67961e5c319d2525300849442ed7ff0fde530cc"
     },
     "round": {
      "status": "committed",
@@ -236,25 +236,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.127638000000",
-       "tokens": 56585
+       "costUsd": "0.128672000000",
+       "tokens": 57102
       }
      }
     ],
     "requests": [
      {
-      "bytes": 211873,
+      "bytes": 213943,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7e9638fb89236740"
      }
     ],
-    "seconds": 0.707,
+    "seconds": 0.909,
     "engine": "v3",
     "actorCount": 18
    },
@@ -266,7 +266,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "valid_spec",
@@ -290,7 +290,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "52d4b970940d3bb7a01fb4cf12f258d7c18aa169b384bbc4de367cbc37fe5543"
+     "specSha256": "693fae23c59a48225f2afc4a8a60469f39f32c29ed9ecf8773c6c632229a0586"
     },
     "round": {
      "status": "committed",
@@ -309,25 +309,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.105928000000",
-       "tokens": 46636
+       "costUsd": "0.106964000000",
+       "tokens": 47154
       }
      }
     ],
     "requests": [
      {
-      "bytes": 173891,
+      "bytes": 175961,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "ab916e3530e64b5c"
      }
     ],
-    "seconds": 0.606,
+    "seconds": 0.894,
     "engine": "v3",
     "actorCount": 12
    },
@@ -339,7 +339,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "valid_spec",
@@ -363,7 +363,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "0b2e63b7b9bb1ae9bc42428c0d0e9d5e6bf9f60bb89a0fa9606a3c0bd9f6bd99"
+     "specSha256": "81e774c3c50028d90c123c936312dafb5961fcfc4da33fb1be437cc32e85a1fd"
     },
     "round": {
      "status": "committed",
@@ -382,25 +382,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.102794000000",
-       "tokens": 43939
+       "costUsd": "0.103828000000",
+       "tokens": 44456
       }
      }
     ],
     "requests": [
      {
-      "bytes": 160840,
+      "bytes": 162910,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "07b2bbbd80ed4a25"
      }
     ],
-    "seconds": 0.872,
+    "seconds": 1.532,
     "engine": "v3",
     "actorCount": 15
    },
@@ -412,7 +412,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "valid_spec",
@@ -436,7 +436,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "0774d6d4205548341786c9c8b6d7fb1235aef0060d49b51f45efa8c44c5369bd"
+     "specSha256": "ea62dca19aee0c3468680e7734b279977e1c572cfad040b3bcce56aadbcd74fa"
     },
     "round": {
      "status": "committed",
@@ -455,25 +455,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.107722000000",
-       "tokens": 47127
+       "costUsd": "0.108756000000",
+       "tokens": 47644
       }
      }
     ],
     "requests": [
      {
-      "bytes": 175041,
+      "bytes": 177111,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "a96eebd960cd98f4"
      }
     ],
-    "seconds": 0.645,
+    "seconds": 1.189,
     "engine": "v3",
     "actorCount": 12
    },
@@ -485,7 +485,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "valid_spec",
@@ -509,7 +509,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "a6afeaddf40a23803d1605b2964d7d61a4320bc20daa7618c60eaa4c28d2b253"
+     "specSha256": "1a33585ffc03e18d3bccb70f6c479e7ac2df0a52d33674b2f15827f035aad9bd"
     },
     "round": {
      "status": "committed",
@@ -528,25 +528,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.126328000000",
-       "tokens": 53698
+       "costUsd": "0.127362000000",
+       "tokens": 54215
       }
      }
     ],
     "requests": [
      {
-      "bytes": 195861,
+      "bytes": 197931,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "d62d5772b83008a0"
      }
     ],
-    "seconds": 1.634,
+    "seconds": 2.597,
     "engine": "v3",
     "actorCount": 20
    },
@@ -558,7 +558,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "valid_spec",
@@ -582,7 +582,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "2bca4f67a8f04e0987a4c5c00ddf146dcfe6e4f06bceea8f47c45c7a1b04666c"
+     "specSha256": "864afd9f885e30a1efaa1b2c08ae5c15091edf5ac320a7199a5ae819cdab00a1"
     },
     "round": {
      "status": "committed",
@@ -601,25 +601,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.139710000000",
-       "tokens": 59565
+       "costUsd": "0.140744000000",
+       "tokens": 60082
       }
      }
     ],
     "requests": [
      {
-      "bytes": 217681,
+      "bytes": 219751,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "95dfe0f3aabb29d3"
      }
     ],
-    "seconds": 1.646,
+    "seconds": 2.296,
     "engine": "v3",
     "actorCount": 19
    },
@@ -631,7 +631,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "valid_spec",
@@ -655,7 +655,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "1aa5a23771e4c2428c6e7d72c3605fb7c8e4d78408017f634717f1015fca4e5a"
+     "specSha256": "53a4b78ac7bbe71d781124d845ab2db53bcb8e45617bb1657418eab4f98044b8"
     },
     "round": {
      "status": "committed",
@@ -674,25 +674,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.095712000000",
-       "tokens": 42854
+       "costUsd": "0.096748000000",
+       "tokens": 43372
       }
      }
     ],
     "requests": [
      {
-      "bytes": 161415,
+      "bytes": 163485,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "43f24bd4d5bb68bf"
      }
     ],
-    "seconds": 0.383,
+    "seconds": 0.75,
     "engine": "v3",
     "actorCount": 9
    },
@@ -704,7 +704,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "valid_spec",
@@ -728,7 +728,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "aa4dce999cb93a2d2a222292e393b55e80f9d839c819170527c08f2f6de50cbf"
+     "specSha256": "30144318f381adc4ffeceb7496b857d148d06e7cc52b93c038f3f3805d0ef277"
     },
     "round": {
      "status": "committed",
@@ -747,25 +747,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.158122000000",
-       "tokens": 68617
+       "costUsd": "0.159158000000",
+       "tokens": 69135
       }
      }
     ],
     "requests": [
      {
-      "bytes": 253583,
+      "bytes": 255653,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6e94d49f04816614"
      }
     ],
-    "seconds": 1.619,
+    "seconds": 5.523,
     "engine": "v3",
     "actorCount": 19
    },
@@ -777,7 +777,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "valid_spec",
@@ -801,7 +801,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "9c30d61e815e4be26d2b9f8b5d3121ca314ac878185d021460c80e02c64011c4"
+     "specSha256": "324f1f4e5ed3ccb2793b07073cf6943c094b4c7c20954d8ab90eb52aef59f2e5"
     },
     "round": {
      "status": "committed",
@@ -820,25 +820,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.092104000000",
-       "tokens": 38748
+       "costUsd": "0.093138000000",
+       "tokens": 39265
       }
      }
     ],
     "requests": [
      {
-      "bytes": 140384,
+      "bytes": 142454,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6f188565e532db7d"
      }
     ],
-    "seconds": 0.894,
+    "seconds": 1.358,
     "engine": "v3",
     "actorCount": 15
    },
@@ -850,7 +850,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "valid_spec",
@@ -874,7 +874,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "71d5f376d78638bb88bb51d71b6b439bd7e0d0333b01bd6b4ee5642500a65daf"
+     "specSha256": "cc3b97a744491a6fda8e8b7ad4dc99eab2da27b2854b30274976a39549c17f8f"
     },
     "round": {
      "status": "committed",
@@ -893,25 +893,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.107768000000",
-       "tokens": 47064
+       "costUsd": "0.108802000000",
+       "tokens": 47581
       }
      }
     ],
     "requests": [
      {
-      "bytes": 174616,
+      "bytes": 176686,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "34889fdd4b16243e"
      }
     ],
-    "seconds": 0.601,
+    "seconds": 0.732,
     "engine": "v3",
     "actorCount": 11
    },
@@ -923,7 +923,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "valid_spec",
@@ -947,7 +947,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "dfecfb842b466a8631f34d99c004c738987a58c483e9c0758e762e4c567cc678"
+     "specSha256": "bbd1999e04c414c5b7c0d4065fdc6964a5db1205c5a74fc60090989994c2904f"
     },
     "round": {
      "status": "committed",
@@ -966,25 +966,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.115332000000",
-       "tokens": 49786
+       "costUsd": "0.116368000000",
+       "tokens": 50304
       }
      }
     ],
     "requests": [
      {
-      "bytes": 183386,
+      "bytes": 185456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "71475974e0c81982"
      }
     ],
-    "seconds": 1.093,
+    "seconds": 1.017,
     "engine": "v3",
     "actorCount": 15
    },
@@ -996,7 +996,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "valid_spec",
@@ -1014,7 +1014,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "df9f23d55236f250fa6f000989758405f1cdfe00977eec9703e1ebbd66958a14"
+     "specSha256": "9f3bae6010f3184fadf07ddd4126c3d6424c0a3138a3a0e784a5da1ad652eefa"
     },
     "round": {
      "status": "committed",
@@ -1033,25 +1033,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.061914000000",
-       "tokens": 25183
+       "costUsd": "0.062950000000",
+       "tokens": 25701
       }
      }
     ],
     "requests": [
      {
-      "bytes": 89186,
+      "bytes": 91256,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "cdeb90d351dc5123"
      }
     ],
-    "seconds": 0.869,
+    "seconds": 1.562,
     "engine": "v3",
     "actorCount": 18
    },
@@ -1063,7 +1063,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "valid_spec",
@@ -1087,7 +1087,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "34822d0827360f938c8571e43c7e6d6d67cb7d4a262b8d6c3060d8b71d76f589"
+     "specSha256": "3190494de218381c2118851312b64b015a2f475e32f6115d3cf324b8fa6fb32c"
     },
     "round": {
      "status": "committed",
@@ -1106,25 +1106,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.104136000000",
-       "tokens": 42288
+       "costUsd": "0.105170000000",
+       "tokens": 42805
       }
      }
     ],
     "requests": [
      {
-      "bytes": 149592,
+      "bytes": 151662,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7a8313da14f9b3ae"
      }
     ],
-    "seconds": 1.688,
+    "seconds": 1.612,
     "engine": "v3",
     "actorCount": 14
    },
@@ -1136,7 +1136,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "valid_spec",
@@ -1154,7 +1154,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "64ee58c2956918a5da88e3176275e6e54994f144362c534163a6c6f584019bb9"
+     "specSha256": "a38d7628d13058d1638ff27244789f2d145e0a996703bd69c2c39cfd5d4f069b"
     },
     "round": {
      "status": "committed",
@@ -1173,25 +1173,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.089084000000",
-       "tokens": 38108
+       "costUsd": "0.090118000000",
+       "tokens": 38625
       }
      }
     ],
     "requests": [
      {
-      "bytes": 139564,
+      "bytes": 141634,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "2b792645646a8848"
      }
     ],
-    "seconds": 1.134,
+    "seconds": 0.795,
     "engine": "v3",
     "actorCount": 33
    },
@@ -1203,7 +1203,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "valid_spec",
@@ -1221,7 +1221,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "d80973fcba75f55b162e0a35cd0f6d8cc3a77b4b2d632bbc6e558682f655679c"
+     "specSha256": "552ca6c5b44ed5d8257f5236899a0899ebe70a336da8dcf000c0a1b3c1cfcc76"
     },
     "round": {
      "status": "committed",
@@ -1240,25 +1240,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.057396000000",
-       "tokens": 22282
+       "costUsd": "0.058430000000",
+       "tokens": 22799
       }
      }
     ],
     "requests": [
      {
-      "bytes": 76296,
+      "bytes": 78366,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "e3f5c396838a4b5e"
      }
     ],
-    "seconds": 1.123,
+    "seconds": 0.7,
     "engine": "v3",
     "actorCount": 21
    }
@@ -1272,7 +1272,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "valid_spec",
@@ -1296,7 +1296,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "cf595620b893e45204a860790f1364fa80ec11d45437901004c475febdb1823d"
+     "specSha256": "c13df1984662f7dbdd46e52cba91d6d209b56c0cc8d266353cb3277230b4257b"
     },
     "round": {
      "status": "committed",
@@ -1315,8 +1315,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.114920000000",
-       "tokens": 49480
+       "costUsd": "0.115954000000",
+       "tokens": 49997
       }
      },
      {
@@ -1325,36 +1325,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.121456000000",
-       "tokens": 52754
+       "costUsd": "0.122490000000",
+       "tokens": 53271
       }
      }
     ],
     "requests": [
      {
-      "bytes": 181961,
+      "bytes": 184031,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "16b7585c2126dd15"
      },
      {
-      "bytes": 195068,
+      "bytes": 197138,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "1c9b71ede6bd4a09",
+      "systemSha256": "efe1dae9eeefc986",
       "userSha256": "16b7585c2126dd15"
      }
     ],
-    "seconds": 1.201,
+    "seconds": 0.953,
     "engine": "v3",
     "actorCount": 15
    },
@@ -1366,7 +1366,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "valid_spec",
@@ -1387,7 +1387,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "93e58d4f5162d61be5534631eeca079d0463528712dcf90908421ed81c7d7c25"
+     "specSha256": "a3e3e96db286397cb5f97039cae5518ab164b003c4e535e8869cb098c6e8c8af"
     },
     "round": {
      "status": "committed",
@@ -1406,8 +1406,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.127662000000",
-       "tokens": 56589
+       "costUsd": "0.128696000000",
+       "tokens": 57106
       }
      },
      {
@@ -1416,36 +1416,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.133602000000",
-       "tokens": 59567
+       "costUsd": "0.134636000000",
+       "tokens": 60084
       }
      }
     ],
     "requests": [
      {
-      "bytes": 211873,
+      "bytes": 213943,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7e9638fb89236740"
      },
      {
-      "bytes": 223800,
+      "bytes": 225870,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "ae5c874bbaf8fef4",
+      "systemSha256": "b2cafe5e6fcc3d1b",
       "userSha256": "7e9638fb89236740"
      }
     ],
-    "seconds": 0.894,
+    "seconds": 0.735,
     "engine": "v3",
     "actorCount": 18
    },
@@ -1457,7 +1457,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "valid_spec",
@@ -1481,7 +1481,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "42b5057c85dfa3bf8bf210345e3cb10c8f2f0a612c8d1268bc24cf8dfa2c8eab"
+     "specSha256": "0ce82c755309d23abc0ae6fcf047a661c690355060b1aec7a11620d2e5ab148f"
     },
     "round": {
      "status": "committed",
@@ -1500,8 +1500,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.105946000000",
-       "tokens": 46639
+       "costUsd": "0.106982000000",
+       "tokens": 47157
       }
      },
      {
@@ -1510,36 +1510,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.111176000000",
-       "tokens": 49260
+       "costUsd": "0.112212000000",
+       "tokens": 49778
       }
      }
     ],
     "requests": [
      {
-      "bytes": 173891,
+      "bytes": 175961,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "ab916e3530e64b5c"
      },
      {
-      "bytes": 184386,
+      "bytes": 186456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "c54ffc3a2ab423b8",
+      "systemSha256": "0d354a5ab9a0de36",
       "userSha256": "ab916e3530e64b5c"
      }
     ],
-    "seconds": 0.717,
+    "seconds": 0.625,
     "engine": "v3",
     "actorCount": 12
    },
@@ -1551,7 +1551,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "valid_spec",
@@ -1575,7 +1575,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "24889df5ee327f46e01ef9a2bf73188234e9756dd8754be2dafd7a167a0f9680"
+     "specSha256": "80c062e204b3e199e18d8909d832340cae9e4a458f50af183416ae33a305e169"
     },
     "round": {
      "status": "committed",
@@ -1594,8 +1594,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.102812000000",
-       "tokens": 43942
+       "costUsd": "0.103846000000",
+       "tokens": 44459
       }
      },
      {
@@ -1604,36 +1604,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.108932000000",
-       "tokens": 47008
+       "costUsd": "0.109966000000",
+       "tokens": 47525
       }
      }
     ],
     "requests": [
      {
-      "bytes": 160840,
+      "bytes": 162910,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "07b2bbbd80ed4a25"
      },
      {
-      "bytes": 173117,
+      "bytes": 175187,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "a889d8bbcb692ba7",
+      "systemSha256": "f3646bb832986f77",
       "userSha256": "07b2bbbd80ed4a25"
      }
     ],
-    "seconds": 0.964,
+    "seconds": 0.931,
     "engine": "v3",
     "actorCount": 15
    },
@@ -1645,7 +1645,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "valid_spec",
@@ -1669,7 +1669,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "5e82759a26ca0edc23dbcadb15facca3e26d3a54816141b2f22cac83802463a9"
+     "specSha256": "b23bfe7ce6b40910dc3d9e1f5b8fdebef5df557536b1d79e991acd856455ee5c"
     },
     "round": {
      "status": "committed",
@@ -1688,8 +1688,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.107740000000",
-       "tokens": 47130
+       "costUsd": "0.108774000000",
+       "tokens": 47647
       }
      },
      {
@@ -1698,36 +1698,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.113304000000",
-       "tokens": 49918
+       "costUsd": "0.114340000000",
+       "tokens": 50436
       }
      }
     ],
     "requests": [
      {
-      "bytes": 175041,
+      "bytes": 177111,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "a96eebd960cd98f4"
      },
      {
-      "bytes": 186206,
+      "bytes": 188276,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "4f8b89358242b098",
+      "systemSha256": "45be2444f69b333d",
       "userSha256": "a96eebd960cd98f4"
      }
     ],
-    "seconds": 0.892,
+    "seconds": 0.643,
     "engine": "v3",
     "actorCount": 12
    },
@@ -1739,7 +1739,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "valid_spec",
@@ -1763,7 +1763,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "8fd89b30272fb14df12537a0800601cf9d9a788e516e985ee46bfb220fd5a4e5"
+     "specSha256": "5b00c91d346829ce59b6cd90c88280844d1c358e6a8efd84e0971bb7429d4c73"
     },
     "round": {
      "status": "committed",
@@ -1782,8 +1782,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.126346000000",
-       "tokens": 53701
+       "costUsd": "0.127380000000",
+       "tokens": 54218
       }
      },
      {
@@ -1792,36 +1792,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.134054000000",
-       "tokens": 57561
+       "costUsd": "0.135088000000",
+       "tokens": 58078
       }
      }
     ],
     "requests": [
      {
-      "bytes": 195861,
+      "bytes": 197931,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "d62d5772b83008a0"
      },
      {
-      "bytes": 211313,
+      "bytes": 213383,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "4cd88f225e22f947",
+      "systemSha256": "26e0f76e5d24b855",
       "userSha256": "d62d5772b83008a0"
      }
     ],
-    "seconds": 2.184,
+    "seconds": 1.709,
     "engine": "v3",
     "actorCount": 20
    },
@@ -1833,7 +1833,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "valid_spec",
@@ -1857,7 +1857,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "bd0e5370f2c2f0ebb7b0df55531305f561c03be87d684b6aec0064e26d010fa6"
+     "specSha256": "dc67591d917ec09423d622c02fa92e8e8133c207432e38cf6343648f0c336a64"
     },
     "round": {
      "status": "committed",
@@ -1876,8 +1876,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.139728000000",
-       "tokens": 59568
+       "costUsd": "0.140762000000",
+       "tokens": 60085
       }
      },
      {
@@ -1886,36 +1886,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.148080000000",
-       "tokens": 63750
+       "costUsd": "0.149116000000",
+       "tokens": 64268
       }
      }
     ],
     "requests": [
      {
-      "bytes": 217681,
+      "bytes": 219751,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "95dfe0f3aabb29d3"
      },
      {
-      "bytes": 234422,
+      "bytes": 236492,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "67f7678398d79c07",
+      "systemSha256": "6700bf1c837cc652",
       "userSha256": "95dfe0f3aabb29d3"
      }
     ],
-    "seconds": 2.363,
+    "seconds": 1.717,
     "engine": "v3",
     "actorCount": 19
    },
@@ -1927,7 +1927,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "valid_spec",
@@ -1951,7 +1951,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "0b54c2be93768e03f35a8f6f3bbca014c30aacd58726cfae3a8e958c01baf220"
+     "specSha256": "7d5ae6dda9d81cba0ddfb172722f64c27cd09e835bddc154dd77ef33a02c33db"
     },
     "round": {
      "status": "committed",
@@ -1970,8 +1970,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.095730000000",
-       "tokens": 42857
+       "costUsd": "0.096766000000",
+       "tokens": 43375
       }
      },
      {
@@ -1980,36 +1980,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.099918000000",
-       "tokens": 44957
+       "costUsd": "0.100952000000",
+       "tokens": 45474
       }
      }
     ],
     "requests": [
      {
-      "bytes": 161415,
+      "bytes": 163485,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "43f24bd4d5bb68bf"
      },
      {
-      "bytes": 169825,
+      "bytes": 171895,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "86e9bfc2231942ac",
+      "systemSha256": "cec9380f0c2112eb",
       "userSha256": "43f24bd4d5bb68bf"
      }
     ],
-    "seconds": 0.499,
+    "seconds": 0.425,
     "engine": "v3",
     "actorCount": 9
    },
@@ -2021,7 +2021,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "valid_spec",
@@ -2045,7 +2045,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "59ebd826ef214450a3f728c5374387043d9ac3ab4f4c55f32d54f35e12868ce1"
+     "specSha256": "d905fe0d8182176bc02ef3ebd9713e4da1d9767e7049b02d49a252a72d6dad35"
     },
     "round": {
      "status": "committed",
@@ -2064,8 +2064,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.158140000000",
-       "tokens": 68620
+       "costUsd": "0.159176000000",
+       "tokens": 69138
       }
      },
      {
@@ -2074,36 +2074,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.166634000000",
-       "tokens": 72873
+       "costUsd": "0.167670000000",
+       "tokens": 73391
       }
      }
     ],
     "requests": [
      {
-      "bytes": 253583,
+      "bytes": 255653,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6e94d49f04816614"
      },
      {
-      "bytes": 270606,
+      "bytes": 272676,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "dac8fcb5915e2fbb",
+      "systemSha256": "7fb652bc2c18b7f7",
       "userSha256": "6e94d49f04816614"
      }
     ],
-    "seconds": 2.108,
+    "seconds": 1.654,
     "engine": "v3",
     "actorCount": 19
    },
@@ -2115,7 +2115,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "valid_spec",
@@ -2139,7 +2139,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "76bcb0e8dfb97fc7ce45ac26146eac0689a4c9c2e546e060f8ddfe2c7cc718e0"
+     "specSha256": "d26360422187d937646049035c18dbe0438094f64be7166eee67c943787c6a3c"
     },
     "round": {
      "status": "committed",
@@ -2158,8 +2158,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.092128000000",
-       "tokens": 38752
+       "costUsd": "0.093162000000",
+       "tokens": 39269
       }
      },
      {
@@ -2168,36 +2168,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.098128000000",
-       "tokens": 41760
+       "costUsd": "0.099162000000",
+       "tokens": 42277
       }
      }
     ],
     "requests": [
      {
-      "bytes": 140384,
+      "bytes": 142454,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6f188565e532db7d"
      },
      {
-      "bytes": 152432,
+      "bytes": 154502,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "3cf5aa9de86b2ced",
+      "systemSha256": "a5f0267069d22d4b",
       "userSha256": "6f188565e532db7d"
      }
     ],
-    "seconds": 1.275,
+    "seconds": 0.93,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2209,7 +2209,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "valid_spec",
@@ -2233,7 +2233,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "481b01615d85f40870e5f12467103443a85c1044a17b2a14ff74f65cad84c63b"
+     "specSha256": "066e4ba108333e3f29678c7786719d33a1275b2bacf61218d64a1a8b34a7c650"
     },
     "round": {
      "status": "committed",
@@ -2252,8 +2252,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.107786000000",
-       "tokens": 47067
+       "costUsd": "0.108820000000",
+       "tokens": 47584
       }
      },
      {
@@ -2262,36 +2262,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.113414000000",
-       "tokens": 49887
+       "costUsd": "0.114450000000",
+       "tokens": 50405
       }
      }
     ],
     "requests": [
      {
-      "bytes": 174616,
+      "bytes": 176686,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "34889fdd4b16243e"
      },
      {
-      "bytes": 185911,
+      "bytes": 187981,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "73bc95f05365ef94",
+      "systemSha256": "6bb4f77f9b6f209d",
       "userSha256": "34889fdd4b16243e"
      }
     ],
-    "seconds": 0.96,
+    "seconds": 0.606,
     "engine": "v3",
     "actorCount": 11
    },
@@ -2303,7 +2303,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "valid_spec",
@@ -2327,7 +2327,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "5f727ee1b9197de3ead920fa6d7cd2afdcf5b05ebffb3652ac3237dd40badc28"
+     "specSha256": "0776e07e4cf6f1460e81f7ca578aa2f4c150f8de99fc440c3670955500a8b923"
     },
     "round": {
      "status": "committed",
@@ -2346,8 +2346,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.115350000000",
-       "tokens": 49789
+       "costUsd": "0.116386000000",
+       "tokens": 50307
       }
      },
      {
@@ -2356,36 +2356,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.121818000000",
-       "tokens": 53029
+       "costUsd": "0.122852000000",
+       "tokens": 53546
       }
      }
     ],
     "requests": [
      {
-      "bytes": 183386,
+      "bytes": 185456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "71475974e0c81982"
      },
      {
-      "bytes": 196357,
+      "bytes": 198427,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "218838004f8b50a5",
+      "systemSha256": "1273bc93b85cfd64",
       "userSha256": "71475974e0c81982"
      }
     ],
-    "seconds": 1.432,
+    "seconds": 0.964,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2397,7 +2397,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "valid_spec",
@@ -2415,7 +2415,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "4792888f7e734a41bef67356083521eb8472c21f4a7d9bd65e389fe91958a3a0"
+     "specSha256": "50d5716faa93df73dbc0a52744a5812cb6e4c54c5b193f679bc14560adae72ab"
     },
     "round": {
      "status": "committed",
@@ -2434,25 +2434,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.061914000000",
-       "tokens": 25183
+       "costUsd": "0.062950000000",
+       "tokens": 25701
       }
      }
     ],
     "requests": [
      {
-      "bytes": 89186,
+      "bytes": 91256,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "cdeb90d351dc5123"
      }
     ],
-    "seconds": 0.737,
+    "seconds": 0.591,
     "engine": "v3",
     "actorCount": 18
    },
@@ -2464,7 +2464,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "valid_spec",
@@ -2488,7 +2488,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "235a2ac78c7f732c610313111ac2cb7b9982068aa159cf57f4123f92f559f2c2"
+     "specSha256": "574738a62b81dcbe3b24c99bd6cb47a592a398578a36bb832e0b1ea0c4b824c0"
     },
     "round": {
      "status": "committed",
@@ -2507,8 +2507,8 @@
       "status": "rejected",
       "errorCode": "unsupported_actor_derivation",
       "usage": {
-       "costUsd": "0.104154000000",
-       "tokens": 42291
+       "costUsd": "0.105188000000",
+       "tokens": 42808
       }
      },
      {
@@ -2517,36 +2517,36 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.112124000000",
-       "tokens": 46282
+       "costUsd": "0.113160000000",
+       "tokens": 46800
       }
      }
     ],
     "requests": [
      {
-      "bytes": 149592,
+      "bytes": 151662,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7a8313da14f9b3ae"
      },
      {
-      "bytes": 165571,
+      "bytes": 167641,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": true,
-      "systemSha256": "52c98ade39f137ba",
+      "systemSha256": "ccc29dc476fd264c",
       "userSha256": "7a8313da14f9b3ae"
      }
     ],
-    "seconds": 1.415,
+    "seconds": 1.157,
     "engine": "v3",
     "actorCount": 14
    },
@@ -2558,7 +2558,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "valid_spec",
@@ -2576,7 +2576,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "9e651d719e5f0ff8b7ea1f3aeb5f9a8766c943b5c16dae883c41238cddf2e85b"
+     "specSha256": "02997b391eb5a74a6b51ba56fc02c9926857fc11b7bc82ff5c69d612e86a6b37"
     },
     "round": {
      "status": "committed",
@@ -2595,25 +2595,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.089084000000",
-       "tokens": 38108
+       "costUsd": "0.090118000000",
+       "tokens": 38625
       }
      }
     ],
     "requests": [
      {
-      "bytes": 139564,
+      "bytes": 141634,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "2b792645646a8848"
      }
     ],
-    "seconds": 0.959,
+    "seconds": 0.729,
     "engine": "v3",
     "actorCount": 33
    },
@@ -2625,7 +2625,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "valid_spec",
@@ -2643,7 +2643,7 @@
       }
      ],
      "deniedTextInObservations": 0,
-     "specSha256": "45535488eb9eab0e7a3b825835f4e7d91894e960c3efabef30f22f5dae5eb535"
+     "specSha256": "7371afe6ef1f8986a7c0ec75129e23d92559fff2cd8016f5b9861e728ff896e8"
     },
     "round": {
      "status": "committed",
@@ -2662,25 +2662,25 @@
       "status": "succeeded",
       "errorCode": null,
       "usage": {
-       "costUsd": "0.057396000000",
-       "tokens": 22282
+       "costUsd": "0.058430000000",
+       "tokens": 22799
       }
      }
     ],
     "requests": [
      {
-      "bytes": 76296,
+      "bytes": 78366,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "e3f5c396838a4b5e"
      }
     ],
-    "seconds": 0.928,
+    "seconds": 0.731,
     "engine": "v3",
     "actorCount": 21
    }
@@ -2694,7 +2694,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "typed_gap",
@@ -2703,7 +2703,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.055,
+    "seconds": 0.036,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2715,7 +2715,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "typed_gap",
@@ -2724,7 +2724,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.033,
+    "seconds": 0.02,
     "engine": "v3",
     "actorCount": 18
    },
@@ -2736,7 +2736,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "typed_gap",
@@ -2745,7 +2745,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.05,
+    "seconds": 0.032,
     "engine": "v3",
     "actorCount": 12
    },
@@ -2757,7 +2757,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "typed_gap",
@@ -2766,7 +2766,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.052,
+    "seconds": 0.032,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2778,7 +2778,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -2787,7 +2787,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.052,
+    "seconds": 0.032,
     "engine": "v3",
     "actorCount": 12
    },
@@ -2799,7 +2799,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "typed_gap",
@@ -2808,7 +2808,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.066,
+    "seconds": 0.043,
     "engine": "v3",
     "actorCount": 20
    },
@@ -2820,7 +2820,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "typed_gap",
@@ -2829,7 +2829,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.057,
+    "seconds": 0.049,
     "engine": "v3",
     "actorCount": 19
    },
@@ -2841,7 +2841,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "typed_gap",
@@ -2850,7 +2850,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.027,
+    "seconds": 0.024,
     "engine": "v3",
     "actorCount": 9
    },
@@ -2862,7 +2862,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "typed_gap",
@@ -2871,7 +2871,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.063,
+    "seconds": 0.057,
     "engine": "v3",
     "actorCount": 19
    },
@@ -2883,7 +2883,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "typed_gap",
@@ -2892,7 +2892,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.037,
+    "seconds": 0.031,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2904,7 +2904,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -2913,7 +2913,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.037,
+    "seconds": 0.032,
     "engine": "v3",
     "actorCount": 11
    },
@@ -2925,7 +2925,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "typed_gap",
@@ -2934,7 +2934,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.042,
+    "seconds": 0.035,
     "engine": "v3",
     "actorCount": 15
    },
@@ -2946,7 +2946,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "typed_gap",
@@ -2955,7 +2955,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.011,
+    "seconds": 0.009,
     "engine": "v3",
     "actorCount": 18
    },
@@ -2967,7 +2967,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "typed_gap",
@@ -2976,7 +2976,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.04,
+    "seconds": 0.032,
     "engine": "v3",
     "actorCount": 14
    },
@@ -2988,7 +2988,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "typed_gap",
@@ -2997,7 +2997,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.019,
+    "seconds": 0.015,
     "engine": "v3",
     "actorCount": 33
    },
@@ -3009,7 +3009,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "typed_gap",
@@ -3018,7 +3018,7 @@
     "details": {},
     "stage": "prepare_model",
     "requests": [],
-    "seconds": 0.011,
+    "seconds": 0.009,
     "engine": "v3",
     "actorCount": 21
    }
@@ -3032,7 +3032,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "typed_gap",
@@ -3058,18 +3058,18 @@
     },
     "requests": [
      {
-      "bytes": 181961,
+      "bytes": 184031,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "16b7585c2126dd15"
      }
     ],
-    "seconds": 0.072,
+    "seconds": 0.058,
     "engine": "v3",
     "actorCount": 15
    },
@@ -3081,7 +3081,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "typed_gap",
@@ -3107,18 +3107,18 @@
     },
     "requests": [
      {
-      "bytes": 211873,
+      "bytes": 213943,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7e9638fb89236740"
      }
     ],
-    "seconds": 0.044,
+    "seconds": 0.035,
     "engine": "v3",
     "actorCount": 18
    },
@@ -3130,7 +3130,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "typed_gap",
@@ -3156,18 +3156,18 @@
     },
     "requests": [
      {
-      "bytes": 173891,
+      "bytes": 175961,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "ab916e3530e64b5c"
      }
     ],
-    "seconds": 0.059,
+    "seconds": 0.054,
     "engine": "v3",
     "actorCount": 12
    },
@@ -3179,7 +3179,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "typed_gap",
@@ -3205,18 +3205,18 @@
     },
     "requests": [
      {
-      "bytes": 160840,
+      "bytes": 162910,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "07b2bbbd80ed4a25"
      }
     ],
-    "seconds": 0.057,
+    "seconds": 0.053,
     "engine": "v3",
     "actorCount": 15
    },
@@ -3228,7 +3228,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -3254,18 +3254,18 @@
     },
     "requests": [
      {
-      "bytes": 175041,
+      "bytes": 177111,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "a96eebd960cd98f4"
      }
     ],
-    "seconds": 0.057,
+    "seconds": 0.052,
     "engine": "v3",
     "actorCount": 12
    },
@@ -3277,7 +3277,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "typed_gap",
@@ -3303,18 +3303,18 @@
     },
     "requests": [
      {
-      "bytes": 195861,
+      "bytes": 197931,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "d62d5772b83008a0"
      }
     ],
-    "seconds": 0.076,
+    "seconds": 0.07,
     "engine": "v3",
     "actorCount": 20
    },
@@ -3326,7 +3326,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "typed_gap",
@@ -3352,18 +3352,18 @@
     },
     "requests": [
      {
-      "bytes": 217681,
+      "bytes": 219751,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "95dfe0f3aabb29d3"
      }
     ],
-    "seconds": 0.086,
+    "seconds": 0.078,
     "engine": "v3",
     "actorCount": 19
    },
@@ -3375,7 +3375,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "typed_gap",
@@ -3401,18 +3401,18 @@
     },
     "requests": [
      {
-      "bytes": 161415,
+      "bytes": 163485,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "43f24bd4d5bb68bf"
      }
     ],
-    "seconds": 0.048,
+    "seconds": 0.04,
     "engine": "v3",
     "actorCount": 9
    },
@@ -3424,7 +3424,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "typed_gap",
@@ -3450,18 +3450,18 @@
     },
     "requests": [
      {
-      "bytes": 253583,
+      "bytes": 255653,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6e94d49f04816614"
      }
     ],
-    "seconds": 0.101,
+    "seconds": 0.089,
     "engine": "v3",
     "actorCount": 19
    },
@@ -3473,7 +3473,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "typed_gap",
@@ -3499,18 +3499,18 @@
     },
     "requests": [
      {
-      "bytes": 140384,
+      "bytes": 142454,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6f188565e532db7d"
      }
     ],
-    "seconds": 0.057,
+    "seconds": 0.049,
     "engine": "v3",
     "actorCount": 15
    },
@@ -3522,7 +3522,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -3548,18 +3548,18 @@
     },
     "requests": [
      {
-      "bytes": 174616,
+      "bytes": 176686,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "34889fdd4b16243e"
      }
     ],
-    "seconds": 0.059,
+    "seconds": 0.049,
     "engine": "v3",
     "actorCount": 11
    },
@@ -3571,7 +3571,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "typed_gap",
@@ -3597,18 +3597,18 @@
     },
     "requests": [
      {
-      "bytes": 183386,
+      "bytes": 185456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "71475974e0c81982"
      }
     ],
-    "seconds": 0.07,
+    "seconds": 0.057,
     "engine": "v3",
     "actorCount": 15
    },
@@ -3620,7 +3620,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "typed_gap",
@@ -3646,18 +3646,18 @@
     },
     "requests": [
      {
-      "bytes": 89186,
+      "bytes": 91256,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "cdeb90d351dc5123"
      }
     ],
-    "seconds": 0.026,
+    "seconds": 0.018,
     "engine": "v3",
     "actorCount": 18
    },
@@ -3669,7 +3669,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "typed_gap",
@@ -3695,18 +3695,18 @@
     },
     "requests": [
      {
-      "bytes": 149592,
+      "bytes": 151662,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7a8313da14f9b3ae"
      }
     ],
-    "seconds": 0.083,
+    "seconds": 0.052,
     "engine": "v3",
     "actorCount": 14
    },
@@ -3718,7 +3718,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "typed_gap",
@@ -3744,18 +3744,18 @@
     },
     "requests": [
      {
-      "bytes": 139564,
+      "bytes": 141634,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "2b792645646a8848"
      }
     ],
-    "seconds": 0.042,
+    "seconds": 0.026,
     "engine": "v3",
     "actorCount": 33
    },
@@ -3767,7 +3767,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "typed_gap",
@@ -3793,18 +3793,18 @@
     },
     "requests": [
      {
-      "bytes": 76296,
+      "bytes": 78366,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "e3f5c396838a4b5e"
      }
     ],
-    "seconds": 0.027,
+    "seconds": 0.018,
     "engine": "v3",
     "actorCount": 21
    }
@@ -3818,7 +3818,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "typed_gap",
@@ -3835,8 +3835,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.114902000000",
-       "tokens": 49477
+       "costUsd": "0.115936000000",
+       "tokens": 49994
       }
      }
     ],
@@ -3847,18 +3847,18 @@
     },
     "requests": [
      {
-      "bytes": 181961,
+      "bytes": 184031,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "16b7585c2126dd15"
      }
     ],
-    "seconds": 0.109,
+    "seconds": 0.059,
     "engine": "v3",
     "actorCount": 15
    },
@@ -3870,7 +3870,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "typed_gap",
@@ -3887,8 +3887,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.127638000000",
-       "tokens": 56585
+       "costUsd": "0.128672000000",
+       "tokens": 57102
       }
      }
     ],
@@ -3899,18 +3899,18 @@
     },
     "requests": [
      {
-      "bytes": 211873,
+      "bytes": 213943,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7e9638fb89236740"
      }
     ],
-    "seconds": 0.061,
+    "seconds": 0.036,
     "engine": "v3",
     "actorCount": 18
    },
@@ -3922,7 +3922,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "typed_gap",
@@ -3939,8 +3939,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.105928000000",
-       "tokens": 46636
+       "costUsd": "0.106964000000",
+       "tokens": 47154
       }
      }
     ],
@@ -3951,18 +3951,18 @@
     },
     "requests": [
      {
-      "bytes": 173891,
+      "bytes": 175961,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "ab916e3530e64b5c"
      }
     ],
-    "seconds": 0.09,
+    "seconds": 0.055,
     "engine": "v3",
     "actorCount": 12
    },
@@ -3974,7 +3974,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "typed_gap",
@@ -3991,8 +3991,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.102794000000",
-       "tokens": 43939
+       "costUsd": "0.103828000000",
+       "tokens": 44456
       }
      }
     ],
@@ -4003,18 +4003,18 @@
     },
     "requests": [
      {
-      "bytes": 160840,
+      "bytes": 162910,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "07b2bbbd80ed4a25"
      }
     ],
-    "seconds": 0.099,
+    "seconds": 0.059,
     "engine": "v3",
     "actorCount": 15
    },
@@ -4026,7 +4026,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -4043,8 +4043,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.107722000000",
-       "tokens": 47127
+       "costUsd": "0.108756000000",
+       "tokens": 47644
       }
      }
     ],
@@ -4055,18 +4055,18 @@
     },
     "requests": [
      {
-      "bytes": 175041,
+      "bytes": 177111,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "a96eebd960cd98f4"
      }
     ],
-    "seconds": 0.09,
+    "seconds": 0.074,
     "engine": "v3",
     "actorCount": 12
    },
@@ -4078,7 +4078,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "typed_gap",
@@ -4095,8 +4095,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.126328000000",
-       "tokens": 53698
+       "costUsd": "0.127362000000",
+       "tokens": 54215
       }
      }
     ],
@@ -4107,18 +4107,18 @@
     },
     "requests": [
      {
-      "bytes": 195861,
+      "bytes": 197931,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "d62d5772b83008a0"
      }
     ],
-    "seconds": 0.111,
+    "seconds": 0.412,
     "engine": "v3",
     "actorCount": 20
    },
@@ -4130,7 +4130,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "typed_gap",
@@ -4147,8 +4147,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.139710000000",
-       "tokens": 59565
+       "costUsd": "0.140744000000",
+       "tokens": 60082
       }
      }
     ],
@@ -4159,18 +4159,18 @@
     },
     "requests": [
      {
-      "bytes": 217681,
+      "bytes": 219751,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "95dfe0f3aabb29d3"
      }
     ],
-    "seconds": 0.099,
+    "seconds": 0.217,
     "engine": "v3",
     "actorCount": 19
    },
@@ -4182,7 +4182,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "typed_gap",
@@ -4199,8 +4199,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.095712000000",
-       "tokens": 42854
+       "costUsd": "0.096748000000",
+       "tokens": 43372
       }
      }
     ],
@@ -4211,18 +4211,18 @@
     },
     "requests": [
      {
-      "bytes": 161415,
+      "bytes": 163485,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "43f24bd4d5bb68bf"
      }
     ],
-    "seconds": 0.05,
+    "seconds": 0.128,
     "engine": "v3",
     "actorCount": 9
    },
@@ -4234,7 +4234,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "typed_gap",
@@ -4251,8 +4251,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.158122000000",
-       "tokens": 68617
+       "costUsd": "0.159158000000",
+       "tokens": 69135
       }
      }
     ],
@@ -4263,18 +4263,18 @@
     },
     "requests": [
      {
-      "bytes": 253583,
+      "bytes": 255653,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6e94d49f04816614"
      }
     ],
-    "seconds": 0.12,
+    "seconds": 0.193,
     "engine": "v3",
     "actorCount": 19
    },
@@ -4286,7 +4286,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "typed_gap",
@@ -4303,8 +4303,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.092104000000",
-       "tokens": 38748
+       "costUsd": "0.093138000000",
+       "tokens": 39265
       }
      }
     ],
@@ -4315,18 +4315,18 @@
     },
     "requests": [
      {
-      "bytes": 140384,
+      "bytes": 142454,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6f188565e532db7d"
      }
     ],
-    "seconds": 0.061,
+    "seconds": 0.092,
     "engine": "v3",
     "actorCount": 15
    },
@@ -4338,7 +4338,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -4355,8 +4355,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.107768000000",
-       "tokens": 47064
+       "costUsd": "0.108802000000",
+       "tokens": 47581
       }
      }
     ],
@@ -4367,18 +4367,18 @@
     },
     "requests": [
      {
-      "bytes": 174616,
+      "bytes": 176686,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "34889fdd4b16243e"
      }
     ],
-    "seconds": 0.056,
+    "seconds": 0.097,
     "engine": "v3",
     "actorCount": 11
    },
@@ -4390,7 +4390,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "typed_gap",
@@ -4407,8 +4407,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.115332000000",
-       "tokens": 49786
+       "costUsd": "0.116368000000",
+       "tokens": 50304
       }
      }
     ],
@@ -4419,18 +4419,18 @@
     },
     "requests": [
      {
-      "bytes": 183386,
+      "bytes": 185456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "71475974e0c81982"
      }
     ],
-    "seconds": 0.071,
+    "seconds": 0.107,
     "engine": "v3",
     "actorCount": 15
    },
@@ -4442,7 +4442,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "typed_gap",
@@ -4459,8 +4459,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.061914000000",
-       "tokens": 25183
+       "costUsd": "0.062950000000",
+       "tokens": 25701
       }
      }
     ],
@@ -4471,18 +4471,18 @@
     },
     "requests": [
      {
-      "bytes": 89186,
+      "bytes": 91256,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "cdeb90d351dc5123"
      }
     ],
-    "seconds": 0.024,
+    "seconds": 0.034,
     "engine": "v3",
     "actorCount": 18
    },
@@ -4494,7 +4494,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "typed_gap",
@@ -4511,8 +4511,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.104136000000",
-       "tokens": 42288
+       "costUsd": "0.105170000000",
+       "tokens": 42805
       }
      }
     ],
@@ -4523,18 +4523,18 @@
     },
     "requests": [
      {
-      "bytes": 149592,
+      "bytes": 151662,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7a8313da14f9b3ae"
      }
     ],
-    "seconds": 0.083,
+    "seconds": 0.238,
     "engine": "v3",
     "actorCount": 14
    },
@@ -4546,7 +4546,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "typed_gap",
@@ -4563,8 +4563,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.089084000000",
-       "tokens": 38108
+       "costUsd": "0.090118000000",
+       "tokens": 38625
       }
      }
     ],
@@ -4575,18 +4575,18 @@
     },
     "requests": [
      {
-      "bytes": 139564,
+      "bytes": 141634,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "2b792645646a8848"
      }
     ],
-    "seconds": 0.037,
+    "seconds": 0.069,
     "engine": "v3",
     "actorCount": 33
    },
@@ -4598,7 +4598,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "typed_gap",
@@ -4615,8 +4615,8 @@
       "status": "failed",
       "errorCode": "policy_output_truncated",
       "usage": {
-       "costUsd": "0.057396000000",
-       "tokens": 22282
+       "costUsd": "0.058430000000",
+       "tokens": 22799
       }
      }
     ],
@@ -4627,18 +4627,18 @@
     },
     "requests": [
      {
-      "bytes": 76296,
+      "bytes": 78366,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "e3f5c396838a4b5e"
      }
     ],
-    "seconds": 0.023,
+    "seconds": 0.038,
     "engine": "v3",
     "actorCount": 21
    }
@@ -4652,7 +4652,7 @@
      "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
     },
     "userBytes": 166319,
-    "requestBytes": 181818,
+    "requestBytes": 183888,
     "claims": 231,
     "actorAllowedClaims": 203,
     "status": "typed_gap",
@@ -4669,8 +4669,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.114902000000",
-       "tokens": 49477
+       "costUsd": "0.115936000000",
+       "tokens": 49994
       }
      }
     ],
@@ -4681,18 +4681,18 @@
     },
     "requests": [
      {
-      "bytes": 181961,
+      "bytes": 184031,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "16b7585c2126dd15"
      }
     ],
-    "seconds": 0.077,
+    "seconds": 0.122,
     "engine": "v3",
     "actorCount": 15
    },
@@ -4704,7 +4704,7 @@
      "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
     },
     "userBytes": 199648,
-    "requestBytes": 211730,
+    "requestBytes": 213800,
     "claims": 118,
     "actorAllowedClaims": 104,
     "status": "typed_gap",
@@ -4721,8 +4721,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.127638000000",
-       "tokens": 56585
+       "costUsd": "0.128672000000",
+       "tokens": 57102
       }
      }
     ],
@@ -4733,18 +4733,18 @@
     },
     "requests": [
      {
-      "bytes": 211873,
+      "bytes": 213943,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7e9638fb89236740"
      }
     ],
-    "seconds": 0.042,
+    "seconds": 0.067,
     "engine": "v3",
     "actorCount": 18
    },
@@ -4756,7 +4756,7 @@
      "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
     },
     "userBytes": 159110,
-    "requestBytes": 173748,
+    "requestBytes": 175818,
     "claims": 201,
     "actorAllowedClaims": 173,
     "status": "typed_gap",
@@ -4773,8 +4773,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.105928000000",
-       "tokens": 46636
+       "costUsd": "0.106964000000",
+       "tokens": 47154
       }
      }
     ],
@@ -4785,18 +4785,18 @@
     },
     "requests": [
      {
-      "bytes": 173891,
+      "bytes": 175961,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "ab916e3530e64b5c"
      }
     ],
-    "seconds": 0.056,
+    "seconds": 0.097,
     "engine": "v3",
     "actorCount": 12
    },
@@ -4808,7 +4808,7 @@
      "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
     },
     "userBytes": 146206,
-    "requestBytes": 160697,
+    "requestBytes": 162767,
     "claims": 226,
     "actorAllowedClaims": 194,
     "status": "typed_gap",
@@ -4825,8 +4825,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.102794000000",
-       "tokens": 43939
+       "costUsd": "0.103828000000",
+       "tokens": 44456
       }
      }
     ],
@@ -4837,18 +4837,18 @@
     },
     "requests": [
      {
-      "bytes": 160840,
+      "bytes": 162910,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "07b2bbbd80ed4a25"
      }
     ],
-    "seconds": 0.06,
+    "seconds": 0.094,
     "engine": "v3",
     "actorCount": 15
    },
@@ -4860,7 +4860,7 @@
      "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
     },
     "userBytes": 159640,
-    "requestBytes": 174898,
+    "requestBytes": 176968,
     "claims": 202,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -4877,8 +4877,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.107722000000",
-       "tokens": 47127
+       "costUsd": "0.108756000000",
+       "tokens": 47644
       }
      }
     ],
@@ -4889,18 +4889,18 @@
     },
     "requests": [
      {
-      "bytes": 175041,
+      "bytes": 177111,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "a96eebd960cd98f4"
      }
     ],
-    "seconds": 0.061,
+    "seconds": 0.094,
     "engine": "v3",
     "actorCount": 12
    },
@@ -4912,7 +4912,7 @@
      "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
     },
     "userBytes": 179579,
-    "requestBytes": 195718,
+    "requestBytes": 197788,
     "claims": 284,
     "actorAllowedClaims": 252,
     "status": "typed_gap",
@@ -4929,8 +4929,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.126328000000",
-       "tokens": 53698
+       "costUsd": "0.127362000000",
+       "tokens": 54215
       }
      }
     ],
@@ -4941,18 +4941,18 @@
     },
     "requests": [
      {
-      "bytes": 195861,
+      "bytes": 197931,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "d62d5772b83008a0"
      }
     ],
-    "seconds": 0.083,
+    "seconds": 0.117,
     "engine": "v3",
     "actorCount": 20
    },
@@ -4964,7 +4964,7 @@
      "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
     },
     "userBytes": 200204,
-    "requestBytes": 217538,
+    "requestBytes": 219608,
     "claims": 320,
     "actorAllowedClaims": 279,
     "status": "typed_gap",
@@ -4981,8 +4981,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.139710000000",
-       "tokens": 59565
+       "costUsd": "0.140744000000",
+       "tokens": 60082
       }
      }
     ],
@@ -4993,18 +4993,18 @@
     },
     "requests": [
      {
-      "bytes": 217681,
+      "bytes": 219751,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "95dfe0f3aabb29d3"
      }
     ],
-    "seconds": 0.1,
+    "seconds": 0.13,
     "engine": "v3",
     "actorCount": 19
    },
@@ -5016,7 +5016,7 @@
      "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
     },
     "userBytes": 147770,
-    "requestBytes": 161272,
+    "requestBytes": 163342,
     "claims": 144,
     "actorAllowedClaims": 126,
     "status": "typed_gap",
@@ -5033,8 +5033,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.095712000000",
-       "tokens": 42854
+       "costUsd": "0.096748000000",
+       "tokens": 43372
       }
      }
     ],
@@ -5045,18 +5045,18 @@
     },
     "requests": [
      {
-      "bytes": 161415,
+      "bytes": 163485,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "43f24bd4d5bb68bf"
      }
     ],
-    "seconds": 0.047,
+    "seconds": 0.059,
     "engine": "v3",
     "actorCount": 9
    },
@@ -5068,7 +5068,7 @@
      "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
     },
     "userBytes": 236172,
-    "requestBytes": 253440,
+    "requestBytes": 255510,
     "claims": 320,
     "actorAllowedClaims": 282,
     "status": "typed_gap",
@@ -5085,8 +5085,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.158122000000",
-       "tokens": 68617
+       "costUsd": "0.159158000000",
+       "tokens": 69135
       }
      }
     ],
@@ -5097,18 +5097,18 @@
     },
     "requests": [
      {
-      "bytes": 253583,
+      "bytes": 255653,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6e94d49f04816614"
      }
     ],
-    "seconds": 0.098,
+    "seconds": 0.133,
     "engine": "v3",
     "actorCount": 19
    },
@@ -5120,7 +5120,7 @@
      "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
     },
     "userBytes": 129163,
-    "requestBytes": 140241,
+    "requestBytes": 142311,
     "claims": 220,
     "actorAllowedClaims": 189,
     "status": "typed_gap",
@@ -5137,8 +5137,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.092104000000",
-       "tokens": 38748
+       "costUsd": "0.093138000000",
+       "tokens": 39265
       }
      }
     ],
@@ -5149,18 +5149,18 @@
     },
     "requests": [
      {
-      "bytes": 140384,
+      "bytes": 142454,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "6f188565e532db7d"
      }
     ],
-    "seconds": 0.055,
+    "seconds": 0.093,
     "engine": "v3",
     "actorCount": 15
    },
@@ -5172,7 +5172,7 @@
      "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
     },
     "userBytes": 160569,
-    "requestBytes": 174473,
+    "requestBytes": 176543,
     "claims": 200,
     "actorAllowedClaims": 176,
     "status": "typed_gap",
@@ -5189,8 +5189,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.107768000000",
-       "tokens": 47064
+       "costUsd": "0.108802000000",
+       "tokens": 47581
       }
      }
     ],
@@ -5201,18 +5201,18 @@
     },
     "requests": [
      {
-      "bytes": 174616,
+      "bytes": 176686,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "34889fdd4b16243e"
      }
     ],
-    "seconds": 0.056,
+    "seconds": 0.088,
     "engine": "v3",
     "actorCount": 11
    },
@@ -5224,7 +5224,7 @@
      "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
     },
     "userBytes": 167083,
-    "requestBytes": 183243,
+    "requestBytes": 185313,
     "claims": 235,
     "actorAllowedClaims": 201,
     "status": "typed_gap",
@@ -5241,8 +5241,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.115332000000",
-       "tokens": 49786
+       "costUsd": "0.116368000000",
+       "tokens": 50304
       }
      }
     ],
@@ -5253,18 +5253,18 @@
     },
     "requests": [
      {
-      "bytes": 183386,
+      "bytes": 185456,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "71475974e0c81982"
      }
     ],
-    "seconds": 0.074,
+    "seconds": 0.089,
     "engine": "v3",
     "actorCount": 15
    },
@@ -5276,7 +5276,7 @@
      "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
     },
     "userBytes": 80696,
-    "requestBytes": 89043,
+    "requestBytes": 91113,
     "claims": 54,
     "actorAllowedClaims": 54,
     "status": "typed_gap",
@@ -5293,8 +5293,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.061914000000",
-       "tokens": 25183
+       "costUsd": "0.062950000000",
+       "tokens": 25701
       }
      }
     ],
@@ -5305,14 +5305,14 @@
     },
     "requests": [
      {
-      "bytes": 89186,
+      "bytes": 91256,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "cdeb90d351dc5123"
      }
     ],
@@ -5328,7 +5328,7 @@
      "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
     },
     "userBytes": 132862,
-    "requestBytes": 149449,
+    "requestBytes": 151519,
     "claims": 390,
     "actorAllowedClaims": 316,
     "status": "typed_gap",
@@ -5345,8 +5345,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.104136000000",
-       "tokens": 42288
+       "costUsd": "0.105170000000",
+       "tokens": 42805
       }
      }
     ],
@@ -5357,18 +5357,18 @@
     },
     "requests": [
      {
-      "bytes": 149592,
+      "bytes": 151662,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "7a8313da14f9b3ae"
      }
     ],
-    "seconds": 0.066,
+    "seconds": 0.069,
     "engine": "v3",
     "actorCount": 14
    },
@@ -5380,7 +5380,7 @@
      "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
     },
     "userBytes": 128996,
-    "requestBytes": 139421,
+    "requestBytes": 141491,
     "claims": 99,
     "actorAllowedClaims": 99,
     "status": "typed_gap",
@@ -5397,8 +5397,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.089084000000",
-       "tokens": 38108
+       "costUsd": "0.090118000000",
+       "tokens": 38625
       }
      }
     ],
@@ -5409,14 +5409,14 @@
     },
     "requests": [
      {
-      "bytes": 139564,
+      "bytes": 141634,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "2b792645646a8848"
      }
     ],
@@ -5432,7 +5432,7 @@
      "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
     },
     "userBytes": 68103,
-    "requestBytes": 76153,
+    "requestBytes": 78223,
     "claims": 63,
     "actorAllowedClaims": 63,
     "status": "typed_gap",
@@ -5449,8 +5449,8 @@
       "status": "failed",
       "errorCode": "provider_content_filtered",
       "usage": {
-       "costUsd": "0.057396000000",
-       "tokens": 22282
+       "costUsd": "0.058430000000",
+       "tokens": 22799
       }
      }
     ],
@@ -5461,22 +5461,22 @@
     },
     "requests": [
      {
-      "bytes": 76296,
+      "bytes": 78366,
       "maxOutput": 32768,
       "thinking": {
        "type": "disabled"
       },
       "reasoningEffort": null,
       "repair": false,
-      "systemSha256": "ae079de9728d07cb",
+      "systemSha256": "1c502760e8fd341f",
       "userSha256": "e3f5c396838a4b5e"
      }
     ],
-    "seconds": 0.022,
+    "seconds": 0.023,
     "engine": "v3",
     "actorCount": 21
    }
   ]
  },
- "finishedAt": "2026-10-18T19:55:52+0800"
+ "finishedAt": "2026-10-18T20:23:51+0800"
 }

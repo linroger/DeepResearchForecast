@@ -1,0 +1,54 @@
+{
+ "pipeline": "pipe_fd2799f3ad41",
+ "simulationId": "sim_live_fd2799f3ad41",
+ "profile": "after",
+ "startedAt": "2026-10-18T20:15:59+0800",
+ "status": "typed_gap",
+ "code": "modeling_attempts_exhausted",
+ "message": "Modeling exhausted its durable two-request allowance",
+ "details": {
+  "attemptCodes": [
+   "unresolved_source",
+   "actor_basis_mismatch"
+  ]
+ },
+ "seconds": 197.2,
+ "attempts": [
+  {
+   "number": 1,
+   "kind": "initial",
+   "status": "rejected",
+   "errorCode": "unresolved_source",
+   "reservation": {
+    "costUsd": "0.565142000000",
+    "tokens": 217035
+   },
+   "usage": {
+    "costUsd": "0.180520000000",
+    "tokens": 61126
+   },
+   "rejection": {
+    "code": "unresolved_source",
+    "message": "Quoted report excerpt is not a verbatim substring of the report"
+   }
+  },
+  {
+   "number": 2,
+   "kind": "repair",
+   "status": "rejected",
+   "errorCode": "actor_basis_mismatch",
+   "reservation": {
+    "costUsd": "0.646880000000",
+    "tokens": 257904
+   },
+   "usage": {
+    "costUsd": "0.189184000000",
+    "tokens": 70122
+   },
+   "rejection": {
+    "code": "actor_basis_mismatch",
+    "message": "Actor name differs from admitted identity"
+   }
+  }
+ ]
+}

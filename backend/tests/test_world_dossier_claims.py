@@ -384,3 +384,20 @@ def test_one_actors_claim_cannot_reach_a_record_another_actor_sees(record):
         raw["actors"][0]["capabilities"].append("saudi_statement")
         spec = compile_dossier(raw)
         assert spec["actionCatalog"][2]["description"] == "Recover market share"
+
+
+def test_prompt_states_exact_record_shapes_and_research_identity():
+    # The 2026-10-18 live glm-5.3 run returned keyed sections as arrays, template inputs as an
+    # array, recurring events and shortened actor names; the prompt now states each shape.
+    system, _ = payload()
+    for phrase in ("Keyed sections are JSON objects whose keys are", "record IDs, never arrays of records",
+                   '"inputs":{inputName:{"type"', "list each occurrence (no recurrence field)",
+                   "one period per decision round", "Copy each research actor's actorId and name exactly",
+                   "source_claim identity basis", "Quote report sentences, never actor names or claim text"):
+        assert phrase in system, phrase
+    raw = proposal()
+    raw["initialState"]["accounts"] = [{"accountId": "cash", "ownerId": aid(SAUDI), "unit": "usd", "balance": "1",
+                                        "visibility": {"kind": "public"}, "basis": deepcopy(ASSUMPTION)}]
+    with pytest.raises(WorldError) as error:
+        compile_dossier(raw)
+    assert error.value.code == "invalid_state"
