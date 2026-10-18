@@ -196,3 +196,59 @@ def test_fresh_admission_checks_the_modeler_envelope_against_the_budget(offline_
     assert result["world_policy_spec"]["policy"]["modeler"] == value["policy"]["modeler"]
     assert result["world_policy_spec"]["policy"]["thinking"] == "disabled"
     assert result["simulation_admission_v1"]["status"] == "ready" and offline_http.sent == []
+
+
+@pytest.mark.parametrize("change", ["actor_output_over_provider", "actor_envelope_over_budget"])
+def test_fresh_admission_still_checks_the_actor_envelope_when_the_modeler_is_pinned(offline_http, change):
+    from app.services.world_simulation.contracts import WorldError
+
+    value = admission_fixtures.profile()
+    value["policy"]["modeler"] = {"maxInputTokens": 1000, "maxOutputTokens": 100, "timeoutSeconds": 900}
+    if change == "actor_output_over_provider":
+        value["limits"]["maxOutputTokens"] = 4096  # pricing.maxOutputTokens is 2048
+        expected = "invalid_policy_metadata"
+    else:
+        value["limits"]["maxTokens"] = 20000  # covers the modeler (1,100) but not one actor request (30,512)
+        expected = "invalid_modeling_budget"
+    with pytest.raises(WorldError) as error:
+        admission_fixtures.resolve(mode="full", simulation_engine="world-v1", world_policy_spec=value)
+    assert error.value.code == expected and offline_http.sent == []
+
+
+@pytest.mark.parametrize("mode", ["v3", "v4"])
+@pytest.mark.parametrize("code", ["policy_output_truncated", "provider_content_filtered"])
+def test_review_mode_candidate_cut_off_gets_no_repair_request(tmp_path, mode, code):
+    from app.services.world_simulation.contracts import WorldError
+    from app.services.world_simulation.controller import PolicyResponse, run_round
+    from app.services.world_simulation.policy import PolicyFailure
+    from app.services.world_simulation.review import MODE_V3, MODE_V4, normalize_v4_assessment_output
+    from app.services.world_simulation.store import WorldStore
+    from test_world_candidate_repair_controller import RepairingPolicy, repair_spec
+
+    review = MODE_V3 if mode == "v3" else MODE_V4
+    spec = repair_spec()
+    spec["policy"]["decisionReview"] = review
+
+    class Stopped(RepairingPolicy):
+        decision_review = review
+
+        def decide(self, obs, *, review=None):
+            if obs["actorId"] == "buyer":
+                self.calls.append(("buyer", obs["phase"], review is not None))
+                raise PolicyFailure(code, "synthetic provider stop", usage={"tokens": 0, "costUsd": "0"})
+            response = super().decide(obs, review=review)
+            if mode == "v4" and response.assessment is not None:
+                # The shared fixture scripts v3 checks; v4 validates their packed form.
+                response = PolicyResponse(response.decision, response.usage,
+                                          assessment=normalize_v4_assessment_output(response.assessment))
+            return response
+
+    policy = Stopped()
+    with WorldStore(tmp_path / "stopped.sqlite3", spec) as store:
+        fence = store.acquire_writer("stopped")
+        with pytest.raises(WorldError) as caught:
+            run_round(store, policy, fence)
+        assert caught.value.code == "required_decision_failed"
+        assert caught.value.details["lastErrorCode"] == code
+        assert [call for call in policy.calls if call[0] == "buyer"] == [("buyer", "proposal", False)]
+        store.release_writer(fence)

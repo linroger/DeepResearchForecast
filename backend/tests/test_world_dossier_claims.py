@@ -349,3 +349,38 @@ def test_thinking_and_modeler_pins_are_closed(extra):
     with pytest.raises(WorldError) as error:
         _policy_metadata({**BASE_POLICY, **extra})
     assert error.value.code == "invalid_policy_metadata"
+
+
+def test_research_claims_keep_the_closed_span_shape():
+    # {quote} is for model output; a research claim citing one is a typed source error, not a crash.
+    bundle = {"actors": [{"actor_id": "a", "name": "Acme", "claims": [
+        {"claim_id": "goal", "claim": "Recover market share", "report_ref": {"quote": "Recover market share"}}]}]}
+    with pytest.raises(WorldError) as error:
+        build_compiler_messages(research_report=REPORT, research_generation_id=GENERATION, research_engine="v3",
+                                actor_bundle=bundle)
+    assert error.value.code == "unresolved_source"
+    with pytest.raises(WorldError) as error:
+        compile_dossier(bundle=bundle)
+    assert error.value.code == "unresolved_source"
+
+
+@pytest.mark.parametrize("record", ["shared_menu", "shared_record"])
+def test_one_actors_claim_cannot_reach_a_record_another_actor_sees(record):
+    raw = proposal()
+    saudi, iraq = aid(SAUDI), aid(IRAQ)
+    if record == "shared_menu":
+        raw["actionCatalog"][1].update(description="Recover market share", descriptionBasis=ref(SAUDI, "goals.0"))
+    else:
+        raw["initialState"]["rules"]["share_goal"] = {
+            "value": None, "visibility": {"kind": "actors", "actorIds": [saudi, iraq]}, "basis": ref(SAUDI, "goals.0")}
+    with pytest.raises(WorldError) as error:
+        compile_dossier(raw)
+    assert error.value.code == "forbidden_actor_evidence"
+    if record == "shared_menu":
+        # The same citation is admitted on a menu only its owner sees.
+        raw["actionCatalog"].append({**deepcopy(raw["actionCatalog"][1]), "templateId": "saudi_statement",
+                                     "actorIds": [saudi], "parameters": {"recipientIds": [saudi]}})
+        raw["actionCatalog"][1].update(description="Make a public statement.", descriptionBasis=deepcopy(ASSUMPTION))
+        raw["actors"][0]["capabilities"].append("saudi_statement")
+        spec = compile_dossier(raw)
+        assert spec["actionCatalog"][2]["description"] == "Recover market share"

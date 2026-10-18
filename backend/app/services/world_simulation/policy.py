@@ -506,6 +506,8 @@ class _StrictHTTPTransport:
                 'invalid_policy_metadata', 'Pinned thinking must be "disabled" and cannot be combined with reasoningEffort')
         limits = spec.get('limits', {})
         self.max_output = _integer(limits.get('maxOutputTokens'), minimum=1)
+        # The shared actor envelope stays checked even when a role pins its own.
+        self.actor_envelope = (self.max_input, self.max_output)
         self._role_limits(policy)
         metadata = policy.get('pricing')
         require(isinstance(metadata, dict), 'missing_policy_metadata', 'Explicit pricing and context metadata are required')
@@ -532,7 +534,8 @@ class _StrictHTTPTransport:
         require(self._output_parameter in {'max_completion_tokens', 'max_tokens'}
                 and metadata.get('maxOutputIncludesReasoning') is True,
                 'unbounded_transport', 'The provider output limit must include all reasoning tokens')
-        require(self.max_output <= provider_max_output and self.max_output < self.context,
+        require(all(output <= provider_max_output and output < self.context
+                    for output in (self.max_output, self.actor_envelope[1])),
                 'invalid_policy_metadata', 'Requested output exceeds the sourced provider bounds')
         # Retain detached evidence for the coordinator, never for actor prompts.
         self.pricing = metadata

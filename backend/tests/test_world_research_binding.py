@@ -125,3 +125,20 @@ def test_world_preparation_keeps_the_typed_error_code_on_the_pipeline(boundary):
     assert state.options['world_preparation_error'] == {
         'code': 'modeling_gap', 'details': {'attempt': 1, 'declared': True, 'gapCodes': ['no_quota_authority']}}
     assert len(b.sent) == 1 and not b.launches
+
+
+def test_unverifiable_parent_leaves_a_world_seed_unbound_but_running(boundary):
+    from app.services.official_data import simulation_research_binding
+
+    b = boundary
+    state = b.pipeline()
+    consumed = research_handoff(b, state)
+    run(b, state, consumed)
+    (Path(state.handoff_dir) / 'sources.json').write_text('[{"source_id": "late"}]', encoding='utf-8')
+    assert simulation_research_binding(state.simulation_id)['status'] == 'invalid'
+    spec = json.loads((b.root / state.simulation_id / 'world_spec.json').read_text())
+    seed = spec['seed'] + 7919
+    child = b.po.PipelineOrchestrator()._run_world_seed(state, seed=seed, report_md=b.report, sources=[])
+    assert simulation_research_binding(child.simulation_id)['status'] == 'missing'
+    row = state.options['world_seed_runs'][str(seed)]
+    assert row['status'] == 'world_completed' and row['official_data_binding']['status'] == 'unavailable'

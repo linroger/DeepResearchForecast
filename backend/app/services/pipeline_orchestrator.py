@@ -9657,6 +9657,33 @@ class PipelineOrchestrator:
                        state.pipeline_id, stage, reason)
 
     @staticmethod
+    def _bind_world_seed_research(state: PipelineState, row: dict, simulation_id: str,
+                                  report_md: Optional[str], sources: Any) -> None:
+        """Give a world seed child its parent's research generation (official data for its report).
+
+        The child forks the parent's sealed world, so its research input cannot
+        change; unlike an OASIS seed, an unverifiable parent binding therefore only
+        leaves the child unbound. A different existing binding still raises.
+        """
+        from .official_data import ResearchBindingConflict, bind_simulation_research, simulation_research_binding
+        parent = simulation_research_binding(getattr(state, "simulation_id", None))
+        if parent["status"] == "missing":
+            return
+        try:
+            if parent["status"] != "valid":
+                raise ValueError("Parent research generation is not verifiable")
+            bind_simulation_research(
+                simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                pipeline_id=state.pipeline_id, expected_generation=parent, report=report_md, sources=sources)
+            row.pop("official_data_binding", None)
+        except ResearchBindingConflict:
+            raise
+        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable for this seed
+            reason = f"{type(_bind_err).__name__}: {' '.join(str(_bind_err).split())[:240]}"
+            row["official_data_binding"] = {"status": "unavailable", "reason": reason}
+            logger.warning("[%s] world seed %s left unbound: %s", state.pipeline_id, simulation_id, reason)
+
+    @staticmethod
     def _validate_world_seed(row: dict, *, seed: int):
         """Validate durable seed admission without launching or writing."""
         from .world_simulation.artifacts import load_inputs
@@ -9675,13 +9702,8 @@ class PipelineOrchestrator:
     def _run_world_seed(self, state: PipelineState, *, seed: int, report_md: Optional[str] = None,
                         sources: Any = None):
         """Persist child admission before dispatch so retries cannot renew its budget."""
-        from .official_data import bind_simulation_research, simulation_research_binding
         from .world_simulation.service import WorldSimulationService
         manager = SimulationManager()
-        # Seed children consume the parent's research generation, as OASIS seeds do.
-        parent_binding = simulation_research_binding(getattr(state, "simulation_id", None))
-        if parent_binding["status"] == "invalid":
-            raise ValueError("Parent research generation changed before seed preparation")
         runs = state.options.setdefault("world_seed_runs", {})
         key = str(seed)
         row = runs.get(key)
@@ -9694,11 +9716,7 @@ class PipelineOrchestrator:
             runs[key] = row
             PipelineManager.save(state)
         child = self._validate_world_seed(row, seed=seed)
-        if parent_binding["status"] == "valid":
-            bind_simulation_research(
-                child.simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
-                pipeline_id=state.pipeline_id, expected_generation=parent_binding,
-                report=report_md, sources=sources)
+        self._bind_world_seed_research(state, row, child.simulation_id, report_md, sources)
         run = SimulationRunner.get_run_state(child.simulation_id)
         if run is None or run.runner_status != RunnerStatus.COMPLETED:
             self._wait_world_simulation(state, child.simulation_id, lambda pct, message: None)

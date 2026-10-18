@@ -258,6 +258,9 @@ class _Sources:
                 if key in self.derived:
                     continue
                 ref = claim.get("report_ref")
+                # Research claims keep the closed span; {quote} is for model output.
+                require(isinstance(ref, dict) and set(ref) == {"start", "end", "sha256"},
+                        "unresolved_source", "Unsealed research claims need an exact hashed report span")
                 self.basis({"kind": "report_excerpt", "refs": [ref]}, {})
                 require(claim["claim"] in report[ref["start"]:ref["end"]],
                         "unresolved_source", "Unsealed claim text is absent from its exact report span")
