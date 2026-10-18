@@ -45,22 +45,22 @@ The first 12 rows are the 12 newest dossiers; the last 4 are the CJK supplement.
 
 | Dossier | Actors | Before (pinned policy, main 01b1d78) | After: compliant model | After: one model slip | After: no `policy.modeler` | 1301 (HTTP 400) | `length` | `sensitive` |
 |---|---|---|---|---|---|---|---|---|
-| `pipe_1c1255cee2e4` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 231 claims, 181818 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_1ee2fae33f8c` | 18 → 18 | `policy_context_limit` before any request | valid (1 req), 118 claims, 211730 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_22b62e7b8346` | 12 → 12 | `policy_context_limit` before any request | valid (1 req), 201 claims, 173748 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_261de6107490` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 226 claims, 160697 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_3dcd66754cdc` | 12 → 12 | `policy_context_limit` before any request | valid (1 req), 202 claims, 174898 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_41c155a33733` | 20 → 20 | `policy_context_limit` before any request | valid (1 req), 284 claims, 195718 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_4eb5ce9557ff` | 19 → 19 | `policy_context_limit` before any request | valid (1 req), 320 claims, 217538 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_69a26e4c37df` | 9 → 9 | `policy_context_limit` before any request | valid (1 req), 144 claims, 161272 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_6c4190b31f0b` | 19 → 19 | `policy_context_limit` before any request | valid (1 req), 320 claims, 253440 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_baddcd338811` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 220 claims, 140241 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_d569f211eb14` | 11 → 11 | `policy_context_limit` before any request | valid (1 req), 200 claims, 174473 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_fd2799f3ad41` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 235 claims, 183243 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_41522d5d9790` | 18 → 18 | `unsafe_model_text` before any request | valid (1 req), 54 claims, 89043 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_7ef597666938` | 14 → 14 | `unsafe_model_text` before any request | valid (1 req), 390 claims, 149449 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_a90b338fdfa0` | 33 → 20 | `unsafe_model_text` before any request | valid (1 req), 99 claims, 139421 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
-| `pipe_e2egold02` | 21 → 20 | `unsafe_model_text` before any request | valid (1 req), 63 claims, 76153 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_1c1255cee2e4` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 231 claims, 183888 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_1ee2fae33f8c` | 18 → 18 | `policy_context_limit` before any request | valid (1 req), 118 claims, 213800 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_22b62e7b8346` | 12 → 12 | `policy_context_limit` before any request | valid (1 req), 201 claims, 175818 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_261de6107490` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 226 claims, 162767 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_3dcd66754cdc` | 12 → 12 | `policy_context_limit` before any request | valid (1 req), 202 claims, 176968 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_41c155a33733` | 20 → 20 | `policy_context_limit` before any request | valid (1 req), 284 claims, 197788 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_4eb5ce9557ff` | 19 → 19 | `policy_context_limit` before any request | valid (1 req), 320 claims, 219608 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_69a26e4c37df` | 9 → 9 | `policy_context_limit` before any request | valid (1 req), 144 claims, 163342 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_6c4190b31f0b` | 19 → 19 | `policy_context_limit` before any request | valid (1 req), 320 claims, 255510 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_baddcd338811` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 220 claims, 142311 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_d569f211eb14` | 11 → 11 | `policy_context_limit` before any request | valid (1 req), 200 claims, 176543 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_fd2799f3ad41` | 15 → 15 | `policy_context_limit` before any request | valid (1 req), 235 claims, 185313 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_41522d5d9790` | 18 → 18 | `unsafe_model_text` before any request | valid (1 req), 54 claims, 91113 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_7ef597666938` | 14 → 14 | `unsafe_model_text` before any request | valid (1 req), 390 claims, 151519 B | valid (rejected `unsupported_actor_derivation` → succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_a90b338fdfa0` | 33 → 20 | `unsafe_model_text` before any request | valid (1 req), 99 claims, 141491 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
+| `pipe_e2egold02` | 21 → 20 | `unsafe_model_text` before any request | valid (1 req), 63 claims, 78223 B | valid (succeeded) | `policy_context_limit` | `provider_content_filtered`; resume +0 req | `policy_output_truncated`; resume +0 req | `provider_content_filtered`; resume +0 req |
 
 Denied (analyst-only) dossier text found in any actor observation of the 16 compiled worlds: 0. Every modeler request carried thinking={"type": "disabled"} and max_tokens=[32768].
 
@@ -81,11 +81,36 @@ Reading the table:
   exactly one candidate and one v4 review per actor; the largest actor request is 17,029 bytes against the
   pinned 60,000-token actor bound; every actor request carried `thinking: {"type": "disabled"}`.
 
+## Live run 1 (2026-10-18 20:15 +08, owner-approved, modeling only)
+
+One paid modeling run on `pipe_fd2799f3ad41` (OPEC+) with the *after* profile and the branch head a99c20b
+(script: [live-2026-10-18/live_modeling.py](live-2026-10-18/live_modeling.py); DNS only to the pinned provider
+host, deployment reads limited to its interpreter and `.env`, nothing printed from it). No-dispatch preflight
+first: configured provider `glm`, endpoint equal to the pinned coding endpoint, admission `ready`; no other
+pipeline was running.
+
+- **Outcome:** typed `modeling_attempts_exhausted` after 197 s, `attemptCodes`
+  [`unresolved_source`, `actor_basis_mismatch`]; no crash. Reserved 217,035 then 257,904 tokens (byte
+  ceilings); metered 61,126 + 70,122 tokens, USD 0.180520 + 0.189184 at the pinned ceiling tariff.
+  Ledger and both proposals: [live-2026-10-18/live-run-1-receipts.json](live-2026-10-18/live-run-1-receipts.json).
+- **Attempt 1:** every actor's identity basis was a report quote of the research actor's own name; the 8
+  names with a parenthetical qualifier (`Saudi Arabia (energy ministry)`, …) never occur verbatim in the
+  report. **Attempt 2 (repair):** all 12 quotes were real report sentences, but to make each span contain the
+  name it shortened 8 names (`Saudi Arabia`), which the identity check refuses. The prompt had pushed the model
+  into that corner ("identity basis … the excerpt must contain the exact actor name").
+- **Offline, free:** with the names and a `role` claim basis restored, GLM's proposal fails next at
+  `invalid_state` — its `initialState` sections, template `inputs`, scheduled events (`date`, `recurrence`)
+  and flows do not follow the spec's shapes, which the prompt named but never stated. Its substance was
+  sound: 20 declared assumptions, decimal-string numbers, every profile item citing an allowed claim.
+- **Change made:** the prompt now states the exact shape of every section (keyed objects, `inputs` object,
+  one occurrence per scheduled event, contiguous per-round periods), tells the model to copy each research
+  actor's id and name and to use one of its own claims (its `role`) as identity basis, and to quote report
+  sentences, never names. Whether glm-5.3 then compiles needs a second paid run.
+
 ## What this does not show
 
-- The scripted model is not GLM. Whether glm-5.3 follows the new prompt, how often it needs the repair, and
-  its real token use and latency on a 140–250 KB request need one paid live modeling run, which needs the
-  owner's approval.
+- The scripted model is not GLM. Live run 1 (above) showed glm-5.3 did not follow the earlier prompt's
+  implicit shapes; whether it compiles under the revised prompt needs a second paid run.
 - Actor decisions ran only with scripted waiting actors for one round. Real decision quality, multi-round
   behaviour and the engine's known limits (429/1302, unresolved v4 verdicts, reboot liveness; ../handoff.md
   §9) are outside this replay.
