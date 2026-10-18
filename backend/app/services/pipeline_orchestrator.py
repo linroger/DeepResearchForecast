@@ -8529,8 +8529,30 @@ class PipelineOrchestrator:
                     raise ValueError("Pipeline and saved simulation engine pins differ")
         return engine
 
+    def _bind_world_research(self, state: PipelineState, simulation_id: str, report_md: str,
+                             sources: Any, consumed_generation) -> None:
+        """Pin a world run to the research generation it consumed, as OASIS PREPARE does.
+
+        World reports and the evidence-only probability input read official data
+        only for bound simulations. A different existing binding is a provenance
+        violation; any other failure degrades to "official data unavailable".
+        """
+        if consumed_generation is None:
+            return
+        from .official_data import ResearchBindingConflict, bind_simulation_research
+        try:
+            bind_simulation_research(
+                simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                pipeline_id=state.pipeline_id, expected_generation=consumed_generation,
+                report=report_md, sources=sources)
+            state.options.pop("official_data_binding", None)
+        except ResearchBindingConflict:
+            raise
+        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
+            self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
+
     def _run_world_stages(self, state: PipelineState, project: Any, graph_id: str,
-                          actors: Any, report_md: str, *, consumed_generation=None):
+                          actors: Any, report_md: str, *, consumed_generation=None, research_sources=None):
         """PREPARE and RUN remain pipeline stages; the service owns world execution."""
         from pathlib import Path
         from .world_simulation.artifacts import load_inputs, read_json
@@ -8568,6 +8590,9 @@ class PipelineOrchestrator:
                     "input_binding_mismatch", "Prepared world belongs to different research")
             if prepare_registered:
                 require(self._validate_reuse(state, STAGE_PREPARE), "input_binding_mismatch", "World PREPARE artifacts changed")
+            # Forks and worlds sealed before binding existed get the same
+            # generation the sealed spec already names (idempotent if bound).
+            self._bind_world_research(state, sim.simulation_id, report_md, research_sources, consumed_generation)
         else:
             raw_spec = state.options.get("world_spec")
             handoff_candidate = False
@@ -8612,6 +8637,7 @@ class PipelineOrchestrator:
                 sim = manager.create_simulation(project.project_id, graph_id, simulation_engine="world-v1")
                 state.simulation_id = sim.simulation_id
                 PipelineManager.save(state)
+            self._bind_world_research(state, sim.simulation_id, report_md, research_sources, consumed_generation)
             engine = research_engine_for_run(state.options)
             bundle = actors
             if engine == RESEARCH_ENGINE_LEGACY:
@@ -8631,11 +8657,19 @@ class PipelineOrchestrator:
                 require(isinstance(sources, list), "invalid_source", "Legacy research sources must be a list")
                 bundle = {"actors": actors, "sources": sources,
                           "dossier": source_bytes["actor_dossier.md"].decode("utf-8")}
-            sim = manager.prepare_world_simulation(
-                sim.simulation_id, raw_spec=raw_spec, research_report=report_md,
-                research_generation_id=generation, research_engine=engine,
-                actor_bundle=bundle, policy_spec=policy_spec,
-                ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt)
+            try:
+                sim = manager.prepare_world_simulation(
+                    sim.simulation_id, raw_spec=raw_spec, research_report=report_md,
+                    research_generation_id=generation, research_engine=engine,
+                    actor_bundle=bundle, policy_spec=policy_spec,
+                    ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt)
+            except WorldError as error:
+                # The stage error keeps only the message; keep the typed code
+                # (and its closed details, e.g. per-attempt modeler codes) too.
+                state.options["world_preparation_error"] = {
+                    "code": error.code, "details": json.loads(json.dumps(error.details, default=str))}
+                raise
+            state.options.pop("world_preparation_error", None)
             spec, _ = load_inputs(WorldSimulationService.directory(sim.simulation_id, root=manager.SIMULATION_DATA_DIR))
             require(spec["forecastEffect"] == policy, "unsupported_policy", "Compiled world changed the pinned forecast policy")
         self._complete_stage(state, STAGE_PREPARE, "World inputs sealed", reused=prepare_reused)
@@ -9623,6 +9657,33 @@ class PipelineOrchestrator:
                        state.pipeline_id, stage, reason)
 
     @staticmethod
+    def _bind_world_seed_research(state: PipelineState, row: dict, simulation_id: str,
+                                  report_md: Optional[str], sources: Any) -> None:
+        """Give a world seed child its parent's research generation (official data for its report).
+
+        The child forks the parent's sealed world, so its research input cannot
+        change; unlike an OASIS seed, an unverifiable parent binding therefore only
+        leaves the child unbound. A different existing binding still raises.
+        """
+        from .official_data import ResearchBindingConflict, bind_simulation_research, simulation_research_binding
+        parent = simulation_research_binding(getattr(state, "simulation_id", None))
+        if parent["status"] == "missing":
+            return
+        try:
+            if parent["status"] != "valid":
+                raise ValueError("Parent research generation is not verifiable")
+            bind_simulation_research(
+                simulation_id, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id),
+                pipeline_id=state.pipeline_id, expected_generation=parent, report=report_md, sources=sources)
+            row.pop("official_data_binding", None)
+        except ResearchBindingConflict:
+            raise
+        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable for this seed
+            reason = f"{type(_bind_err).__name__}: {' '.join(str(_bind_err).split())[:240]}"
+            row["official_data_binding"] = {"status": "unavailable", "reason": reason}
+            logger.warning("[%s] world seed %s left unbound: %s", state.pipeline_id, simulation_id, reason)
+
+    @staticmethod
     def _validate_world_seed(row: dict, *, seed: int):
         """Validate durable seed admission without launching or writing."""
         from .world_simulation.artifacts import load_inputs
@@ -9638,7 +9699,8 @@ class PipelineOrchestrator:
         require(spec["seed"] == seed, "input_binding_mismatch", "Saved child belongs to a different seed")
         return child
 
-    def _run_world_seed(self, state: PipelineState, *, seed: int):
+    def _run_world_seed(self, state: PipelineState, *, seed: int, report_md: Optional[str] = None,
+                        sources: Any = None):
         """Persist child admission before dispatch so retries cannot renew its budget."""
         from .world_simulation.service import WorldSimulationService
         manager = SimulationManager()
@@ -9654,6 +9716,7 @@ class PipelineOrchestrator:
             runs[key] = row
             PipelineManager.save(state)
         child = self._validate_world_seed(row, seed=seed)
+        self._bind_world_seed_research(state, row, child.simulation_id, report_md, sources)
         run = SimulationRunner.get_run_state(child.simulation_id)
         if run is None or run.runner_status != RunnerStatus.COMPLETED:
             self._wait_world_simulation(state, child.simulation_id, lambda pct, message: None)
@@ -9675,7 +9738,8 @@ class PipelineOrchestrator:
         if self._simulation_engine(state) == "world-v1":
             if max_rounds is not None:
                 raise ValueError("World seed runs use the sealed horizon; max_rounds cannot override it")
-            sim_state = self._run_world_seed(state, seed=seed)
+            sim_state = self._run_world_seed(state, seed=seed, report_md=report_md,
+                                             sources=(research or {}).get("sources"))
             sim_id = sim_state.simulation_id
         else:
             from .official_data import bind_simulation_research, simulation_research_binding
@@ -13821,7 +13885,8 @@ class PipelineOrchestrator:
             if self._simulation_engine(state) == "world-v1":
                 sim_state = self._run_world_stages(
                     state, project, graph_id, actors, report_md,
-                    consumed_generation=_consumed_research_generation)
+                    consumed_generation=_consumed_research_generation,
+                    research_sources=research.get("sources"))
             else:
                 # ---- Stage 3: PREPARE ----
                 upd = self._make_stage_updater(state, STAGE_PREPARE)

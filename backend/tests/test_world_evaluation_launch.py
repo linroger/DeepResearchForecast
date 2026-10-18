@@ -118,6 +118,13 @@ def test_circuit_counts_transport_failures_at_any_round_not_behavior_errors(tmp_
         assert module.provider_failure_stop(tmp_path) is (i == 2)
 
 
+def test_circuit_counts_capacity_refusals_that_stop_a_world_case_directly(tmp_path):
+    module = load_launcher()
+    for i, code in enumerate(('provider_throttled', 'model_capacity_unavailable', 'provider_throttled')):
+        write(tmp_path / f'refused-{i}' / 'receipt.json', {'errorCode': code, 'completedRound': i})
+        assert module.provider_failure_stop(tmp_path) is (i == 2)
+
+
 @pytest.mark.parametrize('change', ['v1_downgrade', 'missing_version', 'original_records', 'missing_records'])
 def test_reviewed_phase_cannot_downgrade_or_overwrite_original_metadata(launch, change):
     module, repo, notes, offline, output, budget = launch

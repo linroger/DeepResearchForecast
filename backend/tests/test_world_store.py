@@ -208,7 +208,7 @@ def test_takeover_fences_every_tentative_and_commit_mutation(api, spec, tmp_path
         second.save_decision("1:proposal:alice", decision, fence)
 
 
-def test_crash_resume_preserves_success_receipts_unknown_exposure_and_attempt_count(api, spec, tmp_path, monkeypatch):
+def test_crash_resume_preserves_success_receipts_unknown_exposure_and_restores_the_lost_attempt(api, spec, tmp_path, monkeypatch):
     path = tmp_path / "world.sqlite"
     first = api.Store(path, spec)
     fence = first.acquire_writer("old")
@@ -221,8 +221,11 @@ def test_crash_resume_preserves_success_receipts_unknown_exposure_and_attempt_co
     with api.Store(path) as recovered:
         fence = recovered.acquire_writer("recovered", takeover=True)
         assert recovered.decision("1:proposal:alice") == alice
-        assert recovered.budget_summary()["attempts"][0]["attemptId"] == attempt
+        lost = recovered.budget_summary()["attempts"][0]
+        assert lost["attemptId"] == attempt and lost["status"] == "abandoned"
         assert recovered.budget_summary()["unknown"] == {"tokens": 20, "costUsd": "0.2"}
+        # The lost call keeps its exposure but not the slot's allowance: two fresh attempts.
+        recovered.reserve_attempt("1:proposal:bob", fence, 20, "0.2")
         recovered.reserve_attempt("1:proposal:bob", fence, 20, "0.2")
         assert_error(api, "attempt_budget_exhausted", lambda: recovered.reserve_attempt("1:proposal:bob", fence))
         assert recovered.head()["round"] == 0

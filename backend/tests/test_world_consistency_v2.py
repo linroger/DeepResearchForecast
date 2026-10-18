@@ -98,7 +98,7 @@ def test_v2_closed_schema_keeps_substantive_obligations(mutation):
         validate_assessment(value, {'actor': {'objectives': []}}, {'intents': []}, mode=MODE_V2)
 
 
-def test_v2_unresolved_revision_cannot_commit_or_get_third_call(tmp_path):
+def test_v2_unresolved_revision_commits_flagged_without_a_third_call(tmp_path):
     class Unresolved(V2Policy):
         def decide(self, obs, *, review=None):
             result = super().decide(obs, review=review)
@@ -110,13 +110,13 @@ def test_v2_unresolved_revision_cannot_commit_or_get_third_call(tmp_path):
     policy = Unresolved('investment')
     with WorldStore(tmp_path / 'world.sqlite3', spec) as store:
         fence = store.acquire_writer('test')
-        with pytest.raises(WorldError):
+        head = run_round(store, policy, fence)
+        assert head['round'] == 1 and store.decision('1:proposal:buyer')['consistencyStatus'] == 'unresolved'
+        assert store.withheld_consistency_receipt('1:proposal:buyer')['state'] == 'withheld'
+        assert [c[2] for c in policy.calls if c[:2] == ('buyer', 'proposal')] == [False, True]
+        with pytest.raises(WorldError) as caught:  # Nothing more to dispatch: the horizon is committed.
             run_round(store, policy, fence)
-        assert store.head()['round'] == 0 and store.decision('1:proposal:buyer') is None
-        before = list(policy.calls)
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
-        assert policy.calls == before
+        assert caught.value.code == 'horizon_complete'
 
 
 def test_compiler_preserves_v2_pin_and_legacy_default():

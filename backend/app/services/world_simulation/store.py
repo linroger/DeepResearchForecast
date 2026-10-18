@@ -17,15 +17,25 @@ import threading
 from uuid import uuid4
 
 from .contracts import (
-    WorldError as WorldError,
+    REFUSAL_CODES, WorldError as WorldError,
     actors_by_id, canonical_json, decimal, digest, identifier,
     parse_time, period_for, quantity, require, validate_decision,
     validate_snapshot, validate_spec, visibility,
 )
 
-_VERSION = 1
+# v2: attempts may be 'abandoned' (open when a later writer fence superseded theirs) or
+# 'throttled' (refused for provider capacity, nothing metered); neither counts toward a
+# slot's allowance, and a review stage left so is dispatched again under a new journal row.
+# Readers accept v1 files unchanged; the first writer migrates them (_migrate).
+_VERSION = 2
+_READABLE_VERSIONS = (1, 2)
 _APPLICATION_ID = 0x57524C44
 _PHASES = ("proposal", "response")
+_ATTEMPT_STATUSES = frozenset({"unknown", "succeeded", "failed", "abandoned", "throttled"})
+_INACTIVE_ATTEMPTS = frozenset({"abandoned", "throttled"})
+_ZERO_USAGE = {"tokens": 0, "costUsd": "0"}
+# A committed review decision whose final assessment stayed unresolved carries this marker.
+UNRESOLVED_MARKER = ("consistencyStatus", "unresolved")
 _SCHEMA = (
     "CREATE TABLE model (singleton INTEGER PRIMARY KEY CHECK(singleton=1), spec TEXT NOT NULL, spec_hash TEXT NOT NULL)",
     "CREATE TABLE writer (singleton INTEGER PRIMARY KEY CHECK(singleton=1), fence INTEGER NOT NULL, owner TEXT, pid INTEGER)",
@@ -36,12 +46,16 @@ _SCHEMA = (
     "CREATE TABLE attempts (attempt_id TEXT PRIMARY KEY, slot TEXT NOT NULL REFERENCES slots(slot), ordinal INTEGER NOT NULL, reserved_tokens INTEGER NOT NULL, reserved_cost TEXT NOT NULL, status TEXT NOT NULL, usage TEXT, UNIQUE(slot,ordinal))",
     "CREATE TABLE event_ids (event_id TEXT PRIMARY KEY, round INTEGER NOT NULL REFERENCES commits(round))",
 )
-_REVIEW_SCHEMA = (
-    "CREATE TABLE consistency_journal (attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id), "
+# v1 also declared UNIQUE(slot,stage), which made an abandoned stage impossible to redispatch;
+# the store now enforces one live candidate and one live revision per slot itself.
+_REVIEW_TABLE = (
+    "CREATE TABLE {name} (attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id), "
     "slot TEXT NOT NULL REFERENCES slots(slot), stage TEXT NOT NULL CHECK(stage IN ('candidate','revision')), "
     "observation_hash TEXT NOT NULL, candidate_attempt_id TEXT REFERENCES attempts(attempt_id), candidate_hash TEXT, "
-    "decision TEXT, assessment TEXT, error TEXT, receipt_hash TEXT NOT NULL, UNIQUE(slot,stage))"
+    "decision TEXT, assessment TEXT, error TEXT, receipt_hash TEXT NOT NULL)"
 )
+_REVIEW_SCHEMA = (_REVIEW_TABLE.format(name="consistency_journal"),
+                  "CREATE INDEX consistency_journal_slot ON consistency_journal(slot)")
 _REVIEW_COLUMNS = {"attempt_id", "slot", "stage", "observation_hash", "candidate_attempt_id",
                    "candidate_hash", "decision", "assessment", "error", "receipt_hash"}
 
@@ -81,6 +95,11 @@ def _alive(pid: int) -> bool:
     except OSError:
         return True
     return True
+
+
+def _live(entries):
+    """Journal entries that are stages: abandoned and throttled attempts are closed records."""
+    return [entry for entry in entries if entry["status"] not in _INACTIVE_ATTEMPTS]
 
 
 def _revision(snapshot, previous_revision, events, resolutions, decisions):
@@ -131,6 +150,7 @@ class WorldStore:
                     if not tables:
                         require(supplied is not None, "missing_world", "New world requires a specification")
                         self._initialize(supplied)
+                    self._migrate()
                     self._load(supplied)
         except BaseException:
             self._db.close()
@@ -223,7 +243,8 @@ class WorldStore:
         for statement in _SCHEMA:
             self._db.execute(statement)
         if self._review_mode is not None:
-            self._db.execute(_REVIEW_SCHEMA)
+            for statement in _REVIEW_SCHEMA:
+                self._db.execute(statement)
         self._db.execute(f"PRAGMA application_id={_APPLICATION_ID}")
         self._db.execute(f"PRAGMA user_version={_VERSION}")
         self._db.execute("INSERT INTO model VALUES (1,?,?)", (canonical_json(spec), digest(spec)))
@@ -235,9 +256,31 @@ class WorldStore:
         self._db.executemany("INSERT INTO event_ids VALUES (?,0)", [(event["eventId"],) for event in events])
         self._db.execute("INSERT INTO head VALUES (1,0)")
 
+    def _migrate(self):
+        """Bring a readable older file to _VERSION inside the opening writer transaction.
+
+        v1 -> v2 rebuilds the review journal without UNIQUE(slot,stage), row for row; no
+        receipt, revision or attempt changes. Readers never migrate.
+        """
+        require(self._db.execute("PRAGMA application_id").fetchone()[0] == _APPLICATION_ID,
+                "unsupported_store", "Unsupported world database schema")
+        version = self._db.execute("PRAGMA user_version").fetchone()[0]
+        if version == _VERSION:
+            return
+        require(version in _READABLE_VERSIONS, "unsupported_store", "Unsupported world database schema")
+        if self._db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='consistency_journal'").fetchone():
+            columns = ",".join(("attempt_id", "slot", "stage", "observation_hash", "candidate_attempt_id",
+                                "candidate_hash", "decision", "assessment", "error", "receipt_hash"))
+            self._db.execute(_REVIEW_TABLE.format(name="consistency_journal_v2"))
+            self._db.execute(f"INSERT INTO consistency_journal_v2 ({columns}) SELECT {columns} FROM consistency_journal")
+            self._db.execute("DROP TABLE consistency_journal")
+            self._db.execute("ALTER TABLE consistency_journal_v2 RENAME TO consistency_journal")
+            self._db.execute(_REVIEW_SCHEMA[1])
+        self._db.execute(f"PRAGMA user_version={_VERSION}")
+
     def _load(self, supplied):
         require(self._db.execute("PRAGMA application_id").fetchone()[0] == _APPLICATION_ID
-                and self._db.execute("PRAGMA user_version").fetchone()[0] == _VERSION,
+                and self._db.execute("PRAGMA user_version").fetchone()[0] in _READABLE_VERSIONS,
                 "unsupported_store", "Unsupported world database schema")
         require(self._db.execute("PRAGMA quick_check").fetchone()[0] == "ok"
                 and not self._db.execute("PRAGMA foreign_key_check").fetchall(),
@@ -348,7 +391,16 @@ class WorldStore:
                 self._db.execute("ROLLBACK")
                 raise
 
-    def acquire_writer(self, owner_id, pid=None, takeover=False):
+    def acquire_writer(self, owner_id, pid=None, takeover=False, holds_launch_lock=False):
+        """Advance the writer fence for ``owner_id``.
+
+        ``holds_launch_lock``: the caller holds this world's exclusive launch flock
+        (world_launch.lock). Every world child holds it for its whole life and the kernel
+        drops it when the holder exits, also across a reboot, so an owner recorded by another
+        process has exited and is taken over without probing its PID, which macOS soon reuses.
+        An owner recorded with this very process's PID is another live store object. Without
+        the lock, an owner whose PID still answers is protected (fail closed, see _alive).
+        """
         require(isinstance(owner_id, str) and 0 < len(owner_id) <= 256,
                 "invalid_writer", "Writer owner identity is required")
         pid = os.getpid() if pid is None else pid
@@ -361,12 +413,37 @@ class WorldStore:
                 if (self._owned_fence == writer["fence"] and writer["owner"] == owner_id
                         and writer["pid"] == pid):
                     return writer["fence"]
-                require(not _alive(writer["pid"]), "writer_active", "A live writer owns this world")
+                live = writer["pid"] == os.getpid() if holds_launch_lock else _alive(writer["pid"])
+                require(not live, "writer_active", "A live writer owns this world")
                 require(takeover, "writer_takeover_required", "Dead writer requires explicit takeover")
             fence = writer["fence"] + 1
+            self._abandon_open_attempts()
             self._db.execute("UPDATE writer SET fence=?,owner=?,pid=? WHERE singleton=1", (fence, owner_id, pid))
         self._owned_fence = fence
         return fence
+
+    def _abandon_open_attempts(self):
+        """Every attempt still 'unknown' belongs to a superseded fence: no writer can finish it.
+
+        Its reservation stays in budget exposure (abandoned counts as unknown), it leaves its
+        slot's allowance, and a pinned review stage can be dispatched again. Runs inside the
+        transaction that advances the fence, before the new fence reserves anything.
+        """
+        open_attempts = [row[0] for row in self._db.execute("SELECT attempt_id FROM attempts WHERE status='unknown'")]
+        if not open_attempts:
+            return
+        rehashed = []
+        if self._review_mode is not None:
+            slots = {row[0] for row in self._db.execute(
+                f"SELECT slot FROM attempts WHERE attempt_id IN ({','.join('?' * len(open_attempts))})", open_attempts)}
+            for slot in sorted(slots):
+                _, entries = self._verified_consistency(slot)
+                for entry in entries:
+                    if entry["attempt_id"] in open_attempts:
+                        rehashed.append((self._consistency_hash({**entry, "status": "abandoned"}), entry["attempt_id"]))
+        self._db.execute("UPDATE attempts SET status='abandoned' WHERE status='unknown'")
+        if rehashed:
+            self._db.executemany("UPDATE consistency_journal SET receipt_hash=? WHERE attempt_id=?", rehashed)
 
     def _fence(self, fence):
         writer = self._db.execute("SELECT fence,owner FROM writer WHERE singleton=1").fetchone()
@@ -450,9 +527,8 @@ class WorldStore:
         if self._review_mode is not None:
             with self._consistency_read():
                 _, entries = self._verified_consistency(slot)
-                if len(entries) == 2 and entries[1]["status"] == "succeeded":
-                    return _json(entries[1]["decision"])
-                return None
+                final = self._final_decision(_live(entries))
+                return _json(final) if final is not None else None
         return self._receipt(slot, "decision")
 
     def _validated_decision(self, value, observation, actor, phase):
@@ -496,7 +572,8 @@ class WorldStore:
                 reserved_tokens += row["reserved_tokens"]
                 reserved_cost += Decimal(row["reserved_cost"])
                 usage = json.loads(row["usage"]) if row["usage"] is not None else None
-                if row["status"] in {"succeeded", "failed"}:
+                # 'throttled' is known zero usage; 'abandoned' keeps its whole reservation as unknown.
+                if row["status"] in {"succeeded", "failed", "throttled"}:
                     actual_tokens += usage["tokens"]
                     actual_cost += Decimal(usage["costUsd"])
                 else:
@@ -538,7 +615,9 @@ class WorldStore:
             row = self._slot(slot)
             require(row["observation"] is not None, "missing_observation", "Attempt requires its persisted observation")
             require(row["decision"] is None, "decision_already_saved", "A completed decision cannot dispatch again")
-            count = self._db.execute("SELECT COUNT(*) FROM attempts WHERE slot=?", (slot,)).fetchone()[0]
+            count, last = self._db.execute(
+                "SELECT COALESCE(SUM(status NOT IN ('abandoned','throttled')),0), COALESCE(MAX(ordinal),0) "
+                "FROM attempts WHERE slot=?", (slot,)).fetchone()
             require(count < self._spec["limits"]["maxAttemptsPerSlot"], "attempt_budget_exhausted", "Decision slot allowance exhausted")
             exposure = self._budget()["exposure"]
             with localcontext() as context:
@@ -548,14 +627,17 @@ class WorldStore:
                         "run_budget_exhausted", "Run token or cost allowance exhausted")
             attempt_id = uuid4().hex
             self._db.execute("INSERT INTO attempts VALUES (?,?,?,?,?,'unknown',NULL)",
-                             (attempt_id, slot, count + 1, reserved["tokens"], reserved["costUsd"]))
+                             (attempt_id, slot, last + 1, reserved["tokens"], reserved["costUsd"]))
         return attempt_id
 
     def finish_attempt(self, attempt_id, status, usage, fence):
-        require(status in {"succeeded", "failed", "unknown"}, "invalid_attempt_status", "Invalid attempt outcome")
+        """Record an attempt outcome; 'throttled' means refused before metering (zero usage)."""
+        require(status in {"succeeded", "failed", "unknown", "throttled"}, "invalid_attempt_status", "Invalid attempt outcome")
         require(isinstance(usage, dict) and set(usage) == {"tokens", "costUsd"},
                 "invalid_usage", "Usage must contain tokens and costUsd")
         normalized = self._usage(usage["tokens"], usage["costUsd"])
+        require(status != "throttled" or normalized == _ZERO_USAGE,
+                "invalid_usage", "A throttled attempt was refused before metering")
         encoded = canonical_json(normalized)
         with self._transaction():
             self._fence(fence)
@@ -563,6 +645,8 @@ class WorldStore:
                     "Pinned attempts require atomic consistency completion")
             row = self._db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
             require(row is not None, "unknown_attempt", "Attempt reservation does not exist")
+            require(row["status"] != "abandoned", "attempt_abandoned",
+                    "A superseded writer's attempt cannot be finished")
             self._slot(row["slot"])
             require(normalized["tokens"] <= row["reserved_tokens"]
                     and decimal(normalized["costUsd"]) <= decimal(row["reserved_cost"]),
@@ -648,20 +732,26 @@ class WorldStore:
                            "ordinal", "reserved_tokens", "reserved_cost", "status", "usage", "decision", "assessment", "error")}})
 
     def _validated_withheld_consistency(self, entry, observation):
-        from .review import MODE_V3, MODE_V4, assessment_status, validate_assessment
+        """A revision whose validated assessment stayed unresolved: private evidence plus the
+        decision the slot commits with UNRESOLVED_MARKER (any review mode)."""
+        from .review import assessment_status, validate_assessment
 
-        require(self._review_mode in {MODE_V3, MODE_V4} and entry["stage"] == "revision" and entry["status"] == "failed"
+        require(entry["stage"] == "revision" and entry["status"] == "failed"
                 and entry["usage"] is not None and entry["decision"] is not None and entry["assessment"] is not None
                 and isinstance(entry["error"], dict) and entry["error"].get("code") == "consistency_unresolved",
-                "invalid_consistency_payload", "Only validated v4 unresolved revisions may retain private evidence"
-                if self._review_mode == MODE_V4 else "Only validated v3 unresolved revisions may retain private evidence")
+                "invalid_consistency_payload", "Only validated unresolved revisions may retain private evidence")
         self._validated_decision(entry["decision"], observation, observation["actorId"], observation["phase"])
         assessment = validate_assessment(entry["assessment"], observation, entry["decision"], mode=self._review_mode)
         require(assessment_status(assessment, mode=self._review_mode) == "unresolved",
                 "invalid_consistency_payload", "Withheld evidence must retain an unresolved verdict")
 
     def _verified_consistency(self, slot):
-        """Validate private state before returning any candidate or final receipt."""
+        """Validate private state before returning any candidate or final receipt.
+
+        Entries follow attempt ordinal. An 'abandoned' or 'throttled' entry is a closed record
+        that keeps its exposure and audit row but is not a stage; the live entries, a candidate
+        and then a revision bound to it, decide the slot.
+        """
         self._require_consistency()
         round_index, phase, actor = self._slot_parts(slot)
         state = {"candidate": None, "candidateAttempt": None, "reviewAttempt": None}
@@ -672,7 +762,7 @@ class WorldStore:
                 "a.reserved_cost,a.status,a.usage FROM consistency_journal j LEFT JOIN attempts a "
                 "ON a.attempt_id=j.attempt_id WHERE j.slot=? ORDER BY a.ordinal", (slot,))]
             attempts = self._db.execute("SELECT COUNT(*) FROM attempts WHERE slot=?", (slot,)).fetchone()[0]
-            require(len(entries) == attempts <= 2, "corrupt_consistency_journal", "Consistency attempt linkage is incomplete")
+            require(len(entries) == attempts, "corrupt_consistency_journal", "Consistency attempt linkage is incomplete")
             if row is None:
                 require(not entries, "corrupt_consistency_journal", "Consistency slot is missing")
                 return state, []
@@ -684,21 +774,23 @@ class WorldStore:
                         and observation["round"] == round_index and observation.get("actorId") == actor
                         and observation.get("phase") == phase and isinstance(observation.get("observationId"), str),
                         "corrupt_consistency_journal", "Consistency observation binding is invalid")
+            live = []
             for ordinal, entry in enumerate(entries, 1):
                 for key in ("usage", "decision", "assessment", "error"):
                     entry[key] = json.loads(entry[key]) if entry[key] is not None else None
-                stage = "candidate" if ordinal == 1 else "revision"
+                require(len(live) < 2, "corrupt_consistency_journal", "Consistency attempt follows a final revision")
+                stage = "candidate" if not live else "revision"
                 require(entry["linked_attempt"] == entry["attempt_id"] and entry["attempt_slot"] == slot
                         and entry["ordinal"] == ordinal and entry["stage"] == stage
                         and entry["observation_hash"] == digest(observation)
-                        and entry["status"] in {"succeeded", "failed", "unknown"},
+                        and entry["status"] in _ATTEMPT_STATUSES,
                         "corrupt_consistency_journal", "Consistency purpose or attempt identity changed")
                 self._usage(entry["reserved_tokens"], entry["reserved_cost"])
-                if ordinal == 1:
+                if stage == "candidate":
                     require(entry["candidate_attempt_id"] is None and entry["candidate_hash"] is None,
                             "corrupt_consistency_journal", "Candidate has an invalid predecessor")
                 else:
-                    candidate = entries[0]
+                    candidate = live[0]
                     review_input = self._consistency_review_input(candidate, observation)
                     require(review_input is not None
                             and entry["candidate_attempt_id"] == candidate["attempt_id"]
@@ -707,7 +799,8 @@ class WorldStore:
                 require(entry["receipt_hash"] == self._consistency_hash(entry),
                         "corrupt_consistency_journal", "Consistency receipt hash changed")
                 if entry["usage"] is None:
-                    require(entry["status"] == "unknown" and all(entry[key] is None for key in ("decision", "assessment", "error")),
+                    require(entry["status"] in {"unknown", "abandoned"}
+                            and all(entry[key] is None for key in ("decision", "assessment", "error")),
                             "corrupt_consistency_journal", "Unfinished consistency attempt has a payload")
                 else:
                     usage = entry["usage"]
@@ -720,13 +813,18 @@ class WorldStore:
                     if entry["status"] == "succeeded":
                         require(entry["error"] is None, "corrupt_consistency_journal", "Successful consistency receipt contains an error")
                         self._validated_decision(entry["decision"], observation, actor, phase)
-                        if ordinal == 1:
+                        if stage == "candidate":
                             require(entry["assessment"] is None, "corrupt_consistency_journal", "Candidate contains a final assessment")
                         else:
                             from .review import assessment_status, validate_assessment
 
                             assessment = validate_assessment(entry["assessment"], observation, entry["decision"], mode=self._review_mode)
                             require(assessment_status(assessment, mode=self._review_mode) == "clear", "corrupt_consistency_journal", "Final assessment is not clear")
+                    elif entry["status"] == "throttled":
+                        require(usage == _ZERO_USAGE and entry["decision"] is None and entry["assessment"] is None
+                                and isinstance(entry["error"], dict) and entry["error"].get("code") in REFUSAL_CODES
+                                and self._consistency_error(entry["error"]) == entry["error"],
+                                "corrupt_consistency_journal", "Throttled consistency attempt has an invalid payload")
                     else:
                         if isinstance(entry["error"], dict) and "candidateRepairEligible" in entry["error"]:
                             self._candidate_repair_context(entry, observation)
@@ -735,13 +833,16 @@ class WorldStore:
                                     "corrupt_consistency_journal", "Failed consistency attempt has an invalid payload")
                         if entry["decision"] is not None or entry["assessment"] is not None:
                             self._validated_withheld_consistency(entry, observation)
+                if entry["status"] in _INACTIVE_ATTEMPTS:
+                    continue
+                live.append(entry)
                 attempt = {"attemptId": entry["attempt_id"], "status": entry["status"], "stage": stage}
                 if entry["error"] is not None:
                     attempt["errorCode"] = entry["error"]["code"]
-                state["candidateAttempt" if ordinal == 1 else "reviewAttempt"] = attempt
-                if ordinal == 1 and entry["status"] == "succeeded":
+                state["candidateAttempt" if stage == "candidate" else "reviewAttempt"] = attempt
+                if stage == "candidate" and entry["status"] == "succeeded":
                     state["candidate"] = entry["decision"]
-            final = entries[-1]["decision"] if len(entries) == 2 and entries[-1]["status"] == "succeeded" else None
+            final = self._final_decision(live)
             require(row["decision"] == (canonical_json(final) if final is not None else None),
                     "corrupt_consistency_journal", "Final decision lacks its matching completed revision")
             return state, entries
@@ -749,6 +850,27 @@ class WorldStore:
             if isinstance(error, WorldError) and error.code == "corrupt_consistency_journal":
                 raise
             raise WorldError("corrupt_consistency_journal", "Consistency journal validation failed") from None
+
+    @staticmethod
+    def _revision_decision(revision):
+        """The decision a finished revision commits, or None.
+
+        A cleared revision commits as is. A validated revision whose assessment stayed
+        unresolved (failed, consistency_unresolved, withheld payload) commits its decision with
+        UNRESOLVED_MARKER, so the round goes on and the record says the review did not clear.
+        """
+        if revision["status"] == "succeeded":
+            return revision["decision"]
+        if (revision["status"] == "failed" and revision["decision"] is not None
+                and isinstance(revision["error"], dict) and revision["error"].get("code") == "consistency_unresolved"):
+            key, value = UNRESOLVED_MARKER
+            return {**revision["decision"], key: value}
+        return None
+
+    @classmethod
+    def _final_decision(cls, live):
+        """The slot's admitted decision: the one its live revision commits."""
+        return cls._revision_decision(live[1]) if len(live) == 2 else None
 
     def _verify_consistency_journal(self):
         self._require_consistency()
@@ -763,7 +885,7 @@ class WorldStore:
             for decision in json.loads(row[0]):
                 slot = f"{decision['round']}:{decision['phase']}:{decision['actorId']}"
                 _, rows = self._verified_consistency(slot)
-                require(len(rows) == 2 and rows[1]["status"] == "succeeded" and rows[1]["decision"] == decision,
+                require(self._final_decision(_live(rows)) == decision,
                         "corrupt_consistency_journal", "Committed decision lacks its consistency receipt")
         return entries
 
@@ -776,18 +898,20 @@ class WorldStore:
         """Private review input derived only from validated durable records."""
         with self._consistency_read():
             _, entries = self._verified_consistency(slot)
-            if not entries:
+            live = _live(entries)
+            if not live:
                 return None
             observation = self._receipt(slot, "observation")
-            return _json(self._consistency_review_input(entries[0], observation))
+            return _json(self._consistency_review_input(live[0], observation))
 
     def consistency_receipt(self, slot):
         """Private audit only; public world/result exports never include this."""
         with self._consistency_read():
             state, entries = self._verified_consistency(slot)
-            if len(entries) != 2 or entries[1]["status"] != "succeeded":
+            live = _live(entries)
+            if len(live) != 2 or live[1]["status"] != "succeeded":
                 return None
-            candidate, final = entries
+            candidate, final = live
             receipt = {"mode": self._review_mode, "slot": slot,
                           "observationId": final["decision"]["observationId"], "observationHash": final["observation_hash"],
                           "candidate": state["candidate"], "candidateHash": final["candidate_hash"],
@@ -805,12 +929,16 @@ class WorldStore:
             return _json(receipt)
 
     def withheld_consistency_receipt(self, slot):
-        """Private, non-admitted v3/v4 evidence; never used by world/API exporters."""
+        """Private evidence of an unresolved revision; never used by world/API exporters.
+
+        The withheld decision itself is committed with UNRESOLVED_MARKER; its assessment stays here.
+        """
         with self._consistency_read():
             _, entries = self._verified_consistency(slot)
-            if len(entries) != 2 or entries[1]["status"] != "failed" or entries[1]["assessment"] is None:
+            live = _live(entries)
+            if len(live) != 2 or live[1]["status"] != "failed" or live[1]["assessment"] is None:
                 return None
-            entry = entries[1]  # Full mode, provenance and unresolved validation happened above.
+            entry = live[1]  # Full mode, provenance and unresolved validation happened above.
             return _json({"schemaVersion": "world-withheld-consistency-receipt/v1", "state": "withheld",
                           "mode": self._review_mode, "slot": slot, "observationHash": entry["observation_hash"],
                           "candidateHash": entry["candidate_hash"], "withheldDecision": entry["decision"],
@@ -825,10 +953,12 @@ class WorldStore:
             row = self._slot(slot)
             require(row["observation"] is not None, "missing_observation", "Attempt requires its persisted observation")
             _, entries = self._verified_consistency(slot)
-            review_input = self._consistency_review_input(entries[0], json.loads(row["observation"])) if entries else None
+            live = _live(entries)
+            review_input = self._consistency_review_input(live[0], json.loads(row["observation"])) if live else None
             require(row["decision"] is None, "decision_already_saved", "A completed decision cannot dispatch again")
-            require((stage == "candidate" and not entries) or (
-                    stage == "revision" and len(entries) == 1 and review_input is not None),
+            # A closed (abandoned or throttled) attempt is not a stage: that stage is dispatched again.
+            require((stage == "candidate" and not live) or (
+                    stage == "revision" and len(live) == 1 and review_input is not None),
                     "consistency_stage_exhausted", "Consistency stages cannot be skipped or replaced")
             exposure = self._budget()["exposure"]
             with localcontext() as context:
@@ -838,8 +968,8 @@ class WorldStore:
                         "run_budget_exhausted", "Run token or cost allowance exhausted")
             attempt_id = uuid4().hex
             entry = {"attempt_id": attempt_id, "slot": slot, "stage": stage, "observation_hash": digest(json.loads(row["observation"])),
-                     "candidate_attempt_id": entries[0]["attempt_id"] if entries else None,
-                     "candidate_hash": digest(review_input) if entries else None,
+                     "candidate_attempt_id": live[0]["attempt_id"] if stage == "revision" else None,
+                     "candidate_hash": digest(review_input) if stage == "revision" else None,
                      "ordinal": len(entries) + 1, "reserved_tokens": reserved["tokens"], "reserved_cost": reserved["costUsd"],
                      "status": "unknown", "usage": None, "decision": None, "assessment": None, "error": None}
             self._db.execute("INSERT INTO attempts VALUES (?,?,?,?,?,'unknown',NULL)",
@@ -852,12 +982,17 @@ class WorldStore:
     def finish_consistency_attempt(self, attempt_id, *, status, usage, fence, decision=None, assessment=None, error=None,
                                    repair_eligible=False):
         require(type(repair_eligible) is bool, "invalid_candidate_repair", "Candidate repair eligibility must be explicit boolean metadata")
-        require(status in ("succeeded", "failed", "unknown"), "invalid_attempt_status", "Invalid attempt outcome")
+        require(status in ("succeeded", "failed", "unknown", "throttled"), "invalid_attempt_status", "Invalid attempt outcome")
         require(isinstance(usage, dict) and set(usage) == {"tokens", "costUsd"}, "invalid_usage", "Usage must contain tokens and costUsd")
         normalized = self._usage(usage["tokens"], usage["costUsd"])
         decision = _json(decision) if decision is not None else None
         assessment = _json(assessment) if assessment is not None else None
         error = self._consistency_error(error)
+        # Refused before metering: no usage, payload or repair, and a refusal code.
+        require(status != "throttled" or (normalized == _ZERO_USAGE and decision is None and assessment is None
+                                          and not repair_eligible and error is not None
+                                          and error["code"] in REFUSAL_CODES),
+                "invalid_consistency_payload", "A throttled consistency attempt was refused before metering")
         with self._transaction():
             self._fence(fence)
             self._require_consistency()
@@ -866,6 +1001,7 @@ class WorldStore:
             _, entries = self._verified_consistency(attempt["slot"])
             entry = next((item for item in entries if item["attempt_id"] == attempt_id), None)
             require(entry is not None, "corrupt_consistency_journal", "Attempt has no consistency purpose")
+            require(entry["status"] != "abandoned", "attempt_abandoned", "A superseded writer's attempt cannot be finished")
             if repair_eligible:
                 require(error is not None, "invalid_candidate_repair", "Eligible candidate failure requires a safe diagnostic")
                 error = self._consistency_error(error, repair_eligible=True)
@@ -901,8 +1037,12 @@ class WorldStore:
                              (canonical_json(decision) if decision is not None else None,
                               canonical_json(assessment) if assessment is not None else None,
                               canonical_json(error) if error is not None else None, self._consistency_hash(entry), attempt_id))
-            if status == "succeeded" and entry["stage"] == "revision":
-                self._db.execute("UPDATE slots SET decision=? WHERE slot=?", (canonical_json(decision), entry["slot"]))
+            if entry["stage"] == "revision":
+                # Same transaction as the receipt: a cleared revision, or an unresolved one
+                # with its withheld decision, becomes the slot's final decision at once.
+                final = self._revision_decision(entry)
+                if final is not None:
+                    self._db.execute("UPDATE slots SET decision=? WHERE slot=?", (canonical_json(final), entry["slot"]))
 
     def _validate_closure(self, snapshot, previous=None):
         require(isinstance(snapshot, dict), "invalid_snapshot", "World snapshot must be an object")
@@ -987,7 +1127,10 @@ class WorldStore:
                         and type(resolution.get("accepted")) is bool and isinstance(resolution.get("code"), str)
                         and isinstance(resolution.get("explanation"), str), "invalid_resolution", "Resolution identity or outcome is invalid")
                 resolved.add(intent_id)
-            require(len(events) <= self._spec["limits"]["maxEventsPerRound"], "event_limit", "Round event limit exceeded")
+            from .kernel import event_load, resolve_round
+
+            require(event_load(events) <= self._spec["limits"]["maxEventsPerRound"], "event_limit",
+                    "Round event limit exceeded")
             event_ids = set()
             period = period_for(self._spec, round_index)
             for event in events:
@@ -1011,8 +1154,6 @@ class WorldStore:
             # This checks the entire pending/actor/event closure without inventing
             # a second mechanism implementation in the persistence boundary.
             # It performs no provider, graph, clock, or filesystem operations.
-            from .kernel import resolve_round
-
             expected = resolve_round(self._spec, json.loads(head["snapshot"]), decisions, round_index)
             require(canonical_json(value) == canonical_json(expected["snapshot"])
                     and canonical_json(events) == canonical_json(expected["events"])

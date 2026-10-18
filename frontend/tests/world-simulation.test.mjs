@@ -193,6 +193,28 @@ test('analyst rendering labels private modeled state, escapes model output and l
   assert.match(body(await h.render()), /私有建模状态：模拟中的信念与计划/)
 })
 
+test('analyst rendering names a decision committed with an unresolved review and a failed commitment', async t => {
+  const flagged = async (id, req) => {
+    const response = payload(id, req)
+    if (response.data.view === 'analyst') {
+      response.data.decisions[0].consistencyStatus = 'unresolved'
+      response.data.world.commitments.c1.status = 'failed'
+    }
+    return response
+  }
+  const h = harness(t, { api: { getWorldSimulation: flagged } })
+  await settle()
+  h.state.view.value = 'analyst'
+  await settle()
+  const en = body(await h.render())
+  assert.match(en, /actor_A · Round 1 · Acted · Consistency review unresolved/)
+  assert.match(en, /invest · Failed/)
+  i18n.locale.value = 'zh'
+  const zh = body(await h.render())
+  assert.match(zh, /一致性复核未解决/)
+  assert.match(zh, /invest · 未能履行/)
+})
+
 for (const stale of ['success', 'envelope', 'reject']) {
   test(`simulation A→B→A discards stale ${stale}, including loading/error writes`, async t => {
     const pending = []

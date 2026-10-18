@@ -473,7 +473,10 @@ def test_bounded_modeler_prompt_uses_actual_research_and_partition_metadata():
     assert "no Python" in messages[0]["content"]
     data = json.loads(messages[1]["content"])
     assert data["report"] == REPORT and data["ontology"]["entityTypes"] == ["Organization"]
-    assert data["claims"][0]["actorAllowed"] is False
+    # Claims are grouped by actor; a supplied (non-derived) claim keeps its full record.
+    assert data["claims"][0]["actorId"] == "a"
+    assert data["claims"][0]["claims"][0]["actorAllowed"] is False
+    assert data["claims"][0]["claims"][0]["claim"]["claim_id"] == "goals"
     assert bundle == original
     with pytest.raises(WorldError) as error:
         build_compiler_messages(research_report="x" * 240001, research_generation_id="research1", research_engine="v3")

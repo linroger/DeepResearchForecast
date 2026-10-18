@@ -158,7 +158,7 @@ def test_legacy_apis_cannot_bypass_review_admission(api, spec, tmp_path):
 
 @pytest.mark.parametrize("stage", ["candidate", "revision"])
 @pytest.mark.parametrize("outcome", ["reserved", "unknown", "failed"])
-def test_lost_or_failed_stage_never_regains_allowance_on_resume(api, spec, tmp_path, stage, outcome):
+def test_lost_stage_is_redispatched_but_failed_stage_never_regains_allowance_on_resume(api, spec, tmp_path, stage, outcome):
     path = tmp_path / "world.sqlite"
     with api.Store(path, spec) as store:
         fence = store.acquire_writer("owner")
@@ -172,12 +172,21 @@ def test_lost_or_failed_stage_never_regains_allowance_on_resume(api, spec, tmp_p
         before = store.budget_summary()
     with api.Store(path) as store:
         fence = store.acquire_writer("resume")
-        assert store.budget_summary() == before
+        after = store.budget_summary()
+        lost = outcome in {"reserved", "unknown"}  # Open when its fence was superseded.
+        assert after["attempts"][-1]["status"] == ("abandoned" if lost else "failed")
+        assert {key: after[key] for key in ("reserved", "actual", "unknown", "exposure")} == {
+            key: before[key] for key in ("reserved", "actual", "unknown", "exposure")}
         assert store.decision(SLOT) is None
         assert store.consistency_receipt(SLOT) is None
-        for next_stage in ("candidate", "revision"):
+        exhausted = ("candidate", "revision") if not lost else (("revision",) if stage == "candidate" else ("candidate",))
+        for next_stage in exhausted:
             fails(api, "consistency_stage_exhausted", lambda next_stage=next_stage: store.reserve_consistency_attempt(SLOT, next_stage, fence))
-        if outcome in {"reserved", "unknown"}:
+        if lost:
+            store.reserve_consistency_attempt(SLOT, stage, fence, 30, "0.3")  # The same stage, dispatched again.
+            assert [a["ordinal"] for a in store.budget_summary()["attempts"]][-2:] == [len(before["attempts"]),
+                                                                                       len(before["attempts"]) + 1]
+        if lost:
             assert before["unknown"] == {"tokens": 30, "costUsd": "0.3"}
         else:
             assert before["unknown"] == ZERO
@@ -381,6 +390,9 @@ def test_fence_and_round_checks_cover_new_mutations(api, spec, tmp_path):
         fence = current.acquire_writer("current")
         fails(api, "stale_fence", lambda: old.reserve_consistency_attempt(SLOT, "candidate", stale))
         fails(api, "stale_fence", lambda: old.finish_consistency_attempt(attempt, status="succeeded", usage=ZERO, fence=stale, decision=draft))
+        # The new fence abandoned the open attempt: nobody can finish it, and the stage is dispatched again.
+        fails(api, "attempt_abandoned", lambda: current.finish_consistency_attempt(attempt, status="succeeded", usage=ZERO, fence=fence, decision=draft))
+        attempt = current.reserve_consistency_attempt(SLOT, "candidate", fence)
         current.finish_consistency_attempt(attempt, status="succeeded", usage=ZERO, fence=fence, decision=draft)
         final_id, final, review = final_revision(api, current, fence)
         commit_wait_round(api, current, fence, final)

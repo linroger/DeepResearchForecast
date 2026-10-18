@@ -136,13 +136,15 @@ def _normalize_profile(value, *, complete, forecast_effect):
             raise WorldError(error.code, "World policy metadata is invalid") from None
         except (TypeError, ValueError, KeyError, AttributeError, RecursionError):
             raise WorldError("invalid_policy_metadata", "World policy metadata is invalid") from None
-        require(mode == MODE_V4 or (not complete and mode is None),
-                "invalid_policy_metadata", "Fresh world admission requires actor-consistency-v4")
+        # No review pin is the fresh default; v4 stays an explicit opt-in until a full behaviour
+        # study passes. Historical v1-v3 pins remain readable for saved worlds only.
+        require(mode is None or mode == MODE_V4, "invalid_policy_metadata",
+                "Fresh world admission accepts no decision review pin or actor-consistency-v4")
         if complete:
             require(profile["policy"].get("responseFormat") == "json_object",
                     "invalid_policy_metadata", "Fresh world admission requires explicit json_object responses")
-            require(candidate_repair_enabled(profile), "invalid_policy_metadata",
-                    "Fresh world admission requires the known-output-error-v1 candidate repair pin")
+            require(mode is None or candidate_repair_enabled(profile), "invalid_policy_metadata",
+                    "Fresh actor-consistency-v4 admission requires the known-output-error-v1 candidate repair pin")
     if "forecastEffect" in profile:
         effect = profile["forecastEffect"]
         require(isinstance(effect, str) and effect in _SAFE_EFFECTS and effect == forecast_effect,
@@ -157,13 +159,15 @@ def _transport_ready(profile):
     try:
         try:
             transport = StrictHTTPModeler(profile)
-            # This is one declared request envelope, not a forecast of the
-            # research-dependent number of modeling or actor decisions.
-            require(transport.max_input + transport.max_output <= profile["limits"]["maxTokens"],
-                    "invalid_modeling_budget", "Declared request exceeds the total token ceiling")
-            cost = decimal(transport._cost(transport.max_input, transport.max_output), nonnegative=True)
-            require(cost <= decimal(profile["limits"]["maxCostUsd"], nonnegative=True),
-                    "invalid_modeling_budget", "Declared request exceeds the total USD ceiling")
+            # One declared request envelope per role (the modeler's own pin and
+            # the shared actor envelope), not a forecast of the research-
+            # dependent number of modeling or actor decisions.
+            for max_input, max_output in {(transport.max_input, transport.max_output), transport.actor_envelope}:
+                require(max_input + max_output <= profile["limits"]["maxTokens"],
+                        "invalid_modeling_budget", "Declared request exceeds the total token ceiling")
+                cost = decimal(transport._cost(max_input, max_output), nonnegative=True)
+                require(cost <= decimal(profile["limits"]["maxCostUsd"], nonnegative=True),
+                        "invalid_modeling_budget", "Declared request exceeds the total USD ceiling")
         finally:
             if transport is not None:
                 transport.close()
@@ -182,10 +186,10 @@ def resolve_fresh_simulation_request(
 
     Research-only validates explicit input shape/metadata but defers profile and
     authentication readiness. Full-world admission requires an explicitly pinned JSON
-    policy with bounded candidate repair, pins an omitted effect from the safe
-    snapshot, and refuses every calendar override. It checks one declared request
-    envelope, not sufficient funding for the unknown future actor trajectory,
-    and compiles no candidate.
+    policy (and, when it opts into actor-consistency-v4 review, bounded candidate
+    repair), pins an omitted effect from the safe snapshot, and refuses every calendar
+    override. It checks one declared request envelope, not sufficient funding for the
+    unknown future actor trajectory, and compiles no candidate.
     """
     require(isinstance(mode, str) and mode in {"full", "research_only"},
             "invalid_world_request", "Unsupported pipeline mode")

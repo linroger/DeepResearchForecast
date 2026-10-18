@@ -24,7 +24,7 @@ def test_explicit_verdicts_are_valid_without_a_generated_aggregate():
     assert 'status' not in value
 
 
-def test_production_unresolved_reason_is_private_durable_and_not_an_action(tmp_path):
+def test_production_unresolved_reason_is_private_durable_and_its_decision_commits_flagged(tmp_path):
     from app.services.world_simulation.controller import PolicyResponse, run_round
     from app.services.world_simulation.store import WorldStore
     from test_world_consistency_controller import RevisingPolicy, specification
@@ -44,25 +44,22 @@ def test_production_unresolved_reason_is_private_durable_and_not_an_action(tmp_p
     path = tmp_path / 'world.sqlite3'
     policy = Concerned('investment')
     with WorldStore(path, spec) as store:
-        before = store.head()
         fence = store.acquire_writer('writer')
-        with pytest.raises(WorldError, match='consistency stage'):
-            run_round(store, policy, fence)
+        head = run_round(store, policy, fence)  # An unresolved verdict no longer ends the round.
         entry = store._verified_consistency('1:proposal:buyer')[1][-1]
         assert entry['assessment'] is not None, 'A validated current concern must not be discarded'
         assert entry['status'] == 'failed' and entry['assessment']['checks'][0]['verdict'] == 'unknown'
-        assert store.decision('1:proposal:buyer') is None and store.consistency_receipt('1:proposal:buyer') is None
-        assert store.head() == before and 'PRIVATE_VALIDATED_CONCERN' not in json.dumps(store.budget_summary())
+        assert store.decision('1:proposal:buyer') == {**entry['decision'], 'consistencyStatus': 'unresolved'}
+        assert store.consistency_receipt('1:proposal:buyer') is None and head['round'] == 1
+        assert 'PRIVATE_VALIDATED_CONCERN' not in json.dumps(store.budget_summary())
+        assert 'PRIVATE_VALIDATED_CONCERN' not in json.dumps(store.read_bundle())
         receipt = store.withheld_consistency_receipt('1:proposal:buyer')
         assert receipt['state'] == 'withheld' and 'PRIVATE_VALIDATED_CONCERN' in json.dumps(receipt)
         store.release_writer(fence)
     calls = deepcopy(policy.calls)
-    with WorldStore(path) as store:
+    with WorldStore(path, read_only=True) as store:
         assert store.withheld_consistency_receipt('1:proposal:buyer') == receipt
-        fence = store.acquire_writer('resume')
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
-        assert policy.calls == calls and store.head() == before
+        assert store.head() == head and policy.calls == calls
 
 
 @pytest.mark.parametrize('verdict,status', [('consistent', 'clear'), ('inconsistent', 'unresolved'),
@@ -121,26 +118,16 @@ def test_real_controller_and_reopened_store_use_same_aggregate(tmp_path, verdict
     policy = PerCheck('investment')
     with WorldStore(path, spec) as store:
         fence = store.acquire_writer('first')
-        if verdict == 'consistent':
-            run_round(store, policy, fence)
-            assert store.head()['accounts']['buyer_stock']['balance'] == '2'
-            assert store.decision('1:proposal:buyer') is not None
-        else:
-            with pytest.raises(WorldError, match='consistency stage'):
-                run_round(store, policy, fence)
-            assert store.head()['round'] == 0 and store.decision('1:proposal:buyer') is None
+        run_round(store, policy, fence)  # A nonclear aggregate commits flagged instead of ending the round.
+        assert store.head()['accounts']['buyer_stock']['balance'] == '2'
+        committed = store.decision('1:proposal:buyer')
+        assert committed.get('consistencyStatus') == (None if verdict == 'consistent' else 'unresolved')
         attempts = [a for a in store.budget_summary()['attempts'] if a['slot'] == '1:proposal:buyer']
         assert len(attempts) == 2
         store.release_writer(fence)
     calls = deepcopy(policy.calls)
-    with WorldStore(path) as store:
-        if verdict == 'consistent':
-            assert store.head()['round'] == 1
-        else:
-            fence = store.acquire_writer('reopened')
-            with pytest.raises(WorldError):
-                run_round(store, policy, fence)
-            assert store.head()['round'] == 0
+    with WorldStore(path, read_only=True) as store:
+        assert store.head()['round'] == 1 and store.decision('1:proposal:buyer') == committed
         assert policy.calls == calls
 
 

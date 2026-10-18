@@ -144,21 +144,30 @@ def test_non_output_or_unknown_failures_never_gain_repair(tmp_path, failure):
 
 @pytest.mark.parametrize('revision', ['invalid', 'unknown'])
 def test_failed_revision_never_opens_a_third_call(tmp_path, revision):
+    # 'invalid' is a malformed review (terminal); 'unknown' is a validated unresolved verdict,
+    # whose withheld decision commits flagged so the round goes on.
     policy = RepairingPolicy(revision=revision)
     path = tmp_path / 'world.sqlite3'
     with WorldStore(path, repair_spec()) as store:
         fence = store.acquire_writer('first')
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
+        if revision == 'invalid':
+            with pytest.raises(WorldError):
+                run_round(store, policy, fence)
+            assert store.decision(SLOT) is None and store.head()['round'] == 0
+        else:
+            assert run_round(store, policy, fence)['round'] == 1
+            assert store.decision(SLOT)['consistencyStatus'] == 'unresolved'
         assert [c[2] for c in policy.calls if c[:2] == ('buyer', 'proposal')] == [False, True]
-        assert store.decision(SLOT) is None and store.head()['round'] == 0
         assert (store.withheld_consistency_receipt(SLOT) is not None) == (revision == 'unknown')
         store.release_writer(fence)
     before = deepcopy(policy.calls)
     with WorldStore(path) as store:
-        fence = store.acquire_writer('resume')
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
+        if revision == 'invalid':
+            fence = store.acquire_writer('resume')
+            with pytest.raises(WorldError):
+                run_round(store, policy, fence)
+        else:
+            assert store.head()['round'] == 1
         assert policy.calls == before
 
 
@@ -276,8 +285,7 @@ def test_withheld_review_tampering_rejects_even_with_recomputed_receipt(tmp_path
     path = tmp_path / 'world.sqlite3'
     with WorldStore(path, repair_spec()) as store:
         fence = store.acquire_writer('first')
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
+        run_round(store, policy, fence)  # The withheld decision commits flagged; tamper with its proof.
         entry = store._verified_consistency(SLOT)[1][-1]
         assert entry['assessment'] is not None
         if tamper == 'missing_decision':

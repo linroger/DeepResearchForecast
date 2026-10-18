@@ -217,18 +217,23 @@ def simulation_research_binding(simulation_id):
         return {"status": "invalid"}
 
 
-def data_api():
-    """Load the fixed repository namespace without changing sys.path."""
+def bridge_module(name):
+    """Import ``deerflow_bridge.<name>`` from the fixed repository namespace without changing sys.path."""
     with _IMPORT_LOCK:
         if "deerflow_bridge" not in sys.modules:
             spec = importlib.machinery.ModuleSpec("deerflow_bridge", loader=None, is_package=True)
             spec.submodule_search_locations = [str(_BRIDGE)]
             sys.modules["deerflow_bridge"] = importlib.util.module_from_spec(spec)
-        try:
-            return importlib.import_module("deerflow_bridge.data_sources")
-        except (ImportError, OSError) as exc:
-            _LOG.warning("Official-data module unavailable (%s)", type(exc).__name__)
-            return None
+        return importlib.import_module("deerflow_bridge." + name)
+
+
+def data_api():
+    """Load the fixed repository namespace without changing sys.path."""
+    try:
+        return bridge_module("data_sources")
+    except (ImportError, OSError) as exc:
+        _LOG.warning("Official-data module unavailable (%s)", type(exc).__name__)
+        return None
 
 
 def _max_series():

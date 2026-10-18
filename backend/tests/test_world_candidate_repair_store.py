@@ -345,7 +345,7 @@ def test_unknown_candidate_never_produces_repair_input_across_reopen(api, spec, 
 
 
 @pytest.mark.parametrize("outcome", ["reserved", "unknown", "failed", "succeeded"])
-def test_second_attempt_in_any_state_never_opens_third_call(api, spec, tmp_path, outcome):
+def test_finished_second_attempt_never_opens_third_call_and_a_lost_one_is_redispatched(api, spec, tmp_path, outcome):
     path = tmp_path / "world.sqlite"
     with api.Store(path, spec) as store:
         fence = store.acquire_writer("owner")
@@ -359,13 +359,23 @@ def test_second_attempt_in_any_state_never_opens_third_call(api, spec, tmp_path,
                 store.finish_consistency_attempt(attempt, status=outcome, usage=KNOWN, fence=fence,
                                                  error={"code": "invalid_input", "message": "Second failure"})
         before = store.budget_summary()
+    lost = outcome in {"reserved", "unknown"}  # Still open when the resume superseded its fence.
     with api.Store(path) as store:
         fence = store.acquire_writer("resume")
-        for stage in ("candidate", "revision"):
+        fails(api, "decision_already_saved" if outcome == "succeeded" else "consistency_stage_exhausted",
+              lambda: store.reserve_consistency_attempt(SLOT, "candidate", fence))
+        after = store.budget_summary()
+        assert [a["status"] for a in after["attempts"]] == ["failed", "abandoned" if lost else outcome]
+        assert {key: after[key] for key in ("actual", "unknown", "exposure")} == {
+            key: before[key] for key in ("actual", "unknown", "exposure")} and len(before["attempts"]) == 2
+        assert before["unknown"] == ({"tokens": 30, "costUsd": "0.3"} if lost else ZERO)
+        if lost:
+            # The lost revision keeps its exposure; the unused repair review is dispatched again.
+            assert store.consistency_review_input(SLOT)["errorCode"] == "invalid_input"
+            store.reserve_consistency_attempt(SLOT, "revision", fence, 30, "0.3")
+        else:
             fails(api, "decision_already_saved" if outcome == "succeeded" else "consistency_stage_exhausted",
-                  lambda stage=stage: store.reserve_consistency_attempt(SLOT, stage, fence))
-        assert store.budget_summary() == before and len(before["attempts"]) == 2
-        assert before["unknown"] == ({"tokens": 30, "costUsd": "0.3"} if outcome in {"reserved", "unknown"} else ZERO)
+                  lambda: store.reserve_consistency_attempt(SLOT, "revision", fence))
 
 
 @pytest.mark.parametrize("defect", ["marker_false", "marker_string", "marker_missing", "code", "unknown", "unsafe_message", "usage", "context_hash", "attempt_link", "observation"])
@@ -420,9 +430,9 @@ def test_known_usage_and_eligibility_marker_are_atomic_and_fenced(api, spec, tmp
     with api.Store(path, spec) as old, api.Store(path) as store:
         stale = old.acquire_writer("old")
         prepare(api, old, stale)
-        attempt = old.reserve_consistency_attempt(SLOT, "candidate", stale, 30, "0.3")
         old.release_writer(stale)
         fence = store.acquire_writer("replacement")
+        attempt = store.reserve_consistency_attempt(SLOT, "candidate", fence, 30, "0.3")
         kwargs = {"status": "failed", "usage": KNOWN, "error": {"code": "invalid_input", "message": "output failure"}, "repair_eligible": True}
         fails(api, "stale_fence", lambda: old.finish_consistency_attempt(attempt, fence=stale, **kwargs))
         before = store.budget_summary()
@@ -444,7 +454,7 @@ def test_known_usage_and_eligibility_marker_are_atomic_and_fenced(api, spec, tmp
 
 @pytest.mark.parametrize("verdict", ["unknown", "inconsistent"])
 @pytest.mark.parametrize("path_kind", ["old_pin_absent", "valid_candidate", "failed_candidate"])
-def test_parent_private_withheld_retention_stays_unadmitted_and_durable(api, spec, tmp_path, path_kind, verdict):
+def test_parent_private_withheld_retention_stays_private_and_its_decision_commits_flagged(api, spec, tmp_path, path_kind, verdict):
     if path_kind == "old_pin_absent":
         spec["policy"].pop("candidateRepair")
     path = tmp_path / "world.sqlite"
@@ -463,14 +473,18 @@ def test_parent_private_withheld_retention_stays_unadmitted_and_durable(api, spe
         receipt = store.withheld_consistency_receipt(SLOT)
         assert receipt["state"] == "withheld" and receipt["withheldDecision"] == final and receipt["assessment"] == review
         assert receipt["candidateHash"] == api.digest(review_input)
-        assert store.decision(SLOT) is None and store.consistency_receipt(SLOT) is None
-        assert store.head()["round"] == 0 and store.rounds() == []
+        flagged = {**final, "consistencyStatus": "unresolved"}
+        assert store.decision(SLOT) == flagged and store.consistency_receipt(SLOT) is None
+        fails(api, "decision_already_saved", lambda: store.reserve_consistency_attempt(SLOT, "revision", fence))
+        store.freeze_phase(1, "response", [], fence)
+        result = api.resolve(store.spec, store.head(), [flagged], 1)
+        store.commit_round(0, result["snapshot"], result["events"], result["resolutions"], [flagged], fence)
+        assert store.rounds()[0]["decisions"] == [flagged]
         assert "PRIVATE_VALIDATED_ASSESSMENT" not in api.canonical(store.read_bundle())
-        fails(api, "consistency_stage_exhausted", lambda: store.reserve_consistency_attempt(SLOT, "revision", fence))
         budget = store.budget_summary()
     with api.Store(path, read_only=True) as store:
         assert store.withheld_consistency_receipt(SLOT) == receipt and store.budget_summary() == budget
-        assert store.decision(SLOT) is None and store.consistency_receipt(SLOT) is None
+        assert store.decision(SLOT) == flagged and store.consistency_receipt(SLOT) is None
 
 
 def test_concurrent_repair_reservations_share_original_second_ordinal_and_budget(api, spec, tmp_path):

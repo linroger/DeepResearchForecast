@@ -1,0 +1,152 @@
+{
+ "before": {
+  "policy": {
+   "provider": "glm",
+   "model": "glm-5.3",
+   "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+   "timeoutSeconds": 120,
+   "maxInputTokens": 60000,
+   "reasoningEffort": "high",
+   "pricing": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "inputUsdPerMillion": "2",
+    "outputUsdPerMillion": "6",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 131072,
+    "inputOverheadTokens": 1024,
+    "outputTokenParameter": "max_tokens",
+    "maxOutputIncludesReasoning": true,
+    "source": {
+     "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/\u6a21\u578b-api/\u5bf9\u8bdd\u8865\u5168.md",
+     "asOf": "2026-10-16T16:20:00Z"
+    }
+   },
+   "decisionReview": "actor-consistency-v4",
+   "responseFormat": "json_object",
+   "candidateRepair": "known-output-error-v1"
+  },
+  "forecastEffect": "diagnostic_only",
+  "limits": {
+   "maxTokens": 250000,
+   "maxCostUsd": "5",
+   "maxOutputTokens": 8192
+  }
+ },
+ "after": {
+  "policy": {
+   "provider": "glm",
+   "model": "glm-5.3",
+   "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+   "timeoutSeconds": 120,
+   "maxInputTokens": 60000,
+   "pricing": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "inputUsdPerMillion": "2",
+    "outputUsdPerMillion": "6",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 131072,
+    "inputOverheadTokens": 1024,
+    "outputTokenParameter": "max_tokens",
+    "maxOutputIncludesReasoning": true,
+    "source": {
+     "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/\u6a21\u578b-api/\u5bf9\u8bdd\u8865\u5168.md",
+     "asOf": "2026-10-16T16:20:00Z"
+    }
+   },
+   "decisionReview": "actor-consistency-v4",
+   "responseFormat": "json_object",
+   "candidateRepair": "known-output-error-v1",
+   "thinking": "disabled",
+   "modeler": {
+    "maxInputTokens": 400000,
+    "maxOutputTokens": 32768,
+    "timeoutSeconds": 900
+   }
+  },
+  "forecastEffect": "diagnostic_only",
+  "limits": {
+   "maxTokens": 3000000,
+   "maxCostUsd": "25",
+   "maxOutputTokens": 8192
+  }
+ },
+ "after_unpinned": {
+  "policy": {
+   "provider": "glm",
+   "model": "glm-5.3",
+   "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+   "timeoutSeconds": 120,
+   "maxInputTokens": 60000,
+   "pricing": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "inputUsdPerMillion": "2",
+    "outputUsdPerMillion": "6",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 131072,
+    "inputOverheadTokens": 1024,
+    "outputTokenParameter": "max_tokens",
+    "maxOutputIncludesReasoning": true,
+    "source": {
+     "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/\u6a21\u578b-api/\u5bf9\u8bdd\u8865\u5168.md",
+     "asOf": "2026-10-16T16:20:00Z"
+    }
+   },
+   "decisionReview": "actor-consistency-v4",
+   "responseFormat": "json_object",
+   "candidateRepair": "known-output-error-v1",
+   "thinking": "disabled"
+  },
+  "forecastEffect": "diagnostic_only",
+  "limits": {
+   "maxTokens": 3000000,
+   "maxCostUsd": "25",
+   "maxOutputTokens": 8192
+  }
+ },
+ "after_effort_low": {
+  "policy": {
+   "provider": "glm",
+   "model": "glm-5.3",
+   "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+   "timeoutSeconds": 120,
+   "maxInputTokens": 60000,
+   "pricing": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "inputUsdPerMillion": "2",
+    "outputUsdPerMillion": "6",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 131072,
+    "inputOverheadTokens": 1024,
+    "outputTokenParameter": "max_tokens",
+    "maxOutputIncludesReasoning": true,
+    "source": {
+     "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/\u6a21\u578b-api/\u5bf9\u8bdd\u8865\u5168.md",
+     "asOf": "2026-10-16T16:20:00Z"
+    }
+   },
+   "decisionReview": "actor-consistency-v4",
+   "responseFormat": "json_object",
+   "candidateRepair": "known-output-error-v1",
+   "modeler": {
+    "maxInputTokens": 400000,
+    "maxOutputTokens": 32768,
+    "timeoutSeconds": 900
+   },
+   "reasoningEffort": "low"
+  },
+  "forecastEffect": "diagnostic_only",
+  "limits": {
+   "maxTokens": 3000000,
+   "maxCostUsd": "25",
+   "maxOutputTokens": 8192
+  }
+ }
+}

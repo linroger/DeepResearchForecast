@@ -1,33 +1,67 @@
 """Single-host lifecycle facade for a sealed world generation and its child."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import os
 import hashlib
+import logging
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import threading
 import uuid
 
 from .artifacts import atomic_json, exclusive_file, file_digest, input_manifest, load_inputs, read_json, seal_inputs
-from .contracts import ENGINE, WorldError, canonical_json, clone, identifier, require
+from .contracts import ENGINE, REFUSAL_CODES, WorldError, canonical_json, clone, identifier, require
 from .results import export_result, load_frozen_result, validate_recoverable_export
 from .store import WorldStore
 
 _processes = {}
 _lock = threading.RLock()
+_LOG = logging.getLogger(__name__)
+# Stops a later start() resumes: an operator cancel, SIGTERM, or capacity refusals that outlasted their waits.
+_RESUMABLE_STOPS = frozenset({'cancelled', 'terminated', *REFUSAL_CODES})
 
 
-def _alive(pid):
-    if type(pid) is not int or pid <= 0:
-        return False
+def _child_environment():
+    """The API's environment plus the shared model-call lease ledger, exactly as pipeline research
+    subprocesses receive it, so world calls draw on the same cross-process provider envelope."""
+    from ...config import Config
+    env = dict(os.environ)
+    env['RESEARCH_MODEL_LEASE_DB'] = os.path.realpath(
+        getattr(Config, 'RESEARCH_MODEL_LEASE_DB', '')
+        or os.path.join(Config.UPLOAD_FOLDER, 'research_model_leases.sqlite3'))
+    return env
+
+
+def _hold_inherited_launch_lock(fd, directory):
+    """The inherited descriptor must be this world's launch lock and hold its exclusive flock."""
+    import fcntl
+    actual = os.fstat(fd)
+    expected = os.stat(directory / 'world_launch.lock')
+    require((actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino),
+            'invalid_launch_lock', 'Inherited launch lock does not belong to this simulation')
+    # Re-locking through the holder's own open file description is a no-op; if any other
+    # description holds the lock this fails, so a passing child provably owns the launch.
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise WorldError('invalid_launch_lock', 'Inherited launch lock is held by another launch') from None
+
+
+@contextmanager
+def _sigterm_cancels(event):
+    """While the child runs, SIGTERM requests cancellation instead of killing it mid-call: it
+    stops at the next causal boundary, records 'stopped' and releases its writer fence."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.signal(signal.SIGTERM, lambda signum, frame: event.set())
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL if previous is None else previous)
 
 
 def _launch_active(directory):
@@ -77,16 +111,22 @@ class WorldSimulationService:
         from .compiler import compile_world_spec
         directory = cls.directory(simulation_id, root)
         preparation = None
+        generation_id = 'world_' + uuid.uuid4().hex
+
+        def compile_candidate(raw):
+            return compile_world_spec(raw, simulation_id=simulation_id, generation_id=generation_id,
+                research_report=research_report, research_generation_id=research_generation_id,
+                research_engine=research_engine, actor_bundle=actor_bundle)
+
         if raw_spec is None:
             from .modeler import generate_candidate
+            # The modeler compiles each proposal so one rejection can be repaired
+            # inside its two-request allowance.
             raw_spec, preparation = generate_candidate(directory, research_report=research_report,
                 research_generation_id=research_generation_id, research_engine=research_engine,
                 actor_bundle=actor_bundle, ontology=ontology, simulation_requirement=simulation_requirement,
-                policy_spec=policy_spec)
-        spec = compile_world_spec(raw_spec, simulation_id=simulation_id,
-            generation_id='world_' + uuid.uuid4().hex, research_report=research_report,
-            research_generation_id=research_generation_id, research_engine=research_engine,
-            actor_bundle=actor_bundle)
+                policy_spec=policy_spec, validate=compile_candidate)
+        spec = compile_candidate(raw_spec)
         # Pin scheduling semantics only for genuinely new preparation, never load/fork.
         spec['interactionQueuePolicy'] = 'presented-v1'
         if preparation is not None:
@@ -133,8 +173,10 @@ class WorldSimulationService:
                   'current_period_end': spec['asOf'], 'horizon_date': spec['horizon'],
                   'error': run.get('error')}
         process = _processes.get(str(directory))
-        alive = (process.poll() is None if process is not None and process.pid == run.get('process_pid')
-                 else _alive(run.get('process_pid')))
+        # Liveness: this process's own child handle, else the launch flock every child holds for
+        # its whole life (the kernel releases it when the child exits, also across a reboot).
+        # Never the recorded PID: macOS reuses PIDs, so a dead child's soon names a live process.
+        alive = process is not None and process.pid == run.get('process_pid') and process.poll() is None
         active_launch = (run.get('runner_status') in {'starting', 'running', 'stopping'}
                          and (alive or _launch_active(directory)))
         database = directory / 'world.sqlite3'
@@ -203,7 +245,7 @@ class WorldSimulationService:
                         '--simulation-dir', str(directory), '--lock-fd', str(lock_fd),
                         '--manifest-sha256', admitted_pin, '--launch-id', record['launch_id']],
                         stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
-                        start_new_session=True, pass_fds=(lock_fd,))
+                        start_new_session=True, pass_fds=(lock_fd,), env=_child_environment())
                 _processes[str(directory)] = process
                 _write_run(directory, record, parent_pid=process.pid)
                 result = cls.status(simulation_id, root=root)
@@ -256,45 +298,54 @@ def run_child(directory, *, policy=None, expected_manifest_sha256=None, launch_i
     store = None
     fence = None
     own_launch = None
-    try:
-        if launch_lock_fd is None:
-            own_launch = exclusive_file(directory / 'world_launch.lock', blocking=False)
-            own_launch.__enter__()
-        else:
-            actual = os.fstat(launch_lock_fd)
-            expected = os.stat(directory / 'world_launch.lock')
-            require((actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino),
-                    'invalid_launch_lock', 'Inherited launch lock does not belong to this simulation')
-        if launch_id is not None:
-            projection = read_json(directory / 'world_run.json')
-            require(projection.get('launch_id') == launch_id and projection.get('generation_id') == spec['generationId'],
-                    'launch_changed', 'Child launch identity differs from admission')
-        store = WorldStore(directory / 'world.sqlite3', spec)
-        fence = store.acquire_writer('child_' + uuid.uuid4().hex, takeover=True)
-        if policy is None:
-            policy = StrictHTTPPolicy(spec)
-        _write_run(directory, record)
-        def cancelled():
-            path = directory / 'world_cancel.json'
-            return path.exists() and read_json(path).get('generationId') == spec['generationId']
-        run_to_horizon(store, policy, fence, cancelled=cancelled,
-                       on_commit=lambda head: export_result(directory))
-        export_result(directory)
-        record['runner_status'] = 'completed'
-        _write_run(directory, record)
-        return 0
-    except Exception as error:
-        record.update(runner_status='stopped' if getattr(error, 'code', '') == 'cancelled' else 'failed',
-                      error=getattr(error, 'code', 'world_execution_failed'))
-        if fence is not None:
+    terminate = threading.Event()
+    with _sigterm_cancels(terminate):
+        try:
+            if launch_lock_fd is None:
+                own_launch = exclusive_file(directory / 'world_launch.lock', blocking=False)
+                own_launch.__enter__()
+            else:
+                _hold_inherited_launch_lock(launch_lock_fd, directory)
+            if launch_id is not None:
+                projection = read_json(directory / 'world_run.json')
+                require(projection.get('launch_id') == launch_id and projection.get('generation_id') == spec['generationId'],
+                        'launch_changed', 'Child launch identity differs from admission')
+            store = WorldStore(directory / 'world.sqlite3', spec)
+            # This child holds the launch flock, so any other recorded writer process has exited.
+            fence = store.acquire_writer('child_' + uuid.uuid4().hex, takeover=True, holds_launch_lock=True)
+            if policy is None:
+                policy = StrictHTTPPolicy(spec)
             _write_run(directory, record)
-        return 1
-    finally:
-        if store is not None:
+            def cancelled():
+                if terminate.is_set():
+                    return True
+                path = directory / 'world_cancel.json'
+                return path.exists() and read_json(path).get('generationId') == spec['generationId']
+            run_to_horizon(store, policy, fence, cancelled=cancelled,
+                           on_commit=lambda head: export_result(directory))
+            export_result(directory)
+            record['runner_status'] = 'completed'
+            _write_run(directory, record)
+            return 0
+        except Exception as error:
+            code = getattr(error, 'code', 'world_execution_failed')
+            if code == 'cancelled' and terminate.is_set():
+                code = 'terminated'
+            record.update(runner_status='stopped' if code in _RESUMABLE_STOPS else 'failed', error=code)
             if fence is not None:
-                store.release_writer(fence)
-            store.close()
-        if owns_policy and policy is not None:
-            policy.close()
-        if own_launch is not None:
-            own_launch.__exit__(None, None, None)
+                _write_run(directory, record)
+            else:
+                # Without the fence this child owns nothing it may record (another launch can own
+                # the projection), so the cause reaches only the log (world_child.log for a child).
+                _LOG.error('World child %s failed before acquiring its writer fence: %s (%s)', directory.name, code,
+                           str(error) if isinstance(error, WorldError) else type(error).__name__)
+            return 1
+        finally:
+            if store is not None:
+                if fence is not None:
+                    store.release_writer(fence)
+                store.close()
+            if owns_policy and policy is not None:
+                policy.close()
+            if own_launch is not None:
+                own_launch.__exit__(None, None, None)

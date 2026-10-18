@@ -382,7 +382,7 @@ def _bind_external_policy(policy, spec):
         '_input_rate': decimal(tariff['inputUsdPerMillion']), '_output_rate': decimal(tariff['outputUsdPerMillion']),
         '_overhead': tariff['inputOverheadTokens'], '_output_parameter': tariff['outputTokenParameter'],
         '_reasoning_effort': config.get('reasoningEffort'), 'decision_review': config.get('decisionReview'),
-        '_response_format': config.get('responseFormat'),
+        '_response_format': config.get('responseFormat'), '_thinking': config.get('thinking'),
         'candidate_repair': config.get('candidateRepair'),
         'max_intents': limits['maxIntentsPerPhase'], '_max_messages': limits['maxInboxItems'],
         '_max_message_chars': limits['maxMessageChars'], '_actors': frozenset(a['actorId'] for a in spec['actors']),

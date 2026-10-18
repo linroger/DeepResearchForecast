@@ -142,31 +142,29 @@ def test_actual_sdk_lossless_fields_remain_private_through_controller_store_and_
 
 
 @pytest.mark.parametrize("verdict", ["unknown", "inconsistent"])
-def test_v4_nonclear_verdict_is_retained_privately_without_commit_or_third_call(
+def test_v4_nonclear_verdict_is_retained_privately_and_commits_flagged_without_third_call(
         tmp_path, actor_case, boundary, monkeypatch, verdict):
     spec, transport, counts, emitted, _ = sdk_world(actor_case, boundary, verdict=verdict)
     path = tmp_path / "world.sqlite3"
     with WorldStore(path, spec) as store:
         fence = store.acquire_writer("first")
-        with pytest.raises(WorldError, match="consistency stage"):
-            run_round(store, transport.policy, fence)
+        head = run_round(store, transport.policy, fence)  # The unresolved verdict no longer ends the round.
         retained = store.withheld_consistency_receipt(SLOT)
         assert_lossless(retained["assessment"], emitted[SLOT])
         assert review_module.assessment_status(retained["assessment"], mode=V4) == "unresolved"
-        assert store.decision(SLOT) is None and store.consistency_receipt(SLOT) is None
-        assert store.head()["round"] == 0 and store.rounds() == []
+        assert store.decision(SLOT) == {**retained["withheldDecision"], "consistencyStatus": "unresolved"}
+        assert store.consistency_receipt(SLOT) is None
+        assert head["round"] == 1 and head["accounts"]["buyer_stock"]["balance"] == "2"
         attempts = [item for item in store.budget_summary()["attempts"] if item["slot"] == SLOT]
         assert [item["status"] for item in attempts] == ["succeeded", "failed"]
         assert all(item["usage"]["tokens"] == 140 for item in attempts)
         assert "PRIVATE_V4" not in canonical_json(store.read_bundle())
     before = len(transport.sent)
     monkeypatch.setattr(review_module, "normalize_v4_assessment_output", forbid_normalization)
-    with WorldStore(path) as resumed:
-        assert resumed.withheld_consistency_receipt(SLOT) == retained
-        fence = resumed.acquire_writer("resume")
-        with pytest.raises(WorldError):
-            run_round(resumed, transport.policy, fence)
-        assert resumed.head()["round"] == 0
+    with WorldStore(path, read_only=True) as reopened:  # Replay reads saved receipts without normalizing them.
+        assert reopened.withheld_consistency_receipt(SLOT) == retained
+        assert reopened.decision(SLOT) == {**retained["withheldDecision"], "consistencyStatus": "unresolved"}
+        assert reopened.head() == head
     assert len(transport.sent) == before and counts[SLOT] == 2
 
 

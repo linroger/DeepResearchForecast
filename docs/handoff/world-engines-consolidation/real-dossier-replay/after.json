@@ -1,0 +1,5482 @@
+{
+ "src": "/private/tmp/claude-501/-Users-rogerlin-Downloads-DeepResearchForecast--claude-worktrees-zen-feistel-8b9b86/425fd604-5cae-45e4-b38d-ccd0b2967d0a/scratchpad/runs/full3-20261018-202256/rsrc",
+ "startedAt": "2026-10-18T20:23:06+0800",
+ "profiles": {
+  "before": {
+   "policy": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "timeoutSeconds": 120,
+    "maxInputTokens": 60000,
+    "reasoningEffort": "high",
+    "pricing": {
+     "provider": "glm",
+     "model": "glm-5.3",
+     "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+     "inputUsdPerMillion": "2",
+     "outputUsdPerMillion": "6",
+     "contextWindowTokens": 1000000,
+     "maxOutputTokens": 131072,
+     "inputOverheadTokens": 1024,
+     "outputTokenParameter": "max_tokens",
+     "maxOutputIncludesReasoning": true,
+     "source": {
+      "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+      "asOf": "2026-10-16T16:20:00Z"
+     }
+    },
+    "decisionReview": "actor-consistency-v4",
+    "responseFormat": "json_object",
+    "candidateRepair": "known-output-error-v1"
+   },
+   "forecastEffect": "diagnostic_only",
+   "limits": {
+    "maxTokens": 250000,
+    "maxCostUsd": "5",
+    "maxOutputTokens": 8192
+   }
+  },
+  "after": {
+   "policy": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "timeoutSeconds": 120,
+    "maxInputTokens": 60000,
+    "pricing": {
+     "provider": "glm",
+     "model": "glm-5.3",
+     "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+     "inputUsdPerMillion": "2",
+     "outputUsdPerMillion": "6",
+     "contextWindowTokens": 1000000,
+     "maxOutputTokens": 131072,
+     "inputOverheadTokens": 1024,
+     "outputTokenParameter": "max_tokens",
+     "maxOutputIncludesReasoning": true,
+     "source": {
+      "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+      "asOf": "2026-10-16T16:20:00Z"
+     }
+    },
+    "decisionReview": "actor-consistency-v4",
+    "responseFormat": "json_object",
+    "candidateRepair": "known-output-error-v1",
+    "thinking": "disabled",
+    "modeler": {
+     "maxInputTokens": 400000,
+     "maxOutputTokens": 32768,
+     "timeoutSeconds": 900
+    }
+   },
+   "forecastEffect": "diagnostic_only",
+   "limits": {
+    "maxTokens": 3000000,
+    "maxCostUsd": "25",
+    "maxOutputTokens": 8192
+   }
+  },
+  "after_unpinned": {
+   "policy": {
+    "provider": "glm",
+    "model": "glm-5.3",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "timeoutSeconds": 120,
+    "maxInputTokens": 60000,
+    "pricing": {
+     "provider": "glm",
+     "model": "glm-5.3",
+     "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+     "inputUsdPerMillion": "2",
+     "outputUsdPerMillion": "6",
+     "contextWindowTokens": 1000000,
+     "maxOutputTokens": 131072,
+     "inputOverheadTokens": 1024,
+     "outputTokenParameter": "max_tokens",
+     "maxOutputIncludesReasoning": true,
+     "source": {
+      "reference": "https://docs.bigmodel.cn/cn/guide/start/pricing.md ; https://docs.bigmodel.cn/cn/guide/start/concept-param.md ; https://huggingface.co/zai-org/GLM-5.3/blob/main/chat_template.jinja ; https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml ; https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+      "asOf": "2026-10-16T16:20:00Z"
+     }
+    },
+    "decisionReview": "actor-consistency-v4",
+    "responseFormat": "json_object",
+    "candidateRepair": "known-output-error-v1",
+    "thinking": "disabled"
+   },
+   "forecastEffect": "diagnostic_only",
+   "limits": {
+    "maxTokens": 3000000,
+    "maxCostUsd": "25",
+    "maxOutputTokens": 8192
+   }
+  }
+ },
+ "runs": {
+  "after:compliant": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 25,
+      "values:source_claim": 52,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 23,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 185,
+       "end": 344,
+       "sha256": "1d3d2b7dc8f8aac3449adcc24911f37fd21b80e964fa8f4851ac824430b84cf2"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "0e6af3ab8999b4a34cc9899014084cac24a883bbaac11d7da9860f99d31290eb"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 15799,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.115936000000",
+       "tokens": 49994
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 184031,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "16b7585c2126dd15"
+     }
+    ],
+    "seconds": 1.434,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 18,
+     "evidenceGrades": {
+      "unsealed-v3": 18
+     },
+     "profileItems": {
+      "objectives:source_claim": 13,
+      "constraints:source_claim": 14
+     },
+     "reportExcerpts": [
+      {
+       "start": 22,
+       "end": 182,
+       "sha256": "e2b39560d6274571f1b6372efd6552c079639ad634caac276026a8e767535a52"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "9b728fd79a5db77229e9ce64e67961e5c319d2525300849442ed7ff0fde530cc"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 36,
+     "reviews": 18,
+     "maxRequestBytes": 13312,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.128672000000",
+       "tokens": 57102
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 213943,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7e9638fb89236740"
+     }
+    ],
+    "seconds": 0.909,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 12,
+     "evidenceGrades": {
+      "unsealed-v3": 12
+     },
+     "profileItems": {
+      "objectives:source_claim": 16,
+      "values:source_claim": 39,
+      "incentives:source_claim": 12,
+      "constraints:source_claim": 22,
+      "beliefs:source_claim": 13
+     },
+     "reportExcerpts": [
+      {
+       "start": 182,
+       "end": 342,
+       "sha256": "0629966387c9014b11c7f0a4dc14cdd2ab668913ba825c7f587c7b02cb944d7b"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "693fae23c59a48225f2afc4a8a60469f39f32c29ed9ecf8773c6c632229a0586"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 24,
+     "reviews": 12,
+     "maxRequestBytes": 16469,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.106964000000",
+       "tokens": 47154
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 175961,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "ab916e3530e64b5c"
+     }
+    ],
+    "seconds": 0.894,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 19,
+      "values:source_claim": 47,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 21,
+      "beliefs:source_claim": 11
+     },
+     "reportExcerpts": [
+      {
+       "start": 178,
+       "end": 338,
+       "sha256": "a67071f22d919003a4e00f8e6f7cb53e54c3bdecb66da9369e77ca5aa0e5766e"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "81e774c3c50028d90c123c936312dafb5961fcfc4da33fb1be437cc32e85a1fd"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 15985,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.103828000000",
+       "tokens": 44456
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 162910,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "07b2bbbd80ed4a25"
+     }
+    ],
+    "seconds": 1.532,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 12,
+     "evidenceGrades": {
+      "unsealed-v3": 12
+     },
+     "profileItems": {
+      "objectives:source_claim": 22,
+      "values:source_claim": 42,
+      "incentives:source_claim": 12,
+      "constraints:source_claim": 21,
+      "beliefs:source_claim": 12
+     },
+     "reportExcerpts": [
+      {
+       "start": 183,
+       "end": 343,
+       "sha256": "b6243e9f18f4b53f84cb641abd8d22b692bc7cb5827eabb7e3f5d19cec87a895"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "ea62dca19aee0c3468680e7734b279977e1c572cfad040b3bcce56aadbcd74fa"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 24,
+     "reviews": 12,
+     "maxRequestBytes": 15248,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.108756000000",
+       "tokens": 47644
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 177111,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "a96eebd960cd98f4"
+     }
+    ],
+    "seconds": 1.189,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {
+      "objectives:source_claim": 26,
+      "values:source_claim": 63,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 29,
+      "beliefs:source_claim": 9
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 341,
+       "sha256": "3740f3f89bf60c3f8cd52ffe2544bb2a54b7115fad76eb5c928a65f0d610a493"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "1a33585ffc03e18d3bccb70f6c479e7ac2df0a52d33674b2f15827f035aad9bd"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 16459,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.127362000000",
+       "tokens": 54215
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 197931,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "d62d5772b83008a0"
+     }
+    ],
+    "seconds": 2.597,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 19,
+     "evidenceGrades": {
+      "unsealed-v3": 19
+     },
+     "profileItems": {
+      "objectives:source_claim": 33,
+      "values:source_claim": 68,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 32,
+      "beliefs:source_claim": 19
+     },
+     "reportExcerpts": [
+      {
+       "start": 184,
+       "end": 344,
+       "sha256": "b84cde1850eb2219c9afa3a8eac3cf8e5f141877ae814e3e20463bd6b437c681"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "864afd9f885e30a1efaa1b2c08ae5c15091edf5ac320a7199a5ae819cdab00a1"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 38,
+     "reviews": 19,
+     "maxRequestBytes": 16503,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.140744000000",
+       "tokens": 60082
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 219751,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "95dfe0f3aabb29d3"
+     }
+    ],
+    "seconds": 2.296,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 9,
+     "evidenceGrades": {
+      "unsealed-v3": 9
+     },
+     "profileItems": {
+      "objectives:source_claim": 12,
+      "values:source_claim": 27,
+      "incentives:source_claim": 9,
+      "constraints:source_claim": 14,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 341,
+       "sha256": "d0fb9952042e3891a6e9e24c0cccf1cabbc2d844c628ffa839c77b3e3a4ca361"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "53a4b78ac7bbe71d781124d845ab2db53bcb8e45617bb1657418eab4f98044b8"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 18,
+     "reviews": 9,
+     "maxRequestBytes": 15129,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.096748000000",
+       "tokens": 43372
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 163485,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "43f24bd4d5bb68bf"
+     }
+    ],
+    "seconds": 0.75,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 19,
+     "evidenceGrades": {
+      "unsealed-v3": 19
+     },
+     "profileItems": {
+      "objectives:source_claim": 38,
+      "values:source_claim": 62,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 24,
+      "beliefs:source_claim": 20
+     },
+     "reportExcerpts": [
+      {
+       "start": 179,
+       "end": 339,
+       "sha256": "80b319dccc5bcf8e6081f02533de6f97ad5df926c5c996895c201a510177328f"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "30144318f381adc4ffeceb7496b857d148d06e7cc52b93c038f3f3805d0ef277"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 38,
+     "reviews": 19,
+     "maxRequestBytes": 15046,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.159158000000",
+       "tokens": 69135
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 255653,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6e94d49f04816614"
+     }
+    ],
+    "seconds": 5.523,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 19,
+      "values:source_claim": 48,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 18,
+      "beliefs:source_claim": 15
+     },
+     "reportExcerpts": [
+      {
+       "start": 183,
+       "end": 343,
+       "sha256": "b443a1683b830b712b254914c2b7e74db7d6f5d8893e2f40a6a223d205ab5f3a"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "324f1f4e5ed3ccb2793b07073cf6943c094b4c7c20954d8ab90eb52aef59f2e5"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 16025,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.093138000000",
+       "tokens": 39265
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 142454,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6f188565e532db7d"
+     }
+    ],
+    "seconds": 1.358,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 11,
+     "evidenceGrades": {
+      "unsealed-v3": 11
+     },
+     "profileItems": {
+      "objectives:source_claim": 24,
+      "values:source_claim": 40,
+      "incentives:source_claim": 11,
+      "constraints:source_claim": 22,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 340,
+       "sha256": "e970615a8c6aa582625715c17ce1a0a6027df778b3de014ba3ce17067475eb5a"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "cc3b97a744491a6fda8e8b7ad4dc99eab2da27b2854b30274976a39549c17f8f"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 22,
+     "reviews": 11,
+     "maxRequestBytes": 16212,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.108802000000",
+       "tokens": 47581
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 176686,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "34889fdd4b16243e"
+     }
+    ],
+    "seconds": 0.732,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 25,
+      "values:source_claim": 49,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 23,
+      "beliefs:source_claim": 11
+     },
+     "reportExcerpts": [
+      {
+       "start": 184,
+       "end": 344,
+       "sha256": "c9cc3a231d6b79b3c292390d86317b5e2e0a3e19a52387cb5677cff5ce399e86"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "bbd1999e04c414c5b7c0d4065fdc6964a5db1205c5a74fc60090989994c2904f"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 14946,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.116368000000",
+       "tokens": 50304
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 185456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "71475974e0c81982"
+     }
+    ],
+    "seconds": 1.017,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 18,
+     "evidenceGrades": {
+      "unsealed-v3": 18
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 660,
+       "end": 812,
+       "sha256": "aaeabc599505c8dfadc780c781294cb1510da111aef136a168f7ad5003d19654"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "9f3bae6010f3184fadf07ddd4126c3d6424c0a3138a3a0e784a5da1ad652eefa"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 36,
+     "reviews": 18,
+     "maxRequestBytes": 11883,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.062950000000",
+       "tokens": 25701
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 91256,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "cdeb90d351dc5123"
+     }
+    ],
+    "seconds": 1.562,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 14,
+     "evidenceGrades": {
+      "unsealed-v3": 14
+     },
+     "profileItems": {
+      "objectives:source_claim": 42,
+      "values:source_claim": 73,
+      "incentives:source_claim": 20,
+      "constraints:source_claim": 28,
+      "beliefs:source_claim": 31
+     },
+     "reportExcerpts": [
+      {
+       "start": 38,
+       "end": 115,
+       "sha256": "c922eca7d04cb33c3dd9259e3e1dccfe88bb31a75e5d659169ba6c32a6ad71fc"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "3190494de218381c2118851312b64b015a2f475e32f6115d3cf324b8fa6fb32c"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 28,
+     "reviews": 14,
+     "maxRequestBytes": 17029,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.105170000000",
+       "tokens": 42805
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 151662,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7a8313da14f9b3ae"
+     }
+    ],
+    "seconds": 1.612,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 156,
+       "end": 307,
+       "sha256": "0bbddcfc294a77a117e11e0fc84a401c1e96c937845120f7b715b88007d7f44f"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "a38d7628d13058d1638ff27244789f2d145e0a996703bd69c2c39cfd5d4f069b"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 11889,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.090118000000",
+       "tokens": 38625
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 141634,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "2b792645646a8848"
+     }
+    ],
+    "seconds": 0.795,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 138,
+       "end": 298,
+       "sha256": "25a2bac5fbf24996cb015bc90207e598959c8f238d7c699842182a0d1bf78f7d"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "552ca6c5b44ed5d8257f5236899a0899ebe70a336da8dcf000c0a1b3c1cfcc76"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 11894,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.058430000000",
+       "tokens": 22799
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 78366,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "e3f5c396838a4b5e"
+     }
+    ],
+    "seconds": 0.7,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ],
+  "after:repair": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 25,
+      "values:source_claim": 52,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 23,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 185,
+       "end": 344,
+       "sha256": "1d3d2b7dc8f8aac3449adcc24911f37fd21b80e964fa8f4851ac824430b84cf2"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "c13df1984662f7dbdd46e52cba91d6d209b56c0cc8d266353cb3277230b4257b"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 15799,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.115954000000",
+       "tokens": 49997
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.122490000000",
+       "tokens": 53271
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 184031,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "16b7585c2126dd15"
+     },
+     {
+      "bytes": 197138,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "efe1dae9eeefc986",
+      "userSha256": "16b7585c2126dd15"
+     }
+    ],
+    "seconds": 0.953,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 18,
+     "evidenceGrades": {
+      "unsealed-v3": 18
+     },
+     "profileItems": {
+      "objectives:source_claim": 13,
+      "constraints:source_claim": 14
+     },
+     "reportExcerpts": [
+      {
+       "start": 22,
+       "end": 182,
+       "sha256": "e2b39560d6274571f1b6372efd6552c079639ad634caac276026a8e767535a52"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "a3e3e96db286397cb5f97039cae5518ab164b003c4e535e8869cb098c6e8c8af"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 36,
+     "reviews": 18,
+     "maxRequestBytes": 13312,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.128696000000",
+       "tokens": 57106
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.134636000000",
+       "tokens": 60084
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 213943,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7e9638fb89236740"
+     },
+     {
+      "bytes": 225870,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "b2cafe5e6fcc3d1b",
+      "userSha256": "7e9638fb89236740"
+     }
+    ],
+    "seconds": 0.735,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 12,
+     "evidenceGrades": {
+      "unsealed-v3": 12
+     },
+     "profileItems": {
+      "objectives:source_claim": 16,
+      "values:source_claim": 39,
+      "incentives:source_claim": 12,
+      "constraints:source_claim": 22,
+      "beliefs:source_claim": 13
+     },
+     "reportExcerpts": [
+      {
+       "start": 182,
+       "end": 342,
+       "sha256": "0629966387c9014b11c7f0a4dc14cdd2ab668913ba825c7f587c7b02cb944d7b"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "0ce82c755309d23abc0ae6fcf047a661c690355060b1aec7a11620d2e5ab148f"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 24,
+     "reviews": 12,
+     "maxRequestBytes": 16469,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.106982000000",
+       "tokens": 47157
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.112212000000",
+       "tokens": 49778
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 175961,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "ab916e3530e64b5c"
+     },
+     {
+      "bytes": 186456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "0d354a5ab9a0de36",
+      "userSha256": "ab916e3530e64b5c"
+     }
+    ],
+    "seconds": 0.625,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 19,
+      "values:source_claim": 47,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 21,
+      "beliefs:source_claim": 11
+     },
+     "reportExcerpts": [
+      {
+       "start": 178,
+       "end": 338,
+       "sha256": "a67071f22d919003a4e00f8e6f7cb53e54c3bdecb66da9369e77ca5aa0e5766e"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "80c062e204b3e199e18d8909d832340cae9e4a458f50af183416ae33a305e169"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 15985,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.103846000000",
+       "tokens": 44459
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.109966000000",
+       "tokens": 47525
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 162910,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "07b2bbbd80ed4a25"
+     },
+     {
+      "bytes": 175187,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "f3646bb832986f77",
+      "userSha256": "07b2bbbd80ed4a25"
+     }
+    ],
+    "seconds": 0.931,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 12,
+     "evidenceGrades": {
+      "unsealed-v3": 12
+     },
+     "profileItems": {
+      "objectives:source_claim": 22,
+      "values:source_claim": 42,
+      "incentives:source_claim": 12,
+      "constraints:source_claim": 21,
+      "beliefs:source_claim": 12
+     },
+     "reportExcerpts": [
+      {
+       "start": 183,
+       "end": 343,
+       "sha256": "b6243e9f18f4b53f84cb641abd8d22b692bc7cb5827eabb7e3f5d19cec87a895"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "b23bfe7ce6b40910dc3d9e1f5b8fdebef5df557536b1d79e991acd856455ee5c"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 24,
+     "reviews": 12,
+     "maxRequestBytes": 15248,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.108774000000",
+       "tokens": 47647
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.114340000000",
+       "tokens": 50436
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 177111,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "a96eebd960cd98f4"
+     },
+     {
+      "bytes": 188276,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "45be2444f69b333d",
+      "userSha256": "a96eebd960cd98f4"
+     }
+    ],
+    "seconds": 0.643,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {
+      "objectives:source_claim": 26,
+      "values:source_claim": 63,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 29,
+      "beliefs:source_claim": 9
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 341,
+       "sha256": "3740f3f89bf60c3f8cd52ffe2544bb2a54b7115fad76eb5c928a65f0d610a493"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "5b00c91d346829ce59b6cd90c88280844d1c358e6a8efd84e0971bb7429d4c73"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 16459,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.127380000000",
+       "tokens": 54218
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.135088000000",
+       "tokens": 58078
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 197931,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "d62d5772b83008a0"
+     },
+     {
+      "bytes": 213383,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "26e0f76e5d24b855",
+      "userSha256": "d62d5772b83008a0"
+     }
+    ],
+    "seconds": 1.709,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 19,
+     "evidenceGrades": {
+      "unsealed-v3": 19
+     },
+     "profileItems": {
+      "objectives:source_claim": 33,
+      "values:source_claim": 68,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 32,
+      "beliefs:source_claim": 19
+     },
+     "reportExcerpts": [
+      {
+       "start": 184,
+       "end": 344,
+       "sha256": "b84cde1850eb2219c9afa3a8eac3cf8e5f141877ae814e3e20463bd6b437c681"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "dc67591d917ec09423d622c02fa92e8e8133c207432e38cf6343648f0c336a64"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 38,
+     "reviews": 19,
+     "maxRequestBytes": 16503,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.140762000000",
+       "tokens": 60085
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.149116000000",
+       "tokens": 64268
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 219751,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "95dfe0f3aabb29d3"
+     },
+     {
+      "bytes": 236492,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "6700bf1c837cc652",
+      "userSha256": "95dfe0f3aabb29d3"
+     }
+    ],
+    "seconds": 1.717,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 9,
+     "evidenceGrades": {
+      "unsealed-v3": 9
+     },
+     "profileItems": {
+      "objectives:source_claim": 12,
+      "values:source_claim": 27,
+      "incentives:source_claim": 9,
+      "constraints:source_claim": 14,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 341,
+       "sha256": "d0fb9952042e3891a6e9e24c0cccf1cabbc2d844c628ffa839c77b3e3a4ca361"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "7d5ae6dda9d81cba0ddfb172722f64c27cd09e835bddc154dd77ef33a02c33db"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 18,
+     "reviews": 9,
+     "maxRequestBytes": 15129,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.096766000000",
+       "tokens": 43375
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.100952000000",
+       "tokens": 45474
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 163485,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "43f24bd4d5bb68bf"
+     },
+     {
+      "bytes": 171895,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "cec9380f0c2112eb",
+      "userSha256": "43f24bd4d5bb68bf"
+     }
+    ],
+    "seconds": 0.425,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 19,
+     "evidenceGrades": {
+      "unsealed-v3": 19
+     },
+     "profileItems": {
+      "objectives:source_claim": 38,
+      "values:source_claim": 62,
+      "incentives:source_claim": 19,
+      "constraints:source_claim": 24,
+      "beliefs:source_claim": 20
+     },
+     "reportExcerpts": [
+      {
+       "start": 179,
+       "end": 339,
+       "sha256": "80b319dccc5bcf8e6081f02533de6f97ad5df926c5c996895c201a510177328f"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "d905fe0d8182176bc02ef3ebd9713e4da1d9767e7049b02d49a252a72d6dad35"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 38,
+     "reviews": 19,
+     "maxRequestBytes": 15046,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.159176000000",
+       "tokens": 69138
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.167670000000",
+       "tokens": 73391
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 255653,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6e94d49f04816614"
+     },
+     {
+      "bytes": 272676,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "7fb652bc2c18b7f7",
+      "userSha256": "6e94d49f04816614"
+     }
+    ],
+    "seconds": 1.654,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 19,
+      "values:source_claim": 48,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 18,
+      "beliefs:source_claim": 15
+     },
+     "reportExcerpts": [
+      {
+       "start": 183,
+       "end": 343,
+       "sha256": "b443a1683b830b712b254914c2b7e74db7d6f5d8893e2f40a6a223d205ab5f3a"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "d26360422187d937646049035c18dbe0438094f64be7166eee67c943787c6a3c"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 16025,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.093162000000",
+       "tokens": 39269
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.099162000000",
+       "tokens": 42277
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 142454,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6f188565e532db7d"
+     },
+     {
+      "bytes": 154502,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "a5f0267069d22d4b",
+      "userSha256": "6f188565e532db7d"
+     }
+    ],
+    "seconds": 0.93,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 11,
+     "evidenceGrades": {
+      "unsealed-v3": 11
+     },
+     "profileItems": {
+      "objectives:source_claim": 24,
+      "values:source_claim": 40,
+      "incentives:source_claim": 11,
+      "constraints:source_claim": 22,
+      "beliefs:source_claim": 10
+     },
+     "reportExcerpts": [
+      {
+       "start": 181,
+       "end": 340,
+       "sha256": "e970615a8c6aa582625715c17ce1a0a6027df778b3de014ba3ce17067475eb5a"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "066e4ba108333e3f29678c7786719d33a1275b2bacf61218d64a1a8b34a7c650"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 22,
+     "reviews": 11,
+     "maxRequestBytes": 16212,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.108820000000",
+       "tokens": 47584
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.114450000000",
+       "tokens": 50405
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 176686,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "34889fdd4b16243e"
+     },
+     {
+      "bytes": 187981,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "6bb4f77f9b6f209d",
+      "userSha256": "34889fdd4b16243e"
+     }
+    ],
+    "seconds": 0.606,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 15,
+     "evidenceGrades": {
+      "unsealed-v3": 15
+     },
+     "profileItems": {
+      "objectives:source_claim": 25,
+      "values:source_claim": 49,
+      "incentives:source_claim": 15,
+      "constraints:source_claim": 23,
+      "beliefs:source_claim": 11
+     },
+     "reportExcerpts": [
+      {
+       "start": 184,
+       "end": 344,
+       "sha256": "c9cc3a231d6b79b3c292390d86317b5e2e0a3e19a52387cb5677cff5ce399e86"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "0776e07e4cf6f1460e81f7ca578aa2f4c150f8de99fc440c3670955500a8b923"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 30,
+     "reviews": 15,
+     "maxRequestBytes": 14946,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.116386000000",
+       "tokens": 50307
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.122852000000",
+       "tokens": 53546
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 185456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "71475974e0c81982"
+     },
+     {
+      "bytes": 198427,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "1273bc93b85cfd64",
+      "userSha256": "71475974e0c81982"
+     }
+    ],
+    "seconds": 0.964,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 18,
+     "evidenceGrades": {
+      "unsealed-v3": 18
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 660,
+       "end": 812,
+       "sha256": "aaeabc599505c8dfadc780c781294cb1510da111aef136a168f7ad5003d19654"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "50d5716faa93df73dbc0a52744a5812cb6e4c54c5b193f679bc14560adae72ab"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 36,
+     "reviews": 18,
+     "maxRequestBytes": 11883,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.062950000000",
+       "tokens": 25701
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 91256,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "cdeb90d351dc5123"
+     }
+    ],
+    "seconds": 0.591,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 14,
+     "evidenceGrades": {
+      "unsealed-v3": 14
+     },
+     "profileItems": {
+      "objectives:source_claim": 42,
+      "values:source_claim": 73,
+      "incentives:source_claim": 20,
+      "constraints:source_claim": 28,
+      "beliefs:source_claim": 31
+     },
+     "reportExcerpts": [
+      {
+       "start": 38,
+       "end": 115,
+       "sha256": "c922eca7d04cb33c3dd9259e3e1dccfe88bb31a75e5d659169ba6c32a6ad71fc"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "574738a62b81dcbe3b24c99bd6cb47a592a398578a36bb832e0b1ea0c4b824c0"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 28,
+     "reviews": 14,
+     "maxRequestBytes": 17029,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "rejected",
+      "errorCode": "unsupported_actor_derivation",
+      "usage": {
+       "costUsd": "0.105188000000",
+       "tokens": 42808
+      }
+     },
+     {
+      "number": 2,
+      "kind": "repair",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.113160000000",
+       "tokens": 46800
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 151662,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7a8313da14f9b3ae"
+     },
+     {
+      "bytes": 167641,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": true,
+      "systemSha256": "ccc29dc476fd264c",
+      "userSha256": "7a8313da14f9b3ae"
+     }
+    ],
+    "seconds": 1.157,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 156,
+       "end": 307,
+       "sha256": "0bbddcfc294a77a117e11e0fc84a401c1e96c937845120f7b715b88007d7f44f"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "02997b391eb5a74a6b51ba56fc02c9926857fc11b7bc82ff5c69d612e86a6b37"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 11889,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.090118000000",
+       "tokens": 38625
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 141634,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "2b792645646a8848"
+     }
+    ],
+    "seconds": 0.729,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "repair",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "valid_spec",
+    "summary": {
+     "actors": 20,
+     "evidenceGrades": {
+      "unsealed-v3": 20
+     },
+     "profileItems": {},
+     "reportExcerpts": [
+      {
+       "start": 138,
+       "end": 298,
+       "sha256": "25a2bac5fbf24996cb015bc90207e598959c8f238d7c699842182a0d1bf78f7d"
+      }
+     ],
+     "deniedTextInObservations": 0,
+     "specSha256": "7371afe6ef1f8986a7c0ec75129e23d92559fff2cd8016f5b9861e728ff896e8"
+    },
+    "round": {
+     "status": "committed",
+     "round": 1,
+     "requests": 40,
+     "reviews": 20,
+     "maxRequestBytes": 11894,
+     "thinking": [
+      "{\"type\": \"disabled\"}"
+     ]
+    },
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "succeeded",
+      "errorCode": null,
+      "usage": {
+       "costUsd": "0.058430000000",
+       "tokens": 22799
+      }
+     }
+    ],
+    "requests": [
+     {
+      "bytes": 78366,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "e3f5c396838a4b5e"
+     }
+    ],
+    "seconds": 0.731,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ],
+  "after_unpinned:compliant": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.036,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.02,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.043,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.049,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.024,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.057,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.031,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.035,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.009,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.015,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "compliant",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "typed_gap",
+    "code": "policy_context_limit",
+    "message": "Actor request exceeds its input or context token bound",
+    "details": {},
+    "stage": "prepare_model",
+    "requests": [],
+    "seconds": 0.009,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ],
+  "after:content_filter": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 184031,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "16b7585c2126dd15"
+     }
+    ],
+    "seconds": 0.058,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 213943,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7e9638fb89236740"
+     }
+    ],
+    "seconds": 0.035,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 175961,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "ab916e3530e64b5c"
+     }
+    ],
+    "seconds": 0.054,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 162910,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "07b2bbbd80ed4a25"
+     }
+    ],
+    "seconds": 0.053,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 177111,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "a96eebd960cd98f4"
+     }
+    ],
+    "seconds": 0.052,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 197931,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "d62d5772b83008a0"
+     }
+    ],
+    "seconds": 0.07,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 219751,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "95dfe0f3aabb29d3"
+     }
+    ],
+    "seconds": 0.078,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 163485,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "43f24bd4d5bb68bf"
+     }
+    ],
+    "seconds": 0.04,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 255653,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6e94d49f04816614"
+     }
+    ],
+    "seconds": 0.089,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 142454,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6f188565e532db7d"
+     }
+    ],
+    "seconds": 0.049,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 176686,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "34889fdd4b16243e"
+     }
+    ],
+    "seconds": 0.049,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 185456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "71475974e0c81982"
+     }
+    ],
+    "seconds": 0.057,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 91256,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "cdeb90d351dc5123"
+     }
+    ],
+    "seconds": 0.018,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 151662,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7a8313da14f9b3ae"
+     }
+    ],
+    "seconds": 0.052,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 141634,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "2b792645646a8848"
+     }
+    ],
+    "seconds": 0.026,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "content_filter",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "unknown",
+      "errorCode": "provider_content_filtered",
+      "usage": null
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 78366,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "e3f5c396838a4b5e"
+     }
+    ],
+    "seconds": 0.018,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ],
+  "after:truncate": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.115936000000",
+       "tokens": 49994
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 184031,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "16b7585c2126dd15"
+     }
+    ],
+    "seconds": 0.059,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.128672000000",
+       "tokens": 57102
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 213943,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7e9638fb89236740"
+     }
+    ],
+    "seconds": 0.036,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.106964000000",
+       "tokens": 47154
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 175961,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "ab916e3530e64b5c"
+     }
+    ],
+    "seconds": 0.055,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.103828000000",
+       "tokens": 44456
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 162910,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "07b2bbbd80ed4a25"
+     }
+    ],
+    "seconds": 0.059,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.108756000000",
+       "tokens": 47644
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 177111,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "a96eebd960cd98f4"
+     }
+    ],
+    "seconds": 0.074,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.127362000000",
+       "tokens": 54215
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 197931,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "d62d5772b83008a0"
+     }
+    ],
+    "seconds": 0.412,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.140744000000",
+       "tokens": 60082
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 219751,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "95dfe0f3aabb29d3"
+     }
+    ],
+    "seconds": 0.217,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.096748000000",
+       "tokens": 43372
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 163485,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "43f24bd4d5bb68bf"
+     }
+    ],
+    "seconds": 0.128,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.159158000000",
+       "tokens": 69135
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 255653,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6e94d49f04816614"
+     }
+    ],
+    "seconds": 0.193,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.093138000000",
+       "tokens": 39265
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 142454,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6f188565e532db7d"
+     }
+    ],
+    "seconds": 0.092,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.108802000000",
+       "tokens": 47581
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 176686,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "34889fdd4b16243e"
+     }
+    ],
+    "seconds": 0.097,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.116368000000",
+       "tokens": 50304
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 185456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "71475974e0c81982"
+     }
+    ],
+    "seconds": 0.107,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.062950000000",
+       "tokens": 25701
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 91256,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "cdeb90d351dc5123"
+     }
+    ],
+    "seconds": 0.034,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.105170000000",
+       "tokens": 42805
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 151662,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7a8313da14f9b3ae"
+     }
+    ],
+    "seconds": 0.238,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.090118000000",
+       "tokens": 38625
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 141634,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "2b792645646a8848"
+     }
+    ],
+    "seconds": 0.069,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "truncate",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "typed_gap",
+    "code": "policy_output_truncated",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "policy_output_truncated",
+      "usage": {
+       "costUsd": "0.058430000000",
+       "tokens": 22799
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "policy_output_truncated",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 78366,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "e3f5c396838a4b5e"
+     }
+    ],
+    "seconds": 0.038,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ],
+  "after:sensitive": [
+   {
+    "pipeline": "pipe_1c1255cee2e4",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "1e93a6182b40b80c1ecdc3707f5b061d86d561746b52f4faae3201d3140aebe5",
+     "actors.json": "c5fc1e3962bcc73b655aed6022b06a35fb1b6d989b5ab3b6eca6c9d064962894"
+    },
+    "userBytes": 166319,
+    "requestBytes": 183888,
+    "claims": 231,
+    "actorAllowedClaims": 203,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.115936000000",
+       "tokens": 49994
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 184031,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "16b7585c2126dd15"
+     }
+    ],
+    "seconds": 0.122,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_1ee2fae33f8c",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "45827f9d48f4a2c9d380ddc4097c3bd021198194760614f613ca801cb4424763",
+     "actors.json": "41e92227a3af54ce64b6e258ddd08dbd2604c90f637f6e48b69d94b2ddd3e468"
+    },
+    "userBytes": 199648,
+    "requestBytes": 213800,
+    "claims": 118,
+    "actorAllowedClaims": 104,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.128672000000",
+       "tokens": 57102
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 213943,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7e9638fb89236740"
+     }
+    ],
+    "seconds": 0.067,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_22b62e7b8346",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "0f022aa70091a0ca13b4c2cf3c074bed9922590c5ca1f38c4adbb6c90cc58614",
+     "actors.json": "7955cc513799b3e2947a44e4d69cc2806f87a8f8892bb35920555b4bcc2bec2d"
+    },
+    "userBytes": 159110,
+    "requestBytes": 175818,
+    "claims": 201,
+    "actorAllowedClaims": 173,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.106964000000",
+       "tokens": 47154
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 175961,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "ab916e3530e64b5c"
+     }
+    ],
+    "seconds": 0.097,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_261de6107490",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "b916c36823028530ffcd2c31ddeadf6091f785b520633c1975fa2d3e0ab1d4e3",
+     "actors.json": "12e5244a6b613a7ab558f59fa534794e561927239b7a27a7675ca8bf74e40644"
+    },
+    "userBytes": 146206,
+    "requestBytes": 162767,
+    "claims": 226,
+    "actorAllowedClaims": 194,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.103828000000",
+       "tokens": 44456
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 162910,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "07b2bbbd80ed4a25"
+     }
+    ],
+    "seconds": 0.094,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_3dcd66754cdc",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "e1e91eed5b1d45b715857f5b1537bce13ed7380e1892af06c9d85b76b81d5135",
+     "actors.json": "b465b884fa37705a34ba194bc026f608363c2edc1a063ec2df29ee4e209beaf6"
+    },
+    "userBytes": 159640,
+    "requestBytes": 176968,
+    "claims": 202,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.108756000000",
+       "tokens": 47644
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 177111,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "a96eebd960cd98f4"
+     }
+    ],
+    "seconds": 0.094,
+    "engine": "v3",
+    "actorCount": 12
+   },
+   {
+    "pipeline": "pipe_41c155a33733",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "9c2438ba70a796ea1eb45190dd35ae8a6ab8cb69c6af9efb41a1ab74c66357ee",
+     "actors.json": "f34a1c4b3b340d7f4ff006709cb70c59660bf47faca7353f5a051a724abb2b7e"
+    },
+    "userBytes": 179579,
+    "requestBytes": 197788,
+    "claims": 284,
+    "actorAllowedClaims": 252,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.127362000000",
+       "tokens": 54215
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 197931,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "d62d5772b83008a0"
+     }
+    ],
+    "seconds": 0.117,
+    "engine": "v3",
+    "actorCount": 20
+   },
+   {
+    "pipeline": "pipe_4eb5ce9557ff",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "66c7db1a420a20321acd072407c3fbd83bd74e94ecab876c86c647fc55d2f6f7",
+     "actors.json": "3d7c1c1688faa72046d0131f978ab4f02f9a5ba19496df0a5fd6942668d7d1a1"
+    },
+    "userBytes": 200204,
+    "requestBytes": 219608,
+    "claims": 320,
+    "actorAllowedClaims": 279,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.140744000000",
+       "tokens": 60082
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 219751,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "95dfe0f3aabb29d3"
+     }
+    ],
+    "seconds": 0.13,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_69a26e4c37df",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "1be8f2404b7f4e9b792379d3a975c026910983488023c5b396a4b5ffa4109820",
+     "actors.json": "c8c0785d55128e1050e0dd060fdb1738b351282bcc2308406b1c2339c5569b15"
+    },
+    "userBytes": 147770,
+    "requestBytes": 163342,
+    "claims": 144,
+    "actorAllowedClaims": 126,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.096748000000",
+       "tokens": 43372
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 163485,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "43f24bd4d5bb68bf"
+     }
+    ],
+    "seconds": 0.059,
+    "engine": "v3",
+    "actorCount": 9
+   },
+   {
+    "pipeline": "pipe_6c4190b31f0b",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "3067c9c94539f3ca0ac8b7d1b6252d7473f990b43652f98cf8aae09c2d069f33",
+     "actors.json": "c07a4d3a8cf2bf56158c8b929df3fcee92ab400aa6b59040a464af7f36a95e2d"
+    },
+    "userBytes": 236172,
+    "requestBytes": 255510,
+    "claims": 320,
+    "actorAllowedClaims": 282,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.159158000000",
+       "tokens": 69135
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 255653,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6e94d49f04816614"
+     }
+    ],
+    "seconds": 0.133,
+    "engine": "v3",
+    "actorCount": 19
+   },
+   {
+    "pipeline": "pipe_baddcd338811",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "c29b7a2ab13de999e6ebd4be9f0ba51ecd8e638acad1093412e30c3ea1e4c272",
+     "actors.json": "0b4e79f1b30890a23a443dd067ce5ac2d539cc22def4e3b6eda4444098792af8"
+    },
+    "userBytes": 129163,
+    "requestBytes": 142311,
+    "claims": 220,
+    "actorAllowedClaims": 189,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.093138000000",
+       "tokens": 39265
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 142454,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "6f188565e532db7d"
+     }
+    ],
+    "seconds": 0.093,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_d569f211eb14",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "473c7194076d0f4b7a1cac1a2d8227bcd72767677fbbd5b91cf0917213395e33",
+     "actors.json": "5fee69c9fb5c8a1de891dce4f50486f37253ef482ed1d6e8f568a85b3fd899e5"
+    },
+    "userBytes": 160569,
+    "requestBytes": 176543,
+    "claims": 200,
+    "actorAllowedClaims": 176,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.108802000000",
+       "tokens": 47581
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 176686,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "34889fdd4b16243e"
+     }
+    ],
+    "seconds": 0.088,
+    "engine": "v3",
+    "actorCount": 11
+   },
+   {
+    "pipeline": "pipe_fd2799f3ad41",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "b1fae58b9cd4fa1c900a73b88406f67614b54cb22e860cf162bb9e8a014ba0c9",
+     "actors.json": "b6d8058177440a34445d4df5be35da7855eee621f746738a734224c78f28c836"
+    },
+    "userBytes": 167083,
+    "requestBytes": 185313,
+    "claims": 235,
+    "actorAllowedClaims": 201,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.116368000000",
+       "tokens": 50304
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 185456,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "71475974e0c81982"
+     }
+    ],
+    "seconds": 0.089,
+    "engine": "v3",
+    "actorCount": 15
+   },
+   {
+    "pipeline": "pipe_41522d5d9790",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "b19b6df3cbd6fbf865cbf2f31713efaaf289e589e5720824e2cbbd16195aae58",
+     "actors.json": "1e4f40221b3cc2216b7924290a5c62450e19687dd56178cfc5a0a45c72f0b95b"
+    },
+    "userBytes": 80696,
+    "requestBytes": 91113,
+    "claims": 54,
+    "actorAllowedClaims": 54,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.062950000000",
+       "tokens": 25701
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 91256,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "cdeb90d351dc5123"
+     }
+    ],
+    "seconds": 0.024,
+    "engine": "v3",
+    "actorCount": 18
+   },
+   {
+    "pipeline": "pipe_7ef597666938",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "b8e3c95cf2a44631646d1425fb4a4621fa3a0cf25cc7d6b04533fc6211acf83b",
+     "actors.json": "91c12cac6a40fa6a5fb1f63094bf3c6e01738a910756617def298b4040052828"
+    },
+    "userBytes": 132862,
+    "requestBytes": 151519,
+    "claims": 390,
+    "actorAllowedClaims": 316,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.105170000000",
+       "tokens": 42805
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 151662,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "7a8313da14f9b3ae"
+     }
+    ],
+    "seconds": 0.069,
+    "engine": "v3",
+    "actorCount": 14
+   },
+   {
+    "pipeline": "pipe_a90b338fdfa0",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "c8d285a1bb319eba450b3155339f0e1ed36c163e0158c012cbb09e9b7acf7723",
+     "actors.json": "884cd982c7d70b767bb0685270312111eeaab4062b60d15b702ef79d0cdabcca"
+    },
+    "userBytes": 128996,
+    "requestBytes": 141491,
+    "claims": 99,
+    "actorAllowedClaims": 99,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.090118000000",
+       "tokens": 38625
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 141634,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "2b792645646a8848"
+     }
+    ],
+    "seconds": 0.032,
+    "engine": "v3",
+    "actorCount": 33
+   },
+   {
+    "pipeline": "pipe_e2egold02",
+    "scenario": "sensitive",
+    "inputs": {
+     "research_report.md": "1b53925d5db0f12522d66f482ad9a7b5574cd6baa35044eac0edea41bf0e3390",
+     "actors.json": "405a71cbb190f35d829a08d0464f6aafa46aaec4d4e7bb1838b930b60f845257"
+    },
+    "userBytes": 68103,
+    "requestBytes": 78223,
+    "claims": 63,
+    "actorAllowedClaims": 63,
+    "status": "typed_gap",
+    "code": "provider_content_filtered",
+    "message": "Modeling stopped: the provider request cannot be resent unchanged",
+    "details": {
+     "attempt": 1
+    },
+    "stage": "prepare_model",
+    "attempts": [
+     {
+      "number": 1,
+      "kind": "initial",
+      "status": "failed",
+      "errorCode": "provider_content_filtered",
+      "usage": {
+       "costUsd": "0.058430000000",
+       "tokens": 22799
+      }
+     }
+    ],
+    "resume": {
+     "status": "typed_gap",
+     "code": "provider_content_filtered",
+     "newRequests": 0
+    },
+    "requests": [
+     {
+      "bytes": 78366,
+      "maxOutput": 32768,
+      "thinking": {
+       "type": "disabled"
+      },
+      "reasoningEffort": null,
+      "repair": false,
+      "systemSha256": "1c502760e8fd341f",
+      "userSha256": "e3f5c396838a4b5e"
+     }
+    ],
+    "seconds": 0.023,
+    "engine": "v3",
+    "actorCount": 21
+   }
+  ]
+ },
+ "finishedAt": "2026-10-18T20:23:51+0800"
+}
