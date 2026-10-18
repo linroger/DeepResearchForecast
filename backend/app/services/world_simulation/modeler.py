@@ -27,7 +27,8 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
     Unknown request outcomes consume their full allowance on ordinary resume.
     """
     import fcntl
-    from .policy import StrictHTTPModeler
+    from .contracts import REFUSAL_CODES, WorldError
+    from .policy import PolicyFailure, StrictHTTPModeler, call_with_backoff
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     require(isinstance(policy_spec, dict) and isinstance(policy_spec.get('limits'), dict),
@@ -48,7 +49,6 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            from .contracts import WorldError
             raise WorldError('modeling_running', 'This modeling attempt is already active') from None
         path = directory / 'world_modeling_receipts.json'
         ledger = read_json(path) if path.exists() else {
@@ -62,7 +62,8 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
                     'costUsd': quantity(sum((decimal(a['costUsd']) for a in records), Decimal(0)))}
 
         while ledger['candidate'] is None:
-            require(len(ledger['attempts']) < 2, 'modeling_attempts_exhausted',
+            # A 'throttled' row was refused for capacity before metering; it spends no request.
+            require(sum(a['status'] != 'throttled' for a in ledger['attempts']) < 2, 'modeling_attempts_exhausted',
                     'Modeling exhausted its durable two-request allowance')
             if transport is None:
                 transport = StrictHTTPModeler(policy_spec)
@@ -78,13 +79,18 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
             ledger['attempts'].append(row)
             atomic_json(path, ledger, preserve_unicode=True)  # durable before the actual external request
             try:
-                response = transport.decide(clone(messages))
+                response = call_with_backoff(lambda: transport.decide(clone(messages)))
                 usage, candidate = response.usage, response.decision
                 require(isinstance(candidate, dict), 'invalid_modeling_response', 'Modeler must return one JSON object')
                 require(type(usage.get('tokens')) is int and 0 <= usage['tokens'] <= reserve['tokens']
                         and Decimal(0) <= decimal(usage.get('costUsd')) <= decimal(reserve['costUsd']),
                         'reservation_exceeded', 'Modeler usage exceeded its declared request bound')
             except Exception as error:
+                if isinstance(error, PolicyFailure) and error.code in REFUSAL_CODES:
+                    row.update(status='throttled', usage={'tokens': 0, 'costUsd': '0'})
+                    atomic_json(path, ledger, preserve_unicode=True)
+                    raise WorldError(error.code, 'Modeling requests were refused for capacity; '
+                                     'resume once capacity returns') from None
                 usage = getattr(error, 'usage', None)
                 if isinstance(usage, dict) and type(usage.get('tokens')) is int and 0 <= usage['tokens'] <= reserve['tokens']:
                     if Decimal(0) <= decimal(usage.get('costUsd')) <= decimal(reserve['costUsd']):

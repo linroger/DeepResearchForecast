@@ -175,7 +175,10 @@ def test_http_error_or_redirect_never_retries(actor_case, boundary, status):
                                            'retry-after': '0', 'x-should-retry': 'true'})
     with pytest.raises(PolicyFailure) as caught:
         case.policy.decide(actor_case.observation)
-    assert caught.value.usage is None
+    # A 429 is a capacity refusal (nothing metered; callers wait and re-send); every other
+    # failure keeps unknown exposure. The transport itself never retries either.
+    assert caught.value.usage == ({'tokens': 0, 'costUsd': '0'} if status == 429 else None)
+    assert caught.value.code == ('provider_throttled' if status == 429 else 'policy_transport_failed')
     assert len(case.sent) == 1
 
 
@@ -651,7 +654,9 @@ def test_modeler_uses_same_single_dispatch_failure_boundary(modeler_case, bounda
     with caplog.at_level(logging.DEBUG):
         with pytest.raises(PolicyFailure) as caught:
             case.policy.decide(modeler_case.messages)
-    assert caught.value.usage is None and len(case.sent) == 1
+    # A 429 is a capacity refusal with nothing metered; the transport still dispatches once.
+    assert caught.value.usage == ({'tokens': 0, 'costUsd': '0'} if failure == '429' else None)
+    assert len(case.sent) == 1
     assert secret not in str(caught.value) and secret not in caplog.text
     assert modeler_case.report not in caplog.text
 

@@ -177,13 +177,16 @@ def test_directed_transport_stop_uses_actual_journal_and_finishes_remaining_rows
     try:
         report = replay.run_evaluation(root, factory, config)
         assert len(calls) == report['attempts'] == 3
-        assert list(report['cases'].values()).count('unknown') == 3
+        # The fixture's 429 is a capacity refusal: known zero usage, so its row is failed, not unknown.
+        assert list(report['cases'].values()).count('failed') == 3
         assert list(report['cases'].values()).count('provider_stopped') == 9
         assert report['completedCases'] == 0 and report['diagnosticGate'] == 'incomplete'
         journal = json.loads((root / 'journal.json').read_text())
         for row in journal['cases'].values():
             if row['status'] == 'provider_stopped':
                 assert row == {'status': 'provider_stopped'}
+            else:
+                assert row['errorCode'] == 'provider_throttled' and row['usage'] == {'tokens': 0, 'costUsd': '0'}
         assert 'SECRET_PROVIDER_ERROR_BODY' not in json.dumps(journal)
         assert replay.run_evaluation(root, factory, config) == report and len(calls) == 3
     finally:

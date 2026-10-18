@@ -78,10 +78,11 @@ def test_failed_required_slot_never_advances_and_resume_reuses_peer_receipts(tmp
     replay = ExamplePolicy('investment')
     with WorldStore(path, spec) as store:
         fence = store.acquire_writer('second')
-        with pytest.raises(WorldError):
-            run_round(store, replay, fence)
-        assert replay.observations == []  # ordinary resume restores no exhausted allowance
-        assert store.head() == initial
+        # Both buyer calls ended with unknown exposure; the new fence abandons them (their
+        # reservations stay in exposure), so resume re-dispatches only that slot.
+        assert {a['status'] for a in store.budget_summary()['attempts'] if a['slot'] == '1:proposal:buyer'} == {'abandoned'}
+        assert run_round(store, replay, fence)['round'] == 1
+        assert [o['actorId'] for o in replay.observations if o['phase'] == 'proposal'] == ['buyer']
 
 
 def test_cancel_before_commit_preserves_head_and_successful_receipts(tmp_path):

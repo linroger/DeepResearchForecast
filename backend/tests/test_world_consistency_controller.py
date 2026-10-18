@@ -93,7 +93,7 @@ def test_causal_loop_uses_revised_choice_before_effects(tmp_path, domain):
         assert store.head() == head and store.decision(slot) == final
 
 
-def test_unresolved_revision_stops_without_committing_or_third_call(tmp_path):
+def test_unresolved_revision_commits_flagged_without_a_third_call(tmp_path):
     class Unresolved(RevisingPolicy):
         def decide(self, obs, *, review=None):
             result = super().decide(obs, review=review)
@@ -104,19 +104,19 @@ def test_unresolved_revision_stops_without_committing_or_third_call(tmp_path):
     path = tmp_path / 'world.sqlite3'
     with WorldStore(path, specification()) as store:
         fence = store.acquire_writer('first')
-        with pytest.raises(WorldError, match='consistency stage'):
-            run_round(store, policy, fence)
-        assert store.head()['round'] == 0 and store.decision('1:proposal:buyer') is None
+        head = run_round(store, policy, fence)
+        decision = store.decision('1:proposal:buyer')
+        assert head['round'] == 1 and decision['consistencyStatus'] == 'unresolved'
+        assert decision in store.rounds()[0]['decisions']
         buyer = [a for a in store.budget_summary()['attempts'] if a['slot'] == '1:proposal:buyer']
         assert [a['status'] for a in buyer] == ['succeeded', 'failed']
         assert buyer[-1]['errorCode'] == 'consistency_unresolved'
         store.release_writer(fence)
     before = list(policy.calls)
-    with WorldStore(path) as store:
-        fence = store.acquire_writer('resume')
-        with pytest.raises(WorldError):
-            run_round(store, policy, fence)
-        assert policy.calls == before and store.head()['round'] == 0
+    with WorldStore(path, read_only=True) as store:
+        assert store.head() == head and store.decision('1:proposal:buyer') == decision
+    assert policy.calls == before
+    assert [c[2] for c in before if c[:2] == ('buyer', 'proposal')] == [False, True]
 
 
 def test_failed_candidate_has_no_unreviewed_replacement(tmp_path):

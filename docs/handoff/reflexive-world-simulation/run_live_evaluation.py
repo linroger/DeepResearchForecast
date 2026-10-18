@@ -150,17 +150,21 @@ def persist_phase_records(records, location, binding):
 
 
 def provider_failure_stop(output):
-    """Stop new cases after three terminal transport/metering failures."""
+    """Stop new cases after three terminal transport/metering failures or capacity refusals."""
     failures = {'policy_transport_failed', 'policy_usage_unavailable', 'policy_identity_mismatch'}
+    # A capacity refusal (HTTP 429 / throttle code, or a full shared model-call lease) stops a
+    # world case directly once its waits run out, and ends a directed row's single request.
+    refusals = {'provider_throttled', 'model_capacity_unavailable'}
     receipts = [json.loads(p.read_text()) for p in output.glob('*/receipt.json')]
-    count = sum(r.get('errorCode') == 'required_decision_failed'
-                and r.get('errorDetails', {}).get('lastErrorCode') in failures for r in receipts)
+    count = sum((r.get('errorCode') == 'required_decision_failed'
+                 and r.get('errorDetails', {}).get('lastErrorCode') in failures)
+                or r.get('errorCode') in refusals for r in receipts)
     journal_path = output / 'journal.json'
     if journal_path.exists():
         rows = json.loads(journal_path.read_text())['cases']
         if not isinstance(rows, dict):
             raise ValueError('Directed transport journal must contain case records')
-        count += sum(row.get('status') in {'failed', 'unknown'} and row.get('errorCode') in failures
+        count += sum(row.get('status') in {'failed', 'unknown'} and row.get('errorCode') in failures | refusals
                      for row in rows.values())
     return count >= 3
 

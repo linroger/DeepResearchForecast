@@ -300,13 +300,11 @@ def test_invalid_limits_fail_before_transport(field, value, no_transport):
         resolve(mode="full", simulation_engine="world-v1", world_policy_spec=candidate)
 
 
-@pytest.mark.parametrize("review", [None, "actor-consistency-v1", "actor-consistency-v2", "actor-consistency-v3", "unknown", [], True])
-def test_fresh_world_requires_v4_review(review, no_transport):
+@pytest.mark.parametrize("review", ["actor-consistency-v1", "actor-consistency-v2", "actor-consistency-v3", "unknown", [], True])
+def test_fresh_world_rejects_review_pins_other_than_v4(review, no_transport):
+    # No pin at all is now the fresh default (test_world_review_admission.py).
     value = profile()
-    if review is None:
-        del value["policy"]["decisionReview"]
-    else:
-        value["policy"]["decisionReview"] = review
+    value["policy"]["decisionReview"] = review
     assert_error("invalid_policy_metadata", mode="full", simulation_engine="world-v1", world_policy_spec=value)
 
 

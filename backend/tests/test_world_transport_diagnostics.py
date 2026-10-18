@@ -19,9 +19,13 @@ def test_http_failure_keeps_only_status_and_unknown_exposure(actor_case, boundar
     with pytest.raises(PolicyFailure) as failed:
         case.policy.decide(actor_case.observation)
     error = failed.value
-    assert error.code == 'policy_transport_failed' and error.usage is None
-    assert str(error) == f'Actor HTTP dispatch failed with status {status}; exposure is unknown'
-    assert _error_message(error) == str(error)
+    if status == 429:  # A capacity refusal: classified from the status, nothing metered.
+        assert error.code == 'provider_throttled' and error.usage == {'tokens': 0, 'costUsd': '0'}
+        assert str(error) == 'Provider refused the request for capacity; nothing was metered'
+    else:
+        assert error.code == 'policy_transport_failed' and error.usage is None
+        assert str(error) == f'Actor HTTP dispatch failed with status {status}; exposure is unknown'
+        assert _error_message(error) == str(error)
     assert 'PRIVATE_PROVIDER' not in str(error) and len(case.sent) == 1
     assert case.policy.reservation(actor_case.observation) == quote
 

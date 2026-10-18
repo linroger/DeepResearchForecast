@@ -7,11 +7,15 @@ name or from the currently selected provider.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_CEILING, localcontext
+from email.utils import parsedate_to_datetime
 import json
 import logging
+import math
 import threading
+import time
 import unicodedata
 import weakref
 from urllib.parse import urlsplit
@@ -281,6 +285,111 @@ class PolicyFailure(WorldError):
     def __init__(self, code: str, message: str, *, usage: dict | None = None):
         super().__init__(code, message)
         self.usage = clone(usage)
+
+
+_NOTHING_METERED = {'tokens': 0, 'costUsd': '0'}
+# Zhipu/GLM capacity codes (concurrency, frequency, request volume); they arrive as HTTP 429.
+_THROTTLE_CODES = frozenset({'1302', '1303', '1305'})
+THROTTLE_WAITS = 3
+THROTTLE_MAX_WAIT_SECONDS = 30.0
+_THROTTLE_DEFAULT_WAITS = (5.0, 10.0, 20.0)
+
+
+class ProviderThrottled(PolicyFailure):
+    """The provider refused the request for capacity (HTTP 429 or a throttle code).
+
+    A refusal happens before generation, so nothing is metered; the same reservation still
+    bounds the one request that will finally be processed. ``retry_after`` (seconds) is the
+    provider's Retry-After hint, or None.
+    """
+
+    def __init__(self, retry_after: float | None = None):
+        super().__init__('provider_throttled', 'Provider refused the request for capacity; nothing was metered',
+                         usage=_NOTHING_METERED)
+        self.retry_after = retry_after
+
+
+def _retry_after(error):
+    """Seconds from a Retry-After (or retry-after-ms) header, or None; never raises."""
+    try:
+        headers = error.response.headers
+        value = headers.get('retry-after-ms')
+        if value is not None:
+            seconds = float(value) / 1000
+        else:
+            value = headers.get('retry-after')
+            if value is None:
+                return None
+            try:
+                seconds = float(value)
+            except ValueError:
+                seconds = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+        return seconds if math.isfinite(seconds) else None
+    except Exception:
+        return None
+
+
+def _is_throttle(error):
+    """Classify from the structured HTTP status and provider code, never from body text."""
+    from openai import APIStatusError
+    from ...utils.llm_errors import error_code, error_status
+
+    return isinstance(error, APIStatusError) and (error_status(error) == 429 or error_code(error) in _THROTTLE_CODES)
+
+
+@contextmanager
+def _model_call_lease():
+    """One permit of the cross-process model-call envelope that research also draws on.
+
+    research_budget.model_call_lease is active when RESEARCH_MODEL_LEASE_DB (or
+    RESEARCH_BUDGET_DB) is set, which WorldSimulationService.start passes to every world
+    child, and waits while the envelope is full. If the shared budget module cannot be
+    loaded the call proceeds unleased, as research does when its ledger is unavailable.
+    """
+    try:
+        from ..official_data import bridge_module
+
+        lease = bridge_module('research_budget').model_call_lease(1)
+    except (ImportError, OSError):
+        logging.getLogger(__name__).warning('Shared model-call lease unavailable; dispatching unleased')
+        lease = nullcontext()
+    with lease:
+        yield
+
+
+def _wait(delay, cancelled=None):
+    """Sleep ``delay`` seconds in one-second slices; False as soon as ``cancelled()``."""
+    deadline = time.monotonic() + delay
+    while True:
+        if cancelled is not None and cancelled():
+            return False
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return True
+        time.sleep(min(remaining, 1.0))
+
+
+def call_with_backoff(call, *, cancelled=None):
+    """Run ``call`` (one policy decide), re-sending it after provider throttling.
+
+    Honours Retry-After, capped at THROTTLE_MAX_WAIT_SECONDS, for at most THROTTLE_WAITS
+    waits; the default schedule is 5, 10 then 20 seconds. Callers keep the attempt they
+    reserved: a throttled request was refused before metering, so the waits never charge a
+    slot. When the waits run out, or ``cancelled()`` turns true during one, the last
+    ProviderThrottled propagates and the caller stops resumably.
+    """
+    waits = 0
+    while True:
+        try:
+            return call()
+        except ProviderThrottled as error:
+            if waits >= THROTTLE_WAITS:
+                raise
+            hint = error.retry_after
+            delay = _THROTTLE_DEFAULT_WAITS[waits] if hint is None else hint
+            waits += 1
+            if not _wait(min(THROTTLE_MAX_WAIT_SECONDS, max(0.0, delay)), cancelled):
+                raise
 
 
 def _attach_revision_shape(error, raw):
@@ -644,14 +753,23 @@ class _StrictHTTPTransport:
             options['reasoning_effort'] = self._reasoning_effort
         if self._response_format is not None:
             options['response_format'] = {'type': self._response_format}
-        try:
-            with _quiet_sdk():
-                response = self._client.chat.completions.with_raw_response.create(
-                    model=self.model, messages=messages, n=1, stream=False,
-                    timeout=self.timeout, **options,
-                )
-        except Exception as error:
-            raise PolicyFailure('policy_transport_failed', _transport_failure_message(error)) from None
+        with ExitStack() as lease:
+            try:
+                lease.enter_context(_model_call_lease())
+            except TimeoutError:
+                raise PolicyFailure('model_capacity_unavailable',
+                                    'Shared model-call capacity stayed unavailable; nothing was dispatched',
+                                    usage=_NOTHING_METERED) from None
+            try:
+                with _quiet_sdk():
+                    response = self._client.chat.completions.with_raw_response.create(
+                        model=self.model, messages=messages, n=1, stream=False,
+                        timeout=self.timeout, **options,
+                    )
+            except Exception as error:
+                if _is_throttle(error):
+                    raise ProviderThrottled(_retry_after(error)) from None
+                raise PolicyFailure('policy_transport_failed', _transport_failure_message(error)) from None
         try:
             # SDK model coercion accepts booleans as integer token counters.
             # Parse the raw envelope first so metering retains its exact types.

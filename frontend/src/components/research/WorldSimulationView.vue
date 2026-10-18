@@ -99,7 +99,7 @@
         <p v-if="view === 'public'">{{ L('公开视图仅显示可见后果。参与者决策与理由仅在参与者或分析者视图中显示。', 'The public view shows visible consequences. Actor decisions and rationales are available in actor or analyst views.') }}</p>
         <p class="muted">{{ L('包含截至所选回合的可见历史。', 'Visible history through the selected round.') }}</p>
         <article v-for="decision in projection.decisions" :key="decision.decisionId" class="record">
-          <h4>{{ decision.actorId }} · {{ L('回合', 'Round') }} {{ decision.round }} · {{ statusLabel(decision.status) }}</h4>
+          <h4>{{ decision.actorId }} · {{ L('回合', 'Round') }} {{ decision.round }} · {{ statusLabel(decision.status) }}<template v-if="decision.consistencyStatus === 'unresolved'"> · {{ L('一致性复核未解决', 'Consistency review unresolved') }}</template></h4>
           <p>{{ text(decision.rationale) }}</p>
           <p class="reference">{{ L('决策参考', 'Decision reference') }}: {{ decision.decisionId }} · {{ L('观察参考', 'Observation reference') }}: {{ decision.observationId }}</p>
           <section v-for="intent in decision.intents" :id="recordId('intent', intent.intentId)" :key="intent.intentId" tabindex="-1" class="intent">
@@ -230,6 +230,7 @@ function statusLabel(value) {
   const labels = {
     unknown: ['未知', 'Unknown'], contested: ['有争议', 'Contested'], specified: ['已指定', 'Specified'], simulated: ['模拟值', 'Simulated'],
     pending: ['待处理', 'Pending'], voting: ['投票中', 'Voting'], settled: ['已履行', 'Settled'], breached: ['已违约', 'Breached'],
+    failed: ['未能履行', 'Failed'],
     accepted: ['已接受', 'Accepted'], rejected: ['已拒绝', 'Rejected'], withdrawn: ['已撤回', 'Withdrawn'], expired: ['已过期', 'Expired'], superseded: ['已替代', 'Superseded'],
     acted: ['已行动', 'Acted'], wait: ['等待', 'Wait'], unable: ['无法行动', 'Unable'], execute: ['执行', 'Execute'],
     propose: ['提议', 'Propose'], accept: ['接受', 'Accept'], reject: ['拒绝', 'Reject'], counter: ['还价', 'Counter'], defer: ['延后', 'Defer'], withdraw: ['撤回', 'Withdraw'],

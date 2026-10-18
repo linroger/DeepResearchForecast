@@ -5,11 +5,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable
 
-from .contracts import WorldError, clone, require, validate_decision
+from .contracts import REFUSAL_CODES, WorldError, clone, require, validate_decision
 from .kernel import resolve_round, stage_interactions
 from .observations import build_observation, response_actors
-from .review import (CANDIDATE_OUTPUT_ERRORS, MODE_V3, MODE_V4, assessment_status,
-                     candidate_repair_enabled, review_mode, validate_assessment)
+from .policy import PolicyFailure, call_with_backoff
+from .review import (CANDIDATE_OUTPUT_ERRORS, assessment_status, candidate_repair_enabled,
+                     review_mode, validate_assessment)
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,20 @@ def slot_id(round_index: int, phase: str, actor_id: str) -> str:
 
 def _cancelled(cancel: Callable[[], bool]) -> None:
     require(not cancel(), 'cancelled', 'World simulation cancelled before the next causal boundary')
+
+
+_NOTHING_METERED = {'tokens': 0, 'costUsd': '0'}
+
+
+def _refused(error) -> bool:
+    """A call refused for capacity before metering (provider throttle or a full shared lease)."""
+    return isinstance(error, PolicyFailure) and error.code in REFUSAL_CODES
+
+
+def _stop_refused(error, cancel: Callable[[], bool]) -> None:
+    """Stop resumably: the refused attempt is closed uncharged, so the slot keeps its allowance."""
+    _cancelled(cancel)  # An operator stop that arrived during the waits takes precedence.
+    raise WorldError(error.code, 'Model calls were refused for capacity; resume the world once capacity returns') from None
 
 
 def _consistent_decision(store, policy, slot, observation, actor_id, phase, fence, cancel):
@@ -47,7 +62,7 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
         decision = assessment = None
         output_validation_error = None
         try:
-            output = policy.decide(clone(observation), **kwargs)
+            output = call_with_backoff(lambda: policy.decide(clone(observation), **kwargs), cancelled=cancel)
             if isinstance(output, PolicyResponse):
                 raw, usage, assessment = output.decision, output.usage, output.assessment
             else:
@@ -63,10 +78,15 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
             if stage == "revision":
                 assessment = validate_assessment(assessment, observation, decision, mode=review_mode(store.spec))
                 status = assessment_status(assessment, mode=review_mode(store.spec))
-                withheld = review_mode(store.spec) in {MODE_V3, MODE_V4} and status == "unresolved" and usage is not None
+                withheld = status == "unresolved" and usage is not None
                 require(status == "clear", "consistency_unresolved",
                         "The actor revision retains an unresolved consistency conflict")
         except Exception as error:
+            if _refused(error):
+                # Closed with nothing charged; on resume this stage is dispatched again.
+                store.finish_consistency_attempt(attempt, status="throttled", usage=_NOTHING_METERED, fence=fence,
+                                                 error={"code": error.code, "message": str(error)})
+                _stop_refused(error, cancel)
             usage = usage if usage is not None else getattr(error, "usage", None)
             repair_eligible = False
             if (repair_enabled and stage == "candidate" and usage is not None
@@ -80,9 +100,10 @@ def _consistent_decision(store, policy, slot, observation, actor_id, phase, fenc
                                              decision=decision if withheld else None,
                                              assessment=assessment if withheld else None,
                                              **({"repair_eligible": True} if repair_eligible else {}))
-            if repair_eligible:
-                # A failed persistence/fence/metering check above propagates;
-                # only a durable failed candidate opens the unused revision.
+            if repair_eligible or withheld:
+                # A failed persistence/fence/metering check above propagates. A durable failed
+                # candidate opens the unused revision; a durable unresolved revision is the
+                # slot's final decision, committed flagged by the store (no third call).
                 return
             raise WorldError("required_decision_failed", "A required consistency stage failed without a replacement allowance",
                              details={"lastErrorCode": diagnostic["code"], "lastErrorMessage": diagnostic["message"]}) from None
@@ -134,7 +155,8 @@ def _collect(store, policy, fence: int, snapshot: dict, round_index: int, phase:
                                             reserved_cost=reservation['costUsd'])
             usage = None
             try:
-                output = policy.decide(clone(observation), **policy_kwargs)
+                output = call_with_backoff(lambda: policy.decide(clone(observation), **policy_kwargs),
+                                           cancelled=cancel)
                 if isinstance(output, PolicyResponse):
                     raw, usage = output.decision, output.usage
                 else:
@@ -143,6 +165,10 @@ def _collect(store, policy, fence: int, snapshot: dict, round_index: int, phase:
                     raw, usage = output, {'tokens': 0, 'costUsd': '0'}
                 decision = validate_decision(spec, raw, actor_id, observation, phase=phase)
             except Exception as error:
+                if _refused(error):
+                    # Closed with nothing charged: the slot keeps its whole allowance for resume.
+                    store.finish_attempt(attempt, 'throttled', _NOTHING_METERED, fence)
+                    _stop_refused(error, cancel)
                 # A network failure after dispatch has an unknown charge. Retain
                 # the full reservation; never log prompt/response or credentials.
                 usage = usage if usage is not None else getattr(error, 'usage', None)

@@ -28,6 +28,10 @@ DEFAULT_LIMITS = {
     "maxConcurrentCalls": 4,
 }
 _ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
+# A model call refused for capacity before anything was metered: the provider throttled it
+# (HTTP 429 or a throttle code) or the shared model-call lease stayed full. Such an attempt
+# is recorded 'throttled' with zero usage and the run stops resumably.
+REFUSAL_CODES = frozenset({"provider_throttled", "model_capacity_unavailable"})
 
 
 class WorldError(ValueError):

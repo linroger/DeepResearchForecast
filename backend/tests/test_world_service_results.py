@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.world_simulation.artifacts import atomic_json, read_json
+from app.services.world_simulation.artifacts import atomic_json, exclusive_file, read_json
 from app.services.world_simulation.contracts import WorldError, validate_decision
 from app.services.world_simulation.examples import ExamplePolicy, example_spec
 from app.services.world_simulation.kernel import initialize_world, resolve_round
@@ -195,9 +195,10 @@ def test_stale_local_process_does_not_hide_resumed_child(tmp_path, monkeypatch):
     atomic_json(directory / 'world_run.json', {'simulation_id': state.simulation_id,
         'generation_id': state.world_generation_id, 'runner_status': 'running', 'process_pid': 99})
     monkeypatch.setitem(service._processes, str(directory), SimpleNamespace(pid=88, poll=lambda: 0))
-    monkeypatch.setattr(service, '_alive', lambda pid: pid == 99)
-    assert Service.status(state.simulation_id, root=tmp_path)['runner_status'] == 'running'
-    assert Service.stop(state.simulation_id, root=tmp_path)['runner_status'] == 'stopping'
+    # The resumed child (another process, PID 99) proves it lives by holding the launch flock.
+    with exclusive_file(directory / 'world_launch.lock', blocking=False):
+        assert Service.status(state.simulation_id, root=tmp_path)['runner_status'] == 'running'
+        assert Service.stop(state.simulation_id, root=tmp_path)['runner_status'] == 'stopping'
     assert (directory / 'world_cancel.json').is_file()
 
 

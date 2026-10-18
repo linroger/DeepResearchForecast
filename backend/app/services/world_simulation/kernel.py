@@ -6,6 +6,7 @@ whole intent/bundle; malformed authoritative configuration fails the round.
 """
 from __future__ import annotations
 
+from bisect import bisect_left
 from collections import defaultdict
 from decimal import Decimal, localcontext
 from typing import Any
@@ -18,6 +19,11 @@ from .contracts import (
 
 _DAY_MICROS = Decimal(86400000000)
 _NUMERIC = {"stock", "rate", "quantity"}
+# A scheduled effect or a settlement that meets these at its time boundary is recorded as a
+# failed event (nothing applies, holds are released) instead of failing the round: actors can
+# legally cause them (spending an account a schedule draws on, repeating a negative investment),
+# and a raise would replay from the saved decisions on every resume.
+_BOUNDARY_FAILURES = frozenset({"insufficient_resources", "negative_quantity"})
 _PARAMETERS = {
     "wait": set(),
     "transfer": {"fromAccount", "toAccount", "amount"},
@@ -397,8 +403,16 @@ def _event(spec: dict, state: dict, events: list, kind: str, at: str, record: di
         item["sourceIntentId"] = intent_id
     events.append(item)
     state["appliedEvents"].append(eid)
-    require(len(events) <= spec["limits"]["maxEventsPerRound"], "event_limit", "Round exceeds declared event limit")
     return item
+
+
+def _moves_nothing(event: dict) -> bool:
+    return event["kind"] in {"flow_transfer", "flow_summary"} and decimal(event["details"]["amount"]) == 0
+
+
+def event_load(events: list) -> int:
+    """Events that count toward maxEventsPerRound; a flow receipt or summary that moved nothing does not."""
+    return sum(not _moves_nothing(event) for event in events)
 
 
 def _effect(state: dict, effect: dict) -> None:
@@ -443,6 +457,32 @@ def _settle(spec: dict, state: dict, events: list, item: dict) -> None:
     item["status"] = "settled"
     _event(spec, state, events, "commitment_settled", item["dueAt"], item, item["commitmentId"],
            actor_id=item["actorId"], intent_id=item["sourceIntentId"], details={"commitmentId": item["commitmentId"]})
+
+
+def _settlement_failure(state: dict, item: dict) -> str | None:
+    """The boundary failure a settlement would meet, found on detached copies before any mutation."""
+    scratch = {key: clone(state[key]) for key in ("accounts", "metrics", "rules")}
+    try:
+        if item["transfers"]:
+            _transfer(scratch, item["transfers"], release=True)
+        for effect in item["effects"]:
+            _effect(scratch, effect)
+    except WorldError as error:
+        if error.code in _BOUNDARY_FAILURES:
+            return error.code
+        raise
+    return None
+
+
+def _fail_commitment(spec: dict, state: dict, events: list, item: dict, code: str) -> None:
+    """Close a commitment whose settlement cannot apply: release its holds and move nothing."""
+    for transfer in item["transfers"]:
+        record = state["accounts"][transfer["fromAccount"]]
+        record["reserved"] = quantity(decimal(record["reserved"]) - decimal(transfer["amount"]))
+    item["status"] = "failed"
+    _event(spec, state, events, "commitment_failed", item["dueAt"], item, item["commitmentId"],
+           actor_id=item["actorId"], intent_id=item["sourceIntentId"],
+           details={"commitmentId": item["commitmentId"], "code": code})
 
 
 def _obligations(spec: dict, state: dict, template: dict, terms: dict, participants: list) -> dict:
@@ -675,11 +715,23 @@ def _flows(spec: dict, state: dict, events: list, start: str, end: str) -> None:
                         "fromAccount": flow["sourceAccount"], "toAccount": flow["targetAccount"]})
 
 
+def _scheduled_done(spec: dict, state: dict, event: dict) -> bool:
+    """A scheduled effect is processed once: applied, or recorded as failed at its boundary."""
+    kind = "scheduled_" + event["kind"]
+    return any(stable_id(spec["generationId"], event["eventId"], name) in state["appliedEvents"]
+               for name in (kind, kind + "_failed"))
+
+
 def _advance(spec: dict, state: dict, events: list, start: str, end: str, *, initial: bool = False) -> None:
+    """Apply time-boundary effects over (start, end].
+
+    Opening effects (``initial``) still raise: before any actor acts, an effect that cannot
+    apply is a specification defect for preparation to report. Later boundary failures in
+    ``_BOUNDARY_FAILURES`` become ``scheduled_<kind>_failed`` / ``commitment_failed`` events.
+    """
     boundaries = defaultdict(list)
     for event in state["scheduledEvents"]:
-        eid = stable_id(spec["generationId"], event["eventId"], "scheduled_" + event["kind"])
-        if eid in state["appliedEvents"]:
+        if _scheduled_done(spec, state, event):
             continue
         at = time_text(event["at"])
         require(parse_time(at) >= parse_time(start) and (initial or parse_time(at) > parse_time(start)),
@@ -702,10 +754,21 @@ def _advance(spec: dict, state: dict, events: list, start: str, end: str, *, ini
         _flows(spec, state, events, cursor, at)
         for _, kind, item in sorted(boundaries[at], key=lambda entry: entry[0]):
             if kind == "scheduled":
-                _effect(state, item)
-                _event(spec, state, events, "scheduled_" + item["kind"], at, item, item["eventId"])
+                try:
+                    _effect(state, item)  # Atomic: every check precedes its first mutation.
+                except WorldError as error:
+                    if initial or error.code not in _BOUNDARY_FAILURES:
+                        raise
+                    _event(spec, state, events, "scheduled_" + item["kind"] + "_failed", at, item, item["eventId"],
+                           details={"scheduledEventId": item["eventId"], "code": error.code})
+                else:
+                    _event(spec, state, events, "scheduled_" + item["kind"], at, item, item["eventId"])
             elif kind == "commitment":
-                _settle(spec, state, events, item)
+                code = None if initial else _settlement_failure(state, item)
+                if code is None:
+                    _settle(spec, state, events, item)
+                else:
+                    _fail_commitment(spec, state, events, item, code)
             else:
                 item["status"] = "expired"
                 _event(spec, state, events, "offer_expired", at, item, item["interactionId"],
@@ -747,8 +810,7 @@ def _prepare(spec: dict, snapshot: dict, round_index: int) -> tuple[dict, dict, 
     state.pop("revision", None)
     # An unsettled opening event is a preparation failure, never a silent late effect.
     for event in state["scheduledEvents"]:
-        eid = stable_id(spec["generationId"], event["eventId"], "scheduled_" + event["kind"])
-        require(eid in state["appliedEvents"] or parse_time(event["at"]) > parse_time(period["start"]),
+        require(_scheduled_done(spec, state, event) or parse_time(event["at"]) > parse_time(period["start"]),
                 "overdue_event", "Initialize opening effects before the first observation")
     return spec, state, period
 
@@ -796,9 +858,108 @@ def _groups(decisions: list, *, communication_only: bool = False, spec: dict | N
     return sorted(groups, key=lambda g: (g[0]["phase"] != "proposal", g[0]["actorId"], g[0]["priority"], g[0]["intentId"]))
 
 
-def _run_intents(spec: dict, state: dict, decisions: list, now: str, *, stage: bool = False) -> tuple[dict, list, list]:
-    events, resolutions = [], []
+def _group_key(group: list) -> tuple:
+    return tuple(intent["intentId"] for intent in group)
+
+
+def _created_pending(before: dict, after: dict) -> tuple[list, list]:
+    """Pending commitments and offers a group created: boundary work for this or a later round."""
+    return ([item for key, item in after["commitments"].items()
+             if key not in before["commitments"] and item["status"] == "pending"],
+            [item for key, item in after["interactions"].items()
+             if key not in before["interactions"] and item["status"] == "pending"])
+
+
+def _boundary_bound(spec: dict, state: dict, start: str, end: str, extra_offers: list) -> int:
+    """Upper bound on the counted events of the boundary phase over (start, end].
+
+    Each unapplied scheduled effect, pending commitment and pending offer due in the window
+    emits exactly one event (applied or failed); each flow emits at most one receipt per
+    interval between distinct boundary instants, plus one summary.
+    """
+    low, high = parse_time(start), parse_time(end)
+    offers = {item["interactionId"]: item for item in extra_offers}
+    offers.update(state["interactions"])
+    due = [event["at"] for event in state["scheduledEvents"] if not _scheduled_done(spec, state, event)]
+    due += [item["dueAt"] for item in state["commitments"].values() if item["status"] == "pending"]
+    due += [item["expiresAt"] for item in offers.values() if item["status"] == "pending"]
+    instants = [at for at in map(parse_time, due) if low < at <= high]
+    return len(instants) + len(spec["flows"]) * (len(set(instants)) + 2)
+
+
+def _boundary_load(spec: dict, state: dict, start: str, end: str, extra_offers: list) -> int:
+    """Exact counted events of the boundary phase over (start, end], run on a detached probe."""
+    probe = clone(state)
+    for offer in extra_offers:
+        probe["interactions"].setdefault(offer["interactionId"], clone(offer))
+    events = []
+    _advance(spec, probe, events, start, end)
+    _summarize_flow_feedback(spec, probe, events, start, end)
+    return event_load(events)
+
+
+def _later_rounds(spec: dict, instants: list, round_index: int) -> set:
+    """Rounds after ``round_index`` whose boundary phase (start, end] contains one of ``instants``."""
+    ends = [parse_time(period["end"]) for period in spec["periods"]]
+    rounds = set()
+    for at in map(parse_time, instants):
+        index = bisect_left(ends, at)  # the first period that ends at or after the instant
+        if index < len(ends) and index + 1 > round_index and parse_time(spec["periods"][index]["start"]) < at:
+            rounds.add(index + 1)
+    return rounds
+
+
+def _fits(spec: dict, trial: dict, used: int, created: tuple[list, list], extra_offers: list, round_index: int) -> bool:
+    """Whether ``used`` counted events leave room for the boundary work of this and later rounds.
+
+    This round: an upper bound first, the exact probe only when the bound does not fit, so a
+    flow receipt that moves nothing never takes an actor's room. Later rounds touched by the
+    group's new commitments and offers: the bound, so settlements and expiries can never pile
+    up past a later round's limit, where nothing could be rejected any more.
+    """
+    limit = spec["limits"]["maxEventsPerRound"]
+    if used > limit:
+        return False
+    period = period_for(spec, round_index)
+    if (used + _boundary_bound(spec, trial, period["start"], period["end"], extra_offers) > limit
+            and used + _boundary_load(spec, trial, period["start"], period["end"], extra_offers) > limit):
+        return False
+    commitments, offers = created
+    for later in sorted(_later_rounds(spec, [c["dueAt"] for c in commitments] + [o["expiresAt"] for o in offers],
+                                      round_index)):
+        period = period_for(spec, later)
+        if _boundary_bound(spec, trial, period["start"], period["end"], extra_offers) > limit:
+            return False
+    return True
+
+
+def _run_intents(spec: dict, state: dict, decisions: list, now: str, *, stage: bool = False,
+                 staged: dict | None = None, admission: dict | None = None) -> tuple[dict, list, list]:
+    """Apply intent groups in causal order; each group is atomic and fails alone.
+
+    A group is also rejected with ``event_limit`` when the counted events already admitted, its
+    own, and the boundary work it leaves would exceed maxEventsPerRound (``_fits``). Staging
+    (``stage``) admits proposal communication that way and records it in ``admission``;
+    resolution replays exactly that record (``staged``) and reserves the staged events and
+    offers ahead of every other group, so a recipient is never shown an offer resolution drops.
+    """
+    pending = {key: row for key, row in (staged or {}).items() if row["admitted"]}
+    events, resolutions, used = [], [], 0
+
+    def reject(group, error):
+        # Explanations are fixed messages, never balances, hidden facts or actor text.
+        for intent in group:
+            resolutions.append({"intentId": intent["intentId"], "actorId": intent["actorId"], "round": state["round"],
+                                "accepted": False, "code": error.code if len(group) == 1 else "bundle_rejected",
+                                "explanation": str(error) if len(group) == 1 else "Atomic bundle could not be executed"})
+
     for group in _groups(decisions, communication_only=stage, spec=spec):
+        key = _group_key(group)
+        replayed = (staged or {}).get(key)
+        pending.pop(key, None)
+        if replayed is not None and not replayed["admitted"]:
+            reject(group, WorldError("event_limit", "Round exceeds declared event limit"))
+            continue
         trial, emitted, codes = clone(state), [], []
         try:
             kinds = {templates_by_id(spec).get(i["templateId"], {}).get("kind") for i in group}
@@ -807,22 +968,35 @@ def _run_intents(spec: dict, state: dict, decisions: list, now: str, *, stage: b
             for intent in group:
                 codes.append(_apply(spec, trial, emitted, intent, now))
             _state_check(spec, trial)
-            require(len(events) + len(emitted) <= spec["limits"]["maxEventsPerRound"], "event_limit", "Round exceeds declared event limit")
         except WorldError as error:
-            if error.code in {"invalid_mechanism", "event_limit", "invalid_state", "resource_violation"}:
+            if error.code in {"invalid_mechanism", "invalid_state", "resource_violation"}:
                 raise
-            # Explanations are fixed messages, never balances, hidden facts or actor text.
-            for intent in group:
-                resolutions.append({"intentId": intent["intentId"], "actorId": intent["actorId"], "round": state["round"],
-                                    "accepted": False, "code": error.code if len(group) == 1 else "bundle_rejected",
-                                    "explanation": str(error) if len(group) == 1 else "Atomic bundle could not be executed"})
-        else:
-            state = trial
-            events.extend(emitted)
-            for intent, code in zip(group, codes):
-                resolutions.append({"intentId": intent["intentId"], "actorId": intent["actorId"], "round": state["round"],
-                                    "accepted": True, "code": code, "explanation": "Action accepted under the declared mechanism"})
+            reject(group, error)
+            continue
+        load = event_load(emitted)
+        if replayed is None:
+            created = _created_pending(state, trial)
+            fits = _fits(spec, trial, used + load + sum(row["load"] for row in pending.values()), created,
+                         [offer for row in pending.values() for offer in row["offers"]], state["round"])
+            if admission is not None:
+                admission[key] = {"admitted": fits, "load": load, "offers": clone(created[1]) if fits else []}
+            if not fits:
+                reject(group, WorldError("event_limit", "Round exceeds declared event limit"))
+                continue
+        state = trial
+        events.extend(emitted)
+        used += load
+        for intent, code in zip(group, codes):
+            resolutions.append({"intentId": intent["intentId"], "actorId": intent["actorId"], "round": state["round"],
+                                "accepted": True, "code": code, "explanation": "Action accepted under the declared mechanism"})
     return state, events, resolutions
+
+
+def _staged_communication(spec: dict, state: dict, decisions: list, now: str) -> tuple[dict, dict]:
+    """Proposal communication exactly as resolution will admit it, with that admission record."""
+    admission = {}
+    staged, _, _ = _run_intents(spec, state, decisions, now, stage=True, admission=admission)
+    return staged, admission
 
 
 def _actor_updates(spec: dict, state: dict, opening: dict, decisions: list) -> None:
@@ -922,6 +1096,8 @@ def initialize_world(spec: dict) -> dict:
         state = initial_snapshot(spec)
         events = []
         _advance(spec, state, events, spec["asOf"], spec["asOf"], initial=True)
+        require(event_load(events) <= spec["limits"]["maxEventsPerRound"], "event_limit",
+                "Round exceeds declared event limit")
         # Initial receipts are carried in the initial snapshot for store export.
         state["initialEvents"] = events
         _record_actor_feedback(spec, state, events, [])
@@ -936,7 +1112,7 @@ def stage_interactions(spec: dict, snapshot: dict, decisions: list, round_index:
         spec, state, period = _prepare(spec, snapshot, round_index)
         decisions = _decisions(spec, decisions, round_index)
         state["round"] = round_index
-        staged, _, _ = _run_intents(spec, state, decisions, period["start"], stage=True)
+        staged, _ = _staged_communication(spec, state, decisions, period["start"])
         # Response observations use the same opening physical/private state. Event
         # receipts belong exclusively to resolution, never tentative staging.
         state = clone(snapshot)
@@ -945,19 +1121,20 @@ def stage_interactions(spec: dict, snapshot: dict, decisions: list, round_index:
         return state
 
 
-def _presented_queue_updates(spec: dict, opening: dict, decisions: list, round_index: int) -> dict:
+def _presented_queue_updates(spec: dict, opening: dict, staged_interactions: dict, decisions: list,
+                             round_index: int) -> dict:
     """Versioned response-phase service accounting, separate from actor consent.
 
     A valid empty response still consumed the presented inbox opportunity.
     Never add cursor state to legacy specs or queues that have never overflowed.
     The root-level cursor is intentionally outside all actor/API projections.
+    ``staged_interactions`` is the staging the response phase was shown.
     """
     if spec.get("interactionQueuePolicy") != "presented-v1":
         return {}
     from .observations import _eligible_inbox
 
-    proposals = [decision for decision in decisions if decision["phase"] == "proposal"]
-    staged = stage_interactions(spec, opening, proposals, round_index)
+    staged = {**opening, "interactions": staged_interactions}
     updates = {}
     limit = spec["limits"]["maxInboxItems"]
     for decision in decisions:
@@ -977,12 +1154,18 @@ def resolve_round(spec: dict, snapshot: dict, decisions: list, round_index: int)
         spec, state, period = _prepare(spec, snapshot, round_index)
         decisions = _decisions(spec, decisions, round_index)
         state["round"] = round_index
-        presented = _presented_queue_updates(spec, snapshot, decisions, round_index)
+        # The same staging the controller showed the response phase (stage_interactions).
+        staged, admission = _staged_communication(spec, state, decisions, period["start"])
+        presented = _presented_queue_updates(spec, snapshot, staged["interactions"], decisions, round_index)
         # Validate provenance against the opening observation, before any effects.
         _actor_updates(spec, state, snapshot, decisions)
-        state, events, resolutions = _run_intents(spec, state, decisions, period["start"])
+        state, events, resolutions = _run_intents(spec, state, decisions, period["start"], staged=admission)
         _advance(spec, state, events, period["start"], period["end"])
         _summarize_flow_feedback(spec, state, events, period["start"], period["end"])
+        # Group admission keeps this within the limit unless the boundary work alone, fixed by the
+        # specification before any actor acts, exceeds it: a configuration failure, as before.
+        require(event_load(events) <= spec["limits"]["maxEventsPerRound"], "event_limit",
+                "Round exceeds declared event limit")
         _record_actor_feedback(spec, state, events, resolutions)
         if presented:
             queue = state.setdefault("interactionQueueState", {})
