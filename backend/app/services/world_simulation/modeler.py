@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import unicodedata
 
 from .artifacts import atomic_json, read_json
@@ -16,6 +17,10 @@ MAX_MODELING_ATTEMPTS = 2
 # Compile failures the model cannot fix by revising its proposal: the caller
 # pinned these values, or the model itself declared the gap.
 _UNREPAIRABLE_COMPILE_CODES = frozenset({'invalid_policy_metadata', 'unsupported_policy', 'invalid_limit'})
+# A 4xx other than timeout/too-early/rate-limit is the provider's deterministic
+# refusal of this request (e.g. GLM 1210 for an unsupported parameter).
+_RETRYABLE_STATUSES = frozenset({408, 425, 429})
+_STATUS_MESSAGE = re.compile(r'Actor HTTP dispatch failed with status (\d{3}); exposure is unknown')
 _INVALID_JSON_FEEDBACK = ('The response was not one strict JSON object: no Markdown fences, duplicate keys, '
                           'floats, NaN or exponents; quantities are decimal strings.')
 
@@ -89,6 +94,11 @@ def _terminal(row):
     if row.get('errorCode') in NON_RETRYABLE_POLICY_CODES:
         return WorldError(row['errorCode'], 'Modeling stopped: the provider request cannot be resent unchanged',
                           details={'attempt': row['number']})
+    status = _STATUS_MESSAGE.fullmatch(row.get('errorMessage') or '') if row.get('errorCode') == 'policy_transport_failed' else None
+    if status is not None and 400 <= int(status[1]) < 500 and int(status[1]) not in _RETRYABLE_STATUSES:
+        return WorldError('provider_request_rejected',
+                          'Modeling stopped: the provider rejected the request; the identical request would be rejected again',
+                          details={'attempt': row['number'], 'status': int(status[1])})
     rejection = row.get('rejection')
     if isinstance(rejection, dict) and not _repairable(rejection):
         details = {'attempt': row['number']}
