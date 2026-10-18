@@ -110,7 +110,7 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
     way. Unknown request outcomes consume their full allowance on ordinary resume.
     """
     import fcntl
-    from .policy import StrictHTTPModeler
+    from .policy import _TRANSPORT_FAILURE_MESSAGES, StrictHTTPModeler
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     require(isinstance(policy_spec, dict) and isinstance(policy_spec.get('limits'), dict),
@@ -210,6 +210,10 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
                          and 0 <= usage['tokens'] <= reserve['tokens']
                          and Decimal(0) <= decimal(usage.get('costUsd')) <= decimal(reserve['costUsd']))
                 row['errorCode'] = error.code if isinstance(error, WorldError) else 'modeling_dispatch_failed'
+                if isinstance(error, WorldError) and str(error) in _TRANSPORT_FAILURE_MESSAGES:
+                    # Closed vocabulary only (HTTP status, timeout or connection);
+                    # never a provider body. It tells a 429 from a 401 on review.
+                    row['errorMessage'] = str(error)
                 if known:
                     row.update(status='failed', usage=usage)
                     if row['errorCode'] == 'policy_invalid_response':
