@@ -111,16 +111,22 @@ class WorldSimulationService:
         from .compiler import compile_world_spec
         directory = cls.directory(simulation_id, root)
         preparation = None
+        generation_id = 'world_' + uuid.uuid4().hex
+
+        def compile_candidate(raw):
+            return compile_world_spec(raw, simulation_id=simulation_id, generation_id=generation_id,
+                research_report=research_report, research_generation_id=research_generation_id,
+                research_engine=research_engine, actor_bundle=actor_bundle)
+
         if raw_spec is None:
             from .modeler import generate_candidate
+            # The modeler compiles each proposal so one rejection can be repaired
+            # inside its two-request allowance.
             raw_spec, preparation = generate_candidate(directory, research_report=research_report,
                 research_generation_id=research_generation_id, research_engine=research_engine,
                 actor_bundle=actor_bundle, ontology=ontology, simulation_requirement=simulation_requirement,
-                policy_spec=policy_spec)
-        spec = compile_world_spec(raw_spec, simulation_id=simulation_id,
-            generation_id='world_' + uuid.uuid4().hex, research_report=research_report,
-            research_generation_id=research_generation_id, research_engine=research_engine,
-            actor_bundle=actor_bundle)
+                policy_spec=policy_spec, validate=compile_candidate)
+        spec = compile_candidate(raw_spec)
         # Pin scheduling semantics only for genuinely new preparation, never load/fork.
         spec['interactionQueuePolicy'] = 'presented-v1'
         if preparation is not None:

@@ -159,13 +159,15 @@ def _transport_ready(profile):
     try:
         try:
             transport = StrictHTTPModeler(profile)
-            # This is one declared request envelope, not a forecast of the
-            # research-dependent number of modeling or actor decisions.
-            require(transport.max_input + transport.max_output <= profile["limits"]["maxTokens"],
-                    "invalid_modeling_budget", "Declared request exceeds the total token ceiling")
-            cost = decimal(transport._cost(transport.max_input, transport.max_output), nonnegative=True)
-            require(cost <= decimal(profile["limits"]["maxCostUsd"], nonnegative=True),
-                    "invalid_modeling_budget", "Declared request exceeds the total USD ceiling")
+            # One declared request envelope per role (the modeler's own pin and
+            # the shared actor envelope), not a forecast of the research-
+            # dependent number of modeling or actor decisions.
+            for max_input, max_output in {(transport.max_input, transport.max_output), transport.actor_envelope}:
+                require(max_input + max_output <= profile["limits"]["maxTokens"],
+                        "invalid_modeling_budget", "Declared request exceeds the total token ceiling")
+                cost = decimal(transport._cost(max_input, max_output), nonnegative=True)
+                require(cost <= decimal(profile["limits"]["maxCostUsd"], nonnegative=True),
+                        "invalid_modeling_budget", "Declared request exceeds the total USD ceiling")
         finally:
             if transport is not None:
                 transport.close()

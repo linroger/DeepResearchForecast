@@ -8,7 +8,7 @@ from typing import Callable
 from .contracts import REFUSAL_CODES, WorldError, clone, require, validate_decision
 from .kernel import resolve_round, stage_interactions
 from .observations import build_observation, response_actors
-from .policy import PolicyFailure, call_with_backoff
+from .policy import NON_RETRYABLE_POLICY_CODES, PolicyFailure, call_with_backoff
 from .review import (CANDIDATE_OUTPUT_ERRORS, assessment_status, candidate_repair_enabled,
                      review_mode, validate_assessment)
 
@@ -178,6 +178,9 @@ def _collect(store, policy, fence: int, snapshot: dict, round_index: int, phase:
                 }
                 store.finish_attempt(attempt, 'failed' if usage is not None else 'unknown',
                                      usage or reservation, fence)
+                if feedback['code'] in NON_RETRYABLE_POLICY_CODES:
+                    # The same observation would be filtered or truncated again.
+                    break
                 continue
             store.finish_attempt(attempt, 'succeeded', usage, fence)
             store.save_decision(slot, decision, fence)
