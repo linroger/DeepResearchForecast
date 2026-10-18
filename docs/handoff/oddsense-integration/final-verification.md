@@ -184,3 +184,12 @@ The independent exact-byte recheck closed PR-4 and PR-5 after the final reviewed
 gate. All scoped provider and downstream findings are closed; see
 [the final provider disposition](provider-review.md) and
 [the downstream disposition](downstream-review.md).
+
+## Local delivery
+
+Implementation and evidence are committed as `69c124b34740ceed40dc670e33fc52b75d4f86b7` on
+`codex/oddsense-integration`. The isolated worktree was clean after that commit;
+this final documentation record adds no source changes. The original checkout
+still has its91 pre-existing status entries and no hashed-file drift.
+Remote push remains uncompleted after the earlier GitHub authentication failure.
+No unchanged-credential retry, merge over original dirt, or deployment occurred.

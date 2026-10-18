@@ -483,3 +483,7 @@ Implemented bounded NewsAPI/optional Reddit, source-aware contextual market comp
 ### 2026-10-18T14:46:12.490229+00:00 — codex/oddsense-integration — final timing and review controls
 
 Final review exposed idle model time consuming the source-fetch allowance, pending-write time counted twice for news, and unknown legacy market elapsed time regaining allowance. Meaningful red receipts are retained. Digest-bound cumulative acquisition accounting, durable interruption reservations, native residual deadlines and positive legacy/replay controls now pass the full22-suite matrix:1455passed/two existing missing-harness skips, exact current bytes and actual engine-through-report/API/export flow. Frontend187/build/EN-ZH visuals unchanged. No original-checkout drift, credential persistence, guard weakening or deployment. Final scoped commit follows; remote authentication remains blocked.
+
+### 2026-10-18T14:50:48.340388+00:00 — Oddsense local delivery committed
+
+Feature commit 69c124b34740ceed40dc670e33fc52b75d4f86b7 on codex/oddsense-integration contains all three approved slices, final1455pass/two-skip backend gate, unchanged187frontend/build proof, actual consumer E2E and independent review closures. Worktree clean at that checkpoint; original91-entry dirty baseline preserved without hashed drift. This closing documentation record changes no application bytes. Remote delivery awaits valid configured Git authentication; do not repeat unchanged credential failures or infer deployment.
