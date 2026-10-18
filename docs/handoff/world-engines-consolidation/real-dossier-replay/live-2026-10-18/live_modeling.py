@@ -102,7 +102,7 @@ def main():
     ledger_path = root / sim_id / "world_modeling_receipts.json"
     if ledger_path.exists():
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-        out["attempts"] = [{key: row.get(key) for key in ("number", "kind", "status", "errorCode", "reservation", "usage", "rejection")}
+        out["attempts"] = [{key: row.get(key) for key in ("number", "kind", "status", "errorCode", "errorMessage", "reservation", "usage", "rejection")}
                            for row in ledger["attempts"]]
     (WORK / "live.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps({key: out.get(key) for key in ("status", "code", "message", "details", "seconds", "attempts")},

@@ -1,0 +1,42 @@
+{
+ "pipeline": "pipe_fd2799f3ad41",
+ "simulationId": "sim_live_fd2799f3ad41",
+ "profile": "after",
+ "startedAt": "2026-10-18T20:37:45+0800",
+ "status": "typed_gap",
+ "code": "modeling_attempts_exhausted",
+ "message": "Modeling exhausted its durable two-request allowance",
+ "details": {
+  "attemptCodes": [
+   "policy_transport_failed",
+   "policy_transport_failed"
+  ]
+ },
+ "seconds": 1.6,
+ "attempts": [
+  {
+   "number": 1,
+   "kind": "initial",
+   "status": "unknown",
+   "errorCode": "policy_transport_failed",
+   "reservation": {
+    "costUsd": "0.569282000000",
+    "tokens": 219105
+   },
+   "usage": null,
+   "rejection": null
+  },
+  {
+   "number": 2,
+   "kind": "retry",
+   "status": "unknown",
+   "errorCode": "policy_transport_failed",
+   "reservation": {
+    "costUsd": "0.569282000000",
+    "tokens": 219105
+   },
+   "usage": null,
+   "rejection": null
+  }
+ ]
+}

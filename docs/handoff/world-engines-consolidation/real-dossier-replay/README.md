@@ -107,10 +107,22 @@ pipeline was running.
   actor's id and name and to use one of its own claims (its `role`) as identity basis, and to quote report
   sentences, never names. Whether glm-5.3 then compiles needs a second paid run.
 
+## Live run 2 (2026-10-18 20:37 +08, owner-approved, modeling only)
+
+Same dossier, profile and script, on 4326304 (the revised prompt). Preflight passed and no other process
+was using the key. **Outcome:** typed `modeling_attempts_exhausted` after 1.6 s with two
+`policy_transport_failed` rows (`status: unknown`, no usage): GLM answered both requests with an HTTP error
+before generating anything (the host was reachable; an unauthenticated call returns 401), so the revised
+prompt was not exercised. The ledger kept only the code, not the HTTP status, so 429 (quota or rate limit)
+cannot be told from another refusal after the fact; attempt rows now also keep the transport's closed
+status message (`errorMessage`, e.g. "…failed with status 429…"). Files:
+[live-2026-10-18/live-run-2-receipts.json](live-2026-10-18/live-run-2-receipts.json).
+
 ## What this does not show
 
-- The scripted model is not GLM. Live run 1 (above) showed glm-5.3 did not follow the earlier prompt's
-  implicit shapes; whether it compiles under the revised prompt needs a second paid run.
+- The scripted model is not GLM. Live run 1 showed glm-5.3 did not follow the earlier prompt's implicit
+  shapes; run 2 was refused by the provider before generation, so whether glm-5.3 compiles under the
+  revised prompt is still open.
 - Actor decisions ran only with scripted waiting actors for one round. Real decision quality, multi-round
   behaviour and the engine's known limits (429/1302, unresolved v4 verdicts, reboot liveness; ../handoff.md
   §9) are outside this replay.
