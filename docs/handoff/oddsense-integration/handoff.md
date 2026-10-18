@@ -1,6 +1,6 @@
 # Oddsense integration handoff
 
-**Last Updated (UTC):** 2026-10-18T12:24:33Z
+**Last Updated (UTC):** 2026-10-18T12:27:00Z
 **Status:** In Progress — source study and reviewed plan complete; implementation awaits plan approval.
 **Current Focus:** Present the reviewed native integration plan for the explicit approval required before application coding.
 
@@ -66,11 +66,19 @@ Read-only Git and file inspection established the baseline. No application code 
 
 At 2026-10-18T12:22:29Z, static verification checked all 36 upstream file hashes, all 38 destination receipt entries across the two worker reports, 145 local Markdown links/line anchors, and hashes for the pre-existing modified files captured in the 91-entry unowned baseline. No error or source drift was found. `verification.json` records the exact check scope. These checks establish source identity and document consistency, not implemented integration or live forecast quality.
 
+The final reviewed plan hash is `82d6e7d91d609adebf8fd0b3fe4f06ff1f80446e78b5a5a914e3d1d90c3af56f`. Finalization edits to this handoff only reconcile status and Git delivery; they do not alter the reviewed plan/study. They are coordinator bookkeeping rather than a new independent runtime review.
+
 ## 9) Remaining Work & Next Steps
 
 The critical path is source study → integration plan → required approval → implementation → consumer-level verification. Intake questions included Oddsense's actual providers and reuse license, overlap with existing tools, credential handling, historical cutoff semantics and downstream evidence identity.
 
 The source study resolved provider roles, MIT licensing, overlap and primary integration boundaries. Independent review is complete and its only P2 design finding was corrected and rechecked: core generation/promotion/reuse protection now gates OS-1 enablement, rather than waiting for OS-3. Current open work is explicit user plan approval, then the three approved implementation slices. The supplied key has not been persisted or tested. Metaculus's current schema/access and all live provider capabilities remain unverified.
+
+### Git delivery
+
+The ten owned study/design files were committed locally as `5a601b5` (`docs: study Oddsense integration and delivery plan`). The repository's `.gitignore:98` ignores every `handoff.md`; only this required, task-owned handoff was explicitly force-added. Unrelated root continuity/progress files and the 91-entry dirty baseline remain outside the commit.
+
+An ordinary non-forced push to the branch's existing `legacy` tracking remote failed: GitHub reported invalid username/token and rejected authentication. No credential was printed or changed. Do not retry the same authentication or claim remote publication. Restore valid configured Git authentication before pushing the local documentation commits. A closing documentation commit records this delivery result; it does not implement OS-1.
 
 ### Next-session prompt
 
@@ -81,3 +89,4 @@ Read this handoff, STUDY.md, PLANS.md, independent-review.md and verification.js
 - 2026-10-18: Created the task-specific handoff before application coding. Recorded ownership, the approval boundary, initial evidence and the study plan.
 - 2026-10-18T12:22:29Z: Recorded completed upstream/producer/downstream source studies, the three-slice proposed plan, issue dispositions and passing static identity/link/baseline checks. Independent review and implementation approval remain pending.
 - 2026-10-18T12:24:33Z: Independent review closed its sole P2 sequencing finding after the plan moved generation/promotion/reuse protection into OS-1's release gate. Study/design are ready for user approval; application work remains unstarted.
+- 2026-10-18T12:27:00Z: Recorded local study commit 5a601b5, the explicitly owned ignored-handoff exception and the failed GitHub authentication on ordinary push. No retry, application change or provider API probe followed.
