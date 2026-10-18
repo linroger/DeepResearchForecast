@@ -24,15 +24,15 @@ DeepAgentForecast 是一个在你自己机器上运行的预测引擎。你输�
 
 **可选引擎（`world-v1`）。** `simulation_engine: "world-v1"` 引入逐回合演化的具体世界：参与者提出行动，对手方独立决定是否同意，明确的机制更新资源、项目、规则、联盟及延迟履行的义务。下一回合，参与者接收其有权看到的新状态及自身行动结果。历史运行与默认引擎仍保持 `oasis-legacy`，直至独立的模型行为发布门通过。
 
-准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策阶段槽位在重试和恢复之后仍最多允许两次真实请求。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。
+准备阶段可接收明确的 `world_spec`，也可通过 `world_policy_spec` 在预算约束下，根据研究与参与者证据自动建立模型。每项数量必须有证据或明确标注的假设。HTTP 策略固定提供方、模型、价格、输入输出上限及整次运行预算；无法约束实际请求数的 CLI 通道不予准入。每个决策槽位最多计入两次有结果记录的请求；随写入进程一起丢失（崩溃、重启）或因提供方容量被拒绝的请求仍计入预算敞口，但不占用槽位次数，恢复时可以重新发出。 新建完整世界模拟会先验证配置，再创建研究任务或文件。可以直接提供配置，也可以通过 `WORLD_POLICY_SPEC_PATH` 指向不含密钥的 JSON 文件，其中包含 `policy`、`limits` 及可选的安全 `forecastEffect`。缺失配置会阻止启动，界面仍保留显式选择传统引擎的选项。
 
 模拟页面提供世界状态、决策与行动、承诺与待处理事项、模型假设，并区分公开、参与者和分析者视图。报告消费同一份冻结结果。`diagnostic_only` 展示条件路径，同时保持概率输入仅来自外部证据；`no_update` 排除世界模拟推理与图表。这些结果是条件模拟，不是经校准的预测。详见[带源码链接的架构与流程图](docs/handoff/reflexive-world-simulation/ARCHITECTURE.md)、[可执行接口契约](docs/handoff/reflexive-world-simulation/implementation-contract.md)和[当前验证与发布状态](docs/handoff/reflexive-world-simulation/handoff.md)。
 
-本分支的新建世界模拟固定使用 `policy.decisionReview: "actor-consistency-v4"`、`policy.responseFormat: "json_object"`、`policy.candidateRepair: "known-output-error-v1"`，并将每个决策槽位限制为两次请求。候选决策之后进行一次最终复核；计量已知的候选格式错误可以使用尚未消耗的第二次请求，但无效或 unresolved 的最终复核不能获得第三次请求。V4 在私有审计记录中保留有界、不可信的复核字段，不将其转化为行动、权限或预测证据。历史 v1/v2/v3 运行保留各自的验证和恢复规则。
+新建世界模拟固定使用 `policy.responseFormat: "json_object"`，并将每个决策槽位限制为两次请求；决策复核默认关闭。在完整行为研究通过之前，`policy.decisionReview: "actor-consistency-v4"`（配合 `policy.candidateRepair: "known-output-error-v1"`）只作为显式选项：候选决策之后进行一次最终复核，计量已知的候选格式错误可以使用尚未消耗的第二次请求，任何槽位都不会获得第三次请求。最终复核结论仍为 unresolved 时不再终止运行：该决策带 `consistencyStatus: "unresolved"` 标记提交，复核内容保留在私有的暂扣记录中。V4 在私有审计记录中保留有界、不可信的复核字段，不将其转化为行动、权限或预测证据。历史 v1/v2/v3 运行保留各自的验证规则，并适用同样的恢复规则。
 
 最近一次完成的完整行为研究仍为 18 对必需比较中通过 16 对，因此尚未切换默认引擎。后续诊断保留了结构错误和事实性解释错误；保留更多复核数据不代表其内容正确。[当前发布记录](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/CURRENT_STATE.md)与 [v4 契约](docs/handoff/reflexive-world-simulation/behavior-rerun/semantic-consistency/release-readiness/check-verdicts/lossless-review-fields/contract.md)区分源码验证与真实模型验收。所有既有结果均保留。评估授权现为总计 40 美元，包含原始 25 美元授权下已发生的全部消耗，并未重置预算。
 
-**已知限制（2026-10-18 审查）。** world-v1 目前还不能在本部署上用真实研究档案建立世界：默认研究引擎不给编译器留下可引用的论断，建模请求超出固定的输入上限，编译错误也没有修复路径。提供方返回 429（代码 1302）或 v4 复核未能解决时，世界运行会永久终止；运行中途重启还可能使其一直显示为运行中。请把它当作基于手工编写 `world_spec` 的研究预览。审查结论、合并时完成的修复与后续计划见[引擎合并记录](docs/handoff/world-engines-consolidation/handoff.md)。
+**已知限制（2026-10-18 审查）。** world-v1 目前还不能在本部署上用真实研究档案建立世界：默认研究引擎不给编译器留下可引用的论断，建模请求超出固定的输入上限，编译错误也没有修复路径。请把它当作基于手工编写 `world_spec` 的研究预览。2026-10-18 的后续修复之后，世界运行可以承受：提供方返回 429（先等待，再以可恢复状态停止）、复核结论未能解决、运行中途重启、崩溃后恢复、到期时已无法执行的边界效果，以及参与者行动占满每轮事件上限。审查结论、修复内容与剩余的后续计划见[引擎合并记录](docs/handoff/world-engines-consolidation/handoff.md)。
 
 ```mermaid
 flowchart TB
