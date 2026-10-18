@@ -111,12 +111,29 @@ def test_429_or_1302_is_classified_as_throttled_with_nothing_metered(actor_case,
 def test_other_http_failures_keep_unknown_exposure(actor_case, sdk, status):
     from app.services.world_simulation.policy import PolicyFailure, ProviderThrottled
 
-    body = {"error": {"code": "1301", "message": "PRIVATE"}} if status == 400 else {"error": "PRIVATE"}
+    # A 400 with a code that is neither a throttle nor a content filter (1301 is typed below).
+    body = {"error": {"code": "1214", "message": "PRIVATE"}} if status == 400 else {"error": "PRIVATE"}
     policy, _, _ = sdk(script={"buyer": [throttle(status=status, body=body)]})
     with pytest.raises(PolicyFailure) as caught:
         policy.decide(actor_case.observation)
     assert not isinstance(caught.value, ProviderThrottled)
     assert caught.value.code == "policy_transport_failed" and caught.value.usage is None
+
+
+@pytest.mark.parametrize("body", [
+    {"error": {"code": "1301", "message": "PRIVATE"}},
+    # A filter marker beside a throttle code: the content filter is checked first.
+    {"error": {"code": "1302", "message": "PRIVATE", "contentFilter": [{"level": 1, "role": "user"}]}},
+])
+def test_content_filter_is_never_waited_out_as_a_throttle(actor_case, sdk, waits, body):
+    from app.services.world_simulation.policy import PolicyFailure, ProviderThrottled, call_with_backoff
+
+    policy, sent, _ = sdk(script={"buyer": [throttle(status=400, body=body)]})
+    with pytest.raises(PolicyFailure) as caught:
+        call_with_backoff(lambda: policy.decide(actor_case.observation))
+    assert not isinstance(caught.value, ProviderThrottled)
+    assert caught.value.code == "provider_content_filtered" and caught.value.usage is None
+    assert waits == [] and len(sent) == 1
 
 
 def test_backoff_honours_retry_after_capped_and_stops_after_three_waits(waits):

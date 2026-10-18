@@ -124,6 +124,30 @@ def test_resume_between_attempts_rebuilds_the_identical_repair_request(tmp_path)
     assert resumed.requests == [_repair_messages(messages, ledger(tmp_path)["attempts"][0])]
 
 
+def test_repair_refused_for_capacity_is_resent_as_the_repair_on_resume(tmp_path, monkeypatch):
+    from app.services.world_simulation import policy
+    from app.services.world_simulation.policy import ProviderThrottled
+
+    monkeypatch.setattr(policy, "_wait", lambda delay, cancelled=None: True)
+    refusals = [ProviderThrottled(retry_after=1.0) for _ in range(policy.THROTTLE_WAITS + 1)]
+    with pytest.raises(WorldError) as stopped:
+        run(tmp_path, Scripted(defective(), *refusals))
+    assert stopped.value.code == "provider_throttled"
+    rows = ledger(tmp_path)["attempts"]
+    assert [(row["kind"], row["status"]) for row in rows] == [("initial", "rejected"), ("repair", "throttled")]
+    resumed = Scripted(proposal())
+    raw, receipt = run(tmp_path, resumed)
+    # The refused row spent no request: the resume repairs the rejection, not the original request.
+    rows = ledger(tmp_path)["attempts"]
+    assert [(row["kind"], row["status"]) for row in rows] == [
+        ("initial", "rejected"), ("repair", "throttled"), ("repair", "succeeded")]
+    messages = build_compiler_messages(research_report=REPORT, research_generation_id=GENERATION, research_engine="v3",
+                                       actor_bundle=dossier(), ontology={}, max_actors=None,
+                                       simulation_requirement="Model OPEC+ quota decisions.")
+    assert resumed.requests == [_repair_messages(messages, rows[0])]
+    assert raw["actors"] == proposal()["actors"] and receipt["used"] == {"tokens": 800, "costUsd": "0.08"}
+
+
 def test_two_rejections_exhaust_with_typed_attempt_codes(tmp_path):
     transport = Scripted(defective(), defective())
     with pytest.raises(WorldError) as error:
