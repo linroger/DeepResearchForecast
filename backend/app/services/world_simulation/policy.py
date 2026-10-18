@@ -260,6 +260,46 @@ _TRANSPORT_FAILURE_MESSAGES = frozenset(
     {_TRANSPORT_GENERIC, _TRANSPORT_TIMEOUT, _TRANSPORT_CONNECTION}
     | {f'Actor HTTP dispatch failed with status {code}; exposure is unknown' for code in range(100, 600)}
 )
+_CONTENT_FILTERED_REQUEST = 'Provider content filter rejected the request; exposure is unknown'
+_CONTENT_FILTERED_RESPONSE = 'Provider content filter stopped the response'
+_OUTPUT_TRUNCATED = 'Response reached the pinned output token limit before completing'
+# Resending the same request cannot pass a provider's content filter, and an
+# identical request under the same output cap truncates again: callers stop.
+NON_RETRYABLE_POLICY_CODES = frozenset({'provider_content_filtered', 'policy_output_truncated'})
+# The modeler has its own pinned request envelope (policy.modeler); actors keep
+# the shared input bound, limits.maxOutputTokens and the <=120 s timeout.
+MODELER_LIMIT_FIELDS = frozenset({'maxInputTokens', 'maxOutputTokens', 'timeoutSeconds'})
+MAX_MODELER_TIMEOUT_SECONDS = 1800
+_THINKING_DISABLED = {'thinking': {'type': 'disabled'}}
+
+
+def _content_filtered(error):
+    """A provider moderation rejection, read only from the SDK's structured body.
+
+    Zhipu sends HTTP 400 with error.code 1301; the codes are shared with the
+    application's LLM client (llm_errors.CONTENT_FILTER_CODES). No message text
+    or body is copied or matched.
+    """
+    from openai import APIStatusError
+
+    from ...utils.llm_errors import CONTENT_FILTER_CODES
+
+    if not isinstance(error, APIStatusError) or error.status_code not in {400, 422}:
+        return False
+    body = error.body
+    if not isinstance(body, dict):
+        return False
+    code = body.get('code')
+    return ('contentFilter' in body or (isinstance(code, (str, int)) and not isinstance(code, bool)
+                                         and str(code).strip().lower() in CONTENT_FILTER_CODES))
+
+
+def _modeler_limits(value):
+    require(isinstance(value, dict) and set(value) == MODELER_LIMIT_FIELDS, 'invalid_policy_metadata',
+            'Modeler limits need exactly maxInputTokens, maxOutputTokens and timeoutSeconds')
+    return {'maxInputTokens': _integer(value['maxInputTokens'], minimum=1),
+            'maxOutputTokens': _integer(value['maxOutputTokens'], minimum=1),
+            'timeoutSeconds': _integer(value['timeoutSeconds'], minimum=1, maximum=MAX_MODELER_TIMEOUT_SECONDS)}
 
 
 def _transport_failure_message(error):
@@ -459,8 +499,14 @@ class _StrictHTTPTransport:
         require('responseFormat' not in policy or (isinstance(self._response_format, str)
                 and self._response_format == 'json_object'),
                 'invalid_policy_metadata', 'Pinned response format must be json_object')
+        # Optional closed pin, sent as extra_body: GLM spends reasoning tokens
+        # against max_tokens unless thinking is disabled on the request itself.
+        self._thinking = policy.get('thinking')
+        require('thinking' not in policy or (self._thinking == 'disabled' and 'reasoningEffort' not in policy),
+                'invalid_policy_metadata', 'Pinned thinking must be "disabled" and cannot be combined with reasoningEffort')
         limits = spec.get('limits', {})
         self.max_output = _integer(limits.get('maxOutputTokens'), minimum=1)
+        self._role_limits(policy)
         metadata = policy.get('pricing')
         require(isinstance(metadata, dict), 'missing_policy_metadata', 'Explicit pricing and context metadata are required')
         metadata = clone(metadata)
@@ -541,6 +587,9 @@ class _StrictHTTPTransport:
             raise
         except Exception:
             raise WorldError('invalid_policy_client', 'SDK boundary does not support strict request options') from None
+
+    def _role_limits(self, policy):
+        """Actors use the shared request envelope; the modeler may pin its own."""
 
     def _build_client(self, config):
         # Reuse the existing SDK/provider catalog, but not the retrying LLMClient
@@ -644,6 +693,8 @@ class _StrictHTTPTransport:
             options['reasoning_effort'] = self._reasoning_effort
         if self._response_format is not None:
             options['response_format'] = {'type': self._response_format}
+        if self._thinking == 'disabled':
+            options['extra_body'] = clone(_THINKING_DISABLED)
         try:
             with _quiet_sdk():
                 response = self._client.chat.completions.with_raw_response.create(
@@ -651,6 +702,8 @@ class _StrictHTTPTransport:
                     timeout=self.timeout, **options,
                 )
         except Exception as error:
+            if _content_filtered(error):
+                raise PolicyFailure('provider_content_filtered', _CONTENT_FILTERED_REQUEST) from None
             raise PolicyFailure('policy_transport_failed', _transport_failure_message(error)) from None
         try:
             # SDK model coercion accepts booleans as integer token counters.
@@ -662,12 +715,24 @@ class _StrictHTTPTransport:
             # The pinned tariff does not establish the price of another model.
             # Keep unknown exposure rather than releasing its reservation.
             raise PolicyFailure('policy_identity_mismatch', 'Actor response model differs from pinned policy')
+        choices = _get(response, 'choices')
+        finish = _get(choices[0], 'finish_reason') if isinstance(choices, list) and len(choices) == 1 else None
+        # Typed and never candidate-repair eligible: the identical request (or a
+        # longer repair under the same cap) would be filtered or truncated again.
+        # Without trustworthy metering the code still wins, with unknown exposure.
+        stopped = ({'sensitive': ('provider_content_filtered', _CONTENT_FILTERED_RESPONSE),
+                    'content_filter': ('provider_content_filtered', _CONTENT_FILTERED_RESPONSE),
+                    'length': ('policy_output_truncated', _OUTPUT_TRUNCATED)}.get(finish)
+                   if isinstance(finish, str) else None)
         try:
             usage = self._usage(response, upper)
         except Exception:
+            if stopped is not None:
+                raise PolicyFailure(*stopped) from None
             raise PolicyFailure('policy_usage_unavailable', 'Actor response has no trustworthy bounded metering') from None
+        if stopped is not None:
+            raise PolicyFailure(*stopped, usage=usage)
         try:
-            choices = _get(response, 'choices')
             if not isinstance(choices, list) or len(choices) != 1:
                 raise ValueError('invalid choices')
             choice = choices[0]
@@ -916,4 +981,14 @@ class StrictHTTPModeler(_StrictHTTPTransport):
     The coordinator owns the durable research-keyed reservation/attempt journal.
     Returned world JSON uses the same strict no-floats/no-duplicates parser as
     actor decisions; the deterministic compiler remains its semantic validator.
+    ``policy.modeler`` pins this request's own input bound, output cap and
+    timeout (a world spec is far larger than one actor decision); without it the
+    modeler shares the actor envelope.
     """
+
+    def _role_limits(self, policy):
+        if 'modeler' in policy:
+            limits = _modeler_limits(policy['modeler'])
+            self.max_input = limits['maxInputTokens']
+            self.max_output = limits['maxOutputTokens']
+            self.timeout = limits['timeoutSeconds']
