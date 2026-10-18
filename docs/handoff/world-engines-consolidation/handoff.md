@@ -1,8 +1,8 @@
 # Handoff.md — consolidating the two world engines (claude reflexive world model × Codex world-v1)
 
-**Last Updated (UTC):** 2026-10-18T13:20Z
-**Status:** Complete — merged into `main` as 609d5fa and pushed (`legacy/main` f78397e..609d5fa). Two follow-ups of 2026-10-18, both cut from `main` 01b1d78: §11, the six world-v1 defects that stop a run (`claude/agitated-albattani-b57618`), and "world-v1 on real dossiers", R6–R11 (`claude/zen-feistel-8b9b86`, §4b; live modeling runs 1–3 in §7). §12: both integrated and tested together on `claude/hopeful-germain-23a9ac` up to the dossier tip f84e225 (§12.5), merged into `main` as d653ba5 on 2026-10-18 at 21:18 +08 (owner's request; not pushed).
-**Current Focus:** owner decisions — pushing `main` (d653ba5 and this record); the next paid live modeling run with the `after_effort_low` profile (runs 2–3 were refused before generation: since ~20:37 +08 glm-5.3 rejects `thinking: disabled`, HTTP 400 / 1210, which likely also affects the app's own GLM calls, §9); the restart-resend follow-up (§12.4).
+**Last Updated (UTC):** 2026-10-18T15:20Z
+**Status:** Complete — merged into `main` as 609d5fa and pushed (`legacy/main` f78397e..609d5fa). Two follow-ups of 2026-10-18, both cut from `main` 01b1d78: §11, the six world-v1 defects that stop a run (`claude/agitated-albattani-b57618`), and "world-v1 on real dossiers", R6–R11 (`claude/zen-feistel-8b9b86`, §4b; live modeling runs 1–3 in §7). §12: both integrated and tested together on `claude/hopeful-germain-23a9ac` up to the dossier tip f84e225 (§12.5), merged into `main` as d653ba5 on 2026-10-18 at 21:18 +08 and pushed at 22:32 +08 (`legacy/main` 8f6196f..c4e54d0), both on the owner's request.
+**Current Focus:** owner decisions — the next paid live modeling run with the `after_effort_low` profile (runs 2–3 were refused before generation: since ~20:37 +08 glm-5.3 rejects `thinking: disabled`, HTTP 400 / 1210, which likely also affects the app's own GLM calls, §9); the restart-resend follow-up (§12.4).
 
 Interpret MUST/SHOULD/MAY per RFC 2119.
 
@@ -193,6 +193,7 @@ Interpret MUST/SHOULD/MAY per RFC 2119.
 - 2026-10-18T13:05Z: live run 3 and the 1210 diagnosis (§1, §5, §7, §9); deterministic 4xx refusals end modeling; `after_effort_low` profile; README/.env.example GLM guidance corrected.
 - 2026-10-18T13:15Z: §12.5 — second merge 339a61c of the dossier branch's live-run commits (a5965f8..f84e225) into the integration: conflicts, the throttle / deterministic-refusal interaction, and the re-run plain, guarded, frontend and replay checks on 339a61c.
 - 2026-10-18T13:20Z: merged `claude/hopeful-germain-23a9ac` (efa9e70) into `main` as d653ba5 (`--no-ff`, no conflicts; main's only extra commits were the OPEC+ validation docs b8ea651/8f6196f). The merged `backend/app`, `backend/tests`, `backend/scripts`, `frontend/src` and `frontend/tests` are byte-identical to the frozen copy behind §12.5's checks (plain `20261018-205943-final2-plain`: 8,038 tests, 0 failed, 19 known errors; guarded `20261018-205943-final2-guarded`: 1,605 tests, the 3 known guard failures; frontend 218 passed, build OK). Not pushed; the deployment checkout is unchanged.
+- 2026-10-18T15:20Z: `main` pushed to legacy at 22:32 +08 (8f6196f..c4e54d0, fast-forward; secret scan of the 20 commits clean); header status and focus updated.
 
 ## 11) Follow-up 2026-10-18 — world-v1 defects that stop a run
 
