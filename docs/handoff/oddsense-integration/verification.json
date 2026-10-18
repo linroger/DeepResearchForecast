@@ -1,0 +1,15 @@
+{
+  "checked_at_utc": "2026-10-18T12:25:23.375390+00:00",
+  "upstream_files_hash_checked": 36,
+  "rust_files_full_text_coverage": 29,
+  "rust_lines": 4051,
+  "destination_receipt_entries_checked": 38,
+  "local_markdown_links_checked": 145,
+  "baseline_unowned_entries": 91,
+  "reviewed_plan_sha256": "82d6e7d91d609adebf8fd0b3fe4f06ff1f80446e78b5a5a914e3d1d90c3af56f",
+  "independent_review": "sole P2 design finding closed; ready for user plan approval",
+  "errors": [],
+  "application_tests_executed": false,
+  "provider_api_calls_executed": false,
+  "scope": "Static documentation/source-identity checks; not runtime integration acceptance."
+}
