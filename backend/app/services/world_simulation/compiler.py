@@ -857,12 +857,31 @@ Return one JSON object, no Python, tools, code, generated mechanisms or state pa
 Use only wait, transfer, investment, agreement, policy, vote, message, breach.
 The deterministic compiler owns sourceBindings, IDs supplied by the caller and evidence grades.
 Do not generate policy metadata, credentials, provider identities or pricing. The caller pins transport policy separately.
-Required fields: periods [{{start,end}}] contiguous UTC dates, actors, initialState
-{{accounts,metrics,rules,relations}}, actionCatalog, assumptions, scheduledEvents, flows.
+Exact shapes (the compiler rejects others). Keyed sections are JSON objects whose keys are
+record IDs, never arrays of records with an ID field; IDs match [A-Za-z0-9_][A-Za-z0-9_.:-]*.
+- periods: [{{"start":"2026-11-01T00:00:00Z","end":"2026-12-01T00:00:00Z"}}, ...]: contiguous UTC
+  timestamps, one period per decision round (for example monthly), each end = next start.
+- actors: [{{"actorId","name","basis","capabilities":[templateId,...],"controlledAccounts":[accountId,...],
+  "objectives"?,"values"?,"incentives"?,"constraints"?,"beliefs"?: [{{"text","basis"}}]}}].
+- initialState: {{"accounts":{{accountId:{{"ownerId":actorId or "external","unit":unitId,"balance":"decimal",
+  "visibility","basis","description"?}}}}, "metrics":{{metricId:{{"kind":"stock"|"rate"|"quantity"|"category"|"boolean",
+  "unit":unitId,"value":"decimal"|string|boolean|null,"visibility","basis","description"?}}}},
+  "rules":{{ruleId:{{"value","visibility","basis","description"?}}}}, "relations":{{relationId:{{"value",
+  "visibility","basis","description"?}}}}}}. Units are IDs such as usd, mbd, index.
+- actionCatalog: [{{"templateId","kind","actorIds":[actorId,...],"description","parameters":{{...}},
+  "inputs":{{inputName:{{"type","min"?,"max"?,"enum"?,"required"?}}}},"basis","visibility","descriptionBasis"?}}].
+- scheduledEvents: [{{"eventId","kind":"transfer"|"metric_delta"|"rule_set","at":"UTC timestamp",
+  "parameters": transfer {{fromAccount,toAccount,amount}} | metric_delta {{targetMetric,delta}} |
+  rule_set {{ruleId,value}},"visibility","basis"}}]; list each occurrence (no recurrence field).
+- flows: [{{"flowId","sourceAccount","targetAccount","ratePerDay":"decimal" or "rateMetric":metricId
+  (a rate metric whose unit is the account unit + _per_day),"limitMetric"?,"visibility","basis"}}].
+- assumptions: [{{"assumptionId","description","visibility"?}}]; visibility is {{"kind":"public"}},
+  {{"kind":"analyst"}} or {{"kind":"actors","actorIds":[...]}}.
 Model at most {max_actors} actors (limits.maxActors); keep the principals the question needs.
 Every modeled record needs basis {{kind,refs}} and explicit visibility where applicable.
-Each actor has actorId, name, basis, capabilities (template IDs), controlledAccounts,
-and optionally objectives, values, incentives, constraints, beliefs as [{{text,basis}}].
+Copy each research actor's actorId and name exactly from actors; never shorten, translate
+or rename them. Give a research actor a source_claim identity basis citing one of its own
+claims (its role claim when it has one).
 claims groups every citable research claim by actorId; each has claimId, exact text
 and actorAllowed. The compiler derived most claims from actor dossier fields: such a
 claimId names the field it copies (goals.0, worldview.values.1, role). Source_claim refs
@@ -875,9 +894,10 @@ profile text; never invent claimIds, selectors or report spans, and missing clai
 not a gap.
 report_excerpt refs are {{quote}}: a verbatim, contiguous report substring of
 {MIN_QUOTE_CHARS}-{MAX_QUOTE_CHARS} characters; the compiler locates it and computes the offsets and
-hash. A report excerpt never grants actor knowledge: use it for an actor's identity
-basis (the excerpt must contain the exact actor name) or for analyst-visible records
-without numbers. Do not use analyst/private/actorAllowed=false text in profiles, menu
+hash. Quote report sentences, never actor names or claim text. A report excerpt never
+grants actor knowledge: use it for analyst-visible records without numbers, or as the
+identity basis of an actor without claims (the excerpt must then contain that exact
+name). Do not use analyst/private/actorAllowed=false text in profiles, menu
 descriptions or visible state, even relabeled as an assumption.
 Scenario_assumption refs are IDs in assumptions [{{assumptionId,description,visibility?}}].
 Assumption visibility uses {{kind:public|analyst}} or {{kind:actors,actorIds:[...]}}; omitted visibility stays analyst-only.
