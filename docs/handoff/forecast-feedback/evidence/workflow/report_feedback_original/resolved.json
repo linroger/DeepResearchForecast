@@ -1,0 +1,356 @@
+{
+  "report_id": "report_feedback_original",
+  "simulation_id": "sim_report_feedback_original",
+  "outcome": "Baseline expansion",
+  "scoring": {
+    "brier": 0.18,
+    "log_loss": 0.3567,
+    "n_scenarios": 2,
+    "outcome_matched_a_scenario": true,
+    "realized_probability": 0.7
+  },
+  "resolved_at": "2026-10-20T17:20:55.120110+00:00",
+  "kind": "scenario",
+  "publication_sha256": "8dae3d259275542ab58589356ade327ef3eeb8b91dd137e106c2a7fd7757ff75",
+  "evidence": {
+    "adjudication": "manual_user",
+    "externally_verified": false
+  },
+  "forecast": {
+    "binary_forecasts": [
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F1",
+        "market_anchor": {
+          "divergence": 0.0,
+          "endDate": "2027-12-31",
+          "forecast_contract_sha256": "3ba35a61f375465f2dc9dd922258a154069796a0c7b23af2507215ba9ef36bf2",
+          "forecast_proposition_id": "forecast-7495ccbcf861",
+          "implied_yes_prob": 0.3,
+          "market_id": "synthetic-market-a",
+          "market_question_sha256": "fac02676a47e31d7b342126154bd085d1f951c9164421568a15fb1a69ee15243",
+          "match_confidence": 0.99,
+          "match_method": "bounded-semantic-equivalence-review",
+          "price_at_research": 0.3,
+          "question": "The US enacts a corporate tax increase by 2027-12-31.",
+          "resolution_equivalence": "exact",
+          "url": "https://polymarket.com/event/synthetic-market-a"
+        },
+        "probability": 0.3,
+        "proposition_id": "forecast-7495ccbcf861",
+        "resolution_criteria": "A signed federal statute raises the corporate tax rate by 2027-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "The US enacts a corporate tax increase by 2027-12-31.",
+        "theme": "policy"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": false,
+        "horizon_year": 2027,
+        "id": "F2",
+        "market_anchor": {
+          "divergence": 0.0,
+          "endDate": "2027-12-31",
+          "forecast_contract_sha256": "fc45c5f3f777802534d86b99595de24a136d103ac7cfe3c760a28b5f36decd86",
+          "forecast_proposition_id": "forecast-cd998d26c347",
+          "implied_yes_prob": 0.8,
+          "market_id": "synthetic-market-b",
+          "market_question_sha256": "e087dc5c1cb39b104d22b4233b4cc555d2c7d3ec95b4757c5f0c5f4c6eebfca1",
+          "match_confidence": 0.99,
+          "match_method": "bounded-semantic-equivalence-review",
+          "price_at_research": 0.8,
+          "question": "The US enacts a household tax rebate by 2027-12-31.",
+          "resolution_equivalence": "exact",
+          "url": "https://polymarket.com/event/synthetic-market-b"
+        },
+        "probability": 0.8,
+        "proposition_id": "forecast-cd998d26c347",
+        "resolution_criteria": "A signed federal statute authorizes a household rebate by 2027-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "The US enacts a household tax rebate by 2027-12-31.",
+        "theme": "policy"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "data_anchor": {
+          "auto_resolvable": true,
+          "comparator": ">",
+          "frequency": "M",
+          "geography": "",
+          "latest_date": "2026-09-01",
+          "latest_value": 4.2,
+          "observation": "2027-06",
+          "period": "2027-06-01",
+          "series": "fred:UNRATE",
+          "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+          "threshold": 4.0,
+          "transform": "",
+          "units": "Percent",
+          "vintage": ""
+        },
+        "horizon_year": 2027,
+        "id": "F3",
+        "probability": 0.7,
+        "proposition_id": "forecast-ceaafb8ca7e7",
+        "resolution_criteria": "fred:UNRATE > 4% in 2027-06. Official resolution: fred:UNRATE > 4% for 2027-06.",
+        "resolution_source": "FRED",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US unemployment rate > 4% in June 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "data_anchor": {
+          "auto_resolvable": true,
+          "comparator": "<",
+          "frequency": "M",
+          "geography": "",
+          "latest_date": "2026-09-01",
+          "latest_value": 3.5,
+          "observation": "2027-12",
+          "period": "2027-12-01",
+          "series": "fred:FEDFUNDS",
+          "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+          "threshold": 3.0,
+          "transform": "",
+          "units": "Percent",
+          "vintage": ""
+        },
+        "horizon_year": 2027,
+        "id": "F4",
+        "probability": 0.4,
+        "proposition_id": "forecast-87aedaf22c98",
+        "resolution_criteria": "fred:FEDFUNDS < 3% in 2027-12. Official resolution: fred:FEDFUNDS < 3% for 2027-12.",
+        "resolution_source": "FRED",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "The effective federal funds rate < 3% in December 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F5",
+        "probability": 0.15,
+        "proposition_id": "forecast-aca85c9ce140",
+        "resolution_criteria": "The official annual industrial output growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US industrial output growth exceeds 2% in 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F6",
+        "probability": 0.25,
+        "proposition_id": "forecast-58ac01e5bd8d",
+        "resolution_criteria": "The official annual retail sales growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US retail sales growth exceeds 2% in 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F7",
+        "probability": 0.35,
+        "proposition_id": "forecast-b0bd32a1bbbb",
+        "resolution_criteria": "The official annual housing starts growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US housing starts growth exceeds 2% in 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F8",
+        "probability": 0.65,
+        "proposition_id": "forecast-2747f2578e29",
+        "resolution_criteria": "The official annual business investment growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US business investment growth exceeds 2% in 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F9",
+        "probability": 0.75,
+        "proposition_id": "forecast-1dc52f25af2f",
+        "resolution_criteria": "The official annual real exports growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US real exports growth exceeds 2% in 2027.",
+        "theme": "macro"
+      },
+      {
+        "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+        "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+        "criteria_sharp": true,
+        "horizon_year": 2027,
+        "id": "F10",
+        "probability": 0.85,
+        "proposition_id": "forecast-0f7e85eef056",
+        "resolution_criteria": "The official annual real imports growth exceeds 2% for 2027 by 2028-12-31.",
+        "resolution_source": "Official public record",
+        "scenario_membership": {
+          "derivable": false,
+          "yes_scenarios": []
+        },
+        "source": "research-prior",
+        "statement": "US real imports growth exceeds 2% in 2027.",
+        "theme": "macro"
+      }
+    ],
+    "confidence": "medium",
+    "confidence_rationale": "",
+    "derived_from": "spine",
+    "headline": "Expansion remains the central scenario.",
+    "horizon": "2027-12-31",
+    "key_uncertainties": [],
+    "market_comparison": {
+      "anchored_count": 2,
+      "comparisons": [
+        {
+          "abs_divergence": 0.0,
+          "divergence": 0.0,
+          "endDate": "2027-12-31",
+          "exceeds_10pp": false,
+          "forecast_id": "F1",
+          "market_id": "synthetic-market-a",
+          "market_implied_yes_prob": 0.3,
+          "market_question": "The US enacts a corporate tax increase by 2027-12-31.",
+          "match_confidence": 0.99,
+          "model_probability": 0.3,
+          "price_at_research": 0.3,
+          "rationale_cites_market": false,
+          "resolution_equivalence": "exact",
+          "statement": "The US enacts a corporate tax increase by 2027-12-31.",
+          "url": "https://polymarket.com/event/synthetic-market-a"
+        },
+        {
+          "abs_divergence": 0.0,
+          "divergence": 0.0,
+          "endDate": "2027-12-31",
+          "exceeds_10pp": false,
+          "forecast_id": "F2",
+          "market_id": "synthetic-market-b",
+          "market_implied_yes_prob": 0.8,
+          "market_question": "The US enacts a household tax rebate by 2027-12-31.",
+          "match_confidence": 0.99,
+          "model_probability": 0.8,
+          "price_at_research": 0.8,
+          "rationale_cites_market": false,
+          "resolution_equivalence": "exact",
+          "statement": "The US enacts a household tax rebate by 2027-12-31.",
+          "url": "https://polymarket.com/event/synthetic-market-b"
+        }
+      ]
+    },
+    "proposition_consistency": {
+      "after": {
+        "checked": 0,
+        "mismatch_count": 0,
+        "mismatches": [],
+        "passed": true,
+        "rows": []
+      },
+      "before": {
+        "checked": 0,
+        "mismatch_count": 0,
+        "mismatches": [],
+        "passed": true,
+        "rows": []
+      },
+      "corrected": [],
+      "corrected_count": 0,
+      "market_anchors": {
+        "anchored_count": 2,
+        "issue_count": 0,
+        "issues": [],
+        "passed": true
+      },
+      "passed": true,
+      "removed_market_anchors": [],
+      "restored_market_influences": [],
+      "sim_adjustment": null,
+      "transferred_market_anchors": []
+    },
+    "scenarios": [
+      {
+        "key_drivers": [],
+        "name": "Baseline expansion",
+        "probability": 0.7,
+        "resolution_criteria": "NBER records no recession beginning before 2027-12-31.",
+        "summary": ""
+      },
+      {
+        "key_drivers": [],
+        "name": "Contraction",
+        "probability": 0.3,
+        "resolution_criteria": "NBER records a recession beginning before 2027-12-31.",
+        "summary": ""
+      }
+    ],
+    "schema_version": 1
+  }
+}

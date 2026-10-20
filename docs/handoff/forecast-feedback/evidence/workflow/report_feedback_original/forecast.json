@@ -1,0 +1,708 @@
+{
+  "headline": "Expansion remains the central scenario.",
+  "horizon": "2027-12-31",
+  "scenarios": [
+    {
+      "name": "Baseline expansion",
+      "probability": 0.7,
+      "summary": "",
+      "key_drivers": [],
+      "resolution_criteria": "NBER records no recession beginning before 2027-12-31."
+    },
+    {
+      "name": "Contraction",
+      "probability": 0.3,
+      "summary": "",
+      "key_drivers": [],
+      "resolution_criteria": "NBER records a recession beginning before 2027-12-31."
+    }
+  ],
+  "key_uncertainties": [],
+  "confidence": "medium",
+  "confidence_rationale": "",
+  "schema_version": 1,
+  "derived_from": "spine",
+  "citation_audit": {
+    "quantitative_claims": 0,
+    "cited": 0,
+    "coverage": 1.0,
+    "source_cited": 0,
+    "source_coverage": 1.0,
+    "unsupported_samples": [],
+    "resolved_cited": 0,
+    "resolved_coverage": 1.0,
+    "excluded_authored_forecast_claims": 46,
+    "authored_forecast_markers_valid": true
+  },
+  "quality": {
+    "quote_provenance": {
+      "total_quotes": 1,
+      "ungrounded": 0,
+      "examples": [],
+      "cited_unverbatim": 0
+    },
+    "lint": {
+      "mode": "final",
+      "lang": "English",
+      "citation_residue": 0,
+      "edge_dumps": 0,
+      "dangling_edge_intros": 0,
+      "legacy_sim_labels": 0,
+      "tool_tokens": 0,
+      "generation_failure_placeholders": 0,
+      "internal_telemetry_appendices": 0,
+      "internal_basis_traces": 0,
+      "internal_graph_parentheticals": 0,
+      "internal_relation_bullets": 0,
+      "standalone_citation_lines": 0,
+      "corrupted_mixed_punctuation_lines": 0,
+      "empty_tables": 0,
+      "dangling_attributions": 0,
+      "pass_narration": {
+        "stripped": 0,
+        "flagged": 0
+      },
+      "citation_variants": 0,
+      "duplicate_sentences_removed": 0,
+      "citation_guard_rules": [],
+      "citation_guard_reverts": 0,
+      "simulation_mechanics": {
+        "rewritten": 0,
+        "sentences_removed": 0,
+        "table_cells_redacted": 0
+      },
+      "malformed_prose_repairs": 0,
+      "sentence_spaces_repaired": 0,
+      "empty_sections": 0,
+      "language_contamination": {
+        "lines": 0,
+        "samples": []
+      },
+      "table_cell_truncations": [],
+      "scenario_prob_mismatches": [],
+      "leakage_flags": 0,
+      "outcome_focus_ok": true,
+      "changed": false
+    },
+    "numeric_consistency": {
+      "scenario_prob_mismatches": [],
+      "mismatch_count": 0
+    },
+    "implausible_stats": {
+      "implausible_stats": [],
+      "count": 0,
+      "max_flagged": 0.0,
+      "cited_extreme_stats": []
+    },
+    "final_audit": {
+      "schema_version": 2,
+      "policy_version": 3,
+      "report_id": "report_feedback_original",
+      "audited_at": "2026-10-20T17:20:54.989400+00:00",
+      "read_only": true,
+      "markdown_chars": 9997,
+      "markdown_sha256": "9d60ce7b9e699f70a13e8fd0e056ff18b7cd50fb1d00e83207403132e69fee43",
+      "disk_sha256": "9d60ce7b9e699f70a13e8fd0e056ff18b7cd50fb1d00e83207403132e69fee43",
+      "disk_matches_memory": true,
+      "failed_sections": [],
+      "citation_grounding": {
+        "quantitative_claims": 0,
+        "cited": 0,
+        "coverage": 1.0,
+        "source_cited": 0,
+        "source_coverage": 1.0,
+        "unsupported_samples": [],
+        "resolved_cited": 0,
+        "resolved_coverage": 1.0,
+        "excluded_authored_forecast_claims": 46,
+        "authored_forecast_markers_valid": true
+      },
+      "citation_body_markers": {
+        "total_markers": 4,
+        "distinct_tags": 2,
+        "order": [
+          "S1",
+          "S2"
+        ],
+        "counts": {
+          "S1": 2,
+          "S2": 2
+        },
+        "dangling": [],
+        "uncited": []
+      },
+      "citation_markers": {
+        "total_markers": 6,
+        "distinct_tags": 2,
+        "order": [
+          "S1",
+          "S2"
+        ],
+        "counts": {
+          "S1": 3,
+          "S2": 3
+        },
+        "dangling": [],
+        "uncited": []
+      },
+      "citation_artifacts": {
+        "enabled": true,
+        "required": true,
+        "references_present": true,
+        "citations_json_present": true,
+        "citations_json_valid": true,
+        "expected_tags": [
+          "S1",
+          "S2"
+        ],
+        "artifact_tags": [
+          "S1",
+          "S2"
+        ],
+        "missing_tags": [],
+        "extra_tags": [],
+        "mismatched_urls": [],
+        "invalid_artifact_urls": [],
+        "missing_reference_tags": [],
+        "missing_reference_urls": [],
+        "issues": [],
+        "passed": true
+      },
+      "semantic_citations": {
+        "checked": 4,
+        "unsupported": 0,
+        "unverifiable": 0,
+        "unverifiable_ratio": 0.0,
+        "examples": [],
+        "max_per_source": 20,
+        "overused_sources": [],
+        "passed": true
+      },
+      "official_chart_captions": {
+        "required": false,
+        "checked": 0,
+        "issues": [],
+        "passed": true
+      },
+      "forecast_track_record": {
+        "required": true,
+        "passed": true,
+        "source_digest": "ac5a383328a3b1fc39f01013657e77c40da7063ccfe491b87b83313de39946bd",
+        "snapshot_sha256": "4881f5a96b0b992a611f3f51e34fcfdb97fe8d7a0b4eaa07c6cddeb7e112e736"
+      },
+      "quote_provenance": {
+        "total_quotes": 1,
+        "ungrounded": 0,
+        "examples": [],
+        "cited_unverbatim": 0
+      },
+      "numeric_consistency": {
+        "scenario_prob_mismatches": [],
+        "mismatch_count": 0
+      },
+      "structured_forecast": {
+        "required": true,
+        "present": true,
+        "scenario_count": 2,
+        "binary_count": 10,
+        "valid": true
+      },
+      "scenario_contract": {
+        "valid": true,
+        "issue_count": 0,
+        "issues": [],
+        "examples": []
+      },
+      "proposition_consistency": {
+        "checked": 0,
+        "rows": [],
+        "mismatches": [],
+        "mismatch_count": 0,
+        "passed": true
+      },
+      "market_anchor_integrity": {
+        "anchored_count": 2,
+        "issues": [],
+        "issue_count": 0,
+        "passed": true
+      },
+      "stat_plausibility": {
+        "implausible_stats": [],
+        "count": 0,
+        "max_flagged": 0.0,
+        "cited_extreme_stats": []
+      },
+      "lint": {
+        "mode": "final",
+        "lang": "English",
+        "citation_residue": 0,
+        "edge_dumps": 0,
+        "dangling_edge_intros": 0,
+        "legacy_sim_labels": 0,
+        "tool_tokens": 0,
+        "generation_failure_placeholders": 0,
+        "internal_telemetry_appendices": 0,
+        "internal_basis_traces": 0,
+        "internal_graph_parentheticals": 0,
+        "internal_relation_bullets": 0,
+        "standalone_citation_lines": 0,
+        "corrupted_mixed_punctuation_lines": 0,
+        "empty_tables": 0,
+        "dangling_attributions": 0,
+        "pass_narration": {
+          "stripped": 0,
+          "flagged": 0
+        },
+        "citation_variants": 0,
+        "duplicate_sentences_removed": 0,
+        "citation_guard_rules": [],
+        "citation_guard_reverts": 0,
+        "simulation_mechanics": {
+          "rewritten": 0,
+          "sentences_removed": 0,
+          "table_cells_redacted": 0
+        },
+        "malformed_prose_repairs": 0,
+        "sentence_spaces_repaired": 0,
+        "empty_sections": 0,
+        "language_contamination": {
+          "lines": 0,
+          "samples": []
+        },
+        "table_cell_truncations": [],
+        "scenario_prob_mismatches": [],
+        "leakage_flags": 0,
+        "outcome_focus_ok": true,
+        "changed": false
+      },
+      "hard_issues": [],
+      "hard_passed": true,
+      "publish_gate": {
+        "enabled": true,
+        "passed": true,
+        "issues": [],
+        "hard_issues": [],
+        "epistemic_issues": [],
+        "hard_passed": true,
+        "citation_coverage": 1.0,
+        "citation_coverage_basis": "resolved_coverage",
+        "probability_sum": 1.0,
+        "has_residual_scenario": true
+      }
+    },
+    "pre_publish_confidence": "medium",
+    "pre_publish_confidence_rationale": "",
+    "citation_coverage": 1.0,
+    "citation_coverage_basis": "resolved_coverage",
+    "probability_sum": 1.0,
+    "has_residual_scenario": true,
+    "max_probability": 0.7,
+    "hard_issues": [],
+    "epistemic_issues": [],
+    "hard_passed": true,
+    "issues": [],
+    "passed": true
+  },
+  "binary_forecasts": [
+    {
+      "id": "F1",
+      "statement": "The US enacts a corporate tax increase by 2027-12-31.",
+      "probability": 0.3,
+      "resolution_criteria": "A signed federal statute raises the corporate tax rate by 2027-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "policy",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-7495ccbcf861",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      },
+      "market_anchor": {
+        "market_id": "synthetic-market-a",
+        "question": "The US enacts a corporate tax increase by 2027-12-31.",
+        "implied_yes_prob": 0.3,
+        "price_at_research": 0.3,
+        "divergence": 0.0,
+        "url": "https://polymarket.com/event/synthetic-market-a",
+        "endDate": "2027-12-31",
+        "resolution_equivalence": "exact",
+        "match_confidence": 0.99,
+        "forecast_proposition_id": "forecast-7495ccbcf861",
+        "forecast_contract_sha256": "3ba35a61f375465f2dc9dd922258a154069796a0c7b23af2507215ba9ef36bf2",
+        "market_question_sha256": "fac02676a47e31d7b342126154bd085d1f951c9164421568a15fb1a69ee15243",
+        "match_method": "bounded-semantic-equivalence-review"
+      }
+    },
+    {
+      "id": "F2",
+      "statement": "The US enacts a household tax rebate by 2027-12-31.",
+      "probability": 0.8,
+      "resolution_criteria": "A signed federal statute authorizes a household rebate by 2027-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "policy",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-cd998d26c347",
+      "criteria_sharp": false,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      },
+      "market_anchor": {
+        "market_id": "synthetic-market-b",
+        "question": "The US enacts a household tax rebate by 2027-12-31.",
+        "implied_yes_prob": 0.8,
+        "price_at_research": 0.8,
+        "divergence": 0.0,
+        "url": "https://polymarket.com/event/synthetic-market-b",
+        "endDate": "2027-12-31",
+        "resolution_equivalence": "exact",
+        "match_confidence": 0.99,
+        "forecast_proposition_id": "forecast-cd998d26c347",
+        "forecast_contract_sha256": "fc45c5f3f777802534d86b99595de24a136d103ac7cfe3c760a28b5f36decd86",
+        "market_question_sha256": "e087dc5c1cb39b104d22b4233b4cc555d2c7d3ec95b4757c5f0c5f4c6eebfca1",
+        "match_method": "bounded-semantic-equivalence-review"
+      }
+    },
+    {
+      "id": "F3",
+      "statement": "US unemployment rate > 4% in June 2027.",
+      "probability": 0.7,
+      "resolution_criteria": "fred:UNRATE > 4% in 2027-06. Official resolution: fred:UNRATE > 4% for 2027-06.",
+      "resolution_source": "FRED",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-ceaafb8ca7e7",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      },
+      "data_anchor": {
+        "series": "fred:UNRATE",
+        "period": "2027-06-01",
+        "observation": "2027-06",
+        "threshold": 4.0,
+        "comparator": ">",
+        "units": "Percent",
+        "transform": "",
+        "frequency": "M",
+        "geography": "",
+        "vintage": "",
+        "source_url": "https://fred.stlouisfed.org/series/UNRATE",
+        "latest_value": 4.2,
+        "latest_date": "2026-09-01",
+        "auto_resolvable": true
+      }
+    },
+    {
+      "id": "F4",
+      "statement": "The effective federal funds rate < 3% in December 2027.",
+      "probability": 0.4,
+      "resolution_criteria": "fred:FEDFUNDS < 3% in 2027-12. Official resolution: fred:FEDFUNDS < 3% for 2027-12.",
+      "resolution_source": "FRED",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-87aedaf22c98",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      },
+      "data_anchor": {
+        "series": "fred:FEDFUNDS",
+        "period": "2027-12-01",
+        "observation": "2027-12",
+        "threshold": 3.0,
+        "comparator": "<",
+        "units": "Percent",
+        "transform": "",
+        "frequency": "M",
+        "geography": "",
+        "vintage": "",
+        "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+        "latest_value": 3.5,
+        "latest_date": "2026-09-01",
+        "auto_resolvable": true
+      }
+    },
+    {
+      "id": "F5",
+      "statement": "US industrial output growth exceeds 2% in 2027.",
+      "probability": 0.15,
+      "resolution_criteria": "The official annual industrial output growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-aca85c9ce140",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    },
+    {
+      "id": "F6",
+      "statement": "US retail sales growth exceeds 2% in 2027.",
+      "probability": 0.25,
+      "resolution_criteria": "The official annual retail sales growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-58ac01e5bd8d",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    },
+    {
+      "id": "F7",
+      "statement": "US housing starts growth exceeds 2% in 2027.",
+      "probability": 0.35,
+      "resolution_criteria": "The official annual housing starts growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-b0bd32a1bbbb",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    },
+    {
+      "id": "F8",
+      "statement": "US business investment growth exceeds 2% in 2027.",
+      "probability": 0.65,
+      "resolution_criteria": "The official annual business investment growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-2747f2578e29",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    },
+    {
+      "id": "F9",
+      "statement": "US real exports growth exceeds 2% in 2027.",
+      "probability": 0.75,
+      "resolution_criteria": "The official annual real exports growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-1dc52f25af2f",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    },
+    {
+      "id": "F10",
+      "statement": "US real imports growth exceeds 2% in 2027.",
+      "probability": 0.85,
+      "resolution_criteria": "The official annual real imports growth exceeds 2% for 2027 by 2028-12-31.",
+      "resolution_source": "Official public record",
+      "theme": "macro",
+      "horizon_year": 2027,
+      "base_rate_anchor": "Synthetic acceptance input; no empirical estimate.",
+      "adjustment_rationale": "Synthetic external response for deterministic acceptance.",
+      "source": "research-prior",
+      "proposition_id": "forecast-0f7e85eef056",
+      "criteria_sharp": true,
+      "scenario_membership": {
+        "derivable": false,
+        "yes_scenarios": []
+      }
+    }
+  ],
+  "binary_quality": {
+    "count": 10,
+    "prob_stdev": 0.243,
+    "midband_share": 0.1,
+    "conviction_count": 7,
+    "sharp_criteria_count": 9,
+    "themes": {
+      "policy": 2,
+      "macro": 8
+    },
+    "theme_cardinality": 2,
+    "passed": true,
+    "issues": [],
+    "proposition_consistency": {
+      "corrected": [],
+      "corrected_count": 0,
+      "removed_market_anchors": [],
+      "restored_market_influences": [],
+      "transferred_market_anchors": [],
+      "before": {
+        "checked": 0,
+        "rows": [],
+        "mismatches": [],
+        "mismatch_count": 0,
+        "passed": true
+      },
+      "after": {
+        "checked": 0,
+        "rows": [],
+        "mismatches": [],
+        "mismatch_count": 0,
+        "passed": true
+      },
+      "market_anchors": {
+        "anchored_count": 2,
+        "issues": [],
+        "issue_count": 0,
+        "passed": true
+      },
+      "passed": true,
+      "sim_adjustment": null
+    }
+  },
+  "market_comparison": {
+    "anchored_count": 2,
+    "comparisons": [
+      {
+        "forecast_id": "F1",
+        "statement": "The US enacts a corporate tax increase by 2027-12-31.",
+        "model_probability": 0.3,
+        "market_id": "synthetic-market-a",
+        "market_question": "The US enacts a corporate tax increase by 2027-12-31.",
+        "market_implied_yes_prob": 0.3,
+        "price_at_research": 0.3,
+        "divergence": 0.0,
+        "abs_divergence": 0.0,
+        "exceeds_10pp": false,
+        "resolution_equivalence": "exact",
+        "match_confidence": 0.99,
+        "url": "https://polymarket.com/event/synthetic-market-a",
+        "endDate": "2027-12-31",
+        "rationale_cites_market": false
+      },
+      {
+        "forecast_id": "F2",
+        "statement": "The US enacts a household tax rebate by 2027-12-31.",
+        "model_probability": 0.8,
+        "market_id": "synthetic-market-b",
+        "market_question": "The US enacts a household tax rebate by 2027-12-31.",
+        "market_implied_yes_prob": 0.8,
+        "price_at_research": 0.8,
+        "divergence": 0.0,
+        "abs_divergence": 0.0,
+        "exceeds_10pp": false,
+        "resolution_equivalence": "exact",
+        "match_confidence": 0.99,
+        "url": "https://polymarket.com/event/synthetic-market-b",
+        "endDate": "2027-12-31",
+        "rationale_cites_market": false
+      }
+    ]
+  },
+  "proposition_consistency": {
+    "corrected": [],
+    "corrected_count": 0,
+    "removed_market_anchors": [],
+    "restored_market_influences": [],
+    "transferred_market_anchors": [],
+    "before": {
+      "checked": 0,
+      "rows": [],
+      "mismatches": [],
+      "mismatch_count": 0,
+      "passed": true
+    },
+    "after": {
+      "checked": 0,
+      "rows": [],
+      "mismatches": [],
+      "mismatch_count": 0,
+      "passed": true
+    },
+    "market_anchors": {
+      "anchored_count": 2,
+      "issues": [],
+      "issue_count": 0,
+      "passed": true
+    },
+    "passed": true,
+    "sim_adjustment": null
+  },
+  "historical_calibration": {
+    "forecast_track_record": {
+      "schema_version": 1,
+      "source": "published_forecasts.jsonl",
+      "source_digest": "ac5a383328a3b1fc39f01013657e77c40da7063ccfe491b87b83313de39946bd",
+      "journal_length": 0,
+      "journal_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "excluded_report_id": "report_feedback_original",
+      "n_reports": 0,
+      "tracks": {
+        "scenario": {
+          "n_forecasts": 0,
+          "n_resolved": 0,
+          "n_outstanding": 0,
+          "mean_brier": null,
+          "coverage": 0.0
+        },
+        "market_binary": {
+          "n_forecasts": 0,
+          "n_resolved": 0,
+          "n_outstanding": 0,
+          "mean_brier": null,
+          "coverage": 0.0
+        },
+        "official_data_binary": {
+          "n_forecasts": 0,
+          "n_resolved": 0,
+          "n_outstanding": 0,
+          "mean_brier": null,
+          "coverage": 0.0
+        },
+        "unanchored_binary": {
+          "n_forecasts": 0,
+          "n_resolved": 0,
+          "n_outstanding": 0,
+          "mean_brier": null,
+          "coverage": 0.0
+        }
+      },
+      "scored_identities": [],
+      "legacy_scenario": {
+        "source": "ledger.jsonl",
+        "n_resolved": 0,
+        "mean_brier": null
+      }
+    }
+  }
+}

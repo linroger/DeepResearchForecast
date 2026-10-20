@@ -432,7 +432,7 @@ def _backup(report_dir: Path) -> Path:
     for path in report_dir.glob("full_report*.pdf"):
         shutil.copy2(path, backup / path.name)
     for name in (
-            "meta.json", "forecast.json", "market_comparison.json",
+            "meta.json", "forecast.json", "forecast_track_record.json", "market_comparison.json",
             "viz_manifest.json", "pdf_export.json"):
         path = report_dir / name
         if path.exists():
@@ -456,7 +456,7 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
             if path.is_file() or path.is_symlink():
                 path.unlink()
     for name in (
-        "meta.json", "forecast.json", "market_comparison.json",
+        "meta.json", "forecast.json", "forecast_track_record.json", "market_comparison.json",
         "viz_manifest.json", "pdf_export.json",
     ):
         path = report_dir / name
@@ -608,8 +608,10 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if main_markdown and main_agent is not None:
         main_agent._forecast_spine = (
             forecast if isinstance(forecast, dict) else forecast_obj)
-        final_audit = main_agent._enforce_final_publish_audit(
-            report_id, _Report(main_markdown))
+        audited_report = _Report(main_markdown)
+        final_audit = main_agent._enforce_final_publish_audit(report_id, audited_report)
+        main_markdown = audited_report.markdown_content
+        meta["markdown_content"] = main_markdown
 
     primary_citations = _read_json(report_dir / "citations.json")
     primary_citations = primary_citations if isinstance(primary_citations, dict) else {}

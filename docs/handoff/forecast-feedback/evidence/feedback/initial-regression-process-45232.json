@@ -1,0 +1,25 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 45232,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-feedback-regression-xtlBne/backend/tests/test_forecast_feedback_sdk.py": "591058ce0b355866d33aaff204d1c908b2c3121e206b09ed0cd81dec3403efed",
+    "/private/tmp/drf-feedback-regression-xtlBne/backend/app/config.py": "78447139477bf6da35fca2026fb3953f949a42cf880566ccfc65b0da757d9cbe",
+    "/private/tmp/drf-feedback-regression-xtlBne/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-feedback-regression-xtlBne/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 13728,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb/backend/tests/test_forecast_feedback_workflow.py": "b49be9a22dc19e49f72acd8a457635ac1f706c927078727852ce4bd0aa959362",
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb/backend/app/config.py": "78447139477bf6da35fca2026fb3953f949a42cf880566ccfc65b0da757d9cbe",
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-feedback-acceptance-final-_y02obqb-evidence/pytest-tmp/test_published_forecast_native0/restart.py": "d03f41b06b853765000107a0c7b1a0fc6eb1870edf54b7cc6962a72ef5a0acfa"
+  },
+  "children": {
+    "13731": {
+      "exit_code": 0,
+      "receipt": "process-13731.json"
+    }
+  },
+  "identity_preserved": true
+}

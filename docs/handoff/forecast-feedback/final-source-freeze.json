@@ -1,0 +1,22 @@
+{
+  "mirror": "/private/tmp/drf-feedback-final-EE0asH",
+  "source_sha256": {
+    "backend/app/api/sdk.py": "41537171afdf65b179718e38c39f3834709a58a567cafc5b8cbbed845c7f3ba9",
+    "backend/app/services/agent_decision.py": "695f29f4558f78f5fecc98cd8dfe79dab247f414fe669fe83ad6f5dee12c655f",
+    "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
+    "backend/app/services/forecast_ledger.py": "2576a04a669586c7ebe94550d5d5ef1a8754c51bf65b42809e068e7164c0edc5",
+    "backend/app/services/forecast_track_record.py": "6cd977828939223b239cd83ebb72c39f05c6a76714ad9ada3f9be5b73d9610b1",
+    "backend/app/services/report_agent.py": "880615f54c85e2f43a1d2a50f1c7bdd8949baf4f41ae46b75ed0c48886e4e46a",
+    "backend/app/services/world_model.py": "2673149b82e606abd008f62c31a4ea5019358ee31f8b376314052711730fea43",
+    "backend/app/services/world_update.py": "91116f0a92fce1a6b65a312f29b6b9cfe24094ffdb97da0b6cadbf1d1cf38f56",
+    "backend/scripts/backfill_report_visuals.py": "c8f36446dc8c72affb46b2458096878dd773154b7efaa66296be090404ff62bf",
+    "backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "backend/scripts/resolution_monitor.py": "b76349d721fb306f086b1284591255dae0d67dd562f9bdd8be4d68f3f16eb15c",
+    "backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "backend/tests/test_forecast_track_record.py": "b10619ed839a53d3b3ddeff5929f25428c89c7a3487daa3cbb7c1ccbb5963caf",
+    "backend/tests/test_report_official_publication_real.py": "208c6cd7919151d586e136e9db7168e0ccf350d17dd2123809e1658671fba8a6",
+    "backend/tests/test_world_commitment_fulfilment.py": "c404da182ed40a36fcb42a025e3958885259528ce60d0d423389a050dc534873"
+  },
+  "drift": []
+}

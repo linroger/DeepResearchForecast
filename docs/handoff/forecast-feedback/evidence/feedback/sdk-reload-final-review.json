@@ -1,0 +1,15 @@
+{
+  "reviewer": "Faraday",
+  "agent_id": "01a159ef-a35b-7550-9b7a-1edf2d68bde4",
+  "status": "closed; no remaining actionable findings",
+  "mode": "read-only source and receipt inspection; no independent test execution",
+  "owned_source_sha256": {
+    "backend/app/api/sdk.py": "41537171afdf65b179718e38c39f3834709a58a567cafc5b8cbbed845c7f3ba9",
+    "backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+  },
+  "verified_runs": [
+    "reload-final-forward",
+    "reload-final-reverse"
+  ],
+  "resolved_finding": "Regression restores the exact pretest exception class in finally, preserving later tests holding imports."
+}

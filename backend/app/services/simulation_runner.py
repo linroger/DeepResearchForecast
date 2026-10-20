@@ -1390,6 +1390,7 @@ class SimulationRunner:
         "world_state_history.jsonl",
         "world_actions.jsonl",
         "world_digest.jsonl",
+        "world_paths.json",              # WORLD PATHS (SIM_WORLD_PATHS > 1): the sibling paths' state
         "emergent_metrics.json",
         "twitter_emergent_metrics.json",
         "reddit_emergent_metrics.json",

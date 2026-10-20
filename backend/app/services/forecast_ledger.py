@@ -19,6 +19,24 @@ import os
 import threading
 from typing import Any, Dict, List, Optional
 
+# The immutable production registry is separate from the compatible legacy API.
+from .forecast_feedback import (  # noqa: F401
+    ForecastFeedbackError,
+    forecast_publication_digest,
+    list_outstanding_published_questions,
+    list_published_report_ids,
+    mark_published_report_checked,
+    outstanding_published_report_ids,
+    production_track_record,
+    read_published_forecast,
+    read_published_resolutions,
+    reconcile_published_resolutions,
+    record_published_forecast,
+    resolve_published_scenario,
+    verify_production_track_record,
+    verify_published_forecast,
+)
+
 
 def ledger_dir() -> str:
     """Resolve the ledger directory (FORECAST_LEDGER_DIR, else under PIPELINE_DATA_DIR)."""
@@ -501,17 +519,22 @@ def append_data_resolution(record: Dict[str, Any], *, d: Optional[str] = None) -
 
 
 def data_brier_summary(d: Optional[str] = None) -> Dict[str, Any]:
-    """Official-data calibration never enters the market-only denominator."""
+    """Legacy official outcomes, restricted to eligible finite production scores."""
     import math
-    rows = read_data_resolutions(d)
+    rows = [
+        row for row in read_data_resolutions(d)
+        if is_production_calibration_row(row)
+        and ("dataset_snapshot" not in row
+             or is_production_calibration_row(row["dataset_snapshot"]))
+    ]
     values = [row.get("brier_contribution") for row in rows]
     values = [float(value) for value in values if isinstance(value, (int, float))
-              and not isinstance(value, bool) and math.isfinite(value)]
-    return {"n_resolved": len(rows), "mean_brier": round(sum(values) / len(values), 4) if values else None}
+              and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= 1]
+    return {"n_resolved": len(values), "mean_brier": round(sum(values) / len(values), 4) if values else None}
 
 
 def official_data_track_record(d: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Binary track record of data-anchored forecasts, separate from the scenario Brier.
+    """Legacy observational data outcomes; immutable publication is not established.
 
     Returns None until at least one official outcome is recorded, so a consumer
     (e.g. forecast.json ``official_data_track_record``) stays byte-identical

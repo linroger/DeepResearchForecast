@@ -4998,15 +4998,7 @@ class ReportAgent:
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
-        # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
-            try:
-                from .forecast_ledger import append_forecast as _append
-                _append(forecast, report_id=report_id,
-                        horizon=str(forecast.get("horizon") or "") or None,
-                        created_at=datetime.now().isoformat())
-            except Exception:  # noqa: BLE001
-                pass
+        # Only the final, audit-passed publication enters the immutable ledger.
         logger.info(
             f"结构化预测已生成: {report_id} "
             f"({len(forecast.get('scenarios', []))} 情景, "
@@ -10343,6 +10335,25 @@ class ReportAgent:
             else None
         )
         folder = ReportManager._get_report_folder(report_id)
+        preserved_track = None
+        from .forecast_track_record import START as _track_start, END as _track_end
+        if _track_start in (report.markdown_content or "") or _track_end in (report.markdown_content or ""):
+            from .forecast_track_record import audit_and_strip
+            with open(os.path.join(folder, "forecast.json"), encoding="utf-8") as stream:
+                preserved_track = json.load(stream)
+            ReportManager._verify_forecast_track_record(report_id, preserved_track)
+            prose, track_audit = audit_and_strip(report.markdown_content, preserved_track)
+            if not track_audit.get("passed"):
+                raise ValueError("Cannot stabilize an invalid forecast track record")
+            report.markdown_content = prose
+            write_text_atomic(os.path.join(folder, "full_report.md"), prose)
+
+        def restore_track() -> None:
+            if preserved_track is not None:
+                from .forecast_track_record import insert
+                report.markdown_content = insert(report.markdown_content, preserved_track, lang)
+                write_text_atomic(os.path.join(folder, "full_report.md"), report.markdown_content)
+
         totals: Dict[str, Any] = {
             "passes": 0,
             "quotes_removed": 0,
@@ -10448,6 +10459,7 @@ class ReportAgent:
                     totals["lint_rewrites"],
                     totals["quantitative_rewrites"],
                 )
+                restore_track()
                 return totals
 
         # GLM-run 2026-09-18: the historical failure mode of this gate is NOT
@@ -10477,6 +10489,7 @@ class ReportAgent:
                     logger.info(
                         "发布 Markdown 按 lint 不动点收敛（语义门全绿，仅 lint "
                         "在附录再生成上振荡）: %s", report_id)
+                    restore_track()
                     return totals
             except Exception as _fp_exc:  # noqa: BLE001 — 保守回退到原失败路径
                 logger.warning("lint 不动点收敛尝试失败，按未收敛处理: %s", _fp_exc)
@@ -10605,6 +10618,8 @@ class ReportAgent:
         confidence demotion cannot repair them and publication must stop.
         """
         issues: List[str] = []
+        if (audit.get("forecast_track_record") or {}).get("passed") is False:
+            issues.append("Forecast track record differs from its frozen ledger snapshot")
         if (audit.get("official_chart_captions") or {}).get("passed") is False:
             issues.append("官方数据图表来源标注缺失或不匹配")
         failed_sections = list(audit.get("failed_sections") or [])
@@ -10743,11 +10758,48 @@ class ReportAgent:
                 + ("；".join(quality_issues) or "未提供质量门失败原因")
             )
 
+    def _prepare_forecast_track_record(self, report_id: str, report: "Report") -> None:
+        """Freeze past outcomes once, then render them after authored prose stabilizes."""
+        if (not getattr(Config, "REPORT_FORECAST_LEDGER", True)
+                or getattr(self, "_world_binding", None)):
+            return
+        from .forecast_ledger import production_track_record, verify_production_track_record
+        from .forecast_track_record import insert
+
+        path = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+        if not os.path.isfile(path):
+            return
+        with open(path, encoding="utf-8") as stream:
+            forecast = json.load(stream)
+        if not isinstance(forecast, dict):
+            raise ValueError("Invalid structured forecast for track record")
+        history = forecast.setdefault("historical_calibration", {})
+        if not isinstance(history, dict):
+            raise ValueError("Invalid historical calibration payload")
+        frozen_path = os.path.join(ReportManager._get_report_folder(report_id),
+                                   "forecast_track_record.json")
+        if os.path.isfile(frozen_path):
+            with open(frozen_path, encoding="utf-8") as stream:
+                frozen = json.load(stream)
+            verify_production_track_record(frozen, exclude_report_id=report_id)
+        else:
+            # Never trust model-supplied history. The companion capture freezes an
+            # exact journal prefix, verifiable after restart and newer outcomes.
+            frozen = production_track_record(exclude_report_id=report_id)
+            write_json_atomic(frozen_path, frozen, allow_nan=False)
+        history["forecast_track_record"] = frozen
+        report.markdown_content = insert(
+            report.markdown_content, forecast, getattr(self, "output_language", "English"))
+        write_text_atomic(path, json.dumps(forecast, ensure_ascii=False, indent=2, allow_nan=False))
+        write_text_atomic(ReportManager._get_report_markdown_path(report_id), report.markdown_content)
+        self._forecast_spine = forecast
+
     def _enforce_final_publish_audit(
         self, report_id: str, report: "Report"
     ) -> Dict[str, Any]:
         """Run the authoritative audit and convert execution failure into a hard stop."""
         try:
+            self._prepare_forecast_track_record(report_id, report)
             audit = self._audit_final_published_markdown(report_id, report)
             self._require_final_publish_audit(audit)
             return audit
@@ -10802,6 +10854,19 @@ class ReportAgent:
         # complete published document below.
         world = self._verify_world(report_id)
         audit_md = _world_prose(md, self._world_pathway()) if world else md
+        from .forecast_track_record import audit_and_strip
+        track_forecast_path = os.path.join(folder, "forecast.json")
+        try:
+            with open(track_forecast_path, encoding="utf-8") as stream:
+                track_forecast = json.load(stream)
+        except (OSError, ValueError):
+            track_forecast = {}
+        audit_md, track_audit = audit_and_strip(audit_md, track_forecast)
+        if track_audit.get("required") and track_audit.get("passed"):
+            try:
+                ReportManager._verify_forecast_track_record(report_id, track_forecast)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                track_audit.update(passed=False, reason=str(exc))
         chunks = self._split_markdown_h2_sections(audit_md)
         reference_chunks = [
             chunk for chunk in chunks
@@ -10908,6 +10973,7 @@ class ReportAgent:
             "citation_artifacts": citation_artifacts,
             "semantic_citations": semantic_citation_audit,
             "official_chart_captions": self._audit_official_chart_captions(md, folder),
+            "forecast_track_record": track_audit,
             "quote_provenance": quote_audit,
             "numeric_consistency": numeric_audit,
             "structured_forecast": structured_forecast_audit,
@@ -14163,7 +14229,7 @@ class ReportAgent:
             # 使用ReportManager组装完整报告
             report.markdown_content = ReportManager.assemble_full_report(report_id, outline)
             report.status = ReportStatus.COMPLETED
-            report.completed_at = datetime.now().isoformat()
+            report.completed_at = datetime.now(timezone.utc).isoformat()
             # 部分完成（partial）：把失败（写入占位符）的章节标题挂到 report，经 to_dict 暴露
             # failed_sections / partial。状态仍为 completed（前端以 status==='completed' 判定终态），
             # 由 partial 标记区分「完整」与「部分完成」。无失败章节时为空列表 → 与历史一致。
@@ -15367,6 +15433,28 @@ class ReportManager:
                 result["reasons"].append(
                     "translation metadata is missing the exact report/source identity"
                 )
+        if not lang and (audit.get("forecast_track_record") or {}).get("required"):
+            try:
+                with open(os.path.join(cls._get_report_folder(report_id), "forecast.json"),
+                          encoding="utf-8") as stream:
+                    track_forecast = json.load(stream)
+                cls._verify_forecast_track_record(report_id, track_forecast)
+            except (OSError, ValueError, KeyError, TypeError):
+                result["reasons"].append("frozen forecast track record companion invalid")
+        if not lang and meta.get("forecast_feedback_required"):
+            try:
+                from .forecast_ledger import read_published_forecast, forecast_publication_digest
+                stored = read_published_forecast(report_id)
+                if stored is None:
+                    result["reasons"].append("published forecast tracking snapshot missing")
+                else:
+                    with open(os.path.join(cls._get_report_folder(report_id), "forecast.json"),
+                              encoding="utf-8") as stream:
+                        current_forecast = json.load(stream)
+                    if forecast_publication_digest(current_forecast) != stored["publication_sha256"]:
+                        result["reasons"].append("published forecast tracking snapshot mismatch")
+            except (OSError, ValueError, KeyError, TypeError):
+                result["reasons"].append("published forecast tracking snapshot invalid")
         result["publishable"] = not result["reasons"]
         return result
 
@@ -17039,13 +17127,78 @@ class ReportManager:
         return '\n'.join(result_lines)
     
     @classmethod
+    def _verify_forecast_track_record(cls, report_id: str, forecast: Dict[str, Any]) -> None:
+        history = forecast.get("historical_calibration") or {}
+        summary = history.get("forecast_track_record") if isinstance(history, dict) else None
+        if summary is None:
+            return
+        from .forecast_ledger import verify_production_track_record
+        with open(os.path.join(cls._get_report_folder(report_id), "forecast_track_record.json"),
+                  encoding="utf-8") as stream:
+            companion = json.load(stream)
+        canonical = lambda value: json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                            separators=(",", ":"), allow_nan=False)
+        if canonical(companion) != canonical(summary):
+            raise ValueError("Frozen track record companion does not match the sealed forecast")
+        verify_production_track_record(summary, exclude_report_id=report_id)
+
+    @classmethod
+    def register_published_forecast(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        """Register/recover only the unchanged bundle that passed every publication audit."""
+        if not getattr(Config, "REPORT_FORECAST_LEDGER", True):
+            return None
+        metadata = cls._read_report_meta(report_id)
+        if not metadata or metadata.get("world_result_ref") or metadata.get("simulation_engine") == "world-v1":
+            return None
+        status = cls.publication_status(report_id)
+        other_reasons = [reason for reason in status.get("reasons", [])
+                         if reason != "published forecast tracking snapshot missing"]
+        if any(reason.startswith("published forecast tracking") for reason in other_reasons):
+            raise ValueError("; ".join(other_reasons))
+        if other_reasons:
+            return None
+        path = os.path.join(cls._get_report_folder(report_id), "forecast.json")
+        if not os.path.isfile(path):
+            return None
+        from .forecast_ledger import record_published_forecast, verify_production_track_record
+        with open(path, "rb") as stream:
+            forecast_bytes = stream.read()
+        if hashlib.sha256(forecast_bytes).hexdigest() != status.get("forecast_sha256"):
+            raise ValueError("Forecast changed after its publication check")
+        forecast = json.loads(forecast_bytes)
+        history = forecast.get("historical_calibration") or {}
+        if isinstance(history, dict) and history.get("forecast_track_record") is not None:
+            verify_production_track_record(history["forecast_track_record"], exclude_report_id=report_id)
+        issued = metadata.get("completed_at") or metadata.get("created_at")
+        instant = datetime.fromisoformat(str(issued).replace("Z", "+00:00"))
+        # Legacy report timestamps were local wall time. astimezone interprets
+        # naive values in the local zone instead of incorrectly relabeling UTC.
+        issued = instant.astimezone(timezone.utc).isoformat()
+        registered = record_published_forecast(
+            forecast, report_id=report_id, created_at=issued)
+        return registered
+
+    @classmethod
     def save_report(cls, report: Report) -> None:
         """保存报告元信息和完整报告"""
         cls._ensure_report_folder(report.report_id)
         
-        # 保存元信息JSON（原子写入，F-7-6）
+        # A complete new forecast cannot publish until its original scoring snapshot
+        # is durable. If interrupted before registration, the same audited bundle can
+        # be recovered explicitly, without acquiring any outcome first.
+        metadata = report.to_dict()
+        forecast_path = os.path.join(cls._get_report_folder(report.report_id), "forecast.json")
+        tracking = (getattr(Config, "REPORT_FORECAST_LEDGER", True)
+                    and report.status == ReportStatus.COMPLETED
+                    and bool(report.completed_at or report.created_at)
+                    and not getattr(report, "world_result_ref", None)
+                    and getattr(report, "simulation_engine", None) != "world-v1"
+                    and os.path.isfile(forecast_path))
+        previous = cls._read_report_meta(report.report_id) or {}
+        if tracking or previous.get("forecast_feedback_required"):
+            metadata["forecast_feedback_required"] = True
         write_text_atomic(cls._get_report_path(report.report_id),
-                          json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+                          json.dumps(metadata, ensure_ascii=False, indent=2))
 
         # 保存大纲
         if report.outline:
@@ -17058,6 +17211,8 @@ class ReportManager:
         # EXECPLAN2 F-7-3: 维护 simulation_id -> report_id 轻量索引，加速 by-simulation 查询
         cls._index_add(report.simulation_id, report.report_id)
 
+        if tracking:
+            cls.register_published_forecast(report.report_id)
         logger.info(f"报告已保存: {report.report_id}")
     
     @classmethod

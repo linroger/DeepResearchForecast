@@ -12,6 +12,10 @@ holds:
   declared outcome power only, documented plans / red lines / goals (bounded,
   sanitised, actor-own evidence), allies and rivals from the valenced relationships.
 * ``relationships`` — valenced edges restricted to the cast.
+* ``shocks`` — researched risks / wildcards (``forecast_inputs.risks``) that may materialise in
+  any period: event, documented base rate converted to a per-day hazard, source, effects on
+  tracked variables and the actors they hit.  Only documented rows qualify; everything else is
+  a typed modelling gap (design §2.12).
 * ``settings`` — arbiter switch, change-ratio clamp, barrier timeout.
 
 Canonical actor-intelligence/v1 dossiers: plans, red lines and goals come only from
@@ -31,13 +35,15 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from datetime import date
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.actors import (
     entity_archetype,
     extract_forecast_inputs,
     extract_quantitative_rows,
     extract_relationship_rows,
+    extract_risk_rows,
     match_actor,
     normalize_name,
     relation_polarity,
@@ -442,6 +448,292 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
     return out
 
 
+# --- EXOGENOUS SHOCKS (design §2.12) ------------------------------------------------------------------
+# A researched risk becomes a shock only when the dossier documents it: an event, a probability (a
+# number in (0, 1), a percentage or a count such as "1 in 20" / "2 of 10 years"), the window that
+# probability refers to (a calendar unit, a number of them, or the forecast horizon) and a source.
+# Anything missing is a typed modelling gap — never an invented number.  The documented window is
+# turned into a per-day hazard under a constant-hazard assumption (p_window = 1 − exp(−hazard × days));
+# the kernel turns the hazard back into a probability for each period's own length.  Effects bind only
+# to variables the world tracks; a documented direction without a size moves nothing mechanically
+# (the arbiter sizes it).
+MAX_SHOCKS = 8
+MAX_SHOCK_EFFECTS = 4
+MAX_SHOCK_GAPS = 8
+_WINDOW_DAYS = {"day": 1.0, "week": 7.0, "month": 30.4375, "quarter": 91.3125, "half_year": 182.625,
+                "year": 365.25}
+# unit words; CJK forms are the explicit periodic ones only ("2027年" is a date, never a window)
+_WINDOW_UNIT_WORDS = (
+    ("half_year", r"half[- ]?years?|semi[- ]?annual(?:ly)?|six[- ]months?|每半年|半年"),
+    ("quarter", r"quarters?|quarterly|每季度|每季|季度"),
+    ("month", r"months?|monthly|每月|月度"),
+    ("week", r"weeks?|weekly|每周"),
+    ("day", r"days?|daily|每日|每天"),
+    ("year", r"years?|yearly|annual(?:ly)?|annum|每年|年度|年内"),
+)
+_WINDOW_COUNTED_UNITS = (
+    ("half_year", r"half[- ]?years?"), ("quarter", r"quarters?|个季度"), ("month", r"months?|个月"),
+    ("week", r"weeks?|周"), ("day", r"days?|天"), ("year", r"years?|年"),
+)
+_HORIZON_RE = re.compile(r"\bhorizon\b|forecast (?:window|period)|预测期|预测窗口", re.IGNORECASE)
+_COUNT_DENOMINATOR_RE = re.compile(r"(?:\bof|\bin|out of|/)\s*$", re.IGNORECASE)
+_PROBABILITY_KEYS = ("probability", "base_rate", "likelihood", "prob", "frequency", "outcome_frequency")
+_WINDOW_KEYS = ("per", "window", "period", "time_window", "horizon")
+_SOURCE_KEYS = ("source", "basis", "source_ref", "evidence", "citation")
+_EFFECT_REF_KEYS = ("variable_id", "variable", "metric", "indicator", "name")
+_UP_WORDS = frozenset("up rise rises rising increase increases higher raise raises surge surges jump jumps spike "
+                      "spikes".split())
+_DOWN_WORDS = frozenset("down fall falls falling decrease decreases lower drop drops decline declines cut cuts "
+                        "plunge plunges".split())
+_UP_CJK = ("上升", "上涨", "提高", "增加", "走高")
+_DOWN_CJK = ("下降", "下跌", "降低", "减少", "走低")
+_SIGNED_NUMBER = r"[+-]?\d[\d,]*(?:\.\d+)?"
+_RANGE_RE = re.compile(r"\d\s*(?:to|–|—|~|-|至|到)\s*[+-]?\d")
+
+
+def parse_risk_probability(raw: Any) -> Optional[float]:
+    """A documented probability in [0, 1]: a number in [0, 1], "5%", "1 in 20", "2 of 10", "3/20" or
+    "0.05"; None when no probability is stated or it falls outside [0, 1]."""
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+        return value if math.isfinite(value) and 0.0 <= value <= 1.0 else None
+    text = _clean(raw, 160).casefold()
+    if not text:
+        return None
+    m = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", text)
+    if m:
+        value = float(m.group(1)) / 100.0
+    else:
+        m = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:in|out of|of|/)\s*(\d+(?:\.\d+)?)(?![\d.])", text)
+        if m:
+            denominator = float(m.group(2))
+            if denominator <= 0:
+                return None
+            value = float(m.group(1)) / denominator
+        else:
+            m = re.fullmatch(r"(\d*\.\d+|\d+)", text.strip())
+            if not m:
+                return None
+            value = float(m.group(1))
+    return value if 0.0 <= value <= 1.0 else None
+
+
+def parse_risk_window(raw: Any, *, horizon_days: Optional[float] = None) -> Optional[Tuple[str, float]]:
+    """``(label, days)`` of the window a documented probability refers to: the forecast horizon, a
+    number of calendar units ("within 9 months"), or one unit ("per month", "annual", "2 of 10 years"
+    counts years); None when the text states none (or the horizon length is unknown)."""
+    text = _clean(raw, 160)
+    if not text:
+        return None
+    if _HORIZON_RE.search(text):
+        return ("horizon", float(horizon_days)) if horizon_days and horizon_days > 0 else None
+    low = text.casefold()
+    for label, words in _WINDOW_COUNTED_UNITS:
+        for m in re.finditer(rf"(?<![\d.])(\d{{1,3}}(?:\.\d+)?)\s*-?\s*(?:{words})(?![a-z])", low):
+            if _COUNT_DENOMINATOR_RE.search(low[:m.start()]):
+                continue                                  # "2 of 10 years": a count of years, i.e. per year
+            n = float(m.group(1))
+            if n > 0:
+                return (f"{m.group(1)} {label}", n * _WINDOW_DAYS[label])
+    for label, words in _WINDOW_UNIT_WORDS:
+        if re.search(rf"(?<![a-z])(?:{words})(?![a-z])", low):
+            return (label, _WINDOW_DAYS[label])
+    return None
+
+
+def _horizon_days(as_of: Any, horizon: Any) -> Optional[float]:
+    try:
+        days = (date.fromisoformat(str(horizon)[:10]) - date.fromisoformat(str(as_of)[:10])).days
+    except (TypeError, ValueError):
+        return None
+    return float(days) if days > 0 else None
+
+
+def _direction_word(raw: Any) -> str:
+    low = _clean(raw, 40).casefold()
+    words = set(re.findall(r"[a-z]+", low))
+    up = bool(words & _UP_WORDS) or any(w in low for w in _UP_CJK)
+    down = bool(words & _DOWN_WORDS) or any(w in low for w in _DOWN_CJK)
+    return "up" if up and not down else "down" if down and not up else ""
+
+
+def _match_tracked_variable(ref: Any, variables: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The seeded state variable an effect names: id, then name, then the longest contained name."""
+    text = _clean(ref, 140)
+    if not text:
+        return None
+    key, want = slugify(text), normalize_name(text)
+    for var in variables:
+        if str(var.get("id") or "") == key or normalize_name(str(var.get("name") or "")) == want:
+            return var
+    best: Optional[Tuple[int, Dict[str, Any]]] = None
+    for var in variables:
+        name = normalize_name(str(var.get("name") or ""))
+        if len(name) >= 4 and (name in want or (len(want) >= 4 and want in name)):
+            if best is None or len(name) > best[0]:
+                best = (len(name), var)
+    return best[1] if best else None
+
+
+def _parse_change(text: str, unit: str, direction: str) -> Tuple[Optional[str], Optional[float]]:
+    """``(op, value)`` of a documented change: "to 150" → set, "+30%" → mul (unless the fact is itself a
+    percentage: then +30% is ambiguous), "+50 bp" / "+2 pp" → add on a percentage, "+25" / "-5 bn" →
+    add.  An unsigned size takes its sign from a documented direction.  ``(None, None)`` = no size."""
+    low = _clean(text, 80).casefold().replace("−", "-").strip()
+    if not low:
+        return None, None
+    if _RANGE_RE.search(low):
+        return None, None                             # "+30% to +50%": a range has no single documented size
+    m = re.match(r"^(?:to|=|→|->|至|到)\s*(.+)$", low)
+    if m:
+        number, _ = parse_quantity(m.group(1))
+        return ("set", number) if number is not None else (None, None)
+    if low[0] not in "+-" and direction:
+        low = ("+" if direction == "up" else "-") + low
+    is_pct_fact = unit.strip() == "%"
+    m = re.fullmatch(rf"({_SIGNED_NUMBER})\s*%", low)
+    if m:
+        if is_pct_fact:
+            return None, None                         # +30% of a percentage: points or relative? unstated
+        return "mul", 1.0 + float(m.group(1).replace(",", "")) / 100.0
+    m = re.fullmatch(rf"({_SIGNED_NUMBER})\s*(pp|percentage points?|个百分点|bps?|basis points?|个基点)", low)
+    if m:
+        if not is_pct_fact:
+            return None, None
+        value = float(m.group(1).replace(",", ""))
+        return "add", value / 100.0 if m.group(2).startswith(("bp", "basis", "个基")) else value
+    m = re.fullmatch(r"([+-])\s*(.+)", low)
+    if m:
+        number, parsed_unit = parse_quantity(m.group(2))
+        if number is not None and parsed_unit != "%":
+            return "add", number if m.group(1) == "+" else -number
+    return None, None
+
+
+def _shock_effect(raw: Any, variables: Sequence[Dict[str, Any]],
+                  gap: Any) -> Optional[Dict[str, Any]]:
+    """One documented effect bound to a tracked variable, or None (recorded through ``gap``)."""
+    if isinstance(raw, str):
+        raw = {"variable": raw}
+    if not isinstance(raw, dict):
+        return None
+    ref = next((raw.get(k) for k in _EFFECT_REF_KEYS if _clean(raw.get(k), 140)), None)
+    var = _match_tracked_variable(ref, variables)
+    if var is None:
+        gap("shock_effect_untracked", f"effect on '{_clean(ref, 60) or '?'}', which the world does not track; dropped")
+        return None
+    direction = _direction_word(raw.get("direction"))
+    text = _clean(next((raw.get(k) for k in ("change", "size", "magnitude", "effect") if raw.get(k) not in (None, "")),
+                       ""), 80)
+    op: Optional[str] = None
+    value: Any = None
+    if str(var.get("kind") or "numeric") == "numeric":
+        current = var.get("value") if isinstance(var.get("value"), (int, float)) else None
+        for keys, kind in ((("new_value", "to"), "set"), (("delta",), "add"),
+                           (("change_pct", "pct_change", "percent_change"), "mul")):
+            got = next((raw.get(k) for k in keys if raw.get(k) not in (None, "")), None)
+            number, parsed_unit = parse_quantity(got) if got is not None else (None, "")
+            if kind != "mul" and parsed_unit == "%" and str(var.get("unit") or "").strip() != "%":
+                number = None                         # "delta: -5%" of a non-percentage fact is not -5 units
+            if number is not None:
+                op, value = kind, (1.0 + number / 100.0 if kind == "mul" else number)
+                break
+        if op is None and text:
+            op, value = _parse_change(text, str(var.get("unit") or ""), direction)
+            if op is None and not direction and text.lstrip()[:1] in ("+", "-", "−"):
+                direction = "up" if text.lstrip()[0] == "+" else "down"   # the sign survives an unreadable size
+        if op == "mul" and (value is None or value <= 0):
+            gap("shock_effect_unreadable", f"effect on '{var.get('name')}' would wipe out or flip the fact; dropped")
+            return None
+        implied = ""
+        if op == "add" and value:
+            implied = "up" if value > 0 else "down"
+        elif op == "mul" and value != 1.0:
+            implied = "up" if value > 1.0 else "down"
+        elif op == "set" and current is not None and value != current:
+            implied = "up" if value > current else "down"
+        if direction and implied and implied != direction:
+            gap("shock_effect_unreadable", f"effect on '{var.get('name')}' contradicts its own direction; dropped")
+            return None
+        direction = direction or implied
+    else:
+        got = next((raw.get(k) for k in ("new_value", "to") if raw.get(k) not in (None, "")), None)
+        m = re.match(r"^(?:to|=|→|->|至|到)\s*(.+)$", text, re.IGNORECASE) if got is None and text else None
+        target = _clean(got if got is not None else (m.group(1) if m else ""), 80)
+        if target:
+            op, value = "set", target
+    if op is None and not direction:
+        gap("shock_effect_unreadable", f"effect on '{var.get('name')}' states neither a size nor a direction; dropped")
+        return None
+    if op is None:
+        gap("shock_effect_direction_only", f"effect on '{var.get('name')}' documents a direction only; the arbiter sizes it")
+    return {"variable_id": str(var.get("id")), "variable": _clean(var.get("name"), 140), "op": op,
+            "value": value, "direction": direction, "text": text}
+
+
+def shocks_from_research(actors: Optional[Dict[str, Any]], variables: Sequence[Dict[str, Any]],
+                         cast: Optional[Dict[str, str]] = None, *, as_of: Any = None,
+                         horizon: Any = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    """Seed ``shocks`` from the dossier's documented risks, plus the typed gaps of the rows that do not
+    qualify (see the comment above ``MAX_SHOCKS``).  ``cast`` maps normalised names to cast names for
+    ``affects``.  Pure and never raises."""
+    shocks: List[Dict[str, Any]] = []
+    gaps: List[Dict[str, str]] = []
+    horizon_days = _horizon_days(as_of, horizon)
+    for row in extract_risk_rows(actors):
+        if len(shocks) >= MAX_SHOCKS:
+            break
+        event = _clean(row.get("event") or row.get("risk") or row.get("name") or row.get("description"), 200)
+
+        def gap(kind: str, note: str, _subject: str = event) -> None:
+            if len(gaps) < MAX_SHOCK_GAPS:
+                gaps.append({"kind": kind, "subject": _clean(_subject, 120), "note": _clean(note, 160)})
+
+        raw_p = next((row.get(k) for k in _PROBABILITY_KEYS if row.get(k) not in (None, "")), None)
+        p = parse_risk_probability(raw_p)
+        if p is None or not 0.0 < p < 1.0:
+            gap("shock_without_base_rate", "no probability strictly between 0 and 1 is stated (a certain event "
+                                           "is a scheduled event); not modelled as a shock")
+            continue
+        raw_window = next((row.get(k) for k in _WINDOW_KEYS if _clean(row.get(k), 80)), None)
+        window = parse_risk_window(raw_window if raw_window is not None else raw_p, horizon_days=horizon_days)
+        if window is None:
+            gap("shock_without_window", "the window of its probability (per day … year, or the forecast "
+                                        "horizon) is not stated; not modelled as a shock")
+            continue
+        source = _clean(next((row.get(k) for k in _SOURCE_KEYS if _clean(row.get(k), 160)), ""), 160)
+        if not source:
+            gap("shock_without_source", "no source for its probability; not modelled as a shock")
+            continue
+        sid = "shock_" + slugify(event, 40)
+        if any(s["id"] == sid for s in shocks):
+            continue
+        effects = []
+        raw_effects = row.get("effects")
+        for raw in (raw_effects if isinstance(raw_effects, list) else [raw_effects] if raw_effects else []):
+            effect = _shock_effect(raw, variables, gap)
+            if effect is not None and len(effects) < MAX_SHOCK_EFFECTS:
+                effects.append(effect)
+        affects: List[str] = []
+        raw_affects = row.get("affects") or row.get("actors") or row.get("targets")
+        for name in (raw_affects if isinstance(raw_affects, list) else [raw_affects] if raw_affects else []):
+            hit = (cast or {}).get(normalize_name(str(name or "")))
+            if hit and hit not in affects:
+                affects.append(hit)
+        label, days = window
+        shocks.append({
+            "id": sid, "event": event,
+            "base_rate": {"probability": round(p, 6), "window": label, "window_days": round(days, 4),
+                          "text": _clean(raw_p, 80)},
+            "hazard_per_day": -math.log1p(-p) / days,
+            "source": source, "effects": effects, "affects": affects[:6],
+            "recurring": row.get("recurring") is True,
+        })
+    return shocks, gaps
+
+
 def build_world_model_seed(
     actors: Optional[Dict[str, Any]],
     agent_configs: Sequence[Any],
@@ -602,9 +894,17 @@ def build_world_model_seed(
         row["allies"] = _dedupe(row["allies"], 8)
         row["rivals"] = _dedupe(row["rivals"], 8)
     block["relationships"] = rels[:80]
+    # EXOGENOUS SHOCKS: documented risks only; the rows that fall short become gaps below
+    shock_gaps: List[Dict[str, str]] = []
+    try:
+        block["shocks"], shock_gaps = shocks_from_research(
+            actors_dict, block["state_variables"], {normalize_name(r["name"]): r["name"] for r in rows},
+            as_of=block["as_of_date"], horizon=block["horizon_date"])
+    except Exception:  # noqa: BLE001
+        block["shocks"] = []
     # MODELLING GAPS (ported from the world-v1 compiler's stance): what the research could not
     # ground is reported, never invented — the run, the panel and the report show the list
-    block["gaps"] = seed_gaps(block)
+    block["gaps"] = (shock_gaps + seed_gaps(block))[:MAX_SEED_GAPS]
     return block
 
 
@@ -620,6 +920,11 @@ def seed_gaps(block: Dict[str, Any]) -> List[Dict[str, str]]:
         if len(gaps) < MAX_SEED_GAPS:
             gaps.append({"kind": kind, "subject": _clean(subject, 120), "note": _clean(note, 160)})
 
+    # EXOGENOUS SHOCKS (blocks built before 2026-10-20 carry no ``shocks`` key and report nothing);
+    # listed first so a large cast's per-actor gaps never crowd it out
+    if "shocks" in block and not block.get("shocks"):
+        add("no_documented_shocks", "world", "no risk is documented with a probability, its window and a "
+                                             "source; the world has no exogenous shocks")
     for var in block.get("state_variables") or []:
         if not isinstance(var, dict):
             continue

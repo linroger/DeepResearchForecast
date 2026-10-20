@@ -1,0 +1,212 @@
+{
+  "owned_source_sha256": {
+    "backend/app/api/sdk.py": "41537171afdf65b179718e38c39f3834709a58a567cafc5b8cbbed845c7f3ba9",
+    "backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+  },
+  "runs": {
+    "reload-red": {
+      "receipt": "/private/tmp/drf-feedback-sdk-p035l8i1/reload-red-evidence/completed.json",
+      "junit": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "1",
+        "skipped": "0",
+        "tests": "1",
+        "time": "1.432",
+        "timestamp": "2026-10-21T00:40:21.939577",
+        "hostname": "rogers-macbook-pro.taila5afbd.ts.net"
+      },
+      "children": [],
+      "exit_code": 1,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "reload-reverse-red": {
+      "receipt": "/private/tmp/drf-feedback-sdk-p035l8i1/reload-reverse-red-evidence/completed.json",
+      "junit": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "1",
+        "skipped": "0",
+        "tests": "39",
+        "time": "4.648",
+        "timestamp": "2026-10-21T01:00:29.217773",
+        "hostname": "rogers-macbook-pro.taila5afbd.ts.net"
+      },
+      "children": [
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        }
+      ],
+      "exit_code": 1,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 1
+      }
+    },
+    "reload-final-forward": {
+      "receipt": "/private/tmp/drf-feedback-sdk-p035l8i1/reload-final-forward-evidence/completed.json",
+      "junit": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "122",
+        "time": "5.904",
+        "timestamp": "2026-10-21T01:07:34.990006",
+        "hostname": "rogers-macbook-pro.taila5afbd.ts.net"
+      },
+      "children": [
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        }
+      ],
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 4
+      },
+      "owned_match": true,
+      "current_dependency_drift": []
+    },
+    "reload-final-reverse": {
+      "receipt": "/private/tmp/drf-feedback-sdk-p035l8i1/reload-final-reverse-evidence/completed.json",
+      "junit": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "122",
+        "time": "6.064",
+        "timestamp": "2026-10-21T01:09:29.283623",
+        "hostname": "rogers-macbook-pro.taila5afbd.ts.net"
+      },
+      "children": [
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        },
+        {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          }
+        }
+      ],
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 4
+      },
+      "owned_match": true,
+      "current_dependency_drift": []
+    }
+  },
+  "original_failure_receipt": "/private/tmp/drf-feedback-regression-20261021-1/junit.xml",
+  "no_guard_changes": true,
+  "review_receipt": "/private/tmp/drf-feedback-sdk-p035l8i1/reload-final-review.json"
+}

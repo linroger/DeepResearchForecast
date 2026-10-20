@@ -146,6 +146,52 @@ def resolve_report_id(id_: str) -> Optional[str]:
     return None
 
 
+def recover_pending_publications(limit: int, *, dry_run: bool = False) -> List[Dict[str, Any]]:
+    """Fairly revisit interrupted registrations independently of the outcome queue.
+
+    Directory discovery is read-only; at most `limit` audited registrations are
+    attempted. The cursor rotates even past broken reports, so an older pending
+    publication cannot be starved by permanently unresolved forecasts.
+    """
+    from app.services.report_agent import ReportManager
+    from app.utils.atomic import write_json_atomic
+
+    registered = set(_ledger.list_published_report_ids())
+    root = ReportManager.REPORTS_DIR
+    if not os.path.isdir(root):
+        return []
+    candidates = []
+    with os.scandir(root) as entries:
+        for entry in entries:
+            if not entry.is_dir(follow_symlinks=False) or entry.name in registered:
+                continue
+            metadata = ReportManager._read_report_meta(entry.name) or {}
+            if (isinstance(metadata, dict) and metadata.get("forecast_feedback_required")
+                    and metadata.get("status") == "completed"):
+                candidates.append(entry.name)
+    if not candidates:
+        return []
+    cursor_path = os.path.join(_ledger.ledger_dir(), "publication_recovery_cursor.json")
+    cursor_value = _read_json(cursor_path)
+    cursor = str(cursor_value.get("last_report_id") or "") if isinstance(cursor_value, dict) else ""
+    candidates.sort()
+    ordered = [rid for rid in candidates if rid > cursor] + [rid for rid in candidates if rid <= cursor]
+    selected = ordered[:max(0, int(limit))]
+    results = []
+    for rid in selected:
+        if dry_run:
+            results.append({"report_id": rid, "pending": True})
+            continue
+        try:
+            row = ReportManager.register_published_forecast(rid)
+            results.append({"report_id": rid, "registered": row is not None})
+        except (OSError, ValueError, TypeError) as exc:
+            results.append({"report_id": rid, "registered": False, "error": str(exc)})
+        finally:
+            write_json_atomic(cursor_path, {"last_report_id": rid})
+    return results
+
+
 def recent_report_ids(n: int, *, as_of: Optional[str] = None) -> List[str]:
     """最近 n 份报告的 report_id（按 created_at 倒序，与 ReportManager.list_reports 同序）。
     RESOLUTION_MONITOR_LOOKBACK_DAYS>0 时进一步过滤到 created_at 在近 N 天内的报告。"""
@@ -273,10 +319,14 @@ def build_resolution_records(anchored: List[Dict[str, Any]],
         anchor = b.get("market_anchor") or {}
         mid = str(anchor.get("market_id") or "").strip()
         res = resolutions.get(mid) if mid else None
-        if not isinstance(res, dict) or not res.get("resolved"):
+        if (not isinstance(res, dict) or res.get("resolved") is not True
+                or str(res.get("market_id") or "").strip() != mid):
             continue
         yes_price = _coerce_float(res.get("resolved_yes_price"))
-        if yes_price is None:
+        label = res.get("resolved_outcome")
+        terminal = (label == "Yes" and yes_price is not None and 0.99 <= yes_price <= 1.0
+                    or label == "No" and yes_price is not None and 0.0 <= yes_price <= 0.01)
+        if not terminal:
             continue  # 已关闭但真值不可定 → 交给「需人工判定」，不入 Brier
         y = 1.0 if yes_price >= 0.5 else 0.0
         model_p = _coerce_float(b.get("probability"))
@@ -709,7 +759,22 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     if report_folder is None:
         report_folder = _report_folder(report_id)
     if forecast is None:
+        from app.services.report_agent import ReportManager
+        publication = ReportManager.publication_status(report_id)
+        if not publication.get("publishable"):
+            metadata = ReportManager._read_report_meta(report_id) or {}
+            if metadata.get("forecast_feedback_required") and not dry_run:
+                ReportManager.register_published_forecast(report_id)
+                publication = ReportManager.publication_status(report_id)
+            if not publication.get("publishable"):
+                raise ValueError("Cannot monitor an unpublished forecast: "
+                                 + "; ".join(publication.get("reasons") or []))
         forecast = _read_json(os.path.join(report_folder, "forecast.json"))
+    retained = _ledger.read_published_forecast(report_id, d=ledger_dir)
+    if retained is not None:
+        # Resolution is always against the immutable publication. An injected/current
+        # report payload cannot change its probability, IDs, anchors or criteria.
+        forecast = retained["forecast"]
     if client is None:
         from app.utils.prediction_markets import PolymarketClient
         client = PolymarketClient()
@@ -747,18 +812,21 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     if not resolutions and market_ids:
         # 未拿到任何终态（未启用/网络失败）：判定检查这一维退化。
         degraded = True
-    resolved_ids = {mid for mid, r in resolutions.items()
-                    if isinstance(r, dict) and r.get("resolved")}
-
     records = build_resolution_records(anchored, resolutions,
                                        report_id=report_id, resolved_at=as_of)
+    resolved_ids = {row["market_id"] for row in records}
 
     prior_data, prior_statuses, prior_ids = _recorded_official_outcomes(
         binaries, _ledger.read_data_resolutions(ledger_dir), report_id=report_id, as_of=as_of,
     ) if getattr(Config, "DATA_SOURCES_ENABLED", False) else ([], [], set())
     # Preserve the first official resolution rather than scoring this forecast
     # a second time when a market subsequently reaches its terminal state.
-    records = [row for row in records if str(row.get("forecast_id") or "") not in prior_ids]
+    data_anchored_ids = {str(binary.get("id") or "") for binary in binaries
+                         if isinstance(binary.get("data_anchor"), dict) and binary["data_anchor"]}
+    # Official observations own dual-anchor scoring. A terminal market is still
+    # price context, but cannot suppress or settle the official-data lane.
+    records = [row for row in records if str(row.get("forecast_id") or "")
+               not in prior_ids | data_anchored_ids]
     data_records, data_statuses = resolve_official_forecasts(
         binaries, report_id=report_id, as_of=None if current_time else as_of,
         already_resolved=[row.get("forecast_id") for row in records] + list(prior_ids),
@@ -804,6 +872,35 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                              if (row["forecast_id"], row["series"]) not in committed_keys] + committed_statuses
             data_records = committed
 
+    feedback = {"accepted": 0, "duplicates": 0, "rejected": []}
+    if retained is not None and not dry_run:
+        # Re-read durable native facts: this repairs a crash after outcome append
+        # and before joining/scoring, without overwriting an earlier resolution.
+        feedback = _ledger.reconcile_published_resolutions(report_id, d=ledger_dir)
+        observed = _ledger.reconcile_published_resolutions(
+            report_id, market_rows=records, data_rows=data_records, d=ledger_dir)
+        feedback["accepted"] += observed["accepted"]
+        feedback["duplicates"] += observed["duplicates"]
+        feedback["rejected"].extend(observed["rejected"])
+        degraded = degraded or bool(feedback["rejected"])
+    track_record = _ledger.production_track_record(d=ledger_dir)
+
+    candidate_records = records + data_records
+    if retained is not None:
+        committed_outcomes = _ledger.read_published_resolutions(report_id, d=ledger_dir)
+        records, data_records = [], []
+        for outcome in committed_outcomes:
+            if outcome["kind"] not in ("market_binary", "official_data_binary"):
+                continue
+            row = dict(outcome["evidence"], brier_contribution=outcome["score"]["brier"],
+                       model_p=outcome["score"]["probability"])
+            (records if outcome["kind"] == "market_binary" else data_records).append(row)
+        resolved_ids = {row["market_id"] for row in records}
+        admitted_data = {row["forecast_id"] for row in data_records}
+        for status in data_statuses:
+            if status["status"] == "resolved" and status["forecast_id"] not in admitted_data:
+                status.update(status="manual", reason="Outcome was not admitted to the immutable score ledger")
+
     # Compute presentation and counts only after the committed evidence wins.
     data_resolved_ids = {row["forecast_id"] for row in data_records}
     data_pending_ids = {row["forecast_id"] for row in data_statuses if row["status"] == "pending"}
@@ -820,6 +917,16 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     calibration = _ledger.calibration_summary(ledger_dir)
     market_brier = _ledger.market_brier_summary(ledger_dir)
     data_brier = _ledger.data_brier_summary(ledger_dir) if data_statuses else {"n_resolved": 0, "mean_brier": None}
+    if retained is not None:
+        tracks = track_record["tracks"]
+        calibration = {**tracks["scenario"], "calibration_error": None,
+                       "source": "published_forecasts.jsonl"}
+        market_brier = {**tracks["market_binary"], "source": "published_forecasts.jsonl"}
+        data_brier = {**tracks["official_data_binary"], "source": "published_forecasts.jsonl"}
+        data_status_ids = {row["forecast_id"] for row in data_statuses}
+        data_statuses.extend({"forecast_id": row["forecast_id"], "series": row["series"],
+                              "status": "resolved", "reason": "Retained official outcome"}
+                             for row in data_records if row["forecast_id"] not in data_status_ids)
 
     md = render_monitor_md(
         report_id=report_id, as_of=as_of_day, movers=movers,
@@ -856,11 +963,15 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         "anchored_count": len(anchored),
         "movers": movers,
         "resolved_count": len(records) + len(data_records),
-        "newly_recorded_count": len(newly_recorded),
+        "newly_recorded_count": feedback["accepted"] if retained is not None else len(newly_recorded),
+        "native_records_appended": len(newly_recorded),
         "needs_manual_count": len(needs_manual),
         "needs_manual": needs_manual,
         "resolution_records": records,
+        "candidate_resolution_records": candidate_records,
         "calibration": calibration,
+        "forecast_feedback": feedback,
+        "forecast_track_record": track_record,
         "market_brier": market_brier,
         "degraded": degraded,
         "dry_run": bool(dry_run),
@@ -925,10 +1036,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     dry = bool(args.dry_run)
+    recovery = []
     # 目标报告集合：--all-recent 优先；否则单个 report_id/pipeline_id。
     if args.all_recent is not None:
         n = recent_n_default() if args.all_recent in (None, -1) else max(1, int(args.all_recent))
-        report_ids = recent_report_ids(n)
+        recovery = recover_pending_publications(n, dry_run=dry)
+        due = _ledger.outstanding_published_report_ids(as_of=_utcnow_iso(), limit=n)
+        recent = recent_report_ids(n)
+        report_ids = list(dict.fromkeys([*due, *recent]))[:n]
         if not report_ids:
             print("未找到可监测的最近报告。", file=sys.stderr)
             return 1
@@ -949,11 +1064,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         except Exception as e:  # noqa: BLE001 — 单份失败不应中断整批
             logger.error(f"监测报告 {rid} 失败（跳过）: {e}", exc_info=True)
             results.append({"report_id": rid, "error": str(e)})
-            continue
-        results.append(res)
+        else:
+            results.append(res)
+        finally:
+            if not dry and _ledger.read_published_forecast(rid) is not None:
+                _ledger.mark_published_report_checked(rid, checked_at=_utcnow_iso())
 
     _print_json({
         "dry_run": dry,
+        "publication_recovery": recovery,
         "count": len(results),
         "reports": [_summary_row(r) if "error" not in r else r for r in results],
     })
@@ -968,6 +1087,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         _print_json({
             "market_brier": _ledger.market_brier_summary(),
             "scenario_calibration": _ledger.calibration_summary(),
+            "forecast_track_record": _ledger.production_track_record(),
             # Official-data outcomes (data_resolutions.jsonl) stay a separate track record.
             "official_data_brier": _ledger.data_brier_summary(),
         })
