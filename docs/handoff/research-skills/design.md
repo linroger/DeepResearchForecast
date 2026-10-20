@@ -267,7 +267,7 @@ The knob is env `RESEARCH_SKILLS`: `auto` (default) or `off`. An unknown value m
 4. **Gap review** (`_gap_review`): append the **Gaps** lines of the plan skills.
 5. **Writers** (`section_task`, `_exec_summary`): append the **Synthesize** text of the primary plan skills (≤ 2). The scenario section also gets `reference-class-forecasting`'s Synthesize text. The executive summary gets it under `SUMMARY_HEADER` (conventions only, no exhibits).
 6. **meta**: `meta.research_skills = {skills, source: planner|router|plan.json, sectors, hashes}`, recorded only when enabled.
-7. **Forecast frame**: with plan skills, the extraction step adds a `FORECAST FRAME EXTRACTION TASK` whose `base_rates` and `drivers` fill `actors.json` `forecast_inputs` (consumed by `backend/app/utils/actors.py`). Without plan skills the extraction calls are unchanged.
+7. **Forecast frame**: with plan skills, the extraction step adds a `FORECAST FRAME EXTRACTION TASK` whose `base_rates` and `drivers` fill `actors.json` `forecast_inputs` (consumed by `backend/app/utils/actors.py`), and whose `risks`, each checked against the report by `normalize_frame_risks`, fill `forecast_inputs.risks` for the reflexive world model's exogenous shocks (2026-10-21, `docs/handoff/research-risks/handoff.md`). Without plan skills the extraction calls are unchanged.
 
 ### 5.3 Legacy (`deerflow_research.py`)
 

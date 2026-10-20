@@ -327,3 +327,79 @@ gap it closes; all are deterministic kernel rules or bounded arbiter fields vali
 Acceptance: `tests/test_world_announced_settings.py`, `test_world_track_records.py`, `test_world_red_lines.py`,
 `test_world_pressure_channel.py`, `test_world_reflexivity.py` (the chain end to end) and
 `test_llm_thinking_refusal.py`.
+
+## 2.12 Exogenous shocks and a distribution of futures (2026-10-20)
+
+Record: [`docs/handoff/world-state-paths/handoff.md`](../world-state-paths/handoff.md). Until this iteration a run
+produced one world path, and the only exogenous input was the dated research timeline: nothing the research
+named as a risk could happen unless an actor made it happen.
+
+- **Exogenous shocks from research (seed).** Dossier contract `forecast_inputs.risks` (top-level `risks` /
+  `wildcards` / `tail_risks` are tolerated): `{event, probability, per, source, effects: [{metric, change |
+  delta | change_pct | new_value, direction}], affects, recurring}` (`utils/actors.extract_risk_rows`).
+  `world_model_seed.shocks_from_research` admits a row only when it documents an event, a probability (a number
+  in (0, 1), a percentage, or a count such as "1 in 20" / "2 of 10 years"), the window that probability refers
+  to (a calendar unit, a number of units, or the forecast horizon; in a field or in the probability text) and a
+  source. The window becomes a per-day hazard under a constant-hazard assumption (p_window = 1 − e^(−h·days));
+  that assumption is the only modelling step, recorded here. Effects bind only to tracked state variables;
+  "+30%" on a fact that is itself a percentage, a range or a size that contradicts its direction leaves a
+  direction only (the arbiter sizes it). Everything that falls short is a typed seed gap listed first
+  (`shock_without_base_rate`, `shock_without_window`, `shock_without_source`, `shock_effect_untracked`,
+  `shock_effect_direction_only`, `shock_effect_unreadable`), and a world without any documented shock carries
+  `no_documented_shocks`. Outcome base rates (`forecast_inputs.base_rates`) remain the share prior and never
+  become shocks. As of 2026-10-20 no research engine emitted `risks` (handoff F1). Since 2026-10-21 the v3
+  engine's forecast-frame extraction (runs with method skills) asks for the risks the report attaches a
+  probability to and keeps one only when a report line states that probability for that event (not a
+  scenario's own weight); its window and `[S<n>]` source only on such a line, its effects only on
+  `quantitative_facts` metrics and an effect's size only when the report states it
+  (`linear_research.normalize_frame_risks`, `meta.forecast_risks`; record
+  [`docs/handoff/research-risks/handoff.md`](../research-risks/handoff.md)). Runs without method skills and
+  the legacy deer-flow engine still emit none and record the gap.
+- **Shocks in the kernel.** `world_model.Shock`, `WorldModel.fire_shocks`: after the due effects of a round,
+  every unfired (or recurring) shock is rolled once, in seed order, with the round's RNG at
+  p = 1 − e^(−h·d) for the period's own length d (`period_days`); a world without shocks draws exactly as
+  before. A fired shock is an `emergent` event (source `shock`, "… — a researched risk materialised") aimed at
+  the actors the dossier names; its effects move facts with provenance `shock` under `max_change_ratio`,
+  bounded against each fact's value before this period's shocks and never across zero; it fires once unless
+  documented as recurring. `settings.shocks_enabled` (`SIM_WORLD_SHOCKS`, default true) stops the rolls. The
+  next public brief and digest list it, a hit actor sees it under "Aimed at you last period" and gets
+  contain / adapt / answer options instead of "Counter another actor's move", and the arbiter reads it under
+  "Confirmed events this period" with its documented base rate, source, the changes already applied and the
+  directions left to size. Round records carry `deterministic.shocks_fired` only when the world has shocks.
+- **K world paths.** `SIM_WORLD_PATHS=K` (default 1, capped at `world_paths.MAX_WORLD_PATHS` = 8). Every
+  committed round runs K world updates that share the round's decisions (no extra decision call). Path 0 is
+  `_ReflexiveWorldCoordinator._world`, computed exactly as with one path (RNG `SIM_SEED·1000003 + round`,
+  arbiter temperature 0.3) and the only path rendered into briefs, so K>1 changes no agent-facing text and the
+  herding guard I-1 holds (agents never see shares, let alone their spread; the arbiter never sees them either).
+  Paths 1..K−1 start as copies of path 0, draw from their own stream (`world_paths.path_rng`: a SHA-512-seeded
+  `random.Random` of (seed, path, round), reproducible across processes) — so pending effects and shocks roll
+  differently — and make their own arbiter call on their own world at `SIM_WORLD_PATH_TEMPERATURE` (default 0.7,
+  clamped to [0, 1]; 0.3 turns the extra sampling off). They run concurrently with path 0
+  (`SIM_WORLD_DECISION_CONCURRENCY − 1` at a time); a failed sibling freezes for that round and never touches
+  path 0. Each sibling's scenario shares step with the same actor commitments, statuses, inertia and entropy
+  floor plus its own world channel (its arbiter's pressure, when applied).
+- **Reporting.** Every trajectory row after round 0 carries `paths` = `{k, shares: {scenario: {mean, sd, min,
+  p10, p50, p90, max}}, leaders}`; the world summary (`world_state.json` → `/world-state` API, trajectory
+  `world_model`, `run_summary.json` `world_model`) carries `paths` with the same distribution, per-path shares,
+  leaders and arbiter failures, how often and when each shock fired, the numeric facts whose values differ
+  across paths (min / p50 / max), both temperatures and the per-round arbiter-call ceiling. Path 0 stays the
+  trajectory's `outcome`, so every downstream consumer is unchanged; the report and the forecast stage do not
+  read `paths` yet. `world_paths.json` holds the siblings' worlds and share histories; a resume restores them
+  when its committed round matches the world's, otherwise the siblings restart from path 0 and
+  `restarted_at_round` says so. It rotates with the other per-run artifacts. With K=1 no `paths` key and no
+  `world_paths.json` are written: the artifacts are byte-identical to the single-path code.
+- **What the paths mean.** The siblings are conditional on the actors' realised decisions: they spread
+  world-side uncertainty (shock and delayed-effect rolls, how the arbiter resolves the same moves), not the
+  actors' reactions to a divergent world, which would take K× the decision calls.
+- **Cost.** Per committed round: decision calls unchanged; arbiter calls K (none with `SIM_WORLD_ARBITER=false`).
+  Arbiter prompts rebuilt with this code from the saved worlds of the live runs `sim_d6ebcc77e22d` and
+  `sim_1838cf014c0b` average 2,393 and 2,656 tokens (max 2,996; cl100k count as a proxy for the provider's
+  tokenizer); the reply is capped at 2,200 tokens (plus the reasoning headroom of always-thinking models). Each
+  extra path therefore adds at most about 5.2k tokens per round: K=4 over 9 monthly rounds adds 27 calls, about
+  65–81k prompt and at most 59k completion tokens, against about 1.29 M tokens for the whole simulation of
+  `sim_d6ebcc77e22d`. Wall time per round grows little because the siblings run beside path 0.
+
+Acceptance: `tests/test_world_shocks.py` (seed contract, firing rules, clamp, reproducibility and the base-rate
+frequency, visibility to briefs / menu / arbiter) and `tests/test_world_paths.py` (settings, RNG streams,
+aggregation, K=3 against K=1 byte-for-byte, reproducibility, resume restore and restart, the cap, failing
+siblings, shock-driven divergence).
