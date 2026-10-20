@@ -48,7 +48,14 @@ _KIND_NAME_UNITS = frozenset(VARIABLE_KINDS) | frozenset((
 PROVENANCES = ("research", "official", "seed", "arbiter", "effect", "action")
 VALENCES = ("allied", "adversarial", "transactional", "directional", "neutral")
 EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "system",
-               "offer", "agreement", "breach")
+               "offer", "agreement", "breach", "red_line")
+# RED LINES (realism, 2026-10-20): a move the arbiter finds crossing another actor's documented red
+# line becomes a ``red_line`` event aimed at that actor (who gets response options next period) and
+# pushes the relationship apart.  The reported text must match one of the actor's own red lines.
+RED_LINE_MATCH_MIN = 0.5             # share of the red line's content tokens the report must repeat
+RED_LINE_NUDGE = -0.25
+# TRENDS: a numeric fact that moved the same way in consecutive periods is marked in the public brief
+TREND_MIN_PERIODS = 2
 # OFFERS (ported from the world-v1 engine's consent mechanics): a move of one of these
 # options aimed at another actor opens an offer that only the recipient's answer can settle.
 PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concession", "sign_agreement",
@@ -86,8 +93,14 @@ ANNOUNCING_KINDS = frozenset({"policy", "economic", "legal", "coalition", "opera
 ANNOUNCED_FIGURE_TOLERANCE = 0.005   # relative tolerance when matching an announced figure
 EVENT_LIMIT = 400
 DEFAULT_MAX_CHANGE_RATIO = 0.5
-PUBLIC_BRIEF_MAX_CHARS = 2400
-PRIVATE_BRIEF_MAX_CHARS = 900
+# (raised 2026-10-20 from 2400 / 900 for the track-record and expectation lines)
+PUBLIC_BRIEF_MAX_CHARS = 3200
+PRIVATE_BRIEF_MAX_CHARS = 1300
+# TRACK RECORDS and EXPECTATIONS (reflexivity, 2026-10-20): how an actor's past conduct reads to
+# others, and what each actor expected the others to do next.
+RESOLUTION_COUNTED = ("success", "partial", "blocked", "failed")
+EXPECTATION_LIMIT = 8                 # stored per actor (newest kept)
+EXPECTATION_TEXT_MAX_CHARS = 160
 
 # polarity thresholds that re-label a relationship after a nudge
 _ALLIED_AT = 0.25
@@ -334,6 +347,11 @@ def announced_figures(text: Any) -> List[float]:
     return out
 
 
+def _is_non_move(description: str) -> bool:
+    """An ``action`` event that records no move (a hold or a typed non-decision)."""
+    return description.endswith(" holds position") or " makes no recorded move" in description
+
+
 def _close(a: float, b: float) -> bool:
     return abs(a - b) <= 1e-9 + ANNOUNCED_FIGURE_TOLERANCE * max(abs(a), abs(b))
 
@@ -406,6 +424,38 @@ class StateVariable:
             self.history = self.history[-HISTORY_LIMIT:]
         return True
 
+    def values_by_round(self) -> Dict[int, Any]:
+        """The value at the end of each round in which it was recorded (the last write wins)."""
+        out: Dict[int, Any] = {}
+        for h in self.history:
+            if isinstance(h, dict):
+                try:
+                    out[int(h.get("round") or 0)] = h.get("value")
+                except (TypeError, ValueError):
+                    continue
+        return out
+
+    def trend(self, upto_round: int) -> Tuple[str, int]:
+        """TRENDS: ``("rising" | "falling", n)`` when the value moved the same way in each of the
+        ``n`` consecutive periods ending at ``upto_round``; ``("", 0)`` otherwise."""
+        if self.kind != "numeric":
+            return "", 0
+        by_round = self.values_by_round()
+        rounds = sorted(by_round)
+        direction, n, r = "", 0, int(upto_round)
+        while r in by_round:
+            earlier = [x for x in rounds if x < r]
+            if not earlier:
+                break
+            before, after = by_round[earlier[-1]], by_round[r]
+            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (before, after)):
+                break
+            step = "rising" if after > before else "falling" if after < before else ""
+            if not step or (direction and step != direction):
+                break
+            direction, n, r = step, n + 1, r - 1
+        return direction, n
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id, "name": self.name, "value": self.value, "unit": self.unit,
@@ -456,6 +506,11 @@ class ActorState:
         self.commitments: List[Dict[str, Any]] = []
         self.last_action: Optional[Dict[str, Any]] = None
         self.irreversible_option_ids: List[str] = []
+        # TRACK RECORDS: how the arbiter resolved this actor's moves (counts per outcome)
+        self.outcomes: Dict[str, int] = {}
+        # EXPECTATIONS: what this actor expected others to do in response to its moves
+        # ({round, about, reaction}), compared with what they did in the next period
+        self.expectations: List[Dict[str, Any]] = []
 
     # -- helpers --------------------------------------------------------------
     @property
@@ -485,6 +540,23 @@ class ActorState:
     def pending_commitments(self) -> List[Dict[str, Any]]:
         return [c for c in self.commitments if c.get("status") in ("pending", "due")]
 
+    def track_record(self) -> Dict[str, Any]:
+        """TRACK RECORDS: this actor's conduct as the world recorded it — commitments kept / lapsed /
+        broken (``released`` ones were the other side's breach), open commitments, how the arbiter
+        resolved its moves, and ``reliability`` = kept / resolved (None until one resolves).
+        Deterministic; reads only recorded state (the 24 newest commitments)."""
+        counts = {"kept": 0, "lapsed": 0, "broken": 0, "released": 0, "open": 0}
+        for c in self.commitments:
+            key = {"fulfilled": "kept", "lapsed": "lapsed", "breached": "broken", "released": "released",
+                   "pending": "open", "due": "open"}.get(c.get("status"))
+            if key:
+                counts[key] += 1
+        resolved = counts["kept"] + counts["lapsed"] + counts["broken"]
+        return {**counts, "resolved": resolved,
+                "reliability": round(counts["kept"] / resolved, 3) if resolved else None,
+                "outcomes": {k: int(self.outcomes[k]) for k in RESOLUTION_COUNTED if self.outcomes.get(k)},
+                "reputation": round(self.reputation, 3)}
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "agent_id": self.agent_id, "name": self.name, "agency_class": self.agency_class,
@@ -495,6 +567,9 @@ class ActorState:
             "incentives": dict(self.incentives), "aliases": list(self.aliases),
             "reputation": round(self.reputation, 4), "commitments": list(self.commitments),
             "last_action": self.last_action, "irreversible_option_ids": list(self.irreversible_option_ids),
+            "outcomes": dict(self.outcomes), "expectations": list(self.expectations),
+            # derived (from_dict ignores it): for the /world-state API and the panel
+            "track_record": self.track_record(),
         }
 
     @classmethod
@@ -514,6 +589,10 @@ class ActorState:
         a.last_action = d.get("last_action") if isinstance(d.get("last_action"), dict) else None
         a.irreversible_option_ids = [str(x) for x in (d.get("irreversible_option_ids") or [])
                                      if str(x).strip()]
+        outcomes = d.get("outcomes") if isinstance(d.get("outcomes"), dict) else {}
+        a.outcomes = {k: int(v) for k, v in outcomes.items()
+                      if k in RESOLUTION_COUNTED and isinstance(v, int) and not isinstance(v, bool) and v > 0}
+        a.expectations = [e for e in (d.get("expectations") or []) if isinstance(e, dict)][-EXPECTATION_LIMIT:]
         return a
 
 
@@ -1017,14 +1096,18 @@ class WorldModel:
                 option_id=option_id, action_kind=kind, period_label=label)))
             if status != "ok":
                 continue
+            self._record_expectations(actor, round_num, d.get("expected_reactions"))
             if option_id != "hold_position":
                 # a commitment that fell due this period is honoured by acting on it — any move,
                 # an answer to an offer included (live finding sim_1838cf014c0b: an actor that
                 # answered a second offer in the period its agreement fell due was branded a
                 # breacher); a holder lets it lapse (see lapse_overdue_commitments) — mechanical,
-                # no LLM judgement
+                # no LLM judgement.  A withdrawal never honours the obligations it breaks: before
+                # 2026-10-20 a ``break_alliance`` in the period the obligation fell due marked it
+                # fulfilled first, so the breaker kept a clean track record.
+                withdrawn_from = set(targets) if option_id == "break_alliance" else set()
                 for c in actor.commitments:
-                    if c.get("status") == "due":
+                    if c.get("status") == "due" and c.get("counterparty") not in withdrawn_from:
                         c["status"] = "fulfilled"
                         c["fulfilled_round"] = int(round_num)
             if option_id.startswith(RESPONSE_PREFIXES):
@@ -1257,6 +1340,111 @@ class WorldModel:
             actors=[bname], targets=[oname], source="interaction", option_id=inter.option_id,
             period_label=str((self.period or {}).get("label") or "")))
 
+    # -- track records and expectations (reflexivity) -------------------------------
+    def _record_expectations(self, actor: ActorState, round_num: int, raw: Any) -> None:
+        """EXPECTATIONS: keep what ``actor`` expects named cast members to do in response."""
+        for row in (raw if isinstance(raw, list) else [])[:4]:
+            if not isinstance(row, dict):
+                continue
+            about = self.resolve_actor(row.get("actor"))
+            reaction = _text(row.get("reaction"), EXPECTATION_TEXT_MAX_CHARS)
+            if about is None or about == actor.agent_id or not reaction:
+                continue
+            actor.expectations.append({"round": int(round_num), "about": self.actor_name(about),
+                                       "reaction": reaction})
+        actor.expectations = actor.expectations[-EXPECTATION_LIMIT:]
+
+    def track_record(self, agent_id: int) -> Dict[str, Any]:
+        """TRACK RECORDS for ``agent_id`` (``ActorState.track_record``); {} for an unknown actor."""
+        actor = self.actors.get(agent_id)
+        return actor.track_record() if actor is not None else {}
+
+    def track_record_text(self, agent_id: int) -> str:
+        """One line for briefs and the arbiter, "" while nothing has been resolved."""
+        rec = self.track_record(agent_id)
+        parts: List[str] = []
+        if rec.get("resolved"):
+            failed = [f"{rec[k]} {word}" for k, word in (("lapsed", "lapsed"), ("broken", "broken")) if rec.get(k)]
+            parts.append(f"kept {rec['kept']} of {rec['resolved']} commitments"
+                         + (f" ({', '.join(failed)})" if failed else ""))
+        outcomes = rec.get("outcomes") or {}
+        if outcomes:
+            words = {"success": "succeeded", "partial": "partly succeeded", "blocked": "blocked", "failed": "failed"}
+            parts.append("moves " + ", ".join(f"{n} {words[k]}" for k, n in outcomes.items()))
+        return "; ".join(parts)
+
+    def expectation_checks(self, agent_id: int, upto_round: int) -> List[Dict[str, Any]]:
+        """EXPECTATIONS vs what happened: what ``agent_id`` expected others to do after its moves
+        in period ``upto_round - 1``, next to what they did in ``upto_round`` (the reaction comes
+        one period later: moves within a period are simultaneous)."""
+        actor = self.actors.get(agent_id)
+        if actor is None or upto_round < 2:
+            return []
+        out: List[Dict[str, Any]] = []
+        for exp in actor.expectations:
+            if int(exp.get("round") or 0) != int(upto_round) - 1:
+                continue
+            about = str(exp.get("about") or "")
+            moves = [e for e in self.events_in_round(upto_round, ("action", "offer", "agreement", "breach"))
+                     if e.actors and e.actors[0] == about]
+            moved = [e for e in moves if not (e.kind == "action" and _is_non_move(e.description))]
+            actual = moved or moves
+            out.append({"made_round": int(exp.get("round") or 0), "about": about,
+                        "expected": str(exp.get("reaction") or ""),
+                        "actual": "; ".join(_text(e.description, 140) for e in actual[:2]) or "made no recorded move",
+                        "reacted": bool(moved),
+                        "aimed_at_you": any(actor.name in e.targets for e in moved)})
+        return out
+
+    # -- red lines --------------------------------------------------------------------
+    def match_red_line(self, agent_id: int, text: Any) -> Optional[str]:
+        """The documented red line of ``agent_id`` that ``text`` refers to, else None: the text equals
+        or contains it, is a fragment covering at least 60% of it, or repeats at least
+        RED_LINE_MATCH_MIN of its content tokens."""
+        actor = self.actors.get(agent_id)
+        wanted = normalize_label(text)
+        if actor is None or not wanted:
+            return None
+        said = {t for t in _terms_tokens(wanted) if t not in _TERMS_STOPWORDS}
+        best: Optional[Tuple[float, str]] = None
+        for line in actor.red_lines:
+            key = normalize_label(line)
+            # the report quotes the whole red line, or most of it (a bare keyword is not a red line)
+            if key == wanted or key in wanted or (wanted in key and len(wanted) >= 0.6 * len(key)):
+                return line
+            tokens = {t for t in _terms_tokens(key) if t not in _TERMS_STOPWORDS}
+            if tokens:
+                share = len(tokens & said) / len(tokens)
+                if share >= RED_LINE_MATCH_MIN and (best is None or share > best[0]):
+                    best = (share, line)
+        return best[1] if best else None
+
+    def cross_red_line(self, round_num: int, actor_ref: Any, by_ref: Any, red_line: Any, *,
+                       rationale: str = "") -> Optional[Dict[str, Any]]:
+        """RED LINES: record that ``by`` crossed ``actor``'s documented red line with its move this
+        period.  Returns the record, or None when the report does not hold up (unknown or identical
+        actors, ``by`` made no move this period, or the text matches none of the actor's red lines)."""
+        aid, bid = self.resolve_actor(actor_ref), self.resolve_actor(by_ref)
+        if aid is None or bid is None or aid == bid:
+            return None
+        move = self.actors[bid].last_action
+        if (not isinstance(move, dict) or int(move.get("round") or 0) != int(round_num)
+                or move.get("status") != "ok" or move.get("option_id") == "hold_position"):
+            return None
+        line = self.match_red_line(aid, red_line)
+        if line is None:
+            return None
+        aname, bname = self.actor_name(aid), self.actor_name(bid)
+        rel = self._ensure_relationship(bid, aid, kind="OPPOSES", round_num=round_num,
+                                        basis=f"crossed a red line in round {round_num}")
+        rel.nudge(RED_LINE_NUDGE, round_num=round_num, cause=f"{bname} crossed {aname}'s red line")
+        why = _text(rationale, 160)
+        self._add_event(WorldEvent(
+            round_num, "red_line", f"{bname} crossed {aname}'s red line: {line}" + (f" — {why}" if why else ""),
+            actors=[bname], targets=[aname], source="arbiter", option_id=_text(move.get("option_id"), 64),
+            period_label=str((self.period or {}).get("label") or "")))
+        return {"actor": aname, "by": bname, "red_line": line}
+
     def change_ratio(self) -> Optional[float]:
         """Per-period bound on how far the arbiter or a delayed effect may move a numeric fact."""
         ratio = self.settings.get("max_change_ratio", DEFAULT_MAX_CHANGE_RATIO)
@@ -1299,7 +1487,7 @@ class WorldModel:
         effects_added, resolutions}`` for the round record.
         """
         summary = {"variables_changed": [], "variables_added": [], "events": 0,
-                   "relationships_changed": [], "effects_added": 0, "resolutions": 0}
+                   "relationships_changed": [], "effects_added": 0, "resolutions": 0, "red_lines_crossed": []}
         if not isinstance(update, dict):
             return summary
         ratio = self.change_ratio()
@@ -1388,6 +1576,11 @@ class WorldModel:
                 probability=fx.get("probability", 1.0), source="arbiter",
                 targets=fx.get("targets"), created_round=round_num))
             summary["effects_added"] += 1
+        for rl in update.get("red_line_crossings") or []:
+            crossed = self.cross_red_line(round_num, rl.get("actor"), rl.get("by"), rl.get("red_line"),
+                                          rationale=rl.get("rationale") or "") if isinstance(rl, dict) else None
+            if crossed is not None:
+                summary["red_lines_crossed"].append(crossed)
         for res in update.get("action_resolutions") or []:
             if not isinstance(res, dict):
                 continue
@@ -1399,6 +1592,8 @@ class WorldModel:
             if actor.last_action and actor.last_action.get("round") == round_num:
                 actor.last_action["resolution"] = outcome
                 actor.last_action["resolution_rationale"] = _text(res.get("rationale"), 200)
+            if outcome in RESOLUTION_COUNTED:
+                actor.outcomes[outcome] = int(actor.outcomes.get(outcome, 0)) + 1
             if outcome in ("success", "fulfilled"):
                 actor.reputation = _clamp(actor.reputation + 0.02, 0.0, 1.0)
             elif outcome in ("blocked", "failed"):
@@ -1567,13 +1762,16 @@ class WorldModel:
                              key=lambda v: (0 if v.id in changed_ids else 1,
                                             -(v.history[-1].get("round", 0) if v.history else 0), v.name))
             for v in ordered[:14]:
-                line = f"- {v.name}: {format_value(v.value, v.unit)}"
+                notes: List[str] = []
                 ch = changed_ids.get(v.id)
                 if ch is not None:
-                    line += f" (was {format_value(ch['from'], v.unit)} last period)"
+                    notes.append(f"was {format_value(ch['from'], v.unit)} last period")
                 elif v.as_of and v.provenance in ("research", "official"):
-                    line += f" (as of {v.as_of})"
-                lines.append(line)
+                    notes.append(f"as of {v.as_of}")
+                direction, periods = v.trend(r) if r > 0 else ("", 0)
+                if periods >= TREND_MIN_PERIODS:
+                    notes.append(f"{direction} {periods} periods running")
+                lines.append(f"- {v.name}: {format_value(v.value, v.unit)}" + (f" ({'; '.join(notes)})" if notes else ""))
         moves = self.events_in_round(r, ("action",)) if r > 0 else []
         if moves:
             lines.append("## Moves last period")
@@ -1581,7 +1779,8 @@ class WorldModel:
                 who = e.actors[0] if e.actors else "An actor"
                 stmt = f' — "{_text(e.statement, 160)}"' if e.statement else ""
                 lines.append(f"- {who}: {e.description}{stmt}")
-        consequences = self.events_in_round(r, ("scheduled", "consequence", "emergent", "resolution")) if r > 0 else []
+        consequences = (self.events_in_round(r, ("scheduled", "consequence", "emergent", "resolution", "red_line"))
+                        if r > 0 else [])
         if consequences:
             lines.append("## Consequences and events")
             for e in consequences[:10]:
@@ -1605,6 +1804,17 @@ class WorldModel:
                 if not any(f"[{it.id}]" in e.description for e in deals):
                     lines.append(f"- Open: {self.actor_name(it.proposer)} → {self.actor_name(it.recipient)} [{it.id}]: "
                                  f"{it.terms} (answer due by {self._period_label_for_round(it.expires_round)})")
+        records = []
+        for actor in self.actors.values():
+            text = self.track_record_text(actor.agent_id)
+            if text:
+                rec = self.track_record(actor.agent_id)
+                records.append((-(rec.get("lapsed", 0) + rec.get("broken", 0)), -rec.get("resolved", 0),
+                                actor.name, text))
+        if records:
+            # TRACK RECORDS: counterparts discount the threats and promises of actors who broke theirs
+            lines.append("## Track records")
+            lines.extend(f"- {name}: {text}" for _, _, name, text in sorted(records)[:6])
         pending: List[str] = []
         for actor in self.actors.values():
             for c in actor.pending_commitments():
@@ -1632,6 +1842,9 @@ class WorldModel:
             tail = f"; outcome so far: {res}" if res else ""
             lines.append(f"- Your last move ({self._period_label_for_round(int(la.get('round', 0)))}): "
                          f"{la.get('label') or la.get('option_id')}{tail}")
+        record = self.track_record_text(agent_id)
+        if record:
+            lines.append(f"- Your track record as others see it: {record}")
         pend = actor.pending_commitments()
         if pend:
             lines.append("- Your open commitments:")
@@ -1654,6 +1867,13 @@ class WorldModel:
             for e in aimed[:5]:
                 who = e.actors[0] if e.actors else "someone"
                 lines.append(f"  · {who}: {e.description}")
+        checks = self.expectation_checks(agent_id, r)
+        if checks:
+            # EXPECTATIONS: the actor learns where its picture of the others was wrong
+            lines.append("- What you expected vs what happened:")
+            for c in checks[:3]:
+                lines.append(f"  · {c['about']}: you expected \"{_text(c['expected'], 100)}\"; "
+                             f"it did: {_text(c['actual'], 140)}")
         allies, rivals, changed = [], [], []
         for rel in self.relationships_of(agent_id):
             other = rel.target if rel.source == agent_id else rel.source

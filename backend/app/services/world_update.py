@@ -45,6 +45,8 @@ MAX_EVENTS = 8
 MAX_RELATIONSHIP_CHANGES = 8
 MAX_PENDING_EFFECTS = 6
 MAX_RESOLUTIONS = 24
+MAX_RED_LINE_CROSSINGS = 4
+MAX_RED_LINE_ACTORS = 8
 NARRATIVE_MAX_CHARS = 700
 DIGEST_MAX_CHARS = 1100
 ARBITER_ERROR_SNIPPET_CHARS = 200
@@ -111,7 +113,12 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         "calendar period. Real-world actors have just made their moves for the period; your job is to "
         "resolve what the world does in response — honestly, conservatively and consistently with how "
         "institutions, markets and counterparties actually react. Do not invent dramatic outcomes; most "
-        "moves have partial, delayed or contested effects.",
+        "moves have partial, delayed or contested effects. The world is reflexive: markets and counterparties "
+        "react to announcements and to what they expect before measures take effect, and they weigh each "
+        "actor's word by its track record — threats and promises from actors who kept their commitments move "
+        "others more than those from actors who broke them. Widely shared expectations can become "
+        "self-fulfilling (expected shortages trigger stockpiling) or self-defeating (an expected crackdown is "
+        "pre-empted); reflect that only where this period's moves and facts support it.",
         f"Forecast question: {world.question or '(not stated)'}",
         f"Period: {label}" + (f" ({span})" if span else "") + f" — round {round_num}"
         + (f"; forecast horizon {world.horizon_date}" if world.horizon_date else ""),
@@ -122,7 +129,8 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
                          key=lambda v: (-(v.history[-1].get("round", 0) if v.history else 0), v.name))
     for v in vars_sorted[:max_variables]:
         tail = f" [{v.kind}]" if v.kind != "numeric" else ""
-        lines.append(f"- {v.id}: {v.name} = {format_value(v.value, v.unit)}{tail}")
+        path = _recent_path(v)
+        lines.append(f"- {v.id}: {v.name} = {format_value(v.value, v.unit)}{tail}" + (f" (path: {path})" if path else ""))
     if not world.variables:
         lines.append("- (no tracked variables yet — you may create up to 3 that the moves clearly affect)")
     lines.append("")
@@ -135,11 +143,26 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         opt = d.get("option") or {}
         tgt = f" → {', '.join(d.get('targets') or [])}" if d.get("targets") else ""
         stmt = f' Statement: "{_text(d.get("public_statement"), 240)}"' if d.get("public_statement") else ""
+        aid = world.resolve_actor(d.get("agent_id"))
+        record = world.track_record_text(aid) if aid is not None else ""
         lines.append(f"- {d.get('actor_name')}: {opt.get('label')} (kind={opt.get('kind')}, "
-                     f"magnitude={d.get('magnitude')}){tgt}.{stmt}")
+                     f"magnitude={d.get('magnitude')}){tgt}.{stmt}"
+                     + (f" Track record: {record}." if record else ""))
         moved += 1
     if not moved:
         lines.append("- (no actor made a consequential move; the world drifts on its own momentum)")
+    expectations = [(a.name, e) for a in world.actors.values() for e in a.expectations
+                    if int(e.get("round") or 0) == int(round_num)]
+    if expectations:
+        lines.append("")
+        lines.append("## Expectations in play (what this period's movers expect others to do next)")
+        lines.extend(f"- {name} expects {e.get('about')}: {e.get('reaction')}" for name, e in expectations[:8])
+    stakes = _red_lines_at_stake(world, rows)
+    if stakes:
+        lines.append("")
+        lines.append("## Red lines at stake (documented by each actor; report a crossing only when a move this "
+                     "period clearly crosses one)")
+        lines.extend(f"- {name}: " + "; ".join(red) for name, red in stakes)
     if deterministic.get("scheduled_events"):
         lines.append("")
         lines.append("## Confirmed events this period")
@@ -185,6 +208,9 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later.',
         '- "action_resolutions": [{"actor": "<cast name>", "outcome": "success|partial|blocked|pending|failed", '
         '"rationale": "..."}] — one per actor that moved.',
+        '- "red_line_crossings": [{"actor": "<whose red line>", "by": "<cast name whose move crossed it>", '
+        '"red_line": "<the red line as listed>", "rationale": "..."}] — only for a listed red line that a move '
+        "this period clearly crossed; usually none.",
         '- "scenario_pressure": {"<candidate scenario>": "up|down|flat"} — direction only, no numbers.',
         f"Cast: {cast}. Candidate scenarios: {sc}.{lang}",
     ]
@@ -197,6 +223,40 @@ def _clamp_rule(world: WorldModel) -> str:
     if not ratio:
         return ""
     return f"; every other change is limited to about ±{float(ratio) * 100:g}% of the current value per period"
+
+
+def _recent_path(var: Any, periods: int = 4) -> str:
+    """TRENDS: a numeric fact's values at the end of its last ``periods`` recorded rounds, oldest
+    first ("20% → 30% → 45%"); "" until it has changed at least once."""
+    if getattr(var, "kind", "") != "numeric":
+        return ""
+    by_round = var.values_by_round()
+    values = [by_round[r] for r in sorted(by_round)][-periods:]
+    if len(values) < 2:
+        return ""
+    return " → ".join(format_value(v, var.unit) for v in values)
+
+
+def _red_lines_at_stake(world: WorldModel, rows: List[Dict[str, Any]]) -> List[Tuple[str, List[str]]]:
+    """RED LINES the arbiter should know: actors this period's moves targeted first, then the
+    rest of the cast with documented red lines (bounded)."""
+    targeted: List[int] = []
+    for d in rows:
+        if d.get("status") != "ok" or (d.get("option") or {}).get("id") == "hold_position":
+            continue
+        for t in d.get("targets") or []:
+            aid = world.resolve_actor(t)
+            if aid is not None and aid not in targeted:
+                targeted.append(aid)
+    ordered = targeted + [aid for aid in world.actors if aid not in targeted]
+    out: List[Tuple[str, List[str]]] = []
+    for aid in ordered:
+        actor = world.actors.get(aid)
+        if actor is not None and actor.red_lines:
+            out.append((actor.name, [_text(x, 140) for x in actor.red_lines[:2]]))
+        if len(out) >= MAX_RED_LINE_ACTORS:
+            break
+    return out
 
 
 def _num(value: Any) -> Optional[float]:
@@ -222,7 +282,7 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
     problems: List[str] = []
     update: Dict[str, Any] = {"narrative": "", "variable_changes": [], "new_variables": [], "events": [],
                               "relationship_changes": [], "pending_effects": [], "action_resolutions": [],
-                              "scenario_pressure": {}}
+                              "red_line_crossings": [], "scenario_pressure": {}}
     if not isinstance(raw, dict):
         return update, ["payload is not an object"]
     update["narrative"] = _text(raw.get("narrative"), NARRATIVE_MAX_CHARS)
@@ -390,6 +450,18 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                 continue
             update["action_resolutions"].append({"actor": world.actor_name(aid), "outcome": outcome,
                                                  "rationale": _text(r.get("rationale"), 200)})
+    crossings = raw.get("red_line_crossings")
+    if isinstance(crossings, list):
+        for rl in crossings[:MAX_RED_LINE_CROSSINGS]:
+            if not isinstance(rl, dict):
+                continue
+            aid, bid = world.resolve_actor(rl.get("actor")), world.resolve_actor(rl.get("by"))
+            line = world.match_red_line(aid, rl.get("red_line")) if aid is not None else None
+            if aid is None or bid is None or aid == bid or line is None:
+                problems.append("red line crossing with unknown actors or an unlisted red line")
+                continue
+            update["red_line_crossings"].append({"actor": world.actor_name(aid), "by": world.actor_name(bid),
+                                                 "red_line": line, "rationale": _text(rl.get("rationale"), 200)})
     pressure = raw.get("scenario_pressure")
     if isinstance(pressure, dict):
         for k, v in pressure.items():
@@ -469,7 +541,8 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
             lines.append(f"- {ch['name']}: {format_value(ch['from'], ch['unit'])} → {format_value(ch['to'], ch['unit'])}")
         for nv in diff["variables_added"][:4]:
             lines.append(f"- New: {nv['name']} = {format_value(nv['value'], nv['unit'])}")
-    consequences = world.events_in_round(round_num, ("scheduled", "consequence", "emergent", "resolution"))
+    consequences = world.events_in_round(round_num, ("scheduled", "consequence", "emergent", "resolution",
+                                                     "red_line"))
     if consequences:
         lines.append("Events and consequences:")
         lines.extend(f"- {e.description}" for e in consequences[:8])
@@ -496,9 +569,15 @@ def behaviour_metrics(world: WorldModel, round_num: int, decisions: Iterable[Any
     prev = int(round_num) - 1
     moves = [d for d in rows if d.get("status") == "ok" and (d.get("option") or {}).get("id") != "hold_position"]
     out: Dict[str, Any] = {"moves": len(moves), "responsive_moves": 0, "offers_answered": 0,
-                           "responsive_share": None, "signals_last_period": 0}
+                           "responsive_share": None, "signals_last_period": 0,
+                           "expectations_checked": 0, "expectations_reacted": 0}
     if prev < 1:
         return out
+    # EXPECTATIONS: of the reactions actors expected after last period's moves, how many came
+    for aid in world.actors:
+        for check in world.expectation_checks(aid, int(round_num)):
+            out["expectations_checked"] += 1
+            out["expectations_reacted"] += int(bool(check["reacted"]))
     changed = [v.name.casefold() for v in world.variables.values()
                if any(isinstance(h, dict) and int(h.get("round") or 0) == prev for h in v.history)]
     movers = set()

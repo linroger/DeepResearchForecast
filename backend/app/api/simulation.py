@@ -2396,6 +2396,7 @@ def get_simulation_world_state(simulation_id: str):
                            "agency_class": a.get("agency_class"), "archetype": a.get("archetype"),
                            "capacity_per_round": a.get("capacity_per_round"),
                            "reputation": a.get("reputation"), "last_action": a.get("last_action"),
+                           "track_record": a.get("track_record") if isinstance(a.get("track_record"), dict) else None,
                            "pending_commitments": [c for c in commitments if c.get("status") in ("pending", "due")][:6]})
         relationships = []
         for r in (world.get("relationships") or [])[:200]:

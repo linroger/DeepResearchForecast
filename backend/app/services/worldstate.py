@@ -119,6 +119,52 @@ def commitments_from_decisions(
     return out
 
 
+# WORLD CHANNEL (reflexive world model, 2026-10-20): before this, the scenario shares moved only with
+# the actors' self-declared ``scenario_commitment``s — a signed deal or a collapsed tariff left the
+# outcome where the actors' words put it.  The arbiter's world-grounded ``scenario_pressure``
+# (direction words per scenario, never numbers) now enters the step as one more commitment set: the
+# current shares tilted up (x(1+tilt)) or down (x(1-tilt)) and renormalised, weighted at
+# ``weight_ratio`` x the actors' committed weight (or ``weight_ratio`` alone when no actor committed,
+# e.g. every actor abstained).  It never runs in a round the Foglamp statuses freeze.
+WORLD_PRESSURE_TILT = 0.25
+
+
+def commitment_mass(commitments: List[Dict[str, Any]]) -> float:
+    """Total ``magnitude x weight`` of a commitment set (what ``WorldState.step`` sums as votes)."""
+    total = 0.0
+    for c in commitments or []:
+        if not isinstance(c, dict):
+            continue
+        try:
+            total += max(0.0, float(c.get("magnitude", 1.0) or 0.0)) * max(0.0, float(c.get("weight", 1.0) or 0.0))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def pressure_commitments(pressure: Optional[Dict[str, Any]], shares: Dict[str, float], actor_mass: float,
+                         *, weight_ratio: float, tilt: float = WORLD_PRESSURE_TILT) -> List[Dict[str, Any]]:
+    """The world channel's commitments for ``WorldState.step`` (see WORLD CHANNEL above); ``[]`` when
+    there is no up/down pressure or the channel is off (``weight_ratio`` <= 0).  Pure."""
+    try:
+        ratio = float(weight_ratio)
+        tilt = max(0.0, min(0.9, float(tilt)))
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(pressure, dict) or ratio <= 0 or not shares:
+        return []
+    factor = {"up": 1.0 + tilt, "down": 1.0 - tilt}
+    if not any(str(pressure.get(s) or "") in factor for s in shares):
+        return []
+    raw = {s: max(0.0, float(v or 0.0)) * factor.get(str(pressure.get(s) or ""), 1.0) for s, v in shares.items()}
+    total = sum(raw.values())
+    if total <= 0:
+        return []
+    weight = ratio * actor_mass if actor_mass > 0 else ratio
+    return [{"scenario": s, "magnitude": round(v / total, 6), "weight": round(weight, 6), "channel": "world"}
+            for s, v in raw.items() if v > 0]
+
+
 class WorldState:
     """A distribution over scenario names ∈ [0,1] summing to 1, evolved by commitments.
 

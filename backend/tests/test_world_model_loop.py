@@ -619,7 +619,8 @@ def test_offer_recipient_decides_and_history_rows_carry_offers_and_behaviour(tmp
                                           "lapsed": 0, "breached": 0}
     # round 1 has no prior period and round 3 has no non-hold move → only round 2 is scored
     assert state["summary"]["behaviour"] == {"rounds_scored": 1, "moves": 1, "responsive_moves": 1,
-                                             "responsive_share": 1.0, "offers_answered": 1}
+                                             "responsive_share": 1.0, "offers_answered": 1,
+                                             "expectations_checked": 0, "expectations_reacted": 0}
     inter = state["world"]["interactions"][0]
     assert inter["status"] == "accepted" and len(inter["obligations"]) == 2
     assert all(c["source"] == "agreement:i1_1" for a in state["world"]["actors"][:2] for c in a["commitments"])

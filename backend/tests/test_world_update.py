@@ -369,7 +369,8 @@ def test_behaviour_metrics_count_moves_that_answer_last_period():
     ]
     m = wu.behaviour_metrics(world, 2, rows)
     assert m == {"moves": 3, "responsive_moves": 2, "offers_answered": 1, "responsive_share": 0.667,
-                 "signals_last_period": m["signals_last_period"]}
+                 "signals_last_period": m["signals_last_period"],
+                 "expectations_checked": 0, "expectations_reacted": 0}
     assert m["signals_last_period"] >= 2
     record = wu.run_world_round(world, 2, {"label": "P2"}, rows[:2], [], llm=None, rng=None, arbiter_enabled=False)
     assert record["behaviour"]["moves"] == 2 and record["behaviour"]["responsive_moves"] == 1
