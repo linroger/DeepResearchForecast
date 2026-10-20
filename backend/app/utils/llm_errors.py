@@ -36,6 +36,13 @@ _HTTP_STATUS_RE = re.compile(r"(?i)(?:error code|status(?: code)?|http)[:\s]+(\d
 # quoted key excludes the SDK's own ``Error code: 400`` prefix.
 _BODY_CODE_RE = re.compile(r"""['"]code['"]\s*:\s*['"]?([A-Za-z0-9_.-]{1,32})""")
 _QUOTA_MARKERS = ("rate_limit", "rate limit", "quota", "usage limit", "insufficient balance", "429")
+# A model that always reasons refusing a request that disabled reasoning.  Zhipu glm-5.3 since
+# 2026-10-18 ~20:37 +08: HTTP 400, code 1210, "该模型始终思考，不支持关闭思考；请使用 low、high 或 max".
+# 1210 is Zhipu's generic invalid-parameter code, so the message decides, not the code.
+_THINKING_REQUIRED_MARKERS = (
+    "始终思考", "不支持关闭思考", "always thinks", "always reasons", "cannot disable thinking",
+    "thinking cannot be disabled", "does not support disabling thinking", "disabling thinking is not supported",
+)
 _AUTH_MARKERS = ("authenticationerror", "invalid authentication", "failed to authenticate", "401")
 
 DEFAULT_SNIPPET_CHARS = 160
@@ -102,6 +109,22 @@ def is_content_filter_error(exc: BaseException) -> bool:
         return True
     body = getattr(exc, "body", None)
     return isinstance(body, dict) and "contentFilter" in body
+
+
+def is_thinking_required_error(exc: BaseException) -> bool:
+    """The provider refused the request because it disabled reasoning on a model that always
+    reasons (GLM 400 / 1210).  Resending with reasoning enabled can succeed; resending the same
+    request cannot."""
+    status = error_status(exc)
+    if status is not None and status != 400:
+        return False
+    low = _message(exc).casefold()
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        message = err.get("message") if isinstance(err, dict) else body.get("message")
+        low += " " + " ".join(str(message or "").split()).casefold()
+    return any(marker in low for marker in _THINKING_REQUIRED_MARKERS)
 
 
 def is_non_retryable_request_error(exc: BaseException) -> bool:

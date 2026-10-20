@@ -252,7 +252,11 @@ def _live_openai_compat(label: str, provider: str, api_key, base_url, model):
         "max_tokens": 16,
     }
     # 推理提供方：实测时关闭推理，避免 reasoning 吃光 max_tokens 导致空 content。
-    extra = getattr(Config, "_DISABLE_THINKING_EXTRA_BODY", {}).get(provider)
+    # A model that always reasons (glm-5.x) refuses that (HTTP 400 / 1210) and gets the lowest
+    # accepted effort instead (Config.minimal_reasoning_body).
+    minimal = getattr(Config, "minimal_reasoning_body", None)
+    extra = (minimal(provider, model) if callable(minimal)
+             else getattr(Config, "_DISABLE_THINKING_EXTRA_BODY", {}).get(provider))
     if extra:
         kwargs["extra_body"] = extra
     # Kimi K2.7 Code 网关硬校验温度（开推理只接受 1、关推理只接受 0.6），temperature=0 会 400。

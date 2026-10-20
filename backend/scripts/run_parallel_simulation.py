@@ -3822,6 +3822,13 @@ class _ReflexiveWorldCoordinator:
             self._decision_conc = max(1, int(_cfg_flag("SIM_WORLD_DECISION_CONCURRENCY", "6") or 6))
         except (TypeError, ValueError):
             self._decision_conc = 6
+        # WORLD CHANNEL: weight of the arbiter's scenario_pressure in the share step, as a fraction of
+        # the actors' committed weight (worldstate.pressure_commitments); 0 turns the channel off
+        try:
+            self._pressure_weight = max(0.0, float(settings.get("pressure_weight",
+                                                                _cfg_flag("SIM_WORLD_PRESSURE_WEIGHT", "0.35"))))
+        except (TypeError, ValueError):
+            self._pressure_weight = 0.35
         self._language = _sim_output_language(config)
         self._agent_configs = [c for c in (config.get("agent_configs") or []) if isinstance(c, dict)]
         self._power = self._dc._outcome_power_map(self._agent_configs)
@@ -4304,7 +4311,7 @@ class _ReflexiveWorldCoordinator:
         from app.services.world_update import run_world_round
         from app.services.worldstate import (
             ROUND_STATUS_ABSTAINED, ROUND_STATUS_COMMITTED, ROUND_STATUS_MISSING, ROUND_STATUS_SILENT,
-            commitments_from_decisions,
+            commitment_mass, commitments_from_decisions, pressure_commitments,
         )
         rnd = round_num + 1
         period = buf.get("period") if isinstance(buf.get("period"), dict) else self._period_for(round_num)
@@ -4357,13 +4364,24 @@ class _ReflexiveWorldCoordinator:
                 eff_inertia = self._dc._inertia_for_gap(self._inertia, self._prev_date, period_end, self._avg_gap)
                 entropy_days = self._dc._period_days(period) if (self._entropy_on and period) else None
                 prev_shares = dict(self._ws.shares)
-                self._ws.step(conv, inertia=eff_inertia, entropy_mix_days=entropy_days, round_status=round_status)
+                # WORLD CHANNEL: the world's own movement (arbiter scenario_pressure) leans the step;
+                # only an applied arbiter counts, and the round status stays the actors'
+                actor_mass = commitment_mass(conv)
+                world_rows = (pressure_commitments(record.get("scenario_pressure"), prev_shares, actor_mass,
+                                                   weight_ratio=self._pressure_weight)
+                              if record.get("arbiter_status") == "applied" else [])
+                self._ws.step(conv + world_rows, inertia=eff_inertia, entropy_mix_days=entropy_days,
+                              round_status=round_status)
                 self._world.scenario_shares = dict(self._ws.shares)
                 out = self._ws.outcome()
                 leader = out.get("leader")
                 for row in rows:
                     self._scenario_decisions.append(dict(row))
                 snap: Dict[str, Any] = {"round": rnd, **out, "round_status": round_status}
+                if world_rows and round_status in (ROUND_STATUS_COMMITTED, ROUND_STATUS_ABSTAINED):
+                    snap["channels"] = {"actors": round(actor_mass, 6),
+                                        "world": round(commitment_mass(world_rows), 6),
+                                        "pressure": dict(record.get("scenario_pressure") or {})}
                 if period_end:
                     snap["as_of"] = period_end
                 if period:
@@ -4444,6 +4462,8 @@ class _ReflexiveWorldCoordinator:
         moves_total = 0
         responsive_total = 0
         offers_answered = 0
+        expectations_checked = 0
+        expectations_reacted = 0
         try:
             hist = os.path.join(self._dir, WORLD_HISTORY_FILE)
             if os.path.exists(hist):
@@ -4463,6 +4483,9 @@ class _ReflexiveWorldCoordinator:
                             moves_total += int(beh.get("moves") or 0)
                             responsive_total += int(beh.get("responsive_moves") or 0)
                             offers_answered += int(beh.get("offers_answered") or 0)
+                        # EXPECTATIONS: counted from round 2 on, independent of the move score
+                        expectations_checked += int(beh.get("expectations_checked") or 0)
+                        expectations_reacted += int(beh.get("expectations_reacted") or 0)
         except OSError:
             failed = 0
         return {
@@ -4486,6 +4509,8 @@ class _ReflexiveWorldCoordinator:
                 "responsive_moves": responsive_total,
                 "responsive_share": round(responsive_total / moves_total, 3) if moves_total else None,
                 "offers_answered": offers_answered,
+                "expectations_checked": expectations_checked,
+                "expectations_reacted": expectations_reacted,
             },
         }
 

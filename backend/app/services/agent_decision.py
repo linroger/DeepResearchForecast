@@ -410,6 +410,11 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
     aimed = [e for e in world.events_in_round(last_round)
              if actor.name in e.targets and e.kind not in ("offer", "agreement", "breach")
              and e.option_id not in PROPOSAL_OPTION_IDS] if last_round > 0 else []
+    # RED LINES: a crossing is the sharper reading of the move that crossed it — answer it first and
+    # do not offer a second set of responses to the same actor's plain move
+    crossed_by = {e.actors[0] for e in aimed if e.kind == "red_line" and e.actors}
+    aimed = sorted((e for e in aimed if e.kind != "action" or not (e.actors and e.actors[0] in crossed_by)),
+                   key=lambda e: 0 if e.kind == "red_line" else 1)
     for idx, ev in enumerate(aimed[:3]):
         who = ev.actors[0] if ev.actors else "another actor"
         who_id = world.resolve_actor(who)
@@ -422,7 +427,9 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
                 push({"id": tmpl_id, "label": label, "kind": kind, "cost": cost, "lag": 0,
                       "reversibility": "reversible", "targets_actor": True,
                       "suggested_targets": [who] if who_id is not None else [],
-                      "why": "responds to a move aimed at you last period"})
+                      # RED LINES: a crossing reads as one, so the answer can be weighed against it
+                      "why": (f"{who} crossed your red line last period" if ev.kind == "red_line"
+                              else "responds to a move aimed at you last period")})
     # 2) documented plans (research-grounded)
     for idx, plan in enumerate(actor.documented_plans[:4]):
         kind, cost, lag = _plan_kind(plan)
