@@ -3,7 +3,8 @@
 Pins: with method skills the ``FORECAST FRAME EXTRACTION TASK`` asks for the risks the report itself
 attaches a probability to, with that probability and its window exactly as written, the [S<n>]
 marker of the statement and effects on quantities the report names; ``normalize_frame_risks`` keeps
-a risk only when a line of the report states its probability and names the event, keeps its window
+a risk only when a line of the report states its probability (one probability, never a published
+range such as "5-25%") and names the event, keeps its window
 and marker only when they stand on such a line, binds effects only to ``quantitative_facts`` metrics
 (by their exact names) and an effect's size only when the report states it — anything else is left
 empty or dropped and counted in ``meta.forecast_risks``, never invented; the counts are bounded; the
@@ -146,6 +147,26 @@ def test_a_probability_the_report_does_not_state_for_that_event_drops_the_risk(e
     risks, checks = _risks([{"event": event, "probability": probability, "per": "monthly", "source": "S2"}])
     assert risks == []
     assert checks == {**_ZERO, "extracted": 1, "probability_not_stated": 1}
+
+
+@pytest.mark.parametrize("probability", ["5-10%", "5-25%", "between 1% and 5%", "0.5–1%", "5%至25%",
+                                         "1 in 20 to 1 in 10"])
+def test_a_published_range_is_no_single_probability(probability):
+    """Risk registers publish likelihood bands. Copied as printed, the report states the band, but it
+    is no one probability: the seed's parser would read one end of it as the shock's rate
+    (world_model_seed.parse_risk_probability: "5-25%" → 0.25), so the risk is dropped and counted."""
+    report = REPORT + (f"\nThe national risk register puts the probability of a regional grid blackout at "
+                       f"{probability} over the next five years [S1].\n")
+    risks, checks = _risks([{"event": "Regional grid blackout", "probability": probability,
+                             "per": "over the next five years", "source": "S1"},
+                            {"event": "Grid failure", "probability": "5-10%", "per": "per year", "source": "S1"}],
+                           report=report)
+    assert risks == [] and checks == {**_ZERO, "extracted": 2, "probability_range": 2}
+
+
+@pytest.mark.parametrize("probability", ["1 in 20", "2 of 10 years", "12.5%", "1-in-100", "0.05", "5%", "15%"])
+def test_a_single_probability_is_no_range(probability):
+    assert not lr._PROBABILITY_RANGE_RE.search(lr._report_key(probability))
 
 
 def test_window_and_marker_count_only_on_the_line_that_states_the_probability():

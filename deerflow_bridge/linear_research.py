@@ -4298,20 +4298,23 @@ def _frame_rows(frame: Any, key: str, fields: Sequence[str], limit: int) -> list
 # marker count only when they stand on such a line, an effect only on a metric of
 # quantitative_facts, and an effect's size only when the report states it.  A scenario of the
 # frame is never a risk: neither an event named like one nor a probability stated only on lines
-# that give a scenario its own weight.  What does not check out is left empty, so the seed records
-# a typed gap for it (shock_without_window, shock_without_source, a direction-only effect) instead
-# of using a number the report does not contain.
+# that give a scenario its own weight.  A published range ("5-25%", "between 1% and 5%") is no
+# single probability: the seed would read one end of it as the shock's rate, so it is dropped too.
+# What does not check out is left empty, so the seed records a typed gap for it
+# (shock_without_window, shock_without_source, a direction-only effect) instead of using a number
+# the report does not contain.
 _PERCENT_WORDS_RE = re.compile(r"\s*(?:per\s?cent|percent)\b")
 _CHANGE_LEAD_RE = re.compile(r"^(?:(?:to\b|by\b|=|→|->|至|到|[+\-−±])\s*)+")
 _RANGE_TAIL_RE = re.compile(r"\s*(?:-|–|—|~|to\b|至|到)\s*[+\-−]?\d")
 _RANGE_HEAD_RE = re.compile(r"\d%?\s*(?:-|–|—|~|to|至|到)\s*[+\-−]?$")
+_PROBABILITY_RANGE_RE = re.compile(r"\d\s*%?\s*(?:-|–|—|~|to\b|and\b|至|到)\s*[+\-−]?\d")
 _GENERIC_WORDS = frozenset("the and for its per are was has not but can may any all out off risk risks chance "
                            "chances probability likelihood event events shock shocks would could might will "
                            "that this with from into over under within their there which".split())
 _METRIC_STOPWORDS = frozenset("the of a an in on for to at by".split())
-_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "scenario", "window_not_stated",
-                      "source_not_stated", "effects_kept", "effects_untracked", "effects_unreadable",
-                      "effect_sizes_not_stated")
+_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "probability_range", "scenario",
+                      "window_not_stated", "source_not_stated", "effects_kept", "effects_untracked",
+                      "effects_unreadable", "effect_sizes_not_stated")
 
 
 def _report_key(text: Any) -> str:
@@ -4421,10 +4424,13 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
         if _name_key(event) in frame_names:
             checks["scenario"] += 1
             continue
+        probabilities = _probability_phrases(item.get("probability"))
+        if any(_PROBABILITY_RANGE_RE.search(p) for p in probabilities):
+            checks["probability_range"] += 1
+            continue
         terms = _event_terms(event)
         about = [line for line in lines if _names_event(line, terms)]
-        phrase = next((p for p in _probability_phrases(item.get("probability"))
-                       if any(_states(line, p) for line in about)), "")
+        phrase = next((p for p in probabilities if any(_states(line, p) for line in about)), "")
         if not phrase:
             checks["probability_not_stated"] += 1
             continue
