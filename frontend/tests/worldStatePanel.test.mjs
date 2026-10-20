@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as vue from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -224,4 +225,69 @@ test('the selection is announced to the parent and a parent reset is honoured', 
   assert.deepEqual(h.emitted.at(-1), ['update:selectedRound', 4])
   const r = await h.render()
   assert.match(r.text, /past period · round 4 \/ 5/)
+})
+
+// GET /world-state for the reflexivity scenario run through the real kernel (see worldState.test.mjs)
+const reflexive = () => JSON.parse(readFileSync(new URL('./fixtures/world/world_state.reflexive.json', import.meta.url), 'utf8'))
+const CROSSING = 'United States Government crossed China Ministry of Commerce&#39;s red line: No tariffs above 100% on Chinese goods'
+
+test('track records, the expected-reaction count and a crossed red line reach the reader', async (t) => {
+  const h = mountPanel(t, reflexive())
+  await h.state.load()
+  let r = await h.render()
+  // the expectation badge sits beside the responsive-moves badge and explains itself on hover
+  assert.match(r.text, /responsive moves 25% expected reactions followed 1\/1 model projection, not evidence/)
+  assert.match(r.html, /title="1 of the 1 reactions the actors expected after their own moves were followed by a move of the actor they named, one period later\. Whether that move matched the expectation is not judged\."/)
+  // breakers first; zero buckets left out; released is not the actor's failure
+  assert.match(r.text, /Track records \(2\) United States Government kept 0 of 1 \(0%\) · 1 broken · moves: 1 succeeded China Ministry of Commerce 1 released · moves: 1 partly succeeded/)
+  assert.match(r.html, /<li class="ws-record tr-broken"><span class="ws-actor">United States Government<\/span>/)
+  assert.match(r.html, /<li class="ws-record"><span class="ws-actor">China Ministry of Commerce<\/span>/)
+  assert.match(r.html, /<div class="ws-card-head" title="Commitments the world recorded for each actor: kept, lapsed/)
+  assert.doesNotMatch(r.text, /reputation|0\.37/)                   // counts, never the mixed score
+  // the crossing period: the red line is labelled, not tagged red_line, and leads the list
+  h.state.selectRound(1)
+  r = await h.render()
+  assert.match(r.text, new RegExp(`Consequences and events \\(2\\) red line crossed ${CROSSING} — 145% announced relation`))
+  assert.match(r.html, /<li class="ws-event ev-red-line"><span class="ws-kind mono">red line crossed<\/span>/)
+  assert.doesNotMatch(r.text, /red_line|Track records/)              // track records describe the latest world
+  // the same period after its events left the API window: the history row stands in
+  const data = reflexive()
+  data.recent_events = data.recent_events.filter((e) => e.round > 2)
+  h.serve(data)
+  await h.state.load()
+  r = await h.render()
+  assert.match(r.text, new RegExp(`Consequences and events \\(2\\) red line crossed ${CROSSING} relation`))
+})
+
+test('the new lines read Chinese labels from the locale', async (t) => {
+  const h = mountPanel(t, reflexive())
+  await h.state.load()
+  i18n.locale.value = 'zh'
+  let r = await h.render()
+  assert.match(r.text, /回应上期 25% 预期反应获跟进 1\/1/)
+  assert.match(r.html, /title="角色在自身行动后预期他方作出的 1 项反应中，1 项在下一时段确有被点名方的行动跟进；该行动是否符合预期不作判定。"/)
+  assert.match(r.text, /履约记录 \(2\) United States Government 兑现 0\/1 \(0%\) · 1 项违约 · 行动：1 项成功 China Ministry of Commerce 1 项因对方违约解除 · 行动：1 项部分成功/)
+  h.state.selectRound(1)
+  r = await h.render()
+  assert.match(r.html, /<span class="ws-kind mono">越过红线<\/span>/)
+})
+
+test('a run whose records hold nothing yet says so', async (t) => {
+  const early = payload([1])
+  early.actors[0].track_record = { kept: 0, lapsed: 0, broken: 0, released: 0, open: 0, resolved: 0, reliability: null, outcomes: {} }
+  const h = mountPanel(t, early)
+  await h.state.load()
+  const r = await h.render()
+  assert.match(r.text, /Track records \(0\) No commitment or move resolved yet/)
+})
+
+test('runs from before the reflexivity signals render no new lines', async (t) => {
+  const legacy = payload([1, 2, 3])
+  legacy.summary.behaviour = { rounds_scored: 2, moves: 4, responsive_moves: 1, responsive_share: 0.25, offers_answered: 0 }
+  const h = mountPanel(t, legacy)
+  await h.state.load()
+  const r = await h.render()
+  assert.match(r.text, /responsive moves 25% model projection, not evidence/)
+  assert.doesNotMatch(r.text, /expected reactions|Track records|red line/)
+  assert.doesNotMatch(r.html, /ws-record|ev-red-line/)
 })

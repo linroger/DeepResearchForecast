@@ -1,6 +1,6 @@
 # Handoff — reflexive world-state model: realism, reflexivity and robustness (iteration 2026-10-20)
 
-**Last Updated (UTC):** 2026-10-20T14:10Z
+**Last Updated (UTC):** 2026-10-20T15:25Z
 **Status:** Complete for this iteration (not pushed; a live run awaits the owner's approval)
 **Current Focus:** none; next candidates in §9.
 
@@ -94,9 +94,51 @@ All on 2026-10-20 (+08:00) against the working tree at 63aa8c7 plus the docs and
 ## 9) Remaining Work & Next Steps
 - **Live run (owner's approval):** the only way to see the new mechanics on real artifacts and to falsify A1. Watch: `glm` calls succeed with `reasoning_effort: low`; `world_state.json` actors' `track_record`; `red_line` events; `expectations_checked/reacted` in `summary.behaviour`; trajectory `channels`.
 - **Deployment:** the deployment checkout still serves `claude-reflexive-world-state-model` with another process's edits; nothing here reaches it until it runs `main` after this branch is merged.
-- **Not done in this iteration (candidates):** the World State panel does not yet show track records or the expectation counts (the API returns them); the report's world-evolution block does not list red-line crossings or track records; exogenous shocks from researched risks with base rates (the seed has no such field yet); private negotiations (offers are public today); commitment fulfilment stays mechanical (any non-hold move except a withdrawal honours a due commitment).
+- **Not done in this iteration (candidates):** the World State panel does not yet show track records or the expectation counts (the API returns them); the report's world-evolution block does not list red-line crossings or track records (*both done in the reader iteration, §11*); exogenous shocks from researched risks with base rates (the seed has no such field yet); private negotiations (offers are public today); commitment fulfilment stays mechanical (any non-hold move except a withdrawal honours a due commitment).
 
 ## 10) Updates to This File (append-only)
 - 2026-10-20T13:30Z: created with the brief, the eight gaps, acceptance checks and the plan.
 - 2026-10-20T14:05Z: increments 1–8 done (52a9b37, f599827, 63aa8c7 + docs); findings F1–F4, decisions D1–D6, before/after evidence (§7); suites pending (§8).
 - 2026-10-20T14:10Z: final plain and guarded suites recorded (§8); status Complete for this iteration.
+- 2026-10-20T15:25Z: reader iteration recorded (§11): panel and report lines for track records, red lines and expectation counts; §9 candidates annotated.
+
+## 11) Reader iteration — the panel and the report show the new signals (2026-10-20, +08:00 22:46–23:30)
+- **Request (from the session that ran §1–§10):** surface the reflexive world model's new signals to readers. World State panel: each actor's `track_record` (kept, lapsed, broken, released, open, resolved, reliability, outcomes), breakers first; `red_line` events with a readable label in both languages; the run summary's `behaviour.expectations_checked` / `expectations_reacted` beside the responsive-moves badge. Report (`ReportAgent._world_evolution_block`): bounded lines for red-line crossings and for actors with broken or lapsed commitments, still labelled an elicited model projection, hours mode and legacy runs byte-identical. Tests, README EN/ZH (line-aligned), this entry; commit on an own branch, nothing pushed. Constraints as §1 (deployment checkout untouched, frozen rsync copies, herding guard, no paid runs, `env -u GH_TOKEN`).
+- **Branch:** `claude/brave-stonebraker-d2b98b` (worktree `.claude/worktrees/brave-stonebraker-d2b98b`), fast-forwarded from `main` 8bf156d to b8cc994 (this record's four commits) before the work.
+
+### 11.1 Requirements → acceptance checks
+| Req | Acceptance check | Evidence |
+|---|---|---|
+| R11 panel track records | Latest view only (like open commitments), on runs whose API actors carry `track_record`: one line per actor with a resolved, released or open commitment or a resolved move; order broken + lapsed, then broken, resolved, name; "kept k of n (p%) · b broken · l lapsed · r released · o open · moves: …", zero buckets left out; never the reputation score (D3); the actor name red for a breaker, amber for lapses only; empty-state line when nothing is resolved; card absent on older runs | `frontend/tests/worldState.test.mjs` (`trackRecordRows`, `trackRecordSummary`, view model), `worldStatePanel.test.mjs` (EN and ZH markup, classes, no `reputation`) |
+| R12 red-line label | `red_line` consequences read "red line crossed" / 「越过红线」, lead their period's list, red tag; a past period outside the API's 40-event window takes them from the history row's `red_lines_crossed` | same modules; screenshot `en-past-2026-04-red-line.jpg` |
+| R13 expectation badge | "expected reactions followed r/c" / 「预期反应获跟进 r/c」 beside the responsive-moves badge, tooltip saying a match is not judged (D4); shown whenever `expectations_checked` > 0, also when the move score is null; reacted capped at checked; absent on older runs | same modules |
+| R14 report lines | after the alliance shifts and before the closing caveat: 「红线越界（推演仲裁认定，共 N 次[，列最近 4 次]）：」 + the newest 4 `red_line` event descriptions (period label, 220 chars), then 「承诺履约（推演内记录，非现实信誉评估）：」 + up to 6 actors with broken or lapsed commitments, same order as the panel (「兑现 k/n，违约 b，失效 l」) | `backend/tests/test_world_reader_signals.py` |
+| R15 byte-identical | the block for the downstream fixture equals the text b8cc994 rendered (`LEGACY_BLOCK`, SHA-256 df3d715f… from both trees); clean or junk track records and blank red-line events add nothing; hours mode has no `world_state.json` → "" as before | same module; `block_head.txt` = `block_new.txt` |
+| R16 API | `/world-state` history rows carry `red_lines_crossed` (≤ 4 entries, `actor`/`by`/`red_line` only, 160 chars each) only when the row's `arbiter` summary has crossings; the response of an older run is unchanged | same module |
+| R17 contract | `frontend/tests/fixtures/world/world_state.reflexive.json` (the panel tests' payload) equals the API's answer for the reflexivity scenario (`tests/test_world_reflexivity.py`, periods 1–4) run through the real kernel; regenerate with `DRF_WRITE_FIXTURES=1` | same module, `test_the_panel_fixture_is_what_the_api_returns` |
+| R18 no regressions | frontend unit + build green; plain suite 0 failures apart from the 19 known errors; guarded runner only the 3 known guard failures | §11.4 |
+
+### 11.2 Decisions
+- **D7 (API, small addition):** each history row already stores the period's crossings (`arbiter.red_lines_crossed`), but the API passes no `arbiter` field, so a past period older than the 40-event window lost its red lines. The row now carries `red_lines_crossed`, only when non-empty. Alternative (widen the event window) rejected: it grows every poll.
+- **D8 (order):** breakers first by broken + lapsed, the agents' public-brief key, then broken (an actor who broke a commitment ranks ahead of one who only let one lapse), then resolved, then name. The report uses the same order (its third key, kept, ranks identically once the first two tie).
+- **D9 (wording):** reliability shows as the percentage after "kept k of n"; "released" counts are listed (not the actor's failure) and explained in the card's tooltip with the other terms. Chinese uses 违约 for broken, as the existing offers line does.
+- **D10:** track records describe the latest world only; a past period would need per-round snapshots the API does not keep.
+- **D11:** the report block stays Chinese like the rest of the signal pack; each new heading repeats that it is the model's own record (推演仲裁认定 / 推演内记录，非现实信誉评估), and the block keeps its projection label and closing caveat. No shares or probabilities appear in the new lines.
+
+### 11.3 Issues, mistakes, recoveries
+- **I1 (deployment folder touched; cache only):** a throwaway Vite preview of the panel, run from this worktree whose `frontend/node_modules` is a symlink to the deployment checkout's, re-optimised its dependency cache into `/Users/rogerlin/Downloads/DeepResearchForecast/frontend/node_modules/.vite/deps` at 23:04:06 +08 (axios and vue; it replaced the cache that was there). No deployment Vite process was running; Vite rebuilds that cache by itself on its next start because the config hash differs. It was not restored (the old content is gone, and deleting the folder would be one more write). **Guardrail:** a Vite dev server started from a worktree with linked `node_modules` MUST set `cacheDir` outside `node_modules` (the preview config was changed to the scratchpad, and the timestamp stayed 23:04:06 afterwards). `npm run build` and `node --test` do not write there.
+- **I2:** the desktop app's preview launcher left that Vite process asleep without a port; a background shell job served it and the browser pane opened the URL.
+- **I3 (test):** a first panel assertion forgot that the consequence count includes relationship rows; fixed in the test.
+- **F5 (found, not changed):** the round headline's "N events" counts only the arbiter's emergent events, so a period whose only event is a red-line crossing reads "0 events" (seen in the preview for 2026-04).
+
+### 11.4 Verification (2026-10-20, +08:00)
+- **Before/after:** the new tests on an archive of b8cc994 (`/Users/rogerlin/Downloads/drf-guarded-runs/20261020-reader-signals-evidence/before_*.log`): frontend — `worldState.test.mjs` fails at import (the new helpers do not exist), 2 of the 3 new panel tests fail (the "older runs render no new lines" test passes, as it must); backend — 6 of 7 fail, the byte-identical test passes (it is the guarantee). On this branch all pass.
+- **Frontend:** `npm run test:unit` 228 passed / 0 failed (218 + 10 new; the empty-state case was added after the suites below, frontend only); `npm run build` OK.
+- **Plain suite** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261020-230100-reader-signals-plain/`, frozen rsync copy without `backend/uploads`, deployment venv): JUnit `tests=8096 errors=19 failures=0 skipped=1352` = 6,725 passed, 1,341 skipped, 11 xfailed, 19 errors (all `test_legacy_official_data.py`), 0 failed; 8,096 = 8,089 (§8) + 7 new. The copy predates only a frontend label change (the Chinese colon after 行动); its `backend/` equals the final one apart from caches.
+- **Guarded runner** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261020-231007-reader-signals-guarded/`): the §8 module list plus `test_world_reader_signals.py` (56 modules, `modules.txt`): 1,618 tests, 1,615 passed, 3 failed — the known guard failures (`test_deployment_sidecar_control_flow.py` ×2, `test_official_data_end_to_end.py::test_guarded_mcp_to_promoted_research_and_report_png`); 1,618 = 1,611 (§8) + 7 new. Receipt: no source drift, identity preserved.
+- **Gates:** `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541` on the two changed app modules and `--select F,E9` on the new test module pass; `py_compile` OK; no invisible characters in the changed files; README EN/ZH still 2,007 lines each.
+- **Visual check** (throwaway Vite page with the real component and the fixture, no backend; screenshots and SHA-256 sums in the evidence folder): latest view (expectation badge beside the responsive-moves badge, US first in red with "kept 0 of 1 (0%) · 1 broken · moves: 1 succeeded", China "1 released · moves: 1 partly succeeded"), the 2026-04 period ("red line crossed" in red at the head of the list, no track-record card), Chinese, and 375 px width (no horizontal scroll). Light theme only; dark-theme colours reuse the panel's existing red/amber hues.
+
+### 11.5 Remaining
+- A live run (owner's approval) shows the lines on real artifacts; nothing here needs one to be correct.
+- F5 (headline event count); the candidates in §9.

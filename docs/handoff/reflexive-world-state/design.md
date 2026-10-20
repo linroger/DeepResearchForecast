@@ -327,3 +327,15 @@ gap it closes; all are deterministic kernel rules or bounded arbiter fields vali
 Acceptance: `tests/test_world_announced_settings.py`, `test_world_track_records.py`, `test_world_red_lines.py`,
 `test_world_pressure_channel.py`, `test_world_reflexivity.py` (the chain end to end) and
 `test_llm_thinking_refusal.py`.
+
+- **Readers (same day, later).** The World State panel lists each actor's `track_record` on the latest view
+  (counts, never the reputation score; breakers first: broken + lapsed, then broken, resolved, name), labels
+  `red_line` consequences "red line crossed" / 「越过红线」 at the head of their period, and shows
+  `expectations_reacted / expectations_checked` from the run summary beside the responsive-moves badge. The
+  `/world-state` history rows carry `red_lines_crossed` (at most 4, only when present) so a past period keeps
+  its crossings after its events leave the 40-event window. The report's world-evolution block adds the newest
+  4 red-line crossings and up to 6 actors with broken or lapsed commitments, inside the block that stays
+  labelled an elicited model projection; without such events or records it is byte-identical. Acceptance:
+  `tests/test_world_reader_signals.py` (it also pins `frontend/tests/fixtures/world/world_state.reflexive.json`,
+  the panel tests' payload, to the API's output for the reflexivity scenario) and the frontend
+  `worldState` / `worldStatePanel` tests.

@@ -2376,6 +2376,14 @@ def get_simulation_world_state(simulation_id: str):
                 "deterministic": row.get("deterministic") or {},
                 "digest": digests.get(row.get("round"), ""),
             }
+            # RED LINES crossed in the period (the kernel's apply summary), for the panel's past-period
+            # view once the round's events have left the recent-event window; absent when none
+            arbiter = row.get("arbiter") if isinstance(row.get("arbiter"), dict) else {}
+            crossed = arbiter.get("red_lines_crossed") if isinstance(arbiter.get("red_lines_crossed"), list) else []
+            crossed = [{k: str(c.get(k) or "")[:160] for k in ("actor", "by", "red_line")}
+                       for c in crossed[:4] if isinstance(c, dict)]
+            if crossed:
+                entry["red_lines_crossed"] = crossed
             if row.get("error"):
                 entry["error"] = str(row.get("error"))[:200]
             history.append(entry)

@@ -4141,11 +4141,13 @@ class ReportAgent:
         lines.append("注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。")
         return "\n".join(lines)
 
-    def _world_evolution_block(self, max_variables: int = 6, max_moves: int = 8) -> str:
+    def _world_evolution_block(self, max_variables: int = 6, max_moves: int = 8, max_red_lines: int = 4,
+                               max_records: int = 6) -> str:
         """REFLEXIVE WORLD (design §2.9): render ``world_state.json`` / ``world_state_history.jsonl``
         as a bounded diagnostic block — variable trajectories per period, the decisive moves,
-        alliance shifts and arbiter failures.  Labeled an elicited model projection; absent
-        artifacts → "" (hours mode / legacy runs are byte-identical)."""
+        alliance shifts, red-line crossings, actors with broken or lapsed commitments and arbiter
+        failures.  Labeled an elicited model projection; absent artifacts → "" and absent fields add
+        nothing (hours mode / legacy runs are byte-identical)."""
         try:
             sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
                                    str(self.simulation_id or ""))
@@ -4261,6 +4263,36 @@ class ReportAgent:
         if shifts:
             lines.append("联盟/对立变动：")
             lines.extend(f"· {s}" for s in shifts[:6])
+        # RED LINES (reflexivity, design §2.11): crossings the arbiter reported and the kernel
+        # validated — the model's own verdicts, newest few only
+        crossings = [e for e in (world.get("events") or [])
+                     if isinstance(e, dict) and e.get("kind") == "red_line" and str(e.get("description") or "").strip()]
+        if crossings:
+            more = f"，列最近 {max_red_lines} 次" if len(crossings) > max_red_lines else ""
+            lines.append(f"红线越界（推演仲裁认定，共 {len(crossings)} 次{more}）：")
+            for e in crossings[-max_red_lines:]:
+                lines.append(f"· {str(e.get('period_label') or _lab(e.get('round')))}: {str(e.get('description')).strip()[:220]}")
+
+        def _count(value):
+            return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else 0
+
+        # TRACK RECORDS: actors whose recorded commitments were broken or lapsed, breakers first
+        records = []
+        for actor in world.get("actors") or []:
+            rec = actor.get("track_record") if isinstance(actor, dict) else None
+            if not isinstance(rec, dict):
+                continue
+            kept, broken, lapsed = _count(rec.get("kept")), _count(rec.get("broken")), _count(rec.get("lapsed"))
+            if broken or lapsed:
+                name = str(actor.get("name") or f"Agent {actor.get('agent_id')}")
+                records.append((-(broken + lapsed), -broken, -kept, name, kept, broken, lapsed))
+        if records:
+            lines.append("承诺履约（推演内记录，非现实信誉评估）：")
+            for _, _, _, name, kept, broken, lapsed in sorted(records)[:max_records]:
+                parts = [f"兑现 {kept}/{kept + broken + lapsed}"]
+                parts += [f"违约 {broken}"] if broken else []
+                parts += [f"失效 {lapsed}"] if lapsed else []
+                lines.append(f"· {name}：" + "，".join(parts))
         lines.append("注：世界变量由推演仲裁逐期更新并有界钳制，不是观察到的现实指标；现实世界的定量声明只能来自研究来源。")
         return "\n".join(lines)
 

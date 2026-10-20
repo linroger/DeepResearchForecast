@@ -136,11 +136,86 @@ function textItems(list, max = 12) {
   }).filter(Boolean)
 }
 
+/** Readable tag for an event kind in the consequences list ("red_line" → "red line crossed"); other kinds pass through. */
+export function eventKindLabel(kind, labels = {}) {
+  const k = String(kind || '')
+  const lab = { red_line: 'red line crossed', ...labels }
+  return Object.prototype.hasOwnProperty.call(lab, k) && lab[k] ? String(lab[k]) : k
+}
+
+const TRACK_RECORD_COUNTS = ['kept', 'lapsed', 'broken', 'released', 'open']
+const MOVE_OUTCOMES = ['success', 'partial', 'blocked', 'failed']
+
+function countOf(value) {
+  const n = Number(value)
+  return value !== null && value !== undefined && typeof value !== 'boolean' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+
+/**
+ * TRACK RECORDS: one row per actor whose `track_record` (GET /world-state `actors[]`) holds a
+ * resolved, released or open commitment or a resolved move. Breakers first: the most broken or
+ * lapsed commitments (the agents' public brief ranks by the same sum), then the most broken, the
+ * most resolved, the name. `resolved` = kept + lapsed + broken; `reliability` = kept / resolved.
+ */
+export function trackRecordRows(actors) {
+  const rows = []
+  for (const a of Array.isArray(actors) ? actors : []) {
+    const rec = a && typeof a === 'object' ? a.track_record : null
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue
+    const counts = {}
+    for (const key of TRACK_RECORD_COUNTS) counts[key] = countOf(rec[key])
+    const resolved = counts.kept + counts.lapsed + counts.broken
+    const given = Number(rec.reliability)
+    const reliability = !resolved ? null
+      : (rec.reliability !== null && rec.reliability !== undefined && typeof rec.reliability !== 'boolean' && Number.isFinite(given)
+          ? Math.max(0, Math.min(1, given)) : counts.kept / resolved)
+    const outcomes = rec.outcomes && typeof rec.outcomes === 'object'
+      ? MOVE_OUTCOMES.map((outcome) => ({ outcome, count: countOf(rec.outcomes[outcome]) })).filter((o) => o.count > 0)
+      : []
+    if (!resolved && !counts.released && !counts.open && !outcomes.length) continue
+    rows.push({ actor: String(a.name || `Agent ${a.agent_id}`), ...counts, resolved, reliability, outcomes })
+  }
+  const failures = (r) => r.broken + r.lapsed
+  return rows.sort((x, y) => failures(y) - failures(x) || y.broken - x.broken || y.resolved - x.resolved
+    || (x.actor < y.actor ? -1 : x.actor > y.actor ? 1 : 0))
+}
+
+/**
+ * "kept 1 of 3 (33%) · 1 broken · 1 lapsed · 2 open · moves: 2 succeeded, 1 blocked" for one
+ * `trackRecordRows` row; zero buckets are left out. `labels.kept` takes {k} (kept) and {n} (resolved).
+ */
+export function trackRecordSummary(row, labels = {}) {
+  if (!row || typeof row !== 'object') return ''
+  const lab = {
+    kept: 'kept {k} of {n}', broken: 'broken', lapsed: 'lapsed', released: 'released', open: 'open', moves: 'moves',
+    success: 'succeeded', partial: 'partly succeeded', blocked: 'blocked', failed: 'failed', colon: ': ', separator: ', ',
+    ...labels
+  }
+  const parts = []
+  if (row.resolved > 0) {
+    const pct = row.reliability !== null && row.reliability !== undefined ? ` (${Math.round(row.reliability * 100)}%)` : ''
+    parts.push(String(lab.kept).replace('{k}', String(row.kept)).replace('{n}', String(row.resolved)) + pct)
+  }
+  for (const key of ['broken', 'lapsed', 'released', 'open']) {
+    if (row[key] > 0) parts.push(`${row[key]} ${lab[key]}`)
+  }
+  const outcomes = Array.isArray(row.outcomes) ? row.outcomes : []
+  if (outcomes.length) parts.push(`${lab.moves}${lab.colon}` + outcomes.map((o) => `${o.count} ${lab[o.outcome] || o.outcome}`).join(lab.separator))
+  return parts.join(' · ')
+}
+
+/** RED LINES of a history row (`red_lines_crossed`), as consequence rows worded like the kernel's red_line events. */
+function redLineConsequences(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 4)
+    .filter((x) => x && typeof x === 'object' && x.actor && x.by && x.red_line)
+    .map((x) => ({ kind: 'red_line', description: `${x.by} crossed ${x.actor}'s red line: ${x.red_line}` }))
+}
+
 /**
  * View model for the panel, built from the /world-state payload. Defensive against partial data.
  * `selectedRound` (null = follow the latest committed round) picks which history row the
  * narrative, arbiter verdict, decisions, moves, consequences, diff and digest describe; the
- * tracked variables and open commitments always describe the latest world.
+ * tracked variables, open commitments and track records always describe the latest world.
  */
 export function summarizeWorldState(data, selectedRound = null) {
   const d = data && typeof data === 'object' ? data : {}
@@ -189,11 +264,14 @@ export function summarizeWorldState(data, selectedRound = null) {
     moves = textItems(det.actions).filter((a) => !/holds position|no recorded move/.test(a))
       .map((a) => ({ actor: '', description: a, statement: '', targets: [] }))
     consequences = [
+      ...redLineConsequences(row && row.red_lines_crossed),
       ...textItems(det.effects_fired).map((x) => ({ kind: 'effect', description: x })),
       ...textItems(det.scheduled_events).map((x) => ({ kind: 'scheduled', description: x })),
       ...textItems(det.commitments_lapsed).map((x) => ({ kind: 'lapsed', description: x }))
     ]
   }
+  // RED LINES lead the list (the card shows its first ten); the rest keep their order
+  consequences = [...consequences.filter((c) => c.kind === 'red_line'), ...consequences.filter((c) => c.kind !== 'red_line')]
   const diff = row && row.diff && typeof row.diff === 'object' ? row.diff : {}
   const relationshipChanges = (Array.isArray(diff.relationships_changed) ? diff.relationships_changed : [])
     .filter((rc) => rc && typeof rc === 'object')
@@ -247,6 +325,18 @@ export function summarizeWorldState(data, selectedRound = null) {
         responsiveMoves: Number(summary.behaviour.responsive_moves || 0),
         responsiveShare: Number(summary.behaviour.responsive_share), offersAnswered: Number(summary.behaviour.offers_answered || 0) }
     : null
+  // EXPECTATIONS: of the reactions actors expected after their moves, how many the named actor
+  // followed with a move one period later (counted apart from the move score; absent on older runs)
+  const beh = summary.behaviour && typeof summary.behaviour === 'object' ? summary.behaviour : {}
+  const expectationsChecked = countOf(beh.expectations_checked)
+  const expectations = expectationsChecked
+    ? { checked: expectationsChecked, reacted: Math.min(expectationsChecked, countOf(beh.expectations_reacted)) }
+    : null
+  // TRACK RECORDS describe the latest world; `trackRecordsAvailable` is false on runs whose API rows predate them
+  const actorRows = Array.isArray(d.actors) ? d.actors : []
+  const trackRecordsAvailable = actorRows.some((a) => a && typeof a === 'object' && a.track_record
+    && typeof a.track_record === 'object' && !Array.isArray(a.track_record))
+  const trackRecords = trackRecordRows(actorRows)
   const problems = textItems(row && row.arbiter_problems, 12)
   if (row && row.error) problems.push(String(row.error))
   const headline = isPast
@@ -281,6 +371,9 @@ export function summarizeWorldState(data, selectedRound = null) {
     offerCounts,
     seedGaps,
     behaviour,
+    expectations,
+    trackRecords,
+    trackRecordsAvailable,
     history: rows.map((r) => ({
       round: r.round, label: r.period_label || `#${r.round}`, headline: String(r.headline || ''),
       arbiterStatus: r.arbiter_status || '',
