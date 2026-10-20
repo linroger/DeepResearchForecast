@@ -4296,10 +4296,11 @@ def _frame_rows(frame: Any, key: str, fields: Sequence[str], limit: int) -> list
 # only when a line of the report states its probability and names the event (shares a word of
 # three letters or more, or two consecutive CJK characters, with it); its window and its [S<n>]
 # marker count only when they stand on such a line, an effect only on a metric of
-# quantitative_facts, and an effect's size only when the report states it.  What does not check
-# out is left empty, so the seed records a typed gap for it (shock_without_window,
-# shock_without_source, a direction-only effect) instead of using a number the report does not
-# contain.
+# quantitative_facts, and an effect's size only when the report states it.  A scenario of the
+# frame is never a risk: neither an event named like one nor a probability stated only on lines
+# that give a scenario its own weight.  What does not check out is left empty, so the seed records
+# a typed gap for it (shock_without_window, shock_without_source, a direction-only effect) instead
+# of using a number the report does not contain.
 _PERCENT_WORDS_RE = re.compile(r"\s*(?:per\s?cent|percent)\b")
 _CHANGE_LEAD_RE = re.compile(r"^(?:(?:to\b|by\b|=|→|->|至|到|[+\-−±])\s*)+")
 _RANGE_TAIL_RE = re.compile(r"\s*(?:-|–|—|~|to\b|至|到)\s*[+\-−]?\d")
@@ -4397,7 +4398,7 @@ def _quant_metric(ref: Any, names: Sequence[tuple[str, str]]) -> str:
 
 def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, Any]],
                           sources: Sequence[Mapping[str, Any]],
-                          scenario_names: Sequence[str] = ()) -> tuple[list[dict], dict]:
+                          scenarios: Sequence[Scenario] = ()) -> tuple[list[dict], dict]:
     """``(risks, checks)``: the frame's risks the report documents (the rules above), at most
     MAX_FRAME_RISKS in the model's order, and the counts of what each check removed."""
     checks = dict.fromkeys(_FRAME_RISK_CHECKS, 0)
@@ -4406,7 +4407,7 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
     text = "\n".join(lines)
     names = [(_name_key(row.get("metric")), _collapse(row.get("metric"), 200))
              for row in quant if isinstance(row, Mapping) and _name_key(row.get("metric"))]
-    scenarios = {_name_key(name) for name in scenario_names if _name_key(name)}
+    frame_names = {_name_key(s.name) for s in scenarios if _name_key(s.name)}
     risks: list[dict] = []
     seen: set[str] = set()
     for item in raw_rows if isinstance(raw_rows, list) else []:
@@ -4417,7 +4418,7 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
         checks["extracted"] += 1
         if len(risks) >= MAX_FRAME_RISKS or _norm_key(event) in seen:
             continue
-        if _name_key(event) in scenarios:
+        if _name_key(event) in frame_names:
             checks["scenario"] += 1
             continue
         terms = _event_terms(event)
@@ -4427,8 +4428,11 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
         if not phrase:
             checks["probability_not_stated"] += 1
             continue
-        seen.add(_norm_key(event))
         stating = [line for line in about if _states(line, phrase)]
+        if any(phrase == f"{s.weight}%" and all(_report_key(s.name) in line for line in stating) for s in scenarios):
+            checks["scenario"] += 1
+            continue
+        seen.add(_norm_key(event))
         per = _collapse(item.get("per"), 80)
         if per and not any(_states(line, _report_key(per)) for line in stating):
             per = ""
@@ -7901,7 +7905,7 @@ class _Engine:
         when the frame was extracted."""
         frame = getattr(self, "_frame", None)
         risks, checks = normalize_frame_risks(frame, getattr(self, "_frame_report", ""), quant, sources,
-                                              [s.name for s in self.plan.scenarios])
+                                              self.plan.scenarios)
         if isinstance(frame, Mapping):
             self.meta["forecast_risks"] = checks
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),

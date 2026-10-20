@@ -200,7 +200,7 @@ def test_counts_are_bounded_and_scenarios_duplicates_and_garbage_never_become_ri
                             {"event": "Hormuz closure", "probability": "5%", "per": "monthly", "source": "S2"},
                             {**HORMUZ, "event": "Tanker insurance crisis", "probability": "1 in 20",
                              "per": "", "affects": [f"Insurer {i}" for i in range(9)], "recurring": "true"}],
-                           scenarios=["Hormuz closure", "Calm"])
+                           scenarios=[lr.Scenario("Hormuz closure", 30, ""), lr.Scenario("Calm", 70, "")])
     assert [r["event"] for r in risks] == ["Strait of Hormuz closure", "Tanker insurance crisis"]
     assert risks[1]["affects"] == [f"Insurer {i}" for i in range(lr.MAX_FRAME_RISK_AFFECTS)]
     assert risks[1]["recurring"] is False                       # only a JSON true says it recurs
@@ -208,6 +208,22 @@ def test_counts_are_bounded_and_scenarios_duplicates_and_garbage_never_become_ri
     for frame in (None, [], "risks", {"risks": "x"}, {"risks": [1, None, {"event": 5}, {"event": ""}, ["x"]]},
                   {"base_rates": []}):
         assert lr.normalize_frame_risks(frame, REPORT, QUANT, SOURCES) == ([], _ZERO)
+
+
+def test_a_scenario_restated_under_another_name_is_not_a_risk():
+    """The frame's scenarios are the share prior, never shocks: a paraphrased scenario whose only
+    stated probability is that scenario's own weight is dropped; an exogenous event with the same
+    number on a line of its own is kept."""
+    frame = [lr.Scenario("Coalition rupture and early election", 25, ""), lr.Scenario("Continuity", 75, "")]
+    report = ("- Coalition rupture and early election — 25% — a coalition crisis triggers a snap election [S2].\n"
+              "A no-confidence vote against the chancellor has a 25% chance per year [S2].\n")
+    risks, checks = _risks([
+        {"event": "Early election after a coalition crisis", "probability": "25%", "per": "", "source": "S2"},
+        {"event": "No-confidence vote", "probability": "25%", "per": "per year", "source": "S2"},
+    ], report=report, scenarios=frame)
+    assert [(r["event"], r["per"], r["source"]) for r in risks] == [
+        ("No-confidence vote", "per year", "IEA risk note [S2]")]
+    assert checks == {**_ZERO, "extracted": 2, "kept": 1, "scenario": 1}
 
 
 def test_a_chinese_report_keeps_its_own_window_words_and_full_width_numbers():
