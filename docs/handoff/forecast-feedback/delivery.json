@@ -1,0 +1,23 @@
+{
+  "recorded_utc": "2026-10-20T17:32:15.973638+00:00",
+  "implementation_status": "complete",
+  "local_main_integration": "complete",
+  "remote_delivery": "blocked_authentication",
+  "commitment_commit": "303e5a88aa4fa097441b8b2161bc0209b3c42130",
+  "feedback_commit": "ba914c5f6addf1831a8ad5bed41fee856d262344",
+  "accepted_unique_cases": 812,
+  "final_source_gate_cases": 509,
+  "source_verification": "verification.json",
+  "review": "closed; review.md",
+  "push_attempt": {
+    "remote": "legacy",
+    "ref": "main",
+    "commit": "ba914c5f6addf1831a8ad5bed41fee856d262344",
+    "exit_code": 128,
+    "error": "Invalid username or token. Password authentication is not supported for Git operations.",
+    "unchanged_credentials_retried": false
+  },
+  "deployment": false,
+  "primary_checkout_preserved": true,
+  "next_step": "Restore working GitHub authentication, then push the already-reviewed local main; do not rerun providers or change accepted source to retry delivery."
+}

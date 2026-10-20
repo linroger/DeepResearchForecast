@@ -207,7 +207,7 @@
   "deployment": false,
   "production_accuracy_claim": false,
   "main_commitment_commit": "303e5a88aa4fa097441b8b2161bc0209b3c42130",
-  "delivery": "reviewed implementation accepted; commit and remote delivery recorded separately",
+  "delivery": "local main integrated; remote push rejected by authentication; delivery.json",
   "deduplication": "JUnit classname normalized only for backend/ invocation prefix; same module/class and parameterized test name count once.",
   "review": "closed; no remaining blocking findings; review.md"
 }

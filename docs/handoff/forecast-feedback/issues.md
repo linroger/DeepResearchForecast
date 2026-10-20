@@ -21,3 +21,5 @@
 ## Final acceptance closure
 
 FF-1 through FF-15 are resolved by implementation, focused regressions and the final accepted 812-case set. Remaining publication work is only the final reviewed commit/main fast-forward/push; this does not imply deployment or empirical calibration. No new unresolved application issue remains in the approved slice.
+
+- DELIVERY-1 (blocked): GitHub rejected the authenticated push of reviewed local main with Invalid username or token. Source/acceptance are complete; restore credentials before retrying. No unchanged-credential retry occurred.

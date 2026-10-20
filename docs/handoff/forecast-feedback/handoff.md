@@ -1,8 +1,8 @@
 # Forecast feedback handoff
 
 **Last Updated (UTC):** 2026-10-20T15:19:52.682931+00:00
-**Status:** Implementation complete; Git delivery in progress
-**Current Focus:** Integrate the stricter promise contract with current main and close the durable forecast feedback loop.
+**Status:** Implementation and local main integration complete; remote delivery blocked by authentication
+**Current Focus:** Deliver the reviewed local main after GitHub authentication is restored.
 
 ## 1) Request & Context
 The user approved the preceding roadmap's first implementation: integrate commitment fulfilment with main, implement forecasting through outcome scoring, verify restart and next report track record with a subagent team. The clean managed worktree starts from main ac488913. The primary deployment checkout is dirty and remains untouched. This is implementation and guarded synthetic end-to-end acceptance, not a live-provider accuracy study or deployment.
@@ -22,11 +22,12 @@ The approved plan is in PLANS.md. Integrate the world repair first while mapping
 
 ## 4) To-Do & Progress Ledger
 - [x] Read current main history, prior verification and guarded runner boundary.
-- [ ] Integrate commitment semantics with newer main realism features.
-- [ ] Implement durable typed forecast and resolution join.
-- [ ] Wire monitoring and next-report consumer.
-- [ ] Independent acceptance/review and relevant regression gates.
-- [ ] Scoped commits, main integration and delivery record.
+- [x] Integrate commitment semantics with newer main realism features — 303e5a8, 305 cases.
+- [x] Implement durable typed forecast and resolution join — ba914c5.
+- [x] Wire monitoring and next-report consumer — seven real workflow cases including restart.
+- [x] Independent acceptance/review and relevant regression gates — 812 unique cases, review closed.
+- [x] Scoped commits, local main integration and delivery record.
+- [ ] Remote publication — blocked by rejected GitHub authentication.
 
 ## 5) Findings, Decisions, Assumptions
 Main still contains broad non-hold fulfilment; local repair faae88f is not its ancestor. The ledger currently stores scenario probabilities but not binary contracts; market/data outcomes live separately. The current report appends to the ledger before final publication. The resolution monitor defaults to recent reports. Exact publication boundary and legacy resolution APIs are being traced before changes.
@@ -69,3 +70,9 @@ Independent review also closed publication race and rollback gaps at source leve
 All 812 unique cases pass: commitment305, combinedfeedback500, workflow7. Both final-source actor consequence/restart reruns also pass. The seven-case full workflow uses real generation/publication/native monitoring/Flask SDK/ledger and a fresh interpreter; the next actual report and APIs/download preserve the exact typed record. All 17 changed Python boundary hashes match tested sources. Source-dependent tests are frozen; only documentation, commit and remote delivery remain. See verification.md/json and evidence/.
 
 Independent final review is closed on the exact frozen bytes. The final combined gate comprises 509 passing cases (500 regression, seven full workflows, two fresh world continuations), with the earlier unchanged 305-case world integration producing812 unique accepted cases overall. No blocking finding remains.
+
+### 2026-10-20T17:32:15.973638+00:00 — local delivery and remote blocker
+
+Commit303e5a8 integrates the world repair; ba914c5 implements the full feedback loop. Local main was fast-forwarded with expected-old-value checks, preserving all existing checkout files. The single authorized `git push legacy main` attempt failed with Invalid username or token (exit128). No unchanged-credential retry was made. Source hashes still match acceptance; no remaining application change is required. Delivery details are in delivery.json.
+
+Next-session prompt: “Read docs/handoff/forecast-feedback/handoff.md and delivery.json. The implementation is reviewed and locally integrated. Confirm local main and source hashes, restore working GitHub authentication through the existing credential flow, then push local main once. Preserve the dirty primary deployment checkout; do not restart services or rerun paid providers. Further forecast-quality work should begin with prospective evaluation rather than treating fixture scores as calibration.”
