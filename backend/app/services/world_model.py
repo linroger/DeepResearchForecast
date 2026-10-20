@@ -76,6 +76,14 @@ COMMITMENT_STATUSES = ("pending", "due", "fulfilled", "lapsed", "withdrawn")
 
 DEFAULT_CAPACITY_PER_ROUND = 2
 HISTORY_LIMIT = 48
+# ANNOUNCED SETTINGS (realism, 2026-10-20): the change clamp (``max_change_ratio``) keeps the arbiter
+# from inventing jumps, but it also made an actor's own announced instrument setting (a tariff raised
+# from 20% to 145% in one month, a quota cut to a stated level) take several periods to land.  An
+# arbiter change attributed (``caused_by``) to an actor whose move this period was of one of these
+# kinds and whose statement or terms state the new value — or the size of the change — applies in
+# full; it never crosses zero.  Everything else stays clamped.
+ANNOUNCING_KINDS = frozenset({"policy", "economic", "legal", "coalition", "operational"})
+ANNOUNCED_FIGURE_TOLERANCE = 0.005   # relative tolerance when matching an announced figure
 EVENT_LIMIT = 400
 DEFAULT_MAX_CHANGE_RATIO = 0.5
 PUBLIC_BRIEF_MAX_CHARS = 2400
@@ -310,6 +318,24 @@ def _is_currency_unit(unit: str) -> bool:
     if any(sym in u for sym in ("$", "€", "£", "¥", "￥")):
         return True
     return u.casefold() in _CURRENCY_CODES
+
+
+def announced_figures(text: Any) -> List[float]:
+    """Every figure a statement states, scaled like ``parse_quantity`` ("145%" → 145,
+    "US$2 billion" → 2e9, "1.5 million barrels" → 1.5e6); bounded to the first 24."""
+    s = _text(text, 800)
+    out: List[float] = []
+    for m in _NUMBER_RE.finditer(s):
+        num, _ = parse_quantity(s[m.start(): m.start() + 40])
+        if num is not None:
+            out.append(num)
+        if len(out) >= 24:
+            break
+    return out
+
+
+def _close(a: float, b: float) -> bool:
+    return abs(a - b) <= 1e-9 + ANNOUNCED_FIGURE_TOLERANCE * max(abs(a), abs(b))
 
 
 # ---------------------------------------------------------------------------
@@ -969,11 +995,17 @@ class WorldModel:
             description = _text(option.get("label"), 160) or option_id
             if target_names:
                 description += " → " + ", ".join(target_names[:4])
+            announced_terms = _text(d.get("terms"), INTERACTION_TERMS_MAX_CHARS)
+            if not announced_terms and option_id.startswith("accept:"):
+                # an acceptance adopts the offer's terms verbatim (mirror-image rule)
+                accepted = self.interactions.get(option_id.partition(":")[2])
+                announced_terms = accepted.terms if accepted is not None else ""
             actor.last_action = {
                 "round": int(round_num), "option_id": option_id, "kind": kind,
                 "label": _text(option.get("label"), 160), "targets": target_names,
                 "magnitude": round(magnitude, 3), "status": status, "resolution": None,
                 "reversibility": _text(option.get("reversibility"), 24),
+                "statement": _text(d.get("public_statement"), 320), "terms": announced_terms,
             }
             event_kind = "action"
             if option_id == "hold_position" or status != "ok":
@@ -1225,6 +1257,41 @@ class WorldModel:
             actors=[bname], targets=[oname], source="interaction", option_id=inter.option_id,
             period_label=str((self.period or {}).get("label") or "")))
 
+    def change_ratio(self) -> Optional[float]:
+        """Per-period bound on how far the arbiter or a delayed effect may move a numeric fact."""
+        ratio = self.settings.get("max_change_ratio", DEFAULT_MAX_CHANGE_RATIO)
+        try:
+            return float(ratio) if ratio is not None else None
+        except (TypeError, ValueError):
+            return DEFAULT_MAX_CHANGE_RATIO
+
+    def _announced_by(self, caused_by: Any, var: StateVariable, target: Any,
+                      round_num: int) -> Optional[ActorState]:
+        """The actor whose move this period announced ``target`` for ``var`` (ANNOUNCED SETTINGS),
+        else None.  Requires: ``caused_by`` resolves to an actor whose recorded move this period is
+        ok, not a hold and of an ``ANNOUNCING_KINDS`` kind; its statement or terms state the new
+        value or the size of the change; and the change does not cross zero."""
+        if caused_by is None or var.kind != "numeric" or not isinstance(var.value, (int, float)):
+            return None
+        aid = self.resolve_actor(caused_by)
+        actor = self.actors.get(aid) if aid is not None else None
+        move = actor.last_action if actor is not None else None
+        if (not isinstance(move, dict) or int(move.get("round") or 0) != int(round_num)
+                or move.get("status") != "ok" or move.get("option_id") == "hold_position"
+                or move.get("kind") not in ANNOUNCING_KINDS):
+            return None
+        try:
+            new, cur = float(target), float(var.value)
+        except (TypeError, ValueError):
+            return None
+        if (cur > 0 > new) or (cur < 0 < new):
+            return None
+        figures = announced_figures(f"{move.get('statement') or ''} {move.get('terms') or ''}")
+        wanted = (new, abs(new - cur))
+        if any(_close(f, w) for f in figures for w in wanted if w != 0 or f == 0):
+            return actor
+        return None
+
     def apply_arbiter_update(self, round_num: int, update: Dict[str, Any]) -> Dict[str, Any]:
         """Apply a *validated* arbiter update (see ``world_update.validate_arbiter_update``).
 
@@ -1235,11 +1302,7 @@ class WorldModel:
                    "relationships_changed": [], "effects_added": 0, "resolutions": 0}
         if not isinstance(update, dict):
             return summary
-        ratio = self.settings.get("max_change_ratio", DEFAULT_MAX_CHANGE_RATIO)
-        try:
-            ratio = float(ratio) if ratio is not None else None
-        except (TypeError, ValueError):
-            ratio = DEFAULT_MAX_CHANGE_RATIO
+        ratio = self.change_ratio()
         label = str((self.period or {}).get("label") or "")
         for ch in update.get("variable_changes") or []:
             if not isinstance(ch, dict):
@@ -1257,10 +1320,19 @@ class WorldModel:
                     continue
             else:
                 continue
-            if var.set_value(target, round_num=round_num, source="arbiter",
-                             cause=ch.get("rationale") or "arbiter", max_change_ratio=ratio):
-                summary["variables_changed"].append({"id": var.id, "name": var.name, "from": before,
-                                                     "to": var.value, "unit": var.unit})
+            announcer = self._announced_by(ch.get("caused_by"), var, target, round_num)
+            if announcer is not None:
+                # ANNOUNCED SETTINGS: the actor's own stated figure lands in full this period
+                changed = var.set_value(target, round_num=round_num, source="action",
+                                        cause=f"{announcer.name} announced it: {ch.get('rationale') or 'arbiter'}")
+            else:
+                changed = var.set_value(target, round_num=round_num, source="arbiter",
+                                        cause=ch.get("rationale") or "arbiter", max_change_ratio=ratio)
+            if changed:
+                row = {"id": var.id, "name": var.name, "from": before, "to": var.value, "unit": var.unit}
+                if announcer is not None:
+                    row["announced_by"] = announcer.name
+                summary["variables_changed"].append(row)
         for nv in update.get("new_variables") or []:
             if not isinstance(nv, dict) or not nv.get("name"):
                 continue
@@ -1364,8 +1436,11 @@ class WorldModel:
                         target = None
                 else:
                     target = None
+                # a delayed consequence is as bounded as an immediate one (the clamp used to be
+                # skipped here, so a scheduled effect could move a fact without limit)
                 if target is not None and var.set_value(target, round_num=round_num, source="effect",
-                                                        cause=fx.description):
+                                                        cause=fx.description,
+                                                        max_change_ratio=self.change_ratio()):
                     var_ids.append(var.id)
             self._add_event(WorldEvent(round_num, "consequence", desc, targets=fx.targets,
                                        source=fx.source or "effect", variable_ids=var_ids,

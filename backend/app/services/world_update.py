@@ -171,8 +171,10 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         "Resolve the period. Return ONLY JSON with these keys:",
         '- "narrative": 2-4 sentences on what actually changed and why (≤600 chars).',
         '- "variable_changes": [{"variable_id": "<id from the list>", "new_value": <number or text> OR '
-        '"delta": <number>, "rationale": "..."}] — only variables the moves/events plausibly affect; '
-        "small, defensible moves; leave the rest untouched.",
+        '"delta": <number>, "caused_by": "<cast name>" | null, "rationale": "..."}] — only variables the '
+        "moves/events plausibly affect; small, defensible moves; leave the rest untouched. Name caused_by "
+        "only when a mover's own move this period sets the new value (an announced tariff, rate, quota or "
+        f"price it states): a stated figure takes effect in full{_clamp_rule(world)}.",
         '- "new_variables": [{"name": "...", "value": ..., "unit": "...", "kind": "numeric|categorical|boolean|text", '
         '"rationale": "..."}] — at most 3, only when a move creates a new fact the world must now track.',
         '- "events": [{"description": "...", "kind": "emergent|consequence|resolution", "actors": ["<cast name>"], '
@@ -187,6 +189,14 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         f"Cast: {cast}. Candidate scenarios: {sc}.{lang}",
     ]
     return "\n".join(lines)
+
+
+def _clamp_rule(world: WorldModel) -> str:
+    """The per-period bound the kernel applies to every change that was not announced."""
+    ratio = world.change_ratio()
+    if not ratio:
+        return ""
+    return f"; every other change is limited to about ±{float(ratio) * 100:g}% of the current value per period"
 
 
 def _num(value: Any) -> Optional[float]:
@@ -235,6 +245,15 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                 problems.append(f"duplicate change for '{var.id}'")
                 continue
             row: Dict[str, Any] = {"variable_id": var.id, "rationale": _text(ch.get("rationale"), 200)}
+            cause = ch.get("caused_by")
+            if cause not in (None, "") and var.kind == "numeric":
+                # ANNOUNCED SETTINGS: the kernel lifts the clamp only when this actor's own move
+                # this period stated the figure (WorldModel._announced_by); here it must be cast
+                cause_id = world.resolve_actor(cause)
+                if cause_id is None:
+                    problems.append(f"unknown actor '{_text(cause, 80)}' in caused_by")
+                else:
+                    row["caused_by"] = world.actor_name(cause_id)
             if var.kind == "numeric":
                 nv, dl = _num(ch.get("new_value")), _num(ch.get("delta"))
                 if nv is None and dl is None:
