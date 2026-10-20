@@ -206,6 +206,7 @@ def _records():
             ("us-pres-2024-trump", "simulation", "r_live")]
     out = [{"golden_id": g, "arm": a, "status": "completed", "report_id": r, "pipeline_id": "p"} for g, a, r in rows]
     out.append({"golden_id": "fed-2025-01-cut", "arm": "simulation", "status": "failed", "error": "provider outage"})
+    out.append({"golden_id": "fed-2025-01-cut", "arm": "production", "status": "completed", "report_id": None})
     return out
 
 
@@ -226,7 +227,8 @@ def test_score_runs_per_arm_with_deltas_and_knowledge_split():
     split = base["knowledge_split"]["ids"]
     assert split == {"post_model_cutoff": ["fed-2025-01-cut"], "pre_model_cutoff": ["us-pres-2024-trump"],
                      "unknown": []}
-    assert report["ablation"]["order"] == ["research_only", "markets", "simulation"]
+    assert report["arms"]["production"]["not_scored"][0]["reason"] == "no_report"
+    assert report["ablation"]["order"] == ["research_only", "markets", "simulation", "production"]
     assert {row["arm"] for row in report["questions"]} == {"research_only", "markets"}
 
 
@@ -252,7 +254,7 @@ def test_cmd_score_writes_report_and_markdown(tmp_path):
                            out=str(tmp_path / "eval_report.json"), markdown=str(tmp_path / "eval_report.md"))
     assert be.cmd_score(args) == 0
     report = json.loads((tmp_path / "eval_report.json").read_text(encoding="utf-8"))
-    assert set(report["arms"]) == {"research_only", "markets", "simulation"}
+    assert set(report["arms"]) == {"research_only", "markets", "simulation", "production"}
     assert report["arms"]["markets"]["metrics"]["calibration"]["ece"] is not None
     md = (tmp_path / "eval_report.md").read_text(encoding="utf-8")
     assert "## Paired against research_only" in md and "## Model-knowledge split" in md and "## Not scored" in md

@@ -353,8 +353,8 @@ def score_runs(records: Iterable[Mapping[str, Any]], golden: Sequence[Mapping[st
             bucket["not_scored"].append({"id": gid, "reason": "not_in_golden_set"})
             continue
         if record.get("status") != "completed" or not record.get("report_id"):
-            bucket["not_scored"].append({"id": gid, "reason": f"run_{record.get('status')}",
-                                         "error": record.get("error")})
+            reason = "no_report" if record.get("status") == "completed" else f"run_{record.get('status')}"
+            bucket["not_scored"].append({"id": gid, "reason": reason, "error": record.get("error")})
             continue
         bucket["completed"] += 1
         forecast = forecast_loader(record["report_id"])

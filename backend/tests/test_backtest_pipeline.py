@@ -158,6 +158,18 @@ def test_admission_refuses_the_world_v1_engine(admission, monkeypatch):
     assert not admission.root.exists()
 
 
+def test_a_scenario_fork_keeps_the_cutoff(admission):
+    po = admission.po
+    base = po.PipelineOrchestrator.start("Will X happen?", backtest=_request(arm="markets"))
+    live = po.PipelineOrchestrator.start("Will Y happen?")
+    for state in (base, live):
+        state.graph_id = "graph_fixture"
+        po.PipelineManager.save(state)
+    child = po.PipelineOrchestrator.fork(base.pipeline_id, {"label": "what-if"})
+    assert child.options[bm.BACKTEST_OPTION] == po.PipelineManager.load(base.pipeline_id)["options"][bm.BACKTEST_OPTION]
+    assert bm.BACKTEST_OPTION not in po.PipelineOrchestrator.fork(live.pipeline_id, {"label": "x"}).options
+
+
 def test_sdk_route_answers_400_for_an_invalid_request(admission, monkeypatch):
     from flask import Flask
     from app.api import sdk

@@ -292,3 +292,12 @@ def test_archive_off_reads_live_pages_only(tmp_path):
                       archive=lambda lookup, timeout: pytest.fail("archive used"))
     assert tools.fetch("https://news.example/2024/10/12/story", agent_id="K1").startswith("[S1]")
     assert fetch.urls == ["https://news.example/2024/10/12/story"]
+
+
+def test_the_archive_route_keeps_the_source_deny_list(tmp_path):
+    fetch = _Fetch()
+    tools, ledger = _tools(tmp_path, policy=_policy(tmp_path), fetch=fetch,
+                           archive=lambda lookup, timeout: pytest.fail("archive queried for a denied source"))
+    url = "https://economicsummarizer.com/2024/10/20/markets"
+    assert tools.fetch(url, agent_id="K1") == "FETCH_FAILED(source_quality_rejected): try another source."
+    assert fetch.urls == [] and ledger.rows() == []

@@ -3514,6 +3514,17 @@ def _data_api() -> Any:
     return importlib.import_module(f"{__package__}.data_sources" if __package__ else "data_sources")
 
 
+def _source_policy_rejection(url: str) -> str | None:
+    """The fetch layer's source-deny verdict for ``url`` (``cached_fetch``);
+    ``None`` when the URL is allowed or the policy module is not deployed."""
+    try:
+        cached_fetch = importlib.import_module("cached_fetch")
+    except ImportError:
+        return None
+    check = getattr(cached_fetch, "_source_policy_rejection", None)
+    return check(url) if callable(check) else None
+
+
 def _backtest_api() -> Any:
     """``backtest_cutoff``, imported only by backtest runs (same import rule as ``_data_api``)."""
     return importlib.import_module(f"{__package__}.backtest_cutoff" if __package__ else "backtest_cutoff")
@@ -4710,6 +4721,11 @@ class ResearchTools:
         verdict admits it.  Mirrors :meth:`_fetch_uncached` otherwise."""
         bt = _backtest_api()
         policy = self.backtest
+        if _source_policy_rejection(url):
+            # A capture is served from web.archive.org: the original URL must
+            # still pass the deny list the live fetch applies.
+            self._remember_failure(key, "source_quality_rejected", transient=False)
+            return self._fetch_failed(agent_id, "source_quality_rejected")
         snapshot = bt.find_snapshot(url, policy, http_get=self._archive_get)
         text: str | None = None
         if snapshot is not None:
