@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "description": "EVAL-1 golden set: real, objectively-resolved binary (YES/NO) questions from 2024-2026 used to score whether pipeline changes make FORECASTS better (not just tests green). Each entry is a genuinely resolved, checkable event. 'resolved_outcome' is the ground-truth YES(true)/NO(false). 'as_of_date' is the knowledge cutoff a forecaster should be scored at — run the pipeline with an as-of constraint at/near this date, then score its binary_forecasts (matched by id) against this file.",
+    "description": "EVAL-1 golden set: real, objectively-resolved binary (YES/NO) questions from 2024-2026 used to score whether pipeline changes make FORECASTS better (not just tests green). Each entry is a genuinely resolved, checkable event. 'resolved_outcome' is the ground-truth YES(true)/NO(false). 'as_of_date' is the date the forecast is made: backtest mode (docs/handoff/backtest/design.md) cuts every pipeline input there and backend/scripts/backtest_eval.py runs and scores the set. 'knowledge_cutoff' is the first date the outcome was public (for every current entry its resolution date: each outcome was reported the day it happened); a model whose training data reaches that date may already know the answer, so the scorer reports questions whose knowledge_cutoff falls after the model's training cutoff (pass --model-knowledge-cutoff) apart from the rest.",
     "outcome_semantics": "resolved_outcome=true  → the event described by 'question' HAPPENED (YES). resolved_outcome=false → it did NOT happen (NO). A forecast's 'probability' is the model's YES probability in [0,1].",
-    "schema": ["id", "question", "resolution_criteria", "resolved_outcome", "resolution_date", "category", "difficulty", "as_of_date"],
+    "schema": ["id", "question", "resolution_criteria", "resolved_outcome", "resolution_date", "category", "difficulty", "as_of_date", "knowledge_cutoff"],
     "count": 30
   },
   "questions": [
@@ -14,7 +14,8 @@
       "resolution_date": "2024-11-06",
       "category": "elections",
       "difficulty": "medium",
-      "as_of_date": "2024-11-01"
+      "as_of_date": "2024-11-01",
+      "knowledge_cutoff": "2024-11-06"
     },
     {
       "id": "us-pres-2024-harris",
@@ -24,7 +25,8 @@
       "resolution_date": "2024-11-06",
       "category": "elections",
       "difficulty": "medium",
-      "as_of_date": "2024-11-01"
+      "as_of_date": "2024-11-01",
+      "knowledge_cutoff": "2024-11-06"
     },
     {
       "id": "us-senate-2024-gop",
@@ -34,7 +36,8 @@
       "resolution_date": "2024-11-06",
       "category": "elections",
       "difficulty": "medium",
-      "as_of_date": "2024-11-01"
+      "as_of_date": "2024-11-01",
+      "knowledge_cutoff": "2024-11-06"
     },
     {
       "id": "us-senate-2024-dem-hold",
@@ -44,7 +47,8 @@
       "resolution_date": "2024-11-06",
       "category": "elections",
       "difficulty": "medium",
-      "as_of_date": "2024-11-01"
+      "as_of_date": "2024-11-01",
+      "knowledge_cutoff": "2024-11-06"
     },
     {
       "id": "uk-ge-2024-labour",
@@ -54,7 +58,8 @@
       "resolution_date": "2024-07-05",
       "category": "elections",
       "difficulty": "easy",
-      "as_of_date": "2024-06-01"
+      "as_of_date": "2024-06-01",
+      "knowledge_cutoff": "2024-07-05"
     },
     {
       "id": "uk-ge-2024-tory",
@@ -64,7 +69,8 @@
       "resolution_date": "2024-07-05",
       "category": "elections",
       "difficulty": "easy",
-      "as_of_date": "2024-06-01"
+      "as_of_date": "2024-06-01",
+      "knowledge_cutoff": "2024-07-05"
     },
     {
       "id": "fr-legis-2024-rn-majority",
@@ -74,7 +80,8 @@
       "resolution_date": "2024-07-07",
       "category": "elections",
       "difficulty": "hard",
-      "as_of_date": "2024-06-20"
+      "as_of_date": "2024-06-20",
+      "knowledge_cutoff": "2024-07-07"
     },
     {
       "id": "mx-pres-2024-sheinbaum",
@@ -84,7 +91,8 @@
       "resolution_date": "2024-06-02",
       "category": "elections",
       "difficulty": "easy",
-      "as_of_date": "2024-05-01"
+      "as_of_date": "2024-05-01",
+      "knowledge_cutoff": "2024-06-02"
     },
     {
       "id": "id-pres-2024-prabowo",
@@ -94,7 +102,8 @@
       "resolution_date": "2024-02-14",
       "category": "elections",
       "difficulty": "easy",
-      "as_of_date": "2024-01-15"
+      "as_of_date": "2024-01-15",
+      "knowledge_cutoff": "2024-02-14"
     },
     {
       "id": "in-ge-2024-bjp-alone",
@@ -104,7 +113,8 @@
       "resolution_date": "2024-06-04",
       "category": "elections",
       "difficulty": "medium",
-      "as_of_date": "2024-04-01"
+      "as_of_date": "2024-04-01",
+      "knowledge_cutoff": "2024-06-04"
     },
     {
       "id": "in-ge-2024-nda-majority",
@@ -114,7 +124,8 @@
       "resolution_date": "2024-06-04",
       "category": "elections",
       "difficulty": "easy",
-      "as_of_date": "2024-04-01"
+      "as_of_date": "2024-04-01",
+      "knowledge_cutoff": "2024-06-04"
     },
     {
       "id": "fed-2024-09-cut",
@@ -124,7 +135,8 @@
       "resolution_date": "2024-09-18",
       "category": "monetary-policy",
       "difficulty": "medium",
-      "as_of_date": "2024-09-01"
+      "as_of_date": "2024-09-01",
+      "knowledge_cutoff": "2024-09-18"
     },
     {
       "id": "fed-2024-11-cut",
@@ -134,7 +146,8 @@
       "resolution_date": "2024-11-07",
       "category": "monetary-policy",
       "difficulty": "easy",
-      "as_of_date": "2024-11-01"
+      "as_of_date": "2024-11-01",
+      "knowledge_cutoff": "2024-11-07"
     },
     {
       "id": "fed-2024-12-cut",
@@ -144,7 +157,8 @@
       "resolution_date": "2024-12-18",
       "category": "monetary-policy",
       "difficulty": "medium",
-      "as_of_date": "2024-12-01"
+      "as_of_date": "2024-12-01",
+      "knowledge_cutoff": "2024-12-18"
     },
     {
       "id": "fed-2025-01-cut",
@@ -154,7 +168,8 @@
       "resolution_date": "2025-01-29",
       "category": "monetary-policy",
       "difficulty": "medium",
-      "as_of_date": "2025-01-15"
+      "as_of_date": "2025-01-15",
+      "knowledge_cutoff": "2025-01-29"
     },
     {
       "id": "apple-iphone16-2024",
@@ -164,7 +179,8 @@
       "resolution_date": "2024-09-09",
       "category": "product-launch",
       "difficulty": "easy",
-      "as_of_date": "2024-08-01"
+      "as_of_date": "2024-08-01",
+      "knowledge_cutoff": "2024-09-09"
     },
     {
       "id": "openai-gpt4o-2024",
@@ -174,7 +190,8 @@
       "resolution_date": "2024-05-13",
       "category": "product-launch",
       "difficulty": "medium",
-      "as_of_date": "2024-04-01"
+      "as_of_date": "2024-04-01",
+      "knowledge_cutoff": "2024-05-13"
     },
     {
       "id": "apple-vision-pro-2024",
@@ -184,7 +201,8 @@
       "resolution_date": "2024-02-02",
       "category": "product-launch",
       "difficulty": "easy",
-      "as_of_date": "2024-01-01"
+      "as_of_date": "2024-01-01",
+      "knowledge_cutoff": "2024-02-02"
     },
     {
       "id": "nvidia-3t-2024",
@@ -194,7 +212,8 @@
       "resolution_date": "2024-06-05",
       "category": "markets",
       "difficulty": "medium",
-      "as_of_date": "2024-01-01"
+      "as_of_date": "2024-01-01",
+      "knowledge_cutoff": "2024-06-05"
     },
     {
       "id": "spacex-starship-catch-2024",
@@ -204,7 +223,8 @@
       "resolution_date": "2024-10-13",
       "category": "science-tech",
       "difficulty": "hard",
-      "as_of_date": "2024-09-01"
+      "as_of_date": "2024-09-01",
+      "knowledge_cutoff": "2024-10-13"
     },
     {
       "id": "btc-100k-2024",
@@ -214,7 +234,8 @@
       "resolution_date": "2024-12-05",
       "category": "markets",
       "difficulty": "medium",
-      "as_of_date": "2024-01-01"
+      "as_of_date": "2024-01-01",
+      "knowledge_cutoff": "2024-12-05"
     },
     {
       "id": "btc-spot-etf-2024",
@@ -224,7 +245,8 @@
       "resolution_date": "2024-01-10",
       "category": "markets",
       "difficulty": "medium",
-      "as_of_date": "2024-01-01"
+      "as_of_date": "2024-01-01",
+      "knowledge_cutoff": "2024-01-10"
     },
     {
       "id": "trump-ny-conviction-2024",
@@ -234,7 +256,8 @@
       "resolution_date": "2024-05-30",
       "category": "legal-politics",
       "difficulty": "medium",
-      "as_of_date": "2024-05-01"
+      "as_of_date": "2024-05-01",
+      "knowledge_cutoff": "2024-05-30"
     },
     {
       "id": "ucl-2024-real-madrid",
@@ -244,7 +267,8 @@
       "resolution_date": "2024-06-01",
       "category": "sports",
       "difficulty": "medium",
-      "as_of_date": "2024-05-01"
+      "as_of_date": "2024-05-01",
+      "knowledge_cutoff": "2024-06-01"
     },
     {
       "id": "sb-lviii-2024-chiefs",
@@ -254,7 +278,8 @@
       "resolution_date": "2024-02-11",
       "category": "sports",
       "difficulty": "medium",
-      "as_of_date": "2024-02-01"
+      "as_of_date": "2024-02-01",
+      "knowledge_cutoff": "2024-02-11"
     },
     {
       "id": "sb-lix-2025-eagles",
@@ -264,7 +289,8 @@
       "resolution_date": "2025-02-09",
       "category": "sports",
       "difficulty": "medium",
-      "as_of_date": "2025-02-01"
+      "as_of_date": "2025-02-01",
+      "knowledge_cutoff": "2025-02-09"
     },
     {
       "id": "mlb-2024-dodgers",
@@ -274,7 +300,8 @@
       "resolution_date": "2024-10-30",
       "category": "sports",
       "difficulty": "medium",
-      "as_of_date": "2024-10-01"
+      "as_of_date": "2024-10-01",
+      "knowledge_cutoff": "2024-10-30"
     },
     {
       "id": "euro-2024-spain",
@@ -284,7 +311,8 @@
       "resolution_date": "2024-07-14",
       "category": "sports",
       "difficulty": "medium",
-      "as_of_date": "2024-07-01"
+      "as_of_date": "2024-07-01",
+      "knowledge_cutoff": "2024-07-14"
     },
     {
       "id": "nba-2024-celtics",
@@ -294,7 +322,8 @@
       "resolution_date": "2024-06-17",
       "category": "sports",
       "difficulty": "easy",
-      "as_of_date": "2024-05-01"
+      "as_of_date": "2024-05-01",
+      "knowledge_cutoff": "2024-06-17"
     },
     {
       "id": "oscars-2024-oppenheimer",
@@ -304,7 +333,8 @@
       "resolution_date": "2024-03-10",
       "category": "awards",
       "difficulty": "easy",
-      "as_of_date": "2024-02-01"
+      "as_of_date": "2024-02-01",
+      "knowledge_cutoff": "2024-03-10"
     }
   ]
 }
