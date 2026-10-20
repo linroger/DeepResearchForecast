@@ -12,5 +12,9 @@ killed    market cutoff eligibility
 killed    report re-quote
 killed    production ledger skip
 killed    monitor skip
+killed    archive circuit breaker
+killed    deny list on the archive route
+killed    extract-only salvage allowance
+killed    legacy research refusal
 killed    markets-off env
 survivors: []
