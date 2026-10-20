@@ -29,7 +29,7 @@ In runs with method skills only (`RESEARCH_SKILLS=auto` and a plan with skills),
    - state each published probability in a sentence of its own that names no scenario and is not bold or a heading;
    - give the event, the probability and the window exactly as the evidence gives them, with the marker;
    - never give a risk event a probability the evidence does not publish;
-   - say when none was found.
+   - say so where the evidence records that none was published. The rule is conditional on the evidence, so runs without a hazards KIQ get no such sentences.
 
 4. **Extraction guard (engine).** `normalize_frame_risks` now drops a probability *range* ("5-25%", "between 1% and 5%", "5%至25%") and counts it as `meta.forecast_risks.probability_range`. Risk registers publish likelihood bands. Copied faithfully, the report states a band, but the seed's parser would read one end of it as the shock's rate (`"5-25%"` → 0.25, `"between 1% and 5%"` → 0.01).
 
@@ -73,8 +73,8 @@ Every rule of the Plan is kept: resolvability, base-rate wording and routing, th
 - **Calls: +0.** The KIQ count is unchanged (the risks KIQ is reworded), and the hazards KIQ spends its existing search and fetch budget. There are no new extraction calls.
 - **Input tokens** (cl100k counts):
   - Planner: +7 characters.
-  - Hazards KIQ: the note, 726 characters ≈ 151 tokens. It is uncached once, then a cached prefix on each further step: about +150 uncached and about +1k cached tokens over 5–9 steps.
-  - Writers: the rule, 441 characters ≈ 89 tokens on each writer call. That is 8 calls in the scripted standard run (`cost_probe.txt` in the evidence directory, [handoff.md](handoff.md) §8), so about +0.7k uncached tokens. Repairs and critique rewrites add one rule each.
+  - Hazards KIQ: the note, 725 characters ≈ 151 tokens. It is uncached once, then a cached prefix on each further step: about +150 uncached and about +1k cached tokens over 5–9 steps.
+  - Writers: the rule, 424 characters ≈ 87 tokens on each writer call. That is 8 calls in the scripted standard run (`cost_probe.txt` in the evidence directory, [handoff.md](handoff.md) §8), so about +0.7k uncached tokens. Repairs and critique rewrites add one rule each.
 - **Output tokens:** the hazard findings (one line each) plus up to 6 risk rows in the frame reply (about 80 tokens each).
 - **Total:** under 2k tokens per run, against a standard run's budget of 2.5M units. Off mode is byte-identical, with no cost.
 

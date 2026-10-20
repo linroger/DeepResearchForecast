@@ -100,7 +100,8 @@ def test_the_writer_rule_states_published_probabilities_on_one_checkable_line():
                  "names no scenario and is not bold or a heading",
                  "the probability and its window exactly as the evidence gives them, and the marker",
                  "Never give a risk event a probability the evidence does not publish",
-                 "say that no published probability was found"):
+                 # only where the evidence itself records it, so runs without a hazards KIQ get no such lines
+                 "where the evidence records that none was published for an event, say so."):
         assert text in rule, text
     _never_asks_for_an_estimate(rule)
 

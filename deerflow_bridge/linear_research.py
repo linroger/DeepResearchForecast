@@ -536,8 +536,8 @@ _HAZARD_SECTION_RULE = (
     "- Documented hazards: when the evidence gives a probability that a source publishes for a risk event, "
     "state it in a sentence of its own that names no scenario and is not bold or a heading: the event, the "
     "probability and its window exactly as the evidence gives them, and the marker. Never give a risk event a "
-    "probability the evidence does not publish; where the evidence found none for an event, say that no "
-    "published probability was found.")
+    "probability the evidence does not publish; where the evidence records that none was published for an "
+    "event, say so.")
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
