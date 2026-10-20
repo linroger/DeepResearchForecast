@@ -247,6 +247,25 @@ def test_the_api_carries_track_records_and_red_lines_per_period(client, tmp_path
     assert [e["kind"] for e in data["recent_events"]].count("red_line") == 1
 
 
+def test_the_round_headline_counts_red_line_crossings(tmp_path):
+    """The headline's "events" are the arbiter's emergent events; a crossing used to leave the
+    period reading "0 events".  It now has its own count, and only when there is one."""
+    _reflexive_run(str(tmp_path / "sim_headline"))
+    with open(tmp_path / "sim_headline" / "world_state_history.jsonl", encoding="utf-8") as f:
+        headlines = [json.loads(line)["headline"] for line in f]
+    assert headlines[0].startswith("2026-04: 1 decisions · 1 facts changed · 0 events · 1 red line crossed · "
+                                   "arbiter=applied · ")
+    assert all("red line" not in h.split(" · arbiter=")[0] for h in headlines[1:])
+    record = {"deterministic": {"decisions": 2}, "diff": {}, "arbiter_status": "applied",
+              "arbiter": {"events": 1, "red_lines_crossed": [{"actor": "A", "by": "B", "red_line": "x"}] * 2}}
+    world = _world()
+    world.period = {"label": "P1"}
+    assert wu.world_update_headline(world, 1, record) == "P1: 2 decisions · 0 facts changed · 1 events · " \
+                                                         "2 red lines crossed · arbiter=applied"
+    record["arbiter"] = {"events": 1}                                                # none → unchanged form
+    assert wu.world_update_headline(world, 1, record) == "P1: 2 decisions · 0 facts changed · 1 events · arbiter=applied"
+
+
 def test_the_api_bounds_red_line_rows_and_skips_junk(client, tmp_path):
     sim = tmp_path / "sim_rl"
     _write_world(str(sim), with_history=False)

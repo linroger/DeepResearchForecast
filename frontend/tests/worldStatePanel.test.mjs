@@ -247,6 +247,7 @@ test('track records, the expected-reaction count and a crossed red line reach th
   // the crossing period: the red line is labelled, not tagged red_line, and leads the list
   h.state.selectRound(1)
   r = await h.render()
+  assert.match(r.text, /2026-04: 1 decisions · 1 facts changed · 0 events · 1 red line crossed · arbiter=applied The tariff jumps/)
   assert.match(r.text, new RegExp(`Consequences and events \\(2\\) red line crossed ${CROSSING} — 145% announced relation`))
   assert.match(r.html, /<li class="ws-event ev-red-line"><span class="ws-kind mono">red line crossed<\/span>/)
   assert.doesNotMatch(r.text, /red_line|Track records/)              // track records describe the latest world

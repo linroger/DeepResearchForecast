@@ -1,6 +1,6 @@
 # Handoff — reflexive world-state model: realism, reflexivity and robustness (iteration 2026-10-20)
 
-**Last Updated (UTC):** 2026-10-20T15:25Z
+**Last Updated (UTC):** 2026-10-20T17:35Z
 **Status:** Complete for this iteration — merged into `main` as acf9b09 on 2026-10-20 at 22:47 +08 and pushed to legacy (8bf156d..main) at 23:02 +08, both on the owner's request; the reader iteration (§11) is on `claude/brave-stonebraker-d2b98b`, not merged or pushed; a live run awaits the owner's approval
 **Current Focus:** none; next candidates in §9.
 
@@ -102,6 +102,7 @@ All on 2026-10-20 (+08:00) against the working tree at 63aa8c7 plus the docs and
 - 2026-10-20T14:10Z: final plain and guarded suites recorded (§8); status Complete for this iteration.
 - 2026-10-20T14:48Z: merged `claude/agitated-albattani-b57618` (b8cc994) into `main` as acf9b09 (`--no-ff`; `main` had no other commits, so the merged tree a5f59fe… is the tested tree). Pushed to legacy at 23:02 +08 (fast-forward from 8bf156d; secret scan of the 6 commits clean).
 - 2026-10-20T15:25Z: reader iteration recorded (§11): panel and report lines for track records, red lines and expectation counts; §9 candidates annotated.
+- 2026-10-20T17:35Z: `main` (303e5a8) merged into the reader branch (2070d30); F5 fixed (headline counts red-line crossings); suites on the merged tree recorded (§11.6).
 
 ## 11) Reader iteration — the panel and the report show the new signals (2026-10-20, +08:00 22:46–23:30)
 - **Request (from the session that ran §1–§10):** surface the reflexive world model's new signals to readers. World State panel: each actor's `track_record` (kept, lapsed, broken, released, open, resolved, reliability, outcomes), breakers first; `red_line` events with a readable label in both languages; the run summary's `behaviour.expectations_checked` / `expectations_reacted` beside the responsive-moves badge. Report (`ReportAgent._world_evolution_block`): bounded lines for red-line crossings and for actors with broken or lapsed commitments, still labelled an elicited model projection, hours mode and legacy runs byte-identical. Tests, README EN/ZH (line-aligned), this entry; commit on an own branch, nothing pushed. Constraints as §1 (deployment checkout untouched, frozen rsync copies, herding guard, no paid runs, `env -u GH_TOKEN`).
@@ -142,4 +143,10 @@ All on 2026-10-20 (+08:00) against the working tree at 63aa8c7 plus the docs and
 
 ### 11.5 Remaining
 - A live run (owner's approval) shows the lines on real artifacts; nothing here needs one to be correct.
-- F5 (headline event count); the candidates in §9.
+- F5 (headline event count); the candidates in §9. *(F5 fixed 2026-10-21, §11.6.)*
+
+### 11.6 Follow-up 2026-10-21 (+08:00 01:14–01:40): `main` merged in, F5 fixed
+- **Why:** `main` had moved to 303e5a8 (confirmed commitment delivery: a due commitment counts as kept only after an explicit delivery attempt that the arbiter confirms; `docs/handoff/forecast-feedback/commitment-integration.md`). Track records feed every new reader line, so the branch had to be checked against it.
+- **Merge:** local `main` merged as 2070d30 (`--no-ff`). The app's sync tool was not used: it fetches `origin`, which here is the archived DeepAgentForecast repository (`origin/main` = ec29ab1); this project's `main` exists locally and on `legacy` (`legacy/main` = ac48891, behind local `main`). One conflict, in this file (status line and update log); both sides kept, in time order. On the merged code the reader, reflexivity, track-record, red-line and downstream modules pass (33), and the fixture contract still holds: the stricter delivery rule does not change this scenario (the US withdrawal is a breach either way; China's obligation is released).
+- **F5 fix:** `world_update_headline` adds "N red line(s) crossed" before `arbiter=` when the arbiter's apply summary has crossings; other headlines are unchanged byte for byte, and the panel's `headlineSummary` keeps the segment (it cuts after `arbiter=`). The fixture changes in exactly one line (round 1's headline). Before the fix, the new headline test and the fixture contract fail and the other 6 reader tests pass (`before_f5.log` in the evidence folder).
+- **Verification (frozen copy `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-011722-reader-signals-merged/`):** frontend 228 passed, build OK; plain suite (JUnit `plain-junit.xml`) 8,191 tests: 6,820 passed, 1,341 skipped, 11 xfailed, 19 errors (all `test_legacy_official_data.py`), 0 failed — 8,191 = 8,096 (§11.4) + 1 new headline test + 94 tests `main` brought in; guarded runner (§11.4's 56 modules plus `test_world_commitment_fulfilment.py`, `modules.txt`) 1,713 tests: 1,710 passed, 3 failed — the same known guard failures; receipt: no source drift, identity preserved; ruff (same selection) and `git diff --check` clean.

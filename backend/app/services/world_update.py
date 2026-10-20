@@ -645,7 +645,13 @@ def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, A
     arb = record.get("arbiter") or {}
     bits = [f"{label}: {det.get('decisions', 0)} decisions",
             f"{len((record.get('diff') or {}).get('variables_changed') or [])} facts changed",
-            f"{arb.get('events', 0)} events", f"arbiter={record.get('arbiter_status')}"]
+            f"{arb.get('events', 0)} events"]
+    # RED LINES: "events" counts the arbiter's emergent events only, so a crossing gets its own
+    # count; a round without one keeps the headline it always had
+    crossed = len(arb.get("red_lines_crossed") or [])
+    if crossed:
+        bits.append(f"{crossed} red line{'s' if crossed != 1 else ''} crossed")
+    bits.append(f"arbiter={record.get('arbiter_status')}")
     narrative = _text(record.get("narrative"), 140)
     if narrative:
         bits.append(narrative)
