@@ -218,9 +218,12 @@ def test_canonical_dossier_uses_only_validated_pack_rows():
 def test_seed_degrades_on_garbage():
     block = wms.build_world_model_seed("not a dict", [{"agent_id": "x"}, None, {"agent_id": 1, "entity_name": "Z"}])
     assert block["actors"][0]["name"] == "Z" and block["state_variables"] == [] and block["relationships"] == []
-    # a garbage seed is honest about what it could not ground
-    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships, 4 modelling gaps"
-    assert sorted(g["kind"] for g in block["gaps"]) == ["actor_unclassified", "actor_without_goals", "actor_without_plans", "no_state_variables"]
+    # a garbage seed is honest about what it could not ground (since 2026-10-20 that includes the
+    # exogenous shocks: no documented risk → no_documented_shocks, design §2.12)
+    assert wms.world_model_seed_summary(block) == "world model: 0 variables, 1 actors, 0 relationships, 5 modelling gaps"
+    assert sorted(g["kind"] for g in block["gaps"]) == ["actor_unclassified", "actor_without_goals", "actor_without_plans",
+                                                        "no_documented_shocks", "no_state_variables"]
+    assert block["shocks"] == []
 
 
 def test_agent_activity_config_additive_fields_and_parameters_emit_block():
