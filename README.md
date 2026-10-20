@@ -599,7 +599,7 @@ Nine method skills under `deerflow_bridge/skills/` give the research agents doma
 - Each KIQ task, actor KIQs included, gets the `Investigate` section of its best-matching plan skill and at most one more. Base-rate KIQs are led by `reference-class-forecasting`. An industry skill brings the sector adapters the KIQ names (else the question's); beside another method it brings only the adapters.
 - The gap review gets the `Gaps` checks. Section writers get the `Synthesize` contract for their own sections; the executive summary gets only its conventions, no exhibits.
 - Method text is appended only to the last message, so the cached prompt prefix and the tools object are unchanged.
-- With method skills active, finalization also extracts the report's base rates and drivers into `actors.json` `forecast_inputs`, which the forecast spine reads.
+- With method skills active, finalization also extracts the report's base rates and drivers into `actors.json` `forecast_inputs`, which the forecast spine reads, and the risks the report attaches a probability to into `forecast_inputs.risks`, the world model's exogenous shocks. A risk is kept only when a report line states that probability for that event and does not merely restate a scenario's weight; its window and `[S#]` source count only on such a line, its effects only on `quantitative_facts` metrics, and an effect's size only when the report states it. What fails a check is left empty, so the world seed records a modelling gap rather than an invented number; `meta.forecast_risks` counts each check.
 
 **Legacy.**
 - The lead agent's skill whitelist adds only the routed skills.

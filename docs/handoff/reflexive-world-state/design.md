@@ -347,8 +347,14 @@ named as a risk could happen unless an actor made it happen.
   (`shock_without_base_rate`, `shock_without_window`, `shock_without_source`, `shock_effect_untracked`,
   `shock_effect_direction_only`, `shock_effect_unreadable`), and a world without any documented shock carries
   `no_documented_shocks`. Outcome base rates (`forecast_inputs.base_rates`) remain the share prior and never
-  become shocks. As of 2026-10-20 no research engine emits `risks` (handoff F1), so live runs record the gap
-  until the extraction prompt asks for them.
+  become shocks. As of 2026-10-20 no research engine emitted `risks` (handoff F1). Since 2026-10-21 the v3
+  engine's forecast-frame extraction (runs with method skills) asks for the risks the report attaches a
+  probability to and keeps one only when a report line states that probability for that event (not a
+  scenario's own weight); its window and `[S<n>]` source only on such a line, its effects only on
+  `quantitative_facts` metrics and an effect's size only when the report states it
+  (`linear_research.normalize_frame_risks`, `meta.forecast_risks`; record
+  [`docs/handoff/research-risks/handoff.md`](../research-risks/handoff.md)). Runs without method skills and
+  the legacy deer-flow engine still emit none and record the gap.
 - **Shocks in the kernel.** `world_model.Shock`, `WorldModel.fire_shocks`: after the due effects of a round,
   every unfired (or recurring) shock is rolled once, in seed order, with the round's RNG at
   p = 1 − e^(−h·d) for the period's own length d (`period_days`); a world without shocks draws exactly as
