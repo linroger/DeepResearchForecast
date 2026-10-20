@@ -278,3 +278,52 @@ plus resume guards already give replay without re-deciding), the strict budgeted
 typed mechanism catalogue (it only admits eight pre-declared action kinds and fails the whole
 world on any gap; the integrated model keeps the agency-class catalogue plus a bounded arbiter),
 the preregistered evaluation harness (tied to Codex's evidence workflow and frozen fixtures).
+
+## 2.11 Reflexivity and realism iteration (2026-10-20)
+
+Record: [`docs/handoff/world-state-realism/handoff.md`](../world-state-realism/handoff.md). Each item lists the
+gap it closes; all are deterministic kernel rules or bounded arbiter fields validated before use.
+
+- **Announced settings land; everything else stays bounded.** `world_model.ANNOUNCING_KINDS`,
+  `WorldModel._announced_by`: an arbiter change attributed (`caused_by`) to an actor whose move this period
+  was a policy, economic, legal, coalition or operational move that stated the new value or the size of the
+  change (an acceptance states the figures of the offer it adopts) applies in full and never crosses zero;
+  other changes keep the `max_change_ratio` clamp, which now also bounds delayed effects (`fire_due_effects`
+  applied them unbounded before). `last_action` keeps the bounded statement and terms the check reads.
+- **Track records (reputation made visible).** `ActorState.track_record`: commitments kept / lapsed / broken,
+  `released` ones (the other side's breach), open ones, and how the arbiter resolved the actor's moves
+  (`ActorState.outcomes`). The public brief lists them (breakers first), each actor sees its own, the arbiter
+  reads each mover's record and is told that counterparts discount the word of actors who broke theirs; the
+  `/world-state` API returns it. A `break_alliance` no longer honours the obligation it breaks in the period
+  it falls due (the mechanical "any move honours a due commitment" rule used to give the breaker a clean
+  record).
+- **Expectations (the perception side of reflexivity).** The `expected_reactions` of each decision are stored
+  on the actor (`ActorState.expectations`, newest 8); one period later `WorldModel.expectation_checks` puts
+  each next to what that actor actually did, in the expecting actor's private brief. The arbiter lists the
+  expectations in play and is told that markets and counterparties react to announcements and expectations
+  before measures take effect, weighted by credibility, and that shared expectations can be self-fulfilling
+  or self-defeating. `behaviour_metrics` and the run summary count `expectations_checked` /
+  `expectations_reacted`.
+- **Red lines.** The arbiter sees the red lines at stake (actors targeted this period first) and may report
+  `red_line_crossings`; `WorldModel.cross_red_line` accepts one only when the crossing actor moved this period
+  and the text matches one of the aggrieved actor's own red lines (`match_red_line`: equal, containing, a
+  fragment covering 60%, or half its content tokens). It becomes a `red_line` event aimed at that actor, pushes
+  the relationship apart (`RED_LINE_NUDGE`), shows in the briefs and digest, and puts the actor's response
+  options first ("X crossed your red line last period"), replacing a plain response to the same move.
+- **Trends.** `StateVariable.trend` / `values_by_round`: the arbiter sees each fact's recent path; the public
+  brief marks a fact that moved the same way for `TREND_MIN_PERIODS` (2) periods or more.
+- **World channel into the outcome.** `worldstate.pressure_commitments`: when the arbiter applied, its
+  `scenario_pressure` enters `WorldState.step` as the current shares tilted ±`WORLD_PRESSURE_TILT` (0.25),
+  weighted at `SIM_WORLD_PRESSURE_WEIGHT` (default 0.35; `settings.pressure_weight` overrides; 0 disables) of
+  the actors' committed weight, or alone when every actor abstained. Round statuses stay the actors'; frozen
+  rounds and failed arbiter rounds add nothing; trajectory rows record `channels`. The herding guard holds:
+  agents never see shares, and the arbiter never sees them either.
+- **Models that always reason.** Not a world-model rule but a precondition for running it on GLM: since
+  2026-10-18 glm-5.3 refuses `thinking: disabled` (400 / 1210). `Config.reasoning_extra_body` gives models
+  matching `LLM_ALWAYS_THINKING_MODELS` (default `glm-5`) reasoning on at `LLM_THINKING_REQUIRED_EFFORT`
+  (default `low`) plus `LLM_THINKING_HEADROOM_TOKENS`; `LLMClient` and the OASIS agents' model resend once and
+  remember any other model that refuses.
+
+Acceptance: `tests/test_world_announced_settings.py`, `test_world_track_records.py`, `test_world_red_lines.py`,
+`test_world_pressure_channel.py`, `test_world_reflexivity.py` (the chain end to end) and
+`test_llm_thinking_refusal.py`.
