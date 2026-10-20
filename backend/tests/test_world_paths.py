@@ -100,7 +100,9 @@ class _PathLLM(_WorldLLM):
 
     def chat_json(self, messages, temperature=0.3, max_tokens=4096, **kwargs):
         content = messages[-1]["content"]
-        if "consequence arbiter" in content:
+        # the arbiter's own prompt, not any prompt that mentions it (decision prompts say "the
+        # consequence arbiter must confirm delivery" since the commitment-delivery change, 303e5a8)
+        if content.startswith("You are the consequence arbiter"):
             _PathLLM.temperatures.append(temperature)
             if temperature != wp.BASE_ARBITER_TEMPERATURE:
                 if _PathLLM.fail_siblings:
