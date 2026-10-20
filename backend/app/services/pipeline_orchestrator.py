@@ -1359,13 +1359,15 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # (linear_research.py phases + research_gateway.py LLM gateway/research tools),
 # and the official-data layer both engines import (data_mcp.py stdio MCP hub,
 # data_catalog.py curated series catalog, data_sources.py unified API,
-# data_tools.py legacy-engine data_search/data_get tools).
+# data_tools.py legacy-engine data_search/data_get tools), and backtest mode's
+# as-of cutoff (backtest_cutoff.py, imported by search_tools.py, data_sources.py
+# and the v3 engine).
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "linear_research.py", "research_gateway.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
-    "research_skills.py",
+    "research_skills.py", "backtest_cutoff.py",
 )
 
 
