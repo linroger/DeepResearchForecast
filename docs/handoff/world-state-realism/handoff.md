@@ -1,7 +1,7 @@
 # Handoff — reflexive world-state model: realism, reflexivity and robustness (iteration 2026-10-20)
 
 **Last Updated (UTC):** 2026-10-20T15:25Z
-**Status:** Complete for this iteration (not pushed; a live run awaits the owner's approval)
+**Status:** Complete for this iteration — merged into `main` as acf9b09 on 2026-10-20 at 22:47 +08 and pushed to legacy (8bf156d..main) at 23:02 +08, both on the owner's request; the reader iteration (§11) is on `claude/brave-stonebraker-d2b98b`, not merged or pushed; a live run awaits the owner's approval
 **Current Focus:** none; next candidates in §9.
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
@@ -100,6 +100,7 @@ All on 2026-10-20 (+08:00) against the working tree at 63aa8c7 plus the docs and
 - 2026-10-20T13:30Z: created with the brief, the eight gaps, acceptance checks and the plan.
 - 2026-10-20T14:05Z: increments 1–8 done (52a9b37, f599827, 63aa8c7 + docs); findings F1–F4, decisions D1–D6, before/after evidence (§7); suites pending (§8).
 - 2026-10-20T14:10Z: final plain and guarded suites recorded (§8); status Complete for this iteration.
+- 2026-10-20T14:48Z: merged `claude/agitated-albattani-b57618` (b8cc994) into `main` as acf9b09 (`--no-ff`; `main` had no other commits, so the merged tree a5f59fe… is the tested tree). Pushed to legacy at 23:02 +08 (fast-forward from 8bf156d; secret scan of the 6 commits clean).
 - 2026-10-20T15:25Z: reader iteration recorded (§11): panel and report lines for track records, red lines and expectation counts; §9 candidates annotated.
 
 ## 11) Reader iteration — the panel and the report show the new signals (2026-10-20, +08:00 22:46–23:30)

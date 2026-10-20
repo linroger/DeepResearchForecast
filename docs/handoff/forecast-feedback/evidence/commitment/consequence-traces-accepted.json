@@ -1,0 +1,362 @@
+{
+  "runs": {
+    "continuous-base-accepted": {
+      "state_path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state.json",
+      "committed_round": 5,
+      "principal_commitments": {
+        "0": [
+          {
+            "id": "c0_2_1",
+            "description": "Honour the agreement with Actor1: Exchange the audited tariff schedules before the next period ends.",
+            "made_round": 2,
+            "due_round": 3,
+            "status": "fulfilled",
+            "source": "agreement:i1_1",
+            "counterparty": 1,
+            "last_fulfillment_attempt": {
+              "round": 3,
+              "agent_id": 0,
+              "commitment_id": "c0_2_1",
+              "option_id": "fulfill:c0_2_1",
+              "outcome": "success",
+              "rationale": "The audited schedule was delivered to the agreed counterparty this period."
+            },
+            "fulfilled_round": 3,
+            "fulfillment_evidence": {
+              "round": 3,
+              "agent_id": 0,
+              "commitment_id": "c0_2_1",
+              "option_id": "fulfill:c0_2_1",
+              "outcome": "success",
+              "rationale": "The audited schedule was delivered to the agreed counterparty this period."
+            }
+          }
+        ],
+        "1": [
+          {
+            "id": "c1_2_1",
+            "description": "Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+            "made_round": 2,
+            "due_round": 3,
+            "status": "breached",
+            "source": "agreement:i1_1",
+            "counterparty": 0
+          }
+        ]
+      },
+      "principal_track_records": {
+        "0": {
+          "kept": 1,
+          "lapsed": 0,
+          "broken": 0,
+          "released": 0,
+          "open": 0,
+          "resolved": 1,
+          "reliability": 1.0,
+          "outcomes": {
+            "success": 1
+          },
+          "reputation": 0.52
+        },
+        "1": {
+          "kept": 0,
+          "lapsed": 0,
+          "broken": 1,
+          "released": 0,
+          "open": 0,
+          "resolved": 1,
+          "reliability": 0.0,
+          "outcomes": {},
+          "reputation": 0.35
+        }
+      },
+      "principal_reputations": {
+        "0": 0.52,
+        "1": 0.35
+      },
+      "principal_relationships": [
+        {
+          "source": 0,
+          "target": 1,
+          "kind": "REGULATES",
+          "valence": "neutral",
+          "polarity": -0.0225,
+          "strength": 0.3783,
+          "basis": "",
+          "last_changed_round": 4,
+          "history": [
+            {
+              "round": 1,
+              "from": 0.0,
+              "to": 0.09,
+              "cause": "Open or join negotiations with another actor \u2192 Actor1"
+            },
+            {
+              "round": 2,
+              "from": 0.09,
+              "to": 0.2775,
+              "cause": "Actor1 accepted Actor0's offer"
+            },
+            {
+              "round": 4,
+              "from": 0.2775,
+              "to": -0.0225,
+              "cause": "Actor1 breached the agreement with Actor0"
+            }
+          ]
+        }
+      ],
+      "commitment_events": [
+        {
+          "round": 3,
+          "kind": "resolution",
+          "description": "Actor0 fulfilled commitment [c0_2_1]: Honour the agreement with Actor1: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor0"
+          ],
+          "targets": [
+            "Actor1"
+          ],
+          "source": "commitment",
+          "variable_ids": [],
+          "option_id": "fulfill:c0_2_1",
+          "period_label": "2027-Q1"
+        },
+        {
+          "round": 4,
+          "kind": "consequence",
+          "description": "Actor1's commitment lapsed: Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor1"
+          ],
+          "targets": [],
+          "source": "commitment",
+          "variable_ids": []
+        },
+        {
+          "round": 4,
+          "kind": "breach",
+          "description": "Breach [i1_1]: Actor1 broke its agreement with Actor0 \u2014 its obligation lapsed: Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor1"
+          ],
+          "targets": [
+            "Actor0"
+          ],
+          "source": "interaction",
+          "variable_ids": [],
+          "option_id": "open_talks",
+          "period_label": "2027-Q2"
+        }
+      ],
+      "artifacts": {
+        "world_state_history.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state_history.jsonl",
+          "sha256": "f5795904dbd558ed7505ee999a31a5aa8356e013c20a2a3ff3262e7187bfdcd5"
+        },
+        "world_digest.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_digest.jsonl",
+          "sha256": "cd494b3c57636e764ccf2e27083b0383e7f6c9dc0209b582e8d80e1c336289b7"
+        },
+        "world_actions.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_actions.jsonl",
+          "sha256": "90f364ff29f535b79d1c84b94ef00548f0735c7a10c5998d91382f953cbdbee7"
+        },
+        "world_state_trajectory.json": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state_trajectory.json",
+          "sha256": "3b6154b1cda02cf84a2d6e43d3d314b0a6463c6bf5b8a05b6d7f0bafe61b50df"
+        },
+        "world_state.json": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state.json",
+          "sha256": "eac4b170b90b392870ff504e6721ff31bf535edac753f8748314b31ce1cee0b1"
+        }
+      }
+    },
+    "resume-base-accepted": {
+      "state_path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state.json",
+      "committed_round": 5,
+      "principal_commitments": {
+        "0": [
+          {
+            "id": "c0_2_1",
+            "description": "Honour the agreement with Actor1: Exchange the audited tariff schedules before the next period ends.",
+            "made_round": 2,
+            "due_round": 3,
+            "status": "fulfilled",
+            "source": "agreement:i1_1",
+            "counterparty": 1,
+            "last_fulfillment_attempt": {
+              "round": 3,
+              "agent_id": 0,
+              "commitment_id": "c0_2_1",
+              "option_id": "fulfill:c0_2_1",
+              "outcome": "success",
+              "rationale": "The audited schedule was delivered to the agreed counterparty this period."
+            },
+            "fulfilled_round": 3,
+            "fulfillment_evidence": {
+              "round": 3,
+              "agent_id": 0,
+              "commitment_id": "c0_2_1",
+              "option_id": "fulfill:c0_2_1",
+              "outcome": "success",
+              "rationale": "The audited schedule was delivered to the agreed counterparty this period."
+            }
+          }
+        ],
+        "1": [
+          {
+            "id": "c1_2_1",
+            "description": "Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+            "made_round": 2,
+            "due_round": 3,
+            "status": "breached",
+            "source": "agreement:i1_1",
+            "counterparty": 0
+          }
+        ]
+      },
+      "principal_track_records": {
+        "0": {
+          "kept": 1,
+          "lapsed": 0,
+          "broken": 0,
+          "released": 0,
+          "open": 0,
+          "resolved": 1,
+          "reliability": 1.0,
+          "outcomes": {
+            "success": 1
+          },
+          "reputation": 0.52
+        },
+        "1": {
+          "kept": 0,
+          "lapsed": 0,
+          "broken": 1,
+          "released": 0,
+          "open": 0,
+          "resolved": 1,
+          "reliability": 0.0,
+          "outcomes": {},
+          "reputation": 0.35
+        }
+      },
+      "principal_reputations": {
+        "0": 0.52,
+        "1": 0.35
+      },
+      "principal_relationships": [
+        {
+          "source": 0,
+          "target": 1,
+          "kind": "REGULATES",
+          "valence": "neutral",
+          "polarity": -0.0225,
+          "strength": 0.3782,
+          "basis": "",
+          "last_changed_round": 4,
+          "history": [
+            {
+              "round": 1,
+              "from": 0.0,
+              "to": 0.09,
+              "cause": "Open or join negotiations with another actor \u2192 Actor1"
+            },
+            {
+              "round": 2,
+              "from": 0.09,
+              "to": 0.2775,
+              "cause": "Actor1 accepted Actor0's offer"
+            },
+            {
+              "round": 4,
+              "from": 0.2775,
+              "to": -0.0225,
+              "cause": "Actor1 breached the agreement with Actor0"
+            }
+          ]
+        }
+      ],
+      "commitment_events": [
+        {
+          "round": 3,
+          "kind": "resolution",
+          "description": "Actor0 fulfilled commitment [c0_2_1]: Honour the agreement with Actor1: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor0"
+          ],
+          "targets": [
+            "Actor1"
+          ],
+          "source": "commitment",
+          "variable_ids": [],
+          "option_id": "fulfill:c0_2_1",
+          "period_label": "2027-Q1"
+        },
+        {
+          "round": 4,
+          "kind": "consequence",
+          "description": "Actor1's commitment lapsed: Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor1"
+          ],
+          "targets": [],
+          "source": "commitment",
+          "variable_ids": []
+        },
+        {
+          "round": 4,
+          "kind": "breach",
+          "description": "Breach [i1_1]: Actor1 broke its agreement with Actor0 \u2014 its obligation lapsed: Honour the agreement with Actor0: Exchange the audited tariff schedules before the next period ends.",
+          "actors": [
+            "Actor1"
+          ],
+          "targets": [
+            "Actor0"
+          ],
+          "source": "interaction",
+          "variable_ids": [],
+          "option_id": "open_talks",
+          "period_label": "2027-Q2"
+        }
+      ],
+      "artifacts": {
+        "world_state_history.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state_history.jsonl",
+          "sha256": "c0f274172b0ce383a4c1bcd48382333eebe49c7e0ed5c84350cb08bd63e4c186"
+        },
+        "world_digest.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_digest.jsonl",
+          "sha256": "acbd75990c8c154b2ce0c25b559e687f93f618bdca3ca9edc53c3c3f533d1ab1"
+        },
+        "world_actions.jsonl": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_actions.jsonl",
+          "sha256": "a2310a54dcc42295bd0b3b508ebccc503db0c9c491dedc1c3c9c78ef035b5aac"
+        },
+        "world_state_trajectory.json": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state_trajectory.json",
+          "sha256": "826c91ece306f5050d5ee574a9e88d49def73d43bedd630b2e0213eee6724de5"
+        },
+        "world_state.json": {
+          "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/pytest-tmp/test_calendar_loop_delivery_br0/world_state.json",
+          "sha256": "db5cc58501ce19c7beb7271c8b116c433cad7ec76a84dcbc1074a4a2c615b8de"
+        }
+      }
+    }
+  },
+  "comparison": {
+    "principal_commitments": true,
+    "principal_track_records": true,
+    "principal_reputations": true,
+    "commitment_events": true,
+    "relationship_polarity_equal": true,
+    "relationship_history_equal": true,
+    "relationship_strengths": {
+      "continuous-base-accepted": 0.3783,
+      "resume-base-accepted": 0.3782
+    }
+  },
+  "full_world_equality_asserted": false,
+  "limit": "Scripted external model replies and fake OASIS environment; actual coordinator, parser, world transitions, arbiter validation/application, artifacts and checkpoint restart."
+}

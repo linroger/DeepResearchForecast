@@ -74,7 +74,13 @@ class _WorldLLM:
             _WorldLLM.calls.append({"kind": "decision", "round": rnd, "actor": actor, "content": content,
                                     "system": messages[0]["content"] if messages[0]["role"] == "system" else ""})
             if actor == "Actor0":
-                option = "impose_measure" if "[impose_measure]" in content else re.search(r"\[(\w+)\]", content).group(1)
+                # Read actual menu rows, not bracketed promise IDs in the private
+                # brief. This fixture exercises generic moves; the dedicated
+                # commitment scenarios exercise explicit delivery attempts.
+                menu_text = content.split(f"# DECIDE YOUR MOVE FOR THIS PERIOD — {actor}\n", 1)[1].split("Rules:", 1)[0]
+                menu_ids = re.findall(r"^- \[([^\]]+)\]", menu_text, re.MULTILINE)
+                option = "impose_measure" if "impose_measure" in menu_ids else next(
+                    item for item in menu_ids if not item.startswith("fulfill:") and item != "hold_position")
                 statement = (f"关税上调至25%（第{rnd}轮）。" if rnd in _WorldLLM.wrong_language_rounds
                              else f"Tariff raised to 25% on imports (round {rnd}).")
                 return {"option_id": option, "targets": ["Actor1"], "magnitude": 0.9,

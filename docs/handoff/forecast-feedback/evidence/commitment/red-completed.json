@@ -1,0 +1,26 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 75464,
+  "status": "completed",
+  "exit_code": 1,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-red/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-red/backend/tests/test_world_commitment_fulfilment.py": "521b538cbc848b066bf20e223260884930fe212b845eeb05a204f1260d90dba1",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-red/backend/app/config.py": "78447139477bf6da35fca2026fb3953f949a42cf880566ccfc65b0da757d9cbe",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-red/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-red/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

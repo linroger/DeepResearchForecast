@@ -261,7 +261,7 @@ def test_commitments_become_due_then_lapse():
     assert any("lapsed" in e.description for e in world.events_in_round(3))
 
 
-def test_due_commitment_is_honoured_by_acting_not_by_resolution():
+def test_unrelated_action_and_generic_resolution_do_not_fulfil_due_commitment():
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.set_period_labels({1: "2026-Q3", 2: "2026-Q4"})
     world.start_round(1, None)
@@ -272,8 +272,9 @@ def test_due_commitment_is_honoured_by_acting_not_by_resolution():
     assert "due 2026-Q4" in world.render_public_brief(upto_round=1)
     world.register_decisions(2, [_decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
                                                                "kind": "economic", "cost": 3, "lag": 0})])
-    assert world.actors[0].commitments[0]["status"] == "fulfilled"
-    assert world.actors[0].commitments[0]["fulfilled_round"] == 2
+    world.apply_arbiter_update(2, {"action_resolutions": [{"actor": "Alpha Systems", "outcome": "success"}]})
+    assert world.actors[0].commitments[0]["status"] == "due"
+    assert "fulfilled_round" not in world.actors[0].commitments[0]
 
 
 # ----------------------------------------------------------------------------- snapshot / diff / briefs

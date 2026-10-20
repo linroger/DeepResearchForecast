@@ -1,0 +1,47 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 35216,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:network:socket.__new__": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "quarantine:oasis_import_cwd": 1,
+    "blocked:external_read": 20
+  },
+  "source_sha256": {
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_commitment_fulfilment.py": "c404da182ed40a36fcb42a025e3958885259528ce60d0d423389a050dc534873",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_model.py": "73372a548871a03705eace3744e98d272fb4b86382532d8dfb7318af94dc1099",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_interactions.py": "9bcc23d1b1bbabc7340683e3ef4f583671cf60601785fca07dafa5ae17c5328b",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_update.py": "aa0972f3780fc6d51fe0585e4dbac4a4d33cf617b920878081870c2978112ef5",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_agent_decision.py": "ca8002c019df2ecc8b0898eadf98336d881f2a7a5ec2929b5222781dcc3a204d",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_model_seed.py": "6123e3d2e2f74a96da08540127a1ae9eae76c491ba4ccc69c61684a2b79b3c3a",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_worldstate.py": "e8264dd918e17244a18a12f3b30b8311a7124891555f02b44998f724c7281392",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_delta.py": "861bf2313701e7acdb3d29c14d720a874b5ef5b921c8f09f4f2ef8493b84214f",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_track_records.py": "cfeaeb8dc14dc5cbc5a79b6d9b817c3fb1afe70bb7caa19b79f798ba831a53c6",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_red_lines.py": "0642d4613149b23c3cfc85a4c0c36e9426337232e88bfe398dd865a18890b413",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_announced_settings.py": "77d58bc685f787689113f4d4ed9318ed4a63deee4bfc98c93b7df02e78cba407",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_pressure_channel.py": "20a334994ace5cb9a636c0db5361aef41a6cbac6058481d045ffe52edce95e0f",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/tests/test_world_reflexivity.py": "a78126a1f1bcf52b1a63a063e91c4bbfb9b24a454ef584ce6f6568c5f9458768",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/app/config.py": "78447139477bf6da35fca2026fb3953f949a42cf880566ccfc65b0da757d9cbe",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1",
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

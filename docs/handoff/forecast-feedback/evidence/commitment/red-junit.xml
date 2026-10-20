@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="1.749" timestamp="2026-10-20T23:23:05.605694" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_unrelated_public_statement_does_not_fulfil_due_promise" time="0.014"><failure message="AssertionError: assert 'fulfilled' == 'due'&#10;  &#10;  - due&#10;  + fulfilled">def test_unrelated_public_statement_does_not_fulfil_due_promise():
+        world = _world()
+        promise = world.actors[0].add_commitment("Deliver audited schedule", made_round=1, due_round=2)
+        world.start_round(2, _period(2))
+        decision = _parse(world, 0, 2, "public_statement",
+                          public_statement="Our office will be closed for the holiday.")
+        assert decision.ok
+        _advance(world, 2, [decision], llm=_Arbiter([
+            {"actor": "Actor0", "outcome": "success", "rationale": "The unrelated notice was published."},
+        ]), enabled=True)
+&gt;       assert promise["status"] == "due"
+E       AssertionError: assert 'fulfilled' == 'due'
+E         
+E         - due
+E         + fulfilled
+
+backend/tests/test_world_commitment_fulfilment.py:125: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_accepting_second_offer_does_not_fulfil_first_agreement" time="0.002"><failure message="AssertionError: assert 'fulfilled' == 'due'&#10;  &#10;  - due&#10;  + fulfilled">def test_accepting_second_offer_does_not_fulfil_first_agreement():
+        world, first = _agreement()
+        old = _obligation(world, 1, first)
+        # The second proposer opens its offer through the same real decision path.
+        second_offer = _parse(world, 2, 2, "open_talks", targets=["Actor1"],
+                              terms="Arrange a separate press conference.")
+        assert second_offer.ok
+        world.register_decisions(2, [second_offer.to_dict()])
+        second = next(it for it in world.interactions.values() if it.id != first.id)
+        world.start_round(3, _period(3))
+        accept = _parse(world, 1, 3, f"accept:{second.id}")
+        assert accept.ok
+        _advance(world, 3, [accept])
+        assert second.status == "accepted"
+        assert first.status == "accepted"
+&gt;       assert old["status"] == "due"
+E       AssertionError: assert 'fulfilled' == 'due'
+E         
+E         - due
+E         + fulfilled
+
+backend/tests/test_world_commitment_fulfilment.py:146: AssertionError</failure></testcase></testsuite></testsuites>

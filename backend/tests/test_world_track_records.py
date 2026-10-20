@@ -10,6 +10,7 @@ and shows the actor what the others actually did one period later.
 import json
 
 from app.services import world_update as wu
+from app.services.agent_decision import build_option_menu, parse_decision
 from app.services.world_model import WorldModel
 
 
@@ -43,11 +44,26 @@ def _hold(agent_id, name):
 
 
 def _two_promises_one_kept(world):
-    """Union promises twice in round 1; acts when they fall due (kept), holds the next time (lapsed)."""
+    """Two stored promises: confirmed delivery of the first, then lapse of the second."""
     world.start_round(1, None)
     world.register_decisions(1, [_move(1, "Dockworkers Union", commitment={"description": "Return to work", "due_periods": 1})])
+    actor = world.actors[1]
+    promise = actor.commitments[0]
+    actor.add_commitment("Hold a ballot", made_round=1, due_round=3)
     world.start_round(2, None)
-    world.register_decisions(2, [_move(1, "Dockworkers Union", commitment={"description": "Hold a ballot", "due_periods": 1})])
+    delivery = parse_decision(
+        {"option_id": "fulfill:" + promise["id"], "public_statement": "Our members have returned to work."},
+        actor=actor, world=world, options=build_option_menu(actor, world, 2), scenarios=world.scenarios, round_num=2,
+    )
+    assert delivery.ok
+    world.register_decisions(2, [delivery.to_dict()])
+    assert world.track_record(1)["kept"] == 0
+    update, problems = wu.validate_arbiter_update({"action_resolutions": [{
+        "actor": actor.name, "commitment_id": promise["id"], "action_round": 2,
+        "outcome": "success", "rationale": "The members returned to work as promised.",
+    }]}, world)
+    assert not problems
+    world.apply_arbiter_update(2, update)
     world.start_round(3, None)
     world.lapse_overdue_commitments(3)
     world.register_decisions(3, [_hold(1, "Dockworkers Union")])
@@ -61,7 +77,7 @@ def test_track_record_counts_kept_lapsed_and_broken_commitments():
     rec = world.track_record(1)
     assert (rec["kept"], rec["lapsed"], rec["broken"], rec["resolved"]) == (1, 1, 0, 2)
     assert rec["reliability"] == 0.5
-    assert world.track_record_text(1) == "kept 1 of 2 commitments (1 lapsed)"
+    assert world.track_record_text(1) == "kept 1 of 2 commitments (1 lapsed); moves 1 succeeded"
     assert world.track_record_text(0) == ""                       # nothing resolved yet: no line
     assert world.track_record(99) == {}
 
@@ -96,7 +112,7 @@ def test_the_arbiter_weighs_moves_by_track_record():
     rows = [_move(1, "Dockworkers Union", "strike_action", "coercive", statement="Strike extended.")]
     world.register_decisions(4, rows)
     prompt = wu.build_arbiter_prompt(world, 4, None, rows, {}, ["Deal", "Long strike"])
-    assert "Track record: kept 1 of 2 commitments (1 lapsed)." in prompt
+    assert "Track record: kept 1 of 2 commitments (1 lapsed); moves 1 succeeded." in prompt
     assert "weigh each actor's word by its track record" in prompt
     assert "self-fulfilling" in prompt and "self-defeating" in prompt
 
