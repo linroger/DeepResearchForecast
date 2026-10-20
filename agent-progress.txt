@@ -586,3 +586,4 @@ Delivery checkpoint: 7d72c951cf8f8846e083989d593c8c4090f877c7 committed40ownedfi
 - Accepted812 unique guarded cases (305world,500feedback,7fullworkflow) plus duplicate joint-source worldcontinuous/resume checks. External responses synthetic; actual producer/consumers/storage/restart remain real. Evidence: docs/handoff/forecast-feedback/verification.md.
 - Next: prospective forecast evaluation against simple baselines; do not infer calibration from these mechanics tests. Final commit/main/remote status is in docs/handoff/forecast-feedback/delivery.json. Primary deployment dirt preserved.
 - Delivery: localmain303e5a8 +ba914c5 complete; onepush tolegacy/main failed Invalid username or token. Authentication must be restored before a new delivery attempt; no deployment changes.
+- 2026-10-21 delivery follow-up: GitHub authentication repaired using macOS Keychain; legacy/main push ac48891..1a86c47 succeeded. No application source or deployment changes.

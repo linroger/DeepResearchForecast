@@ -1,8 +1,8 @@
 # Forecast feedback handoff
 
 **Last Updated (UTC):** 2026-10-20T15:19:52.682931+00:00
-**Status:** Implementation and local main integration complete; remote delivery blocked by authentication
-**Current Focus:** Deliver the reviewed local main after GitHub authentication is restored.
+**Status:** Complete — implementation, local main integration and remote publication verified
+**Current Focus:** No remaining implementation or delivery work in this slice.
 
 ## 1) Request & Context
 The user approved the preceding roadmap's first implementation: integrate commitment fulfilment with main, implement forecasting through outcome scoring, verify restart and next report track record with a subagent team. The clean managed worktree starts from main ac488913. The primary deployment checkout is dirty and remains untouched. This is implementation and guarded synthetic end-to-end acceptance, not a live-provider accuracy study or deployment.
@@ -27,7 +27,7 @@ The approved plan is in PLANS.md. Integrate the world repair first while mapping
 - [x] Wire monitoring and next-report consumer — seven real workflow cases including restart.
 - [x] Independent acceptance/review and relevant regression gates — 812 unique cases, review closed.
 - [x] Scoped commits, local main integration and delivery record.
-- [ ] Remote publication — blocked by rejected GitHub authentication.
+- [x] Remote publication — authentication repaired; main pushed successfully.
 
 ## 5) Findings, Decisions, Assumptions
 Main still contains broad non-hold fulfilment; local repair faae88f is not its ancestor. The ledger currently stores scenario probabilities but not binary contracts; market/data outcomes live separately. The current report appends to the ledger before final publication. The resolution monitor defaults to recent reports. Exact publication boundary and legacy resolution APIs are being traced before changes.
@@ -76,3 +76,9 @@ Independent final review is closed on the exact frozen bytes. The final combined
 Commit303e5a8 integrates the world repair; ba914c5 implements the full feedback loop. Local main was fast-forwarded with expected-old-value checks, preserving all existing checkout files. The single authorized `git push legacy main` attempt failed with Invalid username or token (exit128). No unchanged-credential retry was made. Source hashes still match acceptance; no remaining application change is required. Delivery details are in delivery.json.
 
 Next-session prompt: “Read docs/handoff/forecast-feedback/handoff.md and delivery.json. The implementation is reviewed and locally integrated. Confirm local main and source hashes, restore working GitHub authentication through the existing credential flow, then push local main once. Preserve the dirty primary deployment checkout; do not restart services or rerun paid providers. Further forecast-quality work should begin with prospective evaluation rather than treating fixture scores as calibration.”
+
+### 2026-10-20T17:40:56.437076+00:00 — authentication repaired and remote delivery complete
+
+The user supplied replacement GitHub authentication and explicitly requested secure persistence. The credential was validated against GitHub, stored and retrieved successfully through macOS Keychain, and GitHub Git credential lookup now uses osxkeychain directly. No credential was added to source files, documentation, command arguments or plaintext credential files. The new authentication successfully pushed main from ac48891 to1a86c47 on legacy. The prior authentication blocker is resolved. No application source or live service changed during delivery repair.
+
+Updated next-session prompt: “Read this handoff and delivery.json. The approved commitment and forecast-feedback slice is fully delivered. Begin any new forecast-quality work from current main with prospective evaluation and simple baselines; preserve the dirty primary deployment checkout and distinguish offline mechanics from empirical accuracy.”
