@@ -492,18 +492,27 @@ Field rules:
 - Write text values in $language.""")
 
 # Runs with method skills only (research_skills): the forecast stage reads these as
-# actors.json forecast_inputs.base_rates / .drivers (backend/app/utils/actors.py).
+# actors.json forecast_inputs.base_rates / .drivers (backend/app/utils/actors.py), and the
+# reflexive world model's seed reads .risks as exogenous shocks (backend/app/services/
+# world_model_seed.shocks_from_research; normalize_frame_risks checks each one against the report).
 _T_FRAME = string.Template("""FORECAST FRAME EXTRACTION TASK
-From the research report above, extract the outside-view base rates and the causal drivers the report itself states, for the forecasting stage. Use only the report; copy counts and numbers exactly as written; never invent a reference class, a number or a source.
+From the research report above, extract the outside-view base rates, the causal drivers and the documented risks the report itself states, for the forecasting stage. Use only the report; copy counts, probabilities and numbers exactly as written; never invent a reference class, a probability, a number or a source.
 Reply with ONE JSON object only, in exactly this shape:
 {"base_rates": [{"reference_class": "...", "outcome_frequency": "...", "basis": "..."}],
- "drivers": [{"variable": "...", "direction": "...", "why_it_matters": "..."}]}
+ "drivers": [{"variable": "...", "direction": "...", "why_it_matters": "..."}],
+ "risks": [{"event": "...", "probability": "...", "per": "...", "source": "S1", "effects": [{"metric": "...", "change": "...", "direction": "up"}], "affects": ["..."], "recurring": false}]}
 Field rules:
 - base_rates: at most $max_rates. reference_class names the comparable cases and the counting rule (which cases, threshold, horizon, period); outcome_frequency is the count or share exactly as the report states it (for example "2 of 3 episodes" or "about 7% of years"); basis names the series, dataset or study and keeps its [S<n>] marker. An empty list when the report states no base rate.
 - drivers: at most $max_drivers variables that move the outcome, most important first; direction says which way the variable pushes the forecast outcome; why_it_matters is one clause with the mechanism and the [S<n>] marker of its evidence when the report gives one.
+- risks: at most $max_risks discrete events outside the actors' own plans (a disruption, an accident, a ruling, a crisis) to which the report itself attaches a probability, most consequential first; never the forecast question's own outcome or one of its scenarios. event names what would happen in one short clause. probability is that probability exactly as the report writes it (for example "5%", "1 in 20" or "2 of 10 years"), never one you estimate, convert or derive. per is the period that probability refers to, exactly as the report writes it (for example "per month", "within 12 months" or "over the forecast horizon"); "" when the report states none. source is the [S<n>] marker of that statement in the report, without brackets. effects: at most $max_effects quantities the report says the event would move, each named as the report names it where it states the quantity's current value; change is the size exactly as the report writes it ("+30%", "-5 bn" or "to 150"), "" when the report gives only a direction; direction is up or down. affects: the actors the report says the event would hit, by name. recurring is true only when the report says the event can happen more than once. An empty list when the report attaches a probability to no such event.
 - Write text values in $language.""")
 MAX_FRAME_BASE_RATES = 6
 MAX_FRAME_DRIVERS = 8
+# Documented risks per run and their bounded parts (the seed admits at most 8 shocks with
+# 4 effects and 6 affected actors each; world_model_seed.MAX_SHOCKS).
+MAX_FRAME_RISKS = 6
+MAX_FRAME_RISK_EFFECTS = 3
+MAX_FRAME_RISK_AFFECTS = 6
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
@@ -4283,6 +4292,190 @@ def _frame_rows(frame: Any, key: str, fields: Sequence[str], limit: int) -> list
     return rows
 
 
+# Documented risks (forecast_inputs.risks, the world model's exogenous shocks): a risk is kept
+# only when a line of the report states its probability and names the event (shares a word of
+# three letters or more, or two consecutive CJK characters, with it); its window and its [S<n>]
+# marker count only when they stand on such a line, an effect only on a metric of
+# quantitative_facts, and an effect's size only when the report states it.  What does not check
+# out is left empty, so the seed records a typed gap for it (shock_without_window,
+# shock_without_source, a direction-only effect) instead of using a number the report does not
+# contain.
+_PERCENT_WORDS_RE = re.compile(r"\s*(?:per\s?cent|percent)\b")
+_CHANGE_LEAD_RE = re.compile(r"^(?:(?:to\b|by\b|=|→|->|至|到|[+\-−±])\s*)+")
+_RANGE_TAIL_RE = re.compile(r"\s*(?:-|–|—|~|to\b|至|到)\s*[+\-−]?\d")
+_RANGE_HEAD_RE = re.compile(r"\d%?\s*(?:-|–|—|~|to|至|到)\s*[+\-−]?$")
+_GENERIC_WORDS = frozenset("the and for its per are was has not but can may any all out off risk risks chance "
+                           "chances probability likelihood event events shock shocks would could might will "
+                           "that this with from into over under within their there which".split())
+_METRIC_STOPWORDS = frozenset("the of a an in on for to at by".split())
+_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "scenario", "window_not_stated",
+                      "source_not_stated", "effects_kept", "effects_untracked", "effects_unreadable",
+                      "effect_sizes_not_stated")
+
+
+def _report_key(text: Any) -> str:
+    """Comparison form of report text: NFKC, case-folded, without emphasis marks, percent
+    spellings as "%", single spaces."""
+    text = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    text = _PERCENT_WORDS_RE.sub("%", re.sub(r"[*_`]", "", text))
+    return " ".join(text.split()).replace(" %", "%")
+
+
+def _states(text: str, phrase: str) -> bool:
+    """``phrase`` stands in ``text`` (both report keys): not inside a longer number and not as
+    one end of a range ("5%" is not stated by "5-10%")."""
+    if not phrase:
+        return False
+    pattern = ((r"(?<![\d.])" if phrase[0].isdigit() else "") + re.escape(phrase)
+               + (r"(?!\d|\.\d)" if phrase[-1].isdigit() else ""))
+    return any(not _RANGE_TAIL_RE.match(text, m.end())
+               and not _RANGE_HEAD_RE.search(text[max(0, m.start() - 16):m.start()])
+               for m in re.finditer(pattern, text))
+
+
+def _event_terms(event: str) -> set[str]:
+    """Words of at least three letters (generic ones excepted) and CJK character pairs of an
+    event, in report-key form."""
+    key = _report_key(event)
+    words = {w for w in re.findall(r"[^\W\d_\u3400-\u9fff]{3,}", key) if w not in _GENERIC_WORDS}
+    pairs = {run[i:i + 2] for run in re.findall(r"[\u3400-\u9fff]{2,}", key) for i in range(len(run) - 1)}
+    return words | pairs
+
+
+def _names_event(line: str, terms: set[str]) -> bool:
+    return any(term in line if _is_cjk(term) else re.search(rf"(?<!\w){re.escape(term)}", line)
+               for term in terms)
+
+
+def _is_cjk(text: str) -> bool:
+    return bool(re.match(r"[\u3400-\u9fff]", text))
+
+
+def _probability_phrases(raw: Any) -> list[str]:
+    """Report keys a stated probability may take: the text as written, or for a bare number in
+    (0, 1) its decimal and percentage forms.  [] without a digit (not a probability)."""
+    if isinstance(raw, bool) or raw is None:
+        return []
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+        if not (math.isfinite(value) and 0.0 < value < 1.0):
+            return []
+        return [f"{value:g}", f"{value * 100:g}%"]
+    text = _report_key(_collapse(raw, 80))
+    return [text] if re.search(r"\d", text) else []
+
+
+def _metric_tokens(text: Any) -> frozenset[str]:
+    """Words (and single CJK characters) of a metric name, without function words."""
+    key = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    return frozenset(t for t in re.findall(r"[\u3400-\u9fff]|[^\W_\u3400-\u9fff]+", key)
+                     if t not in _METRIC_STOPWORDS)
+
+
+def _quant_metric(ref: Any, names: Sequence[tuple[str, str]]) -> str:
+    """The quantitative_facts metric an effect names: equal name keys; else the longest metric
+    name (four characters at least) inside the effect's; else the one metric whose name contains
+    the effect's, or whose words contain the effect's words or lie within them (two words at
+    least: "Brent price" → "Brent crude price"); "" when none or ambiguous ("crude price" with
+    Brent and WTI).  The effect then carries the metric's exact name, so the seed's own binding
+    (``world_model_seed._match_tracked_variable``) finds it by equal names."""
+    want = _name_key(ref)
+    if not want:
+        return ""
+    exact = next((name for key, name in names if key == want), "")
+    inside = sorted(((len(key), name) for key, name in names if len(key) >= 4 and key in want), reverse=True)
+    if exact or inside:
+        return exact or inside[0][1]
+    tokens = _metric_tokens(ref)
+    for fits in ({name for key, name in names if len(want) >= 4 and want in key},
+                 {name for _, name in names if min(len(tokens), len(_metric_tokens(name))) >= 2
+                  and (tokens <= _metric_tokens(name) or _metric_tokens(name) <= tokens)}):
+        if fits:
+            return fits.pop() if len(fits) == 1 else ""
+    return ""
+
+
+def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, Any]],
+                          sources: Sequence[Mapping[str, Any]],
+                          scenario_names: Sequence[str] = ()) -> tuple[list[dict], dict]:
+    """``(risks, checks)``: the frame's risks the report documents (the rules above), at most
+    MAX_FRAME_RISKS in the model's order, and the counts of what each check removed."""
+    checks = dict.fromkeys(_FRAME_RISK_CHECKS, 0)
+    raw_rows = (frame.get("risks") if isinstance(frame, Mapping) else None) or []
+    lines = [_report_key(line) for line in str(report or "").splitlines() if line.strip()]
+    text = "\n".join(lines)
+    names = [(_name_key(row.get("metric")), _collapse(row.get("metric"), 200))
+             for row in quant if isinstance(row, Mapping) and _name_key(row.get("metric"))]
+    scenarios = {_name_key(name) for name in scenario_names if _name_key(name)}
+    risks: list[dict] = []
+    seen: set[str] = set()
+    for item in raw_rows if isinstance(raw_rows, list) else []:
+        event = _collapse(item.get("event"), 200) if isinstance(item, Mapping) \
+            and isinstance(item.get("event"), str) else ""
+        if not event:
+            continue
+        checks["extracted"] += 1
+        if len(risks) >= MAX_FRAME_RISKS or _norm_key(event) in seen:
+            continue
+        if _name_key(event) in scenarios:
+            checks["scenario"] += 1
+            continue
+        terms = _event_terms(event)
+        about = [line for line in lines if _names_event(line, terms)]
+        phrase = next((p for p in _probability_phrases(item.get("probability"))
+                       if any(_states(line, p) for line in about)), "")
+        if not phrase:
+            checks["probability_not_stated"] += 1
+            continue
+        seen.add(_norm_key(event))
+        stating = [line for line in about if _states(line, phrase)]
+        per = _collapse(item.get("per"), 80)
+        if per and not any(_states(line, _report_key(per)) for line in stating):
+            per = ""
+            checks["window_not_stated"] += 1
+        row: dict[str, Any] = {"event": event, "probability": phrase, "per": per, "source": ""}
+        marker = re.search(r"\d+", str(item.get("source") or ""))
+        number = int(marker.group(0)) if marker else 0
+        source = _source_for_ref(number, sources) if number else None
+        if source is not None and any(re.search(rf"(?<![a-z0-9])s{number}(?!\d)", line) for line in stating):
+            title = _collapse(source.get("title"), 120)
+            row["source"] = f"{title} [S{number}]" if title else f"[S{number}]"
+            if source.get("url"):
+                row["source_url"] = source["url"]
+            if source.get("tier"):
+                row["tier"] = source["tier"]
+        else:
+            checks["source_not_stated"] += 1
+        effects: list[dict] = []
+        raw_effects = item.get("effects")
+        for effect in raw_effects if isinstance(raw_effects, list) else []:
+            if not isinstance(effect, Mapping) or len(effects) >= MAX_FRAME_RISK_EFFECTS:
+                continue
+            metric = _quant_metric(effect.get("metric") or effect.get("variable"), names)
+            if not metric or any(e["metric"] == metric for e in effects):
+                checks["effects_untracked"] += not metric
+                continue
+            change = _collapse(effect.get("change"), 80)
+            direction = _collapse(effect.get("direction"), 40)
+            core = _CHANGE_LEAD_RE.sub("", _report_key(change))
+            if change and not (re.search(r"\d", core) and _states(text, core)):
+                if not direction and change[0] in "+-−":
+                    direction = "up" if change[0] == "+" else "down"
+                change = ""
+                checks["effect_sizes_not_stated"] += 1
+            if change or direction:
+                effects.append({"metric": metric, "change": change, "direction": direction})
+            else:
+                checks["effects_unreadable"] += 1
+        checks["effects_kept"] += len(effects)
+        row.update(effects=effects,
+                   affects=_as_str_list(item.get("affects"), limit=MAX_FRAME_RISK_AFFECTS, item_chars=160),
+                   recurring=item.get("recurring") is True)
+        risks.append(row)
+    checks["kept"] = len(risks)
+    return risks, checks
+
+
 def _data_statistic(entry: Any) -> str:
     """The statistic a catalog entry's title names without its geography
     ("GDP (annual % growth): World" → "GDP (annual % growth)")."""
@@ -7549,6 +7742,7 @@ class _Engine:
                                   max_contested=MAX_CONTESTED_ROWS, language=self.language),
                           ("quantitative_facts",)),
                 "frame": (_render(_T_FRAME, max_rates=MAX_FRAME_BASE_RATES, max_drivers=MAX_FRAME_DRIVERS,
+                                  max_risks=MAX_FRAME_RISKS, max_effects=MAX_FRAME_RISK_EFFECTS,
                                   language=self.language), ("base_rates", "drivers")),
             }
             if len(todo) >= 2:
@@ -7569,6 +7763,8 @@ class _Engine:
                 self.write_json(self.work / "extract" / f"{kind}.json",
                                 {"report_sha256": report_sha, "result": results[kind], "truncated": cut})
         self._frame = results.get("frame")
+        # Every extracted risk is checked against the report body it came from.
+        self._frame_report = report_body
         for kind in truncated:
             self.meta[f"{kind}_truncated"] = True
             self.log("warn", f"v3: the {kind} extraction reply was truncated at its output cap even with the "
@@ -7677,7 +7873,7 @@ class _Engine:
         if isinstance(timeline_hist, dict):
             self.meta["timeline_freshness"] = timeline_hist
         obj.update(key_events=timeline, quantitative_facts=quant, contested_claims=contested,
-                   forecast_inputs=self.forecast_inputs())
+                   forecast_inputs=self.forecast_inputs(quant, sources))
         for key in ("sources", "actor_intelligence_contract"):
             obj.pop(key, None)
         for row in obj.get("actors") or []:
@@ -7698,14 +7894,23 @@ class _Engine:
                 "contested_count": len(contested), "has_situation_brief": bool(obj["situation_brief"]),
                 "_actors_obj": obj}
 
-    def forecast_inputs(self) -> dict:
+    def forecast_inputs(self, quant: Sequence[Mapping[str, Any]] = (),
+                        sources: Sequence[Mapping[str, Any]] = ()) -> dict:
+        """actors.json ``forecast_inputs``; ``risks`` keeps only what the report states
+        (:func:`normalize_frame_risks`), with its checks in ``meta.forecast_risks``
+        when the frame was extracted."""
         frame = getattr(self, "_frame", None)
+        risks, checks = normalize_frame_risks(frame, getattr(self, "_frame_report", ""), quant, sources,
+                                              [s.name for s in self.plan.scenarios])
+        if isinstance(frame, Mapping):
+            self.meta["forecast_risks"] = checks
         return {"scenarios": [{"name": s.name, "probability": round(s.weight / 100.0, 4),
                                "narrative": s.thesis} for s in self.plan.scenarios],
                 "base_rates": _frame_rows(frame, "base_rates", ("reference_class", "outcome_frequency", "basis"),
                                           MAX_FRAME_BASE_RATES),
                 "drivers": _frame_rows(frame, "drivers", ("variable", "direction", "why_it_matters"),
                                        MAX_FRAME_DRIVERS),
+                "risks": risks,
                 "indicators": self._official_indicators()}
 
     def _official_refs(self) -> tuple[list[tuple[Any, int]], dict[int, int], dict[str, str]]:
