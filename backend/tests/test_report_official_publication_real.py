@@ -243,6 +243,61 @@ def published_en(env, monkeypatch):
     return _published("English", env, monkeypatch)
 
 
+@pytest.mark.parametrize("fail_pdf", [False, True])
+def test_legacy_visual_replay_binds_or_rolls_back_new_track_record(env, monkeypatch, fail_pdf):
+    """A replay's first historical capture follows the report transaction."""
+    import hashlib
+    import scripts.backfill_report_visuals as backfill
+    from app.services import forecast_ledger
+
+    monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", False)
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR", str(env / "replay-ledger"))
+    published = _published("English", env, monkeypatch)
+    report, folder = published["report"], published["folder"]
+    companion = folder / "forecast_track_record.json"
+    assert not companion.exists()
+    before = {name: (folder / name).read_bytes() for name in
+              ("meta.json", "forecast.json", "full_report.md", "final_audit.json")}
+    pipeline = env / "pipelines" / "pipe_legacy_replay"
+    pipeline.mkdir(parents=True)
+    (published["handoff"] / "sources.json").write_text(
+        json.dumps(published["bundle"]["sources"]), encoding="utf-8")
+    (pipeline / "pipeline_state.json").write_text(json.dumps({
+        "report_id": report.report_id, "simulation_id": "real_sim",
+        "handoff_dir": str(published["handoff"]),
+    }), encoding="utf-8")
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(env / "pipelines"))
+    monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", True)
+    reached = []
+
+    def export_pdf(cls, report_id, force=False, lang=None):
+        assert companion.exists()
+        reached.append(report_id)
+        if fail_pdf:
+            raise RuntimeError("synthetic downstream PDF failure")
+        path = Path(cls._get_report_pdf_path(report_id))
+        path.write_bytes(b"%PDF-1.4 replay")
+        return str(path)
+
+    monkeypatch.setattr(ReportManager, "export_pdf", classmethod(export_pdf))
+    if fail_pdf:
+        with pytest.raises(RuntimeError, match="synthetic downstream PDF failure"):
+            backfill.backfill_one("pipe_legacy_replay", report.report_id, apply=True)
+        assert not companion.exists()
+        assert all((folder / name).read_bytes() == value for name, value in before.items())
+    else:
+        backfill.backfill_one("pipe_legacy_replay", report.report_id, apply=True)
+        forecast = json.loads((folder / "forecast.json").read_text())
+        assert json.loads(companion.read_text()) == forecast["historical_calibration"]["forecast_track_record"]
+        markdown = (folder / "full_report.md").read_bytes()
+        assert json.loads((folder / "meta.json").read_text())["markdown_content"] == markdown.decode()
+        assert json.loads((folder / "final_audit.json").read_text())["markdown_sha256"] == hashlib.sha256(markdown).hexdigest()
+    assert reached
+    # A visual replay is not a new forecasting admission.
+    assert forecast_ledger.list_published_report_ids() == []
+    assert ReportManager.publication_status(report.report_id)["publishable"]
+
+
 def _section(markdown, heading):
     """Lines of one H2 section (heading excluded) up to the next H2."""
     lines = markdown.split("\n")
@@ -763,6 +818,10 @@ def test_forecast_json_keeps_the_official_data_track_record_separate(env, monkey
     assert "confidence_rationale" not in tracked  # no scenario has resolved: no calibration note
     assert {key: value for key, value in tracked.items() if key != "historical_calibration"} == untracked
 
+    # Draft finalization no longer admits production forecasts. Seed a historical
+    # legacy row explicitly to verify its separately labeled compatibility summary.
+    assert forecast_ledger.read_ledger() == []
+    forecast_ledger.append_forecast(untracked, report_id="legacy_scenario", created_at="2026-10-01T00:00:00Z")
     # A resolved scenario forecast keeps its own Brier; the binary record stays beside it.
     entries = forecast_ledger.read_ledger()
     entries[0].update(resolved=True, outcome=untracked["scenarios"][1]["name"])

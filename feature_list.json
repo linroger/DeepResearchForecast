@@ -252,5 +252,18 @@
       "Complete reviewed offline gates and the approved maximum US$25 held-out live evaluation before default admission or model-realism claims."
     ],
     "passes": false
+  },
+  {
+    "id": "forecast_feedback_immutable_publication_loop",
+    "category": "functional",
+    "description": "Integrate exact default-world promise fulfilment with main and close durable published forecast resolution scoring and next-report track record.",
+    "steps": [
+      "Run real commitment consequences and actor feedback through restart on current main.",
+      "Publish a forecast through actual final audit and retain immutable probabilities and resolution identities.",
+      "Resolve market/data binaries and a manually adjudicated scenario through native monitor and SDK paths.",
+      "Retry and restart without duplicate scores or changed original evidence; reject invalid identities and conflicting outcomes.",
+      "Generate the next report and verify frozen typed track record in forecast JSON, audited Markdown and API/download consumers."
+    ],
+    "passes": true
   }
 ]

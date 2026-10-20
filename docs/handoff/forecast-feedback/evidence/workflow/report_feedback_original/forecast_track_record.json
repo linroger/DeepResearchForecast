@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "published_forecasts.jsonl",
+  "source_digest": "ac5a383328a3b1fc39f01013657e77c40da7063ccfe491b87b83313de39946bd",
+  "journal_length": 0,
+  "journal_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "excluded_report_id": "report_feedback_original",
+  "n_reports": 0,
+  "tracks": {
+    "scenario": {
+      "n_forecasts": 0,
+      "n_resolved": 0,
+      "n_outstanding": 0,
+      "mean_brier": null,
+      "coverage": 0.0
+    },
+    "market_binary": {
+      "n_forecasts": 0,
+      "n_resolved": 0,
+      "n_outstanding": 0,
+      "mean_brier": null,
+      "coverage": 0.0
+    },
+    "official_data_binary": {
+      "n_forecasts": 0,
+      "n_resolved": 0,
+      "n_outstanding": 0,
+      "mean_brier": null,
+      "coverage": 0.0
+    },
+    "unanchored_binary": {
+      "n_forecasts": 0,
+      "n_resolved": 0,
+      "n_outstanding": 0,
+      "mean_brier": null,
+      "coverage": 0.0
+    }
+  },
+  "scored_identities": [],
+  "legacy_scenario": {
+    "source": "ledger.jsonl",
+    "n_resolved": 0,
+    "mean_brier": null
+  }
+}
