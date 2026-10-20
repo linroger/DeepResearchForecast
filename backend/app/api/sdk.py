@@ -47,6 +47,7 @@ from ..services.pipeline_orchestrator import (
     simulation_admission_error,
 )
 from ..services.world_simulation.contracts import WorldError
+from ..services.backtest_mode import BacktestRequestError
 from ..services.report_agent import ReportManager
 from ..services.backtest import score_forecast
 from ..utils.atomic import write_json_atomic
@@ -91,6 +92,8 @@ def v1_run():
         model: str        研究模型（可选；须在 Config.SUPPORTED_DEERFLOW_MODELS 内）
         simulation_engine: str  可选；省略采用 fresh default，显式 null 无效
         world_spec / world_policy_spec: dict  可选；使用同一 fresh admission 契约
+        backtest: dict    可选；回测模式 {as_of, strict, archive, arm, target, run_label}
+                          （docs/handoff/backtest/design.md），无效请求 → 400
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -145,7 +148,7 @@ def v1_run():
             language=language,
             model=model,
             **{key: data[key] for key in
-               ('simulation_engine', 'world_spec', 'world_policy_spec') if key in data},
+               ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest') if key in data},
         )
         return _ok({
             "pipeline_id": state.pipeline_id,
@@ -153,6 +156,8 @@ def v1_run():
             "mode": state.mode,
             "status": state.status,
         })
+    except BacktestRequestError as error:
+        return _err(f"backtest 请求无效（invalid backtest request）: {error}", 400)
     except WorldError as error:
         body, status = simulation_admission_error(error)
         return jsonify(body), status

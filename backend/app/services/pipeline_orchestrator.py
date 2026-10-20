@@ -66,6 +66,14 @@ from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import RunnerStatus, SimulationRunner
 from .world_simulation.admission import UNSET, resolve_fresh_simulation_request
 from .world_simulation.contracts import WorldError
+from .backtest_mode import (
+    BACKTEST_OPTION,
+    BacktestRequestError,
+    backtest_of,
+    markets_enabled as backtest_markets_enabled,
+    normalize_backtest_request,
+    research_child_policy,
+)
 from ..services.text_processor import TextProcessor
 from ..services.zep_graph_memory_updater import ZepGraphMemoryManager
 from ..utils.actors import (
@@ -2237,6 +2245,7 @@ class DeerFlowResearchRunner:
         evidence_only: bool = False,
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
+        backtest: Optional[dict[str, Any]] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2368,6 +2377,16 @@ class DeerFlowResearchRunner:
                   else resolve_research_engine())
         )
         env["RESEARCH_ENGINE"] = research_engine
+        # Backtest mode (docs/handoff/backtest/design.md §3): the cutoff is
+        # parent-owned like the checkpoint id: an ambient value is never
+        # inherited, and only a pipeline that pinned one hands it on.
+        env.pop("DRF_BACKTEST_POLICY", None)
+        if backtest is not None:
+            if research_engine != RESEARCH_ENGINE_V3:
+                raise RuntimeError("回测模式只支持 v3 研究引擎（backtest mode needs the v3 research engine; "
+                                   f"this invocation resolves to {research_engine}）")
+            env["DRF_BACKTEST_POLICY"] = research_child_policy(
+                backtest, audit_path=os.path.join(os.path.realpath(handoff_dir), "backtest_audit.jsonl"))
         if research_engine == RESEARCH_ENGINE_V3:
             # v3 caps its own wall-clock plan at 0.85 × this value so it writes
             # research_report.md before the watchdog's SIGKILL; hand it the
@@ -2425,7 +2444,8 @@ class DeerFlowResearchRunner:
         # （bridge 侧经 _env_flag/os.environ 读取）。不下发时子进程只看到自己的 env 默认值，
         # 后端 .env 里的配置对研究子进程静默失效（与 ACTOR_CAST_MAX 曾经的漂移同因）。
         env["PREDICTION_MARKETS_ENABLED"] = (
-            "true" if getattr(Config, "PREDICTION_MARKETS_ENABLED", True) else "false")
+            "true" if getattr(Config, "PREDICTION_MARKETS_ENABLED", True)
+            and backtest_markets_enabled(backtest) else "false")
         env["PREDICTION_MARKETS_MAX"] = str(getattr(Config, "PREDICTION_MARKETS_MAX", 20))
         env["PREDICTION_MARKETS_MIN_VOLUME"] = str(getattr(Config, "PREDICTION_MARKETS_MIN_VOLUME", 200.0))
         env["PREDICTION_MARKETS_MAX_PER_EVENT"] = str(getattr(Config, "PREDICTION_MARKETS_MAX_PER_EVENT", 3))
@@ -8741,8 +8761,15 @@ class PipelineOrchestrator:
         simulation_engine=UNSET,
         world_spec: Optional[dict] = None,
         world_policy_spec: Optional[dict] = None,
+        backtest: Optional[dict] = None,
     ) -> PipelineState:
-        """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。"""
+        """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。
+
+        ``backtest``: an opt-in backtest request (``backtest_mode.normalize_backtest_request``);
+        it is validated and pinned before anything is created, and refused
+        (:class:`BacktestRequestError`) for the legacy research engine or the
+        world-v1 simulation engine.  ``None`` admits a live run as before.
+        """
         # Resolve before directories, tasks, state writes or thread registration.
         # Reuse this exact snapshot for persisted containment semantics.
         safety_policy = capture_safety_policy_v1("admission")
@@ -8751,6 +8778,13 @@ class PipelineOrchestrator:
             world_policy_spec=world_policy_spec, max_rounds=max_rounds,
             safety_policy=safety_policy,
         )
+        backtest_option = None
+        if backtest is not None:
+            backtest_option = normalize_backtest_request(backtest)
+            if resolve_research_engine() != RESEARCH_ENGINE_V3:
+                raise BacktestRequestError("backtest mode needs the v3 research engine (RESEARCH_ENGINE)")
+            if simulation_options.get("simulation_engine") == "world-v1":
+                raise BacktestRequestError("backtest mode supports the OASIS simulation engine only")
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         PipelineManager.ensure_dirs(pipeline_id)
 
@@ -8788,6 +8822,8 @@ class PipelineOrchestrator:
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
         state.options["safety_policy_v1"] = safety_policy
+        if backtest_option is not None:
+            state.options[BACKTEST_OPTION] = backtest_option
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -9187,6 +9223,10 @@ class PipelineOrchestrator:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
             except (TypeError, ValueError):
                 pass
+        if backtest_of(base_state.options) is not None:
+            # A fork of a backtest run reuses research read at the cutoff; its
+            # report must keep the cutoff too (no live re-quote, no ledger row).
+            new_state.options[BACKTEST_OPTION] = dict(base_state.options[BACKTEST_OPTION])
 
         new_state.options["simulation_engine"] = engine
         if engine == "world-v1":
@@ -9878,6 +9918,7 @@ class PipelineOrchestrator:
             logger.info("[%s] ReportAgent 尚未支持 scenario_spine，种子 %s 回退自由情景命名",
                         state.pipeline_id, seed)
             agent = ReportAgent(**_agent_kwargs)
+        agent.set_backtest_policy(backtest_of(state.options))
         agent.generate_report(report_id=rid)
         return sim_id, rid, self._read_report_forecast(rid)
 
@@ -12054,6 +12095,7 @@ class PipelineOrchestrator:
                     state.prompt,
                     synthesis_dir,
                     on_progress=_progress,
+                    backtest=backtest_of(state.options),
                     depth=state.options.get("depth"),
                     language=state.options.get("research_language"),
                     model=state.options.get("research_model"),
@@ -12312,6 +12354,7 @@ class PipelineOrchestrator:
                 track_prompt,
                 track_dir,
                 on_progress=_make_cb(idx),
+                backtest=backtest_of(state.options),
                 depth=state.options.get("depth"),
                 language=state.options.get("research_language"),
                 model=state.options.get("research_model"),
@@ -12608,6 +12651,7 @@ class PipelineOrchestrator:
                         state.prompt,
                         synthesis_dir,
                         on_progress=_global_progress,
+                        backtest=backtest_of(state.options),
                         depth=state.options.get("depth"),
                         language=state.options.get("research_language"),
                         model=state.options.get("research_model"),
@@ -13178,6 +13222,7 @@ class PipelineOrchestrator:
                             state.prompt,
                             handoff_dir,
                             on_progress=upd,
+                            backtest=backtest_of(state.options),
                             depth=state.options.get("depth"),
                             language=state.options.get("research_language"),  # T5.5
                             model=state.options.get("research_model"),        # T5.5
@@ -14487,6 +14532,7 @@ class PipelineOrchestrator:
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
 
+                agent.set_backtest_policy(backtest_of(state.options))
                 report = agent.generate_report(progress_callback=report_cb, report_id=report_id)
                 try:
                     ReportManager.save_report(report)
