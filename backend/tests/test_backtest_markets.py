@@ -151,3 +151,20 @@ def test_collector_writes_an_as_of_snapshot_and_section(polymarket, monkeypatch,
     history = json.loads((tmp_path / d.PRICE_HISTORY_FILENAME).read_text(encoding="utf-8"))
     assert all(point["t"] <= CUTOFF for point in history["open"])
     assert meta["prediction_markets_as_of"] == POLICY.cutoff.isoformat()
+
+
+def test_bridge_refuses_legacy_research_paths_in_backtest_mode(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("DRF_BACKTEST_POLICY", raising=False)
+    assert d._backtest_engine_refusal(False, "") == ""  # a live run: no opinion
+    monkeypatch.setenv("DRF_BACKTEST_POLICY", POLICY.to_env())
+    assert d._backtest_engine_refusal(True, "") == ""
+    assert d._backtest_engine_refusal(False, "--extract-only") == ""  # salvage reads no web content
+    assert "v3 research engine" in d._backtest_engine_refusal(False, "")
+    assert "(--evidence-only)" in d._backtest_engine_refusal(False, "--evidence-only")
+    monkeypatch.setenv("RESEARCH_ENGINE", "v3")
+    monkeypatch.setattr(sys, "argv", ["deerflow_research.py", "--prompt", "Will Trump win?",
+                                      "--out-dir", str(tmp_path), "--evidence-only"])
+    assert d.main() == 3
+    meta = json.loads((tmp_path / d.META_FILENAME).read_text(encoding="utf-8"))
+    assert meta["status"] == "failed" and "(--evidence-only)" in meta["error"]
+    assert "backtest mode needs the v3 research engine" in capsys.readouterr().err

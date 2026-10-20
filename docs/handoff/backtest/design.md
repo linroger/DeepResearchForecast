@@ -36,7 +36,7 @@ Non-goals: the legacy research engine (backtest mode refuses it), the opt-in wor
 
 - Admission (`PipelineOrchestrator.start(backtest=…)`, `POST /api/v1/run` field `backtest`) validates it and refuses: an as-of date that is not a past ISO date, a target that resolves on or before the as-of date, the legacy research engine, and the world-v1 simulation engine.
 - The research stage re-checks the engine at launch and fails closed if it no longer resolves to v3.
-- The research child receives one parent-owned variable, `DRF_BACKTEST_POLICY` (compact JSON: `as_of`, `strict`, `archive`, `audit_path`). The parent always removes an ambient value first, so a live pipeline can never inherit a cutoff and a backtest pipeline never inherits another one. The bridge's legacy engine path refuses to run when it is set.
+- The research child receives one parent-owned variable, `DRF_BACKTEST_POLICY` (compact JSON: `as_of`, `strict`, `archive`, `audit_path`). The parent always removes an ambient value first, so a live pipeline can never inherit a cutoff and a backtest pipeline never inherits another one. The bridge refuses the legacy engine and its research lanes (`--evidence-only`, `--synthesis-manifest`) when it is set; only the `--extract-only` salvage may run, because it reads no web content (it re-extracts the saved report and refreshes markets, which the policy cuts).
 - Cutoff instant: the end of the as-of day in UTC. A source dated on the as-of day is admissible.
 
 ## 4. Dates and verdicts (`deerflow_bridge/backtest_cutoff.py`)

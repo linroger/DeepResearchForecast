@@ -17716,6 +17716,21 @@ def _resolve_research_engine(plog: "ProgressLog | None" = None) -> str:
     return "legacy"
 
 
+def _backtest_engine_refusal(use_v3_engine: bool, legacy_only_mode: str) -> str:
+    """Why a backtest run (``DRF_BACKTEST_POLICY`` set) must not start here, or ''.
+
+    Backtest mode cuts inputs in the v3 tool layer (docs/handoff/backtest/design.md
+    §3); the legacy engine and its research lanes would read the present.  The
+    ``--extract-only`` salvage reads no web content (it re-extracts the saved
+    report and refreshes markets, which the policy cuts), so it may run."""
+    if not os.environ.get("DRF_BACKTEST_POLICY", "").strip() or use_v3_engine:
+        return ""
+    if legacy_only_mode == "--extract-only":
+        return ""
+    return ("backtest mode needs the v3 research engine; this run resolves to the legacy engine"
+            + (f" ({legacy_only_mode})" if legacy_only_mode else ""))
+
+
 def _legacy_only_mode(args: Any) -> str:
     """CLI flag of a lane contract only the legacy engine implements ('' if none).
 
@@ -18002,6 +18017,16 @@ def main() -> int:
         )
     elif use_v3_engine:
         plog.write("stage", "research engine: v3 (linear_research)")
+    backtest_refusal = _backtest_engine_refusal(use_v3_engine, legacy_only_mode)
+    if backtest_refusal:
+        _atomic_write_text(out_dir / META_FILENAME, json.dumps({
+            "status": "failed", "question": question, "model": args.model, "depth": args.depth,
+            "target_language": args.target_language, "started_at": _utcnow(), "finished_at": _utcnow(),
+            "error": backtest_refusal}, ensure_ascii=False, indent=2))
+        plog.write("error", backtest_refusal)
+        plog.close()
+        print(f"ERROR: {backtest_refusal}", file=sys.stderr)
+        return 3
     activation_telemetry = skill_activation_estimate()
     if use_v3_engine:
         activation_telemetry.update({
