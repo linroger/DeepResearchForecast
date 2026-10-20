@@ -513,6 +513,31 @@ MAX_FRAME_DRIVERS = 8
 MAX_FRAME_RISKS = 6
 MAX_FRAME_RISK_EFFECTS = 3
 MAX_FRAME_RISK_AFFECTS = 6
+# Documented hazards, the research behind those risks (runs with method skills only, like the
+# frame; docs/handoff/research-risks/documented-hazards.md).  The reference-class skill's Plan
+# words the risks KIQ "Documented hazards (外生风险概率): which sources publish a probability and
+# window for <2-3 exogenous events>?".  Such a KIQ (or a gap follow-up worded so) gets the note,
+# and every section writer the rule, so the report states each published probability where
+# normalize_frame_risks can check it: event, probability, window and marker on one line that
+# names no scenario (fix_scenario_weights rewrites a percentage stated beside a scenario name, and
+# the scenario parsers read bold items and headings).  Neither text asks for a probability that
+# no source publishes.
+_HAZARD_KIQ_RE = re.compile(r"\b(?:documented|published)\s+hazards?\b|外生风险|风险概率", re.I)
+_HAZARD_KIQ_NOTE = (
+    "DOCUMENTED HAZARDS: for each exogenous event this question names (when it names none, the two or three "
+    "that would move the outcome most), look for a probability that a source itself publishes for it: an "
+    "agency or central-bank risk outlook, a risk register, a catastrophe-model return period, a rating "
+    "agency's default study. Record each as a finding with the event, the probability and the window it "
+    "refers to exactly as the source prints them, and the publisher's [S<n>] marker. Never estimate, count, "
+    "convert or derive a probability yourself, and never record a scenario weight or a forecast of the "
+    "research question's own outcome as one. When no source publishes a probability for an event, say so "
+    "under ## Open questions.")
+_HAZARD_SECTION_RULE = (
+    "- Documented hazards: when the evidence gives a probability that a source publishes for a risk event, "
+    "state it in a sentence of its own that names no scenario and is not bold or a heading: the event, the "
+    "probability and its window exactly as the evidence gives them, and the marker. Never give a risk event a "
+    "probability the evidence does not publish; where the evidence found none for an event, say that no "
+    "published probability was found.")
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
@@ -6195,6 +6220,8 @@ class _Engine:
             task += self._kiq_data_text(kiq)
         if getattr(self, "skill_library", None) is not None:
             task += self._kiq_skill_text(kiq)
+            if self._plan_skills() and _HAZARD_KIQ_RE.search(kiq.question):
+                task += "\n" + _HAZARD_KIQ_NOTE
         return task
 
     def _kiq_data_text(self, kiq: Kiq) -> str:
@@ -6729,6 +6756,8 @@ class _Engine:
             if section.is_scenario:
                 lines.append("   " + _SCENARIO_SECTION_NOTE)
         lines += ["", _SECTION_RULES]
+        if getattr(self, "skill_library", None) is not None and self._plan_skills():
+            lines.append(_HAZARD_SECTION_RULE)
         rows = self._data_rows()
         if rows:
             lines.append(_DATA_SECTION_RULE)
