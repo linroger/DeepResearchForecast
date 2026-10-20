@@ -158,7 +158,8 @@ def _digest_line(context: str, *words: str) -> str | None:
 
 
 class HazardWorld(v3.World):
-    """The planner words the risks KIQ as the documented-hazards KIQ; that KIQ's agent finds the
+    """The scripted planner adds a documented-hazards KIQ (a live planner rewords its risks KIQ so,
+    following the reference-class Plan); that KIQ's agent finds the
     regulator's published probability for a moratorium and none for a cooling-water ban; a writer
     that was given the hazard rule states what the evidence publishes in the scenario section
     (where the scenario post-processing runs) and says what it does not; the extraction model also

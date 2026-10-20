@@ -1,8 +1,8 @@
 # Handoff — research engine v3 emits documented risks for the world model's shocks (2026-10-21)
 
-**Last Updated (UTC):** 2026-10-20T18:00Z
-**Status:** Complete offline — committed on `claude/nice-diffie-73cb9a` (56f34ac, ec0c9cd, docs), not pushed, not merged; the live check (§9) needs the owner's approval
-**Current Focus:** none; next is the owner-approved live check in §9.
+**Last Updated (UTC):** 2026-10-20T18:50Z
+**Status:** Complete offline. The extraction is committed on `claude/nice-diffie-73cb9a` (56f34ac, ec0c9cd, docs). The documented-hazards follow-up (§11) is on `claude/fervent-spence-6d11bb` (feaf779, b17c52d, docs). Nothing is pushed or merged. The live check (§9) needs the owner's approval.
+**Current Focus:** none; next is the owner-approved live check in §9, which can now expect documented hazards (§11).
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
 
@@ -65,7 +65,12 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
 - **Targeted, worktree (before the harness fix):** research v3 modules, skills, official data, world consistency/shocks/paths/seed, characterization, contract finalization, dossier translation, actor contract — green apart from the 3 `test_world_paths.py` failures of F2; after the fix `test_world_paths.py` 27 passed; `test_research_frame_risks.py` 21 passed.
 - **Plain suite, first run** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-risks-plain/`, frozen copy of bf50f8f = merge + d51fb55 + the feature, before the scenario guard D6): JUnit `tests=8285 errors=19 failures=0 skipped=1352` (352.9 s). The 19 errors are the known `test_legacy_official_data.py` cases.
 - **Plain suite, final code** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-014416-frame-risks-plain-final/`, frozen copy of c579aaa = 33ae24d + this change, clean tree, `source_manifest.sha256`): JUnit `tests=8286 errors=19 failures=0 skipped=1352` = 6,915 passed, 1,341 skipped, 11 xfailed, 19 errors, **0 failed** (352.4 s). The 19 errors are the known `test_legacy_official_data.py` cases; `test_research_frame_risks.py` 21/21 and `test_world_paths.py` 27/27 passed.
-- **Commit map:** the branch was rebuilt on 33ae24d after the first run (§1); bf50f8f → 56f34ac (feature), a63c611 → ec0c9cd (scenario guard D6), docs c579aaa. The probes of §7 and the real-report scan are in `20261021-013626-frame-risks-plain/evidence/` (`README.txt` says how they were run).
+- **Commit map:** the branch was rebuilt on 33ae24d after the first run (§1); bf50f8f → 56f34ac (feature), a63c611 → ec0c9cd (scenario guard D6), docs c579aaa.
+- **Documented hazards (§11):**
+  - Plain suite on b17c52d (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-022657-hazards-plain/`, rsync copy without `backend/uploads`, `source_manifest.sha256`): JUnit `tests=8316 errors=19 failures=0 skipped=1352` (365.1 s).
+  - Final, on aa203ba (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-024000-hazards-plain-final/`, `git archive aa203ba`, no `backend/uploads`, `source_manifest.sha256`): JUnit `tests=8316 errors=19 failures=0 skipped=1352`, which is 6,945 passed, 1,341 skipped, 11 xfailed, 19 errors and **0 failed** (355.7 s). The 19 errors are the known `test_legacy_official_data.py` cases.
+  - Within that final run: the research, skills and world-research modules (`test_research_*`, `test_v3_official_data`, `test_drf2_skills_config`, `test_runtime_skill_sync`, `test_sessionb_skill_hygiene`, `test_world_research_binding`, `test_world_shocks`, `test_world_paths`, `test_world_model_seed`) gave 1,492 passed and 14 skipped; `test_research_documented_hazards.py` 17/17; `test_research_frame_risks.py` 34/34.
+  - Gates: `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge` and `--select F,E9` on the two test modules pass; `py_compile` is OK; README EN/ZH have 2,010 lines each, and the new line is 603 in both. The probes of §7 and the real-report scan are in `20261021-013626-frame-risks-plain/evidence/` (`README.txt` says how they were run).
 - **Gates:** `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge` and `--select F,E9` on the new test module pass; `py_compile` OK; README EN/ZH 2,009 lines each.
 
 ## 9) Remaining Work & Next Steps
@@ -76,12 +81,40 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
   4. PREPARE: `world_model.shocks` and the `shock_*` gaps in the sealed seed; `no_documented_shocks` must be absent when a risk was kept and present when `risks` is `[]`.
   5. The run: `deterministic.shocks_fired` rows, `emergent` events with source `shock`, the arbiter's "Confirmed events this period" line.
   6. Expect `risks: []` on many questions (F1) — correct under the owner's rule, not a failure. Pick a question whose sources publish event hazards (for example a hurricane-season or supply-disruption question) to see one fire.
-- **Research of hazards (follow-up, design):** shocks fire live only if reports state event probabilities. The planner / `reference-class-forecasting` skill could ask for one KIQ on documented hazards of the main exogenous risks (with their windows and sources), so the report states them and this extraction can keep them. Changes paid research runs; needs its own design and live check.
+- **Research of hazards (follow-up, design):** shocks fire live only if reports state event probabilities. The planner / `reference-class-forecasting` skill could ask for one KIQ on documented hazards of the main exogenous risks (with their windows and sources), so the report states them and this extraction can keep them. Changes paid research runs; needs its own design and live check. **Done offline 2026-10-21 (§11, [documented-hazards.md](documented-hazards.md)); the live check is still owed.**
 - **Legacy deer-flow engine:** emits no `risks` (out of scope); its runs keep recording the gap.
 - **Merge into `main`:** this branch carries the paths branch on 33ae24d, the commit the world-v1 session is testing for `main`; once `main` contains it, this branch merges with only its own commits.
 - **Risks:** a model that copies probabilities exactly but attaches them to the wrong event on a line that names both events would pass D1 (two events on one line); the clamp and once-only firing bound the effect. The extraction prompt is longer by one rule (~250 tokens of uncached task text per run).
+
+## 11) Follow-up: documented hazards (2026-10-21, branch `claude/fervent-spence-6d11bb`)
+
+- **Request (from the session that started this one):** design and implement offline a way for v3 research to find and state documented probabilities of a forecast question's main exogenous risks, so this extraction has something to keep on live runs. The research must never ask the model to estimate a probability: it only finds probabilities that sources publish, and says when none is found. Respect the skill caps, resync the deer-flow copies, and add offline tests (prompt text; a scripted run whose KIQ notes carry a published hazard that ends in `forecast_inputs.risks`; a run where none is published that ends with `[]`). Suites must be green, and README EN/ZH updated. No live run or push without the owner.
+- **Branch:** the worktree had no commits of its own and did not contain `claude/nice-diffie-73cb9a`, so it was reset to it (42215e6) first.
+- **Design:** [documented-hazards.md](documented-hazards.md), which covers the alternatives, the cost per run and why it never invents.
+  - The `reference-class-forecasting` Plan words the risks KIQ "Documented hazards (外生风险概率): …". This rewords an existing KIQ and adds none.
+  - The engine appends `_HAZARD_KIQ_NOTE` to a KIQ matching `_HAZARD_KIQ_RE` and `_HAZARD_SECTION_RULE` to every writer, both only with plan skills.
+  - **D7:** the note and the rule are engine text. The skill's Investigate reaches only base-rate KIQs, and base-rate wording brings the 30-year prefetch and the "count comparable episodes" note. Investigate and Synthesize are also at their caps.
+  - **D8:** the hazards wording deliberately does not match `_BASE_RATE_RE`.
+- **Commits:**
+  - feaf779: range guard. **F3:** risk registers publish bands, and the seed's `parse_risk_probability` reads one end of a band (`"5-25%"` → 0.25, `"between 1% and 5%"` → 0.01). A risk whose probability is a range is now dropped and counted in `meta.forecast_risks.probability_range`.
+  - b17c52d: the feature.
+  - aa203ba: the writer rule says "none was published" only where the evidence records it. Before, every writer in every run with method skills could have added such a sentence for any risk it mentioned.
+- **Tests:**
+  - `tests/test_research_documented_hazards.py` (17): Plan wording and routing; the note and the rule ask for no estimate (every estimate/count/convert/derive word stands in a "never" clause); the regex in EN and ZH, with negatives; why the sentence names no scenario and is not bold (`fix_scenario_weights` rewrites "Stalled expansion (10%)" to 20%, and a bold row parses as a fourth scenario).
+  - Engine runs in the same module: published hazard → verified finding → scenario-section sentence → `risks` row → one seed shock (p 0.1 per year); nothing published, with the extraction offering 10% and 5% → `risks: []` and `no_documented_shocks`; a Chinese hazards KIQ gets the note; `RESEARCH_SKILLS=off` shows no hazard text and no risks.
+  - `tests/test_research_frame_risks.py`: +13 range cases (21 → 34).
+- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-022657-hazards-plain/` (`evidence/README.txt`).
+  - Before/after probe on `git archive` 42215e6 vs b17c52d and aa203ba. Before: no note, no rule, `risks: []`. After: the line in the report, one risk, one shock.
+  - Cost probe: 0 extra calls; note 151 tokens on the hazards KIQ only; rule 87 tokens × 8 writer calls.
+  - Mutation check: 8 of 8 mutants killed.
+  - Deployed-skill resync on a copy of the deployment's `deer-flow/skills/public` (the deployment was not touched): before the sync, 2 drift failures on `reference-class-forecasting/SKILL.md`; after it, 15 bundles byte-identical, 46 passed and 5 vendored-source skips.
+- **Deployment:** the deployment checkout needs the skill resync after a merge. The orchestrator's pre-launch skill sync does it, or run `deerflow_bridge/runtime_skill_sync.py --source-root deerflow_bridge/skills --deployed-public-root deer-flow/skills/public`. The bridge modules are copied at launch (`_DEPLOYED_BRIDGE_MODULES`).
+- **Open:**
+  - The owner-approved live check (§9, plus documented-hazards.md §6). Pick a question whose sources publish event hazards.
+  - For the world-model sessions: the seed's own parser still accepts a range when given one. The research side no longer sends one.
 
 ## 10) Updates to This File (append-only)
 - 2026-10-20T17:30Z: created with the brief and branch notes.
 - 2026-10-20T17:45Z: implementation, tests, findings F1–F2, decisions D1–D6, before/after probes, docs; first plain run (bf50f8f) 0 failed.
 - 2026-10-20T17:55Z: branch rebuilt on the world-v1 session's 7f4ca6d + 33ae24d (identical merge, one harness fix instead of two); final plain run on c579aaa 0 failed (§8); status Complete offline.
+- 2026-10-20T18:50Z: §11 documented-hazards follow-up on `claude/fervent-spence-6d11bb` (feaf779, b17c52d, aa203ba): design note, finding F3 (ranges), decisions D7–D8, evidence, final plain run on aa203ba 0 failed (§8); §9 follow-up marked done offline.
