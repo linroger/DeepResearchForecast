@@ -1,7 +1,7 @@
 # Handoff — research engine v3 emits documented risks for the world model's shocks (2026-10-21)
 
 **Last Updated (UTC):** 2026-10-20T18:00Z
-**Status:** Complete offline — committed on `claude/nice-diffie-73cb9a`, not pushed, not merged; the live check (§9) needs the owner's approval
+**Status:** Complete offline — committed on `claude/nice-diffie-73cb9a` (56f34ac, ec0c9cd, docs), not pushed, not merged; the live check (§9) needs the owner's approval
 **Current Focus:** none; next is the owner-approved live check in §9.
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
@@ -64,7 +64,8 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-risks-plain/` (frozen copy of bf50f8f, `base_commit.txt`, `source_manifest.sha256`, `junit.xml`, `pytest.log`) plus `evidence/` (probes, real-report scan).
 - **Targeted, worktree (before the harness fix):** research v3 modules, skills, official data, world consistency/shocks/paths/seed, characterization, contract finalization, dossier translation, actor contract — green apart from the 3 `test_world_paths.py` failures of F2; after the fix `test_world_paths.py` 27 passed; `test_research_frame_risks.py` 21 passed.
 - **Plain suite, first run** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-risks-plain/`, frozen copy of bf50f8f = merge + d51fb55 + the feature, before the scenario guard D6): JUnit `tests=8285 errors=19 failures=0 skipped=1352` (352.9 s). The 19 errors are the known `test_legacy_official_data.py` cases.
-- **Plain suite, final code:** FINAL_SUITE
+- **Plain suite, final code** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-014416-frame-risks-plain-final/`, frozen copy of c579aaa = 33ae24d + this change, clean tree, `source_manifest.sha256`): JUnit `tests=8286 errors=19 failures=0 skipped=1352` = 6,915 passed, 1,341 skipped, 11 xfailed, 19 errors, **0 failed** (352.4 s). The 19 errors are the known `test_legacy_official_data.py` cases; `test_research_frame_risks.py` 21/21 and `test_world_paths.py` 27/27 passed.
+- **Commit map:** the branch was rebuilt on 33ae24d after the first run (§1); bf50f8f → 56f34ac (feature), a63c611 → ec0c9cd (scenario guard D6), docs c579aaa. The probes of §7 and the real-report scan are in `20261021-013626-frame-risks-plain/evidence/` (`README.txt` says how they were run).
 - **Gates:** `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge` and `--select F,E9` on the new test module pass; `py_compile` OK; README EN/ZH 2,009 lines each.
 
 ## 9) Remaining Work & Next Steps
@@ -82,4 +83,5 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
 
 ## 10) Updates to This File (append-only)
 - 2026-10-20T17:30Z: created with the brief and branch notes.
-- 2026-10-20T18:00Z: implementation, tests, findings F1–F2, decisions D1–D6, before/after probes, docs; suites recorded in §8; status Complete offline.
+- 2026-10-20T17:45Z: implementation, tests, findings F1–F2, decisions D1–D6, before/after probes, docs; first plain run (bf50f8f) 0 failed.
+- 2026-10-20T17:55Z: branch rebuilt on the world-v1 session's 7f4ca6d + 33ae24d (identical merge, one harness fix instead of two); final plain run on c579aaa 0 failed (§8); status Complete offline.
