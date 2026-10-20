@@ -33,6 +33,7 @@ import hashlib
 import math
 import re
 import unicodedata
+from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 WORLD_MODEL_STATE_VERSION = "world-model-state/v1"
@@ -45,7 +46,7 @@ _KIND_NAME_UNITS = frozenset(VARIABLE_KINDS) | frozenset((
     "number", "num", "int", "integer", "float", "decimal", "bool", "flag", "string", "str",
     "category", "enum", "date", "datetime", "timestamp",
 ))
-PROVENANCES = ("research", "official", "seed", "arbiter", "effect", "action")
+PROVENANCES = ("research", "official", "seed", "arbiter", "effect", "action", "shock")
 VALENCES = ("allied", "adversarial", "transactional", "directional", "neutral")
 EVENT_KINDS = ("action", "scheduled", "consequence", "emergent", "resolution", "system",
                "offer", "agreement", "breach", "red_line")
@@ -56,6 +57,13 @@ RED_LINE_MATCH_MIN = 0.5             # share of the red line's content tokens th
 RED_LINE_NUDGE = -0.25
 # TRENDS: a numeric fact that moved the same way in consecutive periods is marked in the public brief
 TREND_MIN_PERIODS = 2
+# EXOGENOUS SHOCKS (design §2.12, 2026-10-20): researched risks from the seed (``world_model_seed.
+# shocks_from_research``) are rolled once per period with the injected RNG at the probability their
+# documented per-day hazard gives for the period's length; a fired shock is an ``emergent`` event
+# (source ``shock``) whose documented effects move tracked facts under the change clamp, bounded
+# against each fact's value before this period's shocks, never across zero.  A shock fires once
+# unless the dossier documents it as recurring.  ``settings["shocks_enabled"] is False`` stops firing.
+SHOCK_EVENT_SUFFIX = " — a researched risk materialised"
 # OFFERS (ported from the world-v1 engine's consent mechanics): a move of one of these
 # options aimed at another actor opens an offer that only the recipient's answer can settle.
 PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concession", "sign_agreement",
@@ -357,6 +365,20 @@ def _is_non_move(description: str) -> bool:
 
 def _close(a: float, b: float) -> bool:
     return abs(a - b) <= 1e-9 + ANNOUNCED_FIGURE_TOLERANCE * max(abs(a), abs(b))
+
+
+def period_days(period: Optional[Dict[str, Any]]) -> Optional[int]:
+    """Calendar days a period covers (both ends included), None when its dates are missing or
+    unreadable (same rule as ``decision_channel._period_days``)."""
+    if not isinstance(period, dict):
+        return None
+    try:
+        start = date.fromisoformat(str(period.get("period_start") or "")[:10])
+        end = date.fromisoformat(str(period.get("period_end") or "")[:10])
+    except ValueError:
+        return None
+    days = (end - start).days + 1
+    return days if days > 0 else None
 
 
 # ---------------------------------------------------------------------------
@@ -703,6 +725,59 @@ class PendingEffect:
                    created_round=d.get("created_round") or 0)
 
 
+class Shock:
+    """EXOGENOUS SHOCKS: a researched risk that may materialise in any period (seed ``shocks``)."""
+
+    def __init__(self, shock_id: str, *, event: str, hazard_per_day: float,
+                 base_rate: Optional[Dict[str, Any]] = None, source: str = "",
+                 effects: Optional[List[Dict[str, Any]]] = None, affects: Optional[List[str]] = None,
+                 recurring: bool = False, fired_rounds: Optional[List[int]] = None) -> None:
+        self.id = _text(shock_id, 64) or "shock"
+        self.event = _text(event, 200)
+        try:
+            hazard = float(hazard_per_day)
+        except (TypeError, ValueError):
+            hazard = 0.0
+        self.hazard_per_day = hazard if math.isfinite(hazard) and hazard > 0 else 0.0
+        self.base_rate = dict(base_rate) if isinstance(base_rate, dict) else {}
+        self.source = _text(source, 160)
+        self.effects = [dict(e) for e in (effects or []) if isinstance(e, dict) and e.get("variable_id")][:4]
+        self.affects = _items(affects, 6, 160)
+        self.recurring = recurring is True
+        self.fired_rounds = [int(r) for r in (fired_rounds or []) if isinstance(r, int) and not isinstance(r, bool)]
+
+    def period_probability(self, days: float) -> float:
+        """Probability of firing in a period of ``days`` under the documented constant hazard."""
+        return 1.0 - math.exp(-self.hazard_per_day * max(0.0, float(days)))
+
+    def base_rate_text(self) -> str:
+        """The documented base rate as written, with its window ("5% per month")."""
+        text = _text(self.base_rate.get("text"), 80)
+        window = _text(self.base_rate.get("window"), 24).replace("_", " ")
+        if not window or window.split(" ")[-1] in text.casefold():
+            return text
+        if window == "horizon":
+            suffix = "over the forecast horizon"
+        elif window[:1].isdigit():
+            suffix = f"over {window}s"
+        else:
+            suffix = f"per {window}"
+        return f"{text} {suffix}".strip()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"id": self.id, "event": self.event, "hazard_per_day": self.hazard_per_day,
+                "base_rate": dict(self.base_rate), "source": self.source,
+                "effects": [dict(e) for e in self.effects], "affects": list(self.affects),
+                "recurring": self.recurring, "fired_rounds": list(self.fired_rounds)}
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "Shock":
+        return cls(d.get("id") or "", event=d.get("event") or "", hazard_per_day=d.get("hazard_per_day") or 0.0,
+                   base_rate=d.get("base_rate"), source=d.get("source") or "", effects=d.get("effects"),
+                   affects=d.get("affects"), recurring=d.get("recurring") is True,
+                   fired_rounds=d.get("fired_rounds"))
+
+
 class Interaction:
     """An offer from one actor to another that only the recipient's answer can settle.
 
@@ -830,6 +905,8 @@ class WorldModel:
         self._interaction_seq = 0
         # MODELLING GAPS reported by the seed (what the research could not ground)
         self.seed_gaps: List[Dict[str, Any]] = []
+        # EXOGENOUS SHOCKS: researched risks rolled once per period (fire_shocks)
+        self.shocks: List[Shock] = []
 
     # -- construction -----------------------------------------------------------
     @classmethod
@@ -845,6 +922,7 @@ class WorldModel:
                     horizon_date=seed.get("horizon_date"), scenarios=scenarios or seed.get("scenarios") or (),
                     settings=seed.get("settings") if isinstance(seed.get("settings"), dict) else None)
         world.seed_gaps = [g for g in (seed.get("gaps") or []) if isinstance(g, dict)][:32]
+        world.shocks = [Shock.from_dict(s) for s in (seed.get("shocks") or []) if isinstance(s, dict)][:8]
         seeded: Dict[int, Dict[str, Any]] = {}
         for row in seed.get("actors") or []:
             if isinstance(row, dict) and row.get("agent_id") is not None:
@@ -1820,6 +1898,57 @@ class WorldModel:
         self.pending_effects = keep
         return fired
 
+    def fire_shocks(self, round_num: int, rng: Any) -> List[Dict[str, Any]]:
+        """EXOGENOUS SHOCKS: roll every eligible shock once for this period (seed order, one draw each,
+        so a given RNG reproduces the same firings); a fired shock becomes an ``emergent`` event and
+        applies its documented effects (see the comment at ``SHOCK_EVENT_SUFFIX``).  Returns one row per
+        fired shock for the round record and the arbiter."""
+        if not self.shocks or self.settings.get("shocks_enabled", True) is False:
+            return []
+        days = period_days(self.period)
+        if days is None:
+            return []
+        ratio = self.change_ratio()
+        label = str((self.period or {}).get("label") or "")
+        base: Dict[str, Any] = {}
+        fired: List[Dict[str, Any]] = []
+        for shock in self.shocks:
+            if shock.fired_rounds and not shock.recurring:
+                continue
+            p = shock.period_probability(days)
+            try:
+                roll = float(rng.random())
+            except Exception:  # noqa: BLE001
+                continue
+            if roll >= p:
+                continue
+            shock.fired_rounds.append(int(round_num))
+            changed: List[Dict[str, Any]] = []
+            var_ids: List[str] = []
+            to_size: List[str] = []
+            for fx in shock.effects:
+                var = self.variables.get(str(fx.get("variable_id") or ""))
+                if var is None:
+                    continue
+                if fx.get("op") not in ("set", "add", "mul"):
+                    if fx.get("direction") in ("up", "down"):
+                        to_size.append(f"{var.name} {fx['direction']}")   # documented direction only
+                    continue
+                before = var.value
+                target = _shock_target(var, fx["op"], fx.get("value"), base.setdefault(var.id, var.value), ratio)
+                if target is not None and var.set_value(target, round_num=round_num, source="shock",
+                                                        cause=f"shock: {shock.event}", max_change_ratio=ratio):
+                    var_ids.append(var.id)
+                    changed.append({"id": var.id, "name": var.name, "from": before, "to": var.value,
+                                    "unit": var.unit})
+            targets = [self.actor_name(a) for a in (self.resolve_actor(n) for n in shock.affects) if a is not None]
+            self._add_event(WorldEvent(round_num, "emergent", f"{shock.event}{SHOCK_EVENT_SUFFIX}", targets=targets,
+                                       source="shock", variable_ids=var_ids, period_label=label))
+            fired.append({"id": shock.id, "event": shock.event, "probability": round(p, 6),
+                          "base_rate": shock.base_rate_text(), "source": shock.source,
+                          "variables_changed": changed, "to_size": to_size, "affects": targets})
+        return fired
+
     def lapse_overdue_commitments(self, round_num: int) -> List[Dict[str, Any]]:
         """Commitments due before this round that were never resolved lapse (visible)."""
         lapsed: List[Dict[str, Any]] = []
@@ -2049,6 +2178,9 @@ class WorldModel:
         if aimed:
             lines.append("- Aimed at you last period:")
             for e in aimed[:5]:
+                if e.source == "shock" and not e.actors:
+                    lines.append(f"  · {e.description}")   # EXOGENOUS SHOCKS: nobody's move
+                    continue
                 who = e.actors[0] if e.actors else "someone"
                 lines.append(f"  · {who}: {e.description}")
         checks = self.expectation_checks(agent_id, r)
@@ -2101,6 +2233,9 @@ class WorldModel:
             "interactions": [it.to_dict() for it in self.interactions.values()],
             "interaction_seq": self._interaction_seq,
             "seed_gaps": list(self.seed_gaps),
+            # EXOGENOUS SHOCKS: only when the seed documented some (a world without shocks serialises
+            # exactly as before)
+            **({"shocks": [s.to_dict() for s in self.shocks]} if self.shocks else {}),
         }
 
     @classmethod
@@ -2127,6 +2262,7 @@ class WorldModel:
                 inter = Interaction.from_dict(row)
                 world.interactions[inter.id] = inter
         world.seed_gaps = [g for g in (d.get("seed_gaps") or []) if isinstance(g, dict)][:32]
+        world.shocks = [Shock.from_dict(s) for s in (d.get("shocks") or []) if isinstance(s, dict)][:8]
         try:
             world.round = int(d.get("round") or 0)
             world.committed_round = int(d.get("committed_round") or 0)
@@ -2142,6 +2278,28 @@ class WorldModel:
         if isinstance(d.get("period_labels"), dict):
             world.set_period_labels(d["period_labels"])
         return world
+
+
+def _shock_target(var: StateVariable, op: str, value: Any, base_value: Any, ratio: Optional[float]) -> Any:
+    """EXOGENOUS SHOCKS: the value a documented effect moves ``var`` to, bounded against the value
+    before this period's shocks (``base_value``) by the change clamp and never across zero; None when
+    the effect cannot apply to this fact."""
+    if var.kind != "numeric" or not isinstance(var.value, (int, float)):
+        return _text(value, 160) or None if op == "set" else None
+    try:
+        size, cur = float(value), float(var.value)
+    except (TypeError, ValueError):
+        return None
+    target = size if op == "set" else cur + size if op == "add" else cur * size
+    if not math.isfinite(target):
+        return None
+    base = float(base_value) if isinstance(base_value, (int, float)) and not isinstance(base_value, bool) else cur
+    if ratio and base != 0:
+        cap = abs(base) * float(ratio)
+        target = _clamp(target, base - cap, base + cap)
+    if (base > 0 > target) or (base < 0 < target):
+        target = 0.0
+    return target
 
 
 def _bound_lines(lines: List[str], max_chars: int) -> str:
