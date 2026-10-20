@@ -1,0 +1,21 @@
+{
+  "base": "ac488913e78a8f87179830088f85452b3a8454f5",
+  "branch": "codex/forecast-feedback",
+  "head": "ac488913e78a8f87179830088f85452b3a8454f5",
+  "owned_files_sha256": {
+    "backend/app/services/world_model.py": "2673149b82e606abd008f62c31a4ea5019358ee31f8b376314052711730fea43",
+    "backend/app/services/agent_decision.py": "695f29f4558f78f5fecc98cd8dfe79dab247f414fe669fe83ad6f5dee12c655f",
+    "backend/app/services/world_update.py": "91116f0a92fce1a6b65a312f29b6b9cfe24094ffdb97da0b6cadbf1d1cf38f56",
+    "backend/tests/test_world_commitment_fulfilment.py": "c404da182ed40a36fcb42a025e3958885259528ce60d0d423389a050dc534873",
+    "backend/tests/test_world_model.py": "73372a548871a03705eace3744e98d272fb4b86382532d8dfb7318af94dc1099",
+    "backend/tests/test_world_interactions.py": "9bcc23d1b1bbabc7340683e3ef4f583671cf60601785fca07dafa5ae17c5328b",
+    "backend/tests/test_world_model_loop.py": "642ea9afbb4c015f99c20bb0f9e1b0bd73f0c86c4f63d1289e4ed6b138648a6b",
+    "backend/tests/test_world_track_records.py": "cfeaeb8dc14dc5cbc5a79b6d9b817c3fb1afe70bb7caa19b79f798ba831a53c6",
+    "docs/handoff/forecast-feedback/commitment-integration.md": "7ae0047831dcbd8fc023006e5fbbb9bbc374928c4f90d790a9c40fd2932e9348"
+  },
+  "source_review": "/private/tmp/drf-forecast-commitment-in9y9u3h/review-accepted.json",
+  "verification": "/private/tmp/drf-forecast-commitment-in9y9u3h/verification-accepted.json",
+  "accepted_unique_tests": 305,
+  "scoped_diff_check": "pass",
+  "scope": "Eight reviewed Python files plus the evidence handoff; no Git state mutations by this worker."
+}

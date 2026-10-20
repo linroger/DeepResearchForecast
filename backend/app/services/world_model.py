@@ -61,6 +61,9 @@ TREND_MIN_PERIODS = 2
 PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concession", "sign_agreement",
                                  "partnership_deal", "bargain", "convene", "program_decision"})
 RESPONSE_PREFIXES = ("accept:", "reject:", "counter:", "defer:")
+FULFILLMENT_PREFIX = "fulfill:"
+FULFILLMENT_ACTION_COST = 1
+MAX_ACTION_RESOLUTIONS = 24
 # OFFERS, mirror-image rule: an ``accept:`` answer adopts the offer's terms verbatim.  When the
 # acceptor writes its own ``terms`` the kernel compares them with the offer (``terms_restate_offer``).
 # Terms that are empty, a word-bounded fragment of the offer, or too short to state terms of their
@@ -524,8 +527,12 @@ class ActorState:
 
     def add_commitment(self, description: str, *, made_round: int, due_round: int,
                        source: str = "decision") -> Dict[str, Any]:
+        sequence = len(self.commitments) + 1
+        existing = {c.get("id") for c in self.commitments if isinstance(c.get("id"), str)}
+        while f"c{self.agent_id}_{made_round}_{sequence}" in existing:
+            sequence += 1
         row = {
-            "id": f"c{self.agent_id}_{made_round}_{len(self.commitments) + 1}",
+            "id": f"c{self.agent_id}_{made_round}_{sequence}",
             "description": _text(description, 220),
             "made_round": int(made_round),
             "due_round": int(due_round),
@@ -934,8 +941,25 @@ class WorldModel:
     def add_relationship(self, rel: Relationship) -> None:
         self.relationships[rel.key] = rel
 
-    def resolve_actor(self, ref: Any) -> Optional[int]:
+    def _exact_actor_ids(self, ref: Any) -> set:
+        """Candidates for an identity claim, without substring guesses or object coercion."""
+        if type(ref) is int:
+            return {ref} if ref in self.actors else set()
+        if type(ref) is not str:
+            return set()
+        key = normalize_label(ref)
+        if not key:
+            return set()
+        # Scan all registered names/aliases: the general first-match index hides
+        # collisions, which cannot establish a unique delivery identity.
+        return {aid for aid, actor in self.actors.items()
+                if key == str(aid) or key in actor.name_keys()}
+
+    def resolve_actor(self, ref: Any, *, exact: bool = False) -> Optional[int]:
         """Resolve an agent id or a (possibly aliased, partial) actor name."""
+        if exact:
+            matches = self._exact_actor_ids(ref)
+            return next(iter(matches)) if len(matches) == 1 else None
         if ref is None or isinstance(ref, bool):
             return None
         if isinstance(ref, int) and ref in self.actors:
@@ -1032,6 +1056,100 @@ class WorldModel:
                                                   source="research_timeline", period_label=label)))
         return out
 
+    def delivery_commitment(self, actor_id: int, commitment_id: Any, round_num: int) -> Optional[Dict[str, Any]]:
+        """An exact owned open promise, never a semantic guess from a new action."""
+        if type(round_num) is not int or round_num != self.round:
+            return None
+        actor = self.actors.get(actor_id)
+        if actor is None or not isinstance(commitment_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,56}", commitment_id):
+            return None
+        matches = [c for c in actor.commitments if c.get("id") == commitment_id]
+        if len(matches) != 1:
+            return None
+        c = matches[0]
+        if (c.get("status") not in ("pending", "due") or not isinstance(c.get("description"), str)
+                or not c["description"].strip() or len(c["description"]) > 220):
+            return None
+        if any(not (type(c.get(key)) is int or isinstance(c.get(key), str) and c[key].isdigit())
+               for key in ("made_round", "due_round")):
+            return None
+        try:
+            made, due = int(c["made_round"]), int(c["due_round"])
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return None
+        if isinstance(c["made_round"], bool) or isinstance(c["due_round"], bool) or not (0 <= made < round_num <= due):
+            return None
+        if str(c.get("source") or "").startswith("agreement:"):
+            inter = self.interactions.get(c["source"].split(":", 1)[1])
+            if (inter is None or inter.status != "accepted" or actor_id not in (inter.proposer, inter.recipient)
+                    or commitment_id not in inter.obligations):
+                return None
+            other = inter.recipient if actor_id == inter.proposer else inter.proposer
+            if (other not in self.actors or type(c.get("counterparty", other)) is not int
+                    or c.get("counterparty", other) != other):
+                return None
+        return c
+
+    def delivery_target_ids(self, actor_id: int, commitment: Dict[str, Any]) -> List[int]:
+        source = str(commitment.get("source") or "")
+        if source.startswith("agreement:"):
+            inter = self.interactions[source.split(":", 1)[1]]
+            other = inter.recipient if actor_id == inter.proposer else inter.proposer
+            return [other]
+        return []
+
+    def delivery_targets(self, actor_id: int, commitment: Dict[str, Any]) -> List[str]:
+        return [self.actor_name(aid) for aid in self.delivery_target_ids(actor_id, commitment)]
+
+    def delivery_targets_match(self, actor_id: int, commitment: Dict[str, Any], raw_targets: Any) -> bool:
+        if raw_targets is None or raw_targets == []:
+            return True  # Omission selects the stored counterparty, never a guessed one.
+        if not isinstance(raw_targets, list) or len(raw_targets) > 6:
+            return False
+        targets = [self.resolve_actor(t, exact=True) for t in raw_targets]
+        source = str(commitment.get("source") or "")
+        expected = set()
+        if source.startswith("agreement:"):
+            inter = self.interactions.get(source.split(":", 1)[1])
+            if inter is None or actor_id not in (inter.proposer, inter.recipient):
+                return False
+            expected = {inter.recipient if actor_id == inter.proposer else inter.proposer}
+        return all(t is not None and t != actor_id for t in targets) and set(targets) == expected
+
+    def delivery_resolution_target(self, actor_id: int, commitment_id: Any, round_num: int,
+                                   action_round: Any) -> Optional[Dict[str, Any]]:
+        actor = self.actors.get(actor_id)
+        action = actor.last_action if actor is not None else None
+        if (type(round_num) is not int or round_num != self.round
+                or type(action_round) is not int or action_round != round_num or not action
+                or action.get("round") != round_num or action.get("status") != "ok"
+                or action.get("commitment_reviewed") or action.get("commitment_id") != commitment_id
+                or action.get("option_id") != FULFILLMENT_PREFIX + str(commitment_id)):
+            return None
+        c = self.delivery_commitment(actor_id, commitment_id, round_num)
+        if c is None or action.get("targets") != self.delivery_targets(actor_id, c):
+            return None
+        if ("commitment_target_ids" in action
+                and not self._delivery_target_ids_match(actor_id, c, action["commitment_target_ids"])):
+            return None
+        attempt = c.get("last_fulfillment_attempt") or {}
+        if (not isinstance(attempt, dict) or attempt.get("round") != round_num
+                or attempt.get("option_id") != action["option_id"] or attempt.get("outcome") != "unverified"):
+            return None
+        return c
+
+    def _delivery_target_ids_match(self, actor_id: int, commitment: Dict[str, Any], target_ids: Any) -> bool:
+        return (isinstance(target_ids, list) and all(type(aid) is int for aid in target_ids)
+                and target_ids == self.delivery_target_ids(actor_id, commitment))
+
+    def resolution_actor(self, row: Dict[str, Any]) -> Tuple[Optional[int], set]:
+        """Require exact identity claims; ambiguous aliases implicate every matching actor."""
+        refs = [row[key] for key in ("actor", "agent_id") if key in row]
+        matches = [self._exact_actor_ids(ref) for ref in refs]
+        implicated = set().union(*matches)
+        valid = bool(refs) and all(len(ids) == 1 for ids in matches) and len(implicated) == 1
+        return (next(iter(implicated)) if valid else None), implicated
+
     def register_decisions(self, round_num: int, decisions: Iterable[Dict[str, Any]]) -> List[WorldEvent]:
         """Apply the deterministic part of the actors' structured decisions.
 
@@ -1062,6 +1180,36 @@ class WorldModel:
             targets = [t for t in (self.resolve_actor(x) for x in (d.get("targets") or [])) if t is not None and t != aid]
             target_names = [self.actor_name(t) for t in targets]
             status = _text(d.get("status"), 24) or "ok"
+            delivery = None
+            if option_id.startswith(FULFILLMENT_PREFIX):
+                if self.resolve_actor(d.get("agent_id"), exact=True) != aid:
+                    continue  # A guessed actor reference cannot bind or spend an owned promise.
+                if (type(round_num) is not int or round_num != self.round
+                        or type(d.get("round")) is not int or d["round"] != round_num):
+                    continue  # Never relabel a saved decision as a new delivery attempt.
+                if any(isinstance(c.get("last_fulfillment_attempt"), dict)
+                       and c["last_fulfillment_attempt"].get("round") == int(round_num) for c in actor.commitments):
+                    continue  # Re-registration cannot reset a reviewed attempt or spend/credit it twice.
+                delivery = self.delivery_commitment(aid, option_id[len(FULFILLMENT_PREFIX):], int(round_num))
+                targets_match = delivery is not None and self.delivery_targets_match(aid, delivery, d.get("targets"))
+                if delivery is not None and "commitment_target_ids" in option:
+                    # Parsed decisions carry names for display and IDs for binding.
+                    # A canonical display name may be shared, but it never replaces
+                    # the exact stored counterparty ID or legitimizes a guessed name.
+                    targets_match = (self._delivery_target_ids_match(aid, delivery, option["commitment_target_ids"])
+                                     and (targets_match or d.get("targets") == self.delivery_targets(aid, delivery)))
+                if (status != "ok" or delivery is None or actor.capacity_remaining < FULFILLMENT_ACTION_COST
+                        or not targets_match):
+                    delivery = None
+                    status = status if status != "ok" else "invalid"
+                else:
+                    target_names = self.delivery_targets(aid, delivery)
+                    targets = self.delivery_target_ids(aid, delivery)
+                option = {"id": option_id, "label": f"Deliver commitment [{option_id[len(FULFILLMENT_PREFIX):]}]: "
+                          + (_text(delivery.get("description"), 220) if delivery else "invalid delivery attempt"),
+                          "kind": "operational", "cost": FULFILLMENT_ACTION_COST if delivery else 0,
+                          "lag": 0, "reversibility": "reversible"}
+                kind = "operational"
             try:
                 cost = max(0, int(option.get("cost", 1) or 0))
             except (TypeError, ValueError):
@@ -1086,6 +1234,12 @@ class WorldModel:
                 "reversibility": _text(option.get("reversibility"), 24),
                 "statement": _text(d.get("public_statement"), 320), "terms": announced_terms,
             }
+            if delivery is not None:
+                actor.last_action.update(commitment_id=delivery["id"],
+                                         commitment_description=delivery.get("description"),
+                                         commitment_target_ids=self.delivery_target_ids(aid, delivery), resolution="pending")
+                delivery["last_fulfillment_attempt"] = {"round": int(round_num), "option_id": option_id,
+                                                       "outcome": "unverified"}
             event_kind = "action"
             if option_id == "hold_position" or status != "ok":
                 description = (f"{actor.name} holds position" if status == "ok"
@@ -1097,19 +1251,9 @@ class WorldModel:
             if status != "ok":
                 continue
             self._record_expectations(actor, round_num, d.get("expected_reactions"))
-            if option_id != "hold_position":
-                # a commitment that fell due this period is honoured by acting on it — any move,
-                # an answer to an offer included (live finding sim_1838cf014c0b: an actor that
-                # answered a second offer in the period its agreement fell due was branded a
-                # breacher); a holder lets it lapse (see lapse_overdue_commitments) — mechanical,
-                # no LLM judgement.  A withdrawal never honours the obligations it breaks: before
-                # 2026-10-20 a ``break_alliance`` in the period the obligation fell due marked it
-                # fulfilled first, so the breaker kept a clean track record.
-                withdrawn_from = set(targets) if option_id == "break_alliance" else set()
-                for c in actor.commitments:
-                    if c.get("status") == "due" and c.get("counterparty") not in withdrawn_from:
-                        c["status"] = "fulfilled"
-                        c["fulfilled_round"] = int(round_num)
+            if delivery is not None:
+                # Selection is an attempt, not delivery or a fresh pledge/alliance.
+                continue
             if option_id.startswith(RESPONSE_PREFIXES):
                 # OFFERS: the recipient's answer settles the offer; nothing else in this decision
                 # can create an agreement (consent rule)
@@ -1487,7 +1631,8 @@ class WorldModel:
         effects_added, resolutions}`` for the round record.
         """
         summary = {"variables_changed": [], "variables_added": [], "events": 0,
-                   "relationships_changed": [], "effects_added": 0, "resolutions": 0, "red_lines_crossed": []}
+                   "relationships_changed": [], "effects_added": 0, "resolutions": 0,
+                   "commitments_fulfilled": 0, "red_lines_crossed": []}
         if not isinstance(update, dict):
             return summary
         ratio = self.change_ratio()
@@ -1581,14 +1726,44 @@ class WorldModel:
                                           rationale=rl.get("rationale") or "") if isinstance(rl, dict) else None
             if crossed is not None:
                 summary["red_lines_crossed"].append(crossed)
-        for res in update.get("action_resolutions") or []:
+        resolutions = update.get("action_resolutions") or []
+        if not isinstance(resolutions, list) or len(resolutions) > MAX_ACTION_RESOLUTIONS:
+            resolutions = []
+        counts: Dict[int, int] = {}
+        for res in resolutions:
+            if isinstance(res, dict):
+                _, implicated = self.resolution_actor(res)
+                for aid in implicated:
+                    counts[aid] = counts.get(aid, 0) + 1
+        for res in resolutions:
             if not isinstance(res, dict):
                 continue
-            aid = self.resolve_actor(res.get("actor") if res.get("actor") is not None else res.get("agent_id"))
-            if aid is None:
+            aid, _ = self.resolution_actor(res)
+            if aid is None or counts.get(aid) != 1:
                 continue
             actor = self.actors[aid]
             outcome = _text(res.get("outcome"), 16).casefold() or "pending"
+            rationale = _text(res.get("rationale"), 200)
+            delivery = None
+            is_delivery = bool(actor.last_action and str(actor.last_action.get("option_id", "")).startswith(FULFILLMENT_PREFIX))
+            if is_delivery or res.get("commitment_id") is not None:
+                delivery = self.delivery_resolution_target(aid, res.get("commitment_id"), round_num, res.get("action_round"))
+                if (delivery is None or not isinstance(res.get("rationale"), str) or not rationale
+                        or not isinstance(res.get("outcome"), str) or not res["outcome"].strip()
+                        or outcome not in ("success", "partial", "blocked", "pending", "failed")):
+                    continue  # A rejected attestation cannot earn generic reputation credit.
+                evidence = {"round": int(round_num), "agent_id": aid, "commitment_id": delivery["id"],
+                            "option_id": actor.last_action["option_id"], "outcome": outcome, "rationale": rationale}
+                actor.last_action["commitment_reviewed"] = True
+                delivery["last_fulfillment_attempt"] = dict(evidence)
+                if outcome == "success":
+                    delivery.update(status="fulfilled", fulfilled_round=int(round_num), fulfillment_evidence=dict(evidence))
+                    self._add_event(WorldEvent(round_num, "resolution",
+                        f"{actor.name} fulfilled commitment [{delivery['id']}]: {delivery.get('description')}",
+                        actors=[actor.name], targets=self.delivery_targets(aid, delivery), source="commitment",
+                        option_id=actor.last_action["option_id"], period_label=label))
+                    summary["commitments_fulfilled"] += 1
+                    summary["events"] += 1
             if actor.last_action and actor.last_action.get("round") == round_num:
                 actor.last_action["resolution"] = outcome
                 actor.last_action["resolution_rationale"] = _text(res.get("rationale"), 200)
@@ -1835,7 +2010,16 @@ class WorldModel:
             return ""
         r = int(upto_round if upto_round is not None else self.committed_round)
         lines = [f"# YOUR SITUATION — {actor.name}",
-                 f"- Capacity this period: {actor.capacity_remaining}/{actor.capacity_per_round} action units"]
+                 f"- Capacity this period: {actor.capacity_remaining}/{actor.capacity_per_round} action units",
+                 f"- Your simulated credibility (0–1): {actor.reputation:.2f}"]
+        # Outcome evidence precedes expandable promises, so it survives the
+        # normal private-brief budget even when the actor has many open duties.
+        outcomes = [e for e in self.events_in_round(r, ("resolution", "consequence", "breach"))
+                    if (e.source == "commitment" or e.kind == "breach")
+                    and (actor.name in e.actors or actor.name in e.targets)] if r > 0 else []
+        if outcomes:
+            lines.append("- Your commitment outcomes last period:")
+            lines.extend(f"  · {_text(e.description, 220)}" for e in reversed(outcomes[-2:]))
         if actor.last_action:
             la = actor.last_action
             res = la.get("resolution")
@@ -1849,8 +2033,8 @@ class WorldModel:
         if pend:
             lines.append("- Your open commitments:")
             for c in pend[:5]:
-                flag = " (DUE NOW)" if c.get("status") == "due" else ""
-                lines.append(f"  · {c.get('description')} — due {self._period_label_for_round(int(c.get('due_round', 0)))}{flag}")
+                flag = (" (OVERDUE)" if int(c.get("due_round", 0)) < self.round else " (DUE NOW)") if c.get("status") == "due" else ""
+                lines.append(f"  · [{c.get('id')}] {c.get('description')} — due {self._period_label_for_round(int(c.get('due_round', 0)))}{flag}")
         offers = self.open_interactions_for(agent_id)
         if offers:
             lines.append("- Offers awaiting YOUR answer (accept, reject, counter or defer this period; unanswered offers lapse):")

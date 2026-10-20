@@ -94,11 +94,11 @@ def test_accept_binds_both_parties_and_moves_the_relationship():
     # the agreement is visible in the digest and the record diff
     digest = wu.build_round_digest(w, 2, w.snapshot(), [])
     assert "Offers and agreements:" in digest and "Agreement [i1_1]" in digest
-    # honoured by acting when due: both act in round 3 → fulfilled, no breach
+    # Unrelated statements do not deliver the obligation; it stays due this period.
     w.commit_round(2)
     _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0),
                   _decision(1, "public_statement", kind="communication", lag=0)])
-    assert all(c["status"] == "fulfilled" for a in (0, 1) for c in w.actors[a].commitments)
+    assert all(c["status"] == "due" for a in (0, 1) for c in w.actors[a].commitments)
     assert not w.events_in_round(3, ("breach",))
 
 
@@ -152,7 +152,17 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
     _round(w, 2, [_decision(1, "accept:i1_1", lag=1)])                 # obligations due round 3
     w.commit_round(2)
     rep_before = w.actors[1].reputation
-    _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0)])   # Ministry acts, Agency holds
+    w.start_round(3, {"label": "2026-12"})
+    promise = w.actors[0].pending_commitments()[0]
+    move = parse_decision({"option_id": "fulfill:" + promise["id"],
+                           "public_statement": "We delivered the promised audited schedule."},
+                          actor=w.actors[0], world=w, options=build_option_menu(w.actors[0], w, 3),
+                          scenarios=w.scenarios, round_num=3)
+    _round(w, 3, [move.to_dict()])
+    update, problems = wu.validate_arbiter_update({"action_resolutions": [{"actor": "Ministry", "outcome": "success",
+        "commitment_id": promise["id"], "action_round": 3, "rationale": "The promised audited schedule was delivered."}]}, w)
+    assert not problems
+    w.apply_arbiter_update(3, update)  # Ministry delivers; Agency still owes its own obligation.
     w.commit_round(3)
     det = _round(w, 4, [])                                               # Agency's obligation lapses → breach
     assert w.interactions["i1_1"].status == "breached"
@@ -172,10 +182,8 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
     assert "Ministry withdrew" in det["breaches"][0]
 
 
-def test_answering_an_offer_counts_as_acting_on_a_due_obligation():
-    """Live finding (sim_1838cf014c0b, 2027-01): the Secretariat answered a second offer in the
-    period its first agreement fell due and was branded a breacher — the answer branch skipped the
-    "acting when due honours the obligation" rule that every other non-hold move gets."""
+def test_answering_an_unrelated_offer_does_not_discharge_a_due_obligation():
+    """New consent is distinct from delivery of the actor's earlier accepted promise."""
     w = _world()
     _round(w, 1, [_decision(0, "sign_agreement", targets=["Agency"], terms="Deliver audits in November"),
                   _decision(2, "open_talks", targets=["Agency"], terms="Joint hearing in December")])
@@ -187,12 +195,13 @@ def test_answering_an_offer_counts_as_acting_on_a_due_obligation():
     det = _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0),
                         _decision(1, "accept:i1_2", lag=1)])
     assert w.interactions["i1_2"].status == "accepted"
-    assert all(c["status"] == "fulfilled" for c in w.actors[1].commitments if c.get("source") == "agreement:i1_1")
+    assert all(c["status"] == "due" for c in w.actors[1].commitments if c.get("source") == "agreement:i1_1")
     assert not det["breaches"] and not w.events_in_round(3, ("breach",))
     w.commit_round(3)
     det4 = _round(w, 4, [_decision(0, "public_statement", kind="communication", lag=0),
                          _decision(1, "public_statement", kind="communication", lag=0)])
-    assert w.interactions["i1_1"].status == "accepted" and not det4["breaches"]
+    assert w.interactions["i1_1"].status == "breached" and det4["breaches"]
+    assert w.interactions["i1_2"].status == "accepted"
 
 
 # ----------------------------------------------------------------------------- contract, prompt, persistence

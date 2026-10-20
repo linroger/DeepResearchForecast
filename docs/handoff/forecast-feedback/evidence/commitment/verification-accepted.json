@@ -1,0 +1,268 @@
+{
+  "base": "ac488913e78a8f87179830088f85452b3a8454f5",
+  "repair": "faae88f248dc7e54baf14bd18b930f107c264aaa",
+  "accepted_unique_tests": 305,
+  "review_status": "closed",
+  "source_sha256": {
+    "backend/app/services/world_model.py": "2673149b82e606abd008f62c31a4ea5019358ee31f8b376314052711730fea43",
+    "backend/app/services/agent_decision.py": "695f29f4558f78f5fecc98cd8dfe79dab247f414fe669fe83ad6f5dee12c655f",
+    "backend/app/services/world_update.py": "91116f0a92fce1a6b65a312f29b6b9cfe24094ffdb97da0b6cadbf1d1cf38f56",
+    "backend/tests/test_world_commitment_fulfilment.py": "c404da182ed40a36fcb42a025e3958885259528ce60d0d423389a050dc534873",
+    "backend/tests/test_world_model.py": "73372a548871a03705eace3744e98d272fb4b86382532d8dfb7318af94dc1099",
+    "backend/tests/test_world_interactions.py": "9bcc23d1b1bbabc7340683e3ef4f583671cf60601785fca07dafa5ae17c5328b",
+    "backend/tests/test_world_model_loop.py": "642ea9afbb4c015f99c20bb0f9e1b0bd73f0c86c4f63d1289e4ed6b138648a6b",
+    "backend/tests/test_world_track_records.py": "cfeaeb8dc14dc5cbc5a79b6d9b817c3fb1afe70bb7caa19b79f798ba831a53c6"
+  },
+  "runner_sha256": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+  "source_manifest": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted-sha256.json",
+  "source_manifest_sha256": "96242481f08a9a2e943e133d4c1eb03874314eb59646a8cfbe959170a7ae7341",
+  "gates": {
+    "core-base-accepted": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "contained_library_probes": {
+        "fc-list": 1,
+        "system_profiler": 1,
+        "font_directory_scan": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "passed": 285,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/core-base-accepted/completed.json",
+      "receipt_sha256": "739824ca0b05716794765baac03af6a8c758bc73787bba6ac4d3fda69d5123ed",
+      "junit": "/private/tmp/drf-forecast-commitment-in9y9u3h/core-base-accepted/junit.xml",
+      "junit_sha256": "343ebc29542d96a5dac871917a3a4c6bdeedd2c0bf28ba14ccfc573a18abe50c",
+      "cwd": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+      "argv": [
+        "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+        "-I",
+        "-S",
+        "-B",
+        "backend/scripts/main_offline_pytest.py",
+        "--evidence-dir",
+        "/private/tmp/drf-forecast-commitment-in9y9u3h/core-base-accepted",
+        "-q",
+        "backend/tests/test_world_commitment_fulfilment.py",
+        "backend/tests/test_world_model.py",
+        "backend/tests/test_world_interactions.py",
+        "backend/tests/test_world_update.py",
+        "backend/tests/test_agent_decision.py",
+        "backend/tests/test_world_model_seed.py",
+        "backend/tests/test_worldstate.py",
+        "backend/tests/test_world_delta.py",
+        "backend/tests/test_world_track_records.py",
+        "backend/tests/test_world_red_lines.py",
+        "backend/tests/test_world_announced_settings.py",
+        "backend/tests/test_world_pressure_channel.py",
+        "backend/tests/test_world_reflexivity.py",
+        "-k",
+        "not calendar_loop"
+      ]
+    },
+    "continuous-base-accepted": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "contained_library_probes": {
+        "fc-list": 1,
+        "system_profiler": 1,
+        "font_directory_scan": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "passed": 1,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/completed.json",
+      "receipt_sha256": "db3d9d9a09222c919a7bb65999678962b10bc716635e75e3624c7a54d24f21e9",
+      "junit": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted/junit.xml",
+      "junit_sha256": "b6ae0df2027bbf49d1c1b1307e128682cb343d8036aed6eb92fe95c27a05418f",
+      "cwd": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+      "argv": [
+        "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+        "-I",
+        "-S",
+        "-B",
+        "backend/scripts/main_offline_pytest.py",
+        "--evidence-dir",
+        "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted",
+        "-q",
+        "backend/tests/test_world_commitment_fulfilment.py::test_calendar_loop_delivery_breach_and_next_actor_feedback[continuous]"
+      ]
+    },
+    "resume-base-accepted": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "contained_library_probes": {
+        "fc-list": 1,
+        "system_profiler": 1,
+        "font_directory_scan": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "passed": 1,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/completed.json",
+      "receipt_sha256": "2f8a09eec97bcea9ea05630a99750d2cffd01e4afcf477cbbb140403e945ff16",
+      "junit": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted/junit.xml",
+      "junit_sha256": "118d48d5ae6086c07f145a4d3f05ea8d4eff2713d49421eb181d78d05a6583d5",
+      "cwd": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+      "argv": [
+        "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+        "-I",
+        "-S",
+        "-B",
+        "backend/scripts/main_offline_pytest.py",
+        "--evidence-dir",
+        "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted",
+        "-q",
+        "backend/tests/test_world_commitment_fulfilment.py::test_calendar_loop_delivery_breach_and_next_actor_feedback[resume]"
+      ]
+    },
+    "world-loop-base-accepted": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "contained_library_probes": {
+        "fc-list": 1,
+        "system_profiler": 1,
+        "font_directory_scan": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "passed": 11,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/world-loop-base-accepted/completed.json",
+      "receipt_sha256": "4d5a4f6a0414027a3b5abae60de9b18a8a2b8a2fdcadd81b274969a370e38f1b",
+      "junit": "/private/tmp/drf-forecast-commitment-in9y9u3h/world-loop-base-accepted/junit.xml",
+      "junit_sha256": "057e0247195002898bfe9ee88e1db4100a8bfed80bccf38c7a310d39691c1769",
+      "cwd": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+      "argv": [
+        "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+        "-I",
+        "-S",
+        "-B",
+        "backend/scripts/main_offline_pytest.py",
+        "--evidence-dir",
+        "/private/tmp/drf-forecast-commitment-in9y9u3h/world-loop-base-accepted",
+        "-q",
+        "backend/tests/test_world_model_loop.py"
+      ]
+    },
+    "calendar-loop-base-accepted": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "contained_library_probes": {
+        "fc-list": 1,
+        "system_profiler": 1,
+        "font_directory_scan": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "passed": 7,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/calendar-loop-base-accepted/completed.json",
+      "receipt_sha256": "c769afcd70ab2ad7ce068c8f605c2143dce5baa574a5487c38c74697b7ce71ed",
+      "junit": "/private/tmp/drf-forecast-commitment-in9y9u3h/calendar-loop-base-accepted/junit.xml",
+      "junit_sha256": "d494a8478764383b51af0da9f27bd75253efd38649f51b871654b900c40a4173",
+      "cwd": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+      "argv": [
+        "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+        "-I",
+        "-S",
+        "-B",
+        "backend/scripts/main_offline_pytest.py",
+        "--evidence-dir",
+        "/private/tmp/drf-forecast-commitment-in9y9u3h/calendar-loop-base-accepted",
+        "-q",
+        "backend/tests/test_calendar_round_loop.py"
+      ]
+    }
+  },
+  "earlier_evidence": [
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/verification-pending-review.json",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/verification-final.json",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/review-red/completed.json",
+    "/private/tmp/drf-forecast-commitment-in9y9u3h/counterparty-red/completed.json"
+  ],
+  "consequence_trace": "/private/tmp/drf-forecast-commitment-in9y9u3h/consequence-traces-accepted.json",
+  "consequence_trace_sha256": "f92efe47b9225e27e15157b452c73776703ff72b0c9fbec2ae6bef03c702da2f",
+  "consequence_comparison": {
+    "principal_commitments": true,
+    "principal_track_records": true,
+    "principal_reputations": true,
+    "commitment_events": true,
+    "relationship_polarity_equal": true,
+    "relationship_history_equal": true,
+    "relationship_strengths": {
+      "continuous-base-accepted": 0.3783,
+      "resume-base-accepted": 0.3782
+    }
+  },
+  "all_frozen_source_bytes_unchanged": true,
+  "all_owned_bytes_match_worktree": true,
+  "syntax_check": "ast.parse all eight owned production/test files: pass",
+  "limits": [
+    "Synthetic external model replies and fake OASIS environment; actual coordinator and durable artifact/restart behavior.",
+    "No live provider, empirical calibration, forecast accuracy, deployment or default-engine promotion evidence.",
+    "Arbiter off or failure leaves delivery unconfirmed under existing deadlines.",
+    "Historical closed commitments are preserved, not retroactively rescored."
+  ],
+  "review_receipt": "/private/tmp/drf-forecast-commitment-in9y9u3h/review-accepted.json",
+  "review_receipt_sha256": "5d56c7487c90653e2d28c708e329b902dcde37906c371f152838eb0dd6e6bb67",
+  "source_mirror": "/private/tmp/drf-forecast-commitment-in9y9u3h/source-accepted",
+  "nonowned_source_matches_main": true
+}

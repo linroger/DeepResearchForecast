@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="13" skipped="0" tests="21" time="2.138" timestamp="2026-10-20T23:32:33.776330" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_ambiguous_or_invalid_agreement_binding_has_no_delivery_option[wrong_counterparty]" time="0.014" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets0]" time="0.004" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets1]" time="0.002" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets2]" time="0.002" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets3]" time="0.003"><failure message="AssertionError: assert 'ok' == 'invalid'&#10;  &#10;  - invalid&#10;  + ok">targets = ['Actor10']
+
+    @pytest.mark.parametrize("targets", [
+        ["Actor2"], ["Actor1", "Actor2"], ["Unknown actor"], ["Actor10"],
+        [{"actor": "Actor1"}], [1.0],
+    ])
+    def test_explicit_wrong_counterparty_is_invalid(targets):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        world.start_round(3, _period(3))
+        decision = _parse(world, 0, 3, f"fulfill:{promise['id']}", targets=targets)
+&gt;       assert decision.status == "invalid"
+E       AssertionError: assert 'ok' == 'invalid'
+E         
+E         - invalid
+E         + ok
+
+backend/tests/test_world_commitment_fulfilment.py:340: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets4]" time="0.002"><failure message="AssertionError: assert 'ok' == 'invalid'&#10;  &#10;  - invalid&#10;  + ok">targets = [{'actor': 'Actor1'}]
+
+    @pytest.mark.parametrize("targets", [
+        ["Actor2"], ["Actor1", "Actor2"], ["Unknown actor"], ["Actor10"],
+        [{"actor": "Actor1"}], [1.0],
+    ])
+    def test_explicit_wrong_counterparty_is_invalid(targets):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        world.start_round(3, _period(3))
+        decision = _parse(world, 0, 3, f"fulfill:{promise['id']}", targets=targets)
+&gt;       assert decision.status == "invalid"
+E       AssertionError: assert 'ok' == 'invalid'
+E         
+E         - invalid
+E         + ok
+
+backend/tests/test_world_commitment_fulfilment.py:340: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_explicit_wrong_counterparty_is_invalid[targets5]" time="0.003"><failure message="AssertionError: assert 'ok' == 'invalid'&#10;  &#10;  - invalid&#10;  + ok">targets = [1.0]
+
+    @pytest.mark.parametrize("targets", [
+        ["Actor2"], ["Actor1", "Actor2"], ["Unknown actor"], ["Actor10"],
+        [{"actor": "Actor1"}], [1.0],
+    ])
+    def test_explicit_wrong_counterparty_is_invalid(targets):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        world.start_round(3, _period(3))
+        decision = _parse(world, 0, 3, f"fulfill:{promise['id']}", targets=targets)
+&gt;       assert decision.status == "invalid"
+E       AssertionError: assert 'ok' == 'invalid'
+E         
+E         - invalid
+E         + ok
+
+backend/tests/test_world_commitment_fulfilment.py:340: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Actor00-validator]" time="0.003"><failure message="assert ([])">route = 'validator', actor_ref = 'Actor00'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+&gt;           assert problems and update["action_resolutions"] == []
+E           assert ([])
+
+backend/tests/test_world_commitment_fulfilment.py:360: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Actor00-kernel]" time="0.003"><failure message="assert 1 == 0">route = 'kernel', actor_ref = 'Actor00'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+            assert problems and update["action_resolutions"] == []
+&gt;       assert world.apply_arbiter_update(3, update)["commitments_fulfilled"] == 0
+E       assert 1 == 0
+
+backend/tests/test_world_commitment_fulfilment.py:361: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Actor-validator]" time="0.003"><failure message="assert ([])">route = 'validator', actor_ref = 'Actor'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+&gt;           assert problems and update["action_resolutions"] == []
+E           assert ([])
+
+backend/tests/test_world_commitment_fulfilment.py:360: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Actor-kernel]" time="0.003"><failure message="assert 1 == 0">route = 'kernel', actor_ref = 'Actor'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+            assert problems and update["action_resolutions"] == []
+&gt;       assert world.apply_arbiter_update(3, update)["commitments_fulfilled"] == 0
+E       assert 1 == 0
+
+backend/tests/test_world_commitment_fulfilment.py:361: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Shared office-validator]" time="0.003"><failure message="assert ([])">route = 'validator', actor_ref = 'Shared office'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+&gt;           assert problems and update["action_resolutions"] == []
+E           assert ([])
+
+backend/tests/test_world_commitment_fulfilment.py:360: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_attestation_requires_unambiguous_exact_actor_identity[Shared office-kernel]" time="0.003"><failure message="assert 1 == 0">route = 'kernel', actor_ref = 'Shared office'
+
+    @pytest.mark.parametrize("route", ["validator", "kernel"])
+    @pytest.mark.parametrize("actor_ref", ["Actor00", "Actor", "Shared office"])
+    def test_delivery_attestation_requires_unambiguous_exact_actor_identity(route, actor_ref):
+        world, agreement = _agreement()
+        for aid in (0, 2):
+            world.actors[aid].aliases = ["Shared office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise)
+        world.register_decisions(3, [attempt.to_dict()])
+        before = copy.deepcopy(world.to_dict())
+        update = {"action_resolutions": [_resolution(promise, actor=actor_ref)]}
+        if route == "validator":
+            update, problems = validate_arbiter_update(update, world)
+            assert problems and update["action_resolutions"] == []
+&gt;       assert world.apply_arbiter_update(3, update)["commitments_fulfilled"] == 0
+E       assert 1 == 0
+
+backend/tests/test_world_commitment_fulfilment.py:361: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_delivery_counterparty_rejects_shared_alias_even_when_first_match_is_correct" time="0.003"><failure message="AssertionError: assert 'ok' == 'invalid'&#10;  &#10;  - invalid&#10;  + ok">def test_delivery_counterparty_rejects_shared_alias_even_when_first_match_is_correct():
+        world, agreement = _agreement()
+        for aid in (1, 2):
+            world.actors[aid].aliases = ["Shared receiving office"]
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        world.start_round(3, _period(3))
+        decision = _parse(world, 0, 3, f"fulfill:{promise['id']}", targets=["Shared receiving office"])
+&gt;       assert decision.status == "invalid"
+E       AssertionError: assert 'ok' == 'invalid'
+E         
+E         - invalid
+E         + ok
+
+backend/tests/test_world_commitment_fulfilment.py:373: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit[agent_id-Actor00]" time="0.002"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f23080&gt;.capacity_used">field = 'agent_id', value = 'Actor00'
+
+    @pytest.mark.parametrize("field,value", [
+        ("agent_id", "Actor00"), ("targets", ["Actor10"]), ("targets", [{"actor": "Actor1"}]),
+    ])
+    def test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit(field, value):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row[field] = value
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f23080&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:386: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit[targets-value1]" time="0.002"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f21370&gt;.capacity_used">field = 'targets', value = ['Actor10']
+
+    @pytest.mark.parametrize("field,value", [
+        ("agent_id", "Actor00"), ("targets", ["Actor10"]), ("targets", [{"actor": "Actor1"}]),
+    ])
+    def test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit(field, value):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row[field] = value
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f21370&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:386: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit[targets-value2]" time="0.002"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f3bd40&gt;.capacity_used">field = 'targets', value = [{'actor': 'Actor1'}]
+
+    @pytest.mark.parametrize("field,value", [
+        ("agent_id", "Actor00"), ("targets", ["Actor10"]), ("targets", [{"actor": "Actor1"}]),
+    ])
+    def test_kernel_rejects_guessed_delivery_binding_before_spending_or_credit(field, value):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row[field] = value
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108f3bd40&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:386: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_exact_ids_names_and_unique_registered_aliases_can_deliver[0-1_0]" time="0.002" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_exact_ids_names_and_unique_registered_aliases_can_deliver[0-1_1]" time="0.002" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_exact_ids_names_and_unique_registered_aliases_can_deliver[ actor0 -actor1]" time="0.001" /><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_exact_ids_names_and_unique_registered_aliases_can_deliver[Delivery office-Receiving office]" time="0.001" /></testsuite></testsuites>

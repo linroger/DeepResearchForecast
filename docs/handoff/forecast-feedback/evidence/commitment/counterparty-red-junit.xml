@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="8" skipped="0" tests="8" time="1.442" timestamp="2026-10-20T23:39:23.673736" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_counterparty_binding_survives_serialization_when_display_names_collide[None]" time="0.009"><failure message="AssertionError: assert 'invalid' == 'ok'&#10;  &#10;  - ok&#10;  + invalid">targets = None
+
+    @pytest.mark.parametrize("targets", [None, [1], ["Unique receiving office"]])
+    def test_counterparty_binding_survives_serialization_when_display_names_collide(targets):
+        world, agreement = _agreement()
+        world.actors[1].aliases = ["Unique receiving office"]
+        world.actors[2].name = world.actors[1].name
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise, targets=targets)
+        row = json.loads(json.dumps(attempt.to_dict()))
+        assert row["targets"] == ["Actor1"]  # Human-facing names remain available.
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].last_action["status"] == "ok"
+E       AssertionError: assert 'invalid' == 'ok'
+E         
+E         - ok
+E         + invalid
+
+backend/tests/test_world_commitment_fulfilment.py:440: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_counterparty_binding_survives_serialization_when_display_names_collide[targets1]" time="0.001"><failure message="AssertionError: assert 'invalid' == 'ok'&#10;  &#10;  - ok&#10;  + invalid">targets = [1]
+
+    @pytest.mark.parametrize("targets", [None, [1], ["Unique receiving office"]])
+    def test_counterparty_binding_survives_serialization_when_display_names_collide(targets):
+        world, agreement = _agreement()
+        world.actors[1].aliases = ["Unique receiving office"]
+        world.actors[2].name = world.actors[1].name
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise, targets=targets)
+        row = json.loads(json.dumps(attempt.to_dict()))
+        assert row["targets"] == ["Actor1"]  # Human-facing names remain available.
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].last_action["status"] == "ok"
+E       AssertionError: assert 'invalid' == 'ok'
+E         
+E         - ok
+E         + invalid
+
+backend/tests/test_world_commitment_fulfilment.py:440: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_counterparty_binding_survives_serialization_when_display_names_collide[targets2]" time="0.001"><failure message="AssertionError: assert 'invalid' == 'ok'&#10;  &#10;  - ok&#10;  + invalid">targets = ['Unique receiving office']
+
+    @pytest.mark.parametrize("targets", [None, [1], ["Unique receiving office"]])
+    def test_counterparty_binding_survives_serialization_when_display_names_collide(targets):
+        world, agreement = _agreement()
+        world.actors[1].aliases = ["Unique receiving office"]
+        world.actors[2].name = world.actors[1].name
+        world = WorldModel.from_dict(world.to_dict())
+        promise = _obligation(world, 0, agreement)
+        attempt = _bound_attempt(world, promise, targets=targets)
+        row = json.loads(json.dumps(attempt.to_dict()))
+        assert row["targets"] == ["Actor1"]  # Human-facing names remain available.
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].last_action["status"] == "ok"
+E       AssertionError: assert 'invalid' == 'ok'
+E         
+E         - ok
+E         + invalid
+
+backend/tests/test_world_commitment_fulfilment.py:440: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_serialized_counterparty_ids_cannot_change_the_stored_agreement[bad_ids0]" time="0.001"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a3e3c0&gt;.capacity_used">bad_ids = [2]
+
+    @pytest.mark.parametrize("bad_ids", [[2], ["1"], [1.0], [True], [1, 2]])
+    def test_serialized_counterparty_ids_cannot_change_the_stored_agreement(bad_ids):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row["option"]["commitment_target_ids"] = bad_ids
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a3e3c0&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:462: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_serialized_counterparty_ids_cannot_change_the_stored_agreement[bad_ids1]" time="0.001"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a3db20&gt;.capacity_used">bad_ids = ['1']
+
+    @pytest.mark.parametrize("bad_ids", [[2], ["1"], [1.0], [True], [1, 2]])
+    def test_serialized_counterparty_ids_cannot_change_the_stored_agreement(bad_ids):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row["option"]["commitment_target_ids"] = bad_ids
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a3db20&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:462: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_serialized_counterparty_ids_cannot_change_the_stored_agreement[bad_ids2]" time="0.001"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a40c50&gt;.capacity_used">bad_ids = [1.0]
+
+    @pytest.mark.parametrize("bad_ids", [[2], ["1"], [1.0], [True], [1, 2]])
+    def test_serialized_counterparty_ids_cannot_change_the_stored_agreement(bad_ids):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row["option"]["commitment_target_ids"] = bad_ids
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a40c50&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:462: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_serialized_counterparty_ids_cannot_change_the_stored_agreement[bad_ids3]" time="0.001"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a41d60&gt;.capacity_used">bad_ids = [True]
+
+    @pytest.mark.parametrize("bad_ids", [[2], ["1"], [1.0], [True], [1, 2]])
+    def test_serialized_counterparty_ids_cannot_change_the_stored_agreement(bad_ids):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row["option"]["commitment_target_ids"] = bad_ids
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a41d60&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:462: AssertionError</failure></testcase><testcase classname="backend.tests.test_world_commitment_fulfilment" name="test_serialized_counterparty_ids_cannot_change_the_stored_agreement[bad_ids4]" time="0.001"><failure message="assert 1 == 0&#10; +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a43a40&gt;.capacity_used">bad_ids = [1, 2]
+
+    @pytest.mark.parametrize("bad_ids", [[2], ["1"], [1.0], [True], [1, 2]])
+    def test_serialized_counterparty_ids_cannot_change_the_stored_agreement(bad_ids):
+        world, agreement = _agreement()
+        promise = _obligation(world, 0, agreement)
+        row = _bound_attempt(world, promise).to_dict()
+        row["option"]["commitment_target_ids"] = bad_ids
+        world.register_decisions(3, [row])
+&gt;       assert world.actors[0].capacity_used == 0
+E       assert 1 == 0
+E        +  where 1 = &lt;app.services.world_model.ActorState object at 0x108a43a40&gt;.capacity_used
+
+backend/tests/test_world_commitment_fulfilment.py:462: AssertionError</failure></testcase></testsuite></testsuites>

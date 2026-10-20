@@ -31,7 +31,8 @@ import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import describe_llm_error
-from .world_model import (ActorState, INTERACTION_TERMS_MAX_CHARS, PROPOSAL_OPTION_IDS, WorldModel,
+from .world_model import (ActorState, FULFILLMENT_ACTION_COST, FULFILLMENT_PREFIX,
+                          INTERACTION_TERMS_MAX_CHARS, PROPOSAL_OPTION_IDS, WorldModel,
                           _text, normalize_label)
 
 logger = logging.getLogger(__name__)
@@ -386,6 +387,19 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
         seen.add(opt["id"])
         options.append(opt)
 
+    # Due promises must remain reachable even when incoming offers fill the menu.
+    if remaining >= FULFILLMENT_ACTION_COST:
+        deliverable = [c for c in actor.commitments
+                       if world.delivery_commitment(actor.agent_id, c.get("id"), round_num) is not None]
+        for c in sorted(deliverable, key=lambda item: (int(item["due_round"]), item["id"]))[:3]:
+            push({"id": FULFILLMENT_PREFIX + c["id"],
+                  "label": f"Deliver commitment [{c['id']}]: {_text(c.get('description'), 220)}",
+                  "kind": "operational", "cost": FULFILLMENT_ACTION_COST, "lag": 0,
+                  "reversibility": "reversible", "targets_actor": False,
+                  "suggested_targets": world.delivery_targets(actor.agent_id, c), "commitment_id": c["id"],
+                  "commitment_target_ids": world.delivery_target_ids(actor.agent_id, c),
+                  "why": "attempt this specific promise's delivery now; only explicit arbiter confirmation fulfils it"})
+
     # 0) OFFERS: answers owed on open offers — the only way an agreement can come about
     for it in world.open_interactions_for(actor.agent_id)[:3]:
         who = world.actor_name(it.proposer)
@@ -539,7 +553,10 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         "an offer to another actor or counters one (what you give, what you expect, by when) — an "
         "offer binds nobody until the other side accepts it, and an accept answer adopts the offer's terms "
         "verbatim (leave terms null or restate them — an accept whose terms differ materially is recorded as a "
-        "counter-offer, not an agreement); commitment is what you bind yourself to and when "
+        "counter-offer, not an agreement); a fulfill:<commitment_id> option attempts delivery of that exact "
+        "stored promise. Choose its exact id, retain its counterparty, and describe what was actually delivered; "
+        "an unrelated action, another offer, an announcement or partial progress does not discharge it. "
+        "The consequence arbiter must confirm delivery. commitment is what you bind yourself to and when "
         "(due_periods ≥ 1) or null; alliance_moves lists any alliance you propose/strengthen/break; "
         "scenario_commitment names which candidate scenario your move pushes toward, or \"abstain\" "
         f"if your move has no real bearing on the outcome. Candidate scenarios: {sc}.\n"
@@ -707,6 +724,8 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
         # tolerate the model echoing the label instead of the id
         wanted = normalize_label(raw_option)
         for o in options:
+            if o["id"].startswith(FULFILLMENT_PREFIX):
+                continue  # Delivery identity must be exact, never a label-prefix match.
             if wanted and normalize_label(o["label"]).startswith(wanted[:40]):
                 option = dict(o)
                 break
@@ -722,6 +741,13 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
                 targets.append(name)
     if not targets and option.get("suggested_targets"):
         targets = list(option["suggested_targets"])[:2]
+    if option["id"].startswith(FULFILLMENT_PREFIX):
+        c = world.delivery_commitment(actor.agent_id, option["id"][len(FULFILLMENT_PREFIX):], round_num)
+        if (c is None or actor.capacity_remaining < FULFILLMENT_ACTION_COST
+                or not world.delivery_targets_match(actor.agent_id, c, raw.get("targets"))):
+            return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end,
+                                 raw_option_id=raw_option, problems=["invalid commitment delivery binding"])
+        targets = world.delivery_targets(actor.agent_id, c)
     try:
         magnitude = float(raw.get("magnitude", 0.5))
     except (TypeError, ValueError):
@@ -772,6 +798,8 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
     if option["id"] != HOLD_OPTION_ID and not statement:
         # a move without any public trace is still a move, but we need something to publish
         statement = f"{actor.name}: {option['label']}" + (f" ({', '.join(targets)})" if targets else "")
+    if option["id"].startswith(FULFILLMENT_PREFIX):
+        commitment, moves, terms = None, [], ""  # Delivery is not a fresh pledge, alliance or offer.
     return AgentDecision(actor.agent_id, actor.name, option, targets=targets, magnitude=magnitude,
                          public_statement=statement, private_rationale=rationale, commitment=commitment,
                          alliance_moves=moves, expected_reactions=reactions, scenario=scenario,
@@ -814,6 +842,8 @@ def decision_memory_note(decision: AgentDecision, period_label: str = "") -> str
         return ""
     head = f"# YOUR MOVE THIS PERIOD{(' — ' + period_label) if period_label else ''}"
     lines = [head, f"You chose: {decision.option.get('label') or decision.option.get('id')}"]
+    if str(decision.option.get("id", "")).startswith(FULFILLMENT_PREFIX):
+        lines.append("This was a delivery attempt; only the consequence arbiter can confirm fulfilment.")
     if decision.targets:
         lines.append("Directed at: " + ", ".join(decision.targets))
     if decision.public_statement:

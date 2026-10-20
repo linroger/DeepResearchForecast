@@ -29,7 +29,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import describe_llm_error
 from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
-from .world_model import (RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
+from .world_model import (FULFILLMENT_PREFIX, MAX_ACTION_RESOLUTIONS, RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
                           normalize_label)
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ MAX_NEW_VARIABLES = 3
 MAX_EVENTS = 8
 MAX_RELATIONSHIP_CHANGES = 8
 MAX_PENDING_EFFECTS = 6
-MAX_RESOLUTIONS = 24
+MAX_RESOLUTIONS = MAX_ACTION_RESOLUTIONS
 MAX_RED_LINE_CROSSINGS = 4
 MAX_RED_LINE_ACTORS = 8
 NARRATIVE_MAX_CHARS = 700
@@ -151,6 +151,18 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         moved += 1
     if not moved:
         lines.append("- (no actor made a consequential move; the world drifts on its own momentum)")
+    attempts = [(actor, actor.last_action) for actor in world.actors.values()
+                if actor.last_action and actor.last_action.get("round") == round_num
+                and actor.last_action.get("status") == "ok" and actor.last_action.get("commitment_id")]
+    if attempts:
+        lines.extend(["", "## Specific commitment delivery attempts (not yet fulfilled)",
+                      "Assess whether this exact promise was actually delivered in this period. Unrelated actions, "
+                      "new agreements, announcements and partial progress are not fulfilment. Use success only "
+                      "for full delivery; otherwise use partial, pending, blocked or failed. Return the exact "
+                      "commitment_id AND action_round in that actor's resolution, with a concrete delivery rationale."])
+        for actor, action in attempts:
+            lines.append(f"- actor={actor.name}; commitment_id={action['commitment_id']}; action_round={round_num}; "
+                         f"promise={action.get('commitment_description')}; counterparty={', '.join(action.get('targets') or []) or '(self)'}")
     expectations = [(a.name, e) for a in world.actors.values() for e in a.expectations
                     if int(e.get("round") or 0) == int(round_num)]
     if expectations:
@@ -207,7 +219,8 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '- "pending_effects": [{"description": "...", "due_periods": 1-12, "variable_id": "<id or null>", '
         '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later.',
         '- "action_resolutions": [{"actor": "<cast name>", "outcome": "success|partial|blocked|pending|failed", '
-        '"rationale": "..."}] — one per actor that moved.',
+        '"rationale": "...", "commitment_id": "<exact id for delivery attempts, otherwise null>", '
+        '"action_round": <current round integer for delivery attempts>}] — exactly one per actor that moved.',
         '- "red_line_crossings": [{"actor": "<whose red line>", "by": "<cast name whose move crossed it>", '
         '"red_line": "<the red line as listed>", "rationale": "..."}] — only for a listed red line that a move '
         "this period clearly crossed; usually none.",
@@ -440,16 +453,41 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             update["pending_effects"].append(row)
     res = raw.get("action_resolutions")
     if isinstance(res, list):
-        for r in res[:MAX_RESOLUTIONS]:
+        if len(res) > MAX_RESOLUTIONS:
+            problems.append("too many action resolutions")
+            res = []
+        # Duplicates must be detected before filtering malformed outcomes or
+        # truncating: conflicting attestations cannot become a single success.
+        counts: Dict[int, int] = {}
+        for r in res:
+            if isinstance(r, dict):
+                _, implicated = world.resolution_actor(r)
+                for aid in implicated:
+                    counts[aid] = counts.get(aid, 0) + 1
+        for r in res:
             if not isinstance(r, dict):
                 continue
-            aid = world.resolve_actor(r.get("actor") if r.get("actor") is not None else r.get("agent_id"))
+            aid, _ = world.resolution_actor(r)
             outcome = _text(r.get("outcome"), 16).casefold()
             if aid is None or outcome not in RESOLUTION_OUTCOMES:
                 problems.append("resolution with unknown actor or outcome")
                 continue
-            update["action_resolutions"].append({"actor": world.actor_name(aid), "outcome": outcome,
-                                                 "rationale": _text(r.get("rationale"), 200)})
+            if counts[aid] != 1:
+                problems.append("duplicate actor resolutions")
+                continue
+            row = {"actor": world.actor_name(aid), "outcome": outcome, "rationale": _text(r.get("rationale"), 200)}
+            if world.resolve_actor(row["actor"], exact=True) != aid:
+                # Keep a valid numeric/alias identity when display names collide;
+                # canonicalization must not turn it into an ambiguous claim.
+                row["actor"] = aid
+            action = world.actors[aid].last_action or {}
+            if str(action.get("option_id", "")).startswith(FULFILLMENT_PREFIX) or r.get("commitment_id") is not None:
+                if (world.delivery_resolution_target(aid, r.get("commitment_id"), world.round, r.get("action_round")) is None
+                        or not isinstance(r.get("rationale"), str) or not row["rationale"]):
+                    problems.append("unbound commitment delivery resolution")
+                    continue
+                row.update(commitment_id=r["commitment_id"], action_round=r["action_round"])
+            update["action_resolutions"].append(row)
     crossings = raw.get("red_line_crossings")
     if isinstance(crossings, list):
         for rl in crossings[:MAX_RED_LINE_CROSSINGS]:
