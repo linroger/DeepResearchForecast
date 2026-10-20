@@ -115,7 +115,7 @@ flowchart TB
 - [Architecture](#architecture)
   - [Runtime topology](#runtime-topology) · [Request lifecycle](#request-lifecycle) · [Pipeline lifecycle, state and resume](#pipeline-lifecycle-state-and-resume) · [What each stage reads](#what-each-stage-reads) · [Code map](#code-map)
 - [Stage-by-stage deep dive](#stage-by-stage-deep-dive)
-  - [1 · Research](#stage-1--research-deerflow-2) · [2 · Ontology](#stage-2--ontology) · [3 · Knowledge graph](#stage-3--knowledge-graph) · [4 · Prepare](#stage-4--prepare) · [5 · Simulation](#stage-5--simulation) · [6 · Report and publication](#stage-6--report-and-publication) · [After the run](#after-the-run-ensembles-ledgers-and-monitoring)
+  - [1 · Research](#stage-1--research-deerflow-2) · [2 · Ontology](#stage-2--ontology) · [3 · Knowledge graph](#stage-3--knowledge-graph) · [4 · Prepare](#stage-4--prepare) · [5 · Simulation](#stage-5--simulation) · [6 · Report and publication](#stage-6--report-and-publication) · [After the run](#after-the-run-ensembles-ledgers-and-monitoring) · [Backtest mode](#backtest-mode-accuracy-without-hindsight)
 - [Trust and quality guarantees](#trust-and-quality-guarantees)
 - [Requirements](#requirements)
 - [Installation and setup](#installation-and-setup)
@@ -1176,8 +1176,29 @@ flowchart LR
 - **Calibration tooling.**
   - `backend/app/services/backtest.py` provides Brier score, log loss, calibration bins and the Murphy decomposition.
   - `backend/scripts/golden_eval.py` scores against resolved "golden" questions.
+  - `backend/scripts/backtest_eval.py` runs golden questions end to end in backtest mode and scores them per ablation arm (see [Backtest mode](#backtest-mode-accuracy-without-hindsight)).
   - Joining resolutions back into the ledger, which is what would let later reports show `historical_calibration`, is **not automated yet**.
 - **Scheduled reruns** (`backend/scripts/scheduled_rerun.py daemon|tick`, off by default). They re-run saved questions, record probability drift of 15 points or more, and can POST to a webhook. `scheduled_rerun.py diff <pipe_a> <pipe_b>` compares two runs.
+
+### Backtest mode: accuracy without hindsight
+
+A retrospective score means nothing if the pipeline can read the outcome. **Backtest mode** pins an as-of date on one pipeline and cuts every input it reads at that date. It is opt-in and off by default: a pipeline without it runs exactly as before. Design and evidence: [docs/handoff/backtest/design.md](docs/handoff/backtest/design.md).
+
+- **Starting one.** Call `POST /api/v1/run` (it needs `API_V1_ENABLED=true`) with a `backtest` block such as `{"as_of": "2024-11-01", "strict": true, "archive": "wayback", "arm": "production"}`, plus an optional `target` golden question. Admission refuses a cutoff that is not in the past, the legacy research engine and the world-v1 engine.
+- **What is cut.** The research child receives the policy as `DRF_BACKTEST_POLICY`; a live run never inherits it.
+  - *Search:* Firecrawl gets a date filter that ends on the as-of day, plus dated news rows. Every row from every provider is then dated from its own fields and its URL, and rows dated after the cutoff are dropped.
+  - *Fetch:* the last Wayback Machine capture at or before the cutoff is read when there is one. Otherwise the live page is dated from its metadata, its URL and its search hit, and refused when it was published or modified after the cutoff.
+  - *Official data:* request windows end at the cutoff. FRED values come from the as-of vintage (ALFRED); other providers' current revisions count only for periods that ended by the cutoff.
+  - *Markets:* closed events are searched too. A market counts only if it was open at the cutoff; it is priced from CLOB price history at the cutoff, with resolved prices and later fields removed. The report stage never re-quotes.
+  - *Dates and records:* the plan date, the simulation calendar and the target years start from the as-of date. `forecast.json` gets a `backtest` block, nothing goes to the production ledger, and the resolution monitor skips the report.
+- **Strict or lenient.** Strict mode (the default) drops undated sources; lenient mode keeps them with a flag. Every decision is logged in the handoff's `backtest_audit.jsonl` and summarized in `research_meta.json`.
+- **What it cannot cut: the model's memory.** The LLM may know outcomes from before its training cutoff. Each golden question carries `knowledge_cutoff` (the date its outcome became public), and `golden_eval.py` and `backtest_eval.py` take `--model-knowledge-cutoff` to report `post_model_cutoff` (clean), `pre_model_cutoff` (possibly memorized) and `unknown` separately. All 30 current golden questions resolved by February 2025, so for a 2026 model their scores are an upper bound.
+- **Ablation arms**, each run as its own pipeline: `research_only` (no markets; the simulation never moves probabilities) · `markets` · `simulation` (the simulation may move probabilities, an evaluation-only setting) · `world_channel` (adds the reflexive world channel) · `production` (today's live settings).
+- **The driver** is `backend/scripts/backtest_eval.py`:
+  - `plan --ids <golden ids>` lists the pipelines and the exact request each one gets (quick depth, 4 rounds), with no network;
+  - `run --base-url <backend> --run-dir <dir> --confirm-paid` submits them and waits; it can resume, and it refuses a batch of more than 8 pipelines unless `--max-pipelines` allows it;
+  - `score --run-dir <dir>` writes `eval_report.json` and a markdown summary: Brier, log score, ECE and accuracy per arm, the knowledge split, and paired differences against `research_only`.
+- **Forward testing.** Forecasts that resolve within weeks give clean numbers. Set `RESOLUTION_MONITOR_AUTORUN_HOURS=24`, and a `RESOLUTION_MONITOR_RECENT_N` large enough to keep every open short-horizon report in view. Write questions from `backend/tests/eval/forward_questions_template.json` (2–12 weeks, each settled by an official series or a Polymarket market), check them with `backtest_eval.py forward-check`, and score the resolved ones with `backtest_eval.py forward-score`.
 
 ---
 
@@ -1632,7 +1653,7 @@ These are the routes the dashboard uses. The complete list follows in a collapsi
 | `/api/graph` (14) | `GET /project/<id>` · `GET /project/list` · `DELETE /project/<id>` · `POST /project/<id>/reset` · `POST /ontology/generate` · `POST /build` · `GET /task/<task_id>` · `GET /tasks` · `POST /gc` · `DELETE /delete/<graph_id>` |
 | `/api/simulation` (32) | `GET /entities/<graph_id>` · `GET /entities/<graph_id>/<uuid>` · `GET /entities/<graph_id>/by-type/<type>` · `POST /create` · `POST /prepare` · `POST /prepare/status` · `GET /<sim_id>` · `GET /list` · `GET /history` · `GET /<sim_id>/profiles` · `GET /<sim_id>/config` · `GET /<sim_id>/config/realtime` · `GET /<sim_id>/config/download` · `GET /script/<name>/download` · `POST /generate-profiles` · `POST /start` · `POST /stop` · `GET /<sim_id>/run-status/detail` · `POST /interview` · `POST /interview/batch` · `POST /interview/all` · `POST /interview/history` · `POST /env-status` · `POST /close-env` |
 | `/api/report` (29) | `POST /generate` · `POST /generate/status` · `GET /by-simulation/<sim_id>` · `GET /list` · `DELETE /<report_id>` · `POST /chat` · `GET /<report_id>/progress` · `GET /<report_id>/sections` · `GET /<report_id>/section/<n>` · `GET /check/<sim_id>` · `GET /<report_id>/agent-log` · `GET /<report_id>/agent-log/stream` · `GET /<report_id>/console-log` · `GET /<report_id>/console-log/stream` · `POST /tools/search` · `POST /tools/statistics` |
-| `/api/v1` (6, only when `API_V1_ENABLED=true`) | `POST /run` · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
+| `/api/v1` (6, only when `API_V1_ENABLED=true`) | `POST /run` (accepts a `backtest` block) · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
 
 Many of the extra graph, simulation and report routes predate the unified dashboard; they still work for scripting. The handlers live in [`backend/app/api/`](backend/app/api/).
 
@@ -1736,6 +1757,7 @@ flowchart LR
 | `backend/scripts/model_comparison.py` | The same question through several providers, compared side by side |
 | `backend/scripts/forecast_tools.py` | Ensemble aggregation and backtesting over `forecast.json` files |
 | `backend/scripts/golden_eval.py` · `eval_forecast_quality.py` | Golden-question scoring · rubric LLM-judge (opt-in) |
+| `backend/scripts/backtest_eval.py` | Backtest driver: golden questions × ablation arms at their as-of dates; forward-question check and score |
 | `backend/scripts/export_demo_site_data.py` | Export runs into `docs/demos/<run>/` for the demo site |
 | `backend/scripts/backfill_report_visuals.py` | Rebuild charts and citations for existing reports offline (`--apply` to write) |
 | `backend/scripts/replay_zep_dead_letters.py` | Replay failed simulation → graph feedback writes |
@@ -1778,7 +1800,7 @@ Run the backend scripts from `backend/` with `uv run python scripts/<name>.py --
 | Lint | `npm run lint` | Ruff. CI also lints `backend/scripts` and `deerflow_bridge`. |
 | Config drift | `npm run check:env` | Every setting `config.py` reads must be documented in `.env.example` |
 | Stage-contract smoke test | `npm run smoke` | Stub LLM, deterministic, $0 |
-| Forecast-quality evaluation | `backend/scripts/golden_eval.py`, `eval_forecast_quality.py` | Scores forecast quality rather than code shape |
+| Forecast-quality evaluation | `backend/scripts/golden_eval.py`, `backtest_eval.py`, `eval_forecast_quality.py` | Scores forecast quality rather than code shape |
 
 **CI** (`.github/workflows/ci.yml`) runs three offline jobs on pushes to `main` and on pull requests:
 - Ruff lint plus the env-drift gate;
