@@ -840,25 +840,134 @@ class Config:
         'qwen': {"enable_thinking": False},
     }
 
+    # Models that always reason and refuse a request that disables reasoning: glm-5.3 since
+    # 2026-10-18 ~20:37 +08 answers ``thinking: disabled`` with HTTP 400 / code 1210 ("该模型始终
+    # 思考，不支持关闭思考；请使用 low、high 或 max"), so every simulation and report call failed.  For
+    # these models "disable reasoning" becomes the lowest accepted effort — the payload the default
+    # research engine has always sent GLM (deerflow_bridge/research_gateway.py).  Comma-separated
+    # model-name prefixes (case-insensitive); empty turns the static rule off.  Any other model that
+    # refuses is learned at runtime from its first refusal (``note_thinking_refused``).
+    LLM_ALWAYS_THINKING_MODELS = os.environ.get('LLM_ALWAYS_THINKING_MODELS', 'glm-5')
+    LLM_THINKING_REQUIRED_EFFORT = (os.environ.get('LLM_THINKING_REQUIRED_EFFORT', 'low') or 'low').strip().lower()
+    # Reasoning tokens count against max_tokens; requests that must reason get this much extra room.
+    try:
+        LLM_THINKING_HEADROOM_TOKENS = max(0, int(os.environ.get('LLM_THINKING_HEADROOM_TOKENS', '2048') or 2048))
+    except ValueError:
+        LLM_THINKING_HEADROOM_TOKENS = 2048
+    _THINKING_REQUIRED_EFFORTS = ('low', 'high', 'max')
+    _THINKING_HEADROOM_CEILING = 32768
+    _thinking_refused = set()
+    _thinking_refused_lock = threading.Lock()
+
+    @staticmethod
+    def disables_thinking(extra_body) -> bool:
+        """True when ``extra_body`` asks the provider to switch reasoning off."""
+        if not isinstance(extra_body, dict):
+            return False
+        thinking = extra_body.get("thinking")
+        return ((isinstance(thinking, dict) and thinking.get("type") == "disabled")
+                or extra_body.get("enable_thinking") is False)
+
     @classmethod
-    def reasoning_extra_body(cls, provider=None):
+    def thinking_required(cls, provider, model) -> bool:
+        """The model always reasons: a static prefix rule or a refusal learned at runtime."""
+        p = (provider or '').strip().lower()
+        m = (model or '').strip().casefold()
+        if not m:
+            return False
+        with cls._thinking_refused_lock:
+            if (p, m) in cls._thinking_refused:
+                return True
+        prefixes = [x.strip().casefold() for x in (cls.LLM_ALWAYS_THINKING_MODELS or '').split(',') if x.strip()]
+        return any(m.startswith(prefix) for prefix in prefixes)
+
+    @classmethod
+    def note_thinking_refused(cls, provider, model) -> bool:
+        """Remember for this process that ``model`` refuses disabled reasoning; True when new."""
+        key = ((provider or '').strip().lower(), (model or '').strip().casefold())
+        if not key[1]:
+            return False
+        with cls._thinking_refused_lock:
+            if key in cls._thinking_refused:
+                return False
+            cls._thinking_refused.add(key)
+            return True
+
+    @classmethod
+    def thinking_required_body(cls, provider):
+        """extra_body for a model that must reason: GLM gets reasoning enabled at the configured
+        effort (low / high / max, default low); other providers get their own default (None)."""
+        if (provider or '').strip().lower() != 'glm':
+            return None
+        effort = cls.LLM_THINKING_REQUIRED_EFFORT
+        if effort not in cls._THINKING_REQUIRED_EFFORTS:
+            effort = 'low'
+        return {"thinking": {"type": "enabled"}, "reasoning_effort": effort}
+
+    @classmethod
+    def thinking_headroom(cls, max_tokens):
+        """``max_tokens`` with room for the reasoning a model that must reason will spend."""
+        try:
+            base = int(max_tokens)
+        except (TypeError, ValueError):
+            return max_tokens
+        return max(base, min(base + cls.LLM_THINKING_HEADROOM_TOKENS, cls._THINKING_HEADROOM_CEILING))
+
+    @classmethod
+    def minimal_reasoning_body(cls, provider, model=None):
+        """The least reasoning ``model`` accepts: the provider's disable payload, or — for a model
+        that always reasons — the required body.  Ignores the *_DISABLE_THINKING switches (the
+        connectivity probes always ask for the least reasoning)."""
+        p = (provider or '').strip().lower()
+        body = cls._DISABLE_THINKING_EXTRA_BODY.get(p)
+        if body is not None and cls.thinking_required(p, model):
+            return cls.thinking_required_body(p)
+        return body
+
+    @classmethod
+    def reasoning_extra_body(cls, provider=None, model=None):
         """OpenAI 兼容推理提供方关闭推理用的 extra_body；非推理提供方或开关关闭时返回 None。
 
         kimi/minimax 沿用各自历史开关；deepseek/qwen/glm 统一受 LLM_DISABLE_THINKING 控制。
         关闭推理可避免 reasoning 吃光 max_tokens 导致 content 为空、JSON 解析失败。
+        A model that always reasons (``thinking_required``) gets ``thinking_required_body``
+        instead of a disable payload it would refuse.  ``model`` defaults to LLM_MODEL_NAME when
+        the provider is the configured primary.
         """
         # An explicit provider matters for failover clients.  Reading only the global primary
         # provider made an ``openai`` fallback inherit MiniMax's non-standard
         # ``thinking.type=disabled`` payload, which can make an otherwise healthy proxy reject
         # the request.  Existing callers may omit the argument and retain the old behavior.
-        p = (provider or cls.LLM_PROVIDER or '').strip().lower()
+        p, model = cls._reasoning_target(provider, model)
+        if not cls._reasoning_off_wanted(p):
+            return None
+        return cls.minimal_reasoning_body(p, model)
+
+    @classmethod
+    def reasoning_forced(cls, provider=None, model=None) -> bool:
+        """True when this request wanted reasoning off but the model must reason, so its
+        reasoning tokens will count against max_tokens (callers add ``thinking_headroom``)."""
+        p, model = cls._reasoning_target(provider, model)
+        return cls._reasoning_off_wanted(p) and cls.thinking_required(p, model)
+
+    @classmethod
+    def _reasoning_target(cls, provider, model):
+        primary = (cls.LLM_PROVIDER or '').strip().lower()
+        p = (provider or primary or '').strip().lower()
+        if model is None and p == primary:
+            model = cls.LLM_MODEL_NAME
+        return p, model
+
+    @classmethod
+    def _reasoning_off_wanted(cls, p) -> bool:
+        """The provider has a disable payload and its *_DISABLE_THINKING switch is on."""
         if p == 'kimi' and not cls.LLM_KIMI_DISABLE_THINKING:
-            return None
+            return False
         if p == 'minimax' and not cls.LLM_MINIMAX_DISABLE_THINKING:
-            return None
+            return False
         if p in ('deepseek', 'qwen', 'glm') and not cls.LLM_DISABLE_THINKING:
-            return None
-        return cls._DISABLE_THINKING_EXTRA_BODY.get(p)
+            return False
+        return p in cls._DISABLE_THINKING_EXTRA_BODY
 
     # 向后兼容别名（旧调用点）：等价于 reasoning_extra_body。
     @classmethod

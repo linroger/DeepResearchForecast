@@ -113,7 +113,9 @@ def _test_openai_compat_provider(provider, api_key, base_url, model):
         "max_tokens": 16,
     }
     # 推理提供方：测试时一律关闭推理，避免 reasoning 吃光 max_tokens 导致空 content。
-    extra_body = Config._DISABLE_THINKING_EXTRA_BODY.get(provider)
+    # A model that always reasons (glm-5.x) refuses that (HTTP 400 / 1210) and gets the lowest
+    # accepted effort instead; a reply cut short by reasoning still proves the key works.
+    extra_body = Config.minimal_reasoning_body(provider, model)
     if extra_body:
         kwargs["extra_body"] = extra_body
     # Kimi K2.7 Code 网关硬校验温度（开推理只接受 1、关推理只接受 0.6），temperature=0 会 400。

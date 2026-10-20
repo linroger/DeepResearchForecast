@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
 
 from ..config import Config
-from .llm_errors import describe_llm_error, is_content_filter_error
+from .llm_errors import describe_llm_error, is_content_filter_error, is_thinking_required_error
 from .logger import get_logger
 
 logger = get_logger('mirofish.llm_client')
@@ -739,7 +739,7 @@ class LLMClient:
             "tools": tools_schema,
             "tool_choice": "auto",
         }
-        extra_body = self._apply_reasoning_options(kwargs)
+        extra_body = self._apply_reasoning_options(kwargs, max_tokens)
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
         kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
         # LLM-1: 此前原生工具路径完全绕过 chat() 的韧性/观测栈（无重试、无熔断记账、无计量、
@@ -753,7 +753,7 @@ class LLMClient:
         last_error: Optional[Exception] = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = client.chat.completions.create(**kwargs)
+                response = self._create_completion(client, kwargs, temperature, max_tokens)
                 _cb_reset(self.provider)
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
@@ -924,17 +924,25 @@ class LLMClient:
         thinking_disabled = bool(extra_body and (extra_body.get("thinking") or {}).get("type") == "disabled")
         return 0.6 if thinking_disabled else 1.0
 
-    def _apply_reasoning_options(self, kwargs: Dict[str, Any]) -> Optional[Dict]:
+    def _apply_reasoning_options(self, kwargs: Dict[str, Any], max_tokens: Optional[int] = None) -> Optional[Dict]:
         """Apply reasoning controls for the provider actually serving this request.
 
         A fallback client intentionally retains the global primary configuration, so request
         options must be resolved from ``self.provider`` rather than Config.LLM_PROVIDER.
         Quotio's Antigravity alias additionally accepts the OpenAI-compatible
-        ``reasoning_effort`` field.
+        ``reasoning_effort`` field.  A model that must reason although reasoning was meant to be
+        off (``Config.reasoning_forced``: glm-5.x, or a refusal learned at runtime) gets the
+        accepted reasoning body and ``max_tokens`` (the caller's value) plus reasoning headroom.
         """
-        extra_body = Config.reasoning_extra_body(self.provider)
+        model = kwargs.get("model") or self.model
+        extra_body = Config.reasoning_extra_body(self.provider, model)
         if extra_body:
             kwargs["extra_body"] = extra_body
+        else:
+            kwargs.pop("extra_body", None)
+        if max_tokens is not None and "max_tokens" in kwargs:
+            kwargs["max_tokens"] = (Config.thinking_headroom(max_tokens)
+                                    if Config.reasoning_forced(self.provider, model) else max_tokens)
         if self._is_fallback:
             reasoning_effort = (
                 os.environ.get("LLM_FALLBACK_REASONING_EFFORT", "") or ""
@@ -947,6 +955,27 @@ class LLMClient:
                     )
                 kwargs["reasoning_effort"] = reasoning_effort
         return extra_body
+
+    def _create_completion(self, client: Any, kwargs: Dict[str, Any], temperature: float,
+                           max_tokens: Optional[int]) -> Any:
+        """``client.chat.completions.create``, resent once when the model refuses a request that
+        disabled reasoning (glm-5.3 since 2026-10-18: HTTP 400 / 1210).  The refusal is remembered
+        for this process (``Config.note_thinking_refused``), so later calls for the same model send
+        the accepted body straight away; any other error propagates unchanged."""
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 — only the thinking refusal is handled here
+            if not (Config.disables_thinking(kwargs.get("extra_body")) and is_thinking_required_error(exc)):
+                raise
+            model = kwargs.get("model") or self.model
+            if Config.note_thinking_refused(self.provider, model):
+                logger.warning(
+                    "%s/%s refuses requests that disable reasoning (%s); resending with reasoning on "
+                    "at the lowest accepted effort, and later calls do the same",
+                    self.provider, model, _err_brief(exc))
+        extra_body = self._apply_reasoning_options(kwargs, max_tokens)
+        kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
+        return client.chat.completions.create(**kwargs)
 
     # ------------------------------------------------------------------
     # openai 提供方
@@ -980,7 +1009,7 @@ class LLMClient:
 
         # 推理模型(kimi/minimax/deepseek/qwen/glm)：默认关闭推理，避免 reasoning 吃光
         # max_tokens 导致 content 为空。reasoning_extra_body() 对非推理提供方返回 None。
-        extra_body = self._apply_reasoning_options(kwargs)
+        extra_body = self._apply_reasoning_options(kwargs, max_tokens)
 
         # Kimi K2.7 Code 网关按推理开关硬校验温度（开=1/关=0.6），覆盖调用方温度。
         kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
@@ -988,7 +1017,7 @@ class LLMClient:
         timeout_override = _CALL_TIMEOUT_S.get()
         if timeout_override:
             kwargs["timeout"] = timeout_override
-        response = client.chat.completions.create(**kwargs)
+        response = self._create_completion(client, kwargs, temperature, max_tokens)
         # 捕获精确 token 用量供计量（I-5-0）；无 usage 字段时留空走粗估。
         try:
             _u = getattr(response, "usage", None)

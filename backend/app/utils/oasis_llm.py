@@ -20,6 +20,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 
 from ..config import Config
 from .llm_client import LLMClient, CLI_PROVIDERS
+from .llm_errors import is_thinking_required_error
 from .logger import get_logger
 
 logger = get_logger('mirofish.oasis_llm')
@@ -345,8 +346,38 @@ def _fallback_completion(model, provider: str, exc: Exception, *args, **kwargs) 
     return _build_chat_completion(str(getattr(model, "model_type", provider)), messages, content, tool_calls)
 
 
+def _model_name(model) -> str | None:
+    name = str(getattr(model, "model_type", "") or "").strip()
+    return name or None
+
+
+def _switch_to_required_reasoning(model, provider: str, exc: Exception) -> bool:
+    """The provider refused this agent model's request because it disabled reasoning on a model
+    that always reasons (glm-5.3 since 2026-10-18: HTTP 400 / 1210).  Remember it, give the model
+    the accepted reasoning body and return True so the caller resends once; False otherwise."""
+    try:
+        config = model.model_config_dict
+        if not (Config.disables_thinking(config.get("extra_body")) and is_thinking_required_error(exc)):
+            return False
+        name = _model_name(model)
+        if Config.note_thinking_refused(provider, name):
+            logger.warning(f"OASIS {provider}/{name}: the model refuses disabled reasoning; "
+                           f"switching to the lowest accepted reasoning effort")
+        body = Config.reasoning_extra_body(provider, name)
+        if body:
+            config["extra_body"] = body
+        else:
+            config.pop("extra_body", None)
+        return not Config.disables_thinking(config.get("extra_body"))
+    except Exception:  # noqa: BLE001 — never mask the original error
+        return False
+
+
 def _wrap_openai_fallback_guard(model, provider: str):
-    """给 camel OpenAIModel 直连路径加 LLMClient 故障转移（SIM_LLM_FALLBACK=false 时按原样抛错）。"""
+    """给 camel OpenAIModel 直连路径加 LLMClient 故障转移（SIM_LLM_FALLBACK=false 时按原样抛错）。
+
+    A refusal of disabled reasoning (``_switch_to_required_reasoning``) is resent once on the
+    same provider with the accepted reasoning body before any failover is considered."""
     try:
         _orig = model._request_chat_completion
 
@@ -354,6 +385,8 @@ def _wrap_openai_fallback_guard(model, provider: str):
             try:
                 return _orig(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001 — 仅拦截审查/限流类错误
+                if _switch_to_required_reasoning(model, provider, exc):
+                    return _orig(*args, **kwargs)
                 if not (_sim_llm_fallback_enabled() and _should_fallback_exc(exc)):
                     raise
                 return _fallback_completion(model, provider, exc, *args, **kwargs)
@@ -365,6 +398,8 @@ def _wrap_openai_fallback_guard(model, provider: str):
                 try:
                     return await _aorig(*args, **kwargs)
                 except Exception as exc:  # noqa: BLE001
+                    if _switch_to_required_reasoning(model, provider, exc):
+                        return await _aorig(*args, **kwargs)
                     if not (_sim_llm_fallback_enabled() and _should_fallback_exc(exc)):
                         raise
                     return await asyncio.to_thread(
@@ -588,11 +623,11 @@ def create_oasis_model(config: Dict[str, Any], use_boost: bool = False):
     # 推理模型(kimi/minimax/deepseek/qwen/glm)默认关闭推理，避免 reasoning 吃光 token 预算
     # 导致 content 为空。reasoning_extra_body() 对非推理提供方返回 None，故可统一调用。
     # CAMEL 会把 model_config_dict 透传为 create() 关键字参数，故注入 extra_body。
-    extra_body = Config.reasoning_extra_body()
+    extra_body = Config.reasoning_extra_body(provider, _model_name(model))
     if extra_body is not None:
         try:
             model.model_config_dict["extra_body"] = extra_body
-            logger.info(f"OASIS {provider}: 已关闭推理 via model_config_dict.extra_body={extra_body}")
+            logger.info(f"OASIS {provider}: reasoning options via model_config_dict.extra_body={extra_body}")
         except Exception as e:
             logger.warning(f"OASIS {provider}: 注入 extra_body 失败（继续，但可能触发空 content）: {e}")
     # RUN-18: 直连路径接入 LLMClient 故障转移（内容审查/限流时才触发；SIM_LLM_FALLBACK=false 关闭）。
