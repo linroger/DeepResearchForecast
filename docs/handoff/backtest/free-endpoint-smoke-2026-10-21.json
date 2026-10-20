@@ -1,0 +1,59 @@
+{
+  "as_of": "2024-11-01",
+  "wayback": {
+    "status": "unavailable:HTTPError:429"
+  },
+  "run_at": "2026-10-20T17:53:17+00:00",
+  "polymarket": {
+    "diagnostics": {
+      "backtest_priced_count": 4,
+      "backtest_unpriced_count": 0,
+      "attempted_query_count": 1,
+      "successful_query_count": 1,
+      "transport_failure_count": 0
+    },
+    "rows": [
+      {
+        "market_id": "253591",
+        "question": "Will Donald Trump win the 2024 US Presidential Election?",
+        "implied_yes_prob": 0.59,
+        "price_as_of": "2024-11-01T23:00:03+00:00",
+        "price_basis": "clob_history_at_cutoff"
+      },
+      {
+        "market_id": "253597",
+        "question": "Will Kamala Harris win the 2024 US Presidential Election?",
+        "implied_yes_prob": 0.4105,
+        "price_as_of": "2024-11-01T23:00:03+00:00",
+        "price_basis": "clob_history_at_cutoff"
+      },
+      {
+        "market_id": "253642",
+        "question": "Will any other Republican Politician win the 2024 US Presidential Election?",
+        "implied_yes_prob": 0.0005,
+        "price_as_of": "2024-11-01T23:00:03+00:00",
+        "price_basis": "clob_history_at_cutoff"
+      },
+      {
+        "market_id": "253727",
+        "question": "Kamala Harris wins the popular vote?",
+        "implied_yes_prob": 0.6725,
+        "price_as_of": "2024-11-01T23:00:03+00:00",
+        "price_basis": "clob_history_at_cutoff"
+      }
+    ],
+    "leaked_fields": []
+  },
+  "fred_csv": {
+    "route": "fred_csv",
+    "last_observation": "2024-08-01",
+    "count": 8,
+    "backtest": {
+      "as_of": "2024-11-01",
+      "strict": true,
+      "basis": "current_revision",
+      "dropped_observations": 3
+    },
+    "api_url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=2024-01-01&coed=2024-11-01"
+  }
+}

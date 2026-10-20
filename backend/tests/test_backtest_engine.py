@@ -10,6 +10,8 @@ from __future__ import annotations
 import datetime as _dt
 import json
 
+import pytest
+
 import test_research_engine_v3 as v3
 
 _hermetic_env = v3._hermetic_env
@@ -18,6 +20,13 @@ lr = v3.lr
 rg = v3.rg
 
 POLICY_ENV = "DRF_BACKTEST_POLICY"
+
+
+@pytest.fixture(autouse=True)
+def _closed_archive_circuit():
+    rg._backtest_api().reset_archive_circuit()
+    yield
+    rg._backtest_api().reset_archive_circuit()
 
 
 def dated_search(query: str, n: int) -> str:

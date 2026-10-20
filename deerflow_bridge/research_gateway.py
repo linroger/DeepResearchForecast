@@ -4726,7 +4726,7 @@ class ResearchTools:
             # still pass the deny list the live fetch applies.
             self._remember_failure(key, "source_quality_rejected", transient=False)
             return self._fetch_failed(agent_id, "source_quality_rejected")
-        snapshot = bt.find_snapshot(url, policy, http_get=self._archive_get)
+        snapshot, archive_status = bt.lookup_snapshot(url, policy, http_get=self._archive_get)
         text: str | None = None
         if snapshot is not None:
             try:
@@ -4766,7 +4766,7 @@ class ResearchTools:
         decision, span = bt.verdict(spans, policy)
         detail = {"verdict": decision, "via": via,
                   "date": span.end.isoformat() if span is not None else None,
-                  "basis": span.basis if span is not None else None}
+                  "basis": span.basis if span is not None else None, "archive": archive_status}
         if via == "archive":
             detail["snapshot"] = snapshot.url
         admitted = bt.admits(decision, policy)

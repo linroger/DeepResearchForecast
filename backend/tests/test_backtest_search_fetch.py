@@ -24,6 +24,13 @@ import research_gateway as rg  # noqa: E402
 import search_tools as st  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _closed_archive_circuit():
+    bt.reset_archive_circuit()
+    yield
+    bt.reset_archive_circuit()
+
+
 def _policy(tmp_path, *, strict=True, archive="wayback"):
     return bt.parse_policy({"as_of": "2024-11-01", "strict": strict, "archive": archive,
                             "audit_path": str(tmp_path / "backtest_audit.jsonl")})
@@ -234,7 +241,7 @@ def test_backtest_fetch_reads_the_archive_capture(tmp_path):
     row = ledger.rows()[0]
     assert row["url"] == url  # cited by its own URL; the capture is in the backtest note
     assert row["backtest"] == {"verdict": "before", "via": "archive", "date": "2024-10-31",
-                               "basis": "archive", "snapshot": snapshot}
+                               "basis": "archive", "archive": "hit", "snapshot": snapshot}
     # The stored copy answers re-reads without the network.
     tools.fetch(url, focus="turnout", agent_id="K2")
     assert fetch.urls == [snapshot]
@@ -248,7 +255,7 @@ def test_unreadable_capture_falls_back_to_a_dated_live_page(tmp_path):
                            archive=lambda lookup, timeout: _cdx("20241020000000", url))
     assert tools.fetch(url, agent_id="K1").startswith("[S1] Preview")
     assert fetch.urls == [snapshot, url]
-    assert ledger.rows()[0]["backtest"]["via"] == "live"
+    assert ledger.rows()[0]["backtest"]["via"] == "live" and ledger.rows()[0]["backtest"]["archive"] == "hit"
     assert ledger.rows()[0]["backtest"]["basis"] == "page:header.published time"
 
 
@@ -301,3 +308,19 @@ def test_the_archive_route_keeps_the_source_deny_list(tmp_path):
     url = "https://economicsummarizer.com/2024/10/20/markets"
     assert tools.fetch(url, agent_id="K1") == "FETCH_FAILED(source_quality_rejected): try another source."
     assert fetch.urls == [] and ledger.rows() == []
+
+
+def test_a_dead_archive_is_skipped_after_three_failures(tmp_path):
+    calls = []
+
+    def dead(lookup, timeout):
+        calls.append(lookup)
+        raise TimeoutError("archive stalled")
+
+    fetch = _Fetch({f"https://news.example/2024/10/0{day}/story": "# Story\n\n" + PAGE_BODY for day in range(1, 6)})
+    tools, ledger = _tools(tmp_path, policy=_policy(tmp_path), fetch=fetch, archive=dead)
+    for day in range(1, 6):
+        assert tools.fetch(f"https://news.example/2024/10/0{day}/story", agent_id=f"K{day}").startswith("[S")
+    assert len(calls) == 3  # then the circuit is open: no more waiting on the archive
+    statuses = [row["backtest"]["archive"] for row in ledger.rows()]
+    assert statuses == ["unavailable:TimeoutError"] * 3 + ["circuit_open"] * 2

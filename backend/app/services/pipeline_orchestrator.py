@@ -839,6 +839,14 @@ def capture_actor_intelligence_policy_v1(
 ACTOR_PLANE_UNSUPPORTED_BY_V3 = "research_engine_v3_emits_unsealed_actor_plane"
 
 
+def _pin_report_backtest(agent: Any, state: "PipelineState") -> None:
+    """Hand the report agent its pipeline's backtest option (``None`` for a live
+    run, which also spares the agent its by-simulation lookup)."""
+    setter = getattr(agent, "set_backtest_policy", None)
+    if callable(setter):
+        setter(backtest_of(state.options))
+
+
 def admission_actor_intelligence_policy_v1() -> dict[str, Any]:
     """Pin a new pipeline's actor-plane policy for the research engine it will run.
 
@@ -9918,7 +9926,7 @@ class PipelineOrchestrator:
             logger.info("[%s] ReportAgent 尚未支持 scenario_spine，种子 %s 回退自由情景命名",
                         state.pipeline_id, seed)
             agent = ReportAgent(**_agent_kwargs)
-        agent.set_backtest_policy(backtest_of(state.options))
+        _pin_report_backtest(agent, state)
         agent.generate_report(report_id=rid)
         return sim_id, rid, self._read_report_forecast(rid)
 
@@ -14532,7 +14540,7 @@ class PipelineOrchestrator:
                 def report_cb(stage: str, progress: int, message: str):
                     upd(max(5, min(99, int(progress))), f"{stage}: {message}")
 
-                agent.set_backtest_policy(backtest_of(state.options))
+                _pin_report_backtest(agent, state)
                 report = agent.generate_report(progress_callback=report_cb, report_id=report_id)
                 try:
                     ReportManager.save_report(report)

@@ -35,6 +35,8 @@ import json
 import os
 import re
 import threading
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -56,6 +58,15 @@ MARKET_PRICE_MAX_AGE_S = 7 * 86400
 
 WAYBACK_CDX_URL = "https://web.archive.org/cdx/search/cdx"
 WAYBACK_SNAPSHOT_URL = "https://web.archive.org/web/{timestamp}id_/{original}"
+# The CDX API rate-limits (429) and stalls under load.  One lookup waits at most
+# ARCHIVE_TIMEOUT_S, a 429/5xx is retried once after its Retry-After (capped), and
+# ARCHIVE_BREAK_AT consecutive failures switch the archive off for the process:
+# the fetch then dates live pages instead of waiting on a dead archive.
+ARCHIVE_TIMEOUT_S = 8.0
+ARCHIVE_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+ARCHIVE_RETRY_WAIT_S = 2.0
+ARCHIVE_RETRY_WAIT_CAP_S = 10.0
+ARCHIVE_BREAK_AT = 3
 _HTTP_UA = ("Mozilla/5.0 (compatible; DeepResearchForecast-backtest/1.0; "
             "+https://github.com/linroger/DeepResearchForecast)")
 
@@ -595,17 +606,72 @@ def _http_get_text(url: str, timeout: float) -> str:
         return response.read(2_000_000).decode("utf-8", errors="replace")
 
 
-def find_snapshot(url: str, policy: BacktestPolicy, *,
-                  http_get: Callable[[str, float], str] | None = None,
-                  timeout: float = 15.0) -> Snapshot | None:
-    """The last archive capture of ``url`` at or before the cutoff, ``None`` when
-    there is none, the archive is off, or the lookup fails (never raises)."""
-    if policy.archive != "wayback" or not str(url or "").startswith(("http://", "https://")):
+_ARCHIVE_LOCK = threading.Lock()
+_archive_failures = 0
+
+
+def reset_archive_circuit() -> None:
+    """Close the archive circuit (a new process starts closed; tests reset it)."""
+    global _archive_failures
+    with _ARCHIVE_LOCK:
+        _archive_failures = 0
+
+
+def _retry_wait(exc: BaseException) -> float | None:
+    """Seconds to wait before the one retry of a throttled lookup, ``None`` for no retry."""
+    if not isinstance(exc, urllib.error.HTTPError) or exc.code not in ARCHIVE_RETRY_STATUS:
         return None
     try:
-        return parse_cdx((http_get or _http_get_text)(wayback_lookup_url(url, policy), timeout), policy)
-    except Exception:  # noqa: BLE001 — an unreachable archive means "no capture"
-        return None
+        hinted = float(exc.headers.get("Retry-After")) if exc.headers is not None else None
+    except (TypeError, ValueError):
+        hinted = None
+    return min(ARCHIVE_RETRY_WAIT_CAP_S, max(0.0, hinted if hinted is not None else ARCHIVE_RETRY_WAIT_S))
+
+
+def lookup_snapshot(url: str, policy: BacktestPolicy, *,
+                    http_get: Callable[[str, float], str] | None = None,
+                    timeout: float = ARCHIVE_TIMEOUT_S,
+                    sleep: Callable[[float], None] = time.sleep) -> tuple[Snapshot | None, str]:
+    """``(capture or None, status)`` for the last archive capture of ``url`` at or
+    before the cutoff.  Status: ``hit``, ``miss`` (no capture), ``off`` (archive
+    route disabled or not an http URL), ``circuit_open`` (the archive failed
+    ``ARCHIVE_BREAK_AT`` times in a row in this process) or
+    ``unavailable:<error class>``.  Never raises."""
+    global _archive_failures
+    if policy.archive != "wayback" or not str(url or "").startswith(("http://", "https://")):
+        return None, "off"
+    with _ARCHIVE_LOCK:
+        if _archive_failures >= ARCHIVE_BREAK_AT:
+            return None, "circuit_open"
+    get = http_get or _http_get_text
+    lookup = wayback_lookup_url(url, policy)
+    error: BaseException | None = None
+    for attempt in (1, 2):
+        try:
+            payload = get(lookup, timeout)
+        except Exception as exc:  # noqa: BLE001 — an unreachable archive means "no capture"
+            error = exc
+            wait = _retry_wait(exc) if attempt == 1 else None
+            if wait is None:
+                break
+            sleep(wait)
+            continue
+        with _ARCHIVE_LOCK:
+            _archive_failures = 0
+        snapshot = parse_cdx(payload, policy)
+        return snapshot, "hit" if snapshot is not None else "miss"
+    with _ARCHIVE_LOCK:
+        _archive_failures += 1
+    label = type(error).__name__ if error is not None else "Error"
+    code = getattr(error, "code", None)
+    return None, f"unavailable:{label}" + (f":{code}" if isinstance(code, int) else "")
+
+
+def find_snapshot(url: str, policy: BacktestPolicy, *,
+                  http_get: Callable[[str, float], str] | None = None,
+                  timeout: float = ARCHIVE_TIMEOUT_S) -> Snapshot | None:
+    """The capture of :func:`lookup_snapshot`, without its status."""
+    return lookup_snapshot(url, policy, http_get=http_get, timeout=timeout)[0]
 
 
 # =============================================================== official data

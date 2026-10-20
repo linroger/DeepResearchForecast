@@ -23,6 +23,13 @@ import backtest_cutoff as bt  # noqa: E402
 NOW = datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def _closed_archive_circuit():
+    bt.reset_archive_circuit()
+    yield
+    bt.reset_archive_circuit()
+
+
 def _policy(tmp_path=None, *, strict=True, archive="wayback", as_of="2024-11-01"):
     audit = str(tmp_path / "audit.jsonl") if tmp_path is not None else ""
     return bt.parse_policy({"as_of": as_of, "strict": strict, "archive": archive, "audit_path": audit})
@@ -326,3 +333,55 @@ def test_audit_summary(tmp_path):
     summary = bt.summarize_audit(policy.audit_path)
     assert summary == {"fetch": {"action:dropped": 1, "verdict:after": 1, "action:kept": 1, "verdict:before": 1}}
     assert bt.summarize_audit(tmp_path / "missing.jsonl") == {}
+
+
+def _http_error(code, retry_after=None):
+    import email.message
+    import urllib.error
+    headers = email.message.Message()
+    if retry_after is not None:
+        headers["Retry-After"] = str(retry_after)
+    return urllib.error.HTTPError("https://web.archive.org/cdx", code, "throttled", headers, None)
+
+
+def test_lookup_statuses_retry_and_circuit():
+    policy = _policy()
+    capture = _cdx(["20241030120000", "https://x.example/page", "200", "text/html"])
+    assert bt.lookup_snapshot("https://x.example/page", policy, http_get=lambda u, t: capture)[1] == "hit"
+    assert bt.lookup_snapshot("https://x.example/page", policy, http_get=lambda u, t: _cdx())[1] == "miss"
+    assert bt.lookup_snapshot("ftp://x.example/page", policy)[1] == "off"
+    assert bt.lookup_snapshot("https://x.example/page", _policy(archive="off"))[1] == "off"
+    # A 429 is retried once after its Retry-After (capped at ARCHIVE_RETRY_WAIT_CAP_S).
+    answers, waits = [_http_error(429, retry_after=60), capture], []
+
+    def flaky(url, timeout):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    snapshot, status = bt.lookup_snapshot("https://x.example/page", policy, http_get=flaky, sleep=waits.append)
+    assert status == "hit" and snapshot is not None and waits == [bt.ARCHIVE_RETRY_WAIT_CAP_S]
+    # Two 429s: one retry, then unavailable; a timeout is not retried.
+    calls = []
+
+    def throttled(url, timeout):
+        calls.append(url)
+        raise _http_error(429)
+
+    assert bt.lookup_snapshot("https://x.example/a", policy, http_get=throttled, sleep=lambda s: None)[1] == \
+        "unavailable:HTTPError:429"
+    assert len(calls) == 2
+
+    def stalled(url, timeout):
+        calls.append(url)
+        raise TimeoutError()
+
+    assert bt.lookup_snapshot("https://x.example/b", policy, http_get=stalled)[1] == "unavailable:TimeoutError"
+    assert len(calls) == 3
+    # The third consecutive failure opens the circuit; a success had reset the count before.
+    bt.lookup_snapshot("https://x.example/c", policy, http_get=stalled)
+    assert bt.lookup_snapshot("https://x.example/d", policy, http_get=stalled) == (None, "circuit_open")
+    assert len(calls) == 4
+    bt.reset_archive_circuit()
+    assert bt.lookup_snapshot("https://x.example/page", policy, http_get=lambda u, t: capture)[1] == "hit"
