@@ -1,6 +1,6 @@
 # Handoff — backtest mode: measurable forecast accuracy without hindsight leakage
 
-**Last Updated (UTC):** 2026-10-20T18:10Z (2026-10-21 02:10 +08)
+**Last Updated (UTC):** 2026-10-20T18:05Z (2026-10-21 02:05 +08)
 **Status:** Complete for the offline scope; the paid live acceptance run and forward testing await the owner's approval (§9).
 **Current Focus:** none in this session; next step is the live run proposed in §9.
 
@@ -10,7 +10,7 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 - **Request (from the session that started this one, 2026-10-20):** make DeepResearchForecast's forecast accuracy measurable without hindsight leakage; design it, record the design, implement it. Build a backtest mode, opt-in and off by default so live runs stay byte-identical: (1) an as-of cutoff through the v3 research engine for search/fetch (provider date filters where available, page dates otherwise; undated sources recorded and excluded in strict mode), official data (observations and vintages at or before the cutoff) and markets (price history at the cutoff, never current prices); (2) document model-knowledge leakage, add `knowledge_cutoff` to golden questions and report post-cutoff questions separately; (3) a driver that runs a question set end to end at a cheap backtest profile, maps binary forecasts to golden ids and writes `eval_report.json` with Brier, log score, ECE and an ablation flag set (research only, + markets, + simulation, + world channel); (4) forward testing: document and test `RESOLUTION_MONITOR_AUTORUN_HOURS`, plus a 2–12-week question template.
 - **Evidence behind the request (2026-10-20):** the production ledger holds 200 forecasts, none resolved, only 2 resolving before 2026-10-20; `golden_eval.py` never ran the pipeline; the as-of date was a prompt line only.
 - **Constraints:** never modify the deployment checkout `/Users/rogerlin/Downloads/DeepResearchForecast` or its uploads (live pipelines on 5001/5013; reading its ledger is fine); use its venv `backend/.venv/bin/python`; run suites on frozen rsync copies without `backend/uploads`; no paid runs and no pushes without the owner's approval; `git` with `env -u GH_TOKEN -u GITHUB_TOKEN`.
-- **Branch:** `claude/goofy-leakey-15afc1` (worktree `.claude/worktrees/goofy-leakey-15afc1`), cut from `main` ac48891; 12 commits (§10), not pushed, not merged.
+- **Branch:** `claude/goofy-leakey-15afc1` (worktree `.claude/worktrees/goofy-leakey-15afc1`), cut from `main` ac48891; 13 commits (§10), not pushed, not merged.
 - **Design:** [design.md](design.md), recorded before any code and amended once (§5, the `--extract-only` rule).
 
 ## 2) Requirements → Acceptance Checks
@@ -88,7 +88,8 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 - **Suites on frozen rsync copies without `backend/uploads`, deployment venv:**
   - `20261021-014438-backtest-plain` (HEAD b54d5b7): 8,243 tests, 19 known `test_legacy_official_data.py` errors, **2 failures** (`test_official_data_consumers.py`, §6).
   - `20261021-014552-backtest-guarded` (HEAD b54d5b7, the 55-module list of the previous baseline): 1,611 tests, 1,608 passed, 3 failed — the known guard failures (`test_deployment_sidecar_control_flow.py` ×2, `test_official_data_end_to_end.py::test_guarded_mcp_to_promoted_research_and_report_png`).
-  - Final runs at the final HEAD: see the closing entry of §10.
+  - `20261021-015615-backtest-final-plain` (HEAD 1ab9ebc, the final code; 866ab13 and this entry change docs only): JUnit `tests=8248 errors=19 failures=0 skipped=1352` = 6,877 passed, 1,341 skipped, 11 xfailed, 19 errors (the known `test_legacy_official_data.py` cases: untracked deer-flow checkout), **0 failed**.
+  - `20261021-015615-backtest-final-guarded` (HEAD 1ab9ebc, same 55 modules): 1,611 tests, 1,608 passed, 3 failed — the same 3 known guard failures.
 
 ## 9) Remaining Work & Next Steps
 - **Paid live acceptance run (owner's approval).** Purpose: mechanics on real artifacts, not a skill estimate (both questions resolved before the model's cutoff). Proposal:
@@ -102,4 +103,5 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 
 ## 10) Updates to This File (append-only)
 - 2026-10-20T15:40Z: created with request, requirements, plan, API verification and first decisions.
-- 2026-10-20T18:10Z: rewritten at completion of the offline scope: requirement results, decisions, live findings (archive 429, deny-list gap), issues, scenario tests, verification, live-run proposal. Commits on the branch: 234f2be, 813d5c4, 91ae12c, b1c4b60, 8f33085, 61dfb8b, b54d5b7, b98c41f, 34b49b1, 1ca1831 (+ this handoff).
+- 2026-10-20T18:05Z: final plain (0 failures, 19 known errors) and guarded (3 known failures) runs at 1ab9ebc recorded in §8; README official-data line corrected (866ab13: only FRED's API route returns the as-of vintage).
+- 2026-10-20T17:58Z: rewritten at completion of the offline scope: requirement results, decisions, live findings (archive 429, deny-list gap), issues, scenario tests, verification, live-run proposal. Commits on the branch: 234f2be, 813d5c4, 91ae12c, b1c4b60, 8f33085, 61dfb8b, b54d5b7, b98c41f, 34b49b1, 1ca1831 (+ this handoff).
