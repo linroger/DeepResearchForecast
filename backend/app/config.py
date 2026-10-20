@@ -1224,6 +1224,13 @@ class Config:
     SIM_WORLD_MAX_VARIABLES = int(os.environ.get('SIM_WORLD_MAX_VARIABLES', '24') or '24')
     # Per-round clamp on arbiter numeric changes as a fraction of the current magnitude (I-2).
     SIM_WORLD_MAX_CHANGE_RATIO = float(os.environ.get('SIM_WORLD_MAX_CHANGE_RATIO', '0.5') or '0.5')
+    # EXOGENOUS SHOCKS (design §2.12): fire the researched risks the seed documented (base rate, source).
+    SIM_WORLD_SHOCKS = os.environ.get('SIM_WORLD_SHOCKS', 'true').strip().lower() == 'true'
+    # WORLD PATHS (design §2.12): seeded variants of every round's world update sharing the actors'
+    # decisions (1 = one path, as before; capped at 8; at most this many arbiter calls per round), and
+    # the arbiter temperature of paths 1..K-1 (path 0, the agents' own, stays at 0.3; capped at 1.0).
+    SIM_WORLD_PATHS = os.environ.get('SIM_WORLD_PATHS', '1').strip() or '1'
+    SIM_WORLD_PATH_TEMPERATURE = os.environ.get('SIM_WORLD_PATH_TEMPERATURE', '0.7').strip() or '0.7'
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
 
     # —— OASIS 并发上限（每轮在飞 LLM 请求数）单一真源（EXECPLAN2 I-8-4）——
