@@ -78,7 +78,10 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
     lapsed_offers = world.lapse_expired_interactions(round_num)   # OFFERS: unanswered offers expire first
     action_events = world.register_decisions(round_num, rows)
     fired = world.fire_due_effects(round_num, rng)
+    # EXOGENOUS SHOCKS: rolled after the due effects, so a world without shocks draws exactly as before
+    shocks = world.fire_shocks(round_num, rng)
     breaches = [e.description for e in world.events_in_round(round_num, ("breach",))]
+    extra = {"shocks_fired": shocks} if world.shocks else {}
     return {
         "scheduled_events": [e.description for e in scheduled],
         "actions": [e.description for e in action_events if e.kind == "action"],
@@ -92,6 +95,7 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
         "offers_lapsed": [f"{world.actor_name(o.get('proposer'))} → {world.actor_name(o.get('recipient'))}: {o.get('terms')}"
                           for o in lapsed_offers],
         "breaches": breaches,
+        **extra,
     }
 
 
@@ -163,10 +167,12 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         lines.append("## Red lines at stake (documented by each actor; report a crossing only when a move this "
                      "period clearly crosses one)")
         lines.extend(f"- {name}: " + "; ".join(red) for name, red in stakes)
-    if deterministic.get("scheduled_events"):
+    shocks = deterministic.get("shocks_fired") or []
+    if deterministic.get("scheduled_events") or shocks:
         lines.append("")
         lines.append("## Confirmed events this period")
-        lines.extend(f"- {e}" for e in deterministic["scheduled_events"][:10])
+        lines.extend(f"- {e}" for e in (deterministic.get("scheduled_events") or [])[:10])
+        lines.extend(f"- {_shock_line(s)}" for s in shocks[:6])
     mech: List[str] = []
     for fx in deterministic.get("effects_fired") or []:
         mech.append(fx.get("description", ""))
@@ -215,6 +221,23 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         f"Cast: {cast}. Candidate scenarios: {sc}.{lang}",
     ]
     return "\n".join(lines)
+
+
+def _shock_line(shock: Dict[str, Any]) -> str:
+    """EXOGENOUS SHOCKS: one confirmed-event line — the event, its documented base rate and source, what
+    the kernel already applied, and the documented directions the arbiter must size."""
+    line = (f"Exogenous shock: {_text(shock.get('event'), 200)} (a researched risk that materialised this period; "
+            f"documented base rate {_text(shock.get('base_rate'), 80) or 'unstated'}, source: "
+            f"{_text(shock.get('source'), 120) or 'unstated'}).")
+    applied = [f"{c.get('name')} {format_value(c.get('from'), c.get('unit') or '')} → "
+               f"{format_value(c.get('to'), c.get('unit') or '')}" for c in shock.get("variables_changed") or []]
+    if applied:
+        line += " Already applied within the per-period limit: " + "; ".join(applied[:4]) + "."
+    if shock.get("to_size"):
+        line += " Documented direction, size it: " + "; ".join(str(x) for x in shock["to_size"][:4]) + "."
+    if shock.get("affects"):
+        line += " Hits: " + ", ".join(str(x) for x in shock["affects"][:6]) + "."
+    return line
 
 
 def _clamp_rule(world: WorldModel) -> str:
@@ -620,8 +643,12 @@ def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, A
 
 def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                     decisions: Iterable[Any], fired_events: Iterable[Dict[str, Any]], *, llm: Any, rng: Any,
-                    scenarios: Sequence[str] = (), arbiter_enabled: bool = True, language: str = "") -> Dict[str, Any]:
-    """Deterministic update → arbiter → commit → digest.  Returns the round record."""
+                    scenarios: Sequence[str] = (), arbiter_enabled: bool = True, language: str = "",
+                    arbiter_temperature: float = 0.3) -> Dict[str, Any]:
+    """Deterministic update → arbiter → commit → digest.  Returns the round record.
+
+    ``arbiter_temperature`` stays at the arbiter's default for the path the agents live in; the
+    sibling world paths (``world_paths``) sample it higher, bounded."""
     rows = _decision_rows(decisions)
     before = world.snapshot()
     deterministic = deterministic_round_update(world, round_num, period, rows, fired_events, rng)
@@ -629,7 +656,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
     arbiter_summary: Dict[str, Any] = {}
     if arbiter_enabled:
         status, update, problems = run_arbiter(llm, world, round_num, period, rows, deterministic, scenarios,
-                                               language=language)
+                                               language=language, temperature=arbiter_temperature)
         if status in ("applied", "invalid") and update:
             try:
                 arbiter_summary = world.apply_arbiter_update(round_num, update)

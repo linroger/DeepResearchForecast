@@ -91,7 +91,13 @@ handoff 契约中的 actors.json 形如（NEW 字段均为可选，缺失即降�
         "drivers": [{"variable": "...", "direction": "...", "why_it_matters": "..."}],
         "indicators": [{"indicator": "...", "signals_what": "...", "date_or_trigger": "..."}],
         "scenarios": [{"name": "base|upside|downside", "probability_band": "...",
-                       "narrative": "...", "key_assumptions": ["..."]}]
+                       "narrative": "...", "key_assumptions": ["..."]}],
+        // 可选（反身世界模型的外生冲击，design §2.12）：研究记载的风险/黑天鹅，须写明概率、
+        // 该概率对应的时间窗与来源；缺任一项的行不会成为冲击（只记建模缺口，绝不臆造概率）。
+        "risks": [{"event": "...", "probability": "5%", "per": "month|quarter|year|horizon",
+                   "source": "...", "effects": [{"metric": "<quantitative_facts.metric>",
+                                                 "change": "+30%|-5|to 150", "direction": "up|down"}],
+                   "affects": ["<actor name>"], "recurring": false}]
       }
     }
 
@@ -1945,6 +1951,32 @@ def extract_forecast_inputs(actors: Optional[Any]) -> Dict[str, List[Dict[str, A
     for key in ("base_rates", "drivers", "indicators", "scenarios"):
         lst = fi.get(key)
         out[key] = [x for x in lst if isinstance(x, dict)] if isinstance(lst, list) else []
+    return out
+
+
+# EXOGENOUS SHOCKS (reflexive world model, design §2.12): researched risks / wildcards.
+# ``forecast_inputs.risks`` is the contract; the other spellings are tolerated as written by hand.
+RISK_KEYS = ("risks", "wildcards", "wild_cards", "tail_risks")
+
+
+def extract_risk_rows(actors: Optional[Any]) -> List[Dict[str, Any]]:
+    """安全取出研究记载的风险/黑天鹅行（``forecast_inputs.risks`` 优先，亦接受顶层 ``risks`` /
+    ``wildcards`` / ``tail_risks``）；只保留带事件文本的 dict 行，缺失/非法 → []。
+
+    本函数只取行、不判定其是否足以成为冲击（概率/时间窗/来源的校验在 world_model_seed）。"""
+    if not isinstance(actors, dict):
+        return []
+    fi = actors.get("forecast_inputs")
+    lists = [fi.get(k) for k in RISK_KEYS] if isinstance(fi, dict) else []
+    lists += [actors.get(k) for k in RISK_KEYS]
+    out: List[Dict[str, Any]] = []
+    for lst in lists:
+        if not isinstance(lst, list):
+            continue
+        for r in lst:
+            if isinstance(r, dict) and str(r.get("event") or r.get("risk") or r.get("name")
+                                           or r.get("description") or "").strip():
+                out.append(r)
     return out
 
 

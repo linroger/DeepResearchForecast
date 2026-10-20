@@ -416,6 +416,19 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
     aimed = sorted((e for e in aimed if e.kind != "action" or not (e.actors and e.actors[0] in crossed_by)),
                    key=lambda e: 0 if e.kind == "red_line" else 1)
     for idx, ev in enumerate(aimed[:3]):
+        if ev.source == "shock" and not ev.actors:
+            # EXOGENOUS SHOCKS: nobody moved — the actor contains, adapts to or answers what happened
+            what = _text(ev.description, 80)
+            for tmpl_id, label, kind in (
+                (f"respond_{idx + 1}_contain", f"Contain the fallout of: {what}", "operational"),
+                (f"respond_{idx + 1}_adapt", f"Adjust your plans to: {what}", "economic"),
+                (f"respond_{idx + 1}_accommodate", f"Publicly answer: {what}", "communication"),
+            ):
+                if remaining >= 1:
+                    push({"id": tmpl_id, "label": label, "kind": kind, "cost": 1, "lag": 0,
+                          "reversibility": "reversible", "targets_actor": False,
+                          "why": "a researched risk materialised last period and hit you"})
+            continue
         who = ev.actors[0] if ev.actors else "another actor"
         who_id = world.resolve_actor(who)
         for tmpl_id, label, kind, cost in (
