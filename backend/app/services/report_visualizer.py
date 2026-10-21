@@ -55,7 +55,8 @@ import logging
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+import threading
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,35 @@ except Exception:  # noqa: BLE001
     KALEIDO_AVAILABLE = False
 
 _KALEIDO_RUNTIME_OK = True  # 运行期熔断标志（首个渲染异常后本进程不再尝试 PNG 导出）
+
+
+def _run_kaleido_export(export: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Run one Kaleido export on a daemon thread, wait for it, and return or re-raise its outcome.
+
+    Kaleido drives headless Chrome through choreographer, which feeds the browser's stderr into
+    logging on a logistro reader thread.  That reader is a non-daemon thread that stops only at
+    EOF, and EOF may never come: a failed launch can skip choreographer's close() (which closes
+    its copy of the pipe), and a process Chrome spawned, such as its crashpad handler, can
+    outlive the browser with the pipe as its stderr.  Interpreter exit then waits for the reader
+    forever (a CLI run, or pytest after its summary).  A thread takes its daemon flag from the
+    thread that creates it, so starting the export here makes the reader a daemon too, and a
+    leaked reader can no longer keep the process alive.  tests/test_kaleido_exit.py pins this
+    with a fake browser whose child holds its stderr open.
+    """
+    outcome: Dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            outcome["result"] = export(*args, **kwargs)
+        except BaseException as exc:  # noqa: BLE001 - re-raised in the calling thread below
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=_target, name="kaleido-export", daemon=True)
+    worker.start()
+    worker.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("result")
 
 
 def _close_matplotlib_figure(fig: Any) -> None:
@@ -2928,7 +2958,7 @@ class ReportVisualizer:
                 height = int(fig.layout.height) if fig.layout.height else None
             except Exception:  # noqa: BLE001
                 height = None
-            fig.write_image(path, scale=2, width=1200, height=height)
+            _run_kaleido_export(fig.write_image, path, scale=2, width=1200, height=height)
             return os.path.exists(path)
         except Exception as exc:  # noqa: BLE001
             _KALEIDO_RUNTIME_OK = False
@@ -2965,7 +2995,7 @@ class ReportVisualizer:
                     heights.append(int(f.layout.height) if f.layout.height else 600)
                 except Exception:  # noqa: BLE001
                     heights.append(600)
-            pio.write_images(figs, paths, scale=2, width=1200, height=heights)
+            _run_kaleido_export(pio.write_images, figs, paths, scale=2, width=1200, height=heights)
             for _, abs_path, rel_path, item_id in jobs:
                 if os.path.exists(abs_path):
                     self._png_done[item_id] = rel_path

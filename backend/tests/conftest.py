@@ -5,6 +5,8 @@ fixture lets generator/report code be exercised deterministically without
 burning API calls (I-7-4: record/replay-style stub).
 """
 
+import importlib
+import itertools
 import json
 import os
 import sys
@@ -195,6 +197,53 @@ def _no_ambient_research_engine_selection(monkeypatch):
     """
     for name in ("RESEARCH_ENGINE", "RESEARCH_LINEAR_MODE"):
         monkeypatch.delenv(name, raising=False)
+
+
+_isolated_uploads_ids = itertools.count()
+
+
+@pytest.fixture(autouse=True)
+def _no_checkout_uploads(monkeypatch, tmp_path_factory):
+    """Storage roots stay out of the checkout (offline-first contract).
+
+    ``Config`` points every storage root at the checkout's own ``backend/uploads``,
+    and ``forecast_ledger.ledger_dir()`` falls back to
+    ``PIPELINE_DATA_DIR/_forecast_ledger``.  A test that published through
+    ``ReportManager.save_report`` without its own directories therefore appended to
+    the checkout's ``published_forecasts.jsonl`` (in the deployment checkout, the
+    live ledger), and report logs and an empty ``simulations`` directory were left
+    behind.  Each test instead gets its own ``uploads`` root under the pytest
+    basetemp, not created up front (as in a fresh checkout), with the production
+    layout: reports, pipelines (holding ``_forecast_ledger``) and simulations.
+    ``FORECAST_LEDGER_DIR`` is cleared so the ledger keeps following
+    ``PIPELINE_DATA_DIR``, also when a test switches that directory.  The class
+    attributes are patched too because they copied their paths at import time.
+    Tests that set their own directories keep overriding these values.  The guarded
+    runner already redirects these roots into its evidence directory at import
+    time, so under it this fixture changes nothing.
+    """
+    if os.environ.get("MAIN_OFFLINE_EVIDENCE"):
+        return
+    uploads = os.path.join(str(tmp_path_factory.getbasetemp()), "checkout-uploads",
+                           str(next(_isolated_uploads_ids)), "uploads")
+    simulations = os.path.join(uploads, "simulations")
+    roots = (
+        ("app.config", "Config", {"UPLOAD_FOLDER": uploads,
+                                  "PIPELINE_DATA_DIR": os.path.join(uploads, "pipelines"),
+                                  "OASIS_SIMULATION_DATA_DIR": simulations,
+                                  "FORECAST_LEDGER_DIR": ""}),
+        ("app.services.report_agent", "ReportManager",
+         {"REPORTS_DIR": os.path.join(uploads, "reports")}),
+        ("app.services.simulation_manager", "SimulationManager", {"SIMULATION_DATA_DIR": simulations}),
+        ("app.services.simulation_runner", "SimulationRunner", {"RUN_STATE_DIR": simulations}),
+    )
+    for module_name, class_name, values in roots:
+        try:
+            owner = getattr(importlib.import_module(module_name), class_name)
+        except ImportError:  # a module that cannot be imported cannot write there either
+            continue
+        for name, value in values.items():
+            monkeypatch.setattr(owner, name, value)
 
 
 # 官方数据源的 key 名与路径旋钮（design §12）：key 不是 Config 属性，经 os.environ 透传。
