@@ -222,6 +222,13 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
   - 504c108: `tests=8457 errors=19 failures=0 skipped=1352` (388.4 s), in `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1402-p1p2-plain/`.
   - Final cc8e249: `tests=8458 errors=19 failures=0 skipped=1352` (391.2 s), in `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1409-p1p2-plain-final/`.
   - Both runs: **0 failed**. The 19 errors are all the known `test_legacy_official_data.py` cases, which need the deer-flow checkout.
+  - After merging `main` 18445a6 (6812d8c, `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1419-p1p2-merged-main/`): `tests=9021 errors=19 failures=8 skipped=1507` (418.3 s).
+  - **All 8 failures are `main`'s own.** A frozen `git archive main` (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1427-main-18445a6-baseline/pytest_targeted.log`) fails exactly the same 8, so P1/P2 adds none:
+    - 3 deep-research skill size caps (`test_legacy_official_data` ×2, `test_loop010_research_contracts`): `deerflow_bridge/skills/deep-research/SKILL.md` is 8,306 characters against a 7,000 cap, since 69c124b ("integrate news and market context evidence", merged with Oddsense as 7ae51b7).
+    - `test_research_engine_v3_text::test_kiq_task_seed_rows_are_delimited_untrusted_data`: `_context_text` (69c124b) is missing on the test's stub engine.
+    - 3 `test_v3_official_data` tool-list cases: the KIQ tools differ from what those tests expect.
+    - `test_report_official_publication_real::test_backfill_keeps_official_exhibits_captions_and_audit`: `ForecastFeedbackError: track_record_prefix_mismatch`, the known shared-ledger failure of `main` since 1a5e0ea.
+  - On the merged code, the live probe (`20261021-1419-p1p2-merged-main/evidence/after_probe_merged.txt`) and the gates are unchanged: 4 kept risks, 3 dated shocks, ruff passes.
 - **Gates:** `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge` and `--select F,E9` on the two test modules pass; `py_compile` OK.
 - **Worktree note:** the research and world suites in the worktree gave 2 failures in `test_drf2_skills_config.py::TestBridgeSkillsDeployedByteIdentical`, because the worktree's own deer-flow copy had the deployment's older `reference-class-forecasting/SKILL.md` (§11 changed it). After `runtime_skill_sync.py` on that copy (not the deployment), it matches the bridge. A frozen copy without deer-flow skips those tests.
 - **Not done / open:**
@@ -229,7 +236,8 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
   - Live check of §11 + §12 (owner's approval).
   - Effects on facts beyond the seed's 24 tracked variables stay untracked (D3).
   - A state probability fired once as a shock is a modelling choice (D12).
-  - Merging into `main`.
+  - Merging into `main`: the branch already merges `main` 18445a6, so it fast-forwards or merges cleanly while `main` stays there.
+  - `main`'s 8 failing tests (above) belong to the Oddsense / forecast-feedback owners.
 
 ## 10) Updates to This File (append-only)
 - 2026-10-20T17:30Z: created with the brief and branch notes.
@@ -240,3 +248,4 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
 - 2026-10-21T03:20Z: merged into `main` with the documented-hazards follow-up and the live check; header combined; §11's range finding renumbered F3 → F9 because §5 already uses F3–F8 for the live check.
 - 2026-10-21T06:20Z: §12 P1 + P2 built on `claude/intelligent-cerf-d84ce7` (cb9cc8a, 3f05929, cc8e249, docs 504c108, record d878754): results, D9–D13, F10, before/after probe, mutation check, suites.
 - 2026-10-21T06:40Z: `main` 18445a6 merged into that branch. `main`'s numbering kept: live-check findings F3–F8 and range finding F9. The branch had numbered them F4–F9 and F3, and §12 was renumbered to match. Header, ledger and §9 status updated.
+- 2026-10-21T06:30Z (14:30 +08): merged-`main` suite and baseline recorded in §12: 8 failures, all `main`'s own (same 8 on `git archive main`).
