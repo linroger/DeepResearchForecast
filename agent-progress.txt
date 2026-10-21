@@ -670,3 +670,4 @@ Feature commit 69c124b34740ceed40dc670e33fc52b75d4f86b7 on codex/oddsense-integr
 - Closed mandatory-context binding, historical prompt/acquisition/sealing and report replay reconstruction gaps. Preserved guards and meaningful original assertions while adapting older fixtures.
 - Current merged source:1889 backend passes/two existing harness skips across44modules;261 frontend passes and build. Focused actual research/publication/feedback/replay controls and guarded child cutoff pass. Evidence: docs/handoff/oddsense-main-merge/.
 - Next: commit reviewed merge and verify main push; leave concurrent primary-checkout work untouched. No live provider/model or deployment operation performed.
+- Delivery complete: merge7ae51b7 (parents main15c8453 +Oddsense7c98895), verified ancestry, expected-ref main fast-forward and successful non-forced legacy/main push. Final notes: docs/handoff/oddsense-main-merge/delivery.json.

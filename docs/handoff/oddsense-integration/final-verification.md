@@ -193,3 +193,7 @@ this final documentation record adds no source changes. The original checkout
 still has its91 pre-existing status entries and no hashed-file drift.
 Remote push remains uncompleted after the earlier GitHub authentication failure.
 No unchanged-credential retry, merge over original dirt, or deployment occurred.
+
+## Main-branch delivery (2026-10-21)
+
+Merged with newer main as7ae51b7 and pushed to legacy/main. The merge preserves forecast feedback, historical cutoffs, documented hazards and partial-translation behavior. Fresh merged-source acceptance is1889 backend passes/two existing harness skips,261 frontend passes and a successful build; details are in ../oddsense-main-merge/verification.md. The historical branch-specific receipts above remain unchanged.

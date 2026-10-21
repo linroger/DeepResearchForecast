@@ -1,7 +1,7 @@
 # Oddsense integration handoff
 
 **Last Updated (UTC):** 2026-10-18T14:50:06.051873+00:00
-**Status:** Source-branch implementation complete; current-main merge and refreshed acceptance are recorded in ../oddsense-main-merge/handoff.md.
+**Status:** Complete — merged into main as7ae51b7 and pushed; refreshed acceptance is recorded in ../oddsense-main-merge/handoff.md.
 **Current Focus:** Deliver the scoped accepted commits; apply the isolated branch for fresh runs when requested.
 
 ## 1) Request & Context

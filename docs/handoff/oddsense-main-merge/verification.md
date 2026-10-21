@@ -26,4 +26,4 @@ Earlier broad receipts retain four fixture failures: a new runner protocol field
 
 External provider/model outputs are scripted. No live provider/model request, native PDF success, service restart or production deployment is claimed. Strict demo export’s graph/simulation admission is outside the focused copied-Markdown helper proof. Existing primary-checkout edits were not staged or reset. Closing comparison observed unrelated concurrent primary changes, retained in preservation-after.json; all36 merged runtime/test/frontend boundary files match the accepted mirror.
 
-Final independent receipt review and Git commit/push are recorded in review.md and delivery.json.
+Independent review is closed. Merge7ae51b7 was pushed to legacy/main; review.md and delivery.json record the final result.

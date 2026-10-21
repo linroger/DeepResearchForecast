@@ -1,8 +1,8 @@
 # Oddsense main merge handoff
 
 **Last Updated (UTC):** 2026-10-21T03:54:26.497347+00:00
-**Status:** Verified and independently reviewed; Git delivery in progress
-**Current Focus:** Commit the reviewed merge, integrate main and verify remote delivery.
+**Status:** Complete — merged into main and pushed
+**Current Focus:** No remaining work in the requested merge.
 
 ## 1) Request & Context
 The user requested “merge the oddsense integration to main branch.” The source branch is codex/oddsense-integration at7c98895 (implementation69c124b). Main is15c8453 and includes the newer forecast feedback and subsequent documented-risk/backtest/translation changes. Work occurs in the clean attached forecast-feedback worktree on codex/merge-oddsense; the dirty primary checkout remains untouched. Prior credential repair enables normal Git pushes through Keychain; no secret is included here.
@@ -24,7 +24,7 @@ The approved merge scope is operationalized in PLANS.md. Resolve locally, verify
 - [x] Merge and reconcile conflicts — all seven files resolved.
 - [x] Verify merged workflow, affected main behavior and frontend —1889 backend passes/two existing harness skips;261 frontend/build.
 - [x] Independent review and finding closure — accepted receipt and exact source verified.
-- [ ] Commit/push and verify preservation.
+- [x] Commit/push and verify preservation — merge7ae51b7 pushed; concurrent primary edits retained.
 
 ## 5) Findings, Decisions, Assumptions
 Prior Oddsense 1455 backend/187 frontend results apply only to its branch, not the new merge. New main backtest cutoffs, hazard research and score metadata can interact with context acquisition and canonical report blocks; they require current checks. Existing context remains contextual evidence, never automatically a forecast probability or settlement source.
@@ -69,3 +69,9 @@ Closing primary comparison found external concurrent changes in backend/app/serv
 ### 2026-10-21T05:09:33.913510+00:00 — independent review closure
 
 The final reviewer inspected the44-module accepted receipt/JUnit, every approved child receipt, both explicit interruption controls, the durable copies and source maps. No blocking finding remains. The merge is ready for commit and main publication. Concurrent primary changes remain recorded and untouched.
+
+### 2026-10-21T05:11:33.461167+00:00 — merge delivered
+
+Merge commit7ae51b7 includes both main15c8453 and codex/oddsense-integration7c98895. Both ancestries were verified and main was fast-forwarded with an expected-old-value guard. The non-forced push to legacy/main succeeded. Delivery.json records the merge and accepted gates. A closing documentation commit records delivery without changing application bytes.
+
+Next-session prompt: “Read this handoff, delivery.json and verification.md. The Oddsense merge is complete on main; preserve the concurrent primary edits recorded in preservation-after.json. Any new deployment or live forecast-quality evaluation is separate work. Recheck current refs and source hashes before modifying the accepted contract.”

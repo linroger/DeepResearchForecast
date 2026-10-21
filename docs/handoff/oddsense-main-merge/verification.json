@@ -191,5 +191,5 @@
   "live_provider_or_model_requests": false,
   "deployment": false,
   "review": "closed; no remaining blocking findings; review.md",
-  "delivery": "pending"
+  "delivery": "complete; merge7ae51b7 pushed to legacy/main; delivery.json"
 }
