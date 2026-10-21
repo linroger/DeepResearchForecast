@@ -19,24 +19,14 @@ Identify the current phase from its prompt. The phase contract overrides any fin
 - **Final dossier synthesis only** — the prompt explicitly says to write/synthesize/finalize the complete research dossier. Only this phase uses the long-form output contract in `references/final-dossier-contract.md`.
 - **Structured extraction/judging** — follow the requested JSON/scorecard schema, not the prose length contract.
 
-This distinction is mandatory: a dossier floor on every pass multiplies latency and tokens.
-
 ## Core loop
 
 1. Decompose the brief into 3–7 Key Intelligence Questions (KIQs). Mark load-bearing KIQs, likely S1/S2 source classes, priors, and what would falsify them.
-2. Search for documents, not commentary. Use `web_search`, then `web_fetch` the strongest pages in full. For official statistics use `data_search` → `data_get` if available. For forecast calibration use `prediction_market_search`; if unavailable, use read-only `web_fetch` against the public Gamma API. Run the full market sweep **once, in the opening pass**; if it surfaces zero topically relevant markets, record `no_market_coverage` and skip market search in later phases (one refresh at synthesis only). A transport-failing market tool must not be retried within the same phase.
+2. Search for documents, not commentary. Use `web_search`, then `web_fetch` the strongest pages in full. For official statistics use `data_search` → `data_get` if available. Before using an exposed `news_search`, `social_search` or `market_compare`, load `references/news-market-context.md`; their rows are leads or context, never anchors. For forecast calibration use `prediction_market_search`; if unavailable, use read-only `web_fetch` against the public Gamma API. Run the full market sweep **once, in the opening pass**; if it surfaces zero topically relevant markets, record `no_market_coverage` and skip market search in later phases (one refresh at synthesis only). A transport-failing market tool must not be retried within the same phase.
 3. Maintain an evidence ledger: `KIQ → claim → source/title/real URL/date/tier → independence → grade → open gap`.
 4. Prefer primary origins, verify numbers/units/as-of dates, trace repeated claims back to their origin, and seek the strongest opposing case.
 5. Check convergence after every evidence-bearing call. Continue only for a named unresolved KIQ with a credible next upgrade.
 6. Before final synthesis, verify the synthesis gate and load the final-dossier reference.
-
-## News and cross-platform context
-
-When exposed, use `news_search` to discover dated publisher articles and then `web_fetch` selected original URLs before factual or numeric claims. A NewsAPI snippet is discovery, not a fetched page. Keep publisher, URL, language, publication time and retrieval time; repeated outlets may share one origin. The opening prefetch is already captured: reuse its evidence before spending another query.
-
-`social_search`, when enabled, returns attributed discussion and opinion. `market_compare` returns source-aware topic candidates from additional venues. Preserve provider/native identity, quote basis, units, rules and horizon; similar titles do not establish equivalent contracts or executable arbitrage. These records are context only: never convert tone to event probability or participation counts to trading volume, and never treat them as automatic forecast anchors or settlement evidence.
-
-Read availability status before interpreting an empty list: unavailable, forbidden, rate-limited, partial, disabled and verified empty differ. Do not retry a failed provider repeatedly. Once the research generation is sealed, use stored captures and citations; do not acquire replacement evidence on resume. If these tools are absent, continue with the existing web/data tools.
 
 ## Evidence discipline
 
@@ -95,8 +85,4 @@ If one item fails, run one targeted gap pass. Do not restart broad research.
 
 ## Final synthesis routing
 
-When—and only when—the prompt requests the complete final research dossier, load and follow:
-
-`references/final-dossier-contract.md`
-
-It holds the long-form floor, handoff fields, citations, scenarios, market section, tables, conflicts, and failure checklist; working phases must not load or inherit its length floor.
+When—and only when—the prompt requests the complete final research dossier, load and follow `references/final-dossier-contract.md`: long-form floor, handoff fields, citations, scenarios, market section, tables, conflicts and failure checklist.
