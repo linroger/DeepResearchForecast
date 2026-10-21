@@ -1,8 +1,8 @@
 # Handoff — research engine v3 emits documented risks for the world model's shocks (2026-10-21)
 
-**Last Updated (UTC):** 2026-10-21T06:40Z
-**Status:** On `main` (merged and pushed 2026-10-21): the extraction (`claude/nice-diffie-73cb9a`), the documented-hazards research (§11, `claude/fervent-spence-6d11bb`) and the live check (§7b). Since then P1 (one risk row per stated probability, windows checked by calendar span) and P2 (dated windows in the seed and the kernel) are built offline on `claude/intelligent-cerf-d84ce7` (§12), which merges `main` 18445a6. That branch is not pushed or merged. On the live run's own artifacts it gives 4 kept risks and 3 dated shocks, where `main` gives 1 risk and 0 shocks. P3 and P4 stay proposals.
-**Current Focus:** owner's decision on merging §12 into `main`; then an owner-approved live check of §11 + §12 together (paid; not run).
+**Last Updated (UTC):** 2026-10-21T06:35Z
+**Status:** All on `main` and pushed to `legacy`: the extraction (`claude/nice-diffie-73cb9a`), the documented-hazards research (§11), the live check (§7b), and P1 + P2 (§12; merged as af2d21a on 2026-10-21, `legacy/main` 18445a6..af2d21a, no force). On the live run's own artifacts, P1 + P2 give 4 kept risks and 3 dated shocks where the extraction alone gave 1 and 0. P3 and P4 stay proposals.
+**Current Focus:** owner-approved live check of §11 + §12 together (paid; not run). `main`'s 8 failing tests (§12) are with session local_1c15d327.
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
 
@@ -236,7 +236,7 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
   - Live check of §11 + §12 (owner's approval).
   - Effects on facts beyond the seed's 24 tracked variables stay untracked (D3).
   - A state probability fired once as a shock is a modelling choice (D12).
-  - Merging into `main`: the branch already merges `main` 18445a6, so it fast-forwards or merges cleanly while `main` stays there.
+  - Merged into `main` as af2d21a (parents 18445a6 + b9e122d, tree identical to the tested b9e122d) by compare-and-swap; pushed to `legacy` without force (18445a6..af2d21a).
   - `main`'s 8 failing tests (above) belong to the Oddsense / forecast-feedback owners.
 
 ## 10) Updates to This File (append-only)
@@ -249,3 +249,4 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
 - 2026-10-21T06:20Z: §12 P1 + P2 built on `claude/intelligent-cerf-d84ce7` (cb9cc8a, 3f05929, cc8e249, docs 504c108, record d878754): results, D9–D13, F10, before/after probe, mutation check, suites.
 - 2026-10-21T06:40Z: `main` 18445a6 merged into that branch. `main`'s numbering kept: live-check findings F3–F8 and range finding F9. The branch had numbered them F4–F9 and F3, and §12 was renumbered to match. Header, ledger and §9 status updated.
 - 2026-10-21T06:30Z (14:30 +08): merged-`main` suite and baseline recorded in §12: 8 failures, all `main`'s own (same 8 on `git archive main`).
+- 2026-10-21T06:35Z (14:35 +08): §12 merged into `main` (af2d21a) on the owner's instruction and pushed to `legacy`; header updated.

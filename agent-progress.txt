@@ -685,4 +685,5 @@ Feature commit 69c124b34740ceed40dc670e33fc52b75d4f86b7 on codex/oddsense-integr
   - Tests: `test_research_frame_risks.py` 34 → 116, `test_world_shocks.py` 55 → 115.
   - Plain suites: 504c108 gave 8,457 tests and the final cc8e249 8,458 tests, both 0 failed with the 19 known `test_legacy_official_data` errors.
   - After merging `main` 18445a6 (6812d8c): 9,021 tests, 8 failures, all also failing on `git archive main`. They are the deep-research skill size cap, a `_context_text` stub and `v3_official_data` tool lists from 69c124b/Oddsense, plus the known forecast-feedback prefix mismatch.
-- **Next:** owner-approved live check of the documented-hazards research and P1/P2 together; P3/P4 (§9) not built; merge into `main`; `main`'s 8 failing tests.
+- **Merged** into `main` as af2d21a (owner's instruction, compare-and-swap) and pushed to `legacy` without force (18445a6..af2d21a).
+- **Next:** owner-approved live check of the documented-hazards research and P1/P2 together; P3/P4 (§9) not built; `main`'s 8 failing tests (session local_1c15d327).
