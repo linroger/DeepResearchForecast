@@ -57,6 +57,7 @@ import os
 import re
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -1360,6 +1361,32 @@ def _finalize_html_document(raw_html: str, title: str) -> str:
     return re.sub(r"</head>", metadata + "</head>", raw_html, count=1, flags=re.IGNORECASE)
 
 
+def _run_kaleido_export(export, *args, **kwargs):
+    """Run one Kaleido export on a daemon thread, wait for it, and return or re-raise its outcome.
+
+    Same guard as ``_run_kaleido_export`` in backend/app/services/report_visualizer.py (this
+    script cannot import the backend): Kaleido's logistro stderr-reader thread is non-daemon and
+    stops only at EOF, which may never come after a failed Chrome launch (a process Chrome
+    spawned can keep the pipe open), so this script would write its outputs and then never
+    exit.  The reader takes its daemon flag from the thread that creates it, so exporting from
+    a daemon thread lets the process exit.
+    """
+    outcome = {}
+
+    def _target():
+        try:
+            outcome["result"] = export(*args, **kwargs)
+        except BaseException as exc:  # noqa: BLE001 - re-raised in the calling thread below
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=_target, name="kaleido-export", daemon=True)
+    worker.start()
+    worker.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("result")
+
+
 def _write_outputs(fig, mpl_draw, charts_dir: Path, stem: str) -> tuple[str | None, str | None]:
     """写 <stem>.html（plotly 可用时）+ <stem>.png（kaleido → matplotlib 降级）。
     返回 (png 相对路径 | None, html 相对路径 | None)；两者皆 None = 该图失败。"""
@@ -1397,7 +1424,8 @@ def _write_outputs(fig, mpl_draw, charts_dir: Path, stem: str) -> tuple[str | No
         try:
             layout_height = int(getattr(fig.layout, "height", None) or 750)
             layout_width = int(getattr(fig.layout, "width", None) or 1200)
-            fig.write_image(
+            _run_kaleido_export(
+                fig.write_image,
                 str(png_path),
                 width=max(800, min(layout_width, 1800)),
                 height=max(420, min(layout_height, 1800)),
