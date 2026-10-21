@@ -2,13 +2,17 @@
 
 The Flask app factory owns destructive startup hooks in production.  A test
 process must never run those hooks against the shared localhost uploads tree,
-and a duplicate backend must not reclaim a simulator owned by the backend that
-already holds the configured port.
+nor write into that tree, and a duplicate backend must not reclaim a simulator
+owned by the backend that already holds the configured port.
 """
 
 from __future__ import annotations
 
+import os
 import socket
+from pathlib import Path
+
+import pytest
 
 from app import create_app
 from app.config import Config
@@ -112,4 +116,30 @@ def test_simulation_orphan_reconcile_skips_when_backend_port_is_owned(
     )
 
     SimulationRunner.reconcile_orphans()
+
+
+@pytest.mark.skipif(bool(os.environ.get("MAIN_OFFLINE_EVIDENCE")),
+                    reason="the guarded runner redirects storage at import time and denies "
+                           "writes outside its evidence directory")
+def test_storage_roots_stay_out_of_the_checkout_uploads():
+    """conftest's ``_no_checkout_uploads``: no storage root a test writes through
+    resolves into the checkout's own backend/uploads (in the deployment checkout,
+    the live forecast ledger, reports and simulations)."""
+    from app.services import forecast_ledger
+    from app.services.report_agent import ReportManager
+    from app.services.simulation_manager import SimulationManager
+
+    checkout_uploads = Path(__file__).resolve().parents[1] / "uploads"
+    roots = {
+        "Config.UPLOAD_FOLDER": Config.UPLOAD_FOLDER,
+        "Config.PIPELINE_DATA_DIR": Config.PIPELINE_DATA_DIR,
+        "Config.OASIS_SIMULATION_DATA_DIR": Config.OASIS_SIMULATION_DATA_DIR,
+        "forecast_ledger.ledger_dir()": forecast_ledger.ledger_dir(),
+        "ReportManager.REPORTS_DIR": ReportManager.REPORTS_DIR,
+        "SimulationManager.SIMULATION_DATA_DIR": SimulationManager.SIMULATION_DATA_DIR,
+        "SimulationRunner.RUN_STATE_DIR": SimulationRunner.RUN_STATE_DIR,
+    }
+    inside = {name: value for name, value in roots.items()
+              if Path(value).resolve().is_relative_to(checkout_uploads)}
+    assert inside == {}
 
