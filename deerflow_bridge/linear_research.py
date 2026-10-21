@@ -4347,10 +4347,11 @@ _FRAME_RISK_CHECKS = ("extracted", "split", "kept", "probability_not_stated", "p
 # window per percentage, "5% (low) to 25% (high)" no part separator).  A calendar window (month
 # ranges, single months with a year, quarters, CPC season codes in capitals, day-level date ranges,
 # "through/by/to/until <date>", and the CJK forms) is checked by its calendar span, not by its
-# spelling: it must equal the window that the line stating the probability pairs with it (the
-# window beside it, read the way that line pairs its probabilities and windows; a year only one side
-# gives is ignored), and the line's own phrase is kept.  world_model_seed.calendar_window_spec reads
-# the same forms (parity pinned by test_research_frame_risks).
+# spelling: it must equal the window that the line stating the probability pairs with it (a
+# neighbour that every largest pairing of the line's probabilities and windows gives it,
+# ``_window_pairs``; a year only one side gives is ignored), and the line's own phrase is kept.
+# world_model_seed.calendar_window_spec reads the same forms (parity pinned by
+# test_research_frame_risks).
 _PROB_TOKEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?%")
 _PROB_BETWEEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?%|(?<![\d.])\d+\s+in\s+\d+(?!\d)")
 _PROB_PART_RE = re.compile(
@@ -4631,21 +4632,28 @@ def _window_display(phrase: str) -> str:
 
 
 def _window_pairs(line: str, raw: str) -> set[tuple[tuple[int, int], tuple[int, int, tuple]]]:
-    """``(probability span, window)`` pairs of a report line: every probability with the calendar
-    window right after it ("54% (September–November)") or right before it ("for October–December,
-    83%"), in whichever of the two readings pairs more of the line's probabilities (on a tie, only
-    the pairs both make), so a window belongs to one neighbouring probability, never to the next one
-    along, and a probability between two windows of equal claim keeps neither."""
+    """``(probability span, window)`` pairs of a report line.  A probability and a calendar window
+    can pair only when they stand next to each other ("54% (September–November)", "through January–March
+    2027 at 83%"), and each token pairs at most once; a pair counts when every largest such pairing of
+    the line makes it, so in "54% for September–November, 83% for October–December" each window
+    belongs to the probability before it, never to the next one along, and a probability between two
+    windows of equal claim ("since January 2026 … 23% for Q1 2027") keeps neither."""
     tokens = sorted([(m.start(), m.end(), None) for m in _PROB_BETWEEN_RE.finditer(line)]
                     + list(_calendar_windows(line, raw)), key=lambda tok: tok[:2])
-    readings = []
-    for step in (1, -1):
-        readings.append({(tok[0], tok[1]): tokens[i + step] for i, tok in enumerate(tokens)
-                         if tok[2] is None and 0 <= i + step < len(tokens) and tokens[i + step][2] is not None})
-    forward, backward = (set(reading.items()) for reading in readings)
-    if len(forward) != len(backward):
-        return forward if len(forward) > len(backward) else backward
-    return forward & backward                          # a tie keeps only the pairs both readings make
+    edges = {i for i in range(len(tokens) - 1) if (tokens[i][2] is None) != (tokens[i + 1][2] is None)}
+
+    def largest(banned: int | None = None) -> int:      # maximum matching of a chain, edge ``banned`` left out
+        best = [0] * (len(tokens) + 1)
+        for k in range(1, len(tokens) + 1):
+            best[k] = max(best[k - 1], best[k - 2] + 1 if k >= 2 and k - 2 in edges and k - 2 != banned else 0)
+        return best[-1]
+    size = largest()
+    pairs = set()
+    for i in edges:
+        if largest(i) < size:                          # in every largest pairing
+            prob, window = (tokens[i], tokens[i + 1]) if tokens[i][2] is None else (tokens[i + 1], tokens[i])
+            pairs.add(((prob[0], prob[1]), window))
+    return pairs
 
 
 def _verified_window(per: str, phrase: str, stating: Sequence[str], raw_lines: Mapping[str, str]) -> str:

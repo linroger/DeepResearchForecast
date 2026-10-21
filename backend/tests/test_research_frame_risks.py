@@ -488,6 +488,19 @@ def test_a_probability_between_two_windows_of_equal_claim_keeps_neither():
         assert risk["per"] == "" and checks["window_not_stated"] == 1, (probability, per)
 
 
+def test_a_line_that_puts_windows_before_and_after_its_probabilities_pairs_each_with_its_own():
+    """Report line 145 of the live run, shortened: one window before its probability, three after
+    theirs.  Every largest pairing of the line pairs them this way, so each counts."""
+    report = REPORT + ("\nCPC says a strong-to-very strong El Niño is likely through January–March 2027 at a "
+                       "greater than 83% chance, and puts the probability that the event becomes historic at 54% "
+                       "for September–November 2026, 83% for October–December, and 70% for November–January [S2].\n")
+    for probability, per, kept in (("83%", "Jan-Mar 2027", "January–March 2027"), ("54%", "Sep-Nov", "September–November 2026"),
+                                   ("83%", "Oct-Dec", "October–December"), ("70%", "Nov-Jan", "November–January"),
+                                   ("70%", "Oct-Dec", ""), ("54%", "Jan-Mar 2027", "")):
+        [risk], _ = _risks([{**CPC_ROW, "probability": probability, "per": per}], report=report)
+        assert risk["per"] == kept, (probability, per)
+
+
 def test_a_chinese_window_is_checked_by_its_span():
     report = REPORT + "\n国际能源署估计，2026年10月至12月发生霍尔木兹海峡关闭的概率为15%[S2]。\n"
     risks, checks = _risks([{"event": "霍尔木兹海峡关闭", "probability": "15%", "per": "10月至12月", "source": "S2"},
