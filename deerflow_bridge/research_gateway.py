@@ -4741,18 +4741,27 @@ class ResearchTools:
         return "\n".join(rendered), True, len(rendered)
 
     def _cut_search_rows(self, rows: Sequence[Any], query: str) -> list:
-        """Backtest mode: the rows that may reach the model, in their order.  Rows
-        the search tool already judged (they carry a ``backtest`` verdict) stay;
-        any other row (a custom ``search_fn``) is judged here."""
+        """Recheck every row against this run's cutoff before prompt admission.
+
+        Provider/cache metadata is not proof of the current policy: an earlier
+        verdict can belong to another cutoff, or merely be an empty object.
+        """
         bt = _backtest_api()
         out = []
         for row in rows:
             if not isinstance(row, Mapping):
                 continue
-            if isinstance(row.get("backtest"), Mapping):
-                out.append(row)
-            else:
-                out.extend(bt.filter_search_rows([row], self.backtest, query=query)[0])
+            previous = row.get("backtest")
+            if isinstance(previous, Mapping):
+                decision, span = bt.verdict(bt.result_dates(row), self.backtest)
+                if (bt.admits(decision, self.backtest) and previous.get("verdict") == decision
+                        and previous.get("date") == (span.end.isoformat() if span else None)
+                        and previous.get("basis") == (span.basis if span else None)):
+                    # Independently revalidated, unchanged admission: preserve
+                    # the upstream audit row instead of logging it twice.
+                    out.append(row)
+                    continue
+            out.extend(bt.filter_search_rows([row], self.backtest, query=query)[0])
         return out
 
     def _note_hit(self, row: Mapping[str, Any], item: Mapping[str, Any]) -> str:
@@ -4801,6 +4810,10 @@ class ResearchTools:
             stored = self._stored_page(url)
             if stored is not None:
                 row, text = stored
+                if text is None:
+                    # Never turn a missing/altered pinned generation into a
+                    # fresh capture under the same sid and existing notes.
+                    return self._fetch_failed(agent_id, "stored_evidence_corrupt")
                 with self._lock:
                     self._count(agent_id, "cached_fetches")
                 return self._render_page(row, text, terms, context_terms, cached=True)
@@ -4867,20 +4880,29 @@ class ResearchTools:
             failures = (previous[1] if previous is not None else 0) + 1
             self._failed_fetches[key] = (reason, failures, transient)
 
-    def _stored_page(self, url: str) -> tuple[dict, str] | None:
+    def _stored_page(self, url: str) -> tuple[dict, str | None] | None:
         row = self.ledger.find(url)
-        if row is None or not row.get("fetched") or not row.get("page_path"):
+        if row is None or not row.get("fetched"):
             return None
         text = self._read_page(row)
-        return (row, text) if text is not None else None
+        return row, text
 
     def _page_file(self, page_path: str) -> Path:
         return self.pages_dir / Path(str(page_path)).name
 
     def _read_page(self, row: Mapping[str, Any]) -> str | None:
         try:
-            return self._page_file(str(row["page_path"])).read_text("utf-8", errors="replace")
-        except (OSError, KeyError, TypeError):
+            path = self._page_file(str(row["page_path"]))
+            if (not row.get("page_path") or self.pages_dir.is_symlink() or path.is_symlink()
+                    or path.resolve().parent != self.pages_dir.resolve()):
+                return None
+            # Decode exact stored bytes: text-mode newline normalization would
+            # reject an unchanged CRLF page against its original producer hash.
+            text = path.read_bytes().decode("utf-8")
+            if hashlib.sha256(text.encode("utf-8")).hexdigest() != row.get("content_sha256"):
+                return None
+            return text
+        except (OSError, KeyError, TypeError, UnicodeError):
             return None
 
     def _fetch_uncached(self, url: str, key: str, terms: list[str], context_terms: list[str],

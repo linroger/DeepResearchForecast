@@ -14,6 +14,7 @@ from . import report_bp
 from ..config import Config
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus, load_simulation_world
 from ..services.pipeline_orchestrator import load_research_dossier_for_simulation
+from ..services.backtest_mode import pipeline_for_simulation
 from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
@@ -295,6 +296,19 @@ def _launch_translation_thread(target) -> None:
 
 # ============== 报告生成接口 ==============
 
+def _manual_report_owner_kwargs(owner):
+    """Use the saved scenario and report policy of the verified run owner."""
+    from ..services.pipeline_orchestrator import PipelineManager
+    options = owner["options"] if owner else {}
+    base_simulation_id = None
+    if options.get("base_pipeline_id"):
+        baseline = PipelineManager.load(options["base_pipeline_id"]) or {}
+        base_simulation_id = baseline.get("simulation_id")
+    return {"report_policy": options.get("safety_policy_v1"),
+            "scenario_label": options.get("scenario_label"),
+            "base_simulation_id": base_simulation_id}
+
+
 @report_bp.route('/generate', methods=['POST'])
 def generate_report():
     """
@@ -341,6 +355,10 @@ def generate_report():
                 "success": False,
                 "error": f"模拟不存在: {simulation_id}"
             }), 404
+
+        _owner = pipeline_for_simulation(simulation_id)
+        _dossier = load_research_dossier_for_simulation(simulation_id)
+        _owner_kwargs = _manual_report_owner_kwargs(_owner)
         
         # 检查是否已有报告
         if not force_regenerate:
@@ -373,7 +391,7 @@ def generate_report():
                 "error": "缺少图谱ID，请确保已构建图谱"
             }), 400
         
-        simulation_requirement = project.simulation_requirement
+        simulation_requirement = _owner.get("prompt") if _owner else project.simulation_requirement
         if not simulation_requirement:
             return jsonify({
                 "success": False,
@@ -406,7 +424,6 @@ def generate_report():
                 )
                 
                 # 创建Report Agent（T4.1: best-effort 钉入研究档案，找不到则回退冷图路径）
-                _dossier = load_research_dossier_for_simulation(simulation_id)
                 agent = ReportAgent(
                     graph_id=graph_id,
                     simulation_id=simulation_id,
@@ -417,6 +434,8 @@ def generate_report():
                     research_report=_dossier.get("research_report"),
                     official_data=_dossier.get("official_data"),
                     news_market_context=_dossier.get("news_market_context"),
+                    **_owner_kwargs,
+                    **(_dossier.get("report_artifacts") or {}),
                 )
                 
                 # 进度回调
@@ -1657,7 +1676,8 @@ def chat_with_report_agent():
                 "error": "缺少图谱ID"
             }), 400
         
-        simulation_requirement = project.simulation_requirement or ""
+        _owner = pipeline_for_simulation(simulation_id)
+        simulation_requirement = (_owner.get("prompt") if _owner else project.simulation_requirement) or ""
         
         # 创建Agent并进行对话（T4.1: best-effort 钉入研究档案）
         _dossier = load_research_dossier_for_simulation(simulation_id)
@@ -1671,6 +1691,8 @@ def chat_with_report_agent():
             research_report=_dossier.get("research_report"),
             official_data=_dossier.get("official_data"),
             news_market_context=_dossier.get("news_market_context"),
+            **_manual_report_owner_kwargs(_owner),
+            **(_dossier.get("report_artifacts") or {}),
         )
 
         result = agent.chat(message=message, chat_history=chat_history)

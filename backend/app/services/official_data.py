@@ -33,6 +33,10 @@ _BINDING_KEYS = {"schema_version", "simulation_id", "pipeline_id", "handoff_dir"
 _BINDING_SCHEMA = 2
 _GENERATION_FILES = ("research_report.md", "actors.json", "sources.json", "actor_dossier.md",
                      "research_contract_manifest.json", "data/datasets.json")
+# These are produced during research. Graph priors are deliberately excluded:
+# their legitimate producer runs after research capture in the graph stage.
+_OPTIONAL_RESEARCH_FILES = ("quantitative.json", "contested.json", "timeline.json")
+_CORE_RESEARCH_FILES = _GENERATION_FILES[:4]
 
 
 class ResearchBindingConflict(ValueError):
@@ -73,6 +77,9 @@ def _generation_fingerprints(handoff):
             result[name] = hashlib.sha256(_contained_bytes(Path(handoff), name)).hexdigest()
         except FileNotFoundError:
             result[name] = None
+    for name in _OPTIONAL_RESEARCH_FILES:
+        if os.path.lexists(Path(handoff) / name):
+            result[name] = hashlib.sha256(_contained_bytes(Path(handoff), name)).hexdigest()
     # Keep genuinely old/off generations byte-compatible: the optional key is
     # absent until a sealed contextual snapshot exists. A later addition then
     # changes the generation instead of being silently adopted by an old run.
@@ -247,6 +254,70 @@ def research_binding_has_news_context(simulation_id):
             _bound_handoff(stored) / "news_market_context.json")
     except (OSError, TypeError, ValueError):
         return False
+
+
+def read_bound_research_core(simulation_id):
+    """Read only hash-verified core prose when optional enrichment proof fails.
+
+    ``missing`` permits the caller's historical unbound lookup. ``invalid`` must
+    never authorize mutable pipeline fallback. ``valid`` authenticates these
+    four core artifacts only; it does not admit official/news/rich sidecars or
+    restore validity of the complete generation. No binding is created/repaired.
+    """
+    try:
+        directory = _simulation_directory(simulation_id)
+        raw_binding = _contained_bytes(directory, _BINDING_FILE, limit=65536)
+    except FileNotFoundError:
+        return {"status": "missing"}
+    except (OSError, TypeError, ValueError):
+        return {"status": "invalid"}
+    try:
+        binding = json.loads(raw_binding)
+        if (not isinstance(binding, dict) or set(binding) != _BINDING_KEYS
+                or binding.get("schema_version") not in (1, _BINDING_SCHEMA)
+                or binding.get("simulation_id") != simulation_id
+                or not isinstance(binding.get("pipeline_id"), str) or not binding["pipeline_id"]
+                or not isinstance(binding.get("handoff_dir"), str)
+                or binding["schema_version"] == 1 and not Path(binding["handoff_dir"]).is_absolute()
+                or not isinstance(binding.get("files"), dict)
+                or not set(_CORE_RESEARCH_FILES) <= binding["files"].keys()):
+            raise ValueError("Core research binding is malformed")
+
+        def read_core(handoff):
+            contents = {}
+            for name in _CORE_RESEARCH_FILES:
+                try:
+                    raw = _contained_bytes(handoff, name)
+                except FileNotFoundError:
+                    raw = None
+                actual = hashlib.sha256(raw).hexdigest() if raw is not None else None
+                if actual != binding["files"][name]:
+                    raise ValueError("Core research generation changed")
+                contents[name] = raw
+            return contents
+
+        handoff = _bound_handoff(binding["handoff_dir"])
+        try:
+            contents = read_core(handoff)
+        except (OSError, ValueError):
+            relocated = _relocated_handoff(binding["pipeline_id"]) if binding["schema_version"] == 1 else None
+            if relocated is None:
+                raise
+            handoff = relocated
+            contents = read_core(handoff)
+        result = {"status": "valid", "pipeline_id": binding["pipeline_id"],
+                  "handoff_dir": os.path.realpath(handoff),
+                  "files": {name: binding["files"][name] for name in _CORE_RESEARCH_FILES}}
+        for name, key in (("research_report.md", "research_report"), ("actors.json", "actors"),
+                          ("sources.json", "sources"), ("actor_dossier.md", "actor_dossier")):
+            raw = contents[name]
+            result[key] = (json.loads(raw) if name.endswith(".json") else raw.decode("utf-8")) if raw is not None else None
+        if (_contained_bytes(directory, _BINDING_FILE, limit=65536) != raw_binding
+                or read_core(handoff) != contents):
+            raise ValueError("Core research changed during read")
+        return result
+    except (OSError, TypeError, ValueError, KeyError):
+        return {"status": "invalid"}
 
 
 def bridge_module(name):

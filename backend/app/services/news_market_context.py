@@ -154,11 +154,19 @@ def render_context(context, lang="en", max_items=12) -> str:
             state = text(status.get("state") or "unavailable", 40)
             reason = text(status.get("reason"), 120)
             lines.append(f"| {text(provider)} | — | — | {state}{' (' + reason + ')' if reason else ''} |")
+    shown = 0
     for item in copied["items"][:max(0, min(12, int(max_items)))]:
         url = link(item.get("url"))
         title = text(item.get("title") or item["id"])
         source = f"[{title}]({url})" if url else title
         basis = "context_only"
+        if item["kind"] == "news_snippet" and item.get("snippet"):
+            # A headline is not the captured snippet. Keep its bounded content
+            # available to writers with the same context-only eligibility.
+            snippet = " ".join(str(item["snippet"]).split())
+            basis += "; snippet=" + text(snippet, 600)
+            if len(snippet) > 600:
+                basis += " [摘要已截断]" if chinese else " [snippet truncated]"
         if item["kind"] in {"market_quote", "community_forecast"}:
             details = []
             def stored(name, value, limit=180):
@@ -189,9 +197,13 @@ def render_context(context, lang="en", max_items=12) -> str:
             basis = "; ".join(details)
         row = f"| {text(item['provider'])} / {text(item['kind'])} / {text(item['id'])} | {source} | {text(item.get('published_at') or 'unknown')} / {text(item.get('retrieved_at') or 'unknown')} | {basis} |"
         if sum(len(line) + 1 for line in lines) + len(row) > 23500:
-            lines.append("\n更多记录保留在封存快照中。" if chinese else "\nAdditional records remain in the sealed capture.")
             break
         lines.append(row)
+        shown += 1
+    omitted = len(copied["items"]) - shown
+    if omitted:
+        lines.append(f"\n另有 {omitted} 条记录保留在封存快照中。" if chinese else
+                     f"\n{omitted} additional records remain in the sealed capture.")
     return "\n".join(lines)
 
 

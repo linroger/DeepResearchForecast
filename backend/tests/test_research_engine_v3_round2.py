@@ -829,6 +829,9 @@ def test_r2_parent_pipeline_accepts_a_v3_research_run(tmp_path, monkeypatch, wor
     deerflow_dir.mkdir()
     paths = [str(_REPO / "deerflow_bridge"), str(_REPO / "backend"), str(_REPO / "backend" / "tests")]
     (deerflow_dir / "deerflow_research.py").write_text(_CHILD_SHIM.format(paths=paths), encoding="utf-8")
+    guard = sys.modules.get("main_offline_guard")
+    if guard is not None:
+        guard.allow_python_script(deerflow_dir / "deerflow_research.py")
     for name, value in (("PIPELINE_DATA_DIR", str(tmp_path / "pipelines")),
                         ("UPLOAD_FOLDER", str(tmp_path / "uploads")),
                         ("RESEARCH_MODEL_LEASE_DB", str(tmp_path / "leases.sqlite3")),

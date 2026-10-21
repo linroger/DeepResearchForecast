@@ -1,0 +1,67 @@
+{
+  "finding": "Candidate3 did not record an Actor1 decision before round3; the asserted prior hold therefore did not exist. Same runtime bytes in phases1/2 selected Actor1. Expected-reaction sentinel still reached owner prompt. No demonstrated context loss; fix fixture activation precondition, preserve original assertion and privacy negatives.",
+  "records": [
+    {
+      "phase": "drf-context-joint-final-ip8sensq",
+      "actor1_recorded_moves": [
+        {
+          "round": 1,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        },
+        {
+          "round": 2,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        },
+        {
+          "round": 3,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        }
+      ]
+    },
+    {
+      "phase": "drf-context-joint-replacement-zrf9t4ap",
+      "actor1_recorded_moves": [
+        {
+          "round": 1,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        },
+        {
+          "round": 2,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        },
+        {
+          "round": 3,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        }
+      ]
+    },
+    {
+      "phase": "drf-context-joint-accepted-npw99tgw",
+      "actor1_recorded_moves": [
+        {
+          "round": 3,
+          "actor_name": "Actor1",
+          "status": "ok",
+          "option_id": "hold_position"
+        }
+      ]
+    }
+  ],
+  "correction": "Only Actor1 principal cadence and native prior round2 singlehold assertion; original owner-response/privacy assertions unchanged",
+  "ready_sha256": "bece688b84263501877e2d90e916136b53b8cd25d7272e7ec563accd3f221bc7",
+  "seed_before": "/private/tmp/drf-simulation-expectation-seeds-before-5vful169/evidence/completed.json",
+  "seed_after": "/private/tmp/drf-simulation-expectation-seeds-after-fideegu5/evidence/completed.json",
+  "affected_307": "/private/tmp/drf-simulation-expectation-affected-w5vqziz_/evidence/completed.json"
+}

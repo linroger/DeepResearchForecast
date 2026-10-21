@@ -21,11 +21,15 @@ import pytest
 from app.config import Config
 from app.services import forecast_extractor as fe
 from app.services import report_agent as ra
-from app.services.official_data import data_api, load_official_data
+from app.services.official_data import data_api, load_official_data, simulation_research_binding
 from app.services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
 from app.services.report_visualizer import CHART_TITLES_ZH
+from app.services.pipeline_orchestrator import PipelineManager, PipelineState
+from app.services.simulation_manager import SimulationManager
+from app.services.simulation_runner import SimulationRunner
 
 BUNDLE = Path(__file__).parent / "fixtures" / "data_sources" / "real" / "report_bundle-2026-10-11.json"
+SIMULATION_ID = "sim_real_publication"
 QUESTION = {"English": "Will the US enter a recession before the end of 2027?",
             "Chinese": "美国会在2027年底前陷入衰退吗？"}
 # Exact stored values (fred:UNRATE 2026-09 = 4.2, 2025-09 = 4.4, 2020-04 = 14.8;
@@ -105,7 +109,11 @@ def env(tmp_path, monkeypatch):
     for name, value in FLAGS.items():
         monkeypatch.setattr(Config, name, value, raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
-    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "no-simulation"))
+    simulation_root = str(tmp_path / "no-simulation")
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", simulation_root)
+    monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", simulation_root)
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", simulation_root)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"))
     # Publication journals each forecast; a per-test ledger keeps the frozen track record
     # independent of other tests and of a later PIPELINE_DATA_DIR change.
     monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR", str(tmp_path / "forecast-ledger"))
@@ -128,13 +136,15 @@ def _carrier(tmp_path, rows, name="handoff"):
 def _agent(monkeypatch, language, sources, carrier, model=None):
     monkeypatch.setenv("REPORT_OUTPUT_LANGUAGE", language)
     model = model or UnavailableModel()
-    agent = ReportAgent("real_graph", "real_sim", QUESTION[language], llm_client=model,
+    # A direct stored-carrier report is intentionally unbound, never invalid.
+    assert simulation_research_binding(SIMULATION_ID) == {"status": "missing"}
+    agent = ReportAgent("real_graph", SIMULATION_ID, QUESTION[language], llm_client=model,
                         zep_tools=UnavailableModel(), sources=sources, official_data=carrier)
     return agent, model
 
 
 def _report(report_id, language, body):
-    report = Report(report_id=report_id, simulation_id="real_sim", graph_id="real_graph",
+    report = Report(report_id=report_id, simulation_id=SIMULATION_ID, graph_id="real_graph",
                     simulation_requirement=QUESTION[language], status=ReportStatus.COMPLETED,
                     markdown_content=body, created_at="2026-10-12T00:00:00Z",
                     completed_at="2026-10-12T00:01:00Z")
@@ -261,15 +271,13 @@ def test_legacy_visual_replay_binds_or_rolls_back_new_track_record(env, monkeypa
     assert not companion.exists()
     before = {name: (folder / name).read_bytes() for name in
               ("meta.json", "forecast.json", "full_report.md", "final_audit.json")}
-    pipeline = env / "pipelines" / "pipe_legacy_replay"
-    pipeline.mkdir(parents=True)
     (published["handoff"] / "sources.json").write_text(
         json.dumps(published["bundle"]["sources"]), encoding="utf-8")
-    (pipeline / "pipeline_state.json").write_text(json.dumps({
-        "report_id": report.report_id, "simulation_id": "real_sim",
-        "handoff_dir": str(published["handoff"]),
-    }), encoding="utf-8")
-    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(env / "pipelines"))
+    PipelineManager.save(PipelineState(
+        pipeline_id="pipe_legacy_replay", prompt=QUESTION[published["language"]],
+        report_id=report.report_id, simulation_id=SIMULATION_ID,
+        handoff_dir=str(published["handoff"]),
+    ))
     monkeypatch.setattr(Config, "REPORT_FORECAST_LEDGER", True)
     reached = []
 
@@ -675,15 +683,14 @@ def test_backfill_keeps_official_exhibits_captions_and_audit(published_en, monke
     its attribution, leaves no orphan caption and passes the same final audit."""
     import scripts.backfill_report_visuals as backfill
     published = published_en
-    report, folder, env_root = published["report"], published["folder"], published["handoff"].parent
+    report, folder = published["report"], published["folder"]
     before = report.markdown_content
-    pipeline = env_root / "pipelines" / "pipe_real_backfill"
-    pipeline.mkdir(parents=True)
     (published["handoff"] / "sources.json").write_text(json.dumps(published["bundle"]["sources"]), encoding="utf-8")
-    (pipeline / "pipeline_state.json").write_text(json.dumps({
-        "report_id": report.report_id, "simulation_id": "real_sim", "handoff_dir": str(published["handoff"]),
-    }), encoding="utf-8")
-    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(env_root / "pipelines"), raising=False)
+    PipelineManager.save(PipelineState(
+        pipeline_id="pipe_real_backfill", prompt=QUESTION[published["language"]],
+        report_id=report.report_id, simulation_id=SIMULATION_ID,
+        handoff_dir=str(published["handoff"]),
+    ))
 
     def _export_pdf(cls, report_id, force=False, lang=None):
         path = Path(cls._get_report_pdf_path(report_id))

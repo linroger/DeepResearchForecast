@@ -170,6 +170,11 @@ def test_real_report_sequence_seals_context_and_api_markdown_export(
         simulations = report_root.parent / "simulations"
         (simulations / "sim_fixture").mkdir(parents=True)
         monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(simulations))
+        monkeypatch.setattr(po.Config, "PIPELINE_DATA_DIR", str(report_root.parent / "pipelines"))
+        po.PipelineManager.ensure_dirs("pipe_fixture")
+        po.PipelineManager.save(po.PipelineState(
+            pipeline_id="pipe_fixture", prompt="Fixture outlook", simulation_id="sim_fixture",
+            handoff_dir=str(promoted)))
         official_data.bind_simulation_research("sim_fixture", promoted, pipeline_id="pipe_fixture")
         assert load_for_simulation("sim_fixture") == context
     agent = report_agent_factory(context, sources=sources)

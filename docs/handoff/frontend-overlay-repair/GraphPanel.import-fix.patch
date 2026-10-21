@@ -1,0 +1,5 @@
+--- a/frontend/src/components/GraphPanel.vue
++++ b/frontend/src/components/GraphPanel.vue
+@@ -323 +323 @@
+-import { ensureOverlay, graphOverlayFetcher } from '../../utils/overlayTranslation'
++import { ensureOverlay, graphOverlayFetcher } from '../utils/overlayTranslation'

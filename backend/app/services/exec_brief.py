@@ -736,23 +736,39 @@ class ExecBriefBuilder:
             md = (meta.get("markdown_content") if isinstance(meta, dict) else None) or ""
 
         produced: Dict[str, str] = {}
+        primary_lang = _detect_lang(md)
+        primary_variant = ReportManager._get_report_localized_forecast_path(report_id, primary_lang)
+        audit_path = ReportManager._get_report_final_audit_path(report_id)
+
+        def displayed_forecast(language):
+            # Use the same exact-source-bound strings as the report dashboard.
+            # A missing/stale localization falls back to the canonical artifact.
+            localized, info = ReportManager.load_localized_forecast(report_id, language)
+            return localized if info.get("localized") else _read_json(forecast_path)
 
         # ① 主语言简报 + 速览
         brief_out = cls.brief_path(report_dir)
         digest_out = cls.digest_path(report_dir)
-        if force or cls._needs_rebuild(brief_out, md_path, forecast_path, official_path):
-            forecast = _read_json(forecast_path)
-            lang = _detect_lang(md)
+        rebuild = force or not os.path.exists(digest_out) or cls._needs_rebuild(
+            brief_out, md_path, forecast_path, official_path, meta_path, primary_variant, audit_path)
+        # Deleting a localization has no remaining mtime to compare. Re-render
+        # the canonical fallback and compare content before reusing its cache.
+        if rebuild or not os.path.exists(primary_variant):
+            forecast = displayed_forecast(primary_lang)
+            lang = primary_lang
             outline_summary = ""
             if isinstance(meta, dict):
                 outline_summary = str((meta.get("outline") or {}).get("summary") or "")
             brief_md = cls._render_brief(report_id, report_dir, md, forecast, meta,
                                          lang, outline_summary)
-            if _write_text_atomic(brief_out, brief_md):
-                produced["exec_brief"] = brief_out
             digest_md = cls._render_digest(report_id, md, forecast, meta, lang, report_dir=report_dir)
-            if _write_text_atomic(digest_out, digest_md):
-                produced["digest"] = digest_out
+            if rebuild or _read_text(brief_out) != brief_md or _read_text(digest_out) != digest_md:
+                if _write_text_atomic(brief_out, brief_md):
+                    produced["exec_brief"] = brief_out
+                if _write_text_atomic(digest_out, digest_md):
+                    produced["digest"] = digest_out
+            else:
+                produced.update(exec_brief=brief_out, digest=digest_out)
         else:
             produced["exec_brief"] = brief_out
             if os.path.exists(digest_out):
@@ -761,7 +777,6 @@ class ExecBriefBuilder:
         # ② 译文版简报（meta.translations[]，仅 en/zh，且译文成稿存在）
         translations = meta.get("translations") if isinstance(meta, dict) else None
         if isinstance(translations, list):
-            forecast = _read_json(forecast_path)
             for entry in translations:
                 if not isinstance(entry, dict):
                     continue
@@ -773,9 +788,11 @@ class ExecBriefBuilder:
                 if not tmd:
                     continue
                 tbrief_out = cls.brief_path(report_dir, tlang)
-                if force or cls._needs_rebuild(tbrief_out, tmd_path, forecast_path, official_path):
+                variant_path = ReportManager._get_report_localized_forecast_path(report_id, tlang)
+                if force or not os.path.exists(variant_path) or cls._needs_rebuild(
+                        tbrief_out, tmd_path, forecast_path, official_path, meta_path, variant_path, audit_path):
                     # 译文简报：论点从译文成稿抽取（不传 outline.summary——它是主语言）。
-                    tbrief_md = cls._render_brief(report_id, report_dir, tmd, forecast, meta,
+                    tbrief_md = cls._render_brief(report_id, report_dir, tmd, displayed_forecast(tlang), meta,
                                                   tlang, outline_summary="")
                     if _write_text_atomic(tbrief_out, tbrief_md):
                         produced[f"exec_brief.{tlang}"] = tbrief_out

@@ -1,0 +1,42 @@
+{
+  "evidence": "/private/tmp/drf-frontend-overlay-fix-5_xk3wf4",
+  "baseline_vite_component_status": 500,
+  "source_before_sha256": "d3be61169c34173085301ebcd67bc4a1c37c877790dc165d2b78796d1c58c01b",
+  "other_feature_files_sha256": {
+    "frontend/src/components/research/WorldStatePanel.vue": "b7dac275ec2baed02798b10aadd4763e0e193a80e2206042fed9b56993a9a92d",
+    "frontend/src/utils/overlayTranslation.js": "5af960fb0966f0fce6ff390be822107c1033e885ce752bd6e6e73dbc026c29e8",
+    "frontend/src/api/translations.js": "0cecbceaf1271b1b799b6f598e3db17eae23cdf132b90d0649ca2b2082aa0243"
+  },
+  "source_after_sha256": "71f1ac9c0e13a951f81038ef5a577c5042e6a1ad631e4be0117b232a46c71247",
+  "live_checks": {
+    "vite_component": {
+      "status": 200,
+      "sha256": "106b48b38dc561745129d1f3e1f3776e556c81ce0200c2669f033a7839e82808"
+    },
+    "overlay_helper": {
+      "status": 200,
+      "sha256": "94947d1eb98fe3d329d30550446a61b69a142327d512a69edc806e667e10b6f2"
+    },
+    "translation_api_module": {
+      "status": 200,
+      "sha256": "48f5fcf92cbe83fab81ea21ab64b2b03862c222a1c35ec8f4616fe9dbb34b10d"
+    },
+    "backend_health": {
+      "status": 200,
+      "sha256": "90bab6c03c45672b2e5cb7341357f2ff348b07cd84a082176437b617d1c58aa3"
+    },
+    "proxy_probe": {
+      "status": 404,
+      "sha256": "a35c694b817727964bfa151e9c1ecfae29cb68bf987bcb3ca3098203d61d654c"
+    }
+  },
+  "unit_result": [
+    "# tests 163",
+    "# pass 163",
+    "# fail 0"
+  ],
+  "build": "passed",
+  "other_feature_files_unchanged": true,
+  "minimal_patch_format": "zero-context unified patch; use git apply --unidiff-zero",
+  "minimal_patch_sha256": "81132f63fd7fef4aedbaecbe7725347700c572d4cecf0a4029a332a02762347f"
+}

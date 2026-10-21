@@ -7610,7 +7610,9 @@ def synthesize_multipart(question: str, target_language: str | None, depth: str,
     blocks = _sanitize_untrusted_evidence_blocks(blocks)
     ai_parts = _sanitize_untrusted_evidence_blocks(ai_parts)
     context = sanitize_untrusted_evidence_document(context)
-    question = sanitize_untrusted_evidence_document(question, max_chars=24000)
+    # The admitted brief can carry its cutoff/horizon/scenario controls at the
+    # end. Sanitize it in full; evidence sampling must never truncate the task.
+    question = sanitize_untrusted_evidence_document(question)
     target_language = sanitize_untrusted_evidence_document(
         target_language, max_chars=160) if target_language else target_language
     execution_budget = SynthesisExecutionBudget(
@@ -7715,7 +7717,7 @@ def synthesize_multipart(question: str, target_language: str | None, depth: str,
     cap = _synthesis_context_cap(
         synth_model,
         context,
-        extra_prompt_chars=len(_final_dossier_contract_block()),
+        extra_prompt_chars=len(_final_dossier_contract_block()) + len(question),
     )
     section_cap = _synthesis_section_context_cap(
         len(outline), max(8000, cap - len(notes_digest) - 12000))
@@ -8965,9 +8967,48 @@ def seed_validated_resume_sources(out_dir: str | Path) -> int:
         obj = json.loads(source_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return 0
-    rows = [dict(item) for item in obj if isinstance(item, dict)] \
-        if isinstance(obj, list) else []
+    # The canonical ledger also contains discovery/model-only citations. The
+    # generic manifest seeder assumes admitted fetched inputs and sets ok=True;
+    # replay must not upgrade an unopened URL merely because it was persisted.
+    rows = [dict(item) for item in obj if isinstance(item, dict) and (
+        item.get("source_origin") == "official_data"
+        or (str(item.get("source_origin") or "").strip().casefold() in {"", "fetched"}
+            and _source_is_fetched(item))
+    )] if isinstance(obj, list) else []
     return seed_manifest_sources(rows) if rows else 0
+
+
+def load_validated_resume_evidence_pack(
+        out_dir: str | Path, *, checkpoint_parts: list[str] | None = None) -> str:
+    """Rebind old positional citations after validated source restoration.
+
+    Called only after checkpoint question/depth/lineage admission. Read the
+    durable pack, or reconstruct it from old checkpoint messages, without
+    rewriting either artifact. Cited-only URLs cannot acquire a fetched source
+    number; surviving sources are remapped by URL to the restored namespace.
+    """
+    root = Path(out_dir)
+    if checkpoint_parts is None:
+        path = root / EVIDENCE_PACK_FILENAME
+        if not path.is_file():
+            return ""
+        candidate = path.read_text(encoding="utf-8")
+        parts = parse_evidence_pack(candidate)
+    else:
+        parts = list(checkpoint_parts)
+    if not parts or all(_is_control_failure_block(part) for part in parts):
+        return ""
+    try:
+        sources = json.loads((root / SOURCES_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError, TypeError):
+        sources = []
+    source_rows = [row for row in sources if isinstance(row, dict)] \
+        if isinstance(sources, list) else []
+    index = build_citation_index(_FETCHED_SOURCES, _citation_index_cap())
+    return render_evidence_pack([
+        remap_lane_citations(part, source_rows, index)
+        for part in parts if not _is_control_failure_block(part)
+    ])
 
 
 def persist_evidence_sources(out_dir: str | Path, source_rows: list[dict]) -> None:
@@ -8999,7 +9040,7 @@ def synthesize_from_evidence_parts(
     ai_parts = _sanitize_untrusted_evidence_blocks([
         str(part) for part in (ai_parts or []) if str(part).strip()
     ])
-    question = sanitize_untrusted_evidence_document(question, max_chars=24000)
+    question = sanitize_untrusted_evidence_document(question)
     target_language = sanitize_untrusted_evidence_document(
         target_language, max_chars=160) if target_language else target_language
     actor_blocks_present = any(
@@ -9029,7 +9070,7 @@ def synthesize_from_evidence_parts(
     _cap = _synthesis_context_cap(
         synth_model,
         context,
-        extra_prompt_chars=len(_final_dossier_contract_block()),
+        extra_prompt_chars=len(_final_dossier_contract_block()) + len(question),
     )
     if len(context) > _cap:
         context = build_stratified_outline_context(
@@ -12528,8 +12569,7 @@ def build_report_refine_prompt(question: str, gaps: list, depth: str,
         gap_lines,
         max_chars=12000,
     )
-    safe_question = sanitize_untrusted_evidence_document(
-        question, max_chars=24000)
+    safe_question = sanitize_untrusted_evidence_document(question)
     safe_language = sanitize_untrusted_evidence_document(
         target_language, max_chars=160) if target_language else ""
     lang = f"\n用{safe_language}书写工作笔记。" if safe_language else ""
@@ -12633,7 +12673,7 @@ def judge_research_report(report: str, question: str, target_language: str | Non
         )
         bounded_report, judge_input = _report_judge_input(report)
         governing = build_report_judge_prompt(
-            sanitize_untrusted_evidence_document(question, max_chars=24000),
+            sanitize_untrusted_evidence_document(question),
             sanitize_untrusted_evidence_document(
                 target_language, max_chars=160) if target_language else None,
             target_words,
@@ -13158,8 +13198,7 @@ def run_incremental_report_patch(question: str, report: str, notes: str,
     try:
         safe_report = sanitize_untrusted_evidence_document(report)
         safe_notes = sanitize_untrusted_evidence_document(notes)
-        safe_question = sanitize_untrusted_evidence_document(
-            question, max_chars=24000)
+        safe_question = sanitize_untrusted_evidence_document(question)
         safe_language = sanitize_untrusted_evidence_document(
             target_language, max_chars=160) if target_language else None
         titles = [
@@ -13377,7 +13416,24 @@ def run_research_stage(client, question: str, depth: str, target_language: str |
                 text = ""
             else:
                 plog.write("resume", "跳过已完成 pass: standard（从复用线程重合成）")
-                text = synthesize_from_thread(client, thread_id, question, target_language, model_name, plog, depth=depth)
+                if resume_evidence_pack:
+                    # main admitted this pack under the checkpoint's question,
+                    # depth and attempt identity. A restarted process may have
+                    # no LangGraph thread; merge its surviving messages with the
+                    # durable pack instead of discarding the admitted evidence.
+                    thread_parts, _thread_ai = collect_thread_evidence_parts(
+                        client, thread_id, plog)
+                    if out_dir is not None and thread_parts:
+                        thread_parts = parse_evidence_pack(
+                            load_validated_resume_evidence_pack(
+                                out_dir, checkpoint_parts=thread_parts))
+                    restored_parts = parse_evidence_pack(merge_resume_evidence_packs(
+                        resume_evidence_pack, render_evidence_pack(thread_parts)))
+                    text = synthesize_from_evidence_parts(
+                        restored_parts, restored_parts, question, target_language,
+                        model_name, plog, depth)
+                else:
+                    text = synthesize_from_thread(client, thread_id, question, target_language, model_name, plog, depth=depth)
         # LOOP-010: source counts are diagnostics, never work quotas.  Standard
         # depth receives a targeted top-up only when its own output explicitly
         # carries unresolved KIQ gaps; a low raw source count alone no longer
@@ -13461,6 +13517,12 @@ def run_research_stage(client, question: str, depth: str, target_language: str |
         if _evidence_only:
             parts, _ai_parts = collect_thread_evidence_parts(
                 client, thread_id, plog)
+            if "standard" in _resume_done and out_dir is not None and parts:
+                # No research turn ran on this completed checkpoint. Its old
+                # citation namespace needs the same replay binding as the
+                # durable pack, including on evidence-only export.
+                parts = parse_evidence_pack(load_validated_resume_evidence_pack(
+                    out_dir, checkpoint_parts=parts))
             current = render_evidence_pack(parts or [text])
             return merge_resume_evidence_packs(
                 resume_evidence_pack, current)
@@ -15061,8 +15123,7 @@ def build_actor_refinement_prompt(question: str, gaps: list, depth: str,
         gap_lines,
         max_chars=12000,
     )
-    safe_question = sanitize_untrusted_evidence_document(
-        question, max_chars=24000)
+    safe_question = sanitize_untrusted_evidence_document(question)
     safe_language = sanitize_untrusted_evidence_document(
         target_language, max_chars=160) if target_language else ""
     lang = f"\n用{safe_language}书写。" if safe_language else ""
@@ -15091,7 +15152,7 @@ def judge_dossier(dossier: str, question: str, target_language: str | None,
             coverage, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         bounded_dossier, judge_input = _dossier_judge_input(dossier)
         governing = build_judge_prompt(
-            sanitize_untrusted_evidence_document(question, max_chars=24000),
+            sanitize_untrusted_evidence_document(question),
             sanitize_untrusted_evidence_document(
                 target_language, max_chars=160) if target_language else None,
         )
@@ -15270,7 +15331,8 @@ def run_actor_ontology_stage(client, question: str, depth: str, target_language:
             plog.write("warn", f"actor-ontology synthesize: gathered context only {len(context)} chars (< {_min_ctx}); refusing tool-free fabrication")
             _flag_research_degradation("actor-ontology: near-empty research context; refused tool-free fabrication")
             return ""
-        _cap = _synthesis_context_cap(model_name, context)
+        _cap = _synthesis_context_cap(
+            model_name, context, extra_prompt_chars=len(question))
         if len(context) > _cap:
             context = context[:_cap] + "\n\n[...research context truncated...]"
         plog.write("stage", f"actor-ontology synthesize: writing dossier (tool-free) from {len(context)} chars")
@@ -15280,8 +15342,7 @@ def run_actor_ontology_stage(client, question: str, depth: str, target_language:
             model = create_chat_model(model_name, thinking_enabled=False)
             governing = (
                 build_actor_ontology_prompt(
-                    sanitize_untrusted_evidence_document(
-                        question, max_chars=24000),
+                    sanitize_untrusted_evidence_document(question),
                     depth,
                     sanitize_untrusted_evidence_document(
                         target_language, max_chars=160)
@@ -18393,12 +18454,7 @@ def main() -> int:
             thread_id = _plan["thread_id"]
             resume_completed = set(_plan["completed_passes"])
             restored_sources = seed_validated_resume_sources(out_dir)
-            prior_pack_path = out_dir / EVIDENCE_PACK_FILENAME
-            if prior_pack_path.is_file():
-                candidate_pack = prior_pack_path.read_text(encoding="utf-8")
-                if (parse_evidence_pack(candidate_pack)
-                        and not evidence_pack_is_control_failure_only(candidate_pack)):
-                    resume_evidence_pack = candidate_pack
+            resume_evidence_pack = load_validated_resume_evidence_pack(out_dir)
             resume_info = {"resumed": True, "thread_id": thread_id,
                            "skipped_passes": sorted(resume_completed),
                            "restored_sources": restored_sources,
@@ -18580,7 +18636,8 @@ def main() -> int:
             checkpoint_parts, _checkpoint_ai = collect_thread_evidence_parts(
                 client, thread_id, plog)
             if checkpoint_parts:
-                resume_evidence_pack = render_evidence_pack(checkpoint_parts)
+                resume_evidence_pack = load_validated_resume_evidence_pack(
+                    out_dir, checkpoint_parts=checkpoint_parts)
             else:
                 prior_thread_id = thread_id
                 thread_id = f"research-{uuid.uuid4().hex[:12]}"

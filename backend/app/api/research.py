@@ -33,6 +33,7 @@ from ..services.pipeline_orchestrator import (
 )
 from ..services.world_simulation.admission import UNSET
 from ..services.world_simulation.contracts import WorldError
+from ..services.backtest_mode import BacktestRequestError
 from ..services.research_progress import (
     ResearchProgressLimitError,
     merged_research_progress_full,
@@ -103,8 +104,8 @@ def run_pipeline():
 
         # Preserve omission versus explicit null. start() resolves and revalidates
         # against the current configuration before creating any pipeline state.
-        world_options = {key: data[key] for key in
-                         ('simulation_engine', 'world_spec', 'world_policy_spec') if key in data}
+        run_options = {key: data[key] for key in
+                       ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest') if key in data}
 
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         preflight_errors = preflight_pipeline(mode=mode, model=model)
@@ -123,7 +124,7 @@ def run_pipeline():
             max_rounds=max_rounds,
             language=language,
             model=model,
-            **world_options,
+            **run_options,
         )
         return jsonify({
             "success": True,
@@ -134,6 +135,8 @@ def run_pipeline():
                 "status": state.status,
             },
         })
+    except BacktestRequestError as error:
+        return jsonify({"success": False, "error": f"Invalid backtest request: {error}"}), 400
     except WorldError as error:
         body, status = simulation_admission_error(error)
         return jsonify(body), status

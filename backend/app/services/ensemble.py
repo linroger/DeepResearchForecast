@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any, Dict, List, Optional
 
 
@@ -22,6 +24,33 @@ def _cfg(name: str, default: Any) -> Any:
         return getattr(Config, name, default)
     except Exception:  # noqa: BLE001
         return default
+
+
+def freeze_report_policy(policy):
+    """Detach the three existing admission controls; absent pins keep legacy defaults.
+
+    Present malformed proof is rejected rather than reconstructed from Config.
+    No probability algorithm or policy default is changed by this adapter.
+    """
+    if policy is None:
+        return None
+    if not isinstance(policy, Mapping):
+        raise ValueError("Report policy must be a mapping")
+    try:
+        k = policy["report_spine_selfconsistency_k"]
+        factor = policy["ensemble_extremize_a"]
+        effect = policy["simulation_forecast_effect"]
+    except KeyError as exc:
+        raise ValueError("Report policy is missing an admission control") from exc
+    if type(k) is not int or k < 1:
+        raise ValueError("Report policy draw count must be a positive integer")
+    if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not math.isfinite(factor):
+        raise ValueError("Report policy extremization must be finite")
+    if effect not in ("diagnostic_only", "no_update", "legacy_prompt"):
+        raise ValueError("Report policy simulation effect is invalid")
+    return MappingProxyType({"report_spine_selfconsistency_k": k,
+                             "ensemble_extremize_a": float(factor),
+                             "simulation_forecast_effect": effect})
 
 
 def _norm_name(name) -> str:
@@ -147,7 +176,7 @@ def _stdev(xs: List[float]) -> float:
     return math.sqrt(sum((x - m) ** 2 for x in xs) / (len(xs) - 1))
 
 
-def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
+def aggregate_forecasts(forecasts: List[Dict[str, Any]], *, report_policy=None) -> Dict[str, Any]:
     """Aggregate N structured-forecast dicts (from forecast_extractor) into one.
 
     Scenarios are matched across runs by normalized name; with
@@ -159,6 +188,7 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
     sum to 1. ``agreement`` ∈ [0,1]（对齐后有效共识桶 <2 时为 None——无法判定，
     而非误报 0）。
     """
+    policy = freeze_report_policy(report_policy)
     runs = [f for f in (forecasts or []) if isinstance(f, dict)]
     n = len(runs)
     if n == 0:
@@ -203,7 +233,7 @@ def aggregate_forecasts(forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     # R2-CAL-2：用 extremizing log-odds（几何）池化作为发布概率；算术均值保留为诊断。
     # ENSEMBLE_EXTREMIZE_A 未设置时 → 退回算术均值（默认路径逐字节一致，degrade-safe）。
-    a_raw = _cfg("ENSEMBLE_EXTREMIZE_A", None)
+    a_raw = policy["ensemble_extremize_a"] if policy is not None else _cfg("ENSEMBLE_EXTREMIZE_A", None)
     try:
         a = float(a_raw) if a_raw is not None else None
     except (TypeError, ValueError):

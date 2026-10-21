@@ -169,9 +169,8 @@ def test_unbound_legacy_simulation_does_not_adopt_current_official_generation(tm
 
 
 @pytest.mark.parametrize("mutation", ["identity", "extra_status", "symlink", "new_report", "new_manifest"])
-def test_invalid_binding_drops_only_official_data(tmp_path, monkeypatch, mutation):
-    """D3: a changed or malformed generation proof never serves official data, but the
-    research dossier keeps the pre-binding pipeline lookup instead of vanishing."""
+def test_invalid_binding_keeps_only_verifiable_core(tmp_path, monkeypatch, mutation):
+    """Optional data may degrade; changed core or invalid proof cannot adopt replacements."""
     from app.services import official_data
     from app.services.simulation_manager import SimulationManager
     handoff = tmp_path / "handoff"
@@ -204,9 +203,16 @@ def test_invalid_binding_drops_only_official_data(tmp_path, monkeypatch, mutatio
     monkeypatch.setattr(pipeline.PipelineManager, "list_pipelines", lambda: [{"pipeline_id": "pipe_bound"}])
     monkeypatch.setattr(pipeline.PipelineManager, "load", lambda _: {
         "simulation_id": "sim_bound", "handoff_dir": str(handoff)})
-    result = pipeline.load_research_dossier_for_simulation("sim_bound")
-    assert result["official_data"] is None
-    assert result["research_report"] == (handoff / "research_report.md").read_text()
+    binding_bytes = path.read_bytes()
+    if mutation != "new_manifest":
+        with pytest.raises(ValueError, match="Consumed research generation core"):
+            pipeline.load_research_dossier_for_simulation("sim_bound")
+    else:
+        result = pipeline.load_research_dossier_for_simulation("sim_bound")
+        assert result["official_data"] is None
+        assert result["research_report"] == "Generation one"
+        assert result["report_artifacts"] == {}
+    assert path.read_bytes() == binding_bytes
     assert list(directory.glob(".research-binding-*")) == []
 
 

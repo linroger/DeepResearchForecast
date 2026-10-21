@@ -449,10 +449,10 @@ def _feedback_next_report(app, original_id, original, research_markdown, sources
     # Drive the actual replay transaction to its PDF boundary, then simulate an
     # external export failure. Real repair/audit and backup/rollback remain active.
     pipeline_id = handoff.parent.name
-    (handoff.parent / "pipeline_state.json").write_text(json.dumps({
-        "pipeline_id": pipeline_id, "report_id": next_id, "simulation_id": original.simulation_id,
-        "handoff_dir": str(handoff),
-    }))
+    from app.services.pipeline_orchestrator import PipelineManager, PipelineState
+    PipelineManager.save(PipelineState(
+        pipeline_id=pipeline_id, report_id=next_id, simulation_id=original.simulation_id,
+        prompt=QUESTION, handoff_dir=str(handoff)))
     def bundle():
         return {str(path.relative_to(folder)): path.read_bytes() for path in folder.rglob("*")
                 if path.is_file() and not any(part.startswith(".codex-backup-") for part in path.parts)}
@@ -685,6 +685,9 @@ def test_scripted_engine_to_published_report_api_and_export(tmp_path, monkeypatc
         monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(sims))
         monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(sims))
         consumed = capture_research_generation(promoted)
+        po.PipelineManager.save(po.PipelineState(
+            pipeline_id=pipeline_id, prompt=QUESTION, simulation_id="sim_oddsense",
+            handoff_dir=str(promoted)))
         bind_simulation_research("sim_oddsense", promoted, pipeline_id=pipeline_id, expected_generation=consumed)
         assert carrier_api.load_for_simulation("sim_oddsense") == capture
         receipt.update(capture=capture, research_sources=sources, final_source_refs=refs,

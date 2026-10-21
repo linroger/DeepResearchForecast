@@ -148,7 +148,9 @@ def _pack_claims(pack: Optional[Dict[str, Any]], dimensions: Sequence[str], limi
                 continue
             if str(row.get("evidence_type") or "").casefold().replace("-", "_") == "analyst_inference":
                 continue
-            if row.get("actor_knows") is False:
+            qualifiers = row.get("qualifiers")
+            qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
+            if row.get("actor_knows") is False or qualifiers.get("actor_knows") is False:
                 continue
             claim = _clean(row.get("claim"), 200)
             if claim:
@@ -351,6 +353,9 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
             continue
         period_end = str(fact.get("period_end") or "")[:10]
         if as_of and period_end and period_end > as_of:
+            continue
+        fact_as_of = str(fact.get("as_of_date") or fact.get("as_of") or "")[:10]
+        if as_of and fact_as_of and fact_as_of > as_of:
             continue
         name = _clean(fact.get("metric"), 140)
         if not name:

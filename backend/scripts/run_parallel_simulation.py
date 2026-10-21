@@ -1891,7 +1891,7 @@ def get_active_agents_for_round(
 # when off these helpers are never called → static-persona behavior is byte-identical.
 # The pure update math lives in app.services.agent_dynamics (offline-tested); here
 # we (a) extract received-interaction signals from the round's actions, (b) inject
-# the rendered state line into each active agent's system message before env.step.
+# the rendered state line into each active agent's USER memory before env.step.
 # ============================================================================
 def _build_dynamics_tracker(config, log_info):
     """Build an AgentDynamicsTracker if SIM_AGENT_DYNAMICS is on; else None (no-op)."""
@@ -1909,10 +1909,11 @@ def _build_dynamics_tracker(config, log_info):
 
 
 def _inject_agent_dynamics(active_agents, tracker, log_info):
-    """Append each active agent's current-state line as a fresh SYSTEM memory record
-    for this round. astep() reads memory.get_context(), so the note becomes the
-    most-recent system message before the action prompt (maximal salience) WITHOUT
-    clearing the agent's accumulated conversation memory. Best-effort per agent.
+    """Append the current-state line as a USER memory record for this round.
+
+    CAMEL keeps only the original SYSTEM record when selecting context. USER
+    records reach astep() without replacing the sealed role or clearing prior
+    conversation memory. Best-effort per agent.
 
     (EXECPLAN2 I-2-1. Memory-preserving via update_memory rather than the earlier
     init_messages() re-seed, which the adversarial review flagged as silently wiping
@@ -1930,7 +1931,7 @@ def _inject_agent_dynamics(active_agents, tracker, log_info):
             if not line:
                 continue
             note = BaseMessage.make_user_message(role_name="StateUpdater", content=line)
-            agent.update_memory(note, OpenAIBackendRole.SYSTEM)
+            agent.update_memory(note, OpenAIBackendRole.USER)
         except Exception as e:
             log_info(f"动态状态注入失败 (agent {aid}): {e}")
 
@@ -3787,6 +3788,10 @@ def _append_jsonl(path: str, row: Dict[str, Any]) -> None:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+class WorldContextMismatch(ValueError):
+    """A saved/active world cannot be used with this admitted simulation config."""
+
+
 class _ReflexiveWorldCoordinator:
     """Shared per-simulation world: barrier, decision step, world update, artifacts."""
 
@@ -3798,6 +3803,7 @@ class _ReflexiveWorldCoordinator:
         self._log = log_info
         self._dir = simulation_dir
         self._config = config
+        self._config_fingerprint = _config_hash(config)
         self._expected = max(1, int(expected_platforms or 1))
         self._missing_platform_seq = 0
         tc = config.get("temporal_config") or {}
@@ -3858,6 +3864,7 @@ class _ReflexiveWorldCoordinator:
         self._as_of_date = str(self._tc.get("as_of_date") or self._seed.get("as_of_date") or "") or None
         self._ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
                     if self._scenarios else None)
+        initial_outcome = self._ws.outcome() if self._ws is not None else {}
         self._period_by_round: Dict[int, Dict[str, Any]] = {}
         for i, rp in enumerate(self._tc.get("round_dates") or []):
             if isinstance(rp, dict):
@@ -3870,18 +3877,31 @@ class _ReflexiveWorldCoordinator:
         self._resumed_round = 0  # number of loop rounds (0-based count) already committed on disk
         self._brief = ""
         self._digest = ""
+        self._recent_discourse = ""
+        self._private_decision_rows: Dict[int, Dict[str, Any]] = {}
+        saved_convergence: Dict[str, Any] = {}
         state_path = os.path.join(simulation_dir, WORLD_STATE_FILE)
         if os.path.exists(state_path):
             try:
                 with open(state_path, "r", encoding="utf-8") as handle:
                     saved = json.load(handle)
                 if isinstance(saved, dict) and isinstance(saved.get("world"), dict):
+                    if str(saved.get("simulation_id") or "") != str(config.get("simulation_id") or ""):
+                        raise WorldContextMismatch("saved world belongs to another simulation")
+                    if saved.get("config_hash") and saved["config_hash"] != self._config_fingerprint:
+                        raise WorldContextMismatch("saved world config fingerprint differs from the admitted config")
                     self._world = WorldModel.from_dict(saved["world"])
                     self._resumed_round = int(saved.get("committed_round") or 0)
                     self._brief = str(saved.get("brief") or "")
                     self._digest = str(saved.get("digest") or "")
+                    if saved.get("public_discourse_round") == self._resumed_round:
+                        self._recent_discourse = str(saved.get("public_discourse") or "")[:4000]
+                    saved_convergence = (saved.get("scenario_convergence")
+                                         if isinstance(saved.get("scenario_convergence"), dict) else {})
                     self._resumed_committed_round = self._resumed_round
                     log_info(f"reflexive world: resumed world_state.json at committed round {self._resumed_round}")
+            except WorldContextMismatch:
+                raise
             except Exception as _load_err:  # noqa: BLE001 — a corrupt state file falls back to the seed
                 self._world = None
                 log_info(f"reflexive world: could not load world_state.json ({_load_err}); rebuilding from seed")
@@ -3908,53 +3928,14 @@ class _ReflexiveWorldCoordinator:
                                            if isinstance(rp, dict) and rp.get("label")})
         except Exception:  # noqa: BLE001
             pass
-        self._base_shares = dict(self._ws.shares) if self._ws is not None else {}
-        row0: Dict[str, Any] = {"round": 0, **(self._ws.outcome() if self._ws is not None else {})}
+        self._base_shares = dict(initial_outcome.get("shares") or {})
+        row0: Dict[str, Any] = {"round": 0, **initial_outcome}
         if self._as_of_date:
             row0["as_of"] = self._as_of_date
         self._trajectory: List[Dict[str, Any]] = [row0]
         self._scenario_decisions: List[Dict[str, Any]] = []
         if self._ws is not None and self._resumed_round > 0:
-            try:
-                traj_path = os.path.join(simulation_dir, "world_state_trajectory.json")
-                if os.path.exists(traj_path):
-                    with open(traj_path, "r", encoding="utf-8") as _tf:
-                        saved_traj = json.load(_tf)
-                    rows = saved_traj.get("trajectory") if isinstance(saved_traj, dict) else None
-                    restored: List[Dict[str, Any]] = []
-                    for row in rows if isinstance(rows, list) else []:
-                        if not isinstance(row, dict):
-                            continue
-                        try:
-                            rr = int(row.get("round", -1))
-                        except (TypeError, ValueError):
-                            continue
-                        if rr < 0 or rr > self._resumed_round:
-                            continue
-                        restored.append(dict(row))
-                    if restored:
-                        self._trajectory = restored
-                        history = [dict(r.get("shares")) for r in restored if isinstance(r.get("shares"), dict)]
-                        if history:
-                            self._ws.history = history
-                            self._ws.shares = dict(history[-1])
-                            self._world.scenario_shares = dict(self._ws.shares)
-                        self._ws.round_statuses = [str(r.get("round_status")) for r in restored[1:]
-                                                   if str(r.get("round_status") or "").strip()]
-                    decisions = saved_traj.get("decisions") if isinstance(saved_traj, dict) else None
-                    self._scenario_decisions = []
-                    for row in decisions if isinstance(decisions, list) else []:
-                        if not isinstance(row, dict):
-                            continue
-                        try:
-                            rr = int(row.get("round", 0) or 0)
-                        except (TypeError, ValueError):
-                            rr = 0
-                        if rr > self._resumed_round:
-                            continue
-                        self._scenario_decisions.append(dict(row))
-            except Exception as _traj_err:  # noqa: BLE001
-                log_info(f"reflexive world: could not restore trajectory state ({_traj_err}); continuing from mirrored shares")
+            self._restore_committed_trajectory(row0)
         self._world_decisions: Dict[int, Dict[int, Any]] = {}
         self._decision_futures: Dict[int, "asyncio.Future"] = {}
         self._pending: Dict[int, Dict[str, Any]] = {}
@@ -3972,12 +3953,37 @@ class _ReflexiveWorldCoordinator:
         self._max_round = int(getattr(self, "_resumed_committed_round", 0) or 0)
         self._converged_at: Optional[int] = None
         self._stable_streak = 0
+        if self._resumed_round and self._ws is not None:
+            if saved_convergence.get("round") == self._resumed_round:
+                for key, attr in (("ewma_delta", "_ewma_delta"), ("last_delta", "_last_delta")):
+                    value = saved_convergence.get(key)
+                    if type(value) in (float, int) and 0.0 <= value <= 2.0:
+                        setattr(self._ws, attr, float(value))
+                streak = saved_convergence.get("stable_streak")
+                if type(streak) is int and 0 <= streak <= self._resumed_round:
+                    self._stable_streak = streak
+                at = saved_convergence.get("converged_at")
+                if type(at) is int and 1 <= at <= self._resumed_round:
+                    self._converged_at = at
+                    self._ws.converged_at = at
+            else:
+                # Legacy checkpoints lack convergence state. Recompute only from
+                # known adjacent committed projections; missing rounds stay missing.
+                by_round = {row["round"]: row for row in self._trajectory}
+                for rr in range(1, self._resumed_round + 1):
+                    row, previous = by_round.get(rr), by_round.get(rr - 1)
+                    if (row and previous and row.get("round_status") in ("committed", "abstained")):
+                        delta = sum(abs(float(row["shares"][k]) - float(previous["shares"][k])) for k in self._scenarios)
+                        self._ws._last_delta = round(delta, 6)
+                        self._ws._ewma_delta = round(0.5 * self._ws._ewma_delta + 0.5 * delta, 6)
         self._prev_date = self._as_of_date
         if self._trajectory:
             _last = self._trajectory[-1]
             _date = _last.get("period_end") or _last.get("as_of")
             if _date:
                 self._prev_date = str(_date)
+        if self._resumed_round and self._world.period and self._world.period.get("period_end"):
+            self._prev_date = str(self._world.period["period_end"])
         self._finalized = False
         try:
             self._seed_value = int(os.environ.get("SIM_SEED", "0") or "0")
@@ -4010,6 +4016,153 @@ class _ReflexiveWorldCoordinator:
             except Exception as _paths_err:  # noqa: BLE001 — path 0 must run even if the siblings cannot
                 self._paths = []
                 log_info(f"reflexive world: world paths unavailable ({_paths_err}); running one path")
+
+    def _restore_committed_trajectory(self, row0: Dict[str, Any]) -> None:
+        """Recover round projections without letting an older finalization roll back the checkpoint.
+
+        History is written each round; the trajectory is written only on finalize.
+        The validated world checkpoint remains authoritative for its latest shares.
+        Missing historical rounds are disclosed, never counted as valid transitions.
+        """
+        rows = {0: row0}
+        saved_decisions = []
+        trajectory_path = os.path.join(self._dir, "world_state_trajectory.json")
+        try:
+            if os.path.exists(trajectory_path):
+                with open(trajectory_path, encoding="utf-8") as handle:
+                    saved = json.load(handle)
+                if isinstance(saved, dict) and (not saved.get("config_hash")
+                                               or saved["config_hash"] == self._config_fingerprint):
+                    for row in saved.get("trajectory") or []:
+                        if isinstance(row, dict) and type(row.get("round")) is int:
+                            rr = row["round"]
+                            if 0 < rr <= self._resumed_round and isinstance(row.get("shares"), dict):
+                                rows[rr] = dict(row)
+                    saved_decisions = saved.get("decisions") or []
+            history_path = os.path.join(self._dir, WORLD_HISTORY_FILE)
+            if os.path.exists(history_path):
+                with open(history_path, encoding="utf-8") as handle:
+                    for line in handle:
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue
+                        if not isinstance(row, dict) or type(row.get("round")) is not int:
+                            continue
+                        rr = row["round"]
+                        if not 0 < rr <= self._resumed_round or not isinstance(row.get("shares"), dict):
+                            continue
+                        if row.get("config_hash") and row["config_hash"] != self._config_fingerprint:
+                            continue
+                        period = row.get("period") or self._period_for(rr - 1) or {}
+                        rows[rr] = {**rows.get(rr, {}), "round": rr, "shares": dict(row["shares"]),
+                                    "round_status": row.get("scenario_round_status") or "missing",
+                                    **{k: period[k] for k in ("period_start", "period_end", "label") if period.get(k)}}
+            # A crash can leave a trailing history row beyond the atomic world
+            # checkpoint. Above filtering excludes it; the checkpoint owns the head.
+            head = rows.setdefault(self._resumed_round, {"round": self._resumed_round, "round_status": "missing"})
+            head["shares"] = dict(self._ws.shares)
+            missing = [rr for rr in range(1, self._resumed_round + 1) if rr not in rows]
+            if missing:
+                head["restart_missing_rounds"] = missing
+                self._log(f"reflexive world: restart lacks trajectory evidence for rounds {missing}")
+            self._trajectory = [rows[rr] for rr in sorted(rows)]
+            self._ws.history = [dict(row["shares"]) for row in self._trajectory]
+            self._ws.round_statuses = [str(rows.get(rr, {}).get("round_status") or "missing")
+                                       for rr in range(1, self._resumed_round + 1)]
+            # world_actions is append-only and precedes the world checkpoint.
+            # Restore only admitted, committed actor decisions, not a partial next round.
+            actions_path = os.path.join(self._dir, WORLD_ACTIONS_FILE)
+            recovered = {}
+            for row in saved_decisions:
+                if isinstance(row, dict) and type(row.get("round")) is int and 0 < row["round"] <= self._resumed_round:
+                    recovered[(row["round"], row.get("agent_id"))] = dict(row)
+            if os.path.exists(actions_path):
+                with open(actions_path, encoding="utf-8") as handle:
+                    for line in handle:
+                        try:
+                            row = json.loads(line)
+                        except ValueError:
+                            continue
+                        if not isinstance(row, dict) or type(row.get("round")) is not int:
+                            continue
+                        if not 0 < row["round"] <= self._resumed_round or row.get("status") != "ok":
+                            continue
+                        if row.get("config_hash") and row["config_hash"] != self._config_fingerprint:
+                            continue
+                        aid = row.get("agent_id")
+                        if (type(aid) is not int or aid not in self._world.actors
+                                or row.get("actor_name") != self._world.actor_name(aid)):
+                            continue
+                        previous = self._private_decision_rows.get(aid)
+                        if previous is None or row["round"] >= previous["round"]:
+                            self._private_decision_rows[aid] = row
+                        if row.get("scenario") not in self._scenarios:
+                            continue
+                        decision = {"round": row["round"], "agent_id": aid, "scenario": row["scenario"],
+                                    "magnitude": round(max(0.1, float(row.get("magnitude") or 0)), 3),
+                                    "confidence": round(float(row.get("scenario_confidence") or 0), 3)}
+                        if aid in self._power:
+                            decision["outcome_power"] = self._power[aid]
+                        if row.get("period_end"):
+                            decision["period_end"] = row["period_end"]
+                        recovered[(row["round"], aid)] = decision
+            self._scenario_decisions = list(recovered.values())
+        except (OSError, ValueError, TypeError) as exc:
+            self._log(f"reflexive world: partial restart projection ({type(exc).__name__}); committed shares preserved")
+
+    def _previous_decision_note(self, aid: int) -> str:
+        """Only this actor's last committed move memory enters its structured call.
+
+        The platform publisher already produces this private note for organic
+        OASIS actions. Structured calls bypass that conversation, so explicitly
+        project the same note without copying it into public world artifacts.
+        """
+        from app.services.agent_decision import AgentDecision, decision_memory_note
+        row = self._private_decision_rows.get(aid)
+        if not row or row.get("round", 0) > self._max_round:
+            return ""
+        decision = AgentDecision(aid, self._world.actor_name(aid), row.get("option") or {},
+                                 targets=row.get("targets") or [], magnitude=row.get("magnitude") or 0,
+                                 public_statement=row.get("public_statement") or "",
+                                 private_rationale=row.get("private_rationale") or "",
+                                 commitment=row.get("commitment"), status=row.get("status") or "invalid")
+        note = decision_memory_note(decision, self._world._period_label_for_round(row["round"]))
+        if len(note) > 1800:
+            note = note[:1800] + " [private move memory truncated]"
+        return "# YOUR PREVIOUS DECISION (private memory)\n" + note if note else ""
+
+    def _public_discourse(self, actions: List[Dict[str, Any]]) -> str:
+        """Bound actual public action text; never forward arbitrary action/private metadata."""
+        lines = []
+        seen = set()
+        for row in actions:
+            if not isinstance(row, dict):
+                continue
+            aid = row.get("agent_id")
+            if type(aid) is not int or aid not in self._world.actors:
+                continue
+            kind = str(row.get("action_type") or "").upper()
+            if kind not in ("CREATE_POST", "CREATE_COMMENT", "QUOTE_POST"):
+                continue
+            args = row.get("action_args")
+            if not isinstance(args, dict):
+                continue
+            value = args.get("quote_content") if kind == "QUOTE_POST" else args.get("content")
+            if not isinstance(value, str) or not value.strip():
+                continue
+            text = " ".join(value.split())
+            key = (aid, kind, text)
+            if key in seen:
+                continue
+            seen.add(key)
+            text = text[:240] + " [truncated]" if len(text) > 240 else text
+            lines.append(f"- {self._world.actor_name(aid)} ({kind}): {text}")
+        if not lines:
+            return ""
+        return ("# PUBLIC DISCOURSE LAST PERIOD (statements, not verified facts)\n"
+                + "\n".join(lines[:12])
+                + (f"\n[{len(lines) - 12} further public observations omitted]" if len(lines) > 12 else ""))
 
     def _init_paths(self) -> None:
         """WORLD PATHS: the sibling paths 1..K-1, restored from ``world_paths.json`` when a resume matches
@@ -4205,9 +4358,10 @@ class _ReflexiveWorldCoordinator:
                 options = build_option_menu(actor, world, rnd)
                 prompt = build_decision_prompt(
                     actor, world_clock=clock, public_brief=self._brief,
-                    private_brief=world.render_private_brief(aid, upto_round=rnd - 1),
+                    private_brief="\n\n".join(filter(None, (
+                        world.render_private_brief(aid, upto_round=rnd - 1), self._previous_decision_note(aid)))),
                     options=options, scenarios=self._scenarios, cast_names=cast_names,
-                    language=self._language)
+                    language=self._language, recent_discourse=self._recent_discourse)
                 try:
                     system_message = str(system_message_lookup(aid) or "") if system_message_lookup else ""
                 except Exception:  # noqa: BLE001
@@ -4229,7 +4383,8 @@ class _ReflexiveWorldCoordinator:
                 d = decisions.get(int(aid))
                 if d is not None:
                     _append_jsonl(os.path.join(self._dir, WORLD_ACTIONS_FILE),
-                                  {**d.to_dict(), "period_label": label})
+                                  {**d.to_dict(), "period_label": label,
+                                   "config_hash": self._config_fingerprint})
         except Exception as _e:  # noqa: BLE001
             self._log(f"reflexive world: writing world_actions.jsonl failed: {_e}")
         counts: Dict[str, int] = {}
@@ -4326,6 +4481,7 @@ class _ReflexiveWorldCoordinator:
                 "outcome": out,
                 "trajectory": self._trajectory,
                 "decisions": self._scenario_decisions,
+                "config_hash": self._config_fingerprint,
                 "converged_at": self._converged_at,
                 "n_rounds": self._max_round,
                 "scenarios": self._scenarios,
@@ -4495,6 +4651,10 @@ class _ReflexiveWorldCoordinator:
                     self._prev_date = period_end
             except Exception as _e:  # noqa: BLE001
                 self._log(f"reflexive world: scenario-share step failed in round {rnd} (isolated): {_e}")
+        for decision in decisions:
+            if getattr(decision, "ok", False):
+                self._private_decision_rows[decision.agent_id] = decision.to_dict()
+        self._recent_discourse = self._public_discourse(buf.get("actions") or [])
         self._stepped += 1
         self._max_round = max(self._max_round, rnd)
         self._committed_done.add(round_num)
@@ -4502,6 +4662,7 @@ class _ReflexiveWorldCoordinator:
         try:
             history_row = {
                 "round": rnd, "period": period, "period_label": label,
+                "config_hash": self._config_fingerprint,
                 "decisions": record.get("decisions"),
                 # OFFERS / BREACHES travel with the round: the panel's per-period view and the run
                 # summary's behaviour badge are computed from these rows (live finding
@@ -4699,6 +4860,12 @@ class _ReflexiveWorldCoordinator:
         payload = {
             "schema_version": "world-state-file/v1",
             "simulation_id": str(self._config.get("simulation_id") or ""),
+            "config_hash": self._config_fingerprint,
+            "public_discourse": self._recent_discourse,
+            "public_discourse_round": self._max_round,
+            **({"scenario_convergence": {"round": self._max_round, "ewma_delta": self._ws._ewma_delta,
+                                         "last_delta": self._ws._last_delta, "stable_streak": self._stable_streak,
+                                         "converged_at": self._converged_at}} if self._ws is not None else {}),
             "committed_round": self._max_round,
             "brief": self._brief,
             "digest": self._digest,
@@ -4710,14 +4877,24 @@ class _ReflexiveWorldCoordinator:
 
 
 def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected_platforms: int,
-                           log_info) -> Optional[_ReflexiveWorldCoordinator]:
+                           log_info, *, resume: bool = True) -> Optional[_ReflexiveWorldCoordinator]:
     """Shared coordinator per sim dir; None when world mode is off or construction fails."""
     try:
         if not _world_model_enabled(config):
             return None
         key = os.path.abspath(simulation_dir)
         coord = _WORLD_COORDINATORS.get(key)
+        if coord is not None and coord._config_fingerprint != _config_hash(config):
+            raise WorldContextMismatch("active world coordinator belongs to another config")
         if coord is None:
+            if not resume:
+                # The platform rejected/has no checkpoint. Its freshly reset DB
+                # must not be paired with a completed world from the previous run.
+                for name in (WORLD_STATE_FILE, WORLD_HISTORY_FILE, WORLD_ACTIONS_FILE,
+                             "world_digest.jsonl", "world_state_trajectory.json", "decisions.jsonl", "world_paths.json"):
+                    path = os.path.join(simulation_dir, name)
+                    if os.path.lexists(path):
+                        os.remove(path)
             _WORLD_TRAJ_WRITTEN.pop(key, None)
             coord = _ReflexiveWorldCoordinator(config, simulation_dir, int(expected_platforms or 1), log_info)
             _WORLD_COORDINATORS[key] = coord
@@ -4728,6 +4905,8 @@ def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected
                      + (f", paths={coord._k}, sibling arbiter temperature={coord._path_temperature:g}"
                         if coord._paths else "") + ")")
         return coord
+    except WorldContextMismatch:
+        raise
     except Exception as _e:  # noqa: BLE001
         log_info(f"reflexive world model init failed (falling back to legacy evolution): {_e}")
         return None
@@ -4971,6 +5150,37 @@ def _load_round_checkpoint(simulation_dir: str, platform: str) -> Optional[Dict[
     except (OSError, ValueError, TypeError):
         pass
     return None
+
+
+def _validate_shared_world_resume(config: Dict[str, Any], simulation_dir: str,
+                                  expected_platforms: int, resume: bool) -> None:
+    """Admit both platform DBs together before either can reset shared context.
+
+    Missing/changed checkpoints may start a wholly fresh run. One resumed DB
+    and one fresh DB cannot share one world: reject that mixed admission before
+    model construction, DB reset, or derived-world cleanup, in either start order.
+    """
+    if not resume or expected_platforms <= 1 or not _world_model_enabled(config):
+        return
+    key = os.path.abspath(simulation_dir)
+    fingerprint = _config_hash(config)
+    active = _WORLD_COORDINATORS.get(key)
+    if active is not None:
+        if active._config_fingerprint != fingerprint:
+            raise WorldContextMismatch("active world coordinator belongs to another config")
+        # The sibling joins the already-admitted run, whose first platform may
+        # have advanced its checkpoint since the shared launch was checked.
+        return
+    admitted = []
+    for platform in ("twitter", "reddit"):
+        checkpoint = _load_round_checkpoint(simulation_dir, platform)
+        valid = checkpoint is not None and os.path.exists(os.path.join(simulation_dir, platform + "_simulation.db"))
+        if valid:
+            saved_hash = str(checkpoint.get("config_hash") or "")
+            valid = not saved_hash or saved_hash == fingerprint
+        admitted.append(valid)
+    if any(admitted) and not all(admitted):
+        raise WorldContextMismatch("mixed platform resume admission: both platforms require matching checkpoints and DBs")
 
 
 def _max_trace_rowid(db_path: str) -> int:
@@ -5850,6 +6060,8 @@ async def run_twitter_simulation(
     if not isinstance(temporal_config, dict):
         temporal_config = {}
     calendar = str(temporal_config.get("mode") or "").strip().lower() == "calendar"
+    if calendar:
+        _validate_shared_world_resume(config, simulation_dir, semaphore_platforms, resume)
     
     # Twitter 使用通用 LLM 配置
     model = create_model(config, use_boost=False)
@@ -6112,7 +6324,8 @@ async def run_twitter_simulation(
     # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
     # world update and the scenario-share stepping; when it is active the legacy in-band
     # evolution stays off so the WorldState is stepped exactly once per round.
-    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info)
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
+                                               resume=resume_ckpt is not None)
                     if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if (calendar and _world_coord is None) else None)
@@ -6427,6 +6640,8 @@ async def run_reddit_simulation(
     if not isinstance(temporal_config, dict):
         temporal_config = {}
     calendar = str(temporal_config.get("mode") or "").strip().lower() == "calendar"
+    if calendar:
+        _validate_shared_world_resume(config, simulation_dir, semaphore_platforms, resume)
     
     # Reddit 使用加速 LLM 配置（如果有的话，否则回退到通用配置）
     model = create_model(config, use_boost=True)
@@ -6704,7 +6919,8 @@ async def run_reddit_simulation(
     # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
     # world update and the scenario-share stepping; when it is active the legacy in-band
     # evolution stays off so the WorldState is stepped exactly once per round.
-    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info)
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
+                                               resume=resume_ckpt is not None)
                     if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if (calendar and _world_coord is None) else None)

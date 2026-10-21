@@ -117,7 +117,7 @@ def v1_run():
             except (TypeError, ValueError):
                 return _err("max_rounds 必须是整数")
 
-        language = (data.get('language') or '').strip() or None
+        language = (data.get('language') or data.get('research_language') or '').strip() or None
         if language is not None and language not in _VALID_LANGUAGES:
             return _err(f"language 必须是 {sorted(_VALID_LANGUAGES)} 之一")
         if language == 'auto':
@@ -204,7 +204,7 @@ def v1_dossier(pipeline_id: str):
     EXECPLAN2 I-9-5。读取与 /api/research/<id>/dossier 相同的 handoff 产物，保持契约一致。
     """
     try:
-        handoff = PipelineManager.handoff_dir(pipeline_id)
+        handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
         if not os.path.isdir(handoff):
             return _err("管线不存在", 404)
 

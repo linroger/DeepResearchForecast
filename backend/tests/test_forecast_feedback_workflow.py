@@ -391,6 +391,7 @@ def _generate(root, report_id, *, dual_anchor=False, near_anchor=False):
     """Start the real public generation method from persisted synthetic inputs."""
     from app.config import Config
     from app.services.official_data import data_api, load_official_data
+    from app.services.pipeline_orchestrator import PipelineManager, PipelineState
     from app.services.report_agent import ReportAgent, ReportStatus
 
     simulation_id = f"sim_{report_id}"
@@ -398,10 +399,9 @@ def _generate(root, report_id, *, dual_anchor=False, near_anchor=False):
     pipeline = Path(Config.PIPELINE_DATA_DIR) / pipeline_id
     handoff = pipeline / "handoff"
     handoff.mkdir(parents=True, exist_ok=True)
-    (pipeline / "pipeline_state.json").write_text(json.dumps({
-        "pipeline_id": pipeline_id, "simulation_id": simulation_id,
-        "handoff_dir": str(handoff), "created_at": "2026-10-01T00:00:00Z",
-    }), encoding="utf-8")
+    PipelineManager.save(PipelineState(
+        pipeline_id=pipeline_id, simulation_id=simulation_id, prompt=QUESTION,
+        handoff_dir=str(handoff), created_at="2026-10-01T00:00:00Z"))
     (handoff / "prediction_markets.json").write_text(
         json.dumps({"markets": _markets(dual_anchor=dual_anchor)}), encoding="utf-8")
     api = data_api()

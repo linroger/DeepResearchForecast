@@ -2,9 +2,15 @@
 from __future__ import annotations
 
 from .contracts import (
-    actors_by_id, clone, digest, parse_time, period_for, require,
+    CAUSAL_ORDER_POLICY, actors_by_id, causal_order_key, clone, digest, parse_time, period_for, require,
     templates_by_id, visible_to,
 )
+
+
+def _interaction_order(spec: dict, snapshot: dict, item: dict) -> tuple:
+    if spec.get('resolutionOrderPolicy') == CAUSAL_ORDER_POLICY:
+        return causal_order_key(snapshot, item['interactionId'])
+    return (item['interactionId'],)
 
 
 def _eligible_inbox(spec: dict, snapshot: dict, actor_id: str, round_index: int) -> list[dict]:
@@ -20,9 +26,11 @@ def _eligible_inbox(spec: dict, snapshot: dict, actor_id: str, round_index: int)
         inbox.append(item)
     if spec.get('interactionQueuePolicy') == 'presented-v1':
         presented = snapshot.get('interactionQueueState', {}).get(actor_id, {})
-        inbox.sort(key=lambda item: (presented.get(item['interactionId'], 0), item['deliverAt'], item['interactionId']))
+        inbox.sort(key=lambda item: (presented.get(item['interactionId'], 0), item['deliverAt'],
+                                     _interaction_order(spec, snapshot, item)))
     else:
-        inbox.sort(key=lambda item: (item.get('lastResponseRound', 0), item['deliverAt'], item['interactionId']))
+        inbox.sort(key=lambda item: (item.get('lastResponseRound', 0), item['deliverAt'],
+                                     _interaction_order(spec, snapshot, item)))
     return inbox
 
 
@@ -73,14 +81,14 @@ def build_observation(spec: dict, snapshot: dict, actor_id: str, round_index: in
                 if item.get('kind') == 'message' and visible_to(item, actor_id)
                 and parse_time(item['deliverAt']) <= now
                 and parse_time(item['expiresAt']) > now]
-    messages.sort(key=lambda item: (item['deliverAt'], item['interactionId']))
+    messages.sort(key=lambda item: (item['deliverAt'], _interaction_order(spec, snapshot, item)))
     result = {
         'schemaVersion': 'actor-world-observation/v1', 'actorId': actor_id,
         'round': round_index, 'phase': phase, 'simulatedAt': period['start'],
         'periodEnd': period['end'], 'horizon': spec['horizon'],
         'actor': model, 'privateState': private, 'world': world,
         'inbox': inbox, 'messages': messages[-spec['limits']['maxInboxItems']:],
-        'ownOffers': sorted(own_offers, key=lambda item: item['interactionId']),
+        'ownOffers': sorted(own_offers, key=lambda item: _interaction_order(spec, snapshot, item)),
         'options': sorted(options.values(), key=lambda item: item['templateId']),
     }
     if 'evaluationObservationMask' in spec:

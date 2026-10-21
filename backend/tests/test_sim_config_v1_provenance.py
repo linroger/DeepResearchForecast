@@ -523,7 +523,7 @@ def test_canonical_world_brief_shares_public_rows_without_private_omniscience(
     assert all(sentinel not in serialized_event for sentinel in FLAT_SENTINELS)
 
 
-def test_canonical_world_brief_is_empty_without_explicit_public_source_bound_rows(
+def test_canonical_world_brief_retains_task_boundary_without_public_evidence(
     monkeypatch,
 ):
     monkeypatch.setattr(Config, "SIM_WORLD_BRIEF", True)
@@ -532,13 +532,32 @@ def test_canonical_world_brief_is_empty_without_explicit_public_source_bound_row
         for claim in claims:
             claim["visibility"] = "actor_internal"
     dossier = _dossier(actor)
+    dossier["as_of_date"] = "2026-07-01"
+    dossier["forecast_horizon"] = "through 2029"
     generator = _generator()
-    assert generator._build_world_brief(
+    brief = generator._build_world_brief(
         "question",
         dossier,
         ["RAW HOT TOPIC SENTINEL"],
-        actor_context_packs={actor["actor_id"]: _pack(actor)},
-    ) == ""
+        actor_context_packs={actor["actor_id"]: _pack(actor, dossier=dossier)},
+    )
+    graph = _Graph()
+    _inject_world_brief(graph, brief, lambda message: None)
+    prompts = [brief, *[
+        agent._original_system_message.content for _agent_id, agent in graph.rows
+    ]]
+    for prompt in prompts:
+        assert "question" in prompt
+        assert dossier["as_of_date"] in prompt
+        assert dossier["forecast_horizon"] in prompt
+        for private_value in (
+            "not public", "PRIVATE BOARD PLAN SENTINEL",
+            "MODEL ONLY INFERENCE SENTINEL", "source-bound incentive",
+            "CANONICAL GAINS", "CANONICAL LOSSES",
+            "RAW SITUATION PRIVATE SENTINEL", "RAW MODEL INFERENCE SENTINEL",
+            "RAW HOT TOPIC SENTINEL", *FLAT_SENTINELS,
+        ):
+            assert private_value not in prompt
 
 
 def test_canonical_relationships_and_events_use_only_dossier_bound_visible_packs():

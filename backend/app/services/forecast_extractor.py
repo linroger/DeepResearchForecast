@@ -4405,7 +4405,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              data_pack: Optional[str] = None,
                              official_data: Optional[Dict[str, Any]] = None,
                              simulation_effect: Optional[str] = None,
-                             pinned_questions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                             pinned_questions: Optional[List[Dict[str, Any]]] = None,
+                             report_policy=None) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -4430,6 +4431,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     with that ``proposition_id``, and each row that answers one is marked
     ``golden_id`` (the backtest driver maps forecasts to golden questions by it).
     """
+    from .ensemble import freeze_report_policy
+    policy = freeze_report_policy(report_policy)
     content = (report_markdown or "")
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
     _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
@@ -4439,7 +4442,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
     # （特征化 fixture 专用）时才允许进入二元概率生成；默认 diagnostic_only 下模拟产出
     # 不得移动任何已发布概率（simulation adjustments 是未晋升的预测政策）。
-    _sim_effect = str(simulation_effect or _cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+    _sim_effect = str(simulation_effect or (
+        policy["simulation_forecast_effect"] if policy is not None else
+        _cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only"))
                       or "diagnostic_only").strip().lower()
     pinned = [q for q in (pinned_questions or []) if isinstance(q, dict) and q.get("golden_id")]
     sim_sensitive = (_sim_effect == "legacy_prompt"
@@ -4612,7 +4617,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             if secondary:
                 ensemble_pooled_models = sorted(secondary.keys())
                 from .ensemble import pool_binary_forecasts as _pool
-                a_raw = _cfg("ENSEMBLE_EXTREMIZE_A", None)
+                a_raw = (policy["ensemble_extremize_a"] if policy is not None else
+                         _cfg("ENSEMBLE_EXTREMIZE_A", None))
                 try:
                     _a = float(a_raw) if a_raw is not None else None
                 except (TypeError, ValueError):
@@ -4989,7 +4995,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
                           quantitative_facts: str = "",
                           market_block: str = "",
                           language: str = "",
-                          official_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                          official_data: Optional[Dict[str, Any]] = None,
+                          report_policy=None) -> Dict[str, Any]:
     """NEXTSTEPS P0-1: derive the structured forecast *spine* from research +
     simulation SIGNALS — *before* any prose is written.
 
@@ -5014,6 +5021,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     """
     # R2-DETAIL-3：每块输入上限可配置。RQ-4：signal/inputs 两块 4000→6000（骨架情景/概率
     # 由这两块驱动，4000 会把驱动因素与量化信号截断，让骨架欠地气）；brief/facts 维持旧值。
+    from .ensemble import freeze_report_policy
+    policy = freeze_report_policy(report_policy)
     cap_brief = int(_cfg("REPORT_SPINE_INPUT_CAP_BRIEF", 2000))
     cap_inputs = int(_cfg("REPORT_SPINE_INPUT_CAP_INPUTS", 6000))
     cap_signal = int(_cfg("REPORT_SPINE_INPUT_CAP_SIGNAL", 6000))
@@ -5063,7 +5072,8 @@ def derive_forecast_spine(llm, *, central_question: str = "", horizon: str = "",
     max_tokens = int(_cfg("REPORT_SPINE_MAX_TOKENS", 6144))  # R2-CAL-11: 2048→6144
     floor = _coerce_float(_cfg("FORECAST_PROB_FLOOR", 0.0)) or 0.0
     try:
-        k = int(_cfg("REPORT_SPINE_SELFCONSISTENCY_K", 1) or 1)
+        k = int(policy["report_spine_selfconsistency_k"] if policy is not None else
+                (_cfg("REPORT_SPINE_SELFCONSISTENCY_K", 1) or 1))
     except (TypeError, ValueError):
         k = 1
     k = max(1, k)

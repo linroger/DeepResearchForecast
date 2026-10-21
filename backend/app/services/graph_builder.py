@@ -1157,9 +1157,20 @@ class GraphBuilderService:
                 message="本体已设置"
             )
             
-            # 3. 文本分块
-            chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
+            # Direct/manual builds do not pass through the orchestrator's
+            # research boundary. Sanitize the whole document before splitting
+            # so a directive straddling chunk boundaries cannot become control.
+            normalized_text = unicodedata.normalize("NFKC", str(text or ""))
+            safe_text = sanitize_untrusted_research_text(
+                normalized_text,
+                max_chars=max(1, len(normalized_text) + (normalized_text.count("\n") + 1) * 64),
+            )
+            chunks = TextProcessor.split_text(safe_text, chunk_size, chunk_overlap)
             total_chunks = len(chunks)
+            chunks = [delimit_untrusted_research_text(
+                f"graph document chunk {index}/{total_chunks}", chunk,
+                max_chars=max(1, len(chunk) + (chunk.count("\n") + 1) * 64),
+            ) for index, chunk in enumerate(chunks, start=1)]
             self.task_manager.update_task(
                 task_id,
                 progress=20,
@@ -1385,6 +1396,18 @@ class GraphBuilderService:
         # 优先用研究给的 description，回退到 role；喂给 add_triplet 的端点 summary，
         # graphiti 的 LLM 去重器读 node.summary 来区分同名异体。
         summ = {a["name"]: (str(a.get("description") or a.get("role") or "").strip()[:200]) for a in rows}
+        canonical_endpoints = {normalize_name(a["name"]): a["name"] for a in rows}
+        alias_candidates: Dict[str, set] = {}
+        for actor in rows:
+            aliases = actor.get("aliases")
+            for alias in aliases if isinstance(aliases, list) else []:
+                if isinstance(alias, str) and normalize_name(alias):
+                    alias_candidates.setdefault(normalize_name(alias), set()).add(actor["name"])
+        for alias, names in alias_candidates.items():
+            # Canonical names take precedence; ambiguous legacy aliases do not
+            # authorize merging distinct actors. The sealed path rejects them.
+            if len(names) == 1 and alias not in canonical_endpoints:
+                canonical_endpoints[alias] = next(iter(names))
         n = 0
         seeded_names: set = set()
         for r in rels:
@@ -1398,6 +1421,11 @@ class GraphBuilderService:
                 sanitized = re.sub(r"[^0-9A-Za-z_]+", "_", rl).strip("_").upper() if rl else ""
                 etype = sanitized or etype or "RELATES_TO"
             src, tgt = r.get("source"), r.get("target")
+            # The relationship extractor admits curated aliases. Resolve those
+            # before label/summary lookup and writes, rather than creating bare
+            # alias endpoints and redundant isolated canonical actor nodes.
+            src = canonical_endpoints.get(normalize_name(str(src)), src)
+            tgt = canonical_endpoints.get(normalize_name(str(tgt)), tgt)
             # 把 sign/strength/grade 折进事实文本：边自带可检索的极性/强度/定级，无需改 Graphiti schema。
             fact = str(r.get("basis") or f"{src} {etype} {tgt}")
             sign, strength, grade = r.get("sign"), r.get("strength"), r.get("grade")
@@ -2309,8 +2337,17 @@ class GraphBuilderService:
         if getattr(Config, "GRAPH_CAST_CHUNK_FILTER", True):
             terms = (getattr(self, "_cast_chunk_terms", None) or {}).get(graph_id) or []
             if terms:
-                kept = [c for c in chunks if chunk_mentions_cast(c, terms)]
-                if kept:
+                cast_matches = [chunk_mentions_cast(c, terms) for c in chunks]
+                if any(cast_matches):
+                    kept = [c for c, matched in zip(chunks, cast_matches) if (
+                        matched
+                        # The parent deliberately appends the stored historical
+                        # statistical baseline. Its metrics need not name an actor.
+                        # Preserve that exact producer envelope through extraction.
+                        or c.startswith(
+                            "BEGIN UNTRUSTED RESEARCH DATA — Official statistical observations chunk "
+                        )
+                    )]
                     cast_filtered = input_chunks - len(kept)
                     chunks = kept
                     if cast_filtered:

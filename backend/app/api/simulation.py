@@ -503,6 +503,12 @@ def prepare_simulation():
             except WorldError as exc:
                 return jsonify({"success": False, "error": str(exc), "code": exc.code}), 409
 
+        from ..services.backtest_mode import pipeline_for_simulation
+        from ..services.pipeline_orchestrator import load_research_dossier_for_simulation, _calendar_mode
+        owner = pipeline_for_simulation(simulation_id)
+        context = load_research_dossier_for_simulation(simulation_id)
+        options = owner["options"] if owner else {}
+
         # 检查是否强制重新生成
         force_regenerate = data.get('force_regenerate', False)
         logger.info(f"开始处理 /prepare 请求: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
@@ -535,8 +541,9 @@ def prepare_simulation():
                 "error": f"项目不存在: {state.project_id}"
             }), 404
         
-        # 获取模拟需求
-        simulation_requirement = project.simulation_requirement or ""
+        # Bound secondary/manual simulations consume the same research and run
+        # options as their owner. Never resolve this through today's project.
+        simulation_requirement = (owner.get("prompt") if owner else project.simulation_requirement) or ""
         if not simulation_requirement:
             return jsonify({
                 "success": False,
@@ -544,7 +551,11 @@ def prepare_simulation():
             }), 400
         
         # 获取文档文本
-        document_text = ProjectManager.get_extracted_text(state.project_id) or ""
+        document_text = (context.get("research_report") if owner else None)
+        if document_text is None:
+            document_text = ProjectManager.get_extracted_text(state.project_id) or ""
+        round_budget = options.get("max_rounds") or (
+            None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
         
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
@@ -665,8 +676,14 @@ def prepare_simulation():
                     defined_entity_types=entity_types_list,
                     use_llm_for_profiles=use_llm_for_profiles,
                     progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count
+                    parallel_profile_count=parallel_profile_count,
+                    actors=context.get("actors"),
+                    graph_priors=(context.get("report_artifacts") or {}).get("graph_priors"),
+                    research_language=options.get("research_language"),
+                    max_rounds=int(round_budget) if round_budget else None,
                 )
+                if result_state.status != SimulationStatus.READY:
+                    raise ValueError(result_state.error or "Simulation preparation did not reach ready")
                 
                 # 任务完成
                 task_manager.complete_task(
@@ -889,63 +906,21 @@ def list_simulations():
         }), 500
 
 
+def _retire_report_cache_for_simulation_restart(simulation_id: str) -> None:
+    """Retire current simulation cache before cleanup or replacement execution.
+
+    Historical publication seals and ledger snapshots remain unchanged. A
+    retirement write failure aborts restart before runtime artifacts change.
+    """
+    from ..services.report_agent import ReportManager
+    ReportManager.retire_reports_for_simulation(simulation_id)
+
+
 def _get_report_id_for_simulation(simulation_id: str) -> str:
-    """
-    获取 simulation 对应的最新 report_id
-    
-    遍历 reports 目录，找出 simulation_id 匹配的 report，
-    如果有多个则返回最新的（按 created_at 排序）
-    
-    Args:
-        simulation_id: 模拟ID
-        
-    Returns:
-        report_id 或 None
-    """
-    import json
-    from datetime import datetime
-    
-    # reports 目录路径：backend/uploads/reports
-    # __file__ 是 app/api/simulation.py，需要向上两级到 backend/
-    reports_dir = os.path.join(os.path.dirname(__file__), '../../uploads/reports')
-    if not os.path.exists(reports_dir):
-        return None
-    
-    matching_reports = []
-    
-    try:
-        for report_folder in os.listdir(reports_dir):
-            report_path = os.path.join(reports_dir, report_folder)
-            if not os.path.isdir(report_path):
-                continue
-            
-            meta_file = os.path.join(report_path, "meta.json")
-            if not os.path.exists(meta_file):
-                continue
-            
-            try:
-                with open(meta_file, 'r', encoding='utf-8') as f:
-                    meta = json.load(f)
-                
-                if meta.get("simulation_id") == simulation_id:
-                    matching_reports.append({
-                        "report_id": meta.get("report_id"),
-                        "created_at": meta.get("created_at", ""),
-                        "status": meta.get("status", "")
-                    })
-            except Exception:
-                continue
-        
-        if not matching_reports:
-            return None
-        
-        # 按创建时间倒序排序，返回最新的
-        matching_reports.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return matching_reports[0].get("report_id")
-        
-    except Exception as e:
-        logger.warning(f"查找 simulation {simulation_id} 的 report 失败: {e}")
-        return None
+    """Return the latest current report, using the manager's storage and cache policy."""
+    from ..services.report_agent import ReportManager
+    report = ReportManager.get_report_by_simulation(simulation_id)
+    return report.report_id if report else None
 
 
 @simulation_bp.route('/history', methods=['GET'])
@@ -1637,6 +1612,10 @@ def start_simulation():
             is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
 
             if is_prepared:
+                # Retirement must be durable before stopping an existing run,
+                # cleaning its artifacts, or starting replacement work.
+                if force:
+                    _retire_report_cache_for_simulation_restart(simulation_id)
                 # 准备工作已完成，检查是否有正在运行的进程
                 if state.status == SimulationStatus.RUNNING:
                     # 检查模拟进程是否真的在运行
@@ -1694,6 +1673,11 @@ def start_simulation():
             
             logger.info(f"启用图谱记忆更新: simulation_id={simulation_id}, graph_id={graph_id}")
         
+        # A READY simulation may also have an older completed report (for
+        # example after an earlier failed restart). Invalidate before execution.
+        if not force_restarted:
+            _retire_report_cache_for_simulation_restart(simulation_id)
+
         # 启动模拟
         run_state = SimulationRunner.start_simulation(
             simulation_id=simulation_id,

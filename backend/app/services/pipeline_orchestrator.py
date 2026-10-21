@@ -7352,33 +7352,34 @@ def merge_market_price_histories(track_histories: list[Any],
 
 
 def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
-    """T4.1: best-effort 找到含该 simulation_id 的管线 handoff，加载研究档案。
+    """Read a simulation's consumed dossier; only genuinely unbound runs use legacy lookup.
 
-    供手动报告路径（api/report.py）复用：让手动生成/对话也能钉入背景档案。找不到对应
-    管线 / handoff 时全部返回 None，ReportAgent 回退到冷图盲搜路径（与旧行为一致）。
+    If optional enrichment changed, core prose may degrade only when its original
+    binding hashes still verify. A replacement dossier never becomes G1 context.
     """
     out: dict[str, Any] = {
         "situation_brief": None, "actors": None, "sources": None, "research_report": None,
-        "actor_dossier": None,  # 双轨 Track B：角色本体档案，供手动报告路径作背景上下文（缺失为 None）
-        "official_data": None, "news_market_context": None,
+        "actor_dossier": None, "official_data": None, "news_market_context": None,
+        "report_artifacts": {},
     }
     if not simulation_id:
         return out
-    # Context integrity is a required provenance check, outside the optional
-    # legacy dossier/official-data enrichment fallback below.
     from .news_market_context import load_for_simulation as load_news_for_simulation
-    from .official_data import research_binding_has_news_context, simulation_research_binding
-    context_proof = simulation_research_binding(simulation_id)
-    if context_proof["status"] != "invalid" or research_binding_has_news_context(simulation_id):
+    from .official_data import (research_binding_has_news_context, simulation_research_binding,
+                                read_bound_research_core, load_official_data)
+    binding = simulation_research_binding(simulation_id)
+    if binding["status"] != "invalid" or research_binding_has_news_context(simulation_id):
         out["news_market_context"] = load_news_for_simulation(simulation_id)
+    if binding["status"] == "invalid":
+        core = read_bound_research_core(simulation_id)
+        if core.get("status") != "valid":
+            raise ValueError("Consumed research generation core is invalid; refusing replacement context")
+        out.update(actors=core.get("actors"), sources=core.get("sources"),
+                   research_report=core.get("research_report"), actor_dossier=core.get("actor_dossier"))
+        out["situation_brief"] = situation_brief(out["actors"]) if out["actors"] else None
+        return out  # No optional data or rich artifacts are authenticated by a core-only proof.
+    bound = binding["status"] == "valid"
     try:
-        from .official_data import load_official_data, simulation_research_binding
-        binding = simulation_research_binding(simulation_id)
-        bound = binding["status"] == "valid"
-        if binding["status"] == "invalid":
-            # A changed or unreadable generation proof drops only the official
-            # data; the dossier keeps the pre-binding pipeline lookup.
-            logger.warning("模拟 %s 的研究代际绑定校验失败：官方数据不可用，研究档案按管线回退查找", simulation_id)
         entries = ([{"pipeline_id": binding["pipeline_id"]}] if bound
                    else PipelineManager.list_pipelines())
         for entry in entries:
@@ -7391,19 +7392,24 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
                 continue
             hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
             actors = _read_json(os.path.join(hd, "actors.json"))
-            report = _read_text(os.path.join(hd, "research_report.md"))
-            dossier = _read_text(os.path.join(hd, "actor_dossier.md"))
-            out["actors"] = actors
-            out["sources"] = _read_json(os.path.join(hd, "sources.json"))
-            out["research_report"] = report or None
-            out["actor_dossier"] = dossier or None
-            out["situation_brief"] = situation_brief(actors) if actors else None
-            out["official_data"] = load_official_data(hd) if bound else None
-            if bound and simulation_research_binding(simulation_id)["status"] != "valid":
-                return dict.fromkeys(out)
+            out.update(actors=actors, sources=_read_json(os.path.join(hd, "sources.json")),
+                       research_report=_read_text(os.path.join(hd, "research_report.md")) or None,
+                       actor_dossier=_read_text(os.path.join(hd, "actor_dossier.md")) or None,
+                       situation_brief=situation_brief(actors) if actors else None,
+                       official_data=load_official_data(hd) if bound else None)
+            out["report_artifacts"] = {
+                key: _read_json(os.path.join(hd, filename))
+                for key, filename in (("quantitative", "quantitative.json"),
+                    ("contested", "contested.json"), ("timeline_events", "timeline.json"),
+                    ("graph_priors", "graph_priors.json"),
+                    ("graph_priors_structural", "graph_priors_structural.json"))}
             break
-    except Exception:  # best-effort enrichment must never break manual report generation
-        pass
+    except Exception:
+        if bound:
+            raise
+        return out  # Historical unbound enrichment remains best effort.
+    if bound and simulation_research_binding(simulation_id) != binding:
+        raise ValueError("Consumed research generation changed during dossier read")
     return out
 
 
@@ -9334,12 +9340,19 @@ class PipelineOrchestrator:
             "base_pipeline_id": base_pipeline_id,
             "project_name": base_state.options.get("project_name"),
         }
+        # A what-if fork changes only its overlay. Retain admitted execution and
+        # safety context instead of silently adopting current process defaults.
+        from copy import deepcopy
+        for key in ("depth", "research_language", "research_model", "research_engine",
+                    "max_rounds", "safety_policy_v1"):
+            if key in base_state.options:
+                new_state.options[key] = deepcopy(base_state.options[key])
         _actor_policy = base_state.options.get("actor_intelligence_policy_v1")
         if isinstance(_actor_policy, dict):
             # Scenario forks consume the base research generation.  Preserve
             # the base run's exact actor requirement instead of consulting
             # today's ambient dual-track flag.
-            new_state.options["actor_intelligence_policy_v1"] = dict(_actor_policy)
+            new_state.options["actor_intelligence_policy_v1"] = deepcopy(_actor_policy)
         if (overlay or {}).get("max_rounds"):
             try:
                 new_state.options["max_rounds"] = int(overlay["max_rounds"])
@@ -9348,12 +9361,11 @@ class PipelineOrchestrator:
         if backtest_of(base_state.options) is not None:
             # A fork of a backtest run reuses research read at the cutoff; its
             # report must keep the cutoff too (no live re-quote, no ledger row).
-            new_state.options[BACKTEST_OPTION] = dict(base_state.options[BACKTEST_OPTION])
+            new_state.options[BACKTEST_OPTION] = deepcopy(base_state.options[BACKTEST_OPTION])
 
         new_state.options["simulation_engine"] = engine
         if engine == "world-v1":
-            from copy import deepcopy
-            for key in ("safety_policy_v1", "world_research_generation_id", "research_language"):
+            for key in ("world_research_generation_id",):
                 if key in base_state.options:
                     new_state.options[key] = deepcopy(base_state.options[key])
             if not base_state.simulation_id:
@@ -9556,13 +9568,145 @@ class PipelineOrchestrator:
         except Exception:  # noqa: BLE001 — 安全政策读取绝不让管线崩溃；回退环境值
             return default
 
+    @staticmethod
+    def _report_scenario_context(state: "PipelineState") -> dict[str, Any]:
+        base = None
+        base_id = state.options.get("base_pipeline_id")
+        if base_id:
+            try:
+                base = PipelineManager.load(base_id)
+            except Exception:  # Legacy missing baseline retains scenario labelling.
+                pass
+        return {"scenario_label": state.options.get("scenario_label"),
+                "base_simulation_id": (base or {}).get("simulation_id")}
+
+    @staticmethod
+    def _isolate_fork_handoff(state: "PipelineState") -> None:
+        """Copy published OASIS fork inputs before any child-owned postprocessing.
+
+        Reusing a parent's dossier is read-only. Graph rebuilds and even research
+        postprocessors write beside it, so all consumers switch together to an
+        exact private copy. World forks retain their separate sealed contract.
+        """
+        if (not state.options.get("base_pipeline_id")
+                or PipelineOrchestrator._simulation_engine(state) == "world-v1"):
+            return
+        source = os.path.realpath(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id))
+        owner = os.path.realpath(PipelineManager._dir(state.pipeline_id))
+        if os.path.commonpath([source, owner]) == owner:
+            return
+        from pathlib import Path
+        import shutil
+        import tempfile
+        names = set(_RESEARCH_CONTRACT_FILES) | {
+            _RESEARCH_CONTRACT_FILENAME, "ontology.json", "graph_priors.json",
+            "graph_priors_structural.json", ACTOR_GRAPH_SEED_MANIFEST_FILENAME,
+            "communities.json", "entity_merges.json", "graph_prune.json",
+            "cast_reconciliation.json",
+        }
+        for tree in ("data", "charts"):
+            root = os.path.join(source, tree)
+            if not os.path.lexists(root):
+                continue
+            if os.path.islink(root) or not os.path.isdir(root):
+                raise ValueError("Fork research tree must be a regular directory")
+            for directory, children, files in os.walk(root, followlinks=False):
+                if any(os.path.islink(os.path.join(directory, name)) for name in children):
+                    raise ValueError("Fork research directory symlink rejected")
+                names.update(os.path.relpath(os.path.join(directory, name), source) for name in files)
+                if len(names) > 2000:
+                    raise ValueError("Fork published research exceeds file limit")
+        copied = {}
+        destination = tempfile.mkdtemp(prefix="consumed-handoff-", dir=owner)
+        old_handoff, old_artifacts = state.handoff_dir, dict(state.artifacts)
+        manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+        old_manifest = json.loads(json.dumps(manifest))
+        try:
+            for name in sorted(names):
+                if not os.path.lexists(os.path.join(source, name)):
+                    continue
+                raw = _research_data_read(source, name, 64_000_000)
+                target = Path(destination, name)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
+                copied[name] = hashlib.sha256(raw).hexdigest()
+            if any(_sha256_file(os.path.join(source, name)) != digest for name, digest in copied.items()):
+                raise ValueError("Parent research changed during fork snapshot")
+            def relocate(path):
+                if not isinstance(path, str):
+                    return path
+                relative = os.path.relpath(os.path.realpath(path), source)
+                return os.path.join(destination, relative) if relative in copied else path
+            state.handoff_dir = destination
+            state.artifacts = {key: relocate(path) for key, path in state.artifacts.items()}
+            for entry in manifest.values():
+                if isinstance(entry, dict) and "path" in entry:
+                    entry["path"] = relocate(entry["path"])
+            PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+            PipelineManager.save(state)
+        except BaseException:
+            state.handoff_dir, state.artifacts = old_handoff, old_artifacts
+            PipelineManager.write_artifact_manifest(state.pipeline_id, old_manifest)
+            shutil.rmtree(destination)
+            raise
+
+    @staticmethod
+    def _retire_research_derivatives(state: "PipelineState") -> None:
+        """Retire downstream attempts durably before reconstructing research.
+
+        Output integrity alone cannot show that G1 ontology/configuration belongs
+        to G2 research. Preserve historical files and IDs in an attempt record;
+        allocate new project/graph/simulation/report identities for the new input.
+        """
+        derived = (STAGE_ONTOLOGY, STAGE_GRAPH, STAGE_PREPARE, STAGE_RUN, STAGE_REPORT)
+        if not (state.project_id or state.graph_id or state.simulation_id or state.report_id
+                or any(state.stages.get(stage) and state.stages[stage].status == "completed" for stage in derived)):
+            return
+        if PipelineOrchestrator._simulation_engine(state) == "world-v1" and (
+                state.simulation_id or state.options.get("world_research_generation_id")):
+            raise ValueError("Sealed world research cannot be reconstructed in place; use a new pipeline")
+        from pathlib import Path
+        import tempfile
+        handoff = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
+        files = ("ontology.json", ACTOR_GRAPH_SEED_MANIFEST_FILENAME, "graph_priors.json",
+                 "graph_priors_structural.json", "communities.json", "entity_merges.json", "graph_prune.json")
+        retired = tempfile.mkdtemp(prefix="retired-derived-", dir=PipelineManager._dir(state.pipeline_id))
+        previous = {"project_id": state.project_id, "graph_id": state.graph_id,
+                    "simulation_id": state.simulation_id, "report_id": state.report_id,
+                    "at": _utcnow(), "artifacts_dir": retired}
+        manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+        names = {name for name, entry in manifest.items()
+                 if isinstance(entry, dict) and (entry.get("produced_by_stage") or entry.get("stage")) in derived}
+        names.update(name for stage in derived for name, _ in
+                     PipelineOrchestrator._stage_artifact_specs(state, stage))
+        names.update({"ontology", "communities", "actor_graph_seed_manifest", "graph_priors",
+                      "graph_priors_structural", "graph_prune", "ensemble_forecast"})
+        for name in names:
+            manifest.pop(name, None)
+            state.artifacts.pop(name, None)
+        for stage in derived:
+            _reset_stage_attempt(state.stages.setdefault(stage, StageState(name=stage)))
+        state.project_id = state.graph_id = state.simulation_id = state.report_id = None
+        state.options.setdefault("retired_derived_attempts", []).append(previous)
+        state.options.pop("graph_seed_manifest_sha256", None)
+        state.options.pop("graph_seed_readback", None)
+        PipelineOrchestrator._clear_report_attempt_artifacts(state)
+        # Save the invalidation before any new producer runs, including a crash
+        # between publication of new research and downstream reconstruction.
+        PipelineManager.save(state)
+        PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+        for name in files:
+            path = Path(handoff, name)
+            if path.exists() or path.is_symlink():
+                os.replace(path, os.path.join(retired, name))
+
     def _maybe_run_seed_ensemble(self, state: "PipelineState", project: Any, graph_id: Optional[str],
                                  actors: Any, research: dict, report_md: str) -> None:
         """NEXTSTEPS P0-3: 同问多种子集成。
 
         对**同一张图谱**用不同 SIM_SEED 多跑 (prepare→run→report)，收集每次的 forecast.json
-        （含主跑），聚合为 ensemble_forecast.json，并把 inter-seed 一致度映射成报告信心回写主
-        forecast.json。门控：N_FORECAST_SEEDS>1、full 模式、结构化预测已开、尚未集成。串行、
+        （含主跑），聚合为独立 ensemble_forecast.json；一致度映射只属于该敏感性附录，
+        不改写已审计的主 forecast.json。门控：N_FORECAST_SEEDS>1、full 模式、结构化预测已开、尚未集成。有界、
         有界、带停滞看门狗；任一额外种子失败仅告警跳过；有效样本<2 则不落集成文件（degrade-safe）。
         默认 N=1 → 该方法直接返回（与现状逐字节一致）。
         """
@@ -9612,7 +9756,10 @@ class PipelineOrchestrator:
         _mr = state.options.get("max_rounds") or (
             None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
         max_rounds = int(_mr) if _mr else None
-        handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
+        # Research may be shared with a scenario's parent. Ensemble products are
+        # owned by this pipeline and must never overwrite that shared dossier.
+        handoff_dir = PipelineManager.handoff_dir(state.pipeline_id)
+        os.makedirs(handoff_dir, exist_ok=True)
         # 派生互异种子（base=0 时也确定性互异）；每个种子跑一次独立 (prepare→run→report)。
         seed_jobs = [(k, (base_seed or 0) + k * 7919) for k in range(2, n_seeds + 1)]
         cancel_ev0 = type(self)._cancel_events.get(state.pipeline_id)
@@ -9635,9 +9782,32 @@ class PipelineOrchestrator:
         # 无保护窗口：无 checkpoint、心跳陈旧、墙钟不归属任何阶段——两条失败跑都死在这里。
         from ..utils.telemetry import set_run_context as _set_run_ctx, set_stage as _set_stage
         _ckpt_path = os.path.join(handoff_dir, "ensemble_checkpoint.json")
+        _research_dir = state.handoff_dir or handoff_dir
+        _inputs = {
+            "pipeline_id": state.pipeline_id, "primary_report_id": state.report_id,
+            "simulation_id": state.simulation_id, "graph_id": graph_id,
+            "project_id": getattr(project, "project_id", None),
+            "question": state.prompt, "actors": actors, "research": research,
+            "report": report_md, "primary_forecast": primary_fc,
+            "scenario": self._report_scenario_context(state),
+            "seed_jobs": seed_jobs, "max_rounds": max_rounds,
+            "options": {key: state.options.get(key) for key in (
+                "research_language", "actor_intelligence_policy_v1", "safety_policy_v1",
+                "scenario_label", "base_pipeline_id", "scenario_overlay")},
+            "artifacts": {name: _sha256_file(os.path.join(_research_dir, name)) for name in (
+                "quantitative.json", "contested.json", "timeline.json", "graph_priors.json",
+                "graph_priors_structural.json", "news_market_context.json", "data/datasets.json")},
+        }
+        def _context_digest(value: Any) -> str:
+            return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+        _inputs_sha256 = _context_digest(_inputs)
         _done_seeds: dict[int, dict] = {}
         _prev_ckpt = _read_json(_ckpt_path)
-        if isinstance(_prev_ckpt, dict):
+        if (isinstance(_prev_ckpt, dict) and _prev_ckpt.get("schema_version") == 2
+                and _prev_ckpt.get("pipeline_id") == state.pipeline_id
+                and _prev_ckpt.get("primary_report_id") == state.report_id
+                and _prev_ckpt.get("inputs_sha256") == _inputs_sha256):
             for _row in (_prev_ckpt.get("completed") or []):
                 if not isinstance(_row, dict):
                     continue
@@ -9651,9 +9821,10 @@ class PipelineOrchestrator:
             """把已完成种子清单原子落盘（调用方持 _ckpt_lock）。失败仅告警，不拦集成。"""
             try:
                 write_json_atomic(_ckpt_path, {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "pipeline_id": state.pipeline_id,
                     "primary_report_id": state.report_id,
+                    "inputs_sha256": _inputs_sha256,
                     "n_seeds_requested": n_seeds,
                     "completed": list(_done_seeds.values()),
                     "updated_at": _utcnow(),
@@ -9693,7 +9864,8 @@ class PipelineOrchestrator:
             _prev = _done_seeds.get(seed)
             if _prev and _prev.get("report_id"):
                 _fc_prev = self._read_report_forecast(_prev.get("report_id"))
-                if _fc_prev and _fc_prev.get("scenarios"):
+                if (_fc_prev and _fc_prev.get("scenarios")
+                        and _prev.get("forecast_sha256") == _context_digest(_fc_prev)):
                     logger.info("[%s] 集成种子 %s 已在 checkpoint 中完成，复用其报告 %s",
                                 state.pipeline_id, seed, _prev.get("report_id"))
                     extra_runs.append({"seed": seed,
@@ -9710,6 +9882,7 @@ class PipelineOrchestrator:
                 _done_seeds[seed] = {
                     "k": k, "seed": seed, "simulation_id": sim_id, "report_id": rid,
                     "has_forecast": bool(fc and fc.get("scenarios")),
+                    "forecast_sha256": _context_digest(fc) if fc else None,
                     "completed_at": _utcnow(),
                 }
                 _persist_ckpt()
@@ -9765,7 +9938,7 @@ class PipelineOrchestrator:
                 PipelineManager.save(state)
                 return
             from .ensemble import aggregate_forecasts
-            agg = aggregate_forecasts(forecasts)
+            agg = aggregate_forecasts(forecasts, report_policy=state.options.get("safety_policy_v1"))
             agg["n_seeds_requested"] = n_seeds
             agg["extra_runs"] = extra_runs
             agreement = agg.get("agreement")
@@ -10031,6 +10204,10 @@ class PipelineOrchestrator:
         _agent_kwargs["official_data"] = load_for_simulation(sim_id)
         from .news_market_context import load_for_simulation as load_news_for_simulation
         _agent_kwargs["news_market_context"] = load_news_for_simulation(sim_id)
+        _agent_kwargs["report_policy"] = state.options.get("safety_policy_v1")
+        _agent_kwargs.update(self._report_scenario_context(state))
+        _consumed = load_research_dossier_for_simulation(sim_id)
+        _agent_kwargs.update(_consumed.get("report_artifacts") or {})
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -10905,10 +11082,12 @@ class PipelineOrchestrator:
     @staticmethod
     def _clear_report_attempt_artifacts(state: PipelineState) -> None:
         """Remove old REPORT-owned pointers and integrity rows at a new attempt boundary."""
+        for key in ("ensemble_done", "ensemble", "ensemble_wall"):
+            state.options.pop(key, None)
         stale_names = {
             name for name in list(state.artifacts)
             if name.endswith("_partial") or name == "report_viz_manifest"
-            or name.startswith("report_chart_")
+            or name.startswith("report_chart_") or name == "ensemble_forecast"
         }
         for name in stale_names:
             state.artifacts.pop(name, None)
@@ -11152,6 +11331,8 @@ class PipelineOrchestrator:
         校验器本身异常时必须 fail closed：缺失清单的兼容路径已经由
         ``_validate_reuse`` 显式放行，异常意味着身份/完整性未被证明。
         """
+        if stage == STAGE_REPORT and state.report_id and ReportManager.is_report_retired(state.report_id):
+            return False
         if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
             return self._validate_reuse(state, stage)
         if not bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
@@ -13225,6 +13406,7 @@ class PipelineOrchestrator:
         hb_stop = self._start_heartbeat(state)
         try:
             self._simulation_engine(state)
+            self._isolate_fork_handoff(state)
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
@@ -13293,6 +13475,7 @@ class PipelineOrchestrator:
                 research = _load_research_handoff(handoff_dir)
                 state.research_pid = None
             else:
+                self._retire_research_derivatives(state)
                 upd(1, "准备深度研究…")
                 def _persist_research_pid(pid: int) -> None:
                     state.research_pid = pid
@@ -14576,7 +14759,8 @@ class PipelineOrchestrator:
             existing_report = None
             if state.report_id:
                 try:
-                    existing_report = ReportManager.get_report(state.report_id)
+                    if not ReportManager.is_report_retired(state.report_id):
+                        existing_report = ReportManager.get_report(state.report_id)
                 except Exception:
                     existing_report = None
             # 兜底：report_id 丢失但该模拟已有报告时，按 simulation_id 找回（同样保留原 id）。
@@ -14585,6 +14769,10 @@ class PipelineOrchestrator:
                     existing_report = ReportManager.get_report_by_simulation(sim_state.simulation_id)
                 except Exception:
                     existing_report = None
+            if (existing_report is not None and sim_state is not None
+                    and getattr(existing_report, "simulation_id", sim_state.simulation_id) != sim_state.simulation_id):
+                state.options["report_rebuilt_simulation_mismatch"] = getattr(existing_report, "report_id", state.report_id)
+                existing_report = None
             # ORCH-1: 复用前评估交付物本身。meta 说 COMPLETED 但全章占位/无 forecast.json 的
             # 报告若被复用，S1 健康门必再抛错 → resume 陷入「复用坏报告→健康门失败」死循环
             # （report_id=None 手工修复也不够：get_report_by_simulation 兜底会把它找回来）。
@@ -14639,15 +14827,7 @@ class PipelineOrchestrator:
                 PipelineManager.save(state)
                 upd(5, "生成预测报告…")
                 # T4.6/T4.7: 情景报告 → 传情景标签 + base 模拟 id（反事实对比 scenario_diff）
-                _scenario_label = state.options.get("scenario_label")
-                _base_sim_id = None
-                _base_pid = state.options.get("base_pipeline_id")
-                if _base_pid:
-                    try:
-                        _bd = PipelineManager.load(_base_pid) or {}
-                        _base_sim_id = _bd.get("simulation_id")
-                    except Exception:
-                        _base_sim_id = None
+                _scenario_context = self._report_scenario_context(state)
                 # Visual ownership boundary: research charts remain relative to the
                 # dossier handoff. The final report consumes the shared structured
                 # artifacts below and ReportVisualizer generates its own richer,
@@ -14662,8 +14842,8 @@ class PipelineOrchestrator:
                     "actors": actors,
                     "sources": research.get("sources"),
                     "research_report": report_md,
-                    "scenario_label": _scenario_label,
-                    "base_simulation_id": _base_sim_id,
+                    "scenario_label": _scenario_context["scenario_label"],
+                    "base_simulation_id": _scenario_context["base_simulation_id"],
                 }
                 # W9-8: 研究昂贵产物直通报告链——quantitative(339 行)/contested(29 条)/
                 # timeline(101 事件)/graph_priors(_structural) 此前落盘后零下游读者。
@@ -14682,6 +14862,7 @@ class PipelineOrchestrator:
                 _ra_artifacts["official_data"] = load_for_simulation(sim_state.simulation_id)
                 from .news_market_context import load_for_simulation as load_news_for_simulation
                 _ra_kwargs["news_market_context"] = load_news_for_simulation(sim_state.simulation_id)
+                _ra_kwargs["report_policy"] = state.options.get("safety_policy_v1")
                 if self._simulation_engine(state) == "world-v1":
                     agent = ReportAgent(**_ra_kwargs, **_ra_artifacts)
                 else:
@@ -14706,9 +14887,7 @@ class PipelineOrchestrator:
                     raise RuntimeError(getattr(report, "error", "报告生成失败"))
                 self._complete_stage(state, STAGE_REPORT, "报告完成")
 
-            # ORCH-4: NEXTSTEPS P0-3 多种子集成——此前实现完整却从未被调用（N_FORECAST_SEEDS>1
-            # 静默 no-op）。在主报告完成后、健康门之前接线，使集成的信心改写落进被健康门校验的
-            # forecast.json。方法自身在 N_FORECAST_SEEDS<=1（默认）时直接返回，默认行为逐字节不变。
+            # 集成位于主报告之后，只产出独立的敏感性附录；主报告/forecast 的审计束保持不变。
             if state.mode == "full":
                 try:
                     self._maybe_run_seed_ensemble(state, project, graph_id, actors, research, report_md)

@@ -1,0 +1,332 @@
+{
+  "receipt": "/private/tmp/drf-context-joint-final-ip8sensq/evidence/completed.json",
+  "result": "4491 passed,27 failed,34 errors,2 deselected",
+  "failures": [
+    {
+      "class": "tests.test_context_audit_direct_api",
+      "case": "test_force_restart_retires_current_cache_preserving_publication[running-write]",
+      "message": "AssertionError: Retirement failure must precede stop, cleanup and start\nassert ['stop'] == []\n  \n  Left contains one more item: 'stop'\n  Use -v to get more diff"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_published_forecast_native_resolution_restart_and_next_report",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_publication_barrier_and_probability_tampering",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_native_monitor_rejects_mismatched_provider_identity",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_dual_anchor_market_settlement_does_not_skip_official_observation",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_monitor_aggregates_exclude_near_match_and_unknown_outcomes",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_native_batch_recovers_pending_publication_despite_saturated_queue",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_frozen_track_record_companion_tamper_is_rejected",
+      "message": "AssertionError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation pinned options are invalid\nassert <ReportStatus...LED: 'failed'> == <ReportStatus...: 'completed'>\n  \n  - completed\n  + failed"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_reaches_old_config_before_first_agent",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_disabled_is_noop",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_idempotent_and_preserves_custom_settings",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[custom]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[duplicate]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[disabled]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_guardrail_denial[policy0]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_guardrail_denial[policy1]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_does_not_infer_custom_guardrail_permission",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_scoped_denial_keeps_effective_filter",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_explicit_empty_permissions[custom0-scoped_tool_denial]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_explicit_empty_permissions[custom1-scoped_skills_disabled]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_inheritance_and_effective_override",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_rejects_live_agent_and_missing_implementation",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_disabled_definition_is_absent_from_native_tools",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_conflict_does_not_bypass_other_disabled_definition[data_search-data_get]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_conflict_does_not_bypass_other_disabled_definition[data_get-data_search]",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_interrupted_pending_request_is_reattempted",
+      "message": "AssertionError: assert False\n +  where False = <built-in method startswith of str object at 0x123c194d0>('[S')\n +    where <built-in method startswith of str object at 0x123c194d0> = 'DATA_UNAVAILABLE[provider_unavailable]: The same request is running in another research worker. Retry in a minute.'.startswith\n +      where 'DATA_UNAVAILABLE[provider_unavailable]: The same request is running in another research worker. Retry in a minute.' = <function data_get_impl at 0x11f954b80>('fred:UNRATE')\n +        where <function data_get_impl at 0x11f954b80> = <module 'data_tools' from '/private/tmp/drf-context-joint-final-ip8sensq/repo/deerflow_bridge/data_tools.py'>.data_get_impl"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_delegated_researcher_learns_when_official_data_answers_its_focus",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_agents_learn_the_year_over_year_route_for_index_levels",
+      "message": "failed on setup with \"FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/drf-context-joint-final-ip8sensq/repo/deer-flow/backend/packages/harness/deerflow/config/tool_config.py'\""
+    },
+    {
+      "class": "tests.test_oddsense_workflow",
+      "case": "test_scripted_engine_to_published_report_api_and_export",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aBound simulation owner or pinned options are unavailable"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_real_chart_captions_survive_complete_publication_sequence",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_missing_stabilization_rejects_unstable_prose",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_invalid_chart_attribution_cannot_be_laundered_by_finalization",
+      "message": "AssertionError: Regex pattern did not match.\n Regex: '\u5b98\u65b9\u6570\u636e\u56fe\u8868\u6765\u6e90'\n Input: '\u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid'"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[; Percent;-; Dollars;]",
+      "message": "AssertionError: Regex pattern did not match.\n Regex: '\u5b98\u65b9\u6570\u636e\u56fe\u8868\u6765\u6e90|quant_coverage=0.0'\n Input: '\u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid'"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[; Monthly;-; Quarterly;]",
+      "message": "AssertionError: Regex pattern did not match.\n Regex: '\u5b98\u65b9\u6570\u636e\u56fe\u8868\u6765\u6e90|quant_coverage=0.0'\n Input: '\u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid'"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[/series/UNRATE>-/series/INDPRO>]",
+      "message": "AssertionError: Regex pattern did not match.\n Regex: '\u5b98\u65b9\u6570\u636e\u56fe\u8868\u6765\u6e90|quant_coverage=0.0'\n Input: '\u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid'"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_fenced_attribution_is_not_a_live_chart_caption[False]",
+      "message": "AssertionError: Regex pattern did not match.\n Regex: '\u5b98\u65b9\u6570\u636e\u56fe\u8868\u6765\u6e90'\n Input: '\u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid'"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_fenced_attribution_is_not_a_live_chart_caption[True]",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_multiple_sources_and_numeric_units_survive_publication[mixed]",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_unindexed_series_does_not_strip_indexed_dashboard_source[mixed_unindexed]",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_structured_forecast_and_real_api_publish_without_bypass",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_real_bundle_publishes_without_any_model[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_real_bundle_publishes_without_any_model[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_key_official_indicators_table_is_the_stored_carrier[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_key_official_indicators_table_is_the_stored_carrier[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_official_exhibits_sit_in_the_indicator_section_with_their_source_captions[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_official_exhibits_sit_in_the_indicator_section_with_their_source_captions[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_exact_official_sentences_keep_their_citations[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_exact_official_sentences_keep_their_citations[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_anchored_watch_table_is_tagged_and_canonical[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_anchored_watch_table_is_tagged_and_canonical[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_report_local_carrier_and_official_data_api[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_report_local_carrier_and_official_data_api[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_executive_brief_carries_indicators_and_anchored_watch[English]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_executive_brief_carries_indicators_and_anchored_watch[Chinese]",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_zh_report_publishes_without_purity_for_long_unit_series",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_spine_critique_and_fallback_receive_the_stored_pack",
+      "message": "ValueError: Simulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_backfill_keeps_official_exhibits_captions_and_audit",
+      "message": "failed on setup with \"RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid\""
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_forecast_json_keeps_the_official_data_track_record_separate[English]",
+      "message": "ValueError: Simulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_forecast_json_keeps_the_official_data_track_record_separate[Chinese]",
+      "message": "ValueError: Simulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_canonical_official_lines_do_not_count_toward_the_per_source_cap[English]",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_canonical_official_lines_do_not_count_toward_the_per_source_cap[Chinese]",
+      "message": "RuntimeError: \u6700\u7ec8\u53ea\u8bfb\u5ba1\u8ba1/\u53d1\u5e03\u5b8c\u6574\u6027\u95e8\u5931\u8d25\uff0c\u62a5\u544a\u4e0d\u6807\u8bb0\u4e3a completed\uff1aSimulation consumed research core proof is invalid"
+    }
+  ],
+  "known_unavailable_dependency_nodes": [
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_reaches_old_config_before_first_agent",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_disabled_is_noop",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_idempotent_and_preserves_custom_settings",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[custom]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[duplicate]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[disabled]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_respects_guardrail_denial[policy0]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_respects_guardrail_denial[policy1]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_does_not_infer_custom_guardrail_permission",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_scoped_denial_keeps_effective_filter",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_preserves_explicit_empty_permissions[custom0-scoped_tool_denial]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_preserves_explicit_empty_permissions[custom1-scoped_skills_disabled]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_preserves_inheritance_and_effective_override",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_rejects_live_agent_and_missing_implementation",
+    "backend/tests/test_legacy_official_data.py::test_runtime_registration_disabled_definition_is_absent_from_native_tools",
+    "backend/tests/test_legacy_official_data.py::test_runtime_conflict_does_not_bypass_other_disabled_definition[data_search-data_get]",
+    "backend/tests/test_legacy_official_data.py::test_runtime_conflict_does_not_bypass_other_disabled_definition[data_get-data_search]",
+    "backend/tests/test_legacy_official_data.py::test_delegated_researcher_learns_when_official_data_answers_its_focus",
+    "backend/tests/test_legacy_official_data.py::test_agents_learn_the_year_over_year_route_for_index_levels"
+  ]
+}

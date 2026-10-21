@@ -425,6 +425,12 @@ def is_hard_public_relationship(row: Any) -> bool:
     """
     if not isinstance(row, Mapping):
         return False
+    qualifiers = row.get("qualifiers")
+    qualifiers = qualifiers if isinstance(qualifiers, Mapping) else {}
+    if row.get("actor_knows") is False or qualifiers.get("actor_knows") is False:
+        # An explicit access denial wins over a contradictory public label,
+        # just as it does for shared claims. A relationship changes both actors.
+        return False
     refs = row.get("source_refs")
     if not (
         isinstance(refs, list)

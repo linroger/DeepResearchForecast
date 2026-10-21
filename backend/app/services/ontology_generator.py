@@ -4,6 +4,7 @@
 """
 
 import json
+import unicodedata
 from collections import Counter
 from typing import Dict, Any, List, Optional
 from ..utils.llm_client import LLMClient
@@ -556,10 +557,9 @@ class OntologyGenerator:
             additional_context: 额外上下文
             template: 本体模板名（EXECPLAN2 I-1-3，可选）。缺省读 Config.ONTOLOGY_TEMPLATE，
                 再缺省为 'social_opinion'（与现有行为逐字节一致）。'general_forecast' 为领域自适应模板。
-            central_question: 预测核心问题（EXECPLAN2 I-1-3，可选）。仅 general_forecast 模板消费，
-                用于让类型预算贴合真实预测领域。
-            actors: actors.json 顶层对象（EXECPLAN2 I-1-3，可选）。仅 general_forecast 模板消费其
-                类型分布直方图，并据此决定是否引入 Person/Organization 兜底类型。
+            central_question: 预测核心问题（可选）。所有模板及回退请求均保留此上下文。
+            actors: actors.json 顶层对象（可选）。所有模板保留类型分布直方图；
+                general_forecast 据此决定是否引入 Person/Organization 兜底类型。
 
         Returns:
             本体定义（entity_types, edge_types等）
@@ -624,6 +624,8 @@ class OntologyGenerator:
                 simulation_requirement,
                 additional_context,
                 template=DEFAULT_ONTOLOGY_TEMPLATE,
+                central_question=central_question,
+                actors=actors,
             )
             fallback_result = self.llm_client.chat_json(
                 messages=[
@@ -706,13 +708,17 @@ class OntologyGenerator:
         # control. Sanitize each document independently so one malicious line
         # does not erase safe neighbouring reports, then delimit the combined
         # evidence block before it reaches the model.
-        combined_text = "\n\n---\n\n".join(
-            sanitize_untrusted_research_text(
-                text,
-                max_chars=self.MAX_TEXT_LENGTH_FOR_LLM,
-            )
-            for text in document_texts
-        )
+        safe_documents = []
+        for text in document_texts:
+            normalized = unicodedata.normalize("NFKC", str(text or ""))
+            safe_documents.append(sanitize_untrusted_research_text(
+                normalized,
+                # Sanitize the complete document before sampling. Replacement
+                # markers can expand short unsafe lines, so reserve per-line
+                # space rather than truncating the evidence before the sampler.
+                max_chars=max(1, len(normalized) + (normalized.count("\n") + 1) * 64),
+            ))
+        combined_text = "\n\n---\n\n".join(safe_documents)
         original_length = len(combined_text)
 
         # ONTO-3: 文本超长时按 head+middle+tail 采样（仅影响传给LLM的内容，不影响图谱构建）
@@ -755,11 +761,12 @@ class OntologyGenerator:
 """
 
         # EXECPLAN2 I-1-3: general_forecast 模板下注入领域自适应规则（central_question + 角色
-        # 类型直方图驱动类型预算与兜底策略）；social_opinion 维持原有"正好10个+尾部兜底"规则，
-        # 逐字节不变。
+        # 类型直方图驱动类型预算与兜底策略）；social_opinion 也保留问题/类型上下文，
+        # 但继续使用自身的类型预算规则。
         if template == "general_forecast":
             message += self._general_forecast_rules(central_question, actors)
         else:
+            message += self._forecast_context(central_question, actors)
             message += """
 请根据以上内容，设计适合社会舆论模拟的实体类型和关系类型。
 
@@ -773,16 +780,12 @@ class OntologyGenerator:
 
         return message
 
-    def _general_forecast_rules(
+    def _forecast_context(
         self,
         central_question: Optional[str],
         actors: Optional[Dict[str, Any]],
     ) -> str:
-        """general_forecast 模板的尾部规则块（EXECPLAN2 I-1-3）。
-
-        把预测核心问题与研究确认的角色类型直方图渲染进提示，使类型预算/兜底策略随真实
-        领域而定，而非套用社媒模板。
-        """
+        """Preserve question and observed actor types across templates/fallback."""
         parts: List[str] = ["\n"]
         cq = delimit_untrusted_research_text(
             "central forecast question",
@@ -806,8 +809,18 @@ class OntologyGenerator:
             parts.append(
                 "## 角色阵容统计（深度研究实证的 actor 类型分布）\n\n"
                 f"{ranked}\n\n"
-                "请让 entity_types 的数量与构成贴合上述真实角色分布；高频类型应有专门、可区分的实体类型。\n"
+                "请在所选模板的类型预算内覆盖上述真实角色类型。\n"
             )
+
+        return "".join(parts)
+
+    def _general_forecast_rules(
+        self,
+        central_question: Optional[str],
+        actors: Optional[Dict[str, Any]],
+    ) -> str:
+        """Render the shared forecast context and domain-adaptive schema rules."""
+        parts = [self._forecast_context(central_question, actors)]
 
         parts.append(
             "请根据以上内容，设计**贴合该预测领域**的实体类型和关系类型。\n\n"

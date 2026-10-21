@@ -19,6 +19,7 @@ ENGINE = "world-v1"
 SPEC_SCHEMA = "simulation-world-spec/v1"
 SNAPSHOT_SCHEMA = "world-snapshot/v1"
 RESULT_SCHEMA = "world-result/v1"
+CAUSAL_ORDER_POLICY = "causal-v1"
 KINDS = frozenset({"wait", "transfer", "investment", "agreement", "policy", "vote", "message", "breach"})
 OPERATIONS = frozenset({"execute", "propose", "accept", "reject", "counter", "withdraw", "defer"})
 DEFAULT_LIMITS = {
@@ -186,6 +187,9 @@ def validate_spec(raw: Any) -> dict:
     from .review import review_mode
 
     review_mode(spec)
+    if "resolutionOrderPolicy" in spec:
+        require(spec["resolutionOrderPolicy"] == CAUSAL_ORDER_POLICY, "unsupported_order_policy",
+                "Unknown world resolution order policy")
     if "interactionQueuePolicy" in spec:
         require(spec["interactionQueuePolicy"] == "presented-v1", "unsupported_queue_policy",
                 "Unknown interaction queue policy")
@@ -300,7 +304,22 @@ def initial_snapshot(spec: dict) -> dict:
                                              "observedEvents": [], "lastObservedEvents": [],
                                              "lastActionResults": []} for a in spec["actors"]},
                  scheduledEvents=clone(spec["scheduledEvents"]), appliedEvents=[], sampling={"seed": spec["seed"], "draws": []})
+    if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+        state["causalOrder"] = {}
     return state
+
+
+def causal_order_key(snapshot: dict, record_id: str) -> tuple:
+    """Reducer-owned provenance; kept outside actor and public record projections."""
+    orders = snapshot.get("causalOrder")
+    require(isinstance(orders, dict), "invalid_causal_order", "Causal provenance map is required")
+    order = orders.get(record_id)
+    require(isinstance(order, list) and len(order) == 5
+            and type(order[0]) is int and order[0] >= 1
+            and order[1] in ("proposal", "response") and isinstance(order[2], str)
+            and type(order[3]) is int and type(order[4]) is int and order[4] >= 0,
+            "invalid_causal_order", "Generated record lacks valid causal provenance")
+    return tuple(order)
 
 
 def validate_snapshot(spec: dict, snapshot: dict) -> None:
@@ -313,6 +332,21 @@ def validate_snapshot(spec: dict, snapshot: dict) -> None:
         balance, held = decimal(account["balance"], nonnegative=True), decimal(account["reserved"], nonnegative=True)
         require(held <= balance, "resource_violation", "Reserved resources exceed account balance")
     require(set(snapshot["actorStates"]) == set(actors_by_id(spec)), "actor_identity_mismatch", "Actor state roster changed")
+    if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+        records = {key: record for key, record in snapshot["commitments"].items() if record["kind"] != "vote"}
+        records.update(snapshot["interactions"])
+        require(isinstance(snapshot.get("causalOrder"), dict) and set(snapshot["causalOrder"]) == set(records),
+                "invalid_causal_order", "Causal provenance must cover exactly the generated records")
+        for key, record in records.items():
+            number, phase, actor, _, position = causal_order_key(snapshot, key)
+            require(number <= snapshot["round"] and position < spec["limits"]["maxIntentsPerPhase"]
+                    and actor == record.get("actorId", record.get("proposerId"))
+                    and record["createdAt"] == period_for(spec, number)["start"],
+                    "invalid_causal_order", "Causal provenance does not match its creation slot")
+            intent_id = stable_id(spec["generationId"], number, phase, actor, position)
+            require((record.get("sourceIntentId") == intent_id if key in snapshot["commitments"] else
+                     key == stable_id(spec["generationId"], intent_id, "offer")),
+                    "invalid_causal_order", "Causal provenance does not match its source intent")
     canonical_json(snapshot)
 
 

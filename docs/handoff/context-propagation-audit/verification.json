@@ -1,0 +1,510 @@
+{
+  "schema": "context-audit-final-verification/v1",
+  "status": "Accepted final offline gate and independent bounded review",
+  "base_commit": "3cd421a3b89f475d54db66421eaa6a1684c3e86f",
+  "root": "/private/tmp/drf-context-joint-fourth-2tetzaqp",
+  "receipt_sha256": "e48afebc57d126ac11bf94396111792d14c51127dd7df3d9918716bfd08db34c",
+  "junit_sha256": "f67a1ef26c5b377661ba93de323d5387fa01028f1de86491e6bc9ef5e376f629",
+  "freeze_sha256": "1e066b7e4aeb861daf19d877b3c3d597406db72089f5b8555f7a6c6189958776",
+  "passed": 4533,
+  "deselected": 21,
+  "failures": 0,
+  "errors": 0,
+  "guard_events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 9,
+    "blocked:external_read": 20,
+    "blocked:network:socket.__new__": 1,
+    "quarantine:oasis_import_cwd": 1,
+    "allowed:guarded_child": 17,
+    "blocked:process:os.killpg": 2,
+    "allow:directory_traversal": 232
+  },
+  "guard_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "identity_preserved": true,
+  "shutdown_complete": true,
+  "source_drift": [],
+  "worktree_and_mirror_source_hashes_match": 502,
+  "source_compile_check": "502 sources compiled without execution",
+  "children": {
+    "67214": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "67216": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "67217": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "67240": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "67260": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "67412": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "67460": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "67520": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "67521": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "69309": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "69560": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      }
+    },
+    "70509": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "70524": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "70528": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "70538": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "70567": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    },
+    "70658": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {}
+    }
+  },
+  "first_joint_closures": [
+    {
+      "class": "tests.test_context_audit_direct_api",
+      "case": "test_force_restart_retires_current_cache_preserving_publication[running-write]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_published_forecast_native_resolution_restart_and_next_report",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_publication_barrier_and_probability_tampering",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_native_monitor_rejects_mismatched_provider_identity",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_dual_anchor_market_settlement_does_not_skip_official_observation",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_monitor_aggregates_exclude_near_match_and_unknown_outcomes",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_native_batch_recovers_pending_publication_despite_saturated_queue",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_forecast_feedback_workflow",
+      "case": "test_frozen_track_record_companion_tamper_is_rejected",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_reaches_old_config_before_first_agent",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_disabled_is_noop",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_idempotent_and_preserves_custom_settings",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[custom]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[duplicate]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_existing_tool_conflicts[disabled]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_guardrail_denial[policy0]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_respects_guardrail_denial[policy1]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_does_not_infer_custom_guardrail_permission",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_scoped_denial_keeps_effective_filter",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_explicit_empty_permissions[custom0-scoped_tool_denial]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_explicit_empty_permissions[custom1-scoped_skills_disabled]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_preserves_inheritance_and_effective_override",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_rejects_live_agent_and_missing_implementation",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_registration_disabled_definition_is_absent_from_native_tools",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_conflict_does_not_bypass_other_disabled_definition[data_search-data_get]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_runtime_conflict_does_not_bypass_other_disabled_definition[data_get-data_search]",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_interrupted_pending_request_is_reattempted",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_delegated_researcher_learns_when_official_data_answers_its_focus",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_legacy_official_data",
+      "case": "test_agents_learn_the_year_over_year_route_for_index_levels",
+      "final_disposition": "Unavailable optional native checkout; explicitly deselected"
+    },
+    {
+      "class": "tests.test_oddsense_workflow",
+      "case": "test_scripted_engine_to_published_report_api_and_export",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_real_chart_captions_survive_complete_publication_sequence",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_missing_stabilization_rejects_unstable_prose",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_invalid_chart_attribution_cannot_be_laundered_by_finalization",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[; Percent;-; Dollars;]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[; Monthly;-; Quarterly;]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_canonical_caption_validation_does_not_whitelist_altered_metadata[/series/UNRATE>-/series/INDPRO>]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_fenced_attribution_is_not_a_live_chart_caption[False]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_fenced_attribution_is_not_a_live_chart_caption[True]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_multiple_sources_and_numeric_units_survive_publication[mixed]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_unindexed_series_does_not_strip_indexed_dashboard_source[mixed_unindexed]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_data_publication",
+      "case": "test_structured_forecast_and_real_api_publish_without_bypass",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_real_bundle_publishes_without_any_model[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_real_bundle_publishes_without_any_model[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_key_official_indicators_table_is_the_stored_carrier[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_key_official_indicators_table_is_the_stored_carrier[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_official_exhibits_sit_in_the_indicator_section_with_their_source_captions[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_official_exhibits_sit_in_the_indicator_section_with_their_source_captions[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_exact_official_sentences_keep_their_citations[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_exact_official_sentences_keep_their_citations[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_anchored_watch_table_is_tagged_and_canonical[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_anchored_watch_table_is_tagged_and_canonical[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_report_local_carrier_and_official_data_api[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_report_local_carrier_and_official_data_api[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_executive_brief_carries_indicators_and_anchored_watch[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_executive_brief_carries_indicators_and_anchored_watch[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_zh_report_publishes_without_purity_for_long_unit_series",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_spine_critique_and_fallback_receive_the_stored_pack",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_backfill_keeps_official_exhibits_captions_and_audit",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_forecast_json_keeps_the_official_data_track_record_separate[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_forecast_json_keeps_the_official_data_track_record_separate[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_canonical_official_lines_do_not_count_toward_the_per_source_cap[English]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    },
+    {
+      "class": "tests.test_report_official_publication_real",
+      "case": "test_canonical_official_lines_do_not_count_toward_the_per_source_cap[Chinese]",
+      "final_disposition": "Passed in final exact-byte joint gate"
+    }
+  ],
+  "scope_note": "CPython audit hooks, not an OS sandbox. Denied operations remain attempts; native/model/provider/semantic/production acceptance limits remain explicit.",
+  "review_sha256": "110a20100138355a2c178a4f64c0710e1e1236dabee695a3d4b4f04bf777ed17"
+}

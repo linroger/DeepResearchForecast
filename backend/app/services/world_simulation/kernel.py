@@ -12,7 +12,7 @@ from decimal import Decimal, localcontext
 from typing import Any
 
 from .contracts import (
-    WorldError, actors_by_id, add_days, canonical_json, clone, decimal, identifier,
+    CAUSAL_ORDER_POLICY, WorldError, actors_by_id, add_days, canonical_json, causal_order_key, clone, decimal, identifier,
     initial_snapshot, parse_time, period_for, quantity, require, stable_id,
     templates_by_id, time_text, validate_snapshot, validate_spec, visibility, visible_to,
 )
@@ -431,6 +431,12 @@ def _effect(state: dict, effect: dict) -> None:
         raise WorldError("invalid_mechanism", "Unknown committed effect")
 
 
+def _remember_order(spec: dict, state: dict, record_id: str, intent: dict) -> None:
+    if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+        state["causalOrder"][record_id] = [state["round"], intent["phase"], intent["actorId"],
+                                         intent["priority"], intent["_position"]]
+
+
 def _commitment(spec: dict, state: dict, template: dict, intent: dict, now: str, *,
                 effects: list, transfers: list | None = None, participants: list | None = None,
                 identity: str | None = None) -> dict:
@@ -443,6 +449,7 @@ def _commitment(spec: dict, state: dict, template: dict, intent: dict, now: str,
             "transfers": clone(transfers or []), "visibility": _policy(template, actors_by_id(spec)),
             "basis": clone(template["basis"])}
     state["commitments"][cid] = item
+    _remember_order(spec, state, cid, intent)
     return item
 
 
@@ -525,6 +532,7 @@ def _offer(spec: dict, state: dict, template: dict, intent: dict, now: str, term
     if template["kind"] == "agreement":
         item["obligations"] = _obligations(spec, state, template, terms, [intent["actorId"], *recipients])
     state["interactions"][oid] = item
+    _remember_order(spec, state, oid, intent)
     return item
 
 
@@ -749,10 +757,20 @@ def _advance(spec: dict, state: dict, events: list, start: str, end: str, *, ini
         if item["status"] == "pending" and parse_time(item["expiresAt"]) <= parse_time(end):
             at = max(time_text(item["expiresAt"]), start)
             boundaries[at].append((stable_id(spec["generationId"], item["interactionId"], "offer_expired"), "expiry", item))
+    def boundary_order(entry):
+        if spec.get("resolutionOrderPolicy") != CAUSAL_ORDER_POLICY:
+            return (entry[0],)
+        _, kind, item = entry
+        if kind == "scheduled":
+            return (0, item["eventId"])
+        if kind == "commitment":
+            return (1, *causal_order_key(state, item["commitmentId"]))
+        return (2, *causal_order_key(state, item["interactionId"]))
+
     cursor = start
     for at in sorted(boundaries):
         _flows(spec, state, events, cursor, at)
-        for _, kind, item in sorted(boundaries[at], key=lambda entry: entry[0]):
+        for _, kind, item in sorted(boundaries[at], key=boundary_order):
             if kind == "scheduled":
                 try:
                     _effect(state, item)  # Atomic: every check precedes its first mutation.
@@ -830,7 +848,7 @@ def _decisions(spec: dict, decisions: list, round_index: int) -> list:
                 and isinstance(decision.get("decisionId"), str), "invalid_decision", "Normalized decision provenance is required")
         require(isinstance(decision.get("intents"), list)
                 and len(decision["intents"]) <= spec["limits"]["maxIntentsPerPhase"], "invalid_decision", "Invalid intent count")
-        for intent in decision["intents"]:
+        for position, intent in enumerate(decision["intents"]):
             require(intent.get("actorId") == decision["actorId"] and intent.get("phase") == decision["phase"]
                     and type(intent.get("priority")) is int, "invalid_intent", "Intent identity is not normalized")
             identifier(intent.get("intentId"), "intentId")
@@ -838,6 +856,9 @@ def _decisions(spec: dict, decisions: list, round_index: int) -> list:
             intent_ids.add(intent["intentId"])
             if intent.get("bundleId") is not None:
                 identifier(intent["bundleId"], "bundleId")
+            if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+                # Derived from the saved normalized decision, never actor input.
+                intent["_position"] = position
     return sorted(result, key=lambda d: (d["phase"] != "proposal", d["actorId"]))
 
 
@@ -848,14 +869,17 @@ def _groups(decisions: list, *, communication_only: bool = False, spec: dict | N
             key = (decision["phase"], intent["actorId"], "bundle" if intent.get("bundleId") else "intent",
                    intent.get("bundleId") or intent["intentId"])
             groups.setdefault(key, []).append(intent)
-    groups = [sorted(group, key=lambda i: (i["priority"], i["intentId"])) for group in groups.values()]
+    causal = spec is not None and spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY
+    def order(intent):
+        return intent["_position"] if causal else intent["intentId"]
+    groups = [sorted(group, key=lambda i: (i["priority"], order(i))) for group in groups.values()]
     if communication_only:
         # Select whole bundles, never communication fragments whose final rollback
         # could change a recipient roster after its response opportunity is lost.
         groups = [group for group in groups if group[0]["phase"] == "proposal" and any(
             templates_by_id(spec).get(intent["templateId"], {}).get("kind") in {"agreement", "message"}
             for intent in group)]
-    return sorted(groups, key=lambda g: (g[0]["phase"] != "proposal", g[0]["actorId"], g[0]["priority"], g[0]["intentId"]))
+    return sorted(groups, key=lambda g: (g[0]["phase"] != "proposal", g[0]["actorId"], g[0]["priority"], order(g[0])))
 
 
 def _group_key(group: list) -> tuple:
@@ -887,11 +911,18 @@ def _boundary_bound(spec: dict, state: dict, start: str, end: str, extra_offers:
     return len(instants) + len(spec["flows"]) * (len(set(instants)) + 2)
 
 
-def _boundary_load(spec: dict, state: dict, start: str, end: str, extra_offers: list) -> int:
+def _boundary_load(spec: dict, state: dict, start: str, end: str, extra_offers: list,
+                   extra_orders: dict | None = None) -> int:
     """Exact counted events of the boundary phase over (start, end], run on a detached probe."""
     probe = clone(state)
     for offer in extra_offers:
         probe["interactions"].setdefault(offer["interactionId"], clone(offer))
+        if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY and offer["interactionId"] not in probe["causalOrder"]:
+            # Future staged communication is reserved before physical groups.
+            # Its detached admission probe needs the same origin as the inbox.
+            order = (extra_orders or {}).get(offer["interactionId"])
+            require(order is not None, "invalid_causal_order", "Staged offer lacks causal provenance")
+            probe["causalOrder"][offer["interactionId"]] = clone(order)
     events = []
     _advance(spec, probe, events, start, end)
     _summarize_flow_feedback(spec, probe, events, start, end)
@@ -909,7 +940,8 @@ def _later_rounds(spec: dict, instants: list, round_index: int) -> set:
     return rounds
 
 
-def _fits(spec: dict, trial: dict, used: int, created: tuple[list, list], extra_offers: list, round_index: int) -> bool:
+def _fits(spec: dict, trial: dict, used: int, created: tuple[list, list], extra_offers: list, round_index: int,
+          extra_orders: dict | None = None) -> bool:
     """Whether ``used`` counted events leave room for the boundary work of this and later rounds.
 
     This round: an upper bound first, the exact probe only when the bound does not fit, so a
@@ -922,7 +954,7 @@ def _fits(spec: dict, trial: dict, used: int, created: tuple[list, list], extra_
         return False
     period = period_for(spec, round_index)
     if (used + _boundary_bound(spec, trial, period["start"], period["end"], extra_offers) > limit
-            and used + _boundary_load(spec, trial, period["start"], period["end"], extra_offers) > limit):
+            and used + _boundary_load(spec, trial, period["start"], period["end"], extra_offers, extra_orders) > limit):
         return False
     commitments, offers = created
     for later in sorted(_later_rounds(spec, [c["dueAt"] for c in commitments] + [o["expiresAt"] for o in offers],
@@ -969,7 +1001,7 @@ def _run_intents(spec: dict, state: dict, decisions: list, now: str, *, stage: b
                 codes.append(_apply(spec, trial, emitted, intent, now))
             _state_check(spec, trial)
         except WorldError as error:
-            if error.code in {"invalid_mechanism", "invalid_state", "resource_violation"}:
+            if error.code in {"invalid_mechanism", "invalid_state", "resource_violation", "invalid_causal_order"}:
                 raise
             reject(group, error)
             continue
@@ -977,9 +1009,13 @@ def _run_intents(spec: dict, state: dict, decisions: list, now: str, *, stage: b
         if replayed is None:
             created = _created_pending(state, trial)
             fits = _fits(spec, trial, used + load + sum(row["load"] for row in pending.values()), created,
-                         [offer for row in pending.values() for offer in row["offers"]], state["round"])
+                         [offer for row in pending.values() for offer in row["offers"]], state["round"],
+                         {oid: order for row in pending.values() for oid, order in row.get("causalOrder", {}).items()})
             if admission is not None:
                 admission[key] = {"admitted": fits, "load": load, "offers": clone(created[1]) if fits else []}
+                if fits and spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+                    admission[key]["causalOrder"] = {offer["interactionId"]: clone(trial["causalOrder"][offer["interactionId"]])
+                                                     for offer in created[1]}
             if not fits:
                 reject(group, WorldError("event_limit", "Round exceeds declared event limit"))
                 continue
@@ -1118,10 +1154,12 @@ def stage_interactions(spec: dict, snapshot: dict, decisions: list, round_index:
         state = clone(snapshot)
         state.pop("revision", None)
         state["interactions"] = staged["interactions"]
+        if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+            state["causalOrder"] = clone(staged["causalOrder"])
         return state
 
 
-def _presented_queue_updates(spec: dict, opening: dict, staged_interactions: dict, decisions: list,
+def _presented_queue_updates(spec: dict, opening: dict, staged_state: dict, decisions: list,
                              round_index: int) -> dict:
     """Versioned response-phase service accounting, separate from actor consent.
 
@@ -1134,7 +1172,9 @@ def _presented_queue_updates(spec: dict, opening: dict, staged_interactions: dic
         return {}
     from .observations import _eligible_inbox
 
-    staged = {**opening, "interactions": staged_interactions}
+    staged = {**opening, "interactions": staged_state["interactions"]}
+    if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
+        staged["causalOrder"] = staged_state["causalOrder"]
     updates = {}
     limit = spec["limits"]["maxInboxItems"]
     for decision in decisions:
@@ -1156,7 +1196,7 @@ def resolve_round(spec: dict, snapshot: dict, decisions: list, round_index: int)
         state["round"] = round_index
         # The same staging the controller showed the response phase (stage_interactions).
         staged, admission = _staged_communication(spec, state, decisions, period["start"])
-        presented = _presented_queue_updates(spec, snapshot, staged["interactions"], decisions, round_index)
+        presented = _presented_queue_updates(spec, snapshot, staged, decisions, round_index)
         # Validate provenance against the opening observation, before any effects.
         _actor_updates(spec, state, snapshot, decisions)
         state, events, resolutions = _run_intents(spec, state, decisions, period["start"], staged=admission)

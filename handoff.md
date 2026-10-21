@@ -1,3 +1,5 @@
+> Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Stage receipts are bounded; final source-frozen combined verification and independent review are in progress.
+
 > Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.
 
 # Handoff.md — DeepResearchForecast Analysis Suite

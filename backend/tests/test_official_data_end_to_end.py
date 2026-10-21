@@ -232,7 +232,7 @@ def test_guarded_mcp_to_promoted_research_and_report_png(tmp_path, monkeypatch):
 
         evidence["stage"] = "real ReportAgent context and ReportVisualizer PNG"
         report_dir.mkdir(parents=True)
-        agent = ReportAgent("synthetic-graph", "", engine.question, llm_client=model, zep_tools=graph,
+        agent = ReportAgent("synthetic-graph", "sim_official_e2e_fixture", engine.question, llm_client=model, zep_tools=graph,
                             research_report=(promoted / "research_report.md").read_text(),
                             sources=json.loads((promoted / "sources.json").read_text()),
                             charts_manifest=json.loads((promoted / "charts.json").read_text()), official_data=carrier)

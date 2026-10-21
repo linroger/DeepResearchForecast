@@ -1000,6 +1000,13 @@ class SimulationConfigGenerator:
         # 判定日阶梯：确定性抽取 → LLM 兜底 → 默认 12 个月
         cq = str(actors.get("central_question", "") or "") if isinstance(actors, dict) else ""
         horizon = sim_timeline.extract_horizon(f"{simulation_requirement}\n{cq}", as_of)
+        if horizon is None and isinstance(actors, dict):
+            # The dossier can carry an explicit forecast window independently
+            # of the question prose. Use it before a model/default substitutes
+            # a different endpoint; an explicit question date still wins.
+            dossier_horizon = actors.get("forecast_horizon") or actors.get("horizon")
+            if isinstance(dossier_horizon, str):
+                horizon = sim_timeline.extract_horizon(dossier_horizon, as_of)
         if horizon is None:
             horizon = self._llm_extract_horizon(context, as_of)
         if horizon is None:
@@ -1694,6 +1701,12 @@ class SimulationConfigGenerator:
                     or evidence_type in cls._NON_BEHAVIORAL_EVIDENCE_TYPES
                 ):
                     continue
+                qualifiers = raw.get("qualifiers")
+                qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
+                if raw.get("actor_knows") is False or qualifiers.get("actor_knows") is False:
+                    # Scheduled events are broadcast to all actors. Never let
+                    # a public label override an explicit access denial.
+                    continue
                 key = (str(date), str(event).casefold())
                 if key in seen:
                     continue
@@ -1841,8 +1854,6 @@ class SimulationConfigGenerator:
         official_window: Optional[Dict[str, str]] = None,
     ) -> str:
         public_rows = cls._canonical_public_world_rows(actors, actor_context_packs)
-        if not public_rows and not official_data:
-            return ""
         parts: List[str] = []
         question = " ".join(str(simulation_requirement or "").split()).strip()
         if question:
@@ -1853,6 +1864,20 @@ class SimulationConfigGenerator:
                 ("## Forecast question (what this world is debating)\n" if english
                  else "## 核心预测问题（这个世界正在争论什么）\n") + question
             )
+        # Task boundaries remain necessary even when no research claim may be
+        # shared. They do not grant access to private actor/report evidence.
+        task_lines = []
+        if isinstance(actors, dict):
+            for label, value, bound in (
+                ("Information cutoff" if english else "信息截止日期", actors.get("as_of_date"), 40),
+                ("Forecast horizon" if english else "预测期限", actors.get("forecast_horizon") or actors.get("horizon"), 160),
+            ):
+                if isinstance(value, str) and value.strip():
+                    task_lines.append(f"{label}: {sanitize_untrusted_dossier_text(value, bound)}")
+        if task_lines:
+            task_block = "\n".join(task_lines)
+            parts = ["\n\n".join([*parts, task_block])]
+        fixed_parts = list(parts)
         header = "## Public, source-bound shared facts" if english else "## 公开且来源绑定的共同事实"
         evidence_lines: List[str] = []
         for row in public_rows:
@@ -1881,14 +1906,12 @@ class SimulationConfigGenerator:
         official_data = cls._official_data_for_question(official_data, simulation_requirement)
         # Evidence lines stay whole: a cut line would lose its uncertainty label and sources.
         fitted = cls._fit_official_brief(
-            parts[:1] if question else [], parts[1:] if question else parts,
+            fixed_parts, parts[len(fixed_parts):],
             official_data, actors, max_chars, official_window, english=english, whole_lines=True)
         if fitted is not None:
             return "\n\n".join(fitted).strip()
         official_block = cls._official_snapshot_block(
             official_data, actors, parts, max_chars, official_window, english=english)
-        if not evidence_lines and not official_block:
-            return ""
         if official_block:
             parts.append(official_block)
         return "\n\n".join(parts).strip()
@@ -3741,6 +3764,11 @@ class SimulationConfigGenerator:
                 safe[key] = clean
         if isinstance(row.get("actor_knows"), bool):
             safe["actor_knows"] = row["actor_knows"]
+        qualifiers = row.get("qualifiers")
+        if isinstance(qualifiers, dict) and qualifiers.get("actor_knows") is False:
+            # Preserve denial through the allowlist projection so downstream
+            # public-relationship checks cannot lose it with other qualifiers.
+            safe["actor_knows"] = False
         refs = cls._safe_actor_context_list(
             row.get("source_refs"), limit=8, max_chars=180
         )

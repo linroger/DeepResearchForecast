@@ -15,7 +15,12 @@ import pytest
 from app.config import Config
 from app.services import report_lint
 from app.services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
-from app.services.official_data import data_api, load_official_data
+from app.services.official_data import data_api, load_official_data, simulation_research_binding
+from app.services.simulation_manager import SimulationManager
+from app.services.simulation_runner import SimulationRunner
+
+
+SIMULATION_ID = "sim_synthetic_publication"
 
 
 class NoExternalCalls:
@@ -73,14 +78,21 @@ def report_case(tmp_path, monkeypatch, request):
                         "REPORT_EDITORIAL_LINT": True, "REPORT_FINAL_READ_ONLY_AUDIT": True}.items():
         monkeypatch.setattr(Config, name, value, raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
-    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "empty-simulation"))
+    simulation_root = str(tmp_path / "empty-simulation")
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", simulation_root)
+    monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", simulation_root)
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", simulation_root)
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"))
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR", str(tmp_path / "forecast-ledger"))
     monkeypatch.setattr(ReportAgent, "_define_tools", lambda self: {})
     monkeypatch.setattr(ReportAgent, "_locate_timeline", lambda self: None)
     monkeypatch.setattr(ReportAgent, "_locate_handoff_dir", lambda self: None)
-    agent = ReportAgent("synthetic_graph", "synthetic_sim", "Assess the unemployment outlook",
+    # This carrier-only fixture has no simulation admission or research binding.
+    assert simulation_research_binding(SIMULATION_ID) == {"status": "missing"}
+    agent = ReportAgent("synthetic_graph", SIMULATION_ID, "Assess the unemployment outlook",
                         llm_client=NoExternalCalls(), zep_tools=NoExternalCalls(),
                         sources=sources, official_data=carrier)
-    report = Report(report_id="report_data_publication", simulation_id="synthetic_sim", graph_id="synthetic_graph",
+    report = Report(report_id="report_data_publication", simulation_id=SIMULATION_ID, graph_id="synthetic_graph",
                     simulation_requirement="Assess the unemployment outlook", status=ReportStatus.COMPLETED,
                     markdown_content="# Official data report\n\n## Official data\n\nThe stored series shows the labour market baseline.\n",
                     created_at="2025-07-01T00:00:00Z", completed_at="2025-07-01T00:01:00Z")

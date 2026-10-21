@@ -4,15 +4,33 @@ from __future__ import annotations
 from pathlib import Path
 
 from .artifacts import atomic_json, file_digest, load_inputs, read_json
-from .contracts import ENGINE, RESULT_SCHEMA, clone, digest, require, visible_to
+from .contracts import ENGINE, RESULT_SCHEMA, clone, digest, parse_time, require, visible_to
 from .store import WorldStore
+
+
+def _delivered(interaction, at, view, actor_id):
+    # Senders know their own queued messages/offers; recipients and the public
+    # gain that context only at delivery, including in historical projections.
+    return (view == 'analyst' or actor_id == interaction.get('proposerId')
+            or parse_time(interaction['deliverAt']) <= parse_time(at))
+
+
+def _event_visible(event, snapshot, view, actor_id):
+    if not visible_to(event, actor_id, view=view):
+        return False
+    interaction = snapshot['interactions'].get(event.get('details', {}).get('interactionId'))
+    if interaction is not None and event['kind'] == 'offer_counter':
+        interaction = snapshot['interactions'].get(interaction.get('supersededBy'), interaction)
+    return interaction is None or _delivered(interaction, snapshot['simulatedAt'], view, actor_id)
 
 
 def _project(snapshot, view, actor_id):
     result = {'round': snapshot['round'], 'simulatedAt': snapshot['simulatedAt']}
     for section in ('accounts', 'metrics', 'rules', 'relations', 'commitments', 'interactions'):
         result[section] = {key: clone(record) for key, record in snapshot[section].items()
-                           if visible_to(record, actor_id, view=view)}
+                           if visible_to(record, actor_id, view=view)
+                           and (section != 'interactions'
+                                or _delivered(record, snapshot['simulatedAt'], view, actor_id))}
         if snapshot['round'] > 0:
             for record in result[section].values():
                 record['initialBasis'] = clone(record.get('basis'))
@@ -46,8 +64,10 @@ def _render_bundle(bundle, *, view='public', actor_id=None, round_index=None, re
     require(type(selected) is int and 0 <= selected <= head['round'], 'invalid_round', 'Round has not been committed')
     history = bundle['history'][:selected + 1]
     rounds = [row for row in bundle['rounds'] if row['round'] <= selected]
-    events = [event for event in history[0].get('initialEvents', []) if visible_to(event, actor_id, view=view)]
-    events.extend(event for row in rounds for event in row['events'] if visible_to(event, actor_id, view=view))
+    events = [event for event in history[0].get('initialEvents', [])
+              if _event_visible(event, history[-1], view, actor_id)]
+    events.extend(event for row in rounds for event in row['events']
+                  if _event_visible(event, history[-1], view, actor_id))
     decisions = [clone(d) for row in rounds for d in row['decisions']
                  if view == 'analyst' or (view == 'actor' and d['actorId'] == actor_id)]
     resolutions = [clone(r) for row in rounds for r in row['resolutions']

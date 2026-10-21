@@ -1,0 +1,14 @@
+{
+  "scope": "User requested recurrence discovery, then only high-confidence missing assets",
+  "validation": "skill-creator quick_validate.py: Skill is valid!",
+  "changes": {
+    "SKILL.md": "c08ea6a39bd72b08b5d08ec3d0d391891a9e6fcf4cfaa80df86cca5bb35a14dd",
+    "references/context-consumers.md": "a9f494e1d7b9dad213cce11e8012d6816fb66a8f66734956b9ef647346c843af",
+    "references/localized-artifacts.md": "121173b99451dea2e88ef5be7766f714038f13235e1a935641dd42da24baed16"
+  },
+  "shortlist": "/private/tmp/drf-workflow-packaging-shortlist.md",
+  "created_top_level_skills": 0,
+  "created_agents": 0,
+  "created_automations": 0,
+  "memory_writes": 0
+}

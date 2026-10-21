@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any, Mapping, Optional
 
@@ -173,21 +174,59 @@ def is_backtest_forecast(forecast: Any) -> bool:
     return isinstance(forecast, Mapping) and isinstance(forecast.get("backtest"), Mapping)
 
 
-def policy_for_simulation(simulation_id: Any) -> Optional[dict[str, Any]]:
-    """The pinned option of the pipeline that owns ``simulation_id`` (``None``
-    when there is none, it is live, or the pipelines cannot be read)."""
+def pipeline_for_simulation(simulation_id: Any) -> Optional[dict[str, Any]]:
+    """Read the exact owner, including bound manual/secondary simulations.
+
+    A verified consumed core is the only secondary-owner authority. Optional
+    official datasets are checked by their own consumers; changed core proof
+    cannot fall back to a mutable project or silently select live policy.
+    Truly unbound legacy simulations retain the exact primary-ID lookup.
+    """
     sid = str(simulation_id or "").strip()
     if not sid:
         return None
-    try:
-        from ..config import Config
-        from .pipeline_orchestrator import PipelineManager
-        root = Config.PIPELINE_DATA_DIR
-        names = os.listdir(root) if os.path.isdir(root) else []
-        for pid in names:
-            data = PipelineManager.load(pid)
-            if isinstance(data, dict) and data.get("simulation_id") == sid:
-                return backtest_of(data.get("options"))
-    except Exception:  # noqa: BLE001 — an unreadable pipeline store means "live"
-        return None
+    from ..config import Config
+    from .official_data import read_bound_research_core
+    from .pipeline_orchestrator import PipelineManager
+    proof = read_bound_research_core(sid)
+    if proof["status"] == "invalid":
+        raise ValueError("Simulation consumed research core proof is invalid")
+    if proof["status"] == "valid":
+        data = PipelineManager.load(proof["pipeline_id"])
+        if (not isinstance(data, dict) or data.get("pipeline_id") != proof["pipeline_id"]
+                or not isinstance(data.get("options"), dict)):
+            raise ValueError("Bound simulation owner or pinned options are unavailable")
+        if read_bound_research_core(sid) != proof:
+            raise ValueError("Simulation consumed research changed while reading its owner")
+        return deepcopy(data)
+    root = Config.PIPELINE_DATA_DIR
+    names = sorted(os.listdir(root)) if os.path.isdir(root) else []
+    for pid in names:
+        data = PipelineManager.load(pid)
+        if isinstance(data, dict) and data.get("simulation_id") == sid:
+            if not isinstance(data.get("options"), dict):
+                raise ValueError("Simulation pinned options are invalid")
+            return deepcopy(data)
     return None
+
+
+def policy_for_simulation(simulation_id: Any) -> Optional[dict[str, Any]]:
+    """Pinned backtest policy; invalid required proof never becomes live."""
+    owner = pipeline_for_simulation(simulation_id)
+    options = owner["options"] if owner else {}
+    policy = backtest_of(options)
+    if BACKTEST_OPTION in options and policy is None:
+        raise ValueError("Simulation pinned backtest policy is invalid")
+    if policy is not None:
+        # A present saved arm must contain its complete admitted controls.
+        # Accessor defaults are only for legacy/live callers, never a damaged pin.
+        arm = policy.get("arm")
+        name = arm.get("name") if isinstance(arm, dict) else None
+        expected = ARMS.get(name) if isinstance(name, str) else None
+        if (expected is None or set(arm) != {"name", *expected}
+                or any(arm[key] is not value for key, value in expected.items())):
+            raise ValueError("Simulation pinned backtest arm is invalid")
+        _iso_day(policy.get("as_of"), "as_of")
+        if not isinstance(policy.get("strict"), bool) or policy.get("archive") not in ARCHIVES:
+            raise ValueError("Simulation pinned backtest cutoff controls are invalid")
+    return policy

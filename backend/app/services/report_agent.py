@@ -2397,6 +2397,7 @@ class ReportAgent:
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         official_data: Optional[Dict[str, Any]] = None,
         news_market_context: Optional[Dict[str, Any]] = None,
+        report_policy: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化Report Agent
@@ -2424,9 +2425,13 @@ class ReportAgent:
                 因果骨架的 chokepoint 支点优先取自此处（研究显著度回退）。
             scenario_spine: 主跑情景脊柱 [{name, resolution_criteria}]（W9-5 多种子集成对齐）——
                 钉进骨架推导，让种子对同一组命名情景打分（概率自由，新情景可追加）。
+            report_policy: 已保存的 safety_policy_v1；仅冻结报告抽样次数、集成极化系数和
+                模拟预测效应。None 保持旧调用方行为；显式无效的快照拒绝使用环境默认替代。
         """
         # Freeze the bounded envelope before constructing any clients or prompts.
         # Returning a fresh copy from the property also prevents caller mutation.
+        from .ensemble import freeze_report_policy
+        self._report_policy = freeze_report_policy(report_policy)
         _context = _news_context._validated_copy(news_market_context)
         self._news_context_sha256 = (_context or {}).get("sha256")
         self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
@@ -2628,6 +2633,9 @@ class ReportAgent:
         arm_effect = _backtest.simulation_effect(self._backtest())
         if arm_effect is not None:
             return arm_effect
+        policy = getattr(self, "_report_policy", None)
+        if policy is not None:
+            return policy["simulation_forecast_effect"]
         return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                    or "diagnostic_only").strip().lower()
 
@@ -2646,12 +2654,18 @@ class ReportAgent:
         return getattr(self, "_backtest_option", None)
 
     def _backtest_extraction_kwargs(self) -> Dict[str, Any]:
-        """Binary-extraction keywords of a backtest run: the arm's simulation effect
-        and the pinned golden question; ``{}`` for a live run (call unchanged)."""
+        """Forward an optional admission pin, plus backtest arm/question overrides.
+
+        A legacy live caller without a policy still receives ``{}``.
+        """
         backtest = self._backtest()
+        policy = getattr(self, "_report_policy", None)
+        kwargs: Dict[str, Any] = {}
+        if policy is not None:
+            kwargs.update(report_policy=policy, simulation_effect=self._simulation_forecast_effect())
         if backtest is None:
-            return {}
-        kwargs: Dict[str, Any] = {"simulation_effect": self._simulation_forecast_effect()}
+            return kwargs
+        kwargs["simulation_effect"] = self._simulation_forecast_effect()
         target = backtest.get("target")
         if isinstance(target, dict) and target.get("golden_id"):
             kwargs["pinned_questions"] = [target]
@@ -2821,8 +2835,6 @@ class ReportAgent:
                 f"该情景下的推演，结论需与基线区分。\n\n"
             )
         sb = (self.situation_brief or "").strip()
-        if not sb:
-            return scenario_head
         aod = ""
         if isinstance(self.actors, dict):
             aod = str(self.actors.get("as_of_date", "") or "").strip()
@@ -2830,13 +2842,15 @@ class ReportAgent:
             f"【背景档案（深度研究·权威，as-of {aod}）】" if aod
             else "【背景档案（深度研究·权威）】"
         )
-        parts = [
-            f"{header}\n"
-            "以下为本次预测所依据的深度研究实证档案（角色/关系/时间线/热点均为调研确认）。"
-            "撰写时以此为权威背景：优先复用其中真实人名/机构/关系，再用工具补充"
-            "可验证的预测驱动、结果路径与量化证据；不得描述内部推演机制。\n\n"
-            f"{sb}"
-        ]
+        parts = [scenario_head] if scenario_head else []
+        if sb:
+            parts.append(
+                f"{header}\n"
+                "以下为本次预测所依据的深度研究实证档案（角色/关系/时间线/热点均为调研确认）。"
+                "撰写时以此为权威背景：优先复用其中真实人名/机构/关系，再用工具补充"
+                "可验证的预测驱动、结果路径与量化证据；不得描述内部推演机制。\n\n"
+                f"{sb}"
+            )
         # EXECPLAN2 I-0-5/I-0-1/I-0-2: 钉入研究契约富化块（定量事实表/争议证据/预测输入）。
         # 渲染器在 actors.py，皆 degrade-safe（无对应字段返回空串）；受 RESEARCH_FORECAST_INPUTS /
         # RESEARCH_EVIDENCE_GRADING 旗标约束（默认开），关闭即回退到仅 situation_brief 的旧行为。
@@ -3952,6 +3966,35 @@ class ReportAgent:
             report.markdown_content = restored
             write_text_atomic(ReportManager._get_report_markdown_path(report_id), restored)
 
+    def _report_scope_block(self) -> str:
+        """Carry the admitted question and distinct cutoff/horizon into rewrites too."""
+        parts = []
+        question = getattr(self, "simulation_requirement", "")
+        if question:
+            parts.append("[Report question]\n" + question)
+        baseline = getattr(self, "base_simulation_id", None)
+        if baseline:
+            parts.append("[Counterfactual comparison reference; preserve this baseline identity]\n" + str(baseline))
+        actors = getattr(self, "actors", None)
+        if isinstance(actors, dict) and actors.get("as_of_date"):
+            parts.append("[Research as-of; not the forecast deadline]\n" + str(actors["as_of_date"]))
+        horizon = self._temporal_horizon_date()
+        if horizon:
+            parts.append("[Forecast deadline]\n" + horizon)
+        return "\n\n".join(parts)
+
+    def _forecast_situation_brief(self) -> Optional[str]:
+        """Keep the What-If condition ahead of the extractor's bounded brief slice.
+
+        This contains admitted research scope only, never simulation diagnostics.
+        """
+        brief = getattr(self, "situation_brief", "") or ""
+        scenario = getattr(self, "scenario_label", "")
+        if scenario:
+            return (f"[Conditional What-If scenario: {scenario}]\n"
+                    "Forecast under this condition; distinguish it from the baseline.\n" + brief)
+        return brief or None
+
     def _prepend_research_background(self, prompt: str, section_title: str = "") -> str:
         """T4.1: 把背景档案 + 来源索引钉到提示词最前；二者皆空时原样返回（回退冷图路径）。
 
@@ -3973,8 +4016,9 @@ class ReportAgent:
         # 市场包/图表块经 getattr 读取：部分离线测试用 __new__ 绕过 __init__ 构造 agent，
         # 缺属性时按空串处理（与注入跳过语义一致）。
         prefix_parts = [p for p in (
-            self._background_block, self._sources_index,
-            self._forecast_spine_block, self._signal_pack,
+            self._report_scope_block(),
+            getattr(self, "_background_block", ""), getattr(self, "_sources_index", ""),
+            getattr(self, "_forecast_spine_block", ""), getattr(self, "_signal_pack", ""),
             getattr(self, "_market_pack", ""),
             getattr(self, "_data_pack", ""),
             getattr(self, "_news_context_block", ""),
@@ -4470,17 +4514,17 @@ class ReportAgent:
         backtest = self._backtest()
         if backtest is not None and not _backtest.markets_enabled(backtest):
             return []  # ablation arm without markets
-        # ① 研究 handoff 产物（延迟导入避免与 pipeline_orchestrator 的模块级循环依赖）。
+        # ① Select the consumed handoff, never another pipeline that happens to
+        # share the simulation id. Invalid present proof cannot authorize a new
+        # provider capture; genuinely unbound legacy callers keep their lookup.
+        from .official_data import simulation_research_binding
+        simulation_id = getattr(self, "simulation_id", None)
+        proof = simulation_research_binding(simulation_id) if simulation_id else {"status": "missing"}
+        if proof.get("status") == "invalid":
+            return []
         try:
-            from .pipeline_orchestrator import PipelineManager
-            for entry in PipelineManager.list_pipelines():
-                pid = entry.get("pipeline_id")
-                if not pid:
-                    continue
-                data = PipelineManager.load(pid)
-                if not data or data.get("simulation_id") != getattr(self, "simulation_id", None):
-                    continue
-                hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
+            hd = self._locate_handoff_dir()
+            if hd:
                 path = os.path.join(hd, "prediction_markets.json")
                 if os.path.exists(path):
                     with open(path, "r", encoding="utf-8") as f:
@@ -4488,12 +4532,15 @@ class ReportAgent:
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
                     rows = [m for m in (markets or []) if isinstance(m, dict)]
                     if rows:
+                        if simulation_id and simulation_research_binding(simulation_id) != proof:
+                            return []
                         # PM-3：handoff-PLUS-refresh——研究期快照拉进来后对其做一次实时重报价，
                         # 保留 price_at_research 并算 Δ；重报价未生效时用研究期价并置 _markets_stale。
                         return self._requote_snapshot(rows[:max_n])
-                break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
+        if simulation_id and simulation_research_binding(simulation_id) != proof:
+            return []
         if backtest is not None:
             # A backtest report uses the research snapshot priced at the cutoff
             # only; a live search would return today's prices (and outcomes).
@@ -4767,6 +4814,18 @@ class ReportAgent:
             # legacy_prompt（特征化 fixture 专用）保留旧行为，运行期显式告警。
             if getattr(self, "_world_binding", None):
                 forecast_inputs = self._probability_source("")  # clean evidence even without an actor spine
+            pinned_scenarios = [
+                {"name": row["name"], "resolution_criteria": row.get("resolution_criteria", "")}
+                for row in (getattr(self, "scenario_spine", None) or [])
+                if isinstance(row, dict) and row.get("name")
+            ]
+            if pinned_scenarios:
+                # Seed reports share proposition identities, never parent probabilities.
+                forecast_inputs = (
+                    "[Pinned scenario identities: preserve these names and resolution criteria; "
+                    "estimate probabilities independently. Additional scenarios must be explicit.]\n"
+                    + json.dumps(pinned_scenarios, ensure_ascii=False) + "\n\n" + forecast_inputs
+                )
             _sim_effect = self._simulation_forecast_effect()
             if _sim_effect == "legacy_prompt":
                 logger.warning(
@@ -4799,6 +4858,8 @@ class ReportAgent:
             # RPT-5: a spine-sized pack keeps every listed row whole inside the
             # spine's facts budget (the full pack would be cut mid-row).
             official_kwargs = {}
+            if getattr(self, "_report_policy", None) is not None:
+                official_kwargs["report_policy"] = self._report_policy
             spine_facts = getattr(self, "_data_pack", "")
             if spine_facts:
                 spine_facts = self._build_data_pack(budget=self._spine_facts_budget())
@@ -4807,7 +4868,7 @@ class ReportAgent:
                 self.llm,
                 central_question=self.simulation_requirement or "",
                 horizon=horizon,
-                situation_brief=self.situation_brief or None,
+                situation_brief=self._forecast_situation_brief(),
                 forecast_inputs=forecast_inputs,
                 signal_pack=signal_pack,
                 market_block=market_pack,
@@ -4884,7 +4945,7 @@ class ReportAgent:
         else:
             forecast = extract_structured_forecast(
                 self._probability_source(report_markdown), self.llm,
-                situation_brief=getattr(self, "situation_brief", None),
+                situation_brief=self._forecast_situation_brief(),
                 language=getattr(self, "output_language", None) or "",
                 **self._official_pack_kwargs(),
             )
@@ -5018,7 +5079,7 @@ class ReportAgent:
                     _bsrc, self.llm,
                     min_count=self._binary_min_count(),
                     language=_lang,
-                    situation_brief=getattr(self, "situation_brief", None),
+                    situation_brief=self._forecast_situation_brief(),
                     themes=_themes,
                     signal_pack=_sig or None,
                     market_pack=_mkt or None,
@@ -11399,6 +11460,12 @@ class ReportAgent:
             parts.append("[Section key points]\n" + key_points)
         if not parts:
             return ""  # 没有任何可综合的输入 → 跳过（绝不让模型凭空写）
+        # A summary cannot rely on section-key-point slices to carry its scope.
+        # Keep diagnostics out: the probability source above remains authoritative.
+        parts[:0] = [p for p in (
+            self._report_scope_block(), getattr(self, "_background_block", ""),
+            getattr(self, "_sources_index", ""), getattr(self, "_news_context_block", ""),
+        ) if p]
         prompt = (
             "You are the lead forecaster assembling 'Part 2 — Framework & Synthesis' of a "
             "three-part forecast submission (Part 1 = the binary-forecast table, Part 3 = the "
@@ -11669,9 +11736,11 @@ class ReportAgent:
         except Exception:  # noqa: BLE001
             pass
         # timeline.json（研究 handoff；best-effort，找不到即不画时间线）
-        tl = self._locate_timeline()
-        if not tl and isinstance(getattr(self, "timeline_events", None), list) and self.timeline_events:
-            tl = self.timeline_events  # GATE-W9：handoff 定位失败时回退构造期钉入的 timeline（W9-8 直通）
+        # The caller already pinned its consumed generation. Never replace that
+        # timeline with a later pipeline directory sharing the simulation id.
+        tl = getattr(self, "timeline_events", None)
+        if not isinstance(tl, list) or not tl:
+            tl = self._locate_timeline()
         if tl:
             arts["timeline"] = tl
         # PM-6 修复：把研究 handoff 目录钉进工件，供 ReportVisualizer._load_price_history 定位
@@ -11689,6 +11758,12 @@ class ReportAgent:
         _locate_timeline 同模式）。供 PM-6 市场价格历史折线定位 handoff/market_price_history.json。
         找不到/任何失败 → None（degrade-safe）。延迟导入避免与 pipeline_orchestrator 的循环依赖。"""
         try:
+            from .official_data import simulation_research_binding
+            proof = simulation_research_binding(self.simulation_id)
+            if proof.get("status") == "valid":
+                return proof["handoff_dir"]
+            if proof.get("status") != "missing":
+                return None  # Present invalid proof never authorizes another generation.
             from .pipeline_orchestrator import PipelineManager
             for entry in PipelineManager.list_pipelines():
                 pid = entry.get("pipeline_id")
@@ -11708,20 +11783,12 @@ class ReportAgent:
         匹配管线，与 load_research_dossier_for_simulation 同模式）。找不到/任何失败 → None
         （degrade-safe，时间线图自动跳过）。延迟导入避免与 pipeline_orchestrator 的循环依赖。"""
         try:
-            from .pipeline_orchestrator import PipelineManager
-            for entry in PipelineManager.list_pipelines():
-                pid = entry.get("pipeline_id")
-                if not pid:
-                    continue
-                data = PipelineManager.load(pid)
-                if not data or data.get("simulation_id") != self.simulation_id:
-                    continue
-                hd = data.get("handoff_dir") or PipelineManager.handoff_dir(pid)
-                path = os.path.join(hd or "", "timeline.json")
+            hd = self._locate_handoff_dir()
+            if hd:
+                path = os.path.join(hd, "timeline.json")
                 if os.path.exists(path):
                     with open(path, "r", encoding="utf-8") as f:
                         return json.load(f)
-                return None
         except Exception:  # noqa: BLE001
             return None
         return None
@@ -13147,6 +13214,7 @@ class ReportAgent:
             f"【本章标题】{section.title}\n\n"
             f"【本章草稿】\n{content[:6000]}"
         )
+        usr_prompt = self._prepend_research_background(usr_prompt, section_title=section.title)
         resp = self.llm.chat(
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": usr_prompt}],
@@ -13183,6 +13251,7 @@ class ReportAgent:
             f"【本章标题】{section.title}\n\n"
             f"【待修订草稿】\n{content}"
         )
+        usr_prompt = self._prepend_research_background(usr_prompt, section_title=section.title)
         revised = self.llm.chat(
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": usr_prompt}],
@@ -13221,10 +13290,14 @@ class ReportAgent:
             f"用{lang}书写，保持原文的风格与证据纪律。"
         )
         tail = (content or "")[-3000:]
+        user_prompt = self._prepend_research_background(
+            f"【本章标题】{section.title}\n\n【已截断的章节结尾】\n…{tail}",
+            section_title=section.title,
+        )
         try:
             out = self.llm.chat(
                 messages=[{"role": "system", "content": sys_prompt},
-                          {"role": "user", "content": f"【已截断的章节结尾】\n…{tail}"}],
+                          {"role": "user", "content": user_prompt}],
                 temperature=Config.REPORT_AGENT_TEMPERATURE,
                 max_tokens=4096,
             )
@@ -13520,9 +13593,10 @@ class ReportAgent:
 
         # 兜底：迭代用尽仍无正文 → 末次无工具强制出文
         try:
-            final = self.llm.chat(messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt + "\n\n请直接输出本章 Markdown 正文。"},
+            # Preserve the matching assistant/tool exchange and retrieved evidence
+            # when the native loop exhausts its budget (as the ReAct path does).
+            final = self.llm.chat(messages=messages + [
+                {"role": "user", "content": "请基于以上工具结果直接输出本章 Markdown 正文。"},
             ], temperature=Config.REPORT_AGENT_TEMPERATURE, max_tokens=Config.REPORT_AGENT_SECTION_MAX_TOKENS)
         except Exception as _final_exc:  # noqa: BLE001 — FILTER-SAFE：内容审查且已有合格草稿 → 采纳草稿
             _accepted = self._accept_draft_under_filter(
@@ -14667,7 +14741,9 @@ class ReportAgent:
     def _resolve_report_cached(self) -> Optional[Report]:
         """EXECPLAN2 F-7-3: 解析本 simulation 的最新报告并在实例级记忆，避免重复扫描。"""
         if self._cached_report is not self._cached_report_sentinel:
-            return self._cached_report
+            if self._cached_report is None or not ReportManager.is_report_retired(self._cached_report.report_id):
+                return self._cached_report
+            self._cached_report = self._cached_report_sentinel
         report = ReportManager.get_report_by_simulation(self.simulation_id)
         self._cached_report = report
         return report
@@ -14724,6 +14800,10 @@ class ReportAgent:
             report_content=report_content if report_content else "（暂无报告）",
             tools_description=self._get_tools_description(),
         )
+        for block in (self._report_scope_block(), getattr(self, "_background_block", ""),
+                      getattr(self, "_news_context_block", "")):
+            if block:
+                system_prompt += "\n\n" + block
         if world:
             system_prompt += "\n\n" + self._world_pathway()
             system_prompt += ("\nWorld quantities are conditional simulated outputs under the declared assumptions. "
@@ -14835,6 +14915,7 @@ class ReportManager:
     # EXECPLAN2 F-7-3: simulation_id -> [report_id, ...] 轻量索引文件，
     # 让 get_report_by_simulation 免去对全部报告文件夹的 O(N) 全量扫描 + 全文反序列化。
     _SIM_INDEX_FILENAME = "_sim_index.json"
+    _RETIREMENT_FILENAME = "current_simulation_retirement.json"
     # 串行化索引文件的读改写（同进程内）
     _sim_index_lock = threading.Lock()
     # Existing-report translation retries are user-triggerable.  A per-variant
@@ -16762,6 +16843,53 @@ class ReportManager:
         return os.path.join(cls.REPORTS_DIR, cls._SIM_INDEX_FILENAME)
 
     @classmethod
+    def is_report_retired(cls, report_id: str) -> bool:
+        """Presence withdraws only current-by-simulation eligibility.
+
+        A malformed file, directory or broken symlink also fails closed. Marker
+        contents never grant publication authority or change explicit-ID access.
+        """
+        return os.path.lexists(os.path.join(cls._get_report_folder(report_id), cls._RETIREMENT_FILENAME))
+
+    @classmethod
+    def retire_reports_for_simulation(cls, simulation_id: str, *, reason: str = "simulation_restart") -> List[str]:
+        """Atomically retire current cache entries before a simulation is restarted.
+
+        Scan persisted ownership rather than trusting a possibly incomplete index.
+        Each report-owned marker is atomic and idempotent; a write failure raises
+        so callers MUST abort before simulation cleanup/spawn. Existing publication
+        artifacts and immutable ledger rows remain unchanged, including on failure.
+        """
+        if not isinstance(simulation_id, str) or not simulation_id.strip():
+            raise ValueError("A simulation identity is required for report retirement")
+        cls._ensure_reports_dir()
+        owned = set()
+        for name in os.listdir(cls.REPORTS_DIR):
+            if name == cls._SIM_INDEX_FILENAME:
+                continue
+            path = os.path.join(cls.REPORTS_DIR, name)
+            if os.path.islink(path):
+                continue
+            if os.path.isdir(path):
+                report_id = name
+            elif name.endswith(".json"):
+                report_id = name[:-5]
+            else:
+                continue
+            meta = cls._read_report_meta(report_id)
+            if isinstance(meta, dict) and meta.get("simulation_id") == simulation_id:
+                owned.add(report_id)
+        for report_id in sorted(owned):
+            if cls.is_report_retired(report_id):
+                continue
+            folder = cls._ensure_report_folder(report_id)
+            write_json_atomic(os.path.join(folder, cls._RETIREMENT_FILENAME), {
+                "schema_version": 1, "report_id": report_id, "simulation_id": simulation_id,
+                "reason": str(reason), "retired_at": datetime.now(timezone.utc).isoformat(),
+            })
+        return sorted(owned)
+
+    @classmethod
     def _read_report_meta(cls, report_id: str) -> Optional[Dict[str, Any]]:
         """仅读取并解析某报告的 meta.json（不重建 Report、不读取 full_report.md）。
 
@@ -17554,12 +17682,12 @@ class ReportManager:
         candidates: List[tuple] = []  # (created_at, report_id)
         for rid in index.get(simulation_id, []):
             meta = cls._read_report_meta(rid)
-            if meta and meta.get('simulation_id') == simulation_id:
+            if meta and meta.get('simulation_id') == simulation_id and not cls.is_report_retired(rid):
                 candidates.append((meta.get('created_at', ''), rid))
         if candidates:
             best_rid = max(candidates, key=lambda x: x[0])[1]
             report = cls.get_report(best_rid)
-            if report and report.simulation_id == simulation_id:
+            if report and report.simulation_id == simulation_id and not cls.is_report_retired(best_rid):
                 return report
 
         # ② 回退：全量扫描，确定性地按 created_at 取最新（F-7-0 A）
@@ -17573,6 +17701,8 @@ class ReportManager:
                 meta = cls._read_report_meta(item)
                 if not meta or meta.get("simulation_id") != simulation_id:
                     continue
+                if cls.is_report_retired(item):
+                    continue
                 report = cls.get_report(item)
                 if report and report.simulation_id == simulation_id:
                     matches.append(report)
@@ -17581,6 +17711,8 @@ class ReportManager:
                 report_id = item[:-5]
                 meta = cls._read_report_meta(report_id)
                 if not meta or meta.get("simulation_id") != simulation_id:
+                    continue
+                if cls.is_report_retired(report_id):
                     continue
                 report = cls.get_report(report_id)
                 if report and report.simulation_id == simulation_id:

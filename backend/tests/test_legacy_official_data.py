@@ -1040,14 +1040,21 @@ def test_a_stored_series_answers_a_window_whose_own_request_failed(real_api, tmp
     assert len(provider.calls) == 2
 
 
-def test_interrupted_pending_request_is_reattempted(real_api, tmp_path):
+def test_interrupted_pending_request_is_reattempted(real_api, tmp_path, monkeypatch):
     tools, _, provider, _ = real_api
+    dead_owner = 2 ** 22 + 12345
+    native_pid_alive = tools._pid_alive
+    # This fixture declares a dead external owner. Do not rely on probing an
+    # invented ambient PID: guarded runs deny that probe and conservatively
+    # report it alive. Keep native liveness behavior for every other process.
+    monkeypatch.setattr(tools, "_pid_alive", lambda pid: False if pid == dead_owner else native_pid_alive(pid))
+    assert tools._pid_alive(tools.os.getpid()) is True
     arguments = {"series": "fred:UNRATE", "start": None, "end": None, "transform": None}
     key = tools._request_key("get", arguments)
     # A worker killed mid-request left its reservation behind (dead owner).
     state = {"schema_version": 1, "calls": 1, "agents": {"get:lead": 1}, "cache": {key: {
         "kind": "get", "arguments": arguments, "status": "pending", "attempts": 1,
-        "updated_at": tools._now(), "owner": 2 ** 22 + 12345}}}
+        "updated_at": tools._now(), "owner": dead_owner}}}
     (tmp_path / tools.STATE).write_text(json.dumps(state))
     assert tools.data_get_impl("fred:UNRATE").startswith("[S")
     state = json.loads((tmp_path / tools.STATE).read_text())

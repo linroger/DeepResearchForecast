@@ -5432,7 +5432,7 @@ class _Engine:
     def _context_heading(self) -> str:
         return "新闻与市场背景" if self.language == CHINESE else "News and market context"
 
-    def _context_text(self) -> str:
+    def _context_text(self, *, shown_sids: list[int] | None = None) -> str:
         if self.backtest is not None:
             return ""
         client = getattr(self.tools, "context_client", None)
@@ -5448,6 +5448,8 @@ class _Engine:
             row = self.ledger.find(item.get("url"))
             if not row:
                 continue
+            if shown_sids is not None and row["sid"] not in shown_sids:
+                shown_sids.append(row["sid"])
             label = ("captured contextual contract; publisher fetch does not replace the stored quote"
                      if item.get("kind") in ("market_quote", "community_forecast") else
                      "publisher page fetched" if row.get("fetched") else
@@ -5695,6 +5697,12 @@ class _Engine:
                 except (OSError, ValueError):
                     raise _EngineFailure("official_data_evidence_corrupt: sealed dataset or exhibit changed") from None
 
+    def _check_web_reuse(self) -> None:
+        """Fetched web evidence stays bound to the bytes its notes consumed."""
+        for row in self.ledger.rows():
+            if row.get("fetched") and not row.get("dataset") and self.tools.page_text(row["sid"]) is None:
+                raise _EngineFailure("web_evidence_corrupt: restore the original fetched page generation before resuming")
+
     # ------------------------------------------------------------ utilities
     def log(self, kind: str, message: str) -> None:
         self.reporter.write(kind, message)
@@ -5874,6 +5882,7 @@ class _Engine:
     def execute(self) -> int:
         self.announce()
         try:
+            self._check_web_reuse()
             self.phase_context()
             self.phase_plan()
             self.replan_after_outage()
@@ -6279,6 +6288,11 @@ class _Engine:
     def phase_plan(self) -> None:
         plan = Plan.from_dict(_read_json(self.work / "plan.json")) if self.state.is_done("plan") else None
         brief = _read_text(self.work / "brief.md") if plan else None
+        if plan and (_sha256(" ".join(plan.question.split())) != _sha256(" ".join(self.question.split()))
+                     or plan.language != self.language
+                     or (self.backtest is not None and plan.as_of != self.backtest.as_of_iso)
+                     or (brief and brief != render_brief(plan))):
+            raise _EngineFailure("research_plan_identity_mismatch: saved plan or brief differs from the admitted run")
         if plan and brief and not self._discard_outage_plan(plan):
             self.plan, self.brief, self.kiqs = plan, brief, list(plan.kiqs)
             self.meta["plan_fallback"] = sorted(plan.fallback)
@@ -6415,6 +6429,13 @@ class _Engine:
         task = _render(_T_PLAN, min_kiqs=min(4, self.preset.max_kiqs), max_kiqs=self.preset.max_kiqs,
                        min_sections=self.preset.sections_min, max_sections=self.preset.sections_max,
                        language=self.language, actor_cap=self.actor_prompt_cap)
+        if scope:
+            scoped = {"restated_question": _collapse(scope.get("restated_question"), 400),
+                      "horizon": _collapse(scope.get("horizon"), 120),
+                      "key_entities": _as_str_list(scope.get("key_entities"), limit=12, item_chars=120)}
+            task += ("\n\nSCOPED RESEARCH FRAME\n" + json.dumps(scoped, ensure_ascii=False)
+                     + "\nUse this scope when choosing KIQs, sections, scenarios and actors. "
+                     "The original question and as-of date in the brief remain authoritative.")
         if self.data_enabled:
             task += ("\nOFFICIAL DATA: give each KIQ that needs official statistics the key "
                      "\"data_needs\": [{\"series\": \"<catalog ID>\", \"query\": \"...\", \"geography\": \"...\"}] "
@@ -6498,7 +6519,9 @@ class _Engine:
             if retry_cut_short and entry.get("fallback") in _RETRYABLE_FALLBACKS:
                 continue
             data = _read_json(self.work / "kiq" / f"{kiq.id}.json")
-            if isinstance(data, dict) and data.get("id") == kiq.id and isinstance(data.get("facts"), list):
+            if (isinstance(data, dict) and data.get("id") == kiq.id
+                    and data.get("question") == kiq.question and data.get("kind") == kiq.kind
+                    and data.get("round") == kiq.round and isinstance(data.get("facts"), list)):
                 self.records[kiq.id] = data
 
     def phase_gather(self) -> None:
@@ -6600,10 +6623,12 @@ class _Engine:
             self.gateway.prime(rg.build_messages(ENGINE_CORE, [self.brief], PRIME_TASK), kind="agent",
                                label="gather:prime", tools=self.agent_tools, deadline=deadline)
         grace = self._final_notes_grace(deadline)
-        jobs = [(lambda kiq=kiq: self._gather_job(kiq, self._kiq_task(kiq, seeds[kiq.id]),
-                                                   [row["sid"] for row in seeds[kiq.id]], abort, deadline,
-                                                   grace))
-                for kiq in kiqs]
+        def investigate(kiq: Kiq) -> str:
+            shown = [row["sid"] for row in seeds[kiq.id]]
+            task = self._kiq_task(kiq, seeds[kiq.id], shown_sids=shown)
+            return self._gather_job(kiq, task, shown, abort, deadline, grace)
+
+        jobs = [(lambda kiq=kiq: investigate(kiq)) for kiq in kiqs]
         results = self.gateway.fan_out(jobs, warm_first=False, workers=workers)
         provider_error: BaseException | None = None
         for kiq, result in zip(kiqs, results, strict=True):
@@ -6747,7 +6772,8 @@ class _Engine:
                            for row in [self.ledger.get(sid)] if row]
         return seeds
 
-    def _kiq_task(self, kiq: Kiq, seed_rows: Sequence[Mapping[str, Any]]) -> str:
+    def _kiq_task(self, kiq: Kiq, seed_rows: Sequence[Mapping[str, Any]], *,
+                  shown_sids: list[int] | None = None) -> str:
         lines: list[str] = []
         for row in seed_rows:
             lines.append(f"[S{row['sid']}] {row['title']} — {row['domain']} ({rg.tier_label(row['tier'])})")
@@ -6765,7 +6791,7 @@ class _Engine:
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
             max_steps=self.preset.agent_max_steps, language=self.language)
-        context = self._context_text()
+        context = self._context_text(shown_sids=shown_sids)
         if context:
             task += "\n" + self.delimit("NEWS AND MARKET CONTEXT", context)
             task += ("\nUse news_search/social_search/market_compare only when exposed. Publisher snippets "
@@ -7550,9 +7576,6 @@ class _Engine:
     def _exec_summary(self, sections: Sequence[Mapping[str, Any]], deadline: rg.Deadline) -> tuple[str, str]:
         """Written LAST from the section leads; deterministic summary on failure.
         Provider errors propagate (synthesis then fails resumably)."""
-        persisted = _read_text(self.work / "sections" / "00.md")
-        if persisted and len(persisted.strip()) >= WRITER_BODY_MIN_CHARS:
-            return persisted.strip(), "writer"
         leads = section_leads(sections)
         leads_block = ("SECTION LEADS (the opening paragraph of each drafted section, in report order)\n\n"
                        + "\n\n".join(f"§{i} {title}\n{lead or '(empty)'}"
@@ -7563,11 +7586,19 @@ class _Engine:
             _DATA_EXEC_RULE)
         if getattr(self, "skill_library", None) is not None:
             task += self._writer_skill_text(scenario=False, summary=True)
+        shared = [self.brief, leads_block]
+        context = self._context_text()
+        if context:
+            shared.append(self.delimit("NEWS AND MARKET CONTEXT", context))
+        input_sha = _sha256(json.dumps([*shared, task], ensure_ascii=False))
+        proof_path = self.work / "sections" / "00.input.json"
+        proof = _read_json(proof_path) or {}
+        persisted = _read_text(self.work / "sections" / "00.md")
+        if (persisted and len(persisted.strip()) >= WRITER_BODY_MIN_CHARS
+                and isinstance(proof, dict) and proof.get("input_sha256") == input_sha
+                and proof.get("body_sha256") == _sha256(persisted.strip())):
+            return persisted.strip(), "writer"
         try:
-            shared = [self.brief, leads_block]
-            context = self._context_text()
-            if context:
-                shared.append(self.delimit("NEWS AND MARKET CONTEXT", context))
             result = self._write_call(rg.build_messages(ENGINE_CORE, shared, task),
                                       label="synth:exec", deadline=deadline)
             body = split_writer_output(result.text, [heading]).get(heading, "").strip()
@@ -7575,28 +7606,35 @@ class _Engine:
                 body = self._trim_cut(body, "the executive summary")
             if len(body) >= WRITER_BODY_MIN_CHARS:
                 self._persist_section(0, body, trimmed=result.truncated)
+                self.write_json(proof_path, {"input_sha256": input_sha, "body_sha256": _sha256(body)})
                 return body, "writer"
             self.log("warn", "v3: executive summary reply was unusable; using the deterministic summary")
         except _PROVIDER_ERRORS:
             raise
         except rg.GatewayError as exc:
             self.log("warn", f"v3: executive summary failed ({exc.category}: {exc}); deterministic summary")
+        return self._fallback_exec_summary(sections), "fallback"
+
+    def _fallback_exec_summary(self, sections: Sequence[Mapping[str, Any]]) -> str:
         # Complete sentences of each section's full lead paragraph: a hard cut
         # could split a figure or a marker ("2,34…", "[…").
         lines = [f"- {section.get('title')}: {sentence_excerpt(paragraph, 300)}" for section in sections
                  for paragraph in (_lead_paragraph(section.get("body")),) if paragraph]
         frame = "; ".join(f"{s.name} {s.weight}%" for s in self.plan.scenarios)
         lines += ["", f"{_text(self.language, 'frame_line')}: {frame}."]
-        return "\n".join(lines).strip(), "fallback"
+        return "\n".join(lines).strip()
 
     # =================================================================== qa
     def phase_qa(self) -> None:
+        self._check_web_reuse()
         self._check_data_reuse()
         self._check_context_reuse()
         if self.state.is_done("qa"):
             qa = _read_json(self.work / "qa.json")
             report = _read_text(self.work / "qa_report.md")
             if isinstance(qa, dict) and report and isinstance(qa.get("citation_order"), list):
+                if qa.get("report_sha256") != _sha256(report):
+                    raise _EngineFailure("research_qa_evidence_corrupt: cached report differs from its QA digest")
                 self.qa, self.final_report = qa, report
                 self.meta["research_qa"] = self._qa_meta(qa)
                 self.meta["truncated_sections"] = list(qa.get("truncated_sections") or [])
@@ -7625,6 +7663,7 @@ class _Engine:
         self._prepare_data_exhibits(deadline)
         frame = self.plan.scenarios
         exec_body = str(self.synth["exec_summary"])
+        exec_trimmed = bool(self.synth.get("exec_trimmed"))
         sections = [dict(s) for s in self.synth["sections"]]
         repaired: list[dict] = []
         exec_body, removed = remove_error_markers(exec_body)
@@ -7668,6 +7707,19 @@ class _Engine:
         if extra_rows:
             repaired.append({"check": "scenario_weights_consistent",
                              "action": "probabilities of scenarios outside the frame removed", "rows": extra_rows})
+        if section_leads(sections) != section_leads(self.synth["sections"]):
+            # Accepted QA changes are new summary inputs. Never publish a
+            # summary (or cached 00.md) that still states the retired baseline.
+            try:
+                exec_body, origin = self._exec_summary(sections, deadline)
+                exec_trimmed = origin == "writer" and self._section_trimmed(0)
+            except _PROVIDER_ERRORS as exc:
+                self.log("warn", f"v3: revised executive summary unavailable ({type(exc).__name__}); "
+                                 "using the corrected section leads")
+                exec_body, exec_trimmed = self._fallback_exec_summary(sections), False
+            exec_body = fix_scenario_weights(remove_error_markers(exec_body)[0], frame)[0]
+            exec_body = strip_extra_scenario_probabilities(exec_body, frame)[0]
+            repaired.append({"check": "executive_summary_context", "action": "refreshed from revised section leads"})
         self._embed_data_exhibits(sections)
         context = self._context_text()
         if context:
@@ -7693,7 +7745,7 @@ class _Engine:
             normalized, lambda sid: sid in citable and self.ledger.get(sid) is not None)
         final = body.rstrip() + "\n\n" + render_references(order, self.ledger.get) + "\n"
         self._finalize_data_citations(order)
-        trimmed = self._trimmed_titles(bool(self.synth.get("exec_trimmed")), sections)
+        trimmed = self._trimmed_titles(exec_trimmed, sections)
         dropped = [str(s["title"]) for s in sections
                    if not s.get("is_scenario") and not has_section_content(s["body"])]
         checks = self._qa_checks(final, scenario_ok, trimmed, dropped)
@@ -8224,6 +8276,7 @@ class _Engine:
                              "and none was answered)")
 
     def phase_finalize(self) -> int:
+        self._check_web_reuse()
         self._check_data_reuse()
         self._check_context_reuse()
         self.log("stage", "research:v3:finalize start")
@@ -8470,11 +8523,12 @@ class _Engine:
         quant = normalize_quant(facts_raw.get("quantitative_facts"), sources)
         contested = normalize_contested(facts_raw.get("contested_claims"), sources)
         actors_raw = actors_raw or {}
-        as_of = str(actors_raw.get("as_of_date") or "")
+        if actors_raw.get("as_of_date") and actors_raw["as_of_date"] != plan.as_of:
+            self.log("warn", "v3: actor extraction changed the as-of date; keeping the admitted run cutoff")
         obj: dict[str, Any] = {
             "central_question": _collapse(actors_raw.get("central_question"), 600)
             or plan.restated_question or self.question,
-            "as_of_date": as_of if re.match(r"^\d{4}-\d{2}-\d{2}$", as_of) else plan.as_of,
+            "as_of_date": plan.as_of,
             "situation_brief": normalize_situation(actors_raw.get("situation_brief")),
             "actors": actors,
             "relationships": normalize_relationships(actors_raw.get("relationships"), actors),

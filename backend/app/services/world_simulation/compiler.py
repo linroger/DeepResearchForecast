@@ -14,7 +14,7 @@ import unicodedata
 from typing import Any
 
 from .contracts import (
-    ENGINE, SPEC_SCHEMA, WorldError, canonical_json, clone, decimal, digest,
+    CAUSAL_ORDER_POLICY, ENGINE, SPEC_SCHEMA, WorldError, canonical_json, clone, decimal, digest,
     identifier, require, stable_id, validate_spec, visibility,
 )
 
@@ -248,6 +248,14 @@ class _Sources:
             collect(self.document)
         except RecursionError:
             raise WorldError("invalid_source", "Research input nesting exceeds compiler bound") from None
+        # Keep the audience of actor-known text even when a proposal copies it
+        # into an assumption instead of citing the original claim. Provenance
+        # labels cannot grant another actor access to the source text.
+        self.restricted_text = []
+        for (aid, _), claim in self.claims.items():
+            known, public, _ = _access(claim)
+            if not public:
+                self.restricted_text.append((_norm(claim["claim"]), aid if known else None))
         if self.seal:
             self._validate_legacy()
         else:
@@ -293,12 +301,17 @@ class _Sources:
                 and seal.get("claim_projection_multiset_sha256") == _sha(_source_json(dict(Counter(hashes)))),
                 "invalid_actor_seal", "Actor claim roster fingerprint mismatch")
 
-    def safe(self, text: str) -> str:
+    def safe(self, text: str, *, actor_id: str | None = None, public: bool = False) -> str:
         text = _text(text)
         normalized = _norm(text)
         require(normalized not in self.denied_exact
                 and not any(denied and denied in normalized for denied in self.denied),
                 "forbidden_actor_evidence", "Denied or modeler-only evidence cannot enter actor-visible text")
+        if actor_id is not None or public:
+            require(not any((public or owner != actor_id) and restricted
+                            and (restricted in normalized if _specific_denial(restricted) else restricted == normalized)
+                            for restricted, owner in self.restricted_text),
+                    "forbidden_actor_evidence", "Private claim text cannot enter another audience through an assumption")
         return text
 
     def admissible(self, claim: dict) -> bool:
@@ -326,17 +339,17 @@ class _Sources:
             start, end = match.span()
         return {"start": start, "end": end, "sha256": _sha(self.report[start:end])}
 
-    def safe_tree(self, value: Any) -> None:
+    def safe_tree(self, value: Any, *, actor_id: str | None = None, public: bool = False) -> None:
         """Inspect original strings before JSON escaping can hide whitespace."""
         if isinstance(value, str):
-            self.safe(value)
+            self.safe(value, actor_id=actor_id, public=public)
         elif isinstance(value, dict):
             for key, item in value.items():
-                self.safe(key)
-                self.safe_tree(item)
+                self.safe(key, actor_id=actor_id, public=public)
+                self.safe_tree(item, actor_id=actor_id, public=public)
         elif isinstance(value, list):
             for item in value:
-                self.safe_tree(item)
+                self.safe_tree(item, actor_id=actor_id, public=public)
 
     def basis(self, value: Any, assumptions: dict, *, actor_id: str | None = None,
               public: bool = False, profile: bool = False) -> dict:
@@ -460,7 +473,8 @@ def _profile(raw: dict, sources: _Sources, assumptions: dict) -> dict:
     allowed = {"actorId", "name", "basis", "evidenceGrade", "cadence", "respondToOffers", "capabilities",
                "controlledAccounts", "priorityRules", "fieldStatus", *PROFILE_FIELDS}
     require(set(raw) <= allowed, "invalid_actor", "Actor proposal contains unsupported fields")
-    aid, name = identifier(raw.get("actorId"), "actorId"), sources.safe(raw.get("name"))
+    aid = identifier(raw.get("actorId"), "actorId")
+    name = sources.safe(raw.get("name"), actor_id=aid)
     basis = sources.basis(raw.get("basis"), assumptions)
     source = sources.actors.get(aid)
     require(sources.actor_names.get(_norm(name), aid) == aid,
@@ -494,7 +508,7 @@ def _profile(raw: dict, sources: _Sources, assumptions: dict) -> dict:
                 item = {"text": item, "basis": basis}
             require(isinstance(item, dict) and set(item) == {"text", "basis"}, "invalid_actor", "Profile entries require text and basis")
             item_basis = sources.basis(item["basis"], assumptions, actor_id=aid, profile=True)
-            text = sources.safe(item["text"])
+            text = sources.safe(item["text"], actor_id=aid)
             if item_basis["kind"] == "source_claim":
                 require(len(item_basis["refs"]) == 1, "unsupported_actor_derivation", "Actor facts require a single exact claim")
                 ref = item_basis["refs"][0]
@@ -517,7 +531,7 @@ def _profile(raw: dict, sources: _Sources, assumptions: dict) -> dict:
         rule["basis"] = sources.basis(rule.get("basis"), assumptions, actor_id=aid, profile=True)
         require(rule["basis"]["kind"] == "scenario_assumption", "unsupported_actor_derivation",
                 "Executable priority revision rules require a declared scenario assumption")
-        sources.safe_tree({key: value for key, value in rule.items() if key != "basis"})
+        sources.safe_tree({key: value for key, value in rule.items() if key != "basis"}, actor_id=aid)
         _quantities(rule, sources, keys=("value", "trigger"))
     return result
 
@@ -535,7 +549,11 @@ def _visible_basis(record: dict, sources: _Sources, assumptions: dict, actor_ids
     if policy.get("kind") != "analyst":
         for key in ("description", "value"):
             if key in record:
-                sources.safe_tree(record[key])
+                if policy.get("kind") == "public":
+                    sources.safe_tree(record[key], public=True)
+                else:
+                    for aid in policy.get("actorIds", []):
+                        sources.safe_tree(record[key], actor_id=aid)
 
 
 def _effect_visibility(spec: dict, sources: _Sources, assumptions: dict) -> None:
@@ -653,6 +671,9 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
     require(set(raw_spec) <= permitted, "invalid_spec", "Modeler proposal contains unsupported fields")
     sources = _Sources(research_report, research_generation_id, research_engine, actor_bundle)
     spec = clone(raw_spec)
+    # Compiler-owned semantics for fresh worlds. Saved specs/forks retain their
+    # original pin; modeler output cannot choose a different resolution rule.
+    spec["resolutionOrderPolicy"] = CAUSAL_ORDER_POLICY
     if "policy" in spec:
         _policy_metadata(spec["policy"])
     for key, value in {"simulationId": simulation_id, "generationId": generation_id, "schemaVersion": SPEC_SCHEMA, "engine": ENGINE}.items():
@@ -707,6 +728,8 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
         viewers = template["actorIds"] + template["parameters"].get("recipientIds", [])
         for aid in viewers:
             sources.basis(description_basis, assumptions, actor_id=aid)
+            sources.safe(template["description"], actor_id=aid)
+            sources.safe_tree(template["inputs"], actor_id=aid)
         template["description"] = sources.safe(template["description"])
         sources.safe_tree(template["inputs"])
         if description_basis["kind"] == "source_claim":
