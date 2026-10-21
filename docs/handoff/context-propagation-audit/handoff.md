@@ -1,8 +1,8 @@
 # Context propagation audit handoff
 
 **Last Updated (UTC):** 2026-10-21T17:26:39.316095+00:00
-**Status:** Verified and independently accepted; Git delivery pending
-**Current Focus:** Complete independent final disposition and deliver the exact verified source to main.
+**Status:** Complete — verified and delivered to main
+**Current Focus:** No implementation remains in the exercised scope; preserve declared limits for future work.
 
 ## 1) Request & Context
 The user asks to check every part of the workflow for context propagation failures within stages and across stages. The audit starts from main 3cd421a3b89f475d54db66421eaa6a1684c3e86f, including Oddsense, forecast feedback, documented risks, backtest, partial translations and latest test/runtime-isolation fixes. Work is isolated on codex/context-propagation-audit in the attached forecast-feedback worktree. The primary checkout has unrelated concurrent edits; only the later explicitly authorized GraphPanel import repair is a primary-write exception.
@@ -27,7 +27,7 @@ PLANS.md records invariants and ownership. First map current source and existing
 - [x] Reproduce and repair verified context breaks; original receipts and fixture-error distinctions retained.
 - [x] Reconcile stage/alternate-path coverage and verify combined source: freeze4 passes4533 with21named exclusions;502sourcehashes and17childreceipts verified.
 - [x] Independent final review accepted on freeze4; all502hashes and17children independently reconciled.
-- [ ] Commit/push scoped delivery and verify the remote main SHA.
+- [x] Commit/push scoped delivery and verify remote main/audit branch at source commit 29bf6be5b08990de58099120dbf3db9ab617b366.
 
 ## 5) Findings, Decisions, Assumptions
 Current authority is PipelineOrchestrator/pipeline_state.json; older architecture documents are partial and historical. Prior green integration tests do not certify every stage prompt or every alternate constructor. The audit treats source context, model input, durable artifact, actor access and publication as separate predicates. Existing omission/budget behavior must be evaluated against declared contracts rather than assuming every source byte should reach every model.
@@ -42,7 +42,7 @@ R1–R7 are reconciled in coverage.md and stage-specific actual-consumer tests. 
 Freeze4 final joint:4533passed,21explicitlydeselected,0failures/errors in331.35seconds. Parent and17registeredchildren completed exit0/shutdown/identity/no drift;502current+mirrorPythonhashesmatch andcompile without execution. Guard denied9Popen,20externalreads,1socket,2killpg; these remain attempts. Exact receipts/hashes/61first-joint dispositions are in verification.json. No live provider/model, service restart, dependency installation or saved production run was used.
 
 ## 9) Remaining Work & Next Steps
-Finish independent final disposition and scoped Git delivery, then record verified remote SHA. Named limitations:19optional-DeerFlow native configuration cases unavailable,2OSselfsignal cases not executed; external/model semantics, native PDF binaries, live provider quality, deployment and default world-v1 promotion are outside this acceptance. Preserve primary peer work and existing false feature flags.
+Independent final disposition is Accepted and source commit 29bf6be5b08990de58099120dbf3db9ab617b366 is verified on remote main and the audit branch. No required implementation or delivery remains; this closing commit records that evidence. Named limitations:19optional-DeerFlow native configuration cases unavailable,2OSselfsignal cases not executed; external/model semantics, native PDF binaries, live provider quality, deployment and default world-v1 promotion are outside this acceptance. Preserve primary peer work and existing false feature flags.
 
 Next-session prompt: Read this handoff, final-verification.md, review.md and current main history before new work. Reuse verification-selection.json and the unchanged guard with exact registered scripts in a fresh private mirror. Treat earlier receipts as historical after any source change. Do not run providers, recover saved runs, promote world-v1, alter peer primary work or duplicate existing skills/automations without a new authorized task.
 
@@ -118,3 +118,7 @@ Freeze4 /private/tmp/drf-context-joint-fourth-2tetzaqp passes4533cases with21nam
 ### 2026-10-21T17:33:42.914402+00:00 — independent acceptance closed
 
 Reviewer final disposition Accepted on exactfreeze4; no material unresolved finding in the exercised scope. Final4533/21,502hashes and17children match independent readback. Source and documentation are now prepared for owned-path commit and non-forced main delivery.
+
+### 2026-10-21T17:37:15.543074+00:00 — verified remote delivery and closeout
+
+Source commit 29bf6be5b08990de58099120dbf3db9ab617b366 fast-forwarded local/remote main from3cd421a and created the remote audit branch in one non-forced atomic push. Remote refs independently match. All code/test bytes remain the accepted502-file freeze4; metadata closeout changes no application source. Audit worktree was clean after the source commit. Primary still has its unrelated branch/work; its GraphPanel one-line repair remains applied. No services were restarted and no paid/provider run or world-v1 default promotion occurred. delivery.json records the exact source/ref/review identities.

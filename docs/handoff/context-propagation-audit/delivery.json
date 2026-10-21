@@ -1,0 +1,26 @@
+{
+  "schema": "context-audit-delivery/v1",
+  "status": "verified application and test delivery; this commit is documentation closeout",
+  "verified_at_utc": "2026-10-21T17:37:15.543074+00:00",
+  "source_commit": "29bf6be5b08990de58099120dbf3db9ab617b366",
+  "base_main": "3cd421a3b89f475d54db66421eaa6a1684c3e86f",
+  "remote": "legacy",
+  "remote_url": "https://github.com/linroger/DeepResearchForecast.git",
+  "verified_remote_refs_after_source_push": {
+    "refs/heads/codex/context-propagation-audit": "29bf6be5b08990de58099120dbf3db9ab617b366",
+    "refs/heads/main": "29bf6be5b08990de58099120dbf3db9ab617b366"
+  },
+  "push": "atomic non-forced fast-forward main and audit branch",
+  "source_freeze_sha256": "1e066b7e4aeb861daf19d877b3c3d597406db72089f5b8555f7a6c6189958776",
+  "review_sha256": "110a20100138355a2c178a4f64c0710e1e1236dabee695a3d4b4f04bf777ed17",
+  "result": {
+    "passed": 4533,
+    "failures": 0,
+    "errors": 0,
+    "deselected_named": 21,
+    "matched_python_sources": 502,
+    "clean_children": 17
+  },
+  "primary_checkout": "Existing branch and peer dirt preserved; only explicitly authorized one-line GraphPanel import repair applied, separately verified. No service deployment/restart.",
+  "metadata_closeout": "Final Git HEAD identifies the documentation closeout commit; application/test hashes remain exactly source-freeze4."
+}

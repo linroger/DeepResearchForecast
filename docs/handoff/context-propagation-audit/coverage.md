@@ -1,6 +1,6 @@
 # Context contract coverage and limits
 
-This record reconciles stage notes against the active PipelineOrchestrator workflow. It distinguishes source tracing, scripted actual-consumer execution, durable provenance, and production behavior. Final freeze4 joint gate passes4533cases with21named exclusions; verification.json binds502sourcehashes and17cleanchildreceipts. Individual leaf receipts below apply only to their recorded hashes. Independent final disposition is Accepted; Git delivery remains pending. Source-only concerns are not counted as fixed bugs.
+This record reconciles stage notes against the active PipelineOrchestrator workflow. It distinguishes source tracing, scripted actual-consumer execution, durable provenance, and production behavior. Final freeze4 joint gate passes4533cases with21named exclusions; verification.json binds502sourcehashes and17cleanchildreceipts. Individual leaf receipts below apply only to their recorded hashes. Independent final disposition is Accepted; source delivery is verified on remote main (delivery.json). Source-only concerns are not counted as fixed bugs.
 
 | Boundary / required fields | Real producer and consumer | Executed controls / evidence | State and limits |
 |---|---|---|---|

@@ -1,4 +1,4 @@
-> Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Stage receipts are bounded; final source-frozen combined verification and independent review are in progress.
+> Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
 > Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.
 

@@ -1,6 +1,6 @@
 # Context propagation audit: verification and delivery
 
-Status: Final offline gate and independent review accepted; Git delivery pending.
+Status: Complete — final offline gate, independent review and remote source delivery accepted.
 
 The audit starts from main `3cd421a3b89f475d54db66421eaa6a1684c3e86f` and uses the isolated `codex/context-propagation-audit` branch. The primary checkout remains on its existing branch; its urgent GraphPanel import repair is separately recorded in `../frontend-overlay-repair/`.
 
@@ -41,4 +41,4 @@ The evidence proves the exercised deterministic field, provenance, access, resta
 
 [Coverage](coverage.md), [issues](issues.md), [independent review](review.md) and eight stage notes retain producer → artifact → actual consumer maps, exact read ranges, source hashes, reds/greens and residual limits. [Handoff](handoff.md) is the current continuity authority. [Preservation](preservation-final.json) records the primary exception and concurrent peer drift without attributing peer changes to this audit. [Workflow packaging](workflow-packaging.json) binds the two narrow existing-skill reference additions; no new top-level skill, permanent agent, automation or global-memory write occurred.
 
-The completed freeze4 receipt is accepted. Independent final review is Accepted. Owned-path commit/push remain pending. Do not infer running-service deployment from a future Git delivery.
+The completed freeze4 receipt and independent final review are Accepted. Source commit `29bf6be5b08990de58099120dbf3db9ab617b366` is verified on remote main and the audit branch. [Delivery record](delivery.json) captures the exact refs; this documentation closeout changes no application/test bytes. Git delivery does not deploy or restart the running primary services.

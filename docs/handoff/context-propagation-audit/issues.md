@@ -25,3 +25,5 @@ CTX-L9 is reproduced and repaired by the separate retirement marker contract; cu
 Final freeze4 verification closes all reproduced application defects and valid fixture regressions within the named contracts:4533passed/21explicit exclusions,0failures/errors. The21 exclusions and semantic/native/live limits are retained as coverage limits, not counted as passes or silently fixed. Final independent disposition and Gitdelivery remain pending.
 
 Independent final review is Accepted on freeze4; no unresolved material finding in the exercised scope. Gitdelivery follows.
+
+Delivery closed: source commit 29bf6be5b08990de58099120dbf3db9ab617b366 verified on remote main and audit branch. No unresolved material finding in exercised scope; declared unavailable/live/semantic limits remain.
