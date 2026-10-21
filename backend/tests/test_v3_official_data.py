@@ -37,6 +37,13 @@ def source_receipt():
     assert before == after, "Production source changed during V3 acceptance; repeat with frozen bytes"
 
 
+@pytest.fixture(autouse=True)
+def _no_news_context(monkeypatch):
+    # These checks freeze the web+data tool contract. Context-ON engine scenarios
+    # (news_search/social_search/market_compare) live in test_news_research.py.
+    monkeypatch.setenv("NEWS_CONTEXT_ENABLED", "false")
+
+
 def test_plan_preserves_bounded_data_needs():
     needs = [{"series": "fred:UNRATE", "query": "unemployment", "geography": "USA"}] * 6
     kiqs, _ = lr._normalize_kiqs([{"question": "What is the employment baseline?",
@@ -222,7 +229,8 @@ def engine_factory(tmp_path, monkeypatch, api):
         factory = lambda ledger, pages, bridge, log, limits: rg.ResearchTools(
             ledger, pages, search_fn=fake_search, fetch_fn=page_text, limits=limits, data_sources=source)
         engine = lr._Engine("What is the unemployment baseline?", tmp_path / "run", make_args("quick"), {},
-                            plog, lambda: None, bridge, gateway, factory, {"DATA_SOURCES_ENABLED": "true"})
+                            plog, lambda: None, bridge, gateway, factory,
+                            {"DATA_SOURCES_ENABLED": "true", "NEWS_CONTEXT_ENABLED": "false"})
         engine.plan = lr.build_plan(engine.question, lr.ENGLISH, "2025-02-01", engine.preset, 4,
                                    None, None)
         engine.kiqs = list(engine.plan.kiqs)
