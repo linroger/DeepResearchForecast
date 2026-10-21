@@ -614,3 +614,17 @@ Delivery checkpoint: 7d72c951cf8f8846e083989d593c8c4090f877c7 committed40ownedfi
 - **Result:** skills enabled; one `extract:frame` call (1,855 output tokens, no retry, not truncated); risks 5 extracted → 1 kept (NOAA "5% above-normal" hurricane activity, `[S34]`, report line 175; window blanked); no invented probability passed. False negative: the El Niño row packed three window-specific CPC probabilities into one string. Sealed seed: 0 shocks, `shock_without_window` + `no_documented_shocks`. Even split rows give 0 shocks, because the seed cannot read calendar windows ("October–December").
 - **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-0200-risks-live/` (`checks/`, `research_snapshot/`), run artifacts in `.claude/worktrees/competent-wu-dccf15/backend/uploads/` (kept); record §5 F4–F9, §7b, §8b.
 - **Next:** owner's choice among the §9 proposals P1–P4 (one row per stated probability, calendar windows in the seed, windows as written, cleaner counts); worktree live checks need a real `backend/uploads`.
+
+### 2026-10-21T14:20+08:00 (CST) — branch `claude/intelligent-cerf-d84ce7` (merged `claude/fervent-spence-6d11bb` first, 7667677) — P1 + P2: one risk row per stated probability, dated windows
+- **Request (owner):** "Build P1 (one row per stated probability, prompt + normaliser split) and P2 (dated calendar windows in the seed/kernel) here, with tests; no paid runs."
+- **Change:**
+  - cb9cc8a (P2): `world_model_seed.parse_dated_window` reads month ranges, quarters, CPC season codes in capitals, "by <date>", "in 2027" and the CJK forms. Dated shocks are rolled only on the days a period shares with their stretch (`Shock.active_days`). Gaps `shock_window_elapsed` / `shock_window_after_horizon`. Spelled-out counts are counts ("three-month" was read as "per month").
+  - 3f05929 (P1): `_T_FRAME` asks for one probability per row; `normalize_frame_risks` splits "N% (window); M% (window)"; calendar windows are checked by span and the line's own phrase is kept.
+  - cc8e249: probability–window pairing by every largest pairing of the line.
+  - 504c108: README EN/ZH, design §2.12.
+- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1402-p1p2-plain/evidence/` (`README.txt`).
+  - The live run's own artifacts: kept 1 → 4, seed shocks 0 → 3, firing rates match the hazard.
+  - Mutation check: 13/13 mutants killed.
+  - Tests: `test_research_frame_risks.py` 34 → 116, `test_world_shocks.py` 55 → 115.
+  - Plain suites: 504c108 gave 8,457 tests and the final cc8e249 8,458 tests, both 0 failed with the 19 known `test_legacy_official_data` errors.
+- **Next:** owner-approved live check of the documented-hazards research and P1/P2 together; P3/P4 (§9) not built; merge into `main`.

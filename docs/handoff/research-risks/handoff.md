@@ -1,8 +1,8 @@
 # Handoff — research engine v3 emits documented risks for the world model's shocks (2026-10-21)
 
-**Last Updated (UTC):** 2026-10-21T05:30Z
-**Status:** Two offline changes, both complete: the extraction (`claude/nice-diffie-73cb9a`) and the documented-hazards research (§11, `claude/fervent-spence-6d11bb`). The extraction was live-checked 2026-10-21 on 42215e6, without §11 (`pipe_fef5312f76f0` → `sim_71c47873ada0`, research + PREPARE only, §7b). It was precise (5 extracted, 1 kept, nothing invented), but no shock reached the world: a compound probability string is dropped (F6), and the seed cannot read calendar windows (F7). `claude/intelligent-cerf-d84ce7` merges §11 and builds the fixes P1 and P2 (§12). Nothing is pushed.
-**Current Focus:** P1 + P2 (§12); then the owner-approved live check of §11 and of P1/P2 together.
+**Last Updated (UTC):** 2026-10-21T06:20Z
+**Status:** Built offline on `claude/intelligent-cerf-d84ce7`, not pushed: P1 (one risk row per stated probability, windows checked by calendar span) and P2 (dated windows in the seed and the kernel), §12. On the live run's own artifacts, the extraction and seed now give 4 kept risks and 3 dated shocks, where they gave 1 risk and 0 shocks. The branch also carries the extraction (`claude/nice-diffie-73cb9a`), the documented-hazards research (§11, merged from `claude/fervent-spence-6d11bb`) and the live check of the extraction (§7b). P3 and P4 stay proposals.
+**Current Focus:** owner-approved live check of §11 + §12 together (paid; not run).
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
 
@@ -40,7 +40,8 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 - [x] Docs: README EN/ZH line 602 (one line each, still 2,009 lines), design §2.12, research-skills design item 7, world-state-paths handoff §9/§10, `agent-progress.txt`, this record.
 - [x] Suites (§8).
 - [x] Live check (2026-10-21): `pipe_fef5312f76f0` research → research-finalize failure from the harness (F8) → resume → PREPARE sealed `sim_71c47873ada0`, RUN cancelled by the launcher; checks 1–4 in §7b; evidence §8b.
-- [ ] Owner decision on the §9 proposals P1–P4 (none built).
+- [x] Owner decision on the §9 proposals: P1 and P2 approved and built (2026-10-21, §12); P3 and P4 not built.
+- [ ] Owner-approved live check of §11 + §12 (one paid research run + PREPARE).
 
 ## 5) Findings, Decisions, Assumptions
 - **F1 (real reports, read-only):** in the 9 latest v3 reports with method skills (`backend/uploads/pipelines/pipe_*/handoff/research_report.md`: USD/JPY, Brent Q2 2027, German politics, OPEC+, Japan leadership, France budget crisis, India macro, Burnham agenda, US–China trade) almost every line that pairs a probability word with a percentage and a marker outside the scenario section is a scenario weight, an outcome probability or a market quote, not the probability of an exogenous event (scan: `scan_reports.py` / `real_report_scan.txt` in the evidence dir). Consequence: on many live questions the honest result is `risks: []` and the seed keeps recording `no_documented_shocks`. Shocks fire on live runs only when the research itself documents event hazards (see §9, research of hazards).
@@ -127,7 +128,7 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
 - **Processes:** the attempt-1 backend (pid 8859) and the resume backend (pid 65163) were stopped after the halt, as was its embedded graph server (pid 69062). The deployment's :5001 backend and its graph server were not touched. The `competent-wu-dccf15/backend/uploads` symlink was unlinked before the resume replaced it with the real directory above.
 
 ## 9) Remaining Work & Next Steps
-- **Tuning the live check calls for (proposals; owner's choice, none built).** Each keeps the owner's rule: never a probability the report does not state.
+- **Tuning the live check calls for (proposals; P1 and P2 BUILT 2026-10-21, §12; P3 and P4 not built).** Each keeps the owner's rule: never a probability the report does not state.
   - **P1 — one row per stated probability (fixes F5).** In `_T_FRAME`, ask for one risk row per probability the report states, with its own window ("a probability stated for several windows is several rows"). In `normalize_frame_risks`, also split a probability string holding several "N% (window)" parts into one candidate row per part before the line checks, each window taken from its own parentheses. Every part still has to pass D1 on its own line. On this run it keeps three El Niño rows (`replay.txt`).
   - **P2 — calendar windows in the seed (fixes F6).** `parse_risk_window` / `shocks_from_research` would read month ranges ("October–December 2026", "Sep–Nov"), three-letter season codes ("DJF 2026-27") and "through/by/to <date>" as a dated window [start, end], not a duration. The kernel would apply the hazard only inside the overlap of that window with the simulated periods; a window that is already over at the as-of date gives a typed gap such as `shock_window_elapsed`.
     - Named seasons ("winter 2026-27") stay gaps unless a hemisphere is stated, because they are hemisphere-dependent.
@@ -176,9 +177,64 @@ Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-013626-frame-
   - The owner-approved live check (§9, plus documented-hazards.md §6). Pick a question whose sources publish event hazards.
   - For the world-model sessions: the seed's own parser still accepts a range when given one. The research side no longer sends one.
 
+## 12) P1 + P2: one row per stated probability, dated windows (2026-10-21, branch `claude/intelligent-cerf-d84ce7`)
+- **Request (owner, 2026-10-21 13:23 +08):** "Build P1 (one row per stated probability, prompt + normaliser split) and P2 (dated calendar windows in the seed/kernel) here, with tests; no paid runs."
+- **Base:** this branch merges `claude/fervent-spence-6d11bb` (7667677), so P1 builds on the range guard (§11 F3) instead of conflicting with it later.
+- **Acceptance:**
+  - **P1-a:** `_T_FRAME` asks for one row per stated probability, with the window as the report's sentence writes it. The pinned phrases stay.
+  - **P1-b:** a probability string with ≥ 2 percentages, each with its own window ("54% (Sep-Nov 2026); 83% (Oct-Dec)"), becomes one candidate per part, counted `split`. A published range is never split ("between 1% and 5%", "5% (low) to 25% (high)").
+  - **P1-c:** every part passes D1 on its own line. The event must be named by its original words, never by its window. The window must stand on the line, either verbatim or as the same calendar span ("Sep-Nov 2026" ⇔ the line's "September–November"; a year only the model adds is dropped).
+  - **P1-d:** no other probability may stand between a dated window and its probability on the line. The kept `per` is the line's own phrase.
+  - **P1-e:** replaying the live run's own reply keeps the three CPC rows.
+  - **P2-a:** `world_model_seed.parse_dated_window` reads these forms as a dated span: month ranges, single months with a year, quarters, CPC season codes (upper case), day-level date ranges, "through/by/to/until <date>", "in <year>" and the CJK equivalents.
+  - **P2-b:** ambiguous forms are `None`: a wrapping range with one year, "by 2030", year ranges, named seasons. A window without a year takes its first occurrence that has not ended at the as-of date.
+  - **P2-c:** a shock with a dated window carries `window_start`/`window_end` in `base_rate`. Its hazard comes from the stated duration, else from the window's length. A window that ended before the as-of date is the gap `shock_window_elapsed`; one that starts after the horizon is `shock_window_after_horizon`.
+  - **P2-d:** the kernel applies the hazard only on the days a period overlaps the window. A period outside the window takes no draw.
+  - **P2-e:** seeds without dated windows behave and serialise exactly as before.
+  - **P2-f:** end to end, the live run's split rows become seed shocks that the kernel fires only inside their windows.
+- **Decisions:**
+  - **D9:** dated windows are verified by calendar equivalence, not by paraphrase. Only month, quarter, season-code and date spans compare, and the line's phrase replaces the model's. This is not the D1 relaxation §9 declined.
+  - **D10:** the old duration parser is untouched and its pinned cases keep their results. The dated parser runs beside it.
+  - **D11:** a partly elapsed window keeps a constant hazard over its full length and applies only to the remaining days, so it is never inflated to its full probability.
+  - **D12:** a state probability (an El Niño's strength) is modelled with the same once-only shock; the design point of §9 P2 stays open.
+
+- **Built (commits):**
+  - cb9cc8a (P2): `world_model_seed.calendar_window_spec` / `parse_dated_window` and dated shocks (`window_start`, `window_end`, `window_text`; ids carry the stretch, so one event documented for several stretches stays several shocks). Also new: gaps `shock_window_elapsed` / `shock_window_after_horizon`, `Shock.active_days`, and no roll outside the stretch.
+  - cb9cc8a also fixes a bug found on the way (**F10**): `parse_risk_window` read "a three-month window" as "per month" (a hazard three times too high), because unit words matched after a number word. Spelled-out counts (one … twelve, eighteen, twenty, thirty) are now counts.
+  - 3f05929 (P1): `_T_FRAME` wording; `_probability_parts` and the split (`meta.forecast_risks.split`); `_calendar_windows` / `_calendar_spec` / `_cal_same`; `_verified_window`.
+  - cc8e249: the pairing rule (**D13**).
+  - 504c108: README EN/ZH line 602 (both still 2,010 lines) and design §2.12.
+- **D13 (pairing):** a probability and a calendar window next to each other on a line may pair, each token at most once; a pair counts when every largest pairing of the line makes it.
+  - The first rule (the forward or backward reading that pairs more) tied on the live run's line 145, which puts one window before its probability and three after theirs, so that line paired nothing. Under D13 it pairs all four correctly.
+  - "Since January 2026 … 23% for Q1 2027" (a probability between two windows of equal claim) keeps neither.
+  - A day date ("next due 12 November 2026") is never a one-month window. Before that fix it had made a spurious tie.
+- **Live artifacts, before → after** (`evidence/before_probe.txt` on 7667677 → `evidence/after_probe_final.txt` on cc8e249; the research snapshot of `pipe_fef5312f76f0`, as-of 2026-10-20, horizon 2027-01-31):
+  - `meta.forecast_risks`: kept 1 → 4 (`split` 2), `probability_not_stated` 4 → 3, `effects_kept` 0 → 3.
+  - Kept rows: the CPC rows, with the line's own windows "September–November 2026" / "October–December" / "November–January" and [S6].
+  - Seed: shocks 0 → 3, dated 2026-09-01..11-30 (p 0.54), 2026-10-01..12-31 (0.83) and 2026-11-01..2027-01-31 (0.70). The hurricane row stays `shock_without_window`.
+  - Rolled through 4 monthly periods to the horizon in 1,000 seeded worlds, the shocks fired in 318 / 745 / 678 worlds. The hazard predicts 0.301 / 0.755 / 0.700 for the 42 / 73 / 92 simulated days inside each stretch, so the partly elapsed September–November stretch keeps the hazard of its full length (D11).
+  - Their effect ("STEO winter heating degree days assumption") is a `quantitative_facts` metric, but not among the 24 variables the seed tracks (`SIM_WORLD_MAX_VARIABLES`), so it is `shock_effect_untracked` and the arbiter sizes it. This is D3's binding limit, not a P1/P2 issue.
+- **Tests:**
+  - `tests/test_research_frame_risks.py` 34 → 116: prompt wording; split and never-split cases; 13 calendar-equivalence cases; spans only as stated; season codes in capitals; the mixed-convention line 145; a probability between two windows; CJK; 48 parity cases bridge ⇔ seed; the live run's lines and reply → three dated seed shocks; a scripted engine run (`CompoundRiskWorld`) whose two windows become two dated shocks that fire only inside their stretches (no draw outside).
+  - `tests/test_world_shocks.py` 55 → 115: 51 dated-window parsing cases; spelled-out counts; seed shocks and gaps; kernel overlap and draws; a partly elapsed stretch; a rate per unit with an end date; save/load.
+- **Mutation check** (`evidence/mutate.py`, `evidence/result2.txt`): 13 of 13 mutants killed. They cover pairing (any neighbour, forward only), any equal window on the line, the range check without windows, strict years, lower-case season codes, the elapsed and after-horizon gaps, a kernel that ignores the stretch or draws outside it, day dates as months, spelled-out counts, and a wrapping span placed by one plain year.
+- **Plain suites (frozen `git archive` copies without `backend/uploads` or deer-flow, `source_manifest.sha256`, JUnit):**
+  - 504c108: `tests=8457 errors=19 failures=0 skipped=1352` (388.4 s), in `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1402-p1p2-plain/`.
+  - Final cc8e249: `tests=8458 errors=19 failures=0 skipped=1352` (391.2 s), in `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1409-p1p2-plain-final/`.
+  - Both runs: **0 failed**. The 19 errors are all the known `test_legacy_official_data.py` cases, which need the deer-flow checkout.
+- **Gates:** `uvx ruff@0.17.1 check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge` and `--select F,E9` on the two test modules pass; `py_compile` OK.
+- **Worktree note:** the research and world suites in the worktree gave 2 failures in `test_drf2_skills_config.py::TestBridgeSkillsDeployedByteIdentical`, because the worktree's own deer-flow copy had the deployment's older `reference-class-forecasting/SKILL.md` (§11 changed it). After `runtime_skill_sync.py` on that copy (not the deployment), it matches the bridge. A frozen copy without deer-flow skips those tests.
+- **Not done / open:**
+  - P3 and P4 (§9) are not built.
+  - Live check of §11 + §12 (owner's approval).
+  - Effects on facts beyond the seed's 24 tracked variables stay untracked (D3).
+  - A state probability fired once as a shock is a modelling choice (D12).
+  - Merging into `main`.
+
 ## 10) Updates to This File (append-only)
 - 2026-10-20T17:30Z: created with the brief and branch notes.
 - 2026-10-20T17:45Z: implementation, tests, findings F1–F2, decisions D1–D6, before/after probes, docs; first plain run (bf50f8f) 0 failed.
 - 2026-10-20T17:55Z: branch rebuilt on the world-v1 session's 7f4ca6d + 33ae24d (identical merge, one harness fix instead of two); final plain run on c579aaa 0 failed (§8); status Complete offline.
 - 2026-10-20T18:50Z: §11 documented-hazards follow-up on `claude/fervent-spence-6d11bb` (feaf779, b17c52d, aa203ba): design note, finding F3 (ranges), decisions D7–D8, evidence, final plain run on aa203ba 0 failed (§8); §9 follow-up marked done offline.
 - 2026-10-20T19:00Z (2026-10-21 03:00 +08): live check recorded (session local_64bb9fd5, branch `claude/intelligent-cerf-d84ce7` on 42215e6). Status, §1 delta, R8, ledger, A1 result, F4–F9, §6 (finalize failure, two sessions), §7b, §8b; §9 proposals P1–P4, the recipe note and check 4's corrected wording.
+- 2026-10-21T06:20Z: §12 P1 + P2 built (cb9cc8a, 3f05929, cc8e249, docs 504c108) on this branch after merging §11 (7667677; live-check findings renumbered F4–F9); results, D13, F10, before/after probe, mutation check; suites in §12.
