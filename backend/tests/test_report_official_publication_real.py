@@ -106,6 +106,9 @@ def env(tmp_path, monkeypatch):
         monkeypatch.setattr(Config, name, value, raising=False)
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
     monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "no-simulation"))
+    # Publication journals each forecast; a per-test ledger keeps the frozen track record
+    # independent of other tests and of a later PIPELINE_DATA_DIR change.
+    monkeypatch.setattr(Config, "FORECAST_LEDGER_DIR", str(tmp_path / "forecast-ledger"))
     monkeypatch.setattr(ReportAgent, "_define_tools", lambda self: {})
     monkeypatch.setattr(ReportAgent, "_locate_timeline", lambda self: None)
     monkeypatch.setattr(ReportAgent, "_locate_handoff_dir", lambda self: None)
