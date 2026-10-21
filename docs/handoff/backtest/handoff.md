@@ -1,7 +1,7 @@
 # Handoff — backtest mode: measurable forecast accuracy without hindsight leakage
 
-**Last Updated (UTC):** 2026-10-20T18:05Z (2026-10-21 02:05 +08)
-**Status:** Complete for the offline scope; the paid live acceptance run and forward testing await the owner's approval (§9).
+**Last Updated (UTC):** 2026-10-21T03:30Z (2026-10-21 11:30 +08)
+**Status:** Complete for the offline scope and merged into `main` (§11, pushed 2026-10-21); the paid live acceptance run and forward testing await the owner's approval (§9).
 **Current Focus:** none in this session; next step is the live run proposed in §9.
 
 The words MUST, SHOULD and MAY are used as in RFC 2119.
@@ -101,7 +101,18 @@ The words MUST, SHOULD and MAY are used as in RFC 2119.
 - **Follow-ups (not started):** share research and graph between arms (fork after the graph) to cut cost per question; a golden set resolved after the pipeline model's training cutoff (the model's cutoff must come from its vendor documentation); provider date filters for Serper and Tavily; a vintage route for BLS/BEA where the publisher offers one.
 - **Risks:** strict-mode starvation (likely with Firecrawl; mitigation: lenient comparison, archive); a throttled archive (mitigated by the circuit; lenient mode as fallback); `legacy_prompt` arms flagged by Foglamp warnings in logs (expected, evaluation only).
 
+## 11) Merge into `main` (2026-10-21, +08:00 11:05–11:35), on the owner's request ("commit, push and merge all changes to main")
+- **What went in:** a merge branch `claude/merge-into-main-1021` cut from `main` bb8013d took, in order, `claude/fervent-spence-6d11bb` (documented-risk extraction and documented hazards), `claude/intelligent-cerf-d84ce7` (its live-check record), `claude/frosty-cartwright-f1f9c4` (an earlier merge of the same work; no file changed) and this branch. Every one of them, plus `claude/nice-diffie-73cb9a` / `claude/competent-wu-dccf15`, is now an ancestor of `main`.
+- **Semantic conflict with the forecast-feedback loop (1a5e0ea, on `main` after this branch was cut):** `main` no longer writes the ledger when the forecast is finalised; the audited publication does (`ReportManager.save_report` → `published_forecasts.jsonl`), and every published report gets a frozen production track record (`_prepare_forecast_track_record`). Without care, a backtest report would have entered the production journal and carried today's track record, breaking R5. Resolution in the merge commit 01e8884: `save_report` does not track a `forecast.json` carrying the backtest block (`_is_backtest_forecast_file`), and `_prepare_forecast_track_record` returns early for a backtest report (the final audit checks the section only when present, as for world-v1 reports). The resolution monitor keeps the backtest skip ahead of `main`'s pin to the immutable publication. R5 stays met.
+- **Tests:** `test_live_forecast_still_reaches_the_ledger` became `test_live_forecast_keeps_its_calibration_note` (no ledger write at finalisation any more); new `test_publication_journal_takes_live_reports_not_backtest_ones` and `test_backtest_report_gets_no_track_record` fail on a copy without the two changes and pass with them (`test_backtest_report_stage.py` 17 passed).
+- **Verification on a frozen copy of the merged tree** (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-111453-main1021/`, commit in `tested_commit.txt`):
+  - Plain suite: JUnit `tests=8621 errors=19 failures=1 skipped=1442` = 7,159 passed, 1,431 skipped, 11 xfailed, 19 known `test_legacy_official_data.py` errors, 1 failed — `test_report_official_publication_real.py::test_backfill_keeps_official_exhibits_captions_and_audit`, the order-dependent `track_record_prefix_mismatch` failure `main` already has (recorded for b9608fb in `docs/handoff/world-state-realism/handoff.md` §11.7).
+  - Guarded runner (62 modules, `modules.txt`): 1,922 tests, 1,918 passed, 4 failed — the 3 known guard failures and `test_forecast_feedback_sdk.py::test_restart_repairs_mirror_after_ledger_committed`, which fails the same way on a pristine `git archive` of `main` bb8013d (`main-baseline/guarded.log`).
+  - Frontend `npm run test:unit` 228 passed, `npm run build` OK; `uvx ruff check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge`, `check_env_drift.py --strict`, `compileall` and `git diff --check` clean; README EN/ZH 2,032 lines each.
+- **After the merge:** the deployment checkout still runs `claude-reflexive-world-state-model`; when it moves to `main`, resync the deployed skills (the reference-class Plan changed) and restart the backend.
+
 ## 10) Updates to This File (append-only)
 - 2026-10-20T15:40Z: created with request, requirements, plan, API verification and first decisions.
 - 2026-10-20T18:05Z: final plain (0 failures, 19 known errors) and guarded (3 known failures) runs at 1ab9ebc recorded in §8; README official-data line corrected (866ab13: only FRED's API route returns the as-of vintage).
 - 2026-10-20T17:58Z: rewritten at completion of the offline scope: requirement results, decisions, live findings (archive 429, deny-list gap), issues, scenario tests, verification, live-run proposal. Commits on the branch: 234f2be, 813d5c4, 91ae12c, b1c4b60, 8f33085, 61dfb8b, b54d5b7, b98c41f, 34b49b1, 1ca1831 (+ this handoff).
+- 2026-10-21T03:30Z: §11 merge into `main` with the documented-risk branches; semantic resolution with the forecast-feedback loop; suites recorded.
