@@ -513,6 +513,31 @@ MAX_FRAME_DRIVERS = 8
 MAX_FRAME_RISKS = 6
 MAX_FRAME_RISK_EFFECTS = 3
 MAX_FRAME_RISK_AFFECTS = 6
+# Documented hazards, the research behind those risks (runs with method skills only, like the
+# frame; docs/handoff/research-risks/documented-hazards.md).  The reference-class skill's Plan
+# words the risks KIQ "Documented hazards (外生风险概率): which sources publish a probability and
+# window for <2-3 exogenous events>?".  Such a KIQ (or a gap follow-up worded so) gets the note,
+# and every section writer the rule, so the report states each published probability where
+# normalize_frame_risks can check it: event, probability, window and marker on one line that
+# names no scenario (fix_scenario_weights rewrites a percentage stated beside a scenario name, and
+# the scenario parsers read bold items and headings).  Neither text asks for a probability that
+# no source publishes.
+_HAZARD_KIQ_RE = re.compile(r"\b(?:documented|published)\s+hazards?\b|外生风险|风险概率", re.I)
+_HAZARD_KIQ_NOTE = (
+    "DOCUMENTED HAZARDS: for each exogenous event this question names (when it names none, the two or three "
+    "that would move the outcome most), look for a probability that a source itself publishes for it: an "
+    "agency or central-bank risk outlook, a risk register, a catastrophe-model return period, a rating "
+    "agency's default study. Record each as a finding with the event, the probability and the window it "
+    "refers to exactly as the source prints them, and the publisher's [S<n>] marker. Never estimate, count, "
+    "convert or derive a probability yourself, and never record a scenario weight or a forecast of the "
+    "research question's own outcome as one. When no source publishes a probability for an event, say so "
+    "under ## Open questions.")
+_HAZARD_SECTION_RULE = (
+    "- Documented hazards: when the evidence gives a probability that a source publishes for a risk event, "
+    "state it in a sentence of its own that names no scenario and is not bold or a heading: the event, the "
+    "probability and its window exactly as the evidence gives them, and the marker. Never give a risk event a "
+    "probability the evidence does not publish; where the evidence records that none was published for an "
+    "event, say so.")
 
 _PROMPT_TEMPLATES: Mapping[str, string.Template] = {
     "pre_brief": _T_PRE_BRIEF,
@@ -4298,20 +4323,23 @@ def _frame_rows(frame: Any, key: str, fields: Sequence[str], limit: int) -> list
 # marker count only when they stand on such a line, an effect only on a metric of
 # quantitative_facts, and an effect's size only when the report states it.  A scenario of the
 # frame is never a risk: neither an event named like one nor a probability stated only on lines
-# that give a scenario its own weight.  What does not check out is left empty, so the seed records
-# a typed gap for it (shock_without_window, shock_without_source, a direction-only effect) instead
-# of using a number the report does not contain.
+# that give a scenario its own weight.  A published range ("5-25%", "between 1% and 5%") is no
+# single probability: the seed would read one end of it as the shock's rate, so it is dropped too.
+# What does not check out is left empty, so the seed records a typed gap for it
+# (shock_without_window, shock_without_source, a direction-only effect) instead of using a number
+# the report does not contain.
 _PERCENT_WORDS_RE = re.compile(r"\s*(?:per\s?cent|percent)\b")
 _CHANGE_LEAD_RE = re.compile(r"^(?:(?:to\b|by\b|=|→|->|至|到|[+\-−±])\s*)+")
 _RANGE_TAIL_RE = re.compile(r"\s*(?:-|–|—|~|to\b|至|到)\s*[+\-−]?\d")
 _RANGE_HEAD_RE = re.compile(r"\d%?\s*(?:-|–|—|~|to|至|到)\s*[+\-−]?$")
+_PROBABILITY_RANGE_RE = re.compile(r"\d\s*%?\s*(?:-|–|—|~|to\b|and\b|至|到)\s*[+\-−]?\d")
 _GENERIC_WORDS = frozenset("the and for its per are was has not but can may any all out off risk risks chance "
                            "chances probability likelihood event events shock shocks would could might will "
                            "that this with from into over under within their there which".split())
 _METRIC_STOPWORDS = frozenset("the of a an in on for to at by".split())
-_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "scenario", "window_not_stated",
-                      "source_not_stated", "effects_kept", "effects_untracked", "effects_unreadable",
-                      "effect_sizes_not_stated")
+_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "probability_range", "scenario",
+                      "window_not_stated", "source_not_stated", "effects_kept", "effects_untracked",
+                      "effects_unreadable", "effect_sizes_not_stated")
 
 
 def _report_key(text: Any) -> str:
@@ -4421,10 +4449,13 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
         if _name_key(event) in frame_names:
             checks["scenario"] += 1
             continue
+        probabilities = _probability_phrases(item.get("probability"))
+        if any(_PROBABILITY_RANGE_RE.search(p) for p in probabilities):
+            checks["probability_range"] += 1
+            continue
         terms = _event_terms(event)
         about = [line for line in lines if _names_event(line, terms)]
-        phrase = next((p for p in _probability_phrases(item.get("probability"))
-                       if any(_states(line, p) for line in about)), "")
+        phrase = next((p for p in probabilities if any(_states(line, p) for line in about)), "")
         if not phrase:
             checks["probability_not_stated"] += 1
             continue
@@ -6189,6 +6220,8 @@ class _Engine:
             task += self._kiq_data_text(kiq)
         if getattr(self, "skill_library", None) is not None:
             task += self._kiq_skill_text(kiq)
+            if self._plan_skills() and _HAZARD_KIQ_RE.search(kiq.question):
+                task += "\n" + _HAZARD_KIQ_NOTE
         return task
 
     def _kiq_data_text(self, kiq: Kiq) -> str:
@@ -6723,6 +6756,8 @@ class _Engine:
             if section.is_scenario:
                 lines.append("   " + _SCENARIO_SECTION_NOTE)
         lines += ["", _SECTION_RULES]
+        if getattr(self, "skill_library", None) is not None and self._plan_skills():
+            lines.append(_HAZARD_SECTION_RULE)
         rows = self._data_rows()
         if rows:
             lines.append(_DATA_SECTION_RULE)

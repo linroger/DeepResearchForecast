@@ -592,9 +592,25 @@ Delivery checkpoint: 7d72c951cf8f8846e083989d593c8c4090f877c7 committed40ownedfi
 - **Evidence:** `tests/test_research_frame_risks.py` (21) incl. an engine run whose documented risk becomes a seed shock the kernel fires; before/after probes and a read-only scan of the 9 latest live v3 reports (almost all probability lines are scenario weights: expect `risks: []` on many questions); suites in `docs/handoff/research-risks/handoff.md` §8.
 - **Next:** owner-approved live check (what to look for: handoff §9); research of event hazards so reports state them; merge after `main` takes 33ae24d.
 
+### 2026-10-21T02:45+08:00 (CST) — branch `claude/fervent-spence-6d11bb` (reset to `claude/nice-diffie-73cb9a` 42215e6) — v3 research of documented hazards
+- **Request (from the extract-documented-risks session):** make v3 research find and state documented probabilities of a forecast question's main exogenous risks, so the documented-risk extraction keeps something on live runs. Never ask the model to estimate a probability: only report probabilities that sources publish, and say when none is found. Respect the skill caps and resync the deer-flow copies; add offline tests; README EN/ZH. No live run or push without the owner.
+- **Change:**
+  - feaf779: `normalize_frame_risks` drops a published probability range ("5-25%") as `probability_range`, because the seed read one end of it as the rate.
+  - b17c52d: the `reference-class-forecasting` Plan words the risks KIQ "Documented hazards (外生风险概率): which sources publish a probability and window for <2-3 exogenous events>?" (Plan 1,798/1,800). With method skills, the engine appends `_HAZARD_KIQ_NOTE` to that KIQ (published only, as printed; never estimate, count or convert; say when none is published) and `_HAZARD_SECTION_RULE` to every writer (one sentence per published probability, naming no scenario, not bold or a heading).
+  - aa203ba: the rule says "none published" only where the evidence records it.
+  - Design note: `docs/handoff/research-risks/documented-hazards.md`. It covers the alternatives, the cost (0 calls, under 2k tokens per run) and why it never invents.
+- **Evidence:**
+  - Tests: `tests/test_research_documented_hazards.py` (17) and `tests/test_research_frame_risks.py` (+13 range cases), including engine runs where a published hazard reaches `risks` and a seed shock, and where nothing published ends with `risks: []`.
+  - Evidence dir: `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-022657-hazards-plain/` holds the before/after probe (42215e6: `risks: []`; aa203ba: one risk, one shock), 8/8 mutants killed, and the deployed-skill resync verified on a copy (the deployment was not touched).
+  - Plain suite: b17c52d gave 8,316 tests, 6,945 passed / 0 failed / 19 known errors. The final run on aa203ba (`/Users/rogerlin/Downloads/drf-guarded-runs/20261021-024000-hazards-plain-final/`) gave the same: 8,316 tests, 6,945 passed / 0 failed / 19 known `test_legacy_official_data.py` errors. Research, skills and world-research modules: 1,492 passed.
+- **Next:**
+  - Owner-approved live check: a question whose sources publish event hazards.
+  - Resync the deployed skills after merging.
+  - World-model side: the seed's parser still accepts ranges.
+
 ### 2026-10-21T03:00+08:00 (CST) — branch `claude/intelligent-cerf-d84ce7` (reset to `claude/nice-diffie-73cb9a` 42215e6) — live check of the v3 documented-risk extraction
 - **Request (from the documented-risks session, owner-approved paid run):** one standard research run with method skills, then PREPARE of a simulation on it (no simulation run); check `docs/handoff/research-risks/handoff.md` §9 items 1–4 and record the result.
 - **Run:** `pipe_fef5312f76f0` (Henry Hub winter 2026–27 question naming NOAA CPC hazards), launched by the sibling session local_94279b6c on a :5011 launcher that halts at RUN. Attempt 1 failed at research finalize because that worktree's `backend/uploads` was a symlink (`O_NOFOLLOW` pin, "research root must not contain parent traversal"). It was resumed from a real uploads dir (research reused with 0 engine calls); PREPARE sealed `sim_71c47873ada0`; RUN cancelled; $3.06 in total.
 - **Result:** skills enabled; one `extract:frame` call (1,855 output tokens, no retry, not truncated); risks 5 extracted → 1 kept (NOAA "5% above-normal" hurricane activity, `[S34]`, report line 175; window blanked); no invented probability passed. False negative: the El Niño row packed three window-specific CPC probabilities into one string. Sealed seed: 0 shocks, `shock_without_window` + `no_documented_shocks`. Even split rows give 0 shocks, because the seed cannot read calendar windows ("October–December").
-- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-0200-risks-live/` (`checks/`, `research_snapshot/`), run artifacts in `.claude/worktrees/competent-wu-dccf15/backend/uploads/` (kept); record §5 F3–F8, §7b, §8b.
+- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-0200-risks-live/` (`checks/`, `research_snapshot/`), run artifacts in `.claude/worktrees/competent-wu-dccf15/backend/uploads/` (kept); record §5 F4–F9, §7b, §8b.
 - **Next:** owner's choice among the §9 proposals P1–P4 (one row per stated probability, calendar windows in the seed, windows as written, cleaner counts); worktree live checks need a real `backend/uploads`.
