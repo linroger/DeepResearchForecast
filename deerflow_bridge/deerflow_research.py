@@ -15635,11 +15635,13 @@ def _polymarket_get(path: str, params: dict, timeout: float | None = None,
     raise err
 
 
-def _pm_parse_price_history(data: Any, days: int = 90) -> list[dict]:
+def _pm_parse_price_history(data: Any, days: int = 90, end_ts: int | None = None) -> list[dict]:
     """PM-6: 纯函数——把 CLOB /prices-history 的响应规整成 [{t,p}]（镜像 backend fetch_price_history）。
 
     响应形如 {"history":[{t,p},...]}（少数形态直接是点数组）。days>0 时客户端裁剪到最近 days 天；
-    t 转 int、p 转 float 四舍五入 4 位；缺时间戳/价格的脏点跳过。任何非预期形状 → []。可离线单测。"""
+    t 转 int、p 转 float 四舍五入 4 位；缺时间戳/价格的脏点跳过。任何非预期形状 → []。可离线单测。
+    Backtest mode passes ``end_ts`` (the cutoff): the window ends there and no
+    point after it is kept, whatever the server returned."""
     if isinstance(data, dict):
         hist = data.get("history")
     elif isinstance(data, list):
@@ -15653,7 +15655,7 @@ def _pm_parse_price_history(data: Any, days: int = 90) -> list[dict]:
         d = int(days)
         if d > 0:
             import time as _t
-            cutoff = _t.time() - d * 86400
+            cutoff = (end_ts if end_ts is not None else _t.time()) - d * 86400
     except (TypeError, ValueError):
         cutoff = None
     out: list[dict] = []
@@ -15663,8 +15665,10 @@ def _pm_parse_price_history(data: Any, days: int = 90) -> list[dict]:
         tf = _pm_float(pt.get("t"))
         p = _pm_float(pt.get("p"))
         if tf is None or p is None:
-            continue  # 缺时间戳/价格的点是脏数据，跳过
+            continue  # 缺时间戳/价格的脏点跳过
         if cutoff is not None and tf < cutoff:
+            continue
+        if end_ts is not None and tf > end_ts:
             continue
         out.append({"t": int(tf), "p": round(p, 4)})
     return out
@@ -15678,12 +15682,92 @@ def _pm_fetch_price_history(clob_token_id: Any, interval: str = "1d",
     token = str(clob_token_id or "").strip()
     if not token:
         return []
-    params = {"market": token, "interval": str(interval or "1d").strip()}
+    try:
+        backtest = _pm_backtest_policy()
+    except Exception:  # noqa: BLE001 — an unusable policy never falls back to current prices
+        return []
+    if backtest is not None:
+        # Backtest mode: the daily series of the ``days`` before the cutoff.
+        import backtest_cutoff
+        params = {"market": token, **backtest_cutoff.price_history_window(backtest, days), "fidelity": 1440}
+    else:
+        params = {"market": token, "interval": str(interval or "1d").strip()}
     try:
         data = _polymarket_get("/prices-history", params, timeout=timeout, base_url=_CLOB_BASE_URL)
     except Exception:  # noqa: BLE001 — 历史价为可选增强，失败降级为空
         return []
-    return _pm_parse_price_history(data, days)
+    return _pm_parse_price_history(data, days, end_ts=backtest.cutoff_ts if backtest is not None else None)
+
+
+def _pm_backtest_policy() -> Any:
+    """Backtest mode's policy for market snapshots (docs/handoff/backtest/design.md
+    §5); ``None`` for a live run.  Raises when ``DRF_BACKTEST_POLICY`` is set but
+    unusable, so a caller can never fall back to current prices."""
+    if not os.environ.get("DRF_BACKTEST_POLICY", "").strip():
+        return None
+    import backtest_cutoff
+    return backtest_cutoff.policy_from_env()
+
+
+def _pm_as_of_candidate(raw: Any, matched_query: str, min_volume: float, event_title: str,
+                        event_slug: str, policy: Any) -> dict | None:
+    """Backtest mode: a market that had opened and had not closed by the cutoff
+    (its price comes later, from history); ``None`` otherwise.  Nothing of the
+    live row but its identity, volume and the raw row (for :func:`_pm_price_candidates`)."""
+    import backtest_cutoff
+    if not isinstance(raw, dict):
+        return None
+    market_id = str(raw.get("id") or "").strip()
+    if not market_id or not str(raw.get("question") or "").strip():
+        return None
+    if not backtest_cutoff.market_open_at_cutoff(raw, policy)[0]:
+        return None
+    volume = _pm_float(raw.get("volume")) or 0.0
+    if volume < float(min_volume):
+        return None
+    return {"market_id": market_id, "volume": volume,
+            "event_title": event_title or str(raw.get("groupItemTitle") or "").strip(),
+            "_raw": raw, "_query": matched_query, "_slug": event_slug}
+
+
+def _pm_price_candidates(candidates: list[dict], policy: Any,
+                         diagnostics: dict[str, Any] | None = None) -> list[dict]:
+    """Backtest mode: each candidate priced from CLOB history at the cutoff (the
+    hourly points of the 7 days before it) and rebuilt from an allow-list
+    (``backtest_cutoff.as_of_market_row``); a candidate without a YES token or a
+    price at the cutoff is dropped.  Three transport failures in a row stop it."""
+    import backtest_cutoff
+    window = backtest_cutoff.price_history_window(policy, 7)
+    rows: list[dict] = []
+    unpriced = failures = 0
+    for candidate in candidates:
+        raw = candidate["_raw"]
+        _names, _tokens, yes = backtest_cutoff.market_tokens(raw)
+        if not yes:
+            unpriced += 1
+            continue
+        try:
+            data = _polymarket_get("/prices-history", {"market": yes, **window, "fidelity": 60},
+                                   base_url=_CLOB_BASE_URL)
+            failures = 0
+        except Exception:  # noqa: BLE001 — an unpriced market is left out
+            failures += 1
+            unpriced += 1
+            if failures >= 3:
+                break
+            continue
+        priced = backtest_cutoff.price_at_cutoff(
+            _pm_parse_price_history(data, 0, end_ts=policy.cutoff_ts), policy)
+        if priced is None:
+            unpriced += 1
+            continue
+        rows.append(backtest_cutoff.as_of_market_row(
+            raw, price=priced[0], price_ts=priced[1], policy=policy, matched_query=candidate["_query"],
+            event_title=candidate["event_title"], event_slug=candidate["_slug"]))
+    if diagnostics is not None:
+        diagnostics["backtest_priced_count"] = len(rows)
+        diagnostics["backtest_unpriced_count"] = unpriced
+    return rows
 
 
 def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
@@ -15806,12 +15890,16 @@ def _pm_snapshot(queries: list[str], per_query: int = 8, max_total: int = 20,
     successful = 0
     failures = 0
     error_classes: dict[str, int] = {}
+    # Backtest mode: closed events too (a market open at the cutoff has usually
+    # resolved since); each market is then judged and priced at the cutoff.
+    backtest = _pm_backtest_policy()
+    search_params: dict[str, Any] = {"limit_per_type": per_query}
+    if backtest is None:
+        search_params["events_status"] = "active"
 
     def _fetch(index: int, query: str) -> tuple[int, str, Any, Exception | None]:
         try:
-            data = _polymarket_get("/public-search",
-                                   {"q": query, "limit_per_type": per_query,
-                                    "events_status": "active"})
+            data = _polymarket_get("/public-search", {"q": query, **search_params})
             return index, query, data, None
         except Exception as exc:  # noqa: BLE001
             return index, query, None, exc
@@ -15875,11 +15963,17 @@ def _pm_snapshot(queries: list[str], per_query: int = 8, max_total: int = 20,
             event_title = str(event.get("title") or "").strip()
             event_slug = str(event.get("slug") or "").strip()
             for raw in event.get("markets") or []:
-                norm = _pm_normalize_market(raw, matched_query=q, min_volume=min_volume,
-                                            event_title=event_title, event_slug=event_slug)
+                if backtest is not None:
+                    norm = _pm_as_of_candidate(raw, q, min_volume, event_title, event_slug, backtest)
+                else:
+                    norm = _pm_normalize_market(raw, matched_query=q, min_volume=min_volume,
+                                                event_title=event_title, event_slug=event_slug)
                 if norm is not None and norm["market_id"] not in by_id:
                     by_id[norm["market_id"]] = norm
     ranked = sorted(by_id.values(), key=lambda m: -(m.get("volume") or 0.0))
+    if backtest is not None:
+        ranked = _pm_price_candidates(_pm_cap_per_event(ranked, max_per_event, max_total), backtest,
+                                      diagnostics)
     if diagnostics is not None:
         diagnostics.update({
             "attempted_query_count": attempted,
@@ -16195,6 +16289,19 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     if not _env_flag("PREDICTION_MARKETS_ENABLED", True):
         plog.write("warn", "prediction markets skipped (PREDICTION_MARKETS_ENABLED=false)")
         return
+    try:
+        backtest = _pm_backtest_policy()
+    except Exception as exc:  # noqa: BLE001 — never fall back to current prices
+        payload = {"as_of": _utcnow(), "source": "polymarket", "queries": [], "markets": [],
+                   "no_relevant_markets": True, "reason": f"backtest policy unusable: {exc}"[:300],
+                   "status": {"attempted": False, "query_count": 0, "candidate_count": 0,
+                              "selected_count": 0, "empty_reason": "backtest_policy_unusable"}}
+        _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME, json.dumps(payload, ensure_ascii=False, indent=2))
+        meta["prediction_markets_count"] = 0
+        plog.write("warn", f"prediction markets skipped: backtest policy unusable ({type(exc).__name__})")
+        return
+    # Backtest mode stamps every artifact with the cutoff, never the retrieval time.
+    stamp = backtest.cutoff.isoformat() if backtest is not None else None
     # hot_topics / 头部 actor 名 / 支撑配角来自已落盘的 actors.json（缺失/未抽取时仅用研究问题）。
     hot_topics: list = []
     actor_names: list = []
@@ -16216,10 +16323,11 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                     actor_names += [n for n in ctx_names if n and n not in actor_names]
     except Exception:  # noqa: BLE001 — actors.json 只是查询词的可选增强
         pass
-    tool_candidates = _load_tool_market_candidates(out_dir)
+    # Agent-tool candidates carry live prices: a backtest never reads them.
+    tool_candidates = [] if backtest is not None else _load_tool_market_candidates(out_dir)
     if _PM_TRANSPORT_UNAVAILABLE and not tool_candidates:
         payload = {
-            "as_of": _utcnow(),
+            "as_of": stamp or _utcnow(),
             "source": "polymarket",
             "queries": [],
             "markets": [],
@@ -16260,7 +16368,7 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     if not queries and not tool_candidates:
         # PM-HZ: 无检索词也**始终落盘**显式空标记——下游（报告市场包/置信度理由）能
         # 陈述「无市场锚点」而非在静默缺文件与「阶段没跑」之间无法区分。
-        payload = {"as_of": _utcnow(), "source": "polymarket", "queries": [],
+        payload = {"as_of": stamp or _utcnow(), "source": "polymarket", "queries": [],
                    "markets": [], "no_relevant_markets": True,
                    "reason": "no derivable queries",
                    "status": {"attempted": True, "query_count": 0,
@@ -16376,8 +16484,13 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     # Cross-call tool capture can contain more rows than a single refresh.  Keep
     # the same case-level diversity and size contract after reconciliation.
     markets = _pm_cap_per_event(markets, max_per_event, max_total)
-    as_of = _utcnow()
+    as_of = stamp or _utcnow()
     payload = {"as_of": as_of, "source": "polymarket", "queries": queries, "markets": markets}
+    if backtest is not None:
+        payload["backtest"] = {"as_of": backtest.as_of_iso, "events": "all (closed included)",
+                               "price_basis": "clob_history_at_cutoff",
+                               "priced_count": refresh_diagnostics.get("backtest_priced_count", 0),
+                               "unpriced_count": refresh_diagnostics.get("backtest_unpriced_count", 0)}
     if tool_candidates:
         payload["tool_candidates_seen"] = len(tool_candidates)
         payload["registry_sources"] = ["deterministic_refresh", "prediction_market_search"]
@@ -17603,6 +17716,21 @@ def _resolve_research_engine(plog: "ProgressLog | None" = None) -> str:
     return "legacy"
 
 
+def _backtest_engine_refusal(use_v3_engine: bool, legacy_only_mode: str) -> str:
+    """Why a backtest run (``DRF_BACKTEST_POLICY`` set) must not start here, or ''.
+
+    Backtest mode cuts inputs in the v3 tool layer (docs/handoff/backtest/design.md
+    §3); the legacy engine and its research lanes would read the present.  The
+    ``--extract-only`` salvage reads no web content (it re-extracts the saved
+    report and refreshes markets, which the policy cuts), so it may run."""
+    if not os.environ.get("DRF_BACKTEST_POLICY", "").strip() or use_v3_engine:
+        return ""
+    if legacy_only_mode == "--extract-only":
+        return ""
+    return ("backtest mode needs the v3 research engine; this run resolves to the legacy engine"
+            + (f" ({legacy_only_mode})" if legacy_only_mode else ""))
+
+
 def _legacy_only_mode(args: Any) -> str:
     """CLI flag of a lane contract only the legacy engine implements ('' if none).
 
@@ -17889,6 +18017,16 @@ def main() -> int:
         )
     elif use_v3_engine:
         plog.write("stage", "research engine: v3 (linear_research)")
+    backtest_refusal = _backtest_engine_refusal(use_v3_engine, legacy_only_mode)
+    if backtest_refusal:
+        _atomic_write_text(out_dir / META_FILENAME, json.dumps({
+            "status": "failed", "question": question, "model": args.model, "depth": args.depth,
+            "target_language": args.target_language, "started_at": _utcnow(), "finished_at": _utcnow(),
+            "error": backtest_refusal}, ensure_ascii=False, indent=2))
+        plog.write("error", backtest_refusal)
+        plog.close()
+        print(f"ERROR: {backtest_refusal}", file=sys.stderr)
+        return 3
     activation_telemetry = skill_activation_estimate()
     if use_v3_engine:
         activation_telemetry.update({

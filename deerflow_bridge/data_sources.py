@@ -29,9 +29,11 @@ from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 try:
+    from . import backtest_cutoff
     from . import data_catalog as catalog
     from .data_mcp import McpHub, _source_path, get_hub
 except ImportError:  # deployed bridge is also loaded as bare modules
+    import backtest_cutoff
     import data_catalog as catalog
     from data_mcp import McpHub, _source_path, get_hub
 
@@ -1615,6 +1617,8 @@ class DataSources:
         self._imf_defs: dict[str, dict] = {}
         self._semaphores = {p: threading.BoundedSemaphore(1 if p in ("imf", "bls") else 3) for p in PROVIDERS}
         self._closed = False
+        # Backtest mode (apply_backtest): every window ends at the cutoff; None = live.
+        self._backtest = None
         self._prune_cache()
 
     def _prune_cache(self) -> None:
@@ -1638,6 +1642,19 @@ class DataSources:
             if self._hub is None:
                 self._hub = get_hub(env=self._env)
             return self._hub
+
+    def apply_backtest(self, policy) -> None:
+        """Backtest mode (docs/handoff/backtest/design.md §5): windows end at the
+        cutoff, FRED requests the as-of vintage (``vintage_dates``), and every
+        other observation must be known by then (``backtest_cutoff.observation_admitted``).
+        Cache keys carry the policy tag, so live and backtest entries never mix.
+        Only the v3 research engine calls this; a client without it stays live."""
+        self._backtest = policy
+
+    def _today(self) -> str:
+        """Today's UTC date, or the backtest as-of date when it is earlier."""
+        today = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
+        return min(today, self._backtest.as_of_iso) if self._backtest is not None else today
 
     def providers(self) -> dict[str, str]:
         """Per provider: ready | keyless (FRED CSV route) | key_invalid (the provider rejected the
@@ -1956,7 +1973,7 @@ class DataSources:
             frequency = "A"
         if provider == "usgov":
             frequency = catalog.resolve_usgov_recipe(native)[1]["frequency"]
-        today = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
+        today = self._today()
         try:
             # Publisher projection paths (WEO, GEP) run past today: by default request them
             # to the end of the sixth following year; history still counts back from today.
@@ -1972,6 +1989,13 @@ class DataSources:
                 begin = begin[:8] + "01"  # daily data become months: never open on a partial first month
         except (ValueError, TypeError, OverflowError):
             raise DataFailure("start/end must be dates such as YYYY-MM-DD", "invalid_input") from None
+        if self._backtest is not None:
+            # Nothing after the cutoff, projections included (a current vintage's
+            # projections were made after it).
+            finish = min(finish, self._backtest.as_of_iso)
+            if begin > finish:
+                raise DataFailure("The requested window starts after the backtest cutoff "
+                                  f"({self._backtest.as_of_iso})", "invalid_window")
         # Providers reject windows before their earliest data (USAspending: FY2008).
         floor = _min_start(provider, sid, native)
         begin = max(begin, floor) if floor else begin
@@ -1983,10 +2007,16 @@ class DataSources:
             raise DataFailure("Weekly yoy is unsupported without a verified week-alignment policy", "unsupported_transform")
         fetch_start = max("1900-01-01", floor or "", _shift(begin, -warmup)) if warmup else begin
         canonical = sid + ("#" + transform if transform else "")
-        key = hashlib.sha256(_bytes([NORMALIZATION_POLICY_VERSION, canonical, begin, finish, max_obs])).hexdigest()
-        return {"series": canonical, "base": sid, "provider": provider, "native": native, "start": begin, "end": finish,
-                "fetch_start": fetch_start, "transform": transform, "max_obs": max_obs, "frequency": frequency, "key": key,
-                "default_window": start is None}
+        identity = [NORMALIZATION_POLICY_VERSION, canonical, begin, finish, max_obs]
+        if self._backtest is not None:
+            identity.append(self._backtest.tag)
+        key = hashlib.sha256(_bytes(identity)).hexdigest()
+        request = {"series": canonical, "base": sid, "provider": provider, "native": native, "start": begin, "end": finish,
+                   "fetch_start": fetch_start, "transform": transform, "max_obs": max_obs, "frequency": frequency, "key": key,
+                   "default_window": start is None}
+        if self._backtest is not None and provider == "fred":
+            request["vintage"] = self._backtest.as_of_iso
+        return request
 
     def _cached(self, req):
         key = req["key"]
@@ -2212,7 +2242,7 @@ class DataSources:
         which forecast questions usually reference.
         """
         method = _aggregation(req)
-        today = datetime.fromtimestamp(self._clock(), timezone.utc).date()
+        today = date.fromisoformat(self._today())
         months: dict[str, list[Observation]] = {}
         for o in s.observations:
             months.setdefault(o.date[:7] + "-01", []).append(o)
@@ -2244,6 +2274,24 @@ class DataSources:
         s.notes = _clean(f"Daily data aggregated to monthly {words}; the open month is partial. {s.notes}")
         return observations, periods
 
+    def _cut_at_backtest(self, req, s) -> None:
+        """Backtest mode: keep the observations known at the cutoff (an as-of
+        vintage proves it; a current revision needs its period to have ended,
+        plus a publication lag in strict mode) and record the basis."""
+        policy = self._backtest
+        vintage = bool(req.get("vintage")) and s.provenance.get("vintage_dates") == req["vintage"]
+        periods = s.provenance.get("periods") if isinstance(s.provenance.get("periods"), dict) else {}
+        kept = [o for o in s.observations
+                if backtest_cutoff.observation_admitted(o.date, s.frequency, policy, vintage=vintage,
+                                                        end=(periods.get(o.date) or {}).get("end"))]
+        s.provenance["backtest"] = {"as_of": policy.as_of_iso, "strict": policy.strict,
+                                    "basis": "as_of_vintage" if vintage else "current_revision",
+                                    "dropped_observations": len(s.observations) - len(kept)}
+        s.observations = kept
+        if not kept:
+            raise DataFailure(f"No observations were known at the backtest cutoff ({policy.as_of_iso})",
+                              "invalid_window")
+
     def _finish(self, req, s):
         native_frequency = s.frequency
         if not s.observations:
@@ -2252,6 +2300,8 @@ class DataSources:
         def intersects(o, start):
             return o.date <= req["end"] and periods.get(o.date, {}).get("end", o.date) >= start
         s.observations = [o for o in s.observations if intersects(o, req["fetch_start"])]
+        if self._backtest is not None:
+            self._cut_at_backtest(req, s)
         if s.frequency == "D":
             s.observations, periods = self._monthly(req, s)
         s.provenance["native_frequency"] = native_frequency
@@ -2422,6 +2472,9 @@ class DataSources:
                 "units": "lin", "sort_order": "desc", "offset": 0, "limit": _MAX_ROWS}
         if method:
             args.update(frequency="m", aggregation_method=method)
+        if req.get("vintage"):
+            # Backtest mode: the values as published on the as-of date (ALFRED).
+            args["vintage_dates"] = req["vintage"]
         payload = self._call("fred", "fred_get_series", args)
         if payload.get("series_id") != native or not isinstance(payload.get("data"), list):
             raise ValueError("FRED response series identity mismatch")
@@ -2452,7 +2505,10 @@ class DataSources:
                           notes="" if entry is not None and entry.notes else _clean(payload.get("notes")),
                           provenance={"metadata_fields": authority, "native_complete": True, "native_count": count,
                                       **({"provider_notes": _clean(payload.get("notes"))} if entry is not None and entry.notes else {}),
-                                      "vintage_status": "not supplied by native handler", "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text"})
+                                      **({"vintage_dates": req["vintage"]} if req.get("vintage") else {}),
+                                      "vintage_status": (f"as published on {req['vintage']} (FRED vintage_dates)" if req.get("vintage")
+                                                         else "not supplied by native handler"),
+                                      "numeric_lexemes": "native handler parses floats; null may also represent invalid upstream numeric text"})
 
     def _fred_csv(self, req, start: str, end: str, method: str):
         params = {"id": req["native"], "cosd": start, "coed": end}

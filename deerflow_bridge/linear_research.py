@@ -823,6 +823,18 @@ def _utc_date() -> str:
     return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
 
 
+def _backtest_policy(env: Mapping[str, str]) -> Any:
+    """The run's backtest policy (``backtest_cutoff.BacktestPolicy``) or ``None``;
+    raises ValueError when ``DRF_BACKTEST_POLICY`` is set but unusable."""
+    if not str(env.get("DRF_BACKTEST_POLICY") or "").strip():
+        return None
+    try:
+        api = rg._backtest_api()
+    except ImportError as exc:
+        raise ValueError(f"backtest_cutoff module unavailable ({exc})") from None
+    return api.policy_from_env(env)
+
+
 def _compact_utc() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -4901,6 +4913,13 @@ class _Engine:
         self.bridge = bridge
         self.env = env
         self.model_name = str(getattr(args, "model", "") or "")
+        # Backtest mode (docs/handoff/backtest/design.md): the parent-owned
+        # DRF_BACKTEST_POLICY cuts every input at an as-of date; an unusable
+        # policy fails the run rather than letting it read the present.
+        try:
+            self.backtest = _backtest_policy(env)
+        except ValueError as exc:
+            raise _EngineFailure(f"backtest policy unusable: {exc}") from None
         self.preset = resolve_preset(getattr(args, "depth", None), env)
         self.language = detect_language(self.question, getattr(args, "target_language", None))
         self.actor_cap = self._actor_cap()
@@ -4914,6 +4933,9 @@ class _Engine:
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
+        if self.backtest is not None:
+            # Another cutoff is another run: never resume pages read under it.
+            identity["backtest"] = self.backtest.tag
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.work, self.state, self.resumed = _open_work_dir(
             self.out_dir, identity, self._write_internal, reporter)
@@ -4942,6 +4964,14 @@ class _Engine:
                                                    * self.preset.followups_per_round), 0),
             })
         self.tools = tools_factory(self.ledger, self.work / "pages", bridge, reporter, self.limits)
+        if self.backtest is not None:
+            if not getattr(self.tools, "backtest_capable", False):
+                raise _EngineFailure("backtest mode needs research tools that apply the cutoff")
+            self.tools.backtest = self.backtest
+            self.meta["backtest"] = {key: value for key, value in self.backtest.to_dict().items()
+                                     if key != "audit_path"}
+            self.log("stage", f"v3: backtest mode as of {self.backtest.as_of_iso} "
+                              f"({'strict' if self.backtest.strict else 'lenient'}, archive={self.backtest.archive})")
         self.gateway = gateway_factory(args, reporter, bridge, self.preset)
         # Every model call (the gateway's json/text calls go through its
         # invoke) and every search/fetch passes through these wrappers: the
@@ -5014,6 +5044,10 @@ class _Engine:
                 self.meta["data_sources"]["status"] = "stored_only"
                 return
             sources = self.tools.data_sources or api.get_data_sources(env=self.env)
+            if self.backtest is not None:
+                if not callable(getattr(sources, "apply_backtest", None)):
+                    raise RuntimeError("official-data client cannot apply the backtest cutoff")
+                sources.apply_backtest(self.backtest)
             self.data_enabled = bool(sources.enabled())
             self.meta["data_sources"].update(providers=sources.providers(),
                                              status="enabled" if self.data_enabled else "unavailable")
@@ -5059,7 +5093,7 @@ class _Engine:
     def _skill_year(self) -> int | None:
         """The router's reference year for "future" years: the plan's as-of year, so a
         resumed attempt rebuilds the same method text (today's before a plan exists)."""
-        year = str(self.plan.as_of if self.plan else _utc_date())[:4]
+        year = str(self.plan.as_of if self.plan else self._today())[:4]
         return int(year) if year.isdigit() else None
 
     def _assign_skills(self, plan: Plan, raw_plan: Mapping[str, Any] | None,
@@ -5217,6 +5251,10 @@ class _Engine:
             self._write_internal(path, payload)
         else:
             self.write_text(path, payload)
+
+    def _today(self) -> str:
+        """The run's "today": the backtest as-of date, else the UTC date."""
+        return self.backtest.as_of_iso if self.backtest is not None else _utc_date()
 
     def flush_meta(self) -> None:
         try:
@@ -5628,7 +5666,7 @@ class _Engine:
         """The plan's as-of date (today when the plan has none): data windows
         are counted from it."""
         return (_parse_iso_date(self.plan.as_of if self.plan else "")
-                or _dt.datetime.now(_dt.timezone.utc).date())
+                or _parse_iso_date(self._today()) or _dt.datetime.now(_dt.timezone.utc).date())
 
     def _data_horizon(self) -> int:
         """The forecast horizon year: the last year named in the plan's
@@ -5744,7 +5782,7 @@ class _Engine:
             return
         self.log("stage", "research:v3:plan start")
         with self.phase("plan") as deadline:
-            as_of = _utc_date()
+            as_of = self._today()
             pre_brief = render_pre_brief(self.question, self.language, as_of)
             scope, raw_plan, outage = self._plan_calls(pre_brief, deadline)
             plan = build_plan(self.question, self.language, as_of, self.preset, self.actor_cap,
@@ -7903,7 +7941,7 @@ class _Engine:
         enriched = self.bridge_call("enrich_quantitative_rows", quant)
         if isinstance(enriched, list):
             quant = enriched
-        ref_date = _parse_iso_date(plan.as_of) or _dt.datetime.now(_dt.timezone.utc).date()
+        ref_date = _parse_iso_date(plan.as_of) or _parse_iso_date(self._today()) or _dt.datetime.now(_dt.timezone.utc).date()
         stale_days = _positive_int(self.env.get("RESEARCH_STALE_DAYS"), DEFAULT_STALE_DAYS)
         quant_hist = self.bridge_call("annotate_recency_rows", quant, ref_date, stale_days, date_key="as_of_date")
         timeline_hist = self.bridge_call("annotate_recency_rows", timeline, ref_date, stale_days, date_key="date")
@@ -8186,6 +8224,10 @@ class _Engine:
     # ============================================================ telemetry
     def attach_telemetry(self) -> None:
         """Usage, tools, phase and KIQ summaries into meta (called on every exit)."""
+        if self.backtest is not None and self.backtest.audit_path:
+            # What the cutoff dropped and kept, by input (backtest_audit.jsonl).
+            self.meta.setdefault("backtest", {})["audit"] = rg._backtest_api().summarize_audit(
+                self.backtest.audit_path)
         ledger = self.gateway.ledger.to_dict()
         try:
             self.write_json(self.work / "usage.json", ledger)

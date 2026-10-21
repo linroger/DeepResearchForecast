@@ -59,6 +59,14 @@ try:  # keep search discovery aligned with fetch/final source admission
 except ImportError:  # pragma: no cover - incomplete deployment remains usable
     _source_policy_rejection = None  # type: ignore[assignment]
 
+try:  # backtest mode; a missing module fails closed (web_search_impl) once a policy is set
+    import backtest_cutoff as _backtest_cutoff
+except ImportError:  # pragma: no cover - exercised only by incomplete deployments
+    _backtest_cutoff = None  # type: ignore[assignment]
+
+# Parent-owned backtest policy (docs/handoff/backtest/design.md §3); absent = live run.
+_BACKTEST_POLICY_ENV = "DRF_BACKTEST_POLICY"
+
 # provider → harness community 模块路径（延迟导入，见 _load_search_module）
 _PROVIDER_MODULES = {
     "serper": "deerflow.community.serper.tools",
@@ -432,7 +440,16 @@ def _firecrawl_throttle() -> None:
     _firecrawl_window.append(now)
 
 
-def _firecrawl_search(query: str, max_results: int) -> str:
+def _firecrawl_payload(query: str, limit: int, backtest: Any = None) -> dict:
+    """The /search request body; backtest mode adds the date filter and news rows."""
+    body: dict[str, Any] = {"query": query, "limit": limit, "sources": ["web"]}
+    if backtest is not None:
+        body["sources"] = ["web", "news"]
+        body["tbs"] = _backtest_cutoff.firecrawl_tbs(backtest)
+    return body
+
+
+def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str:
     """Firecrawl v2 /search 直连实现，输出与 community 工具同形的 JSON 字符串。
 
     成功 → {"query", "total_results", "results":[{title,url,content}]}；真实空结果 →
@@ -440,6 +457,9 @@ def _firecrawl_search(query: str, max_results: int) -> str:
     {"error", "query"}（不负缓存，交由上层按瞬态处理）。绝不抛异常、绝不回显凭据。
     花费护栏：limit 被 RESEARCH_FIRECRAWL_SEARCH_LIMIT 钳制（按条计费）；进程内计费调用
     数达上限后直接返回瞬态 {"error"} 形状（不触网、不负缓存），越线只 warn 一次。
+    Backtest mode (``backtest`` = the run's policy): the provider date filter
+    ``tbs=cdr:1,cd_max:<as-of>`` plus the ``news`` source, whose rows carry a
+    date; each result keeps its ``date``.  ``None`` sends today's payload.
     """
     global _firecrawl_search_calls, _firecrawl_ceiling_warned
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
@@ -476,11 +496,7 @@ def _firecrawl_search(query: str, max_results: int) -> str:
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "query": q,
-                        "limit": limit,
-                        "sources": ["web"],
-                    },
+                    json=_firecrawl_payload(q, limit, backtest),
                 )
             if response.status_code != 429 or attempt >= max_retries:
                 break
@@ -504,6 +520,8 @@ def _firecrawl_search(query: str, max_results: int) -> str:
         data = payload.get("data") if isinstance(payload, dict) else None
         # v2 按 source 分组（{"web":[...]}）；容忍 v1 风格的裸列表。
         rows = data.get("web") if isinstance(data, dict) else data
+        if backtest is not None and isinstance(data, dict) and isinstance(data.get("news"), list):
+            rows = (rows if isinstance(rows, list) else []) + data["news"]
         results = []
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
@@ -511,12 +529,15 @@ def _firecrawl_search(query: str, max_results: int) -> str:
             url = str(row.get("url") or "").strip()
             if not url:
                 continue
-            results.append({
+            item = {
                 "title": str(row.get("title") or "").strip() or url,
                 "url": url,
                 "content": str(row.get("description") or row.get("snippet")
                                or "").strip(),
-            })
+            }
+            if backtest is not None and row.get("date"):
+                item["date"] = str(row["date"]).strip()
+            results.append(item)
         return json.dumps(
             {"query": q, "total_results": len(results), "results": results},
             ensure_ascii=False)
@@ -561,6 +582,16 @@ def _call_delegate(tool_obj: Any, query: str, max_results: int) -> str:
     return fn(**kwargs)
 
 
+def _backtest_policy() -> Any:
+    """The run's backtest policy, ``None`` for a live run (raises ValueError when
+    the policy is invalid or the cutoff module is missing: fail closed)."""
+    if not os.environ.get(_BACKTEST_POLICY_ENV, "").strip():
+        return None
+    if _backtest_cutoff is None:
+        raise ValueError("backtest_cutoff module is not deployed beside search_tools")
+    return _backtest_cutoff.policy_from_env()
+
+
 def web_search_impl(
     query: str,
     max_results: int = DEFAULT_MAX_RESULTS,
@@ -572,7 +603,25 @@ def web_search_impl(
     连 DDG 也不可用则返回空结果 JSON（与 community 工具的「无结果」形状一致）。
     WAVE9：委派前后各加一层短 TTL 磁盘缓存（键含**实际使用**的 provider，回退 DDG 时按 ddg 记）；
     缓存关闭（TTL<=0）或 query 归一化后为空时绕过正缓存；LOOP-007 预算仍独立生效。
+
+    Backtest mode (``DRF_BACKTEST_POLICY``): cache and negative-cache keys carry
+    the policy tag, Firecrawl gets the provider date filter, and every result
+    row of every provider then passes ``backtest_cutoff.filter_search_payload``
+    (rows dated after the cutoff dropped, undated ones dropped in strict mode).
     """
+    try:
+        backtest = _backtest_policy()
+    except ValueError as exc:
+        return json.dumps({"error": f"backtest policy unusable: {exc}", "query": query},
+                          ensure_ascii=False)
+    result = _web_search(query, max_results, revisit_reason, backtest)
+    if backtest is None:
+        return result
+    return _backtest_cutoff.filter_search_payload(result, backtest, query=str(query or ""))
+
+
+def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any) -> str:
+    """``web_search_impl`` before the backtest row filter (``backtest=None``: today's path)."""
     provider = _select_search_provider()
     if _research_budget is not None:
         attempt = _research_budget.admit_attempt("search")
@@ -596,14 +645,16 @@ def web_search_impl(
                               ensure_ascii=False)
     # Provider fallback changes the actual request identity; negative-cache the
     # delegate that was really used, just like the positive disk-cache key.
-    exact_key = f"{provider}\n{_normalize_query(query)}\n{int(max_results)}"
+    # A backtest request is another request (date filter): its keys carry the tag.
+    key_provider = provider if backtest is None else f"{provider}|{backtest.tag}"
+    exact_key = f"{key_provider}\n{_normalize_query(query)}\n{int(max_results)}"
     # WAVE9：缓存读——TTL<=0（关闭）或空 query 时完全绕过；缓存层异常绝不阻断搜索。
     _ttl = _search_ttl_seconds()
     _cache_path_str = ""
     if _ttl > 0 and _normalize_query(query):
         try:
             _root = _search_cache_root()
-            _cache_path_str = _search_cache_path(_root, _search_cache_key(provider, query, max_results))
+            _cache_path_str = _search_cache_path(_root, _search_cache_key(key_provider, query, max_results))
             hit = _read_search_cache(_cache_path_str, _ttl)
             if hit is not None:
                 hit = _filter_denied_search_results(hit)
@@ -683,7 +734,7 @@ def web_search_impl(
             return _budget_denial("web_search", network.reason, query)
 
     try:
-        result = (_firecrawl_search(query, max_results)
+        result = (_firecrawl_search(query, max_results, backtest)
                   if provider == "firecrawl"
                   else _call_delegate(tool_obj, query, max_results))
         result = result if isinstance(result, str) else str(result)

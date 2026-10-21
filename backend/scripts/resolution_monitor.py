@@ -770,6 +770,13 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
                 raise ValueError("Cannot monitor an unpublished forecast: "
                                  + "; ".join(publication.get("reasons") or []))
         forecast = _read_json(os.path.join(report_folder, "forecast.json"))
+    if isinstance(forecast, dict) and isinstance(forecast.get("backtest"), dict):
+        # A backtest report forecasts a question whose outcome is already known:
+        # it is scored by backend/scripts/backtest_eval.py, never by this monitor
+        # (no re-quote, no price track, no market or data resolution rows).
+        return {"report_id": report_id, "as_of": as_of, "skipped": "backtest", "anchored_count": 0,
+                "resolved_count": 0, "newly_recorded_count": 0, "needs_manual_count": 0,
+                "degraded": False, "dry_run": bool(dry_run), "monitor_report_path": None}
     retained = _ledger.read_published_forecast(report_id, d=ledger_dir)
     if retained is not None:
         # Resolution is always against the immutable publication. An injected/current
@@ -999,6 +1006,7 @@ def _summary_row(res: Dict[str, Any]) -> Dict[str, Any]:
     带官方数据锚的报告另附 data_* 计数（resolved / pending / manual），无锚时行不变。"""
     row = {
         "report_id": res.get("report_id"),
+        **({"skipped": res["skipped"]} if res.get("skipped") else {}),
         "anchored": res.get("anchored_count"),
         "movers": len(res.get("movers") or []),
         "resolved": res.get("resolved_count"),

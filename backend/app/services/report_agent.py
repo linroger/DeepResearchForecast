@@ -28,6 +28,7 @@ from pathlib import Path
 from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
+from . import backtest_mode as _backtest
 from . import report_filter_safe as _filter_safe
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
@@ -2612,8 +2613,50 @@ class ReportAgent:
         binding = getattr(self, "_world_binding", None)
         if binding:
             return binding["result"]["forecastEffect"]
+        # Backtest ablation arm (backtest_mode.ARMS): the arm decides whether the
+        # simulation may move probabilities; ``production`` keeps the live policy.
+        arm_effect = _backtest.simulation_effect(self._backtest())
+        if arm_effect is not None:
+            return arm_effect
         return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                    or "diagnostic_only").strip().lower()
+
+    def set_backtest_policy(self, option: Optional[Dict[str, Any]]) -> None:
+        """Pin the owning pipeline's backtest option (``None`` = live run).
+
+        The orchestrator calls this before ``generate_report``; an agent built
+        elsewhere (report regeneration) finds the option by its simulation id."""
+        self._backtest_option = option if isinstance(option, dict) else None
+        self._backtest_resolved = True
+
+    def _backtest(self) -> Optional[Dict[str, Any]]:
+        """This report's backtest option, ``None`` for a live run."""
+        if not getattr(self, "_backtest_resolved", False):
+            self.set_backtest_policy(_backtest.policy_for_simulation(getattr(self, "simulation_id", None)))
+        return getattr(self, "_backtest_option", None)
+
+    def _backtest_extraction_kwargs(self) -> Dict[str, Any]:
+        """Binary-extraction keywords of a backtest run: the arm's simulation effect
+        and the pinned golden question; ``{}`` for a live run (call unchanged)."""
+        backtest = self._backtest()
+        if backtest is None:
+            return {}
+        kwargs: Dict[str, Any] = {"simulation_effect": self._simulation_forecast_effect()}
+        target = backtest.get("target")
+        if isinstance(target, dict) and target.get("golden_id"):
+            kwargs["pinned_questions"] = [target]
+        return kwargs
+
+    def _backtest_now_year(self) -> Dict[str, Any]:
+        """``{"now_year": as-of year}`` for a backtest run: target years are judged
+        from the cutoff, not from today; ``{}`` for a live run."""
+        backtest = self._backtest()
+        if backtest is None:
+            return {}
+        try:
+            return {"now_year": int(str(backtest.get("as_of"))[:4])}
+        except (TypeError, ValueError):
+            return {}
 
     def _world_pathway(self) -> str:
         binding = self._verify_world()
@@ -4336,6 +4379,9 @@ class ReportAgent:
             max_n = int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20)
         except (TypeError, ValueError):
             max_n = 20
+        backtest = self._backtest()
+        if backtest is not None and not _backtest.markets_enabled(backtest):
+            return []  # ablation arm without markets
         # ① 研究 handoff 产物（延迟导入避免与 pipeline_orchestrator 的模块级循环依赖）。
         try:
             from .pipeline_orchestrator import PipelineManager
@@ -4360,6 +4406,10 @@ class ReportAgent:
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
+        if backtest is not None:
+            # A backtest report uses the research snapshot priced at the cutoff
+            # only; a live search would return today's prices (and outcomes).
+            return []
         # ② 现抓兜底（仅当 client + report LLM 可用）。Unlike the canonical research
         # artifact, this late path has no researcher to vet lexical matches, so it is
         # deliberately fail-closed: only rows carrying an explicit LLM relevance score
@@ -4456,6 +4506,10 @@ class ReportAgent:
         if not rows:
             self._markets_stale = False
             return rows
+        if self._backtest() is not None:
+            # Backtest: the rows carry the price at the cutoff; a re-quote is today's price.
+            self._markets_stale = False
+            return rows
         if not getattr(Config, "PREDICTION_MARKETS_REQUOTE", True):
             self._markets_stale = True  # 关闭重报价 → 用研究期价（包头标注时效性）
             return rows
@@ -4527,6 +4581,8 @@ class ReportAgent:
         _markets_stale。无数据/关闭旗标时返回 ""（注入自动跳过，行为与历史一致）。
         """
         if not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
+            return ""
+        if not _backtest.markets_enabled(self._backtest()):
             return ""
         markets = self._load_prediction_markets()
         if not markets:
@@ -4883,6 +4939,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     data_pack=getattr(self, "_data_pack", "") or None,
                     official_data=getattr(self, "official_data", None),
+                    **self._backtest_extraction_kwargs(),
                 )
                 if _bres.get("binary_forecasts"):
                     forecast["binary_forecasts"] = _bres["binary_forecasts"]
@@ -4914,7 +4971,7 @@ class ReportAgent:
                     try:
                         _apply_horizon_consistency(
                             forecast, getattr(self, "simulation_requirement", None),
-                            horizon_date=_hz_date)
+                            horizon_date=_hz_date, **self._backtest_now_year())
                     except Exception:  # noqa: BLE001 — 观测性校验，绝不影响产物
                         pass
                     # PM-2：确定性市场对照负载（预测 vs 市场隐含概率、|Δ|、>10pp 判定）——嵌入
@@ -4969,7 +5026,9 @@ class ReportAgent:
             pass
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
+        # A backtest report skips it: today's track record postdates its cutoff.
+        if (getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None)
+                and self._backtest() is None):
             _cs: Dict[str, Any] = {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
             try:
                 from .forecast_ledger import calibration_summary as _cal
@@ -4995,6 +5054,11 @@ class ReportAgent:
                         "official_data_track_record": _otr}
             except Exception:  # noqa: BLE001
                 pass
+        backtest = self._backtest()
+        if backtest is not None:
+            # Evaluation output, never production evidence: marked here so the
+            # ledger, the resolution monitor and the driver can tell.
+            forecast["backtest"] = _backtest.forecast_block(backtest)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -10761,7 +10825,10 @@ class ReportAgent:
     def _prepare_forecast_track_record(self, report_id: str, report: "Report") -> None:
         """Freeze past outcomes once, then render them after authored prose stabilizes."""
         if (not getattr(Config, "REPORT_FORECAST_LEDGER", True)
-                or getattr(self, "_world_binding", None)):
+                or getattr(self, "_world_binding", None)
+                # A backtest report stands at its cutoff: today's track record postdates it
+                # (and may hold outcomes resolved after the cutoff), so it gets none.
+                or self._backtest() is not None):
             return
         from .forecast_ledger import production_track_record, verify_production_track_record
         from .forecast_track_record import insert
@@ -17178,6 +17245,15 @@ class ReportManager:
             forecast, report_id=report_id, created_at=issued)
         return registered
 
+    @staticmethod
+    def _is_backtest_forecast_file(forecast_path: str) -> bool:
+        """True when forecast.json carries the backtest block (``backtest_mode.forecast_block``)."""
+        try:
+            with open(forecast_path, "r", encoding="utf-8") as f:
+                return _backtest.is_backtest_forecast(json.load(f))
+        except (OSError, ValueError):
+            return False
+
     @classmethod
     def save_report(cls, report: Report) -> None:
         """保存报告元信息和完整报告"""
@@ -17193,7 +17269,10 @@ class ReportManager:
                     and bool(report.completed_at or report.created_at)
                     and not getattr(report, "world_result_ref", None)
                     and getattr(report, "simulation_engine", None) != "world-v1"
-                    and os.path.isfile(forecast_path))
+                    and os.path.isfile(forecast_path)
+                    # A backtest forecast's outcome is already known: backtest_eval.py scores
+                    # it, and it never enters the production publication journal.
+                    and not cls._is_backtest_forecast_file(forecast_path))
         previous = cls._read_report_meta(report.report_id) or {}
         if tracking or previous.get("forecast_feedback_required"):
             metadata["forecast_feedback_required"] = True

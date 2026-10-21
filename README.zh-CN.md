@@ -115,7 +115,7 @@ flowchart TB
 - [架构](#架构)
   - [运行时拓扑](#运行时拓扑) · [请求生命周期](#请求生命周期) · [管线生命周期、状态与恢复](#管线生命周期状态与恢复) · [各阶段读取什么](#各阶段读取什么) · [代码地图](#代码地图)
 - [逐阶段深入解析](#逐阶段深入解析)
-  - [1 · 研究](#阶段-1--研究deerflow-2) · [2 · 本体](#阶段-2--本体) · [3 · 知识图谱](#阶段-3--知识图谱) · [4 · 准备](#阶段-4--准备) · [5 · 模拟](#阶段-5--模拟) · [6 · 报告与发布](#阶段-6--报告与发布) · [运行结束之后](#运行结束之后集成账本与监测)
+  - [1 · 研究](#阶段-1--研究deerflow-2) · [2 · 本体](#阶段-2--本体) · [3 · 知识图谱](#阶段-3--知识图谱) · [4 · 准备](#阶段-4--准备) · [5 · 模拟](#阶段-5--模拟) · [6 · 报告与发布](#阶段-6--报告与发布) · [运行结束之后](#运行结束之后集成账本与监测) · [回测模式](#回测模式不带后见之明的准确度测量)
 - [可信度与质量保障](#可信度与质量保障)
 - [环境要求](#环境要求)
 - [安装与配置](#安装与配置)
@@ -1178,8 +1178,29 @@ flowchart LR
 - **校准工具。**
   - `backend/app/services/backtest.py` 提供 Brier 分数、对数损失、校准分箱与 Murphy 分解。
   - `backend/scripts/golden_eval.py` 用已判定的「黄金问题」打分。
+  - `backend/scripts/backtest_eval.py` 在回测模式下端到端运行黄金问题，并按消融分支打分（见[回测模式](#回测模式不带后见之明的准确度测量)）。
   - 下一份默认引擎报告会将已验证的历史记录冻结到 `historical_calibration.forecast_track_record` 和经审计的 Markdown，显示已判定及待判定数量，并分别呈现情景、市场二元及官方数据分数。报告排除自身；描述性分数不能证明模型已校准。`POST /api/v1/resolve/<report_id>` 按精确情景名保存人工判定，将提交的依据标记为人工提供，拒绝冲突重试，并能在重启后从持久日志修复报告内镜像。判定时不回填未登记的旧报告。
 - **定时重跑**（`backend/scripts/scheduled_rerun.py daemon|tick`，默认关闭）。它会重跑保存过的问题，记录 15 个百分点及以上的概率漂移，并可 POST 到 webhook。`scheduled_rerun.py diff <pipe_a> <pipe_b>` 可以比较两次运行。
+
+### 回测模式：不带后见之明的准确度测量
+
+如果管线能读到结局，回溯打分就毫无意义。**回测模式**给单条管线钉住一个截止日期（as-of），并把它读取的每一项输入都截断在这一天。它需要显式开启，默认关闭：不带它的管线与以前完全一样。设计与证据见 [docs/handoff/backtest/design.md](docs/handoff/backtest/design.md)。
+
+- **如何启动。** 调用 `POST /api/v1/run`（需要 `API_V1_ENABLED=true`），附上 `backtest` 块，例如 `{"as_of": "2024-11-01", "strict": true, "archive": "wayback", "arm": "production"}`，还可以附上可选的 `target` 黄金问题。准入时会拒绝不在过去的截止日期、旧版研究引擎以及 world-v1 引擎。
+- **截断哪些输入。** 研究子进程通过 `DRF_BACKTEST_POLICY` 收到该策略；实时运行永远不会继承它。
+  - *搜索：* Firecrawl 会带上截止当天为止的日期过滤，并附带有日期的新闻结果。随后每个提供方的每一条结果都按其自身字段和 URL 定日期，晚于截止日期的结果一律丢弃。
+  - *抓取：* 如果 Wayback Machine 在截止日期当天或之前有存档，就读取最后一份存档。否则读取实时页面，按页面元数据、URL 和对应搜索结果定日期；页面发布或修改晚于截止日期时拒绝读取。
+  - *官方数据：* 请求窗口截止于截止日期。FRED 的 API 路径返回截止日期当时的版本（ALFRED）；其他所有路径（包括 FRED 免密钥的 CSV）返回当前修订值，只计入截止日期前已经结束的时期（严格模式下还要早于截止日期一个发布滞后期）。
+  - *预测市场：* 已关闭的事件也会被检索。只有在截止日期时仍开放的市场才计入；其价格取自截止日期时的 CLOB 历史价格，已判定的价格和此后的字段都会被移除。报告阶段从不重新报价。
+  - *日期与记录：* 研究计划日期、模拟日历和目标年份都从截止日期起算。`forecast.json` 带有 `backtest` 块，不写入生产账本，判定监测也会跳过这份报告。
+- **严格或宽松。** 严格模式（默认）丢弃没有日期的来源；宽松模式保留它们并加标记。每一个决定都记在 handoff 的 `backtest_audit.jsonl` 中，并汇总进 `research_meta.json`。
+- **它截不断的：模型自身的记忆。** LLM 可能知道其训练截止日期之前的结局。每个黄金问题都带有 `knowledge_cutoff`（其结局公开的日期），`golden_eval.py` 和 `backtest_eval.py` 接受 `--model-knowledge-cutoff`，分别报告 `post_model_cutoff`（干净）、`pre_model_cutoff`（可能被记住）和 `unknown`。现有的 30 个黄金问题都在 2025 年 2 月之前判定，因此对 2026 年的模型而言，它们的分数只是上限。
+- **消融分支**，每个分支各自作为一条管线运行：`research_only`（没有预测市场；模拟从不移动概率）· `markets` · `simulation`（模拟可以移动概率，这是只用于评估的设置）· `world_channel`（再加上反身性世界通道）· `production`（当前的线上设置）。
+- **驱动脚本**是 `backend/scripts/backtest_eval.py`：
+  - `plan --ids <黄金问题 id>` 列出要启动的管线以及每条管线收到的确切请求（quick 深度、4 轮），不联网；
+  - `run --base-url <后端地址> --run-dir <目录> --confirm-paid` 提交并等待它们完成；可以续跑，除非 `--max-pipelines` 放宽，否则拒绝超过 8 条管线的批次；
+  - `score --run-dir <目录>` 写出 `eval_report.json` 和一份 markdown 摘要：每个分支的 Brier、对数分数、ECE 与准确率，知识截止拆分，以及与 `research_only` 的配对差值。
+- **前向测试。** 几周内就能判定的预测才能给出干净的数字。设置 `RESOLUTION_MONITOR_AUTORUN_HOURS=24`，并把 `RESOLUTION_MONITOR_RECENT_N` 设得足够大，使每份尚未判定的短期报告都在监测范围内。按 `backend/tests/eval/forward_questions_template.json` 编写问题（2–12 周，每题由官方序列或 Polymarket 市场判定），用 `backtest_eval.py forward-check` 检查，再用 `backtest_eval.py forward-score` 为已判定的预测打分。
 
 ---
 
@@ -1635,7 +1656,7 @@ FIRECRAWL_API_KEY=fc-...         # 可选，但推荐
 | `/api/graph`（14） | `GET /project/<id>` · `GET /project/list` · `DELETE /project/<id>` · `POST /project/<id>/reset` · `POST /ontology/generate` · `POST /build` · `GET /task/<task_id>` · `GET /tasks` · `POST /gc` · `DELETE /delete/<graph_id>` |
 | `/api/simulation`（32） | `GET /entities/<graph_id>` · `GET /entities/<graph_id>/<uuid>` · `GET /entities/<graph_id>/by-type/<type>` · `POST /create` · `POST /prepare` · `POST /prepare/status` · `GET /<sim_id>` · `GET /list` · `GET /history` · `GET /<sim_id>/profiles` · `GET /<sim_id>/config` · `GET /<sim_id>/config/realtime` · `GET /<sim_id>/config/download` · `GET /script/<name>/download` · `POST /generate-profiles` · `POST /start` · `POST /stop` · `GET /<sim_id>/run-status/detail` · `POST /interview` · `POST /interview/batch` · `POST /interview/all` · `POST /interview/history` · `POST /env-status` · `POST /close-env` |
 | `/api/report`（29） | `POST /generate` · `POST /generate/status` · `GET /by-simulation/<sim_id>` · `GET /list` · `DELETE /<report_id>` · `POST /chat` · `GET /<report_id>/progress` · `GET /<report_id>/sections` · `GET /<report_id>/section/<n>` · `GET /check/<sim_id>` · `GET /<report_id>/agent-log` · `GET /<report_id>/agent-log/stream` · `GET /<report_id>/console-log` · `GET /<report_id>/console-log/stream` · `POST /tools/search` · `POST /tools/statistics` |
-| `/api/v1`（6，仅当 `API_V1_ENABLED=true`） | `POST /run` · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
+| `/api/v1`（6，仅当 `API_V1_ENABLED=true`） | `POST /run`（接受 `backtest` 块）· `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
 
 许多额外的图谱、模拟与报告路由早于统一仪表盘出现，至今仍可用于脚本调用。处理函数位于 [`backend/app/api/`](backend/app/api/)。
 
@@ -1739,6 +1760,7 @@ flowchart LR
 | `backend/scripts/model_comparison.py` | 用多个提供方回答同一个问题，并排比较 |
 | `backend/scripts/forecast_tools.py` | 对 `forecast.json` 文件做集成汇总与回测 |
 | `backend/scripts/golden_eval.py` · `eval_forecast_quality.py` | 黄金问题评分 · 评分量规式 LLM 裁判（需显式开启） |
+| `backend/scripts/backtest_eval.py` | 回测驱动：在各自截止日期运行黄金问题 × 消融分支；前向问题检查与打分 |
 | `backend/scripts/export_demo_site_data.py` | 把运行导出到 `docs/demos/<run>/`，供演示站使用 |
 | `backend/scripts/backfill_report_visuals.py` | 离线为已有报告重建图表与引用（加 `--apply` 才写入） |
 | `backend/scripts/replay_zep_dead_letters.py` | 重放失败的模拟 → 图谱回写 |
@@ -1781,7 +1803,7 @@ flowchart LR
 | Lint | `npm run lint` | Ruff。CI 还会检查 `backend/scripts` 与 `deerflow_bridge`。 |
 | 配置漂移 | `npm run check:env` | `config.py` 读取的每一项设置都必须在 `.env.example` 中有说明 |
 | 阶段契约冒烟测试 | `npm run smoke` | 桩 LLM、确定性、零成本 |
-| 预测质量评估 | `backend/scripts/golden_eval.py`、`eval_forecast_quality.py` | 评估预测质量本身，而不只是代码形态 |
+| 预测质量评估 | `backend/scripts/golden_eval.py`、`backtest_eval.py`、`eval_forecast_quality.py` | 评估预测质量本身，而不只是代码形态 |
 
 **CI**（`.github/workflows/ci.yml`）在推送到 `main` 与提交 Pull Request 时运行三个离线任务：
 - Ruff lint 加上环境变量漂移门；

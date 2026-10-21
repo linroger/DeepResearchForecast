@@ -601,9 +601,11 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     both engines and by config.yaml (`use: data_tools:...`).
   #   - research_skills.py (method-skill router and SKILL.md section parser) is
   #     imported by bare name by both engines.
+  #   - backtest_cutoff.py (backtest mode's as-of cutoff) is imported by bare
+  #     name by search_tools.py, data_sources.py and the v3 engine.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -615,6 +617,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed $_tool_mod (official-data sources)" ;;
         research_skills.py)
           ok "Installed $_tool_mod (research method skills)" ;;
+        backtest_cutoff.py)
+          ok "Installed $_tool_mod (backtest-mode as-of cutoff)" ;;
         *)
           ok "Installed $_tool_mod (config-reflected bridge tool)" ;;
       esac
