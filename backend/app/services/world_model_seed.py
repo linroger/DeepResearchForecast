@@ -33,6 +33,7 @@ raises (a failure degrades to a smaller block).
 
 from __future__ import annotations
 
+import calendar
 import math
 import re
 from datetime import date
@@ -454,7 +455,12 @@ def state_variables_from_research(actors: Optional[Dict[str, Any]],
 # probability refers to (a calendar unit, a number of them, or the forecast horizon) and a source.
 # Anything missing is a typed modelling gap — never an invented number.  The documented window is
 # turned into a per-day hazard under a constant-hazard assumption (p_window = 1 − exp(−hazard × days));
-# the kernel turns the hazard back into a probability for each period's own length.  Effects bind only
+# the kernel turns the hazard back into a probability for each period's own length.  A window that is a
+# stretch of the calendar ("October–December 2026", see DATED WINDOWS) is also where the shock can fire:
+# the kernel rolls it only on the days a period shares with that stretch, a stretch already over at the
+# as-of date is ``shock_window_elapsed``, one starting after the horizon ``shock_window_after_horizon``;
+# one partly over keeps the hazard of its full length, so its remaining days are never given the whole
+# probability.  Effects bind only
 # to variables the world tracks; a documented direction without a size moves nothing mechanically
 # (the arbiter sizes it).
 MAX_SHOCKS = 8
@@ -475,6 +481,8 @@ _WINDOW_COUNTED_UNITS = (
     ("half_year", r"half[- ]?years?"), ("quarter", r"quarters?|个季度"), ("month", r"months?|个月"),
     ("week", r"weeks?|周"), ("day", r"days?|天"), ("year", r"years?|年"),
 )
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                 "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "eighteen": 18, "twenty": 20, "thirty": 30}
 _HORIZON_RE = re.compile(r"\bhorizon\b|forecast (?:window|period)|预测期|预测窗口", re.IGNORECASE)
 _COUNT_DENOMINATOR_RE = re.compile(r"(?:\bof|\bin|out of|/)\s*$", re.IGNORECASE)
 _PROBABILITY_KEYS = ("probability", "base_rate", "likelihood", "prob", "frequency", "outcome_frequency")
@@ -537,10 +545,276 @@ def parse_risk_window(raw: Any, *, horizon_days: Optional[float] = None) -> Opti
             n = float(m.group(1))
             if n > 0:
                 return (f"{m.group(1)} {label}", n * _WINDOW_DAYS[label])
+    # spelled-out counts ("a three-month window") are counts too, never the bare unit ("per month")
+    for label, words in _WINDOW_COUNTED_UNITS:
+        for m in re.finditer(rf"(?<![a-z])({'|'.join(_NUMBER_WORDS)})\s*-?\s*(?:{words})(?![a-z])", low):
+            if not _COUNT_DENOMINATOR_RE.search(low[:m.start()]):
+                n = _NUMBER_WORDS[m.group(1)]
+                return (f"{n} {label}", n * _WINDOW_DAYS[label])
     for label, words in _WINDOW_UNIT_WORDS:
         if re.search(rf"(?<![a-z])(?:{words})(?![a-z])", low):
             return (label, _WINDOW_DAYS[label])
     return None
+
+
+# DATED WINDOWS (handoff research-risks §12 P2, 2026-10-21): published outlooks state a probability for
+# a stretch of the calendar ("83% October–December", "DJF 2026-27", "by 31 March 2027"), not per unit of
+# time.  ``calendar_window_spec`` reads the forms of the research extraction (linear_research's
+# ``_CAL_PATTERNS``, the same grammar; parity pinned by test_research_frame_risks) plus a bare year ("in
+# 2027"); ``parse_dated_window`` places the span on the calendar.  A span written without a year is its
+# first occurrence that has not ended at the as-of date; "until <date>" runs from the as-of date.  Ambiguous
+# text is no window: a span across the new year with one plain year ("Nov-Jan 2027"), "by 2030", a named
+# season ("winter 2026-27" depends on the hemisphere), a CPC season code not written in capitals.
+_CAL_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september",
+               "october", "november", "december")
+_CAL_MONTH_NUMBERS = {**{name: i for i, name in enumerate(_CAL_MONTHS, 1)},
+                      **{name[:3]: i for i, name in enumerate(_CAL_MONTHS, 1)}, "sept": 9}
+_CAL_MONTH = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+              r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![a-z])\.?")
+_CAL_YEAR = r"(?:19|20)\d{2}"
+_CAL_SEASONS = {"jfm": (1, 3), "fma": (2, 4), "mam": (3, 5), "amj": (4, 6), "mjj": (5, 7), "jja": (6, 8),
+                "jas": (7, 9), "aso": (8, 10), "son": (9, 11), "ond": (10, 12), "ndj": (11, 1), "djf": (12, 2)}
+_CAL_ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4,
+                 "一": 1, "二": 2, "三": 3, "四": 4}
+_CAL_DATE = (rf"(?:\d{{1,2}}(?:st|nd|rd|th)?\s+{_CAL_MONTH},?(?:\s+{_CAL_YEAR})?"
+             rf"|{_CAL_MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?(?![\d:])(?:,?\s+{_CAL_YEAR})?"
+             rf"|{_CAL_YEAR}-\d{{1,2}}-\d{{1,2}}|{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日)")
+_CAL_SEP = r"\s*(?:-|–|—|‐|‑|~|to|through|thru|until|till|至|到)\s*"
+_CAL_PATTERNS = (     # tried in this order; a later match may not overlap an earlier one
+    ("dates", re.compile(rf"(?<![\w]){_CAL_DATE}{_CAL_SEP}{_CAL_DATE}")),
+    ("months", re.compile(rf"(?<![a-z])(?P<m1>{_CAL_MONTH})(?:\s+(?P<y1>{_CAL_YEAR}))?{_CAL_SEP}"
+                          rf"(?P<m2>{_CAL_MONTH})(?:,?\s*(?P<y2>{_CAL_YEAR})(?:\s*[-–—/]\s*(?P<y2b>\d{{2}}"
+                          rf"(?!\d)|{_CAL_YEAR}))?)?")),
+    ("months", re.compile(rf"(?:(?P<y1>{_CAL_YEAR})年)?(?<!\d)(?P<m1>\d{{1,2}})月?\s*(?:至|到|-|–|—|~)\s*"
+                          rf"(?:(?P<y2>{_CAL_YEAR})年)?(?P<m2>\d{{1,2}})月(?!\d{{1,2}}日)")),
+    ("until", re.compile(rf"(?<![\w])(?:through|thru|to|until|till|by|before|up to|ending)\s+(?:the\s+)?"
+                         rf"(?P<end>end[\s-]+(?:of\s+)?)?(?:{_CAL_DATE}|{_CAL_MONTH}(?:\s+{_CAL_YEAR})?"
+                         rf"|{_CAL_YEAR})(?![\w])")),
+    ("until", re.compile(rf"(?:到|至|截至|截止)\s*{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日"
+                         rf"|{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日\s*(?:之前|以前|前)"
+                         rf"|(?:到|至|截至|截止)?\s*{_CAL_YEAR}年(?:\d{{1,2}}月)?底(?:之前|以前|前)?")),
+    ("quarter", re.compile(rf"(?<![a-z0-9])q(?P<q>[1-4])(?:\s*[-/]?\s*(?P<y>{_CAL_YEAR}))?(?![a-z0-9])"
+                           rf"|(?<![\d])(?P<y2>{_CAL_YEAR})\s*[-/]?\s*q(?P<q2>[1-4])(?![a-z0-9])"
+                           rf"|(?<![a-z])(?P<o>first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter"
+                           rf"(?:\s+(?:of\s+)?(?P<y3>{_CAL_YEAR}))?"
+                           rf"|(?P<y4>{_CAL_YEAR})年(?:第)?(?P<o2>[一二三四1-4])季度")),
+    ("season", re.compile(rf"(?<![a-z])(?P<code>{'|'.join(_CAL_SEASONS)})(?![a-z])"
+                          rf"(?:\s*(?P<y>{_CAL_YEAR})(?:\s*[-–—/]\s*(?P<yb>\d{{2}}(?!\d)|{_CAL_YEAR}))?)?")),
+    ("month", re.compile(rf"(?<![a-z\d])(?<!\d )(?<!\dst )(?<!\dnd )(?<!\drd )(?<!\dth )"
+                         rf"(?P<m>{_CAL_MONTH})\s+(?P<y>{_CAL_YEAR})(?![\d])"
+                         rf"|(?P<y2>{_CAL_YEAR})年(?P<m2>\d{{1,2}})月(?![\d底])")),
+)
+_CAL_YEAR_ONLY_RE = re.compile(rf"(?:in|during|for|over|throughout|through|across)?\s*(?:the\s+)?"
+                               rf"(?:calendar\s+(?:year\s+)?|cy\s*)?(?P<y>{_CAL_YEAR})|(?P<y2>{_CAL_YEAR})年(?:全年|度)")
+
+
+def _cal_month(token: Any) -> int:
+    return _CAL_MONTH_NUMBERS.get(str(token or "").rstrip(".").casefold(), 0)
+
+
+def _month_end(year: int, month: int) -> date:
+    return date(year, month, calendar.monthrange(year, month)[1])
+
+
+def _cal_valid_day(year: Optional[int], month: int, day: int) -> bool:
+    if not 1 <= month <= 12:
+        return False
+    return 1 <= day <= (calendar.monthrange(year, month)[1] if year else 31)
+
+
+def _cal_date(text: str) -> Optional[Tuple[Optional[int], int, int]]:
+    """``(year or None, month, day)`` of one ``_CAL_DATE`` phrase."""
+    m = re.fullmatch(rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+({_CAL_MONTH}),?(?:\s+({_CAL_YEAR}))?", text)
+    if m:
+        year, month, day = (int(m.group(3)) if m.group(3) else None), _cal_month(m.group(2)), int(m.group(1))
+    else:
+        m = re.fullmatch(rf"({_CAL_MONTH})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+({_CAL_YEAR}))?", text)
+        if m:
+            year, month, day = (int(m.group(3)) if m.group(3) else None), _cal_month(m.group(1)), int(m.group(2))
+        else:
+            m = re.fullmatch(rf"({_CAL_YEAR})-(\d{{1,2}})-(\d{{1,2}})|({_CAL_YEAR})年(\d{{1,2}})月(\d{{1,2}})日", text)
+            if not m:
+                return None
+            groups = m.groups()[:3] if m.group(1) else m.groups()[3:]
+            year, month, day = (int(g) for g in groups)
+    return (year, month, day) if _cal_valid_day(year, month, day) else None
+
+
+def _cal_years(m1: int, m2: int, y1: Any, y2: Any, y2b: Any = None) -> Optional[Tuple[Optional[int], Optional[int]]]:
+    """Start and end year of a month span as written: both, neither, or None when the text is
+    ambiguous (a span across the new year with one plain year: "Nov-Jan 2027")."""
+    wrap = m2 < m1
+    y1, y2 = (int(y1) if y1 else None), (int(y2) if y2 else None)
+    if y2b:
+        if y1 is not None or y2 is None or not wrap:
+            return None
+        end = (y2 // 100) * 100 + int(y2b) if len(str(y2b)) == 2 else int(y2b)
+        return (y2, end) if end == y2 + 1 else None
+    if y1 is not None and y2 is not None:
+        return (y1, y2) if 0 <= (y2 * 12 + m2) - (y1 * 12 + m1) <= 11 else None
+    if y1 is not None:
+        return (y1, y1 + wrap)
+    if y2 is not None:
+        return None if wrap else (y2, y2)
+    return (None, None)
+
+
+def _cal_spec(kind: str, m: Any, raw: str) -> Optional[tuple]:
+    """The calendar span one ``_CAL_PATTERNS`` match names: ("months", y1, m1, y2, m2), ("until", y,
+    m, d) or ("dates", y1, m1, d1, y2, m2, d2), a year or a day None when the text leaves it open
+    (m None: the end of that year, d None: the end of that month)."""
+    text = m.group(0)
+    names = m.groupdict()
+    if kind == "dates":
+        found = [_cal_date(d.group(0).strip()) for d in re.finditer(_CAL_DATE, text)]
+        if len(found) != 2 or None in found:
+            return None
+        (y1, m1, d1), (y2, m2, d2) = found
+        if y1 is None and y2 is not None:
+            y1 = y2 if (m1, d1) <= (m2, d2) else y2 - 1
+        elif y2 is None and y1 is not None:
+            y2 = y1 if (m1, d1) <= (m2, d2) else y1 + 1
+        if y1 is not None and (y1, m1, d1) > (y2, m2, d2):
+            return None
+        return ("dates", y1, m1, d1, y2, m2, d2)
+    if kind == "months":
+        cjk = names["m1"].isdigit()
+        m1, m2 = (int(names["m1"]), int(names["m2"])) if cjk else (_cal_month(names["m1"]), _cal_month(names["m2"]))
+        if not (1 <= m1 <= 12 and 1 <= m2 <= 12) or m1 == m2:
+            return None
+        if cjk:                                        # CJK: each year is written beside its month
+            wrap = m2 < m1
+            y1 = int(names["y1"]) if names.get("y1") else (int(names["y2"]) - wrap if names.get("y2") else None)
+            y2 = int(names["y2"]) if names.get("y2") else (y1 + wrap if y1 is not None else None)
+            years = (y1, y2) if y1 is None or 0 <= (y2 * 12 + m2) - (y1 * 12 + m1) <= 11 else None
+        else:
+            years = _cal_years(m1, m2, names["y1"], names["y2"], names.get("y2b"))
+        return ("months", years[0], m1, years[1], m2) if years else None
+    if kind == "until":
+        cjk = re.search(rf"({_CAL_YEAR})年(?:(\d{{1,2}})月)?(?:(\d{{1,2}})日|底)", text)
+        date_hit = re.search(_CAL_DATE, text[text.find(" "):]) if " " in text else None
+        month_hit = re.search(rf"(?<![a-z])({_CAL_MONTH})(?:\s+({_CAL_YEAR}))?", text[text.find(" "):]) \
+            if " " in text else None
+        if cjk:
+            year, month = int(cjk.group(1)), int(cjk.group(2)) if cjk.group(2) else None
+            day = int(cjk.group(3)) if cjk.group(3) else None
+            if month is None and day is not None:
+                return None
+        elif date_hit:
+            parsed = _cal_date(date_hit.group(0).strip())
+            if parsed is None:
+                return None
+            year, month, day = parsed
+        elif month_hit:
+            year = int(month_hit.group(2)) if month_hit.group(2) else None
+            month, day = _cal_month(month_hit.group(1)), None
+        elif names.get("end") and re.search(_CAL_YEAR, text):
+            year, month, day = int(re.search(_CAL_YEAR, text).group(0)), None, None
+        else:
+            return None                                # "by 2030": the year's start or its end?
+        if month is not None and day is not None and not _cal_valid_day(year, month, day):
+            return None
+        return ("until", year, month, day)
+    if kind == "quarter":
+        ordinal = names.get("o") or names.get("o2") or ""
+        q = int(names.get("q") or names.get("q2") or _CAL_ORDINALS.get(ordinal)
+                or (ordinal if ordinal.isdigit() else 0))
+        year = names.get("y") or names.get("y2") or names.get("y3") or names.get("y4")
+        y = int(year) if year else None
+        return ("months", y, 3 * q - 2, y, 3 * q) if 1 <= q <= 4 else None
+    if kind == "season":
+        code = names["code"]
+        if not re.search(rf"(?<![A-Za-z]){code.upper()}(?![A-Za-z])", raw):
+            return None                                # "son", "mam": words, not CPC season codes
+        m1, m2 = _CAL_SEASONS[code]
+        years = _cal_years(m1, m2, None, names.get("y"), names.get("yb"))
+        return ("months", years[0], m1, years[1], m2) if years else None
+    month = _cal_month(names.get("m")) if names.get("m") else int(names.get("m2") or 0)
+    year = int(names.get("y") or names.get("y2") or 0)
+    return ("months", year, month, year, month) if 1 <= month <= 12 and year else None
+
+
+def calendar_window_spec(raw: Any) -> Optional[tuple]:
+    """The one calendar span a window text names (see ``_cal_spec``), or None when it names none or
+    several.  A whole text that is just a year ("in 2027", "calendar 2027", "2027年全年") is that year."""
+    text = _clean(raw, 160)
+    if not text:
+        return None
+    key = " ".join(text.casefold().split())
+    year_only = _CAL_YEAR_ONLY_RE.fullmatch(key)
+    if year_only:
+        y = int(year_only.group("y") or year_only.group("y2"))
+        return ("months", y, 1, y, 12)
+    taken: List[Tuple[int, int, Optional[tuple]]] = []
+    for kind, pattern in _CAL_PATTERNS:
+        for m in pattern.finditer(key):
+            if not any(m.start() < end and start < m.end() for start, end, _ in taken):
+                taken.append((m.start(), m.end(), _cal_spec(kind, m, text)))
+    spans = {spec for _, _, spec in taken if spec is not None}
+    return spans.pop() if len(spans) == 1 else None
+
+
+def _iso_day(raw: Any) -> Optional[date]:
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_span(spec: tuple, as_of: Optional[date]) -> Optional[Tuple[date, date]]:
+    """``(start, end)`` of a calendar span; a span without a year is its first occurrence that has
+    not ended at ``as_of`` and an "until" span starts at ``as_of`` (None without it)."""
+    kind = spec[0]
+    try:
+        if kind == "until":
+            _, year, month, day = spec
+            if as_of is None:
+                return None
+
+            def end_of(y: int) -> date:
+                return date(y, 12, 31) if month is None else _month_end(y, month) if day is None \
+                    else date(y, month, day)
+            if year is None:
+                year = as_of.year if end_of(as_of.year) >= as_of else as_of.year + 1
+            return as_of, end_of(year)
+        if kind == "months":
+            _, y1, m1, y2, m2 = spec
+            if y1 is not None:
+                return date(y1, m1, 1), _month_end(y2, m2)
+            if as_of is None:
+                return None
+            wrap = int(m2 < m1)
+            for y in (as_of.year - 1, as_of.year, as_of.year + 1):
+                if _month_end(y + wrap, m2) >= as_of:
+                    return date(y, m1, 1), _month_end(y + wrap, m2)
+            return None
+        _, y1, m1, d1, y2, m2, d2 = spec
+        if y1 is not None:
+            return date(y1, m1, d1), date(y2, m2, d2)
+        if as_of is None:
+            return None
+        wrap = int((m2, d2) < (m1, d1))
+        for y in (as_of.year - 1, as_of.year, as_of.year + 1):
+            try:
+                start, end = date(y, m1, d1), date(y + wrap, m2, d2)
+            except ValueError:                         # 29 February of a common year
+                continue
+            if end >= as_of:
+                return start, end
+        return None
+    except ValueError:
+        return None
+
+
+def parse_dated_window(raw: Any, *, as_of: Any = None) -> Optional[Tuple[date, date]]:
+    """``(start, end)`` (both days included) of the calendar stretch a documented probability refers
+    to ("October–December 2026", "DJF 2026-27", "Q1 2027", "by 31 March 2027", "in 2027"); None when
+    the text names no such stretch, names it ambiguously, or needs an as-of date it is not given."""
+    spec = calendar_window_spec(raw)
+    if spec is None:
+        return None
+    span = _resolve_span(spec, _iso_day(as_of) if as_of else None)
+    return span if span is not None and (span[0] <= span[1] or spec[0] == "until") else None
 
 
 def _horizon_days(as_of: Any, horizon: Any) -> Optional[float]:
@@ -682,6 +956,7 @@ def shocks_from_research(actors: Optional[Dict[str, Any]], variables: Sequence[D
     shocks: List[Dict[str, Any]] = []
     gaps: List[Dict[str, str]] = []
     horizon_days = _horizon_days(as_of, horizon)
+    as_of_day, horizon_day = (_iso_day(as_of) if as_of else None), (_iso_day(horizon) if horizon else None)
     for row in extract_risk_rows(actors):
         if len(shocks) >= MAX_SHOCKS:
             break
@@ -698,16 +973,32 @@ def shocks_from_research(actors: Optional[Dict[str, Any]], variables: Sequence[D
                                            "is a scheduled event); not modelled as a shock")
             continue
         raw_window = next((row.get(k) for k in _WINDOW_KEYS if _clean(row.get(k), 80)), None)
-        window = parse_risk_window(raw_window if raw_window is not None else raw_p, horizon_days=horizon_days)
-        if window is None:
-            gap("shock_without_window", "the window of its probability (per day … year, or the forecast "
-                                        "horizon) is not stated; not modelled as a shock")
+        window_text = raw_window if raw_window is not None else raw_p
+        window = parse_risk_window(window_text, horizon_days=horizon_days)
+        dated = parse_dated_window(window_text, as_of=as_of)
+        if window is None and dated is None:
+            gap("shock_without_window", "the window of its probability (per day … year, a stretch of the "
+                                        "calendar, or the forecast horizon) is not stated; not modelled as a shock")
             continue
+        if dated is not None:
+            start, end = dated
+            if as_of_day is not None and end < as_of_day:
+                gap("shock_window_elapsed", f"its window ({start.isoformat()} to {end.isoformat()}) ended before "
+                                            "the as-of date; not modelled as a shock")
+                continue
+            if horizon_day is not None and start > horizon_day:
+                gap("shock_window_after_horizon", f"its window ({start.isoformat()} to {end.isoformat()}) starts "
+                                                  "after the forecast horizon; not modelled as a shock")
+                continue
+            if window is None:                         # the probability covers the whole stretch
+                window = ("dated", float((end - start).days + 1))
         source = _clean(next((row.get(k) for k in _SOURCE_KEYS if _clean(row.get(k), 160)), ""), 160)
         if not source:
             gap("shock_without_source", "no source for its probability; not modelled as a shock")
             continue
         sid = "shock_" + slugify(event, 40)
+        if dated is not None:                          # one event documented for several stretches
+            sid += f"_{dated[0]:%Y%m}_{dated[1]:%Y%m}"
         if any(s["id"] == sid for s in shocks):
             continue
         effects = []
@@ -723,10 +1014,14 @@ def shocks_from_research(actors: Optional[Dict[str, Any]], variables: Sequence[D
             if hit and hit not in affects:
                 affects.append(hit)
         label, days = window
+        base_rate = {"probability": round(p, 6), "window": label, "window_days": round(days, 4),
+                     "text": _clean(raw_p, 80)}
+        if dated is not None:                          # the kernel rolls it only inside this stretch
+            base_rate.update(window_start=dated[0].isoformat(), window_end=dated[1].isoformat(),
+                             window_text=_clean(window_text, 80))
         shocks.append({
             "id": sid, "event": event,
-            "base_rate": {"probability": round(p, 6), "window": label, "window_days": round(days, 4),
-                          "text": _clean(raw_p, 80)},
+            "base_rate": base_rate,
             "hazard_per_day": -math.log1p(-p) / days,
             "source": source, "effects": effects, "affects": affects[:6],
             "recurring": row.get("recurring") is True,
