@@ -381,6 +381,13 @@ def period_days(period: Optional[Dict[str, Any]]) -> Optional[int]:
     return days if days > 0 else None
 
 
+def _iso_date(raw: Any) -> Optional[date]:
+    try:
+        return date.fromisoformat(str(raw)[:10]) if raw else None
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # entities
 # ---------------------------------------------------------------------------
@@ -745,15 +752,39 @@ class Shock:
         self.affects = _items(affects, 6, 160)
         self.recurring = recurring is True
         self.fired_rounds = [int(r) for r in (fired_rounds or []) if isinstance(r, int) and not isinstance(r, bool)]
+        # a documented stretch of the calendar ("October–December 2026"): the shock fires only inside it
+        start, end = _iso_date(self.base_rate.get("window_start")), _iso_date(self.base_rate.get("window_end"))
+        self.window_start, self.window_end = (start, end) if start and end and start <= end else (None, None)
 
     def period_probability(self, days: float) -> float:
         """Probability of firing in a period of ``days`` under the documented constant hazard."""
         return 1.0 - math.exp(-self.hazard_per_day * max(0.0, float(days)))
 
+    def active_days(self, period: Optional[Dict[str, Any]]) -> Optional[int]:
+        """Days of ``period`` on which the shock can fire: all of them, or those it shares with the
+        shock's documented stretch of the calendar (0 outside it); None when the period's dates are
+        missing or unreadable."""
+        days = period_days(period)
+        if days is None or self.window_start is None:
+            return days
+        start = date.fromisoformat(str(period.get("period_start"))[:10])
+        end = date.fromisoformat(str(period.get("period_end"))[:10])
+        return max(0, (min(end, self.window_end) - max(start, self.window_start)).days + 1)
+
     def base_rate_text(self) -> str:
-        """The documented base rate as written, with its window ("5% per month")."""
+        """The documented base rate as written, with its window ("5% per month", "83% October–December
+        (2026-10-01 to 2026-12-31)")."""
         text = _text(self.base_rate.get("text"), 80)
         window = _text(self.base_rate.get("window"), 24).replace("_", " ")
+        if self.window_start is not None:
+            # the stretch as the dossier writes it, unless a rate per unit says it ("10% per month")
+            head = (f"{text} {_text(self.base_rate.get('window_text'), 60)}".strip() if window == "dated"
+                    else self._unit_text(text, window))
+            return f"{head} ({self.window_start.isoformat()} to {self.window_end.isoformat()})"
+        return self._unit_text(text, window)
+
+    @staticmethod
+    def _unit_text(text: str, window: str) -> str:
         if not window or window.split(" ")[-1] in text.casefold():
             return text
         if window == "horizon":
@@ -1915,7 +1946,10 @@ class WorldModel:
         for shock in self.shocks:
             if shock.fired_rounds and not shock.recurring:
                 continue
-            p = shock.period_probability(days)
+            active = shock.active_days(self.period)
+            if not active:
+                continue                               # outside its documented stretch: no roll
+            p = shock.period_probability(active)
             try:
                 roll = float(rng.random())
             except Exception:  # noqa: BLE001

@@ -504,7 +504,7 @@ Reply with ONE JSON object only, in exactly this shape:
 Field rules:
 - base_rates: at most $max_rates. reference_class names the comparable cases and the counting rule (which cases, threshold, horizon, period); outcome_frequency is the count or share exactly as the report states it (for example "2 of 3 episodes" or "about 7% of years"); basis names the series, dataset or study and keeps its [S<n>] marker. An empty list when the report states no base rate.
 - drivers: at most $max_drivers variables that move the outcome, most important first; direction says which way the variable pushes the forecast outcome; why_it_matters is one clause with the mechanism and the [S<n>] marker of its evidence when the report gives one.
-- risks: at most $max_risks discrete events outside the actors' own plans (a disruption, an accident, a ruling, a crisis) to which the report itself attaches a probability, most consequential first; never the forecast question's own outcome or one of its scenarios. event names what would happen in one short clause. probability is that probability exactly as the report writes it (for example "5%", "1 in 20" or "2 of 10 years"), never one you estimate, convert or derive. per is the period that probability refers to, exactly as the report writes it (for example "per month", "within 12 months" or "over the forecast horizon"); "" when the report states none. source is the [S<n>] marker of that statement in the report, without brackets. effects: at most $max_effects quantities the report says the event would move, each named as the report names it where it states the quantity's current value; change is the size exactly as the report writes it ("+30%", "-5 bn" or "to 150"), "" when the report gives only a direction; direction is up or down. affects: the actors the report says the event would hit, by name. recurring is true only when the report says the event can happen more than once. An empty list when the report attaches a probability to no such event.
+- risks: at most $max_risks discrete events outside the actors' own plans (a disruption, an accident, a ruling, a crisis) to which the report itself attaches a probability, most consequential first; never the forecast question's own outcome or one of its scenarios. event names what would happen in one short clause. probability is that probability exactly as the report writes it (for example "5%", "1 in 20" or "2 of 10 years"), never one you estimate, convert or derive; one probability per row, so probabilities the report states for several windows are several rows, each with its own window. per is the period that probability refers to, exactly as the report writes it in the sentence that states the probability (for example "per month", "within 12 months", "over the forecast horizon" or "October–December 2026"); "" when the report states none. source is the [S<n>] marker of that statement in the report, without brackets. effects: at most $max_effects quantities the report says the event would move, each named as the report names it where it states the quantity's current value; change is the size exactly as the report writes it ("+30%", "-5 bn" or "to 150"), "" when the report gives only a direction; direction is up or down. affects: the actors the report says the event would hit, by name. recurring is true only when the report says the event can happen more than once. An empty list when the report attaches a probability to no such event.
 - Write text values in $language.""")
 MAX_FRAME_BASE_RATES = 6
 MAX_FRAME_DRIVERS = 8
@@ -4396,9 +4396,65 @@ _GENERIC_WORDS = frozenset("the and for its per are was has not but can may any 
                            "chances probability likelihood event events shock shocks would could might will "
                            "that this with from into over under within their there which".split())
 _METRIC_STOPWORDS = frozenset("the of a an in on for to at by".split())
-_FRAME_RISK_CHECKS = ("extracted", "kept", "probability_not_stated", "probability_range", "scenario",
+_FRAME_RISK_CHECKS = ("extracted", "split", "kept", "probability_not_stated", "probability_range", "scenario",
                       "window_not_stated", "source_not_stated", "effects_kept", "effects_untracked",
                       "effects_unreadable", "effect_sizes_not_stated")
+# One row per stated probability (live check 2026-10-21, handoff §12 P1): a probability the report
+# states for several windows can reach the frame as one string ("54% (Sep-Nov 2026); 83% (Oct-Dec)"),
+# which no single line states.  Each "N% (window)" part becomes its own candidate (counted in
+# ``split``), checked like any row; a published range is never split ("between 1% and 5%" has no
+# window per percentage, "5% (low) to 25% (high)" no part separator).  A calendar window (month
+# ranges, single months with a year, quarters, CPC season codes in capitals, day-level date ranges,
+# "through/by/to/until <date>", and the CJK forms) is checked by its calendar span, not by its
+# spelling: it must equal the window that the line stating the probability pairs with it (a
+# neighbour that every largest pairing of the line's probabilities and windows gives it,
+# ``_window_pairs``; a year only one side gives is ignored), and the line's own phrase is kept.
+# world_model_seed.calendar_window_spec reads the same forms (parity pinned by
+# test_research_frame_risks).
+_PROB_TOKEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?%")
+_PROB_BETWEEN_RE = re.compile(r"(?<![\d.])\d+(?:\.\d+)?%|(?<![\d.])\d+\s+in\s+\d+(?!\d)")
+_PROB_PART_RE = re.compile(
+    r"(?<![\d.])(?P<p>\d+(?:\.\d+)?%)\s*(?:\((?P<w1>[^()]{2,60})\)"
+    r"|(?:in|for|during|over|through|by|until|to)\s+(?P<w2>[^;,()]{2,60}?))\s*(?=[;,]|\band\b|$)")
+_CAL_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august", "september",
+               "october", "november", "december")
+_CAL_MONTH_NUMBERS = {**{name: i for i, name in enumerate(_CAL_MONTHS, 1)},
+                      **{name[:3]: i for i, name in enumerate(_CAL_MONTHS, 1)}, "sept": 9}
+_CAL_MONTH = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+              r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![a-z])\.?")
+_CAL_YEAR = r"(?:19|20)\d{2}"
+_CAL_SEASONS = {"jfm": (1, 3), "fma": (2, 4), "mam": (3, 5), "amj": (4, 6), "mjj": (5, 7), "jja": (6, 8),
+                "jas": (7, 9), "aso": (8, 10), "son": (9, 11), "ond": (10, 12), "ndj": (11, 1), "djf": (12, 2)}
+_CAL_ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4,
+                 "一": 1, "二": 2, "三": 3, "四": 4}
+_CAL_DATE = (rf"(?:\d{{1,2}}(?:st|nd|rd|th)?\s+{_CAL_MONTH},?(?:\s+{_CAL_YEAR})?"
+             rf"|{_CAL_MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?(?![\d:])(?:,?\s+{_CAL_YEAR})?"
+             rf"|{_CAL_YEAR}-\d{{1,2}}-\d{{1,2}}|{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日)")
+_CAL_SEP = r"\s*(?:-|–|—|‐|‑|~|to|through|thru|until|till|至|到)\s*"
+_CAL_PATTERNS = (     # tried in this order; a later match may not overlap an earlier one
+    ("dates", re.compile(rf"(?<![\w]){_CAL_DATE}{_CAL_SEP}{_CAL_DATE}")),
+    ("months", re.compile(rf"(?<![a-z])(?P<m1>{_CAL_MONTH})(?:\s+(?P<y1>{_CAL_YEAR}))?{_CAL_SEP}"
+                          rf"(?P<m2>{_CAL_MONTH})(?:,?\s*(?P<y2>{_CAL_YEAR})(?:\s*[-–—/]\s*(?P<y2b>\d{{2}}"
+                          rf"(?!\d)|{_CAL_YEAR}))?)?")),
+    ("months", re.compile(rf"(?:(?P<y1>{_CAL_YEAR})年)?(?<!\d)(?P<m1>\d{{1,2}})月?\s*(?:至|到|-|–|—|~)\s*"
+                          rf"(?:(?P<y2>{_CAL_YEAR})年)?(?P<m2>\d{{1,2}})月(?!\d{{1,2}}日)")),
+    ("until", re.compile(rf"(?<![\w])(?:through|thru|to|until|till|by|before|up to|ending)\s+(?:the\s+)?"
+                         rf"(?P<end>end[\s-]+(?:of\s+)?)?(?:{_CAL_DATE}|{_CAL_MONTH}(?:\s+{_CAL_YEAR})?"
+                         rf"|{_CAL_YEAR})(?![\w])")),
+    ("until", re.compile(rf"(?:到|至|截至|截止)\s*{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日"
+                         rf"|{_CAL_YEAR}年\d{{1,2}}月\d{{1,2}}日\s*(?:之前|以前|前)"
+                         rf"|(?:到|至|截至|截止)?\s*{_CAL_YEAR}年(?:\d{{1,2}}月)?底(?:之前|以前|前)?")),
+    ("quarter", re.compile(rf"(?<![a-z0-9])q(?P<q>[1-4])(?:\s*[-/]?\s*(?P<y>{_CAL_YEAR}))?(?![a-z0-9])"
+                           rf"|(?<![\d])(?P<y2>{_CAL_YEAR})\s*[-/]?\s*q(?P<q2>[1-4])(?![a-z0-9])"
+                           rf"|(?<![a-z])(?P<o>first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter"
+                           rf"(?:\s+(?:of\s+)?(?P<y3>{_CAL_YEAR}))?"
+                           rf"|(?P<y4>{_CAL_YEAR})年(?:第)?(?P<o2>[一二三四1-4])季度")),
+    ("season", re.compile(rf"(?<![a-z])(?P<code>{'|'.join(_CAL_SEASONS)})(?![a-z])"
+                          rf"(?:\s*(?P<y>{_CAL_YEAR})(?:\s*[-–—/]\s*(?P<yb>\d{{2}}(?!\d)|{_CAL_YEAR}))?)?")),
+    ("month", re.compile(rf"(?<![a-z\d])(?<!\d )(?<!\dst )(?<!\dnd )(?<!\drd )(?<!\dth )"
+                         rf"(?P<m>{_CAL_MONTH})\s+(?P<y>{_CAL_YEAR})(?![\d])"
+                         rf"|(?P<y2>{_CAL_YEAR})年(?P<m2>\d{{1,2}})月(?![\d底])")),
+)
 
 
 def _report_key(text: Any) -> str:
@@ -4412,13 +4468,18 @@ def _report_key(text: Any) -> str:
 def _states(text: str, phrase: str) -> bool:
     """``phrase`` stands in ``text`` (both report keys): not inside a longer number and not as
     one end of a range ("5%" is not stated by "5-10%")."""
+    return bool(_stated_spans(text, phrase))
+
+
+def _stated_spans(text: str, phrase: str) -> list[tuple[int, int]]:
+    """Where ``phrase`` stands in ``text`` by the rule of :func:`_states`."""
     if not phrase:
-        return False
+        return []
     pattern = ((r"(?<![\d.])" if phrase[0].isdigit() else "") + re.escape(phrase)
                + (r"(?!\d|\.\d)" if phrase[-1].isdigit() else ""))
-    return any(not _RANGE_TAIL_RE.match(text, m.end())
-               and not _RANGE_HEAD_RE.search(text[max(0, m.start() - 16):m.start()])
-               for m in re.finditer(pattern, text))
+    return [m.span() for m in re.finditer(pattern, text)
+            if not _RANGE_TAIL_RE.match(text, m.end())
+            and not _RANGE_HEAD_RE.search(text[max(0, m.start() - 16):m.start()])]
 
 
 def _event_terms(event: str) -> set[str]:
@@ -4451,6 +4512,224 @@ def _probability_phrases(raw: Any) -> list[str]:
         return [f"{value:g}", f"{value * 100:g}%"]
     text = _report_key(_collapse(raw, 80))
     return [text] if re.search(r"\d", text) else []
+
+
+def _probability_parts(raw: Any) -> list[tuple[str, str]]:
+    """``(probability, window)`` of each part of a probability stated with its own window per
+    percentage ("54% (Sep-Nov 2026); 83% (Oct-Dec)"), in report-key form; [] when the text is
+    not of that shape or is a published range once the windows are taken out."""
+    if not isinstance(raw, str):
+        return []
+    text = _report_key(_collapse(raw, 240))
+    parts = list(_PROB_PART_RE.finditer(text))
+    if not parts or len(parts) != len(_PROB_TOKEN_RE.findall(text)):
+        return []
+    skeleton, cursor = [], 0                         # the text without its windows (and their brackets)
+    for m in parts:
+        window = "w1" if m.group("w1") is not None else "w2"
+        skeleton.append(text[cursor:m.start(window) - (window == "w1")])
+        cursor = m.end(window) + (window == "w1")
+    if _PROBABILITY_RANGE_RE.search("".join(skeleton) + text[cursor:]):
+        return []
+    return [(m.group("p"), (m.group("w1") or m.group("w2") or "").strip()) for m in parts]
+
+
+def _cal_month(token: Any) -> int:
+    return _CAL_MONTH_NUMBERS.get(str(token or "").rstrip(".").casefold(), 0)
+
+
+def _cal_valid_day(year: int | None, month: int, day: int) -> bool:
+    if not 1 <= month <= 12:
+        return False
+    return 1 <= day <= (calendar.monthrange(year, month)[1] if year else 31)
+
+
+def _cal_date(text: str) -> tuple[int | None, int, int] | None:
+    """``(year or None, month, day)`` of one ``_CAL_DATE`` phrase."""
+    m = re.fullmatch(rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+({_CAL_MONTH}),?(?:\s+({_CAL_YEAR}))?", text)
+    if m:
+        year, month, day = (int(m.group(3)) if m.group(3) else None), _cal_month(m.group(2)), int(m.group(1))
+    elif m := re.fullmatch(rf"({_CAL_MONTH})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+({_CAL_YEAR}))?", text):
+        year, month, day = (int(m.group(3)) if m.group(3) else None), _cal_month(m.group(1)), int(m.group(2))
+    elif m := re.fullmatch(rf"({_CAL_YEAR})-(\d{{1,2}})-(\d{{1,2}})|({_CAL_YEAR})年(\d{{1,2}})月(\d{{1,2}})日", text):
+        groups = m.groups()[:3] if m.group(1) else m.groups()[3:]
+        year, month, day = (int(g) for g in groups)
+    else:
+        return None
+    return (year, month, day) if _cal_valid_day(year, month, day) else None
+
+
+def _cal_years(m1: int, m2: int, y1: Any, y2: Any, y2b: Any = None) -> tuple[int | None, int | None] | None:
+    """Start and end year of a month span as written: both, neither, or None when the text is
+    ambiguous (a span across the new year with one plain year: "Nov-Jan 2027")."""
+    wrap = m2 < m1
+    y1, y2 = (int(y1) if y1 else None), (int(y2) if y2 else None)
+    if y2b:
+        if y1 is not None or y2 is None or not wrap:
+            return None
+        end = (y2 // 100) * 100 + int(y2b) if len(str(y2b)) == 2 else int(y2b)
+        return (y2, end) if end == y2 + 1 else None
+    if y1 is not None and y2 is not None:
+        return (y1, y2) if 0 <= (y2 * 12 + m2) - (y1 * 12 + m1) <= 11 else None
+    if y1 is not None:
+        return (y1, y1 + wrap)
+    if y2 is not None:
+        return None if wrap else (y2, y2)
+    return (None, None)
+
+
+def _cal_spec(kind: str, m: re.Match, raw: str) -> tuple | None:
+    """The calendar span one ``_CAL_PATTERNS`` match names: ("months", y1, m1, y2, m2),
+    ("until", y, m, d) or ("dates", y1, m1, d1, y2, m2, d2), a year or a day None when the text
+    leaves it open (m None: the end of that year, d None: the end of that month)."""
+    text = m.group(0)
+    if kind == "dates":
+        found = [_cal_date(d.group(0).strip()) for d in re.finditer(_CAL_DATE, text)]
+        if len(found) != 2 or None in found:
+            return None
+        (y1, m1, d1), (y2, m2, d2) = found
+        if y1 is None and y2 is not None:
+            y1 = y2 if (m1, d1) <= (m2, d2) else y2 - 1
+        elif y2 is None and y1 is not None:
+            y2 = y1 if (m1, d1) <= (m2, d2) else y1 + 1
+        if y1 is not None and (y1, m1, d1) > (y2, m2, d2):
+            return None
+        return ("dates", y1, m1, d1, y2, m2, d2)
+    if kind == "months":
+        names = m.groupdict()
+        m1, m2 = ((_cal_month(names["m1"]), _cal_month(names["m2"])) if not names["m1"].isdigit()
+                  else (int(names["m1"]), int(names["m2"])))
+        if not (1 <= m1 <= 12 and 1 <= m2 <= 12) or m1 == m2:
+            return None
+        if names["m1"].isdigit():                     # CJK: each year is written beside its month
+            y1, y2 = names.get("y1"), names.get("y2")
+            wrap = m2 < m1
+            y1 = int(y1) if y1 else (int(y2) - wrap if y2 else None)
+            y2 = int(y2) if y2 else (y1 + wrap if y1 is not None else None)
+            years = (y1, y2) if y1 is None or 0 <= (y2 * 12 + m2) - (y1 * 12 + m1) <= 11 else None
+        else:
+            years = _cal_years(m1, m2, names["y1"], names["y2"], names.get("y2b"))
+        return ("months", years[0], m1, years[1], m2) if years else None
+    if kind == "until":
+        cjk = re.search(rf"({_CAL_YEAR})年(?:(\d{{1,2}})月)?(?:(\d{{1,2}})日|底)", text)
+        if cjk:
+            year, month = int(cjk.group(1)), int(cjk.group(2)) if cjk.group(2) else None
+            day = int(cjk.group(3)) if cjk.group(3) else None
+            if month is None and day is not None:
+                return None
+        elif date := re.search(_CAL_DATE, text[text.find(" "):]):
+            parsed = _cal_date(date.group(0).strip())
+            if parsed is None:
+                return None
+            year, month, day = parsed
+        elif month_hit := re.search(rf"(?<![a-z])({_CAL_MONTH})(?:\s+({_CAL_YEAR}))?", text[text.find(" "):]):
+            year = int(month_hit.group(2)) if month_hit.group(2) else None
+            month, day = _cal_month(month_hit.group(1)), None
+        elif m.groupdict().get("end") and (year_hit := re.search(_CAL_YEAR, text)):
+            year, month, day = int(year_hit.group(0)), None, None
+        else:
+            return None                                # "by 2030": the year's start or its end?
+        if month is not None and day is not None and not _cal_valid_day(year, month, day):
+            return None
+        return ("until", year, month, day)
+    names = m.groupdict()
+    if kind == "quarter":
+        ordinal = names.get("o") or names.get("o2") or ""
+        q = int(names.get("q") or names.get("q2") or _CAL_ORDINALS.get(ordinal)
+                or (ordinal if ordinal.isdigit() else 0))
+        year = names.get("y") or names.get("y2") or names.get("y3") or names.get("y4")
+        y = int(year) if year else None
+        return ("months", y, 3 * q - 2, y, 3 * q) if 1 <= q <= 4 else None
+    if kind == "season":
+        code = names["code"]
+        if not re.search(rf"(?<![A-Za-z]){code.upper()}(?![A-Za-z])", raw):
+            return None                                # "son", "mam": words, not CPC season codes
+        m1, m2 = _CAL_SEASONS[code]
+        years = _cal_years(m1, m2, None, names.get("y"), names.get("yb"))
+        return ("months", years[0], m1, years[1], m2) if years else None
+    month = _cal_month(names.get("m")) if names.get("m") else int(names.get("m2") or 0)
+    year = int(names.get("y") or names.get("y2") or 0)
+    return ("months", year, month, year, month) if 1 <= month <= 12 and year else None
+
+
+def _calendar_windows(text: str, raw: str = "") -> list[tuple[int, int, tuple]]:
+    """``(start, end, span)`` of each calendar window phrase in ``text`` (a report key), in text
+    order; ``raw`` (the same text before the report key) tells a CPC season code, which is written
+    in capitals, from a word.  A phrase that names no valid span still covers its text, so an
+    ambiguous "Nov-Jan 2027" is never read again as "Jan 2027"."""
+    taken: list[tuple[int, int, tuple | None]] = []
+    for kind, pattern in _CAL_PATTERNS:
+        for m in pattern.finditer(text):
+            if not any(m.start() < end and start < m.end() for start, end, _ in taken):
+                taken.append((m.start(), m.end(), _cal_spec(kind, m, raw)))
+    return sorted((start, end, spec) for start, end, spec in taken if spec is not None)
+
+
+def _calendar_spec(text: Any) -> tuple | None:
+    """The one calendar span a window text names; None when it names none or several."""
+    raw = _collapse(text, 160)
+    spans = {spec for _, _, spec in _calendar_windows(_report_key(raw), raw)}
+    return spans.pop() if len(spans) == 1 else None
+
+
+_CAL_YEAR_FIELDS = {"months": (1, 3), "until": (1,), "dates": (1, 4)}
+
+
+def _cal_same(a: tuple, b: tuple) -> bool:
+    """Two calendar spans name the same months and days; a year only one of them states is open."""
+    if a[0] != b[0] or len(a) != len(b):
+        return False
+    years = _CAL_YEAR_FIELDS[a[0]]
+    return all(x == y or (i in years and (x is None or y is None)) for i, (x, y) in enumerate(zip(a, b)) if i)
+
+
+def _window_display(phrase: str) -> str:
+    """A window phrase of a report key with its month names, season codes and quarters capitalised."""
+    out = re.sub(rf"(?<![a-z]){_CAL_MONTH}", lambda m: m.group(0).capitalize(), phrase)
+    out = re.sub(rf"(?<![a-z])({'|'.join(_CAL_SEASONS)})(?![a-z])", lambda m: m.group(1).upper(), out)
+    return re.sub(r"(?<![a-z0-9])q([1-4])(?![a-z0-9])", r"Q\1", out)
+
+
+def _window_pairs(line: str, raw: str) -> set[tuple[tuple[int, int], tuple[int, int, tuple]]]:
+    """``(probability span, window)`` pairs of a report line.  A probability and a calendar window
+    can pair only when they stand next to each other ("54% (September–November)", "through January–March
+    2027 at 83%"), and each token pairs at most once; a pair counts when every largest such pairing of
+    the line makes it, so in "54% for September–November, 83% for October–December" each window
+    belongs to the probability before it, never to the next one along, and a probability between two
+    windows of equal claim ("since January 2026 … 23% for Q1 2027") keeps neither."""
+    tokens = sorted([(m.start(), m.end(), None) for m in _PROB_BETWEEN_RE.finditer(line)]
+                    + list(_calendar_windows(line, raw)), key=lambda tok: tok[:2])
+    edges = {i for i in range(len(tokens) - 1) if (tokens[i][2] is None) != (tokens[i + 1][2] is None)}
+
+    def largest(banned: int | None = None) -> int:      # maximum matching of a chain, edge ``banned`` left out
+        best = [0] * (len(tokens) + 1)
+        for k in range(1, len(tokens) + 1):
+            best[k] = max(best[k - 1], best[k - 2] + 1 if k >= 2 and k - 2 in edges and k - 2 != banned else 0)
+        return best[-1]
+    size = largest()
+    pairs = set()
+    for i in edges:
+        if largest(i) < size:                          # in every largest pairing
+            prob, window = (tokens[i], tokens[i + 1]) if tokens[i][2] is None else (tokens[i + 1], tokens[i])
+            pairs.add(((prob[0], prob[1]), window))
+    return pairs
+
+
+def _verified_window(per: str, phrase: str, stating: Sequence[str], raw_lines: Mapping[str, str]) -> str:
+    """The window of a probability as a line stating it (``phrase``) writes it; "" when none does.
+    A calendar window must name the same span as the window that line pairs with that probability
+    (``_window_pairs``), and that line's phrase is returned; any other window must stand on the
+    line as written (D1)."""
+    spec = _calendar_spec(per)
+    if spec is None:
+        return per if any(_states(line, _report_key(per)) for line in stating) else ""
+    for line in stating:
+        spots = set(_stated_spans(line, phrase))
+        for spot, (start, end, found) in sorted(_window_pairs(line, raw_lines.get(line, "")),
+                                                key=lambda pair: (pair[0], pair[1][:2])):
+            if spot in spots and _cal_same(spec, found):
+                return _window_display(line[start:end])
+    return ""
 
 
 def _metric_tokens(text: Any) -> frozenset[str]:
@@ -4490,20 +4769,30 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
     MAX_FRAME_RISKS in the model's order, and the counts of what each check removed."""
     checks = dict.fromkeys(_FRAME_RISK_CHECKS, 0)
     raw_rows = (frame.get("risks") if isinstance(frame, Mapping) else None) or []
+    raw_lines = {_report_key(line): line for line in str(report or "").splitlines() if line.strip()}
     lines = [_report_key(line) for line in str(report or "").splitlines() if line.strip()]
     text = "\n".join(lines)
     names = [(_name_key(row.get("metric")), _collapse(row.get("metric"), 200))
              for row in quant if isinstance(row, Mapping) and _name_key(row.get("metric"))]
     frame_names = {_name_key(s.name) for s in scenarios if _name_key(s.name)}
-    risks: list[dict] = []
-    seen: set[str] = set()
+    candidates: list[tuple[str, Mapping[str, Any], str]] = []
     for item in raw_rows if isinstance(raw_rows, list) else []:
         event = _collapse(item.get("event"), 200) if isinstance(item, Mapping) \
             and isinstance(item.get("event"), str) else ""
         if not event:
             continue
         checks["extracted"] += 1
-        if len(risks) >= MAX_FRAME_RISKS or _norm_key(event) in seen:
+        parts = _probability_parts(item.get("probability"))
+        if len(parts) >= 2 or (parts and not _collapse(item.get("per"), 80)):
+            checks["split"] += len(parts) - 1
+            candidates += [(event, {**item, "probability": p, "per": w}, w if len(parts) >= 2 else "")
+                           for p, w in parts]
+        else:
+            candidates.append((event, item, ""))
+    risks: list[dict] = []
+    seen: set[str] = set()
+    for event, item, part in candidates:
+        if len(risks) >= MAX_FRAME_RISKS or (not part and _norm_key(event) in seen):
             continue
         if _name_key(event) in frame_names:
             checks["scenario"] += 1
@@ -4522,12 +4811,16 @@ def normalize_frame_risks(frame: Any, report: str, quant: Sequence[Mapping[str, 
         if any(phrase == f"{s.weight}%" and all(_report_key(s.name) in line for line in stating) for s in scenarios):
             checks["scenario"] += 1
             continue
-        seen.add(_norm_key(event))
         per = _collapse(item.get("per"), 80)
-        if per and not any(_states(line, _report_key(per)) for line in stating):
-            per = ""
-            checks["window_not_stated"] += 1
-        row: dict[str, Any] = {"event": event, "probability": phrase, "per": per, "source": ""}
+        if per:
+            per = _verified_window(per, phrase, stating, raw_lines)
+            checks["window_not_stated"] += not per
+        # the parts of one compound probability are told apart by their windows
+        label = f"{event} ({per or _window_display(part)})" if part else event
+        if _norm_key(label) in seen:
+            continue
+        seen.add(_norm_key(label))
+        row: dict[str, Any] = {"event": label, "probability": phrase, "per": per, "source": ""}
         marker = re.search(r"\d+", str(item.get("source") or ""))
         number = int(marker.group(0)) if marker else 0
         source = _source_for_ref(number, sources) if number else None

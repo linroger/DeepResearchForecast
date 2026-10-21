@@ -369,9 +369,23 @@ named as a risk could happen unless an actor made it happen.
   (`linear_research.normalize_frame_risks`, `meta.forecast_risks`; record
   [`docs/handoff/research-risks/handoff.md`](../research-risks/handoff.md)). Runs without method skills and
   the legacy deer-flow engine still emit none and record the gap.
+- **Dated windows (2026-10-21, research-risks handoff §12).** Published outlooks state a probability for a
+  stretch of the calendar ("83% October–December", "DJF 2026-27", "by 31 March 2027"), not per unit of
+  time. `world_model_seed.parse_dated_window` reads month ranges, single months with a year, quarters, CPC
+  season codes in capitals, day-level date ranges, "through/by/to/until <date>", a bare year and the CJK
+  forms; a stretch without a year is its first occurrence not over at the as-of date, "until" runs from the
+  as-of date, and ambiguous text ("Nov-Jan 2027", "by 2030", "winter 2026-27") is no window. A dated shock
+  carries `window_start` / `window_end` / `window_text` in its `base_rate`; its hazard comes from a stated rate
+  per unit ("10% per month through March 2027") or else from the stretch's full length, so a stretch partly
+  over at the as-of date never gives its remaining days the whole probability. A stretch over before the
+  as-of date is `shock_window_elapsed`, one starting after the horizon `shock_window_after_horizon`. The
+  research extraction splits a probability stated for several windows into one row per window and checks a
+  calendar window by its span against the window the report's line pairs with that probability. A published
+  probability of a state (an El Niño's strength) becomes the same once-only shock; that is a modelling choice.
 - **Shocks in the kernel.** `world_model.Shock`, `WorldModel.fire_shocks`: after the due effects of a round,
   every unfired (or recurring) shock is rolled once, in seed order, with the round's RNG at
-  p = 1 − e^(−h·d) for the period's own length d (`period_days`); a world without shocks draws exactly as
+  p = 1 − e^(−h·d) for the period's own length d (`period_days`), or for a dated shock the d days the period
+  shares with its stretch (`Shock.active_days`; no draw outside it); a world without shocks draws exactly as
   before. A fired shock is an `emergent` event (source `shock`, "… — a researched risk materialised") aimed at
   the actors the dossier names; its effects move facts with provenance `shock` under `max_change_ratio`,
   bounded against each fact's value before this period's shocks and never across zero; it fires once unless

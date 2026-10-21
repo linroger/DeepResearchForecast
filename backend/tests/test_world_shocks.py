@@ -11,6 +11,7 @@ affected actor's option menu and the arbiter as a confirmed event — reproducib
 
 import math
 import random
+from datetime import date
 
 import pytest
 
@@ -377,3 +378,164 @@ def test_world_without_shocks_keeps_its_round_record_and_prompt():
     record = wu.run_world_round(world, 1, _OCT, [], [], llm=arbiter, rng=_RNG([]), scenarios=["Spike", "Calm"])
     assert "shocks_fired" not in record["deterministic"]
     assert "Confirmed events this period" not in arbiter.prompts[0]
+
+
+# ============================================================================ dated windows
+# docs/handoff/research-risks/handoff.md §12 P2: published outlooks give a probability for a stretch of the
+# calendar ("83% October–December"); the shock then fires only inside that stretch.
+_D = date.fromisoformat
+
+
+@pytest.mark.parametrize("raw, as_of, span", [
+    ("October–December 2026", "2026-10-20", ("2026-10-01", "2026-12-31")),
+    ("October–December 2026", None, ("2026-10-01", "2026-12-31")),          # a written year needs no as-of date
+    ("Oct-Dec", "2026-10-20", ("2026-10-01", "2026-12-31")),
+    ("September–November", "2026-10-20", ("2026-09-01", "2026-11-30")),       # partly over: still this one
+    ("September–November", "2026-12-15", ("2027-09-01", "2027-11-30")),       # over: the next one
+    ("November–January", "2026-10-20", ("2026-11-01", "2027-01-31")),
+    ("November–January 2026-27", None, ("2026-11-01", "2027-01-31")),
+    ("Nov 2026–Jan 2027", None, ("2026-11-01", "2027-01-31")),
+    ("December 2026–February", None, ("2026-12-01", "2027-02-28")),
+    ("DJF 2026-27", None, ("2026-12-01", "2027-02-28")),
+    ("DJF", "2026-10-20", ("2026-12-01", "2027-02-28")),
+    ("JFM 2028", None, ("2028-01-01", "2028-03-31")),
+    ("Q1 2027", None, ("2027-01-01", "2027-03-31")),
+    ("the first quarter of 2027", None, ("2027-01-01", "2027-03-31")),
+    ("2027Q2", None, ("2027-04-01", "2027-06-30")),
+    ("Q4", "2026-10-20", ("2026-10-01", "2026-12-31")),
+    ("January 2027", None, ("2027-01-01", "2027-01-31")),
+    ("in 2027", None, ("2027-01-01", "2027-12-31")),
+    ("calendar year 2027", None, ("2027-01-01", "2027-12-31")),
+    ("1 October to 31 December 2026", None, ("2026-10-01", "2026-12-31")),
+    ("15 December 2026 to 15 January", None, ("2026-12-15", "2027-01-15")),
+    ("by 31 March 2027", "2026-10-20", ("2026-10-20", "2027-03-31")),        # "until" runs from the as-of date
+    ("to 30 Nov 2026", "2026-10-20", ("2026-10-20", "2026-11-30")),
+    ("until November 30, 2026", "2026-10-20", ("2026-10-20", "2026-11-30")),
+    ("through March", "2026-10-20", ("2026-10-20", "2027-03-31")),
+    ("by the end of March 2027", "2026-10-20", ("2026-10-20", "2027-03-31")),
+    ("by end-2027", "2026-10-20", ("2026-10-20", "2027-12-31")),
+    ("before 2027-06-30", "2026-10-20", ("2026-10-20", "2027-06-30")),
+    ("10月至12月", "2026-10-20", ("2026-10-01", "2026-12-31")),
+    ("2026年11月至2027年1月", None, ("2026-11-01", "2027-01-31")),
+    ("2027年3月31日前", "2026-10-20", ("2026-10-20", "2027-03-31")),
+    ("截至2026年11月30日", "2026-10-20", ("2026-10-20", "2026-11-30")),
+    ("2026年底前", "2026-10-20", ("2026-10-20", "2026-12-31")),
+    ("2027年第一季度", None, ("2027-01-01", "2027-03-31")),
+    ("2027年6月", None, ("2027-06-01", "2027-06-30")),
+    ("October–December 2025", "2026-10-20", ("2025-10-01", "2025-12-31")),   # read; the seed calls it elapsed
+    # ambiguous, unplaceable or no stretch at all: never a guess
+    ("Nov–Jan 2027", "2026-10-20", None), ("DJF 2027", "2026-10-20", None), ("djf 2026-27", None, None),
+    ("by 2030", "2026-10-20", None), ("Oct-Dec", None, None), ("by 31 March 2027", None, None),
+    ("winter 2026-27", "2026-10-20", None), ("the 2026 hurricane season", "2026-10-20", None),
+    ("12 November 2026", "2026-10-20", None), ("per month", "2026-10-20", None),
+    ("within 12 months", "2026-10-20", None), ("Oct-Dec; Jan-Mar", "2026-10-20", None),
+    ("30 February 2027 to 1 March 2027", None, None), ("2016–2025", None, None), ("", "2026-10-20", None),
+])
+def test_dated_window_parsing(raw, as_of, span):
+    got = wms.parse_dated_window(raw, as_of=as_of)
+    assert got == (tuple(_D(d) for d in span) if span else None)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("a three-month window", ("3 month", 91.3125)), ("over a two-year period", ("2 year", 730.5)),
+    ("twelve months", ("12 month", 365.25)), ("two of ten years", ("year", 365.25)),
+])
+def test_spelled_out_counts_are_counts_not_the_bare_unit(raw, expected):
+    """"Three-month" was read as "per month" (a hazard three times too high)."""
+    assert wms.parse_risk_window(raw) == expected
+
+
+_WINTER_TIMELINE = {"as_of_date": "2026-10-01", "horizon_date": "2027-03-31"}
+
+
+def test_dated_risks_become_shocks_for_their_stretch_and_the_rest_become_gaps():
+    risks = [
+        {"event": "Historic El Niño", "probability": "83%", "per": "October–December", "source": "CPC [S2]"},
+        {"event": "Historic El Niño", "probability": "70%", "per": "November–January", "source": "CPC [S2]"},
+        {"event": "Gulf hurricane landfall", "probability": "5%", "per": "to 30 November 2026", "source": "NOAA [S3]"},
+        {"event": "Wellhead freeze-off", "probability": "10%", "per": "per month through March 2027",
+         "source": "EIA [S4]"},
+        {"event": "Polar vortex", "probability": "20%", "per": "December–February 2025-26", "source": "CPC [S2]"},
+        {"event": "Heat dome", "probability": "30%", "per": "June–August 2027", "source": "CPC [S2]"},
+        {"event": "Cold winter", "probability": "40%", "per": "winter 2026-27", "source": "CPC [S2]"},
+    ]
+    block = wms.build_world_model_seed(_dossier(risks), _cfgs(), temporal_timeline=_WINTER_TIMELINE)
+    shocks = {s["id"]: s for s in block["shocks"]}
+    assert list(shocks) == ["shock_historic_el_niño_202610_202612", "shock_historic_el_niño_202611_202701",
+                            "shock_gulf_hurricane_landfall_202610_202611", "shock_wellhead_freeze_off_202610_202703"]
+    ond = shocks["shock_historic_el_niño_202610_202612"]
+    assert ond["base_rate"] == {"probability": 0.83, "window": "dated", "window_days": 92.0, "text": "83%",
+                                "window_start": "2026-10-01", "window_end": "2026-12-31",
+                                "window_text": "October–December"}
+    assert ond["hazard_per_day"] == pytest.approx(-math.log(0.17) / 92)
+    hurricane = shocks["shock_gulf_hurricane_landfall_202610_202611"]      # "to <date>" runs from the as-of date
+    assert (hurricane["base_rate"]["window_start"], hurricane["base_rate"]["window_end"]) == ("2026-10-01",
+                                                                                             "2026-11-30")
+    assert hurricane["hazard_per_day"] == pytest.approx(-math.log(0.95) / 61)
+    freeze = shocks["shock_wellhead_freeze_off_202610_202703"]             # a rate per month, until March
+    assert freeze["base_rate"]["window"] == "month" and freeze["base_rate"]["window_end"] == "2027-03-31"
+    assert freeze["hazard_per_day"] == pytest.approx(-math.log(0.9) / 30.4375)
+    kinds = [(g["kind"], g["subject"]) for g in block["gaps"]]
+    assert kinds[:3] == [("shock_window_elapsed", "Polar vortex"), ("shock_window_after_horizon", "Heat dome"),
+                         ("shock_without_window", "Cold winter")]
+    assert "no_documented_shocks" not in {g["kind"] for g in block["gaps"]}
+
+
+def _dated(sid, start, end, *, p=0.83, window="dated", days=92.0, text="October–December", recurring=False):
+    hazard = -math.log(1 - p) / days
+    return {"id": sid, "event": sid.replace("_", " "), "hazard_per_day": hazard,
+            "base_rate": {"probability": p, "window": window, "window_days": days, "text": f"{p:.0%}",
+                          "window_start": start, "window_end": end, "window_text": text},
+            "source": "CPC [S2]", "effects": [], "affects": [], "recurring": recurring}
+
+
+def test_a_dated_shock_rolls_only_on_the_days_a_period_shares_with_its_stretch():
+    shock = Shock.from_dict(_dated("el_nino", "2026-10-01", "2026-12-31"))
+    assert shock.active_days(_month_period("2026-09-01", "2026-09-30")) == 0
+    assert shock.active_days(_OCT) == 31
+    assert shock.active_days(_month_period("2026-12-15", "2027-01-14")) == 17
+    assert shock.active_days({"label": "x"}) is None
+    # a shock without a stretch fires over every whole period, as before
+    assert Shock.from_dict(_HORMUZ).active_days(_OCT) == 31 and Shock.from_dict(_HORMUZ).window_start is None
+    # a malformed stretch is no stretch
+    broken = Shock.from_dict(_dated("x", "2026-12-31", "2026-10-01"))
+    assert broken.window_start is None and broken.active_days(_OCT) == 31
+
+    world = _world([_dated("el_nino", "2026-10-01", "2026-12-31", recurring=True)])
+    rng = _RNG([0.99, 0.99, 0.99])
+    for rnd, (start, end) in enumerate((("2026-09-01", "2026-09-30"), ("2026-10-01", "2026-10-31"),
+                                        ("2026-12-15", "2027-01-14"), ("2027-01-15", "2027-02-14")), 1):
+        world.start_round(rnd, _month_period(start, end))
+        assert world.fire_shocks(rnd, rng) == []
+    assert rng.draws == 2                       # September and February take no draw; October and December do
+    world.start_round(5, _month_period("2026-12-15", "2027-01-14"))
+    [fired] = world.fire_shocks(5, _RNG([0.0]))
+    assert fired["probability"] == pytest.approx(1 - math.exp(-world.shocks[0].hazard_per_day * 17), abs=1e-6)
+    assert fired["base_rate"] == "83% October–December (2026-10-01 to 2026-12-31)"
+
+
+def test_a_partly_elapsed_stretch_never_gets_its_whole_probability():
+    """54% for September–November, sealed on 20 October: the remaining 42 days get 1 − 0.46^(42/91)."""
+    world = _world([_dated("son", "2026-09-01", "2026-11-30", p=0.54, days=91.0, text="September–November")])
+    world.start_round(1, _month_period("2026-10-20", "2026-11-30"))
+    [fired] = world.fire_shocks(1, _RNG([0.0]))
+    assert fired["probability"] == pytest.approx(1 - 0.46 ** (42 / 91), abs=1e-6)
+    assert fired["probability"] < 0.54
+
+
+def test_a_rate_per_unit_with_an_end_date_names_both():
+    shock = Shock.from_dict(_dated("freeze", "2026-10-01", "2027-03-31", p=0.1, window="month", days=30.4375,
+                                   text="per month through March 2027"))
+    assert shock.base_rate_text() == "10% per month (2026-10-01 to 2027-03-31)"
+
+
+def test_dated_shocks_survive_a_save_and_load():
+    world = _world([_dated("el_nino", "2026-10-01", "2026-12-31")])
+    again = WorldModel.from_dict(world.to_dict())
+    [shock] = again.shocks
+    assert (shock.window_start, shock.window_end) == (_D("2026-10-01"), _D("2026-12-31"))
+    assert again.to_dict()["shocks"] == world.to_dict()["shocks"]
+
+
+def _month_period(start, end):
+    return {"label": start[:7], "period_start": start, "period_end": end}

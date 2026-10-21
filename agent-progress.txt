@@ -671,3 +671,18 @@ Feature commit 69c124b34740ceed40dc670e33fc52b75d4f86b7 on codex/oddsense-integr
 - Current merged source:1889 backend passes/two existing harness skips across44modules;261 frontend passes and build. Focused actual research/publication/feedback/replay controls and guarded child cutoff pass. Evidence: docs/handoff/oddsense-main-merge/.
 - Next: commit reviewed merge and verify main push; leave concurrent primary-checkout work untouched. No live provider/model or deployment operation performed.
 - Delivery complete: merge7ae51b7 (parents main15c8453 +Oddsense7c98895), verified ancestry, expected-ref main fast-forward and successful non-forced legacy/main push. Final notes: docs/handoff/oddsense-main-merge/delivery.json.
+
+### 2026-10-21T14:20+08:00 (CST) — branch `claude/intelligent-cerf-d84ce7` (merged `claude/fervent-spence-6d11bb` first, 7667677; `main` 18445a6 merged in afterwards) — P1 + P2: one risk row per stated probability, dated windows
+- **Request (owner):** "Build P1 (one row per stated probability, prompt + normaliser split) and P2 (dated calendar windows in the seed/kernel) here, with tests; no paid runs."
+- **Change:**
+  - cb9cc8a (P2): `world_model_seed.parse_dated_window` reads month ranges, quarters, CPC season codes in capitals, "by <date>", "in 2027" and the CJK forms. Dated shocks are rolled only on the days a period shares with their stretch (`Shock.active_days`). Gaps `shock_window_elapsed` / `shock_window_after_horizon`. Spelled-out counts are counts ("three-month" was read as "per month").
+  - 3f05929 (P1): `_T_FRAME` asks for one probability per row; `normalize_frame_risks` splits "N% (window); M% (window)"; calendar windows are checked by span and the line's own phrase is kept.
+  - cc8e249: probability–window pairing by every largest pairing of the line.
+  - 504c108: README EN/ZH, design §2.12.
+- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-1402-p1p2-plain/evidence/` (`README.txt`).
+  - The live run's own artifacts: kept 1 → 4, seed shocks 0 → 3, firing rates match the hazard.
+  - Mutation check: 13/13 mutants killed.
+  - Tests: `test_research_frame_risks.py` 34 → 116, `test_world_shocks.py` 55 → 115.
+  - Plain suites: 504c108 gave 8,457 tests and the final cc8e249 8,458 tests, both 0 failed with the 19 known `test_legacy_official_data` errors.
+  - After merging `main` 18445a6 (6812d8c): 9,021 tests, 8 failures, all also failing on `git archive main`. They are the deep-research skill size cap, a `_context_text` stub and `v3_official_data` tool lists from 69c124b/Oddsense, plus the known forecast-feedback prefix mismatch.
+- **Next:** owner-approved live check of the documented-hazards research and P1/P2 together; P3/P4 (§9) not built; merge into `main`; `main`'s 8 failing tests.
