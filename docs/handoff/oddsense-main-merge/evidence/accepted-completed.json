@@ -1,0 +1,227 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 26187,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "blocked:external_read": 18,
+    "allowed:guarded_child": 33
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_cutoff.py": "8453edf141f7b8bc998058ae2671fe18f8c493838fd6982718f5f00a6cdb97e2",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_engine.py": "9bf76073a3c7fd63c9eee587e72b50a337c391dfbcf4098d18a433b143e0f8c1",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_eval.py": "0cd98e29e28297239cc92fb8449d95bb9cb45d5c0eb722b0cb2eafa0608a1519",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_markets.py": "1ee2a1ecf89f5d3c68e8f4672d7b4b272b40d6a1d500a255ab8af2d99833669f",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_official_data.py": "b60df7f67c5f52777e7dcbfced04467465a9f24e61ec4b306e909e164b13b414",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_pipeline.py": "8417ea8ae2a1ab9492da37d6b6133ac1289e35907627bd1dd726d4379498dd78",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_report_stage.py": "512c082b07d9e973ab19baadc5625581772ca63ed1fb7d853b10d3290e145a06",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_backtest_search_fetch.py": "ec11852f5b3bc036e3c2d56d1fc1b95366674e2ed5b1b08a21854a61efca5465",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_bridge_prediction_markets.py": "6b9af7521e32d52f8efceb8cba71b08bddc8b4171af65b21c0fbb539ceebcfeb",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_deerflow_bridge_sync_guard.py": "f96c83410231ed14f557d26c8bd45405541a85a2dfa2e490688df8489b7ac059",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_final_publish_audit.py": "877b6611b3cda22297fc9f8344a8042ab3ac828abff308f117d11b3404ba6d16",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_workflow.py": "b49be9a22dc19e49f72acd8a457635ac1f706c927078727852ce4bd0aa959362",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_track_record.py": "b10619ed839a53d3b3ddeff5929f25428c89c7a3487daa3cbb7c1ccbb5963caf",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_market_influence_boundary.py": "38f89dbf8c1dc02bf0053bdf890b12bd4b556a9e27c653ff1ed01749a10c398c",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_context_pipeline.py": "da59415fd4c305c83541012d1e46f3fd1404b366341f81469b5130cab25b69c4",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_research.py": "56f263be18adcedbf9ea8281c11b42ac20877b47308c8d2636ea0c1369c32d4c",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_signals.py": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_oddsense_feedback_merge.py": "974a9e59f1a666d9eef6c7c09ff81e6269e026d60823f819c88dfecdfaf80aea",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_oddsense_merge_guards.py": "3571b0af08c9e8e0bc72dc57d7c65490ec6d797538f49d7f0de5bbd6da9de0af",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_oddsense_workflow.py": "68fe72f133d4aea5822bb7d70dbe433fae12b81ba756c7b8097472fd297589f0",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_official_data_consumers.py": "231c0ca9e506cc178fcc14cc0264e52be6adc279cfad949347621f5f9d0e9584",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_official_data_downstream.py": "34bdb9312570e974335fb9ea7ba2d54355a6a5e746ffea75e8a8f40088abfe18",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_official_data_promotion.py": "a82581e2c274458a6259ce87b29a4e3df54ca857eea25712179e1e5fe3b8374b",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_parallel_research_merge.py": "0c28885c686040beaeee0ffcb1922c4791b5ea4049f54d1c9d21e46fe7569a88",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_prediction_markets.py": "0bf36218e151287174ee5a943033812be81114fdcfc3bb9efd791b8bfd1d46bf",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_bilingual.py": "7077e6270e033cef236708fcb391eb310dfe2e73e4b358c4696ea0b2b56652ca",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_forecast_localization.py": "9dbb1873f88540e35fe37ce957b4bd0d68aed175f24d3b7a45422925e6964fdb",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_market_crosscheck.py": "6e4c9156bf1e9849001f5c4dd8028cee289cc6614b4a9b12e756da097a59ba0c",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_official_data.py": "535151e0a25dd46274c6a81264734c8e1ae951ce1dd7703407a8041c35734481",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_official_publication_real.py": "208c6cd7919151d586e136e9db7168e0ccf350d17dd2123809e1658671fba8a6",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_report_publication_barrier.py": "31fde5d86d98d0266dfeed9a491b5946d59e3127c80a802abbb05be0c1075fe5",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_documented_hazards.py": "0733212794c385077cdd68ac945927a9a1b5dd9af171704426e9ac0be9747465",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_engine_v3.py": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_frame_risks.py": "3e4856278bfb9ff6b9568743f198d116244bd4c13131b4aaa873c5c31d095a38",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_gateway.py": "a2e10cce43cb0297b969fde7dd988336f6c19cbc0f9b8a31087a1d1e19bb4424",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_gateway_official_data.py": "5032de94732ca4dbaf3c6e0faf2ee85bc55f6829c91f985868bc74ea620448fa",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_research_skills.py": "d107f4b6edafbd7ab56216f9b993f0a4797f1fe502478ef312ba590dd579da16",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_resolution_autorun.py": "ab630b8075cb0c4d40ed3ac7e086d1cb37bbda96d8300902fd23ab848ddbc412",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_resolution_monitor.py": "6924482eacb5b4d099cd69091f84b280fddce09793d4e373fdbfc21ba156a19c",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/config.py": "91402879193ccfd58f4bccc2013ab26335c2dea63bd96459f4673e130fef12cf",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/pipeline_orchestrator.py": "d8fb9ffeb1aae3f619de04f95393ffb1ed95b00fbbe59ec6e24d6275c56023e2",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/official_data.py": "86a377d163580efc94499ff12ba17d314a389f3c3d14b4d323bba4d76fc92472",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/news_market_context.py": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/report_agent.py": "25c719d81af6633e8be64a9aa7482b84aad6ffa8888211b184cf0978b6b703dd",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/api/research.py": "6e0acc4aaa712093f7d9bd3f66107f6830dfa25eee26878f7137683a1b278bb0",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/api/report.py": "964d8b2549a24440f36e57f4fc6915f34d3d0869f10f462c896fe433be60b7ac",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/deerflow_bridge/news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/deerflow_bridge/data_sources.py": "17200fb65117b8472d4d2e01c45060e042a0973d16e9eadbe212303e7463ff7c"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_news_signals.py": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/fixtures/gateway_performance.py": "ea81aeb522a76a9fbb8e87e7f0d37616858cf3e221774feb288453ab0a611881",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-oddsense-merge-accepted-20261021-1/pytest-tmp/test_research_child_runs_at_th0/deerflow/deerflow_research.py": "d1b03aa615dffac8f34ec4d62fbf3bb125ba7041f24f6678972c2add06c97c7f",
+    "/private/tmp/drf-oddsense-merge-accepted-20261021-1/pytest-tmp/test_a_live_child_never_inheri0/deerflow/deerflow_research.py": "d1b03aa615dffac8f34ec4d62fbf3bb125ba7041f24f6678972c2add06c97c7f",
+    "/private/tmp/drf-oddsense-merge-accepted-20261021-1/pytest-tmp/test_separate_guarded_processe0/publish_child.py": "95deddb114b10459207f6e5f4612061e73b868fb5450f0da9a73aa2e798af1ac",
+    "/private/tmp/drf-oddsense-merge-accepted-20261021-1/pytest-tmp/test_published_forecast_native0/restart.py": "f3f85cfc91c6ce0be300bfe1a911cbc7417f2fce0b60ebd288060fb15fc190eb"
+  },
+  "children": {
+    "26197": {
+      "exit_code": 0,
+      "receipt": "process-26197.json"
+    },
+    "26235": {
+      "exit_code": 0,
+      "receipt": "process-26235.json"
+    },
+    "26257": {
+      "exit_code": 0,
+      "receipt": "process-26257.json"
+    },
+    "26258": {
+      "exit_code": 0,
+      "receipt": "process-26258.json"
+    },
+    "26259": {
+      "exit_code": 0,
+      "receipt": "process-26259.json"
+    },
+    "26262": {
+      "exit_code": 0,
+      "receipt": "process-26262.json"
+    },
+    "26263": {
+      "exit_code": 0,
+      "receipt": "process-26263.json"
+    },
+    "26266": {
+      "exit_code": 0,
+      "receipt": "process-26266.json"
+    },
+    "26267": {
+      "exit_code": 0,
+      "receipt": "process-26267.json"
+    },
+    "26268": {
+      "exit_code": 0,
+      "receipt": "process-26268.json"
+    },
+    "26269": {
+      "exit_code": 0,
+      "receipt": "process-26269.json"
+    },
+    "26273": {
+      "exit_code": -15,
+      "receipt": "process-26273.json"
+    },
+    "26288": {
+      "exit_code": 0,
+      "receipt": "process-26288.json"
+    },
+    "26289": {
+      "exit_code": 0,
+      "receipt": "process-26289.json"
+    },
+    "26290": {
+      "exit_code": 0,
+      "receipt": "process-26290.json"
+    },
+    "26291": {
+      "exit_code": 0,
+      "receipt": "process-26291.json"
+    },
+    "26292": {
+      "exit_code": 0,
+      "receipt": "process-26292.json"
+    },
+    "26293": {
+      "exit_code": 0,
+      "receipt": "process-26293.json"
+    },
+    "26294": {
+      "exit_code": 0,
+      "receipt": "process-26294.json"
+    },
+    "26295": {
+      "exit_code": 0,
+      "receipt": "process-26295.json"
+    },
+    "26296": {
+      "exit_code": 0,
+      "receipt": "process-26296.json"
+    },
+    "26297": {
+      "exit_code": 0,
+      "receipt": "process-26297.json"
+    },
+    "26298": {
+      "exit_code": 0,
+      "receipt": "process-26298.json"
+    },
+    "26299": {
+      "exit_code": 0,
+      "receipt": "process-26299.json"
+    },
+    "26300": {
+      "exit_code": 0,
+      "receipt": "process-26300.json"
+    },
+    "26301": {
+      "exit_code": 0,
+      "receipt": "process-26301.json"
+    },
+    "26302": {
+      "exit_code": 0,
+      "receipt": "process-26302.json"
+    },
+    "26303": {
+      "exit_code": 0,
+      "receipt": "process-26303.json"
+    },
+    "26304": {
+      "exit_code": 23,
+      "receipt": "process-26304.json"
+    },
+    "27103": {
+      "exit_code": 0,
+      "receipt": "process-27103.json"
+    },
+    "27104": {
+      "exit_code": 0,
+      "receipt": "process-27104.json"
+    },
+    "27105": {
+      "exit_code": 0,
+      "receipt": "process-27105.json"
+    },
+    "27106": {
+      "exit_code": 0,
+      "receipt": "process-27106.json"
+    }
+  },
+  "identity_preserved": true
+}

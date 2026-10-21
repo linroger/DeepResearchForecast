@@ -2376,6 +2376,70 @@ def _fallback_valid_url(url: str) -> bool:
 _VALID_TIERS = ("S1", "S2", "S3")
 
 
+_CONTEXT_EVIDENCE_FIELDS = (
+    "outcome", "outcome_label", "yes_label", "no_label", "probability", "probability_basis",
+    "price", "bid", "ask", "last", "yes_bid", "yes_ask", "no_bid", "no_ask", "last_price",
+    "price_basis", "quote_basis", "price_unit", "quote_units", "units", "volume", "volume_unit",
+    "volume_units", "volume_24h", "open_interest", "forecaster_count", "quote_at", "quote_time",
+    "metadata_updated_at", "end_date", "expiration_time", "contract_type", "market_type",
+    "threshold", "floor_strike", "cap_strike", "strike_type", "rules_primary", "rules_secondary", "rules")
+
+
+def context_evidence_metadata(item: Mapping[str, Any]) -> dict:
+    """Bounded typed projection of supplied market evidence, including null and zero."""
+    if item.get("kind") not in ("market_quote", "community_forecast"):
+        return {}
+    result = {}
+    for name in _CONTEXT_EVIDENCE_FIELDS:
+        if name not in item:
+            continue
+        value = item[name]
+        if value is None or isinstance(value, bool):
+            result[name] = value
+        elif isinstance(value, (int, float)) and math.isfinite(value):
+            result[name] = value
+        elif isinstance(value, str):
+            result[name] = _collapse(_clean_web_text(value), 1600 if name.startswith("rules") else 500)
+    price_fields = item.get("source_price_fields")
+    if isinstance(price_fields, Mapping):
+        fields = {}
+        for name, value in list(price_fields.items())[:16]:
+            if not isinstance(name, str):
+                continue
+            values = value[:8] if isinstance(value, list) else [value]
+            kept = []
+            for part in values:
+                if part is None or isinstance(part, bool):
+                    kept.append(part)
+                elif isinstance(part, (int, float)) and math.isfinite(part):
+                    kept.append(part)
+                elif isinstance(part, str):
+                    kept.append(_collapse(_clean_web_text(part), 80))
+            fields[_collapse(name, 80)] = kept if isinstance(value, list) else (kept[0] if kept else None)
+        result["source_price_fields"] = fields
+    return result
+
+
+def context_evidence_text(item: Mapping[str, Any]) -> str:
+    """Captured contract details, never inferred probabilities, units or quote times."""
+    data = context_evidence_metadata(item)
+    if not data:
+        return ""
+    lines = ["Captured market evidence (context only; candidates are not established equivalent contracts):"]
+    for name, value in data.items():
+        if value is None:
+            rendered = "unknown"
+        elif isinstance(value, (dict, list)):
+            rendered = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        else:
+            rendered = str(value)
+        rendered = rendered.replace("<", "&lt;").replace(">", "&gt;")
+        lines.append(f"- {name}: {rendered}")
+    if "quote_at" not in data and "quote_time" not in data:
+        lines.append("- quote_at: unknown")
+    return "\n".join(lines)[:8000]
+
+
 class SourceLedger:
     """Thread-safe registry of every source seen in the run, with stable ids.
 
@@ -2516,6 +2580,30 @@ class SourceLedger:
             self._touch()
             return dict(row)
 
+    def register_context(self, item: Mapping[str, Any], *, by: str = "") -> dict | None:
+        """Keep discovery provenance without treating a snippet as a fetched page."""
+        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by)
+        if row is None:
+            return None
+        with self._lock:
+            stored = self._rows[row["sid"]]
+            for name in ("provider", "kind", "published_at", "retrieved_at", "publisher",
+                         "native_id", "language"):
+                value = item.get(name)
+                if value is None:
+                    stored.setdefault(name, None)
+                elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    if stored.get(name) in (None, ""):
+                        stored[name] = _collapse(_clean_web_text(str(value)), 300)
+            stored.setdefault("context_id", _collapse(item.get("id"), 300))
+            details = context_evidence_metadata(item)
+            if details:
+                stored.setdefault("context_metadata", details)
+                stored.setdefault("context_evidence_sha256", item.get("evidence_sha256"))
+            stored["eligibility"] = {"context_only": True, "anchor": False, "resolution": False}
+            self._touch()
+            return dict(stored)
+
     def mark_fetched(self, sid: int, *, content_sha256: str, chars: int, page_path: str,
                      title: str | None = None, backtest: Mapping[str, Any] | None = None) -> dict | None:
         with self._lock:
@@ -2523,6 +2611,7 @@ class SourceLedger:
             if row is None:
                 return None
             row["fetched"] = True
+            row["fetched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             row["content_sha256"] = str(content_sha256)
             row["chars"] = int(chars)
             row["page_path"] = str(page_path)
@@ -3509,6 +3598,51 @@ AGENT_TOOLS_WITH_DATA_SCHEMA: list[dict] = AGENT_TOOLS_SCHEMA + [
 ]
 
 
+
+CONTEXT_TOOL_METHODS = {"news_search": "search_news", "social_search": "search_social",
+                        "market_compare": "market_compare"}
+CONTEXT_TOOLS_SCHEMA = [
+    {"type": "function", "function": {
+        "name": name, "description": description,
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "A concise query about the research topic."}},
+            "required": ["query"], "additionalProperties": False}}}
+    for name, description in (
+        ("news_search", "Discover dated news snippets with publisher links and availability. Snippets are "
+         "discovery context: web_fetch the publisher page before factual or numeric claims."),
+        ("social_search", "Discover attributed social opinions, with publication/retrieval times and "
+         "availability. Opinion is context only, never a probability or established fact."),
+        ("market_compare", "Compare source-aware prediction-market candidates, times, rules and quote "
+         "bases. Context only: similar titles do not establish equivalence, anchoring or arbitrage."))]
+
+
+def context_tool_names(env: Mapping[str, Any]) -> tuple[str, ...]:
+    """Trusted feature switches only; credential presence is the provider owner's job."""
+    if str(env.get("DRF_BACKTEST_POLICY") or "").strip():
+        return ()  # Current news/quotes have no point-in-time admissibility contract.
+    def on(name: str, default: str = "true") -> bool:
+        return str(env.get(name, default)).strip().lower() not in ("0", "false", "off", "no")
+    if not on("NEWS_CONTEXT_ENABLED"):
+        return ()
+    return tuple(name for name, enabled in (
+        ("news_search", on("NEWSAPI_ENABLED")),
+        ("social_search", on("REDDIT_SIGNALS_ENABLED", "false")),
+        ("market_compare", on("MARKET_INTELLIGENCE_ENABLED"))) if enabled)
+
+
+@lru_cache(maxsize=16)
+def agent_tools_schema(data_enabled: bool, context_names: tuple[str, ...] = ()) -> list[dict]:
+    """One fixed schema object for the whole run, including retries and forced notes."""
+    base = AGENT_TOOLS_WITH_DATA_SCHEMA if data_enabled else AGENT_TOOLS_SCHEMA
+    if not context_names:
+        return base
+    return base + [row for row in CONTEXT_TOOLS_SCHEMA if row["function"]["name"] in context_names]
+
+
+def _context_api() -> Any:
+    return importlib.import_module(f"{__package__}.news_signals" if __package__ else "news_signals")
+
+
 def _data_api() -> Any:
     """Lazy, package/bare compatible import; never starts a provider."""
     return importlib.import_module(f"{__package__}.data_sources" if __package__ else "data_sources")
@@ -3842,7 +3976,7 @@ class ResearchTools:
                  fetch_fn: Callable[[str], str] | None = None,
                  bridge: Any = None, plog: Any = None,
                  limits: ToolLimits | None = None, data_sources: Any = None,
-                 backtest: Any = None,
+                 context_client: Any = None, backtest: Any = None,
                  archive_get: Callable[[str, float], str] | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
@@ -3863,6 +3997,10 @@ class ResearchTools:
         self._totals = _AgentCounters()
         self._agents: dict[str, _AgentCounters] = {}
         self.data_sources = data_sources
+        self.context_client = context_client
+        self._context_lock = threading.RLock()
+        self._context_cache: dict[tuple[str, str], str] = {}
+        self._context_frozen = False
         self._data_lock = threading.RLock()
         # Model-visible answers by request key ("get:<id>|<start>|<end>",
         # "search:<provider>:<query>").  Only successes and deterministic
@@ -3886,6 +4024,79 @@ class ResearchTools:
         self._archive_get = archive_get
         # Backtest mode: canonical URL -> dates its search hits carried.
         self._hit_dates: dict[str, list[Any]] = {}
+
+    def freeze_context(self) -> None:
+        # Cancellation may run in a signal handler while another thread owns
+        # the query lock. Close admission immediately; admitted I/O may finish.
+        self._context_frozen = True
+
+    def context_query(self, name: str, query: Any, *, agent_id: str,
+                      deadline: Deadline | None = None) -> str:
+        """Dispatch only the frozen context API, under run/agent search admission.
+
+        ContextClient owns shared attempt/network budgets and provider singleflight.
+        Gateway caches/replays consume neither provider nor local search admission.
+        """
+        if self.backtest is not None:
+            return "CONTEXT_UNAVAILABLE[backtest_unsupported]: historical context is not admissible."
+        if name not in CONTEXT_TOOL_METHODS or not isinstance(query, str) or not query.strip():
+            return "CONTEXT_UNAVAILABLE[invalid_input]: use a known context tool and a query string."
+        clean = " ".join(query.split())
+        if len(clean) > MAX_QUERY_CHARS:
+            return "CONTEXT_UNAVAILABLE[invalid_input]: shorten the query."
+        if deadline is not None:
+            remaining = (deadline.remaining() if callable(getattr(deadline, "remaining", None))
+                         else float(deadline) - time.monotonic())
+            if remaining <= 0:
+                return "CONTEXT_UNAVAILABLE[timeout]: research deadline exhausted."
+        key = (name, clean.casefold())
+        with self._context_lock:
+            if key in self._context_cache:
+                return self._context_cache[key]
+            client = self.context_client
+            if client is None:
+                return "CONTEXT_UNAVAILABLE[unavailable]: context provider is unavailable."
+            # A restored/sealed client may replay its own recorded queries, but
+            # cannot be asked a new query from a resumed gather.
+            if self._context_frozen:
+                return "CONTEXT_UNAVAILABLE[stored_only]: use the pinned research context."
+            if not self._reserve(str(agent_id), "search"):
+                return "CONTEXT_UNAVAILABLE[budget_exhausted]: research search allowance exhausted."
+            result = getattr(client, CONTEXT_TOOL_METHODS[name])(clean, deadline=deadline)
+            if not isinstance(result, Mapping):
+                return "CONTEXT_UNAVAILABLE[unavailable]: malformed provider result."
+            status = result.get("status") or {}
+            state = status.get("state", "unavailable") if isinstance(status, Mapping) else "unavailable"
+            lines = [f"CONTEXT {name}: {_collapse(state, 40)}; snippets/opinions/quotes are context only."]
+            providers = result.get("providers")
+            if isinstance(providers, list):
+                for provider in providers[:8]:
+                    if not isinstance(provider, Mapping):
+                        continue
+                    availability = provider.get("status")
+                    if not isinstance(availability, Mapping):
+                        continue
+                    lines.append("Provider " + _collapse(_clean_web_text(provider.get("provider")), 40)
+                                 + ": " + _collapse(_clean_web_text(availability.get("state")), 40)
+                                 + "; " + _collapse(_clean_web_text(availability.get("reason")), 100))
+            for item in list(result.get("items") or [])[:40]:
+                if not isinstance(item, Mapping):
+                    continue
+                row = self.ledger.register_context(item, by=agent_id)
+                if row is None:
+                    continue
+                lines += [f"[S{row['sid']}] {row['title']} — {row.get('provider') or 'unknown'} "
+                          f"({row.get('kind') or 'context'}; published {row.get('published_at') or 'unknown'}; "
+                          f"retrieved {row.get('retrieved_at') or 'unknown'})",
+                          f"    {row['url']}",
+                          delimit_untrusted("CONTEXT SNIPPET", row.get("snippet") or "")]
+                details = context_evidence_text(item)
+                if details:
+                    lines.append(delimit_untrusted("CAPTURED MARKET CONTRACT", details))
+            text = "\n".join(lines)
+            self._context_cache[key] = text
+            self.ledger.flush()
+            return text
 
     def freeze_data(self) -> None:
         """Close admission before synthesis. Stored evidence remains readable."""

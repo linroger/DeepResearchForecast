@@ -1,0 +1,122 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 36798,
+  "status": "completed",
+  "exit_code": 1,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "allowed:guarded_child": 22,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/scripts/main_offline_pytest.py": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_news_signals.py": "c6c74aaf09adc222474d04dcb87dce47791a1fd45d3dd382f04f2964205d391c",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_market_intelligence.py": "4c97eb3e76958b54ec517baf85d6b7884cc9848a2153490dfc68ff502a709298",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_oddsense_workflow.py": "d298dad0628c4e4f74eaf8eefb6091e9d991bb2792b9dadce5b2be3abf98be8f",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/app/services/simulation_manager.py": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_news_signals.py": "c6c74aaf09adc222474d04dcb87dce47791a1fd45d3dd382f04f2964205d391c",
+    "/private/tmp/drf-oddsense-idle-budget-green-zvpq8l2e/backend/tests/test_market_intelligence.py": "4c97eb3e76958b54ec517baf85d6b7884cc9848a2153490dfc68ff502a709298"
+  },
+  "children": {
+    "36950": {
+      "exit_code": 0,
+      "receipt": "process-36950.json"
+    },
+    "36951": {
+      "exit_code": 0,
+      "receipt": "process-36951.json"
+    },
+    "36952": {
+      "exit_code": 0,
+      "receipt": "process-36952.json"
+    },
+    "36953": {
+      "exit_code": 0,
+      "receipt": "process-36953.json"
+    },
+    "36954": {
+      "exit_code": 0,
+      "receipt": "process-36954.json"
+    },
+    "36955": {
+      "exit_code": 0,
+      "receipt": "process-36955.json"
+    },
+    "36956": {
+      "exit_code": 0,
+      "receipt": "process-36956.json"
+    },
+    "36957": {
+      "exit_code": 0,
+      "receipt": "process-36957.json"
+    },
+    "36958": {
+      "exit_code": 0,
+      "receipt": "process-36958.json"
+    },
+    "36959": {
+      "exit_code": 0,
+      "receipt": "process-36959.json"
+    },
+    "36960": {
+      "exit_code": 0,
+      "receipt": "process-36960.json"
+    },
+    "36961": {
+      "exit_code": 0,
+      "receipt": "process-36961.json"
+    },
+    "36962": {
+      "exit_code": 0,
+      "receipt": "process-36962.json"
+    },
+    "36963": {
+      "exit_code": 0,
+      "receipt": "process-36963.json"
+    },
+    "36964": {
+      "exit_code": 0,
+      "receipt": "process-36964.json"
+    },
+    "36965": {
+      "exit_code": 0,
+      "receipt": "process-36965.json"
+    },
+    "36966": {
+      "exit_code": 23,
+      "receipt": "process-36966.json"
+    },
+    "36967": {
+      "exit_code": 0,
+      "receipt": "process-36967.json"
+    },
+    "36968": {
+      "exit_code": 0,
+      "receipt": "process-36968.json"
+    },
+    "36969": {
+      "exit_code": 0,
+      "receipt": "process-36969.json"
+    },
+    "36970": {
+      "exit_code": 0,
+      "receipt": "process-36970.json"
+    },
+    "36971": {
+      "exit_code": -15,
+      "receipt": "process-36971.json"
+    }
+  },
+  "identity_preserved": true
+}

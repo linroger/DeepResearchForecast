@@ -73,6 +73,16 @@ def _generation_fingerprints(handoff):
             result[name] = hashlib.sha256(_contained_bytes(Path(handoff), name)).hexdigest()
         except FileNotFoundError:
             result[name] = None
+    # Keep genuinely old/off generations byte-compatible: the optional key is
+    # absent until a sealed contextual snapshot exists. A later addition then
+    # changes the generation instead of being silently adopted by an old run.
+    context_path = Path(handoff) / "news_market_context.json"
+    if os.path.lexists(context_path):
+        from .news_market_context import load_context
+        load_context(handoff)
+        result["news_market_context.json"] = hashlib.sha256(
+            _contained_bytes(Path(handoff), "news_market_context.json", limit=2_000_000)
+        ).hexdigest()
     return result
 
 
@@ -215,6 +225,28 @@ def simulation_research_binding(simulation_id):
     except (OSError, TypeError, ValueError, KeyError):
         _LOG.warning("Simulation research enrichment unavailable: generation proof failed")
         return {"status": "invalid"}
+
+
+def research_binding_has_news_context(simulation_id):
+    """Whether a binding declares the new optional proof, without accepting it.
+
+    Used solely to preserve the historical official-only dossier degradation.
+    Returning False never authorizes serving contextual data from another path.
+    """
+    try:
+        directory = _simulation_directory(simulation_id)
+        binding = json.loads(_contained_bytes(directory, _BINDING_FILE, limit=65536))
+        if not isinstance(binding, dict) or not isinstance(binding.get("files"), dict):
+            return False
+        if "news_market_context.json" in binding["files"]:
+            return True
+        # A newly present capture must not be silently dropped when an older
+        # consumed generation lacked it. This check never accepts its contents.
+        stored = binding.get("handoff_dir")
+        return isinstance(stored, str) and os.path.lexists(
+            _bound_handoff(stored) / "news_market_context.json")
+    except (OSError, TypeError, ValueError):
+        return False
 
 
 def bridge_module(name):

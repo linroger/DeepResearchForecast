@@ -1384,6 +1384,7 @@ _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "research_budget.py", "linear_research.py", "research_gateway.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
     "research_skills.py", "backtest_cutoff.py",
+    "news_signals.py", "news_tools.py", "market_intelligence.py",
 )
 
 
@@ -2254,6 +2255,7 @@ class DeerFlowResearchRunner:
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
         backtest: Optional[dict[str, Any]] = None,
+        context_question_sha256: Optional[str] = None,
         _spend: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
@@ -2373,6 +2375,15 @@ class DeerFlowResearchRunner:
         # Checkpoint identity is parent-owned per launch; never inherit an
         # ambient value from the backend process into a different handoff.
         env.pop("RESEARCH_CHECKPOINT_ID", None)
+        # The canonical source-capture question belongs to the parent, while
+        # outer-lane prompts may carry angle instructions. Never inherit an
+        # ambient digest or let a lane invent a different identity owner.
+        canonical_context_question = context_question_sha256
+        if canonical_context_question is None:
+            canonical_context_question = _news_context_question_digest(prompt)
+        if not isinstance(canonical_context_question, str) or not re.fullmatch(r"[0-9a-f]{64}", canonical_context_question):
+            raise ValueError("Invalid parent context question digest")
+        env["NEWS_CONTEXT_QUESTION_SHA256"] = canonical_context_question
         # Engine v3: the parent — never ambient env inheritance — decides which
         # research engine the child runs, using the same resolver as the
         # outer-lane topology so the two cannot disagree.  Evidence lanes and
@@ -2464,6 +2475,8 @@ class DeerFlowResearchRunner:
         # 下发，目录与 node 解析为绝对路径（见 _data_sources_subprocess_env）。数据源 API key 不是
         # Config 属性，随 env=dict(os.environ) 原样透传，再由 data_mcp 按每个服务的 env 白名单下发。
         env.update(_data_sources_subprocess_env())
+        env.update(_news_context_subprocess_env(
+            budget_lane_id=budget_lane_id, synthesis=bool(synthesis_manifest_path)))
         if max_concurrent_subagents is not None:
             env["DEER_FLOW_MAX_CONCURRENT_SUBAGENTS"] = str(
                 max(1, min(8, int(max_concurrent_subagents))))
@@ -2791,6 +2804,7 @@ class DeerFlowResearchRunner:
             "actors": actors,
             "sources": sources,
             "timeline": timeline,
+            "news_market_context": _load_news_context(handoff_dir),
             "exit_code": returncode,
             "research_telemetry": research_telemetry,  # I-5-7
         }
@@ -3238,6 +3252,42 @@ def _preserve_research_attempt_progress(
         return None
 
 
+def _news_context_question_digest(question: str) -> str:
+    return hashlib.sha256(" ".join(str(question or "").split()).encode("utf-8")).hexdigest()
+
+
+def _news_context_subprocess_env(*, budget_lane_id: Optional[str] = None,
+                                 synthesis: bool = False) -> dict[str, str]:
+    """Parent-owned context controls; no credentials or second budget owner.
+
+    The broad baseline alone receives NewsAPI admission. Global synthesis reads
+    sealed captures and must never acquire another generation of source data.
+    """
+    flags = {"NEWS_CONTEXT_ENABLED": True, "NEWSAPI_ENABLED": True,
+             "REDDIT_SIGNALS_ENABLED": False, "MARKET_INTELLIGENCE_ENABLED": True}
+    out = {name: "true" if bool(getattr(Config, name, default)) else "false"
+           for name, default in flags.items()}
+    limits = {"NEWSAPI_MAX_REQUESTS": (2, 0, 2), "NEWSAPI_PAGE_SIZE": (20, 1, 20),
+              "NEWSAPI_LOOKBACK_DAYS": (30, 1, 3650),
+              "NEWS_CONTEXT_DEADLINE_SECONDS": (10, 1, 10),
+              "NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS": (5, 1, 5),
+              "REDDIT_MAX_REQUESTS": (1, 0, 1),
+              "MARKET_INTELLIGENCE_MAX_REQUESTS": (4, 0, 4)}
+    for name, (default, low, high) in limits.items():
+        try:
+            value = int(getattr(Config, name, default))
+        except (TypeError, ValueError, OverflowError):
+            value = default
+        out[name] = str(max(low, min(high, value)))
+    lane = str(budget_lane_id or "")
+    if lane.startswith("outer-track-") and lane != "outer-track-1":
+        out["NEWSAPI_MAX_REQUESTS"] = "0"
+    if synthesis or out["NEWS_CONTEXT_ENABLED"] == "false":
+        for name in ("NEWSAPI_MAX_REQUESTS", "REDDIT_MAX_REQUESTS", "MARKET_INTELLIGENCE_MAX_REQUESTS"):
+            out[name] = "0"
+    return out
+
+
 _RESEARCH_CONTRACT_FILENAME = "research_contract_manifest.json"
 _RESEARCH_CONTRACT_FILES = (
     "research_report.md", "actor_dossier.md", "actor_dossier_coverage.json",
@@ -3246,7 +3296,7 @@ _RESEARCH_CONTRACT_FILES = (
     "timeline.json", "quantitative.json", "contested.json",
     "prediction_markets.json", "market_price_history.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
-    "charts.json",
+    "charts.json", "news_market_context.json",
 )
 
 _RESEARCH_JUDGE_DIMS = (
@@ -3439,6 +3489,16 @@ def _research_data_directory_traversal(path: str, *, create: bool) -> int:
     """
     if not os.path.isabs(path):
         raise ValueError("research root must not contain parent traversal")
+    # Reject a visible link before opening the filesystem root. The pinned
+    # no-follow walk below remains the race-resistant authority; this early
+    # refusal also permits the negative case inside the unchanged offline guard.
+    prefix = os.sep
+    for component in path.split(os.sep)[1:]:
+        if component in ("", "."):
+            continue
+        prefix = os.path.join(prefix, component)
+        if os.path.islink(prefix):
+            raise ValueError("research root must not contain parent traversal")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     directory = os.open(os.sep, flags)
     try:
@@ -3786,6 +3846,10 @@ def _research_data_file_set(root: str) -> set[str]:
 
 def _research_contract_entries(root: str) -> dict[str, dict[str, Any]]:
     """Fingerprint the exact contract, including charts and current data."""
+    # Unlike optional enrichment, present contextual proof is mandatory and
+    # sealed. Validate before fingerprinting or promotion can publish it.
+    from .news_market_context import load_context
+    load_context(root)
     entries: dict[str, dict[str, Any]] = {}
     candidates: list[tuple[str, str]] = []
     for name in _RESEARCH_CONTRACT_FILES:
@@ -3867,8 +3931,10 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
         # Optional contract-owned artifacts absent from the generation manifest
         # would prove that a stale file survived promotion.
         for name in _RESEARCH_CONTRACT_FILES:
-            if os.path.exists(os.path.join(root, name)) and name not in entries:
+            if os.path.lexists(os.path.join(root, name)) and name not in entries:
                 errors.append(f"unmanifested_optional_artifact:{name}")
+        from .news_market_context import load_context
+        load_context(root)
         data_files = set(_research_data_artifacts(root))
         expected_data_files = {rel for rel in entries if rel.startswith("data/")}
         if data_files != expected_data_files or _research_data_file_set(root) != data_files:
@@ -3982,6 +4048,8 @@ def _promote_research_contract(
     """
     os.close(_research_data_directory(source_dir))
     os.close(_research_data_directory(handoff_dir, create=True))
+    from .news_market_context import load_context
+    load_context(source_dir)
     source_root = os.path.realpath(source_dir)
     root = os.path.realpath(handoff_dir)
     os.makedirs(root, exist_ok=True)
@@ -4359,6 +4427,42 @@ def _reset_stage_attempt(stage: "StageState") -> None:
     stage.finished_at = None
 
 
+def _merge_track_news_context(track_dirs: list[str], output_dir: str,
+                              sources: list[Any]) -> Optional[dict[str, Any]]:
+    """Publish valid contextual captures without touching canonical markets.
+
+    Final source order is present before merging so the source-store owner can
+    replace lane-local source references while creating the merged generation.
+    """
+    from .news_market_context import load_context, merge_contexts
+    captured = [directory for directory in track_dirs if load_context(directory)]
+    if not captured:
+        return None
+    from ..utils.atomic import write_json_atomic
+    write_json_atomic(os.path.join(output_dir, "sources.json"), sources)
+    return merge_contexts(captured, output_dir) or None
+
+
+def _research_declares_news_context(state: PipelineState, handoff_dir: str,
+                                    consumed_generation: Optional[dict] = None) -> bool:
+    """Presence and durable declarations distinguish missing proof from legacy absence."""
+    name = "news_market_context.json"
+    if (os.path.lexists(os.path.join(handoff_dir, name))
+            or name in (consumed_generation or {}).get("files", {})):
+        return True
+    contract = _read_json(_research_contract_path(handoff_dir))
+    if isinstance(contract, dict) and name in (contract.get("files") or {}):
+        return True
+    manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+    return bool(isinstance(manifest, dict) and "news_market_context" in manifest
+                or "news_market_context" in (state.artifacts or {}))
+
+
+def _load_news_context(handoff_dir: str) -> Optional[dict[str, Any]]:
+    from .news_market_context import load_context
+    return load_context(handoff_dir) or None
+
+
 def _load_research_handoff(handoff_dir: str) -> dict[str, Any]:
     """Load a previously generated DeerFlow handoff, tolerating missing optional JSON.
 
@@ -4389,6 +4493,7 @@ def _load_research_handoff(handoff_dir: str) -> dict[str, Any]:
         "timeline": _read_json(os.path.join(handoff_dir, "timeline.json")),
         "exit_code": None,
         "resumed": True,
+        "news_market_context": _load_news_context(handoff_dir),
     }
 
 
@@ -7255,10 +7360,17 @@ def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[s
     out: dict[str, Any] = {
         "situation_brief": None, "actors": None, "sources": None, "research_report": None,
         "actor_dossier": None,  # 双轨 Track B：角色本体档案，供手动报告路径作背景上下文（缺失为 None）
-        "official_data": None,
+        "official_data": None, "news_market_context": None,
     }
     if not simulation_id:
         return out
+    # Context integrity is a required provenance check, outside the optional
+    # legacy dossier/official-data enrichment fallback below.
+    from .news_market_context import load_for_simulation as load_news_for_simulation
+    from .official_data import research_binding_has_news_context, simulation_research_binding
+    context_proof = simulation_research_binding(simulation_id)
+    if context_proof["status"] != "invalid" or research_binding_has_news_context(simulation_id):
+        out["news_market_context"] = load_news_for_simulation(simulation_id)
     try:
         from .official_data import load_official_data, simulation_research_binding
         binding = simulation_research_binding(simulation_id)
@@ -8578,7 +8690,9 @@ class PipelineOrchestrator:
             state.options.pop("official_data_binding", None)
         except ResearchBindingConflict:
             raise
-        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
+        except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
+            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), consumed_generation):
+                raise ValueError("News context consumed generation changed before world preparation") from _bind_err
             self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
 
     def _run_world_stages(self, state: PipelineState, project: Any, graph_id: str,
@@ -9728,7 +9842,9 @@ class PipelineOrchestrator:
             row.pop("official_data_binding", None)
         except ResearchBindingConflict:
             raise
-        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable for this seed
+        except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
+            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), parent):
+                raise ValueError("News context consumed generation changed before world seed") from _bind_err
             reason = f"{type(_bind_err).__name__}: {' '.join(str(_bind_err).split())[:240]}"
             row["official_data_binding"] = {"status": "unavailable", "reason": reason}
             logger.warning("[%s] world seed %s left unbound: %s", state.pipeline_id, simulation_id, reason)
@@ -9913,6 +10029,8 @@ class PipelineOrchestrator:
         }
         from .official_data import load_for_simulation
         _agent_kwargs["official_data"] = load_for_simulation(sim_id)
+        from .news_market_context import load_for_simulation as load_news_for_simulation
+        _agent_kwargs["news_market_context"] = load_news_for_simulation(sim_id)
         # W9-5：把主跑情景脊柱钉给种子报告（scenario_spine 参数由报告链工作流并行落地；
         # 尚未支持时 TypeError → 回退旧签名，落地顺序无关）。
         try:
@@ -10579,6 +10697,7 @@ class PipelineOrchestrator:
             specs.append(("contested", os.path.join(hd, "contested.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
             specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
+            specs.append(("news_market_context", os.path.join(hd, "news_market_context.json")))
             specs.append(("prediction_market_candidates",
                           os.path.join(hd, "prediction_market_candidates.jsonl")))
             specs.append(("research_budget", os.path.join(hd, "research_budget.json")))
@@ -10944,6 +11063,9 @@ class PipelineOrchestrator:
                 if not os.path.isfile(path) or _sha256_file(path) != entry["sha256"]:
                     return False
             return True
+        if stage == STAGE_RESEARCH:
+            # Never convert corrupt proof into a silent acquisition/rebuild.
+            _load_news_context(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id))
         manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
         if not manifest:
             if stage == STAGE_REPORT and state.report_id:
@@ -11007,6 +11129,8 @@ class PipelineOrchestrator:
                 matched = True
                 break
             if not matched:
+                if name == "news_market_context":
+                    raise ValueError("Stored news context generation changed before stage reuse")
                 logger.warning(
                     "[%s] 复用校验：产物 %s 缺失、内容变更或结构探针未通过（%s）",
                     state.pipeline_id, name, paths_to_check,
@@ -12099,6 +12223,18 @@ class PipelineOrchestrator:
                 f"复用 {len(lanes)} 条已校验证据轨，仅重跑全局综合（{attempt}/2）…",
             )
             try:
+                # Resolve lane directories only from the already-bound manifest;
+                # no graph lookup or new provider query belongs to recovery.
+                lane_dirs = []
+                for lane in lanes:
+                    relative = lane.get("path") if isinstance(lane, dict) else None
+                    if not isinstance(relative, str) or os.path.isabs(relative):
+                        raise ValueError("Invalid context lane path")
+                    candidate_dir = os.path.realpath(os.path.join(handoff_dir, os.path.dirname(relative)))
+                    if os.path.commonpath([os.path.realpath(handoff_dir), candidate_dir]) != os.path.realpath(handoff_dir):
+                        raise ValueError("Context lane escapes handoff")
+                    lane_dirs.append(candidate_dir)
+                _merge_track_news_context(lane_dirs, synthesis_dir, manifest.get("sources") or [])
                 candidate = DeerFlowResearchRunner.run(
                     state.prompt,
                     synthesis_dir,
@@ -12112,6 +12248,7 @@ class PipelineOrchestrator:
                     kg_graph_id=state.graph_id,
                     budget_db_path=budget_db_path,
                     budget_lane_id="global-synthesis-recovery",
+                    context_question_sha256=_news_context_question_digest(state.prompt),
                     budget_telemetry_path=budget_telemetry_path,
                     budget_run_id=state.pipeline_id,
                     budget_epoch=budget_epoch,
@@ -12372,6 +12509,7 @@ class PipelineOrchestrator:
                 kg_graph_id=state.graph_id,  # W9-9：图谱已存在时接入 KG MCP（首跑为 None → no-op）
                 budget_db_path=budget_db_path,
                 budget_lane_id=track_lane_id,
+                context_question_sha256=_news_context_question_digest(state.prompt),
                 budget_telemetry_path=budget_telemetry_path,
                 budget_run_id=state.pipeline_id,
                 budget_epoch=budget_epoch,
@@ -12655,6 +12793,7 @@ class PipelineOrchestrator:
                     f"尝试 {attempt}/2）…",
                 )
                 try:
+                    _merge_track_news_context([td for _title, td, _res in ordered], synthesis_dir, merged_sources)
                     candidate = DeerFlowResearchRunner.run(
                         state.prompt,
                         synthesis_dir,
@@ -12668,6 +12807,7 @@ class PipelineOrchestrator:
                         kg_graph_id=state.graph_id,
                         budget_db_path=budget_db_path,
                         budget_lane_id="global-synthesis",
+                        context_question_sha256=_news_context_question_digest(state.prompt),
                         budget_telemetry_path=budget_telemetry_path,
                         budget_run_id=state.pipeline_id,
                         budget_epoch=budget_epoch,
@@ -12799,6 +12939,7 @@ class PipelineOrchestrator:
                 "timeline": _read_json(os.path.join(handoff_dir, "timeline.json")),
                 "exit_code": 0,
                 "research_telemetry": merged_tel,
+                "news_market_context": _load_news_context(handoff_dir),
             }
 
         labeled_reports: list[tuple[str, str]] = []
@@ -12948,6 +13089,8 @@ class PipelineOrchestrator:
         if _data_merge["series"] or _data_merge["dropped_references"] or _data_merge["unavailable_lanes"]:
             state.options["official_data_merge"] = _data_merge
 
+        _merge_track_news_context(track_dirs, handoff_dir, merged_sources)
+
         # 落盘合并产物到 handoff_dir（下游/resume 读的正是这些文件）
         report_path = os.path.join(handoff_dir, "research_report.md")
         write_text_atomic(report_path, merged_report)
@@ -13006,6 +13149,7 @@ class PipelineOrchestrator:
             "timeline": merged_timeline,
             "exit_code": 0,
             "research_telemetry": merged_tel,
+            "news_market_context": _load_news_context(handoff_dir),
         }
 
     # -- 内部：嵌入预热 (R2-EXEC-7) ---------------------------------------
@@ -13084,6 +13228,9 @@ class PipelineOrchestrator:
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
+            context_declared = _research_declares_news_context(state, handoff_dir)
+            if not _load_news_context(handoff_dir) and context_declared:
+                raise ValueError("Declared news context capture is missing before research reuse")
             report_path = os.path.join(handoff_dir, "research_report.md")
             _report_candidate = (
                 os.path.exists(report_path)
@@ -13102,6 +13249,8 @@ class PipelineOrchestrator:
                 if _contract_present:
                     _integrity_valid = _validate_research_contract(handoff_dir)
                     if not _integrity_valid:
+                        if _research_declares_news_context(state, handoff_dir):
+                            raise ValueError("Stored news context research contract changed before reuse")
                         logger.warning(
                             "[%s] 研究 contract manifest 校验失败，拒绝复用混合/篡改产物",
                             state.pipeline_id,
@@ -13471,7 +13620,9 @@ class PipelineOrchestrator:
                 try:
                     _consumed_research_generation = capture_research_generation(
                         handoff_dir, report=report_md, sources=research.get("sources"))
-                except Exception as _capture_err:  # noqa: BLE001 — binding is enrichment provenance only
+                except Exception as _capture_err:  # noqa: BLE001 — old official-only enrichment can degrade
+                    if _research_declares_news_context(state, handoff_dir):
+                        raise ValueError("News context consumed-generation capture failed") from _capture_err
                     _consumed_research_generation = None
                     self._record_official_data_unbound(state, STAGE_RESEARCH, _capture_err)
             self._complete_stage(
@@ -14001,7 +14152,9 @@ class PipelineOrchestrator:
                             # A fresh simulation id that already pins another research
                             # generation is a provenance violation, not a data outage.
                             raise
-                        except Exception as _bind_err:  # noqa: BLE001 — unbound = official data unavailable
+                        except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
+                            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), _consumed_research_generation):
+                                raise ValueError("News context consumed generation changed before preparation") from _bind_err
                             self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
                     # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的
                     # *_partial 临时产物指针（扫描器会为新 attempt 重新登记）。
@@ -14527,6 +14680,8 @@ class PipelineOrchestrator:
                 }
                 from .official_data import load_for_simulation
                 _ra_artifacts["official_data"] = load_for_simulation(sim_state.simulation_id)
+                from .news_market_context import load_for_simulation as load_news_for_simulation
+                _ra_kwargs["news_market_context"] = load_news_for_simulation(sim_state.simulation_id)
                 if self._simulation_engine(state) == "world-v1":
                     agent = ReportAgent(**_ra_kwargs, **_ra_artifacts)
                 else:

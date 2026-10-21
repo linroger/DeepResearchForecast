@@ -1,0 +1,14 @@
+{
+  "backend/app/services/official_data.py": "86a377d163580efc94499ff12ba17d314a389f3c3d14b4d323bba4d76fc92472",
+  "backend/app/services/pipeline_orchestrator.py": "d8fb9ffeb1aae3f619de04f95393ffb1ed95b00fbbe59ec6e24d6275c56023e2",
+  "backend/app/services/report_agent.py": "25c719d81af6633e8be64a9aa7482b84aad6ffa8888211b184cf0978b6b703dd",
+  "deerflow_bridge/research_gateway.py": "f8e04046bad50ec7228fa0c27d4dfaa73811d503bd89d6cc9d515153928523b5",
+  "deerflow_bridge/linear_research.py": "f14bb1fcc831c233859a02b4cb045af2203b381a557e5669383d15f840f68986",
+  "backend/scripts/backfill_report_visuals.py": "e8850ae44a04d5461f2e638fbd7a21c9ab9b3808830747a2ef73e571fdae5e2d",
+  "backend/tests/test_oddsense_workflow.py": "68fe72f133d4aea5822bb7d70dbe433fae12b81ba756c7b8097472fd297589f0",
+  "backend/tests/test_oddsense_feedback_merge.py": "974a9e59f1a666d9eef6c7c09ff81e6269e026d60823f819c88dfecdfaf80aea",
+  "backend/tests/test_oddsense_merge_guards.py": "3571b0af08c9e8e0bc72dc57d7c65490ec6d797538f49d7f0de5bbd6da9de0af",
+  "backend/tests/test_backtest_pipeline.py": "8417ea8ae2a1ab9492da37d6b6133ac1289e35907627bd1dd726d4379498dd78",
+  "backend/tests/test_news_context_pipeline.py": "da59415fd4c305c83541012d1e46f3fd1404b366341f81469b5130cab25b69c4",
+  "backend/tests/test_official_data_consumers.py": "231c0ca9e506cc178fcc14cc0264e52be6adc279cfad949347621f5f9d0e9584"
+}

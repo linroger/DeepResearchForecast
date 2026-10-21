@@ -440,10 +440,17 @@ def get_dossier(pipeline_id: str):
         except (TypeError, ValueError):
             return None
 
+    from ..services.news_market_context import load_context
+    try:
+        news_market_context = load_context(handoff) or None
+    except ValueError:
+        return jsonify({"success": False, "error": "Research news context is invalid"}), 409
+
     return jsonify({
         "success": True,
         "data": {
             "report": report,
+            "news_market_context": news_market_context,
             "actors": _decode(actors_raw),
             "sources": _decode(sources_raw),
             "timeline": _decode(timeline_raw),

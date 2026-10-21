@@ -51,6 +51,9 @@ def _hermetic_env(monkeypatch):
     for name in list(os.environ):
         if name.startswith("RESEARCH_LINEAR_") or name in _ENV_EXACT:
             monkeypatch.delenv(name, raising=False)
+    # This suite freezes the pre-context web-only contract. Context-ON real
+    # engine/citation/generation scenarios live in test_news_research.py.
+    monkeypatch.setenv("NEWS_CONTEXT_ENABLED", "false")
 
 
 @pytest.fixture

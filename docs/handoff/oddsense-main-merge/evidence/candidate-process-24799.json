@@ -1,0 +1,18 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 24799,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {},
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-merge-final-NEc9Sb/backend/tests/fixtures/gateway_performance.py": "ea81aeb522a76a9fbb8e87e7f0d37616858cf3e221774feb288453ab0a611881"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

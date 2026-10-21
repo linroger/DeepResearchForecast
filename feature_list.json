@@ -265,5 +265,38 @@
       "Generate the next report and verify frozen typed track record in forecast JSON, audited Markdown and API/download consumers."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_newsapi_research_evidence",
+    "category": "research",
+    "description": "Both research engines use bounded NewsAPI discovery and optional Reddit context with persisted provider/time/status metadata, fetched-source citations and immutable replay.",
+    "steps": [
+      "Run a controlled forecast through the actual research engine and observe news_search invocation, bounded provider acquisition, publisher-page fetch and cited final research output.",
+      "Verify invalid credentials, rate limits, forbidden social access, empty results, deadlines, disabled mode and duplicate queries retain distinct states without leaking credentials.",
+      "Promote the sealed context generation through the parent and replay/resume without refetch; reject tampering and changed-input reuse."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_cross_platform_market_context",
+    "category": "research",
+    "description": "Research agents compare provider-qualified Polymarket and Kalshi context using current source shapes, honest units and availability without external automatic forecast anchors.",
+    "steps": [
+      "Invoke market_compare with native-shaped current Polymarket/Kalshi responses and retain identity, quote basis, rules, units, times and source links in the sealed context.",
+      "Exercise absent prices, reversed outcomes, native ID collisions, differing horizons/rules, pagination failures and provider access errors without fabricating probabilities or equivalence.",
+      "Trace context into research and report consumers and assert external IDs never reach Gamma/CLOB refresh, automatic anchors or resolution. Record live compatibility separately."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_news_market_context_delivery",
+    "category": "reporting",
+    "description": "The exact sealed news/social/external-market context reaches ordinary, manual, seed and ensemble report entrypoints, audited Markdown and API/UI/export with immutable generation binding.",
+    "steps": [
+      "Run a controlled source-to-research-to-handoff-to-report publication scenario and verify identical provider/capture/source identities and context-only labels at the API and Markdown/PDF export boundary.",
+      "Verify dossier and forecast UI render bounded safe linked evidence with times, source types, explicit empty/unavailable statuses and English/Chinese labels.",
+      "Exercise stale/tampered generations, old handoffs, disabled behavior, multi-track merges and scenario reuse without provider refetch or actor/world-state privilege expansion."
+    ],
+    "passes": true
   }
 ]

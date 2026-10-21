@@ -1,0 +1,24 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 36256,
+  "status": "completed",
+  "exit_code": 1,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-idle-budget-red-ua5xy_oi/backend/scripts/main_offline_pytest.py": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+    "/private/tmp/drf-oddsense-idle-budget-red-ua5xy_oi/backend/tests/test_news_signals.py": "3210dc352ca3190d317663dd7a6a3eafaf4119eebf9969855e153ba836c4e613",
+    "/private/tmp/drf-oddsense-idle-budget-red-ua5xy_oi/backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "/private/tmp/drf-oddsense-idle-budget-red-ua5xy_oi/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

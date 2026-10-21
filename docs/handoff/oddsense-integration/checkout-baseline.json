@@ -1,0 +1,390 @@
+{
+  "recorded_at_utc": "2026-10-18T12:16:42.490563+00:00",
+  "branch": "claude-reflexive-world-state-model",
+  "head": "dcff7684f255be358232fdcf989af30cbc032c43",
+  "unowned_status": [
+    {
+      "path": "backend/app/services/forecast_extractor.py",
+      "status": " M",
+      "sha256": "0c22b3f68aa38881eb41ad1d9f720362a7debbb75bd47b201aaa9613149f860e"
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "status": " M",
+      "sha256": "b8d5129074f033fefe3ab27d71629da3402de2477250e6e574793531ed5ed651"
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "status": " M",
+      "sha256": "48690e0358980d333c637709c8c7f5066721207c1fdcda8788fa88f304f0bdb3"
+    },
+    {
+      "path": "backend/app/services/report_visualizer.py",
+      "status": " M",
+      "sha256": "ded42ee2befcd56755971da84943a3cafaa4474f67673cda75da99a4ee3fd801"
+    },
+    {
+      "path": "backend/pyproject.toml",
+      "status": " M",
+      "sha256": "a82eb0e8f5c71b4eadf940efcd8fc4c8175a8fe5c3a45bc355c3d4042f83410e"
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_report.py",
+      "status": " M",
+      "sha256": "b4929932e16b14cb69aa14932f4f46d431f8180151de8e42b65373355cb20669"
+    },
+    {
+      "path": "backend/tests/test_bridge_prediction_markets.py",
+      "status": " M",
+      "sha256": "2f828e4b10e946dc5cc08269b6c9b0ddfdb731d26738aa5ca8a3d40daad24a36"
+    },
+    {
+      "path": "backend/tests/test_calibration_rigor.py",
+      "status": " M",
+      "sha256": "fe2f51d4b2eef9e7cf39e17130faa25e3784a22aa6f880253a86a32187dfe1bf"
+    },
+    {
+      "path": "backend/tests/test_parallel_research_merge.py",
+      "status": " M",
+      "sha256": "89ea8bb009a50185e8389c7dafcdadcc4f2bdf155a051b049a09fcbb867d4670"
+    },
+    {
+      "path": "backend/tests/test_report_visualizer.py",
+      "status": " M",
+      "sha256": "870c1ab3396ac0ec4cb505746fd2437a8d60b87906a0815758854cee0796cc4a"
+    },
+    {
+      "path": "backend/tests/test_report_viz_and_pdf.py",
+      "status": " M",
+      "sha256": "eb121467ac47c818ce3b1547fdaff2424ef627558e31721b0c0b9a92af1cf601"
+    },
+    {
+      "path": "backend/tests/test_wave9_report_focus.py",
+      "status": " M",
+      "sha256": "d7b720f8ba10142a1d907a03acdd47eff3fc890aa9bb7dee9cab738717705901"
+    },
+    {
+      "path": "backend/tests/test_wave9_visualizer.py",
+      "status": " M",
+      "sha256": "e9fa2011809a719ff30741e74d77f570f9ca115f65e9b2390022db8721185845"
+    },
+    {
+      "path": "backend/uv.lock",
+      "status": " M",
+      "sha256": "82a42bbc54ef7c46e078f6b1f61ddabd82a42bc552f7b727ecd1fa9d97d761f6"
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "status": " M",
+      "sha256": "3e8c699560728a58463a2f3aa2412bb7ec3c99d7ed4e38b3ad6d35ed4b93022c"
+    },
+    {
+      "path": "docs/architecture/deepresearchforecast-system-architecture.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/architecture/deepresearchforecast-system-architecture.svg",
+      "status": " D"
+    },
+    {
+      "path": "docs/architecture/deepresearchforecast-system-architecture.tldr",
+      "status": " D"
+    },
+    {
+      "path": "docs/architecture/deerflow2/deerflow2-architecture.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/architecture/deerflow2/deerflow2-architecture.svg",
+      "status": " D"
+    },
+    {
+      "path": "docs/architecture/deerflow2/deerflow2-architecture.tldr",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/china-storage-2035/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/collision-decade-2031/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/datacenter-2030/charts/binary_forecast_dotplot.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/datacenter-2030/charts/scenario_probabilities.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/datacenter-2030/charts/timeline_lanes.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/datacenter-2030/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/actor_network.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/binary_forecast_dotplot.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/forecast_revisions.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/quantitative_claims.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/scenario_probabilities.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/source_mix_sunburst.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/charts/timeline_lanes.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research-charts/actor_network.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research-charts/forecast_revisions.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research-charts/quant_metrics.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research-charts/source_quality.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research-charts/timeline.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/ev-2035/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/binary_forecast_dotplot.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/metric_trajectories.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/quantitative_claims.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/scenario_probabilities.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/timeline_lanes.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/charts/worldstate_trajectory.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/actor_network.html",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/actor_network.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/metric_trajectories.html",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/metric_trajectories.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/quant_metrics.html",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/quant_metrics.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/timeline.html",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research-charts/timeline.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/grid-storage-2040/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/charts/binary_forecast_dotplot.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/charts/metric_trajectories.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/charts/scenario_probabilities.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/charts/timeline_lanes.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/charts/worldstate_trajectory.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/quantum-2040/research-charts/timeline.png",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/semiconductors-2030/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/us-iran-2026/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/us-midterms-2026/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/demos/us-trade-2028/research_log.txt",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/01-pipeline-knowledge-graph.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/02-research-dossier-sources.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/03-agent-personas.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/04-simulation-console.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/05-graph-node-details.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/06-simulation-feed.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/07-simulation-posts.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/08-simulation-agent-detail.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/09-semis-research-console.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/10-semis-research-dossier.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/11-semis-key-actors.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/12-semis-cited-sources.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/13-semis-knowledge-graph.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/14-semis-simulation-feed.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/15-semis-forecast-report.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/demo-poster.jpg",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/demo-preview.gif",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/demo-semiconductors.mp4",
+      "status": " D"
+    },
+    {
+      "path": "docs/media/demo.mp4",
+      "status": " D"
+    },
+    {
+      "path": "handoff.md",
+      "status": " M",
+      "sha256": "341cc3e64375b6bb3808f658290e9f5dd6ca9cd4106d014f2d9618f6b03b6463"
+    },
+    {
+      "path": ".zcodeignore",
+      "status": "??",
+      "sha256": "a31a7973a2cba92eae0701e98d5699b7904be3e017defea05be17c4e48674124"
+    },
+    {
+      "path": "ISSUES_LIST_ZCODE.md",
+      "status": "??",
+      "sha256": "24949f328a8f77d140963aeeac9ed76d80807cd569d775a5f2c319a23b03a4e7"
+    },
+    {
+      "path": "docs/handoff/codebase-study/",
+      "status": "??"
+    },
+    {
+      "path": "docs/handoff/main-codebase-study-20261011/",
+      "status": "??"
+    },
+    {
+      "path": "docs/handoff/main-codebase-study-20261016/",
+      "status": "??"
+    },
+    {
+      "path": "newskills/",
+      "status": "??"
+    }
+  ],
+  "note": "Captured during read-only study after creating owned docs. Earlier initial status output remains in session. No pre-existing files were changed by this task."
+}

@@ -1,0 +1,134 @@
+{
+  "receipts": [
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/joint-final-completed.json",
+      "sha256": "2f591bcde3d10fcee73643674cbd6b2678c74e33417c27053a0b0869d5dc2759",
+      "source": "/private/tmp/drf-os-final-joint-20261018-2/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/joint-final-junit.xml",
+      "sha256": "d5f2ec5838ab11ba2d699da4933dd5ab6ef8300b2ddbca8ce8b7efc36d3054a7",
+      "source": "/private/tmp/drf-os-final-joint-20261018-2/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-completed.json",
+      "sha256": "d8c4756235621414dac1c64f77cd3cc9a584e3e356ce536d57b15b4c34a6ca7c",
+      "source": "/private/tmp/drf-os-mixed-metadata-green-20261018-1/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-junit.xml",
+      "sha256": "43b57a111e3a405763b530c8a82cb5777af6ab7fdd5ce1e43f267295c1ea9086",
+      "source": "/private/tmp/drf-os-mixed-metadata-green-20261018-1/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/bilingual-final-completed.json",
+      "sha256": "93ccae5133b75001859e54ece15d9601e09d0ce46e4ade97825c17f63e27c9ed",
+      "source": "/private/tmp/drf-os-final-bilingual-20261018-1/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/bilingual-final-junit.xml",
+      "sha256": "34385bef12765ca121ce27d64b44d51ddc82b3ce89413ab524921f4c9797e5ba",
+      "source": "/private/tmp/drf-os-final-bilingual-20261018-1/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-completed.json",
+      "sha256": "c59e92a9a4acbe9c792ebb64dd4c4e5088a6f258dd7d89367b8ae097f2b77714",
+      "source": "/private/tmp/drf-os-mixed-metadata-red-20261018-1/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-junit.xml",
+      "sha256": "54d724b85cc978dbb3c653d218c309a60147077e9fd34ceee447ed7f18fbbc01",
+      "source": "/private/tmp/drf-os-mixed-metadata-red-20261018-1/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/publication-context-red-completed.json",
+      "sha256": "67f051e0c3911ee3073c99cb062cf56bea871a5b9aa7c27e781ec858da3a98a6",
+      "source": "/private/tmp/oddsense-e2e-fourth-20261018-1326/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/publication-context-red-junit.xml",
+      "sha256": "d93ccfa7eff5fecf729697fc3eaead7df984b64fafd8e964dbd2d2a8854e870d",
+      "source": "/private/tmp/oddsense-e2e-fourth-20261018-1326/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-deployment-completed.json",
+      "sha256": "2a7dd7ff3df2d4770ba410c6e6e67d9656ca08ade27c7ee416d253f4ba31ac61",
+      "source": "/private/tmp/drf-os-native-deploy-20261018-2/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-envpins-completed.json",
+      "sha256": "b9c7c45f248cdd98c6688b291d039298756058fad4a97a9dc82b7000d1a3d904",
+      "source": "/private/tmp/drf-os-envpins-wqktoy52/completed.json"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-envpins-junit.xml",
+      "sha256": "60a0a9526455d0670f2dcb7cdcbdf8048eb673a2204b6a43a55a2abc33e29361",
+      "source": "/private/tmp/drf-os-envpins-wqktoy52/work/junit.xml"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-red-completed.json",
+      "source": "/private/tmp/drf-os-idle-budget-red-20261018-1/completed.json",
+      "sha256": "4c786a1d30d891631928b98addeb75b5d0f32da573d4e4c06cce19dbd4b94b27"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-red-junit.xml",
+      "source": "/private/tmp/drf-os-idle-budget-red-20261018-1/junit.xml",
+      "sha256": "4cbed396b95323fe348bbf5e88269f11d30b13e2d9d046e3dfb46c5fb92c194d"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-transition-completed.json",
+      "source": "/private/tmp/drf-os-idle-budget-green-20261018-1/completed.json",
+      "sha256": "96a50184bf82f17335898c214250e962858001e0b1d6818ad0d54abd0ac82377"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-transition-junit.xml",
+      "source": "/private/tmp/drf-os-idle-budget-green-20261018-1/junit.xml",
+      "sha256": "6eb7d0963e35c3dd1be1b09bdf699b208b6c0130824f637369a43edfe2dc4d4b"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-focused-completed.json",
+      "source": "/private/tmp/drf-os-idle-budget-green-20261018-2/completed.json",
+      "sha256": "b8e7eae139915cb7f95142c49b8c9019f3f6cbda7bdf40148137491ac3d1adfd"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-focused-junit.xml",
+      "source": "/private/tmp/drf-os-idle-budget-green-20261018-2/junit.xml",
+      "sha256": "9c8365bf1fc47b2742b734a46c4ba04cf43db68e0fecc6e7732f32b2329e45fa"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-final-completed.json",
+      "source": "/private/tmp/drf-os-delivery-final-20261018-1/completed.json",
+      "sha256": "21754e9aedbd82fc49135baee60d87f01ba4616291b8a6d2aa62ec7a6c702eeb"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-final-junit.xml",
+      "source": "/private/tmp/drf-os-delivery-final-20261018-1/junit.xml",
+      "sha256": "913e0a9ec6b9b254b5174d39bd16a0b720d95f71e3ded76dd2ae152a92433d4d"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/timing-review-red-completed.json",
+      "source": "/private/tmp/drf-os-timing-review-red-20261018-1/completed.json",
+      "sha256": "04f2280107632c2a53e0167f28e9713ebf4bb61d93a5de4149339b87f585cf3d"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/timing-review-red-junit.xml",
+      "source": "/private/tmp/drf-os-timing-review-red-20261018-1/junit.xml",
+      "sha256": "9672b4d10d1de0ca9b742add460e05c611a982ba40aa4597829f504b77deabcf"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-reviewed-completed.json",
+      "source": "/private/tmp/drf-os-delivery-reviewed-20261018-1/completed.json",
+      "sha256": "377cff51cea9e9507d56c9a98a12fe3baa354fbe365837af273d9aa84107e0d8"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-reviewed-junit.xml",
+      "source": "/private/tmp/drf-os-delivery-reviewed-20261018-1/junit.xml",
+      "sha256": "df5a4d8524025c454ed7d1b7cf214beb947a29d1dfdf73c7d0d39042ddccad21"
+    }
+  ],
+  "distinct_final_cases": {
+    "passed": 1455,
+    "skipped": 2
+  },
+  "note": "Final reviewed22-suite gate1455pass/two existing skips covers current backend bytes including PR4/PR5. Older overlapping gates are historical and are not added to this count."
+}

@@ -194,6 +194,10 @@ import json
 import os
 import sys
 
+# The offline bootstrap resets this flag. Carry only the actual runner's
+# synthetic input, leaving the child's audit boundary and policy untouched.
+market_flag = os.environ.pop("BACKTEST_FIXTURE_MARKETS_ENABLED")
+os.environ["PREDICTION_MARKETS_ENABLED"] = market_flag
 sys.path[:0] = {paths!r}
 import deerflow_research as dr
 import linear_research as lr
@@ -206,6 +210,15 @@ with open(os.path.join(out_dir, "child_env.json"), "w", encoding="utf-8") as str
     json.dump({{name: os.environ.get(name) for name in ("DRF_BACKTEST_POLICY", "PREDICTION_MARKETS_ENABLED")}},
               stream)
 model = v3.ScriptedModel(v3.World())
+original_resolve_policy = lr._backtest_policy
+
+
+def resolve_policy(env):
+    policy = original_resolve_policy(env)
+    with open(os.path.join(out_dir, "child_process.json"), "w", encoding="utf-8") as stream:
+        json.dump({{"pid": os.getpid(), "guarded": "main_offline_guard" in sys.modules,
+                    "resolved_policy": policy.to_dict() if policy is not None else None}}, stream)
+    return policy
 
 
 def gateway_factory(args, plog, bridge_arg, preset):
@@ -220,6 +233,7 @@ def tools_factory(ledger, pages_dir, bridge_arg, plog, limits):
 
 lr._default_gateway_factory = gateway_factory
 lr._default_tools_factory = tools_factory
+lr._backtest_policy = resolve_policy
 dr._collect_prediction_markets = lambda out_dir, question, report, meta, plog, model_name="": None
 dr._render_research_charts = lambda out_dir, meta, plog, question="": {{}}
 sys.exit(dr.main())
@@ -232,7 +246,11 @@ def child_pipeline(tmp_path, monkeypatch):
     deerflow_dir = tmp_path / "deerflow"
     deerflow_dir.mkdir()
     paths = [str(_REPO / "deerflow_bridge"), str(_REPO / "backend"), str(_REPO / "backend" / "tests")]
-    (deerflow_dir / "deerflow_research.py").write_text(_CHILD_SHIM.format(paths=paths), encoding="utf-8")
+    script = deerflow_dir / "deerflow_research.py"
+    script.write_text(_CHILD_SHIM.format(paths=paths), encoding="utf-8")
+    guard = sys.modules.get("main_offline_guard")
+    if guard is not None:
+        guard.allow_python_script(script)
     for name, value in (("PIPELINE_DATA_DIR", str(tmp_path / "pipelines")),
                         ("UPLOAD_FOLDER", str(tmp_path / "uploads")),
                         ("RESEARCH_MODEL_LEASE_DB", str(tmp_path / "leases.sqlite3")),
@@ -240,11 +258,24 @@ def child_pipeline(tmp_path, monkeypatch):
                         ("DEERFLOW_MODEL", "minimax"), ("DEERFLOW_RESEARCH_LANGUAGE", None),
                         ("RESEARCH_ENGINE", "v3"), ("DEERFLOW_DUAL_TRACK", True),
                         ("RESEARCH_PARALLEL_TRACKS", 1), ("EMBED_WARM_AT_RESEARCH", False),
-                        ("PREDICTION_MARKETS_ENABLED", True)):
+                        ("PREDICTION_MARKETS_ENABLED", True), ("NEWS_CONTEXT_ENABLED", False)):
         monkeypatch.setattr(po.Config, name, value, raising=False)
     monkeypatch.setattr(po, "_sync_deerflow_bridge_if_stale", lambda deerflow_dir: None)
     monkeypatch.setenv("MINIMAX_API_KEY", "test-key-not-used")
     monkeypatch.delenv("DEERFLOW_RESEARCH_TIMEOUT", raising=False)
+    parent_envs = []
+    popen = po.subprocess.Popen
+
+    def spawn_child(args, **kwargs):
+        env = dict(kwargs["env"])
+        parent_envs.append({name: env.get(name) for name in
+                           ("DRF_BACKTEST_POLICY", "PREDICTION_MARKETS_ENABLED")})
+        env["BACKTEST_FIXTURE_MARKETS_ENABLED"] = env["PREDICTION_MARKETS_ENABLED"]
+        return popen(args, **{**kwargs, "env": env})
+
+    # Delegate the original command and all process options to the installed
+    # Popen (GuardedPopen under main_offline_pytest); do not replace the runner.
+    monkeypatch.setattr(po.subprocess, "Popen", spawn_child)
 
     def run(pid, options):
         po.PipelineManager.ensure_dirs(pid)
@@ -257,8 +288,19 @@ def child_pipeline(tmp_path, monkeypatch):
                               "safety_policy_v1": po.capture_safety_policy_v1("admission"), **options})
         po.PipelineManager.save(state)
         po.PipelineOrchestrator._run(state)
+        assert state.status == "completed", state.error
         handoff = Path(state.handoff_dir)
         child_env = json.loads((handoff / "child_env.json").read_text(encoding="utf-8"))
+        assert parent_envs == [child_env]
+        child_process = json.loads((handoff / "child_process.json").read_text(encoding="utf-8"))
+        assert child_process["pid"] != os.getpid()
+        assert child_process["guarded"] is (guard is not None)
+        expected_policy = json.loads(child_env["DRF_BACKTEST_POLICY"]) if child_env["DRF_BACKTEST_POLICY"] else None
+        assert child_process["resolved_policy"] == expected_policy
+        if guard is not None:
+            receipt = json.loads((guard.root / f"process-{child_process['pid']}.json").read_text(encoding="utf-8"))
+            assert receipt["exit_code"] == 0 and receipt["shutdown_complete"]
+            assert receipt["identity_preserved"] and receipt["source_drift"] == []
         meta = json.loads((handoff / "meta.json").read_text(encoding="utf-8"))
         return state, handoff, child_env, meta
 

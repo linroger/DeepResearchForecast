@@ -341,7 +341,9 @@ _ENV_READ = re.compile(
     r"""(?:(?:source|env|environ)\.get\(|_source_path\(source,\s*|_limit\()\s*["']([A-Z][A-Z0-9_]+)["']""")
 # Process plumbing, not tuning knobs: the hub passes HOME/PATH to its children
 # and the orchestrator sets the run artifact directory for each research run.
-_NOT_KNOBS = {"HOME", "PATH", "DEERFLOW_RUN_ARTIFACT_DIR"}
+# DRF_BACKTEST_POLICY is an orchestrator-owned per-run identity, documented as
+# non-user configuration in .env.example; it must not be set as a tuning knob.
+_NOT_KNOBS = {"HOME", "PATH", "DEERFLOW_RUN_ARTIFACT_DIR", "DRF_BACKTEST_POLICY"}
 
 
 def _official_data_env_knobs():
@@ -359,6 +361,10 @@ def _official_data_env_knobs():
 
 
 def test_every_official_data_env_knob_is_documented_in_env_example():
+    # The internal cutoff identity is documented as process plumbing, not an
+    # editable environment default. Its exclusion cannot hide missing guidance.
+    assert "DRF_BACKTEST_POLICY" in ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "切勿写进 .env" in ENV_EXAMPLE.read_text(encoding="utf-8")
     knobs = _official_data_env_knobs()
     documented = set(re.findall(r"^\s*#?\s*([A-Z][A-Z0-9_]+)=", ENV_EXAMPLE.read_text(encoding="utf-8"), re.M))
 

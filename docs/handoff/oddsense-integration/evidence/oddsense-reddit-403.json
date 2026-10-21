@@ -1,0 +1,54 @@
+{
+  "controlled_scripted": true,
+  "tool_output": "CONTEXT social_search: forbidden; snippets/opinions/quotes are context only.",
+  "capture": {
+    "acquisition_seconds": 0.0010703339994506678,
+    "as_of": "2026-10-18",
+    "created_at": "2026-10-18T14:45:12.050525Z",
+    "generation_id": "7520344058ab4cd7b444b9e3958cab32",
+    "items": [],
+    "language": "en",
+    "network_requests": {
+      "reddit": 1
+    },
+    "network_started_at": "2026-10-18T14:45:12.051587Z",
+    "providers": {
+      "reddit": {
+        "attempted": true,
+        "reason": "http_403",
+        "state": "forbidden"
+      }
+    },
+    "queries": [
+      {
+        "capture_id": "7520344058ab4cd7b444b9e3958cab32:b557db9d01406bc2fd438c63586637978ccd299e097a5b38528a3e086321764b",
+        "http_status": 403,
+        "items": [],
+        "provider": "reddit",
+        "query": "capacity",
+        "request_id": "b557db9d01406bc2fd438c63586637978ccd299e097a5b38528a3e086321764b",
+        "retrieved_at": "2026-10-18T14:45:12.052654Z",
+        "status": {
+          "attempted": true,
+          "reason": "http_403",
+          "state": "forbidden"
+        }
+      }
+    ],
+    "question_sha256": "a7dbfd92b8bf3ac842174f600827f873e55fa6439169168e7c856dcb58a1eda1",
+    "schema_version": 1,
+    "sealed": true,
+    "sha256": "c9d9b39d6d4e13970df372aa32ca1b7d6ffbfb4a59fe44decfaaf95fbb9c5d1a"
+  },
+  "transport": [
+    {
+      "provider_host": "www.reddit.com",
+      "path": "/search.json",
+      "query": "q=capacity&limit=20&sort=new&t=month&raw_json=1",
+      "header_names": [
+        "Accept",
+        "User-Agent"
+      ]
+    }
+  ]
+}

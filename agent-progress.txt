@@ -646,3 +646,27 @@ Delivery checkpoint: 7d72c951cf8f8846e083989d593c8c4090f877c7 committed40ownedfi
 - **Verification:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-111453-main1021/` — plain 8,621 tests, 0 new failures (1 known order-dependent backfill failure on `main`, 19 known errors); guarded 1,918/1,922 (3 guard failures + the mirror-repair test that fails on pristine `main`); frontend 237 + build after the last merge; gates clean. Record: `docs/handoff/backtest/handoff.md` §11.
 - **Not merged (other owners or older programmes):** Codex branches (`codex/world-realism`, `codex/oddsense-integration`, `codex/reflexive-world-simulation`, two study branches), the two Oddsense commits on `claude-reflexive-world-state-model`, and the finharness `feat/`/`wp/` branches.
 
+
+# Retained Oddsense branch history
+
+### 2026-10-18 — codex/oddsense-integration — approved NewsAPI/Oddsense slices
+
+The user approved OS-1/OS-2/OS-3 and requested a team and actual end-to-end use. Work is isolated at /Users/rogerlin/.codex/worktrees/oddsense-integration/DeepResearchForecast on 495000e; unrelated dirty application changes remain in the original checkout. The frozen contract is docs/handoff/oddsense-integration/integration-contract.md. Five disjoint workers own providers, research, backend lifecycle/reports, market context and frontend. The coordinator owns Config/setup/docs and final verification. Three feature entries were appended without changing existing entries. Offline runner self-controls: 19 passed in /private/tmp/drf-os-baseline-guard-20261018-1; literal /tmp evidence was rejected before imports, so canonical /private/tmp paths are required. Application integration is in progress and no new feature is marked passing yet.
+
+### 2026-10-18T14:03:02.318649+00:00 — codex/oddsense-integration — OS-1/OS-2/OS-3 accepted
+
+Implemented bounded NewsAPI/optional Reddit, source-aware contextual market comparison, immutable evidence lifecycle, both real research consumers, ordinary/manual/seed/ensemble report carriers, publication/API/Markdown export and shared bilingual UI. Added frozen contracts and controlled/real-source verification; original dirty checkout preserved. Relevant matrix1397passed/2existing skips, affected92passed, bilingual61passed, frontend187passed/build; distinct accepted backend IDs1437passed/2skipped. Independent review findings closed; zero introduced F/E9 findings. Live final client19NewsAPI+8Polymarket rows; Kalshi partial catalog recall, Reddit403, Metaculus unsupportedaccess. Durable receipt/runbook: docs/handoff/oddsense-integration/final-verification.md. Local delivery commit follows; remote authentication remains blocked, no retry with unchanged credentials. Next steps: review/publish branch after valid Git auth, then separately requested deployment/live-model evaluation.
+
+### 2026-10-18T14:46:12.490229+00:00 — codex/oddsense-integration — final timing and review controls
+
+Final review exposed idle model time consuming the source-fetch allowance, pending-write time counted twice for news, and unknown legacy market elapsed time regaining allowance. Meaningful red receipts are retained. Digest-bound cumulative acquisition accounting, durable interruption reservations, native residual deadlines and positive legacy/replay controls now pass the full22-suite matrix:1455passed/two existing missing-harness skips, exact current bytes and actual engine-through-report/API/export flow. Frontend187/build/EN-ZH visuals unchanged. No original-checkout drift, credential persistence, guard weakening or deployment. Final scoped commit follows; remote authentication remains blocked.
+
+### 2026-10-18T14:50:48.340388+00:00 — Oddsense local delivery committed
+
+Feature commit 69c124b34740ceed40dc670e33fc52b75d4f86b7 on codex/oddsense-integration contains all three approved slices, final1455pass/two-skip backend gate, unchanged187frontend/build proof, actual consumer E2E and independent review closures. Worktree clean at that checkpoint; original91-entry dirty baseline preserved without hashed drift. This closing documentation record changes no application bytes. Remote delivery awaits valid configured Git authentication; do not repeat unchanged credential failures or infer deployment.
+
+### 2026-10-21 — codex/merge-oddsense: integrate Oddsense with current main
+- Merged codex/oddsense-integration7c98895 into main15c8453 in the isolated integration checkout, preserving both histories and newer feedback/backtest/hazard/translation features.
+- Closed mandatory-context binding, historical prompt/acquisition/sealing and report replay reconstruction gaps. Preserved guards and meaningful original assertions while adapting older fixtures.
+- Current merged source:1889 backend passes/two existing harness skips across44modules;261 frontend passes and build. Focused actual research/publication/feedback/replay controls and guarded child cutoff pass. Evidence: docs/handoff/oddsense-main-merge/.
+- Next: commit reviewed merge and verify main push; leave concurrent primary-checkout work untouched. No live provider/model or deployment operation performed.

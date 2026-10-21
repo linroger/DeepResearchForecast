@@ -1192,6 +1192,7 @@ A retrospective score means nothing if the pipeline can read the outcome. **Back
   - *Fetch:* the last Wayback Machine capture at or before the cutoff is read when there is one. Otherwise the live page is dated from its metadata, its URL and its search hit, and refused when it was published or modified after the cutoff.
   - *Official data:* request windows end at the cutoff. FRED's API route returns the as-of vintage (ALFRED); every other route, FRED's keyless CSV included, returns current revisions, which count only for periods that ended by the cutoff (in strict mode, a publication lag before it).
   - *Markets:* closed events are searched too. A market counts only if it was open at the cutoff; it is priced from CLOB price history at the cutoff, with resolved prices and later fields removed. The report stage never re-quotes.
+  - *News/social/cross-platform context:* current Oddsense tools are disabled for backtests; previously captured live context is rejected instead of being replayed as historical evidence.
   - *Dates and records:* the plan date, the simulation calendar and the target years start from the as-of date. `forecast.json` gets a `backtest` block, nothing goes to the production ledger, and the resolution monitor skips the report.
 - **Strict or lenient.** Strict mode (the default) drops undated sources; lenient mode keeps them with a flag. Every decision is logged in the handoff's `backtest_audit.jsonl` and summarized in `research_meta.json`.
 - **What it cannot cut: the model's memory.** The LLM may know outcomes from before its training cutoff. Each golden question carries `knowledge_cutoff` (the date its outcome became public), and `golden_eval.py` and `backtest_eval.py` take `--model-knowledge-cutoff` to report `post_model_cutoff` (clean), `pre_model_cutoff` (possibly memorized) and `unknown` separately. All 30 current golden questions resolved by February 2025, so for a 2026 model their scores are an upper bound.
@@ -1496,6 +1497,24 @@ Research models (`DEERFLOW_MODEL`), as defined by the stanzas in `deerflow_bridg
 | `RESEARCH_MCP_KG` | `true` | Give fork/continue/resume research runs access to an existing graph |
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | Search and fetch backends (Firecrawl is recommended) |
 | `PREDICTION_MARKETS_ENABLED` | `true` | Keyless Polymarket lookups during research and the report |
+
+**News and cross-platform research context**
+
+Both research engines expose `news_search`, optional `social_search`, and `market_compare` when enabled. A configured NewsAPI key enables one bounded topic prefetch before investigation; selected publisher pages use the ordinary fetch/citation path. NewsAPI snippets remain discovery evidence until the original page is fetched. Reddit records are attributed discussion, while cross-platform quotes retain their venue, native identity, price basis, units and rules. Topic similarity does not establish contract equivalence or executable arbitrage; these feeds never become automatic forecast anchors or settlement evidence.
+
+The sealed `handoff/news_market_context.json` records provider statuses, article/quote times, query identity and hashes. Parent promotion/reuse and the simulation's consumed research binding preserve the captured generation. Research and forecast views show the same bounded attributed context, and forecast Markdown carries its source links and limitations. Report readers do not refetch these sources. Invalid present captures fail validation; missing older captures remain compatible.
+
+| Setting | Default | Current behavior |
+|---|---|---|
+| `NEWS_CONTEXT_ENABLED` | `true` | Master switch for new acquisition/tools/snapshots on fresh runs |
+| `NEWSAPI_API_KEY` · `NEWSAPI_ENABLED` | — · `true` | Key stays in the backend environment and an HTTP header; missing credentials are explicitly unavailable |
+| `NEWSAPI_MAX_REQUESTS` · `NEWSAPI_PAGE_SIZE` | `2` · `20` | Physical requests per generation and articles per one-page request; secondary research lanes receive no NewsAPI allowance |
+| `NEWSAPI_LOOKBACK_DAYS` | `30` | Bounded publication lookback; actual accessible history and delay depend on the subscription |
+| `NEWS_CONTEXT_DEADLINE_SECONDS` · `NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS` | `10` · `5` | Cumulative acquisition time (excluding model/idle gaps) and shorter per-request caps; caller deadlines can only shorten them |
+| `REDDIT_SIGNALS_ENABLED` · `REDDIT_MAX_REQUESTS` | `false` · `1` | Optional discussion discovery; denied/rate-limited access is not an empty successful search |
+| `MARKET_INTELLIGENCE_ENABLED` · `MARKET_INTELLIGENCE_MAX_REQUESTS` | `true` · `4` | Bounded context-only cross-platform discovery; community-forecast access can remain explicitly unsupported |
+
+NewsAPI's published Developer plan currently has a 24-hour article delay, one-month history and 100 requests/day, and permits development/testing only. Verify the actual key's plan before staging/production use; no plan is inferred from possession of a key. See [NewsAPI pricing](https://newsapi.org/pricing), [configuration](.env.example), and [Oddsense attribution](docs/third-party/oddsense.md). Network errors, missing keys, partial catalog scans and unknown timestamps retain explicit availability/coverage limits; no missing price or opinion becomes zero or neutral evidence.
 
 **Official data (research and report)**
 

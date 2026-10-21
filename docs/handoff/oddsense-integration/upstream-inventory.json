@@ -1,0 +1,518 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-10-18T12:16:42.444319+00:00",
+  "repository": "https://github.com/jayeshvpatil/oddsense.git",
+  "revision": "a625a81ff84091c12148b9fb5c84893466aea282",
+  "source_cache": "/tmp/drf-oddsense-study-20261018-q6nhRM/oddsense",
+  "study_scope": "All tracked Rust source files, including inline test definitions. Supporting docs and configuration as indicated. No dependency source or vendor execution.",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 35,
+      "lines": 5,
+      "sha256": "14b3b510501d1ca5deed3be48fc6980ea325ddc235af815ea6c36ee37d3c3d01",
+      "inspected_ranges": [
+        [
+          1,
+          5
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "CLAUDE.md",
+      "bytes": 38170,
+      "lines": 868,
+      "sha256": "cbdc0f4a07d645a9459dfcfe5a3f20a200757f998d3341ea078ecca95b86ee87",
+      "inspected_ranges": [
+        [
+          1,
+          70
+        ]
+      ],
+      "status": "partial_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 60352,
+      "lines": 2376,
+      "sha256": "00fff738666282591c3dec55a5f7a2b8f24713c7faf555913fb333d86c482191",
+      "inspected_ranges": [],
+      "status": "dependency_lock_hashed_only",
+      "symlink": false
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 1003,
+      "lines": 35,
+      "sha256": "f19ce92530548759fec7056d830aca498680eb243af65887cc5ffbc1bf806091",
+      "inspected_ranges": [
+        [
+          1,
+          35
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1069,
+      "lines": 21,
+      "sha256": "915244fd1ec2815f0ed9eb487e2d7939d8ee37517cd082ed63e773f21c4747f5",
+      "inspected_ranges": [
+        [
+          1,
+          21
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "README.md",
+      "bytes": 10498,
+      "lines": 228,
+      "sha256": "dffb6cc068b3918f87bcf73da5c35389320629a728df63bb4c0ffd367544babb",
+      "inspected_ranges": [
+        [
+          1,
+          228
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "SKILL.md",
+      "bytes": 7441,
+      "lines": 255,
+      "sha256": "2422836b9403a941536a0eac7d028054fbb5a7bda0fcae5f721948c3a2212a88",
+      "inspected_ranges": [
+        [
+          1,
+          255
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/adapters/kalshi.rs",
+      "bytes": 9661,
+      "lines": 304,
+      "sha256": "773e1e86d46632e9fe83d442fc8e9762a104613eb389e390beab4d1bed72c148",
+      "inspected_ranges": [
+        [
+          1,
+          304
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/adapters/metaculus.rs",
+      "bytes": 6621,
+      "lines": 217,
+      "sha256": "7d5ad87ab8383f9deee54b9834fd363dc061e6673a9764058d9fdf6e6b96b09e",
+      "inspected_ranges": [
+        [
+          1,
+          217
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/adapters/mod.rs",
+      "bytes": 661,
+      "lines": 20,
+      "sha256": "07356106a90e1c91d2ada8feb4801dac525b60995838bd2a17e2b84183c2c83d",
+      "inspected_ranges": [
+        [
+          1,
+          20
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/adapters/polymarket.rs",
+      "bytes": 7965,
+      "lines": 245,
+      "sha256": "ec97cfcd57f4b1191321935753604952d4081503293dd768d2372e679e71c17c",
+      "inspected_ranges": [
+        [
+          1,
+          245
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/adapters/schema.rs",
+      "bytes": 1850,
+      "lines": 56,
+      "sha256": "dab858fec50589eac0fc5cd1bd40336f9c7f5de1ca22215ae681b72dfb0665b3",
+      "inspected_ranges": [
+        [
+          1,
+          56
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/analysis/arbitrage.rs",
+      "bytes": 9471,
+      "lines": 290,
+      "sha256": "716283a2c41e3d2ca7e777dfcdc3075bde3f5f4255d114f98952dd020f62b52b",
+      "inspected_ranges": [
+        [
+          1,
+          290
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/analysis/divergence.rs",
+      "bytes": 4939,
+      "lines": 160,
+      "sha256": "436f9c1638ffd9003540f24892c77395ff9216f220d0d6f25fa2418dbb3a28dd",
+      "inspected_ranges": [
+        [
+          1,
+          160
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/analysis/mod.rs",
+      "bytes": 39,
+      "lines": 2,
+      "sha256": "eba2c6728028218002dac8e586108caf76065df70321a90ad165bbafffb139fa",
+      "inspected_ranges": [
+        [
+          1,
+          2
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/arbitrage.rs",
+      "bytes": 4513,
+      "lines": 153,
+      "sha256": "dcbc9c11d4c4bd44037db0ab6ac4d0fd4697d39d7614a8009e96f18fe4a282d3",
+      "inspected_ranges": [
+        [
+          1,
+          153
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/compare.rs",
+      "bytes": 3802,
+      "lines": 125,
+      "sha256": "10aa39e01052c5e360f8b04e1033ab40e8e59f8e6128d5524a1cc89ee0ee748e",
+      "inspected_ranges": [
+        [
+          1,
+          125
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/divergence.rs",
+      "bytes": 7701,
+      "lines": 218,
+      "sha256": "aff4a31a6e0ebebdcecec160fe5d37bc7c86c05e9da35beef8f477f3651461bf",
+      "inspected_ranges": [
+        [
+          1,
+          218
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/enrich.rs",
+      "bytes": 739,
+      "lines": 29,
+      "sha256": "b0e6cca8c187b606b397c0943928a64f818f5f2e10c3347af229089da13c3084",
+      "inspected_ranges": [
+        [
+          1,
+          29
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/mod.rs",
+      "bytes": 4372,
+      "lines": 161,
+      "sha256": "352c8aab1e7c1dc31d707c95ad1b5219020f686b54b32973513b790872a8d5e2",
+      "inspected_ranges": [
+        [
+          1,
+          161
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/search.rs",
+      "bytes": 9244,
+      "lines": 270,
+      "sha256": "83df392b62fdb3677336d8b5e785a3354f65be3919e34e9b078e400aaff8b2ec",
+      "inspected_ranges": [
+        [
+          1,
+          270
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/cli/signals.rs",
+      "bytes": 1165,
+      "lines": 44,
+      "sha256": "11bec7eb8309325c30c59fc9ac6ed083ebf664cc9c8f73189e81bfda8702f284",
+      "inspected_ranges": [
+        [
+          1,
+          44
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/config.rs",
+      "bytes": 1919,
+      "lines": 72,
+      "sha256": "8c8be0486a0353779f139004d4cc55628a6a3a0b431169f08fcb9b80372319e8",
+      "inspected_ranges": [
+        [
+          1,
+          72
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/lib.rs",
+      "bytes": 103,
+      "lines": 6,
+      "sha256": "184f0ecd15d7cca46bbd270cc0c8b8401c5955dfa8a2427c8e44930fe101ef13",
+      "inspected_ranges": [
+        [
+          1,
+          6
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/llm/mod.rs",
+      "bytes": 523,
+      "lines": 23,
+      "sha256": "5babf57eb47959d7404fe86bd4183141600544cd9116d1210cffa432cc047f01",
+      "inspected_ranges": [
+        [
+          1,
+          23
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/llm/provider.rs",
+      "bytes": 5954,
+      "lines": 180,
+      "sha256": "a536ceeb8c88cc9d681f5d628994543318f7de7feffb17ae85f89b0ca3ffd897",
+      "inspected_ranges": [
+        [
+          1,
+          180
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/main.rs",
+      "bytes": 2543,
+      "lines": 112,
+      "sha256": "826f39895fb1c417a3a87bc13788f5dd4f42a47906031780efc78896737aba2f",
+      "inspected_ranges": [
+        [
+          1,
+          112
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/output/json.rs",
+      "bytes": 333,
+      "lines": 13,
+      "sha256": "8bb332deaa76983e380ec5151791b854f2cb355f5458ebe1a6e455c09774e9ae",
+      "inspected_ranges": [
+        [
+          1,
+          13
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/output/mod.rs",
+      "bytes": 902,
+      "lines": 40,
+      "sha256": "388b61044e3eb6968f37f7893892ec7a91fb40a543edbc19e17883a5feda8f70",
+      "inspected_ranges": [
+        [
+          1,
+          40
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/output/table.rs",
+      "bytes": 8264,
+      "lines": 279,
+      "sha256": "5b928800212483425e4761813dbaba84800d0455cf5b6ffc85363a2c10552819",
+      "inspected_ranges": [
+        [
+          1,
+          279
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/search/categories.rs",
+      "bytes": 7334,
+      "lines": 221,
+      "sha256": "b3c44c4551d643f6a4062364dff31c2bfea9d6e3f15214f2c79569d428a8804e",
+      "inspected_ranges": [
+        [
+          1,
+          221
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/search/mod.rs",
+      "bytes": 11731,
+      "lines": 281,
+      "sha256": "39d9e552f2212ba0d0eed47de7572907db871d22c26fb8edf3906b71013475ed",
+      "inspected_ranges": [
+        [
+          1,
+          281
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/sentiment/mod.rs",
+      "bytes": 5023,
+      "lines": 163,
+      "sha256": "669029324bfb1c1ebea6e4e0cba69a9f1bff6a5ed44433c45514a4a12ff6f6a0",
+      "inspected_ranges": [
+        [
+          1,
+          163
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/sentiment/news.rs",
+      "bytes": 3104,
+      "lines": 112,
+      "sha256": "eeffb18ad347ad38da4101c166c775b679b431e741af7154e2960b4bdb59acdb",
+      "inspected_ranges": [
+        [
+          1,
+          112
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/sentiment/reddit.rs",
+      "bytes": 2803,
+      "lines": 108,
+      "sha256": "b0d32d4447a0772ca2f9bf5886782fa4c2749245de2376149db5901fada1f31e",
+      "inspected_ranges": [
+        [
+          1,
+          108
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    },
+    {
+      "path": "src/sentiment/scorer.rs",
+      "bytes": 5211,
+      "lines": 147,
+      "sha256": "24007911f80bfa24f3240947aed5eddcff351c5f7f39c953f5e493477a77a96a",
+      "inspected_ranges": [
+        [
+          1,
+          147
+        ]
+      ],
+      "status": "full_text_inspected",
+      "symlink": false
+    }
+  ],
+  "summary": {
+    "tracked_files": 36,
+    "rust_files": 29,
+    "rust_lines": 4051,
+    "rust_full_text_inspected": 29,
+    "uncovered_rust_files": 0,
+    "runtime_tests_executed": 0
+  },
+  "coverage_limit": "Coverage records actual full source-text deliveries; static inventory and inline test definitions do not establish runtime behavior. CLAUDE.md beyond lines 1-70 is not included in full-read coverage; Cargo.lock is hashed only."
+}

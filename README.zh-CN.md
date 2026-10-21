@@ -1192,6 +1192,7 @@ flowchart LR
   - *抓取：* 如果 Wayback Machine 在截止日期当天或之前有存档，就读取最后一份存档。否则读取实时页面，按页面元数据、URL 和对应搜索结果定日期；页面发布或修改晚于截止日期时拒绝读取。
   - *官方数据：* 请求窗口截止于截止日期。FRED 的 API 路径返回截止日期当时的版本（ALFRED）；其他所有路径（包括 FRED 免密钥的 CSV）返回当前修订值，只计入截止日期前已经结束的时期（严格模式下还要早于截止日期一个发布滞后期）。
   - *预测市场：* 已关闭的事件也会被检索。只有在截止日期时仍开放的市场才计入；其价格取自截止日期时的 CLOB 历史价格，已判定的价格和此后的字段都会被移除。报告阶段从不重新报价。
+  - *新闻、社交与跨平台上下文：* 回测时关闭当前 Oddsense 工具；已保存的实时上下文会被拒绝，不会作为历史证据重放。
   - *日期与记录：* 研究计划日期、模拟日历和目标年份都从截止日期起算。`forecast.json` 带有 `backtest` 块，不写入生产账本，判定监测也会跳过这份报告。
 - **严格或宽松。** 严格模式（默认）丢弃没有日期的来源；宽松模式保留它们并加标记。每一个决定都记在 handoff 的 `backtest_audit.jsonl` 中，并汇总进 `research_meta.json`。
 - **它截不断的：模型自身的记忆。** LLM 可能知道其训练截止日期之前的结局。每个黄金问题都带有 `knowledge_cutoff`（其结局公开的日期），`golden_eval.py` 和 `backtest_eval.py` 接受 `--model-knowledge-cutoff`，分别报告 `post_model_cutoff`（干净）、`pre_model_cutoff`（可能被记住）和 `unknown`。现有的 30 个黄金问题都在 2025 年 2 月之前判定，因此对 2026 年的模型而言，它们的分数只是上限。
@@ -1496,6 +1497,24 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 | `RESEARCH_MCP_KG` | `true` | 让分叉/继续/恢复的研究可以访问已有的图谱 |
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | 搜索与抓取后端（推荐 Firecrawl） |
 | `PREDICTION_MARKETS_ENABLED` | `true` | 在研究与报告阶段免 Key 查询 Polymarket |
+
+**新闻与跨平台研究上下文**
+
+两种研究引擎在启用后提供 `news_search`、可选的 `social_search` 和 `market_compare`。配置 NewsAPI Key 后，调查前会进行一次有界主题预取；选中的出版方原文沿用既有抓取与引用流程。NewsAPI 摘要在原文抓取前仅是发现线索。Reddit 条目属于带出处的讨论，跨平台报价保留平台、原生标识、价格依据、单位和结算规则。主题相似不等于合约等价或可执行套利；这些来源不会成为自动概率锚点或结算证据。
+
+封存的 `handoff/news_market_context.json` 保留提供方状态、文章／报价时间、查询身份与哈希。父流程的提升／复用及模拟已消费研究世代的绑定保护所捕获版本。研究与预测界面显示同一份有界、带出处的上下文，预测 Markdown 也保留来源链接和局限。报告读取不会重新抓取这些来源。存在但无效的捕获会被拒绝；缺少捕获的旧运行保持兼容。
+
+| 设置 | 默认值 | 当前行为 |
+|---|---|---|
+| `NEWS_CONTEXT_ENABLED` | `true` | 新运行的新增检索／工具／快照总开关 |
+| `NEWSAPI_API_KEY` · `NEWSAPI_ENABLED` | — · `true` | Key 仅留在后端环境与 HTTP 请求头中；缺失凭证明确标为不可用 |
+| `NEWSAPI_MAX_REQUESTS` · `NEWSAPI_PAGE_SIZE` | `2` · `20` | 每个研究世代的物理请求数与单页文章数；次级研究轨不分配 NewsAPI 额度 |
+| `NEWSAPI_LOOKBACK_DAYS` | `30` | 有界发布时间回溯；实际历史范围与延迟取决于订阅 |
+| `NEWS_CONTEXT_DEADLINE_SECONDS` · `NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS` | `10` · `5` | 累计检索用时（不计模型规划与空闲间隔）及单请求时限；调用方截止时间只能收紧这些上限 |
+| `REDDIT_SIGNALS_ENABLED` · `REDDIT_MAX_REQUESTS` | `false` · `1` | 可选讨论发现；拒绝访问／限流不等于成功的空查询 |
+| `MARKET_INTELLIGENCE_ENABLED` · `MARKET_INTELLIGENCE_MAX_REQUESTS` | `true` · `4` | 有界的跨平台上下文发现；社区预测访问未建立时明确标为不支持 |
+
+NewsAPI 公布的 Developer 方案目前有 24 小时文章延迟、一个月历史及每天 100 次请求，且仅允许开发／测试用途。用于预发布／生产前须核对实际 Key 的方案；不能由持有 Key 推断权限。参见 [NewsAPI 方案](https://newsapi.org/pricing)、[配置](.env.example)及 [Oddsense 署名](docs/third-party/oddsense.md)。网络错误、缺少 Key、部分目录扫描及未知时间戳均保留明确的可用性／覆盖局限；缺失报价或观点不会变成零概率或中性证据。
 
 **官方数据（研究与预测报告）**
 
