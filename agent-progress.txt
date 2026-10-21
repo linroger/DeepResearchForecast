@@ -623,3 +623,10 @@ Delivery checkpoint: 7d72c951cf8f8846e083989d593c8c4090f877c7 committed40ownedfi
   - Owner-approved live check: a question whose sources publish event hazards.
   - Resync the deployed skills after merging.
   - World-model side: the seed's parser still accepts ranges.
+
+### 2026-10-21T03:00+08:00 (CST) — branch `claude/intelligent-cerf-d84ce7` (reset to `claude/nice-diffie-73cb9a` 42215e6) — live check of the v3 documented-risk extraction
+- **Request (from the documented-risks session, owner-approved paid run):** one standard research run with method skills, then PREPARE of a simulation on it (no simulation run); check `docs/handoff/research-risks/handoff.md` §9 items 1–4 and record the result.
+- **Run:** `pipe_fef5312f76f0` (Henry Hub winter 2026–27 question naming NOAA CPC hazards), launched by the sibling session local_94279b6c on a :5011 launcher that halts at RUN. Attempt 1 failed at research finalize because that worktree's `backend/uploads` was a symlink (`O_NOFOLLOW` pin, "research root must not contain parent traversal"). It was resumed from a real uploads dir (research reused with 0 engine calls); PREPARE sealed `sim_71c47873ada0`; RUN cancelled; $3.06 in total.
+- **Result:** skills enabled; one `extract:frame` call (1,855 output tokens, no retry, not truncated); risks 5 extracted → 1 kept (NOAA "5% above-normal" hurricane activity, `[S34]`, report line 175; window blanked); no invented probability passed. False negative: the El Niño row packed three window-specific CPC probabilities into one string. Sealed seed: 0 shocks, `shock_without_window` + `no_documented_shocks`. Even split rows give 0 shocks, because the seed cannot read calendar windows ("October–December").
+- **Evidence:** `/Users/rogerlin/Downloads/drf-guarded-runs/20261021-0200-risks-live/` (`checks/`, `research_snapshot/`), run artifacts in `.claude/worktrees/competent-wu-dccf15/backend/uploads/` (kept); record §5 F3–F8, §7b, §8b.
+- **Next:** owner's choice among the §9 proposals P1–P4 (one row per stated probability, calendar windows in the seed, windows as written, cleaner counts); worktree live checks need a real `backend/uploads`.
