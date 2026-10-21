@@ -1,0 +1,213 @@
+{
+  "scope": "Approved default commitment integration and forecast-to-resolution-scoring-next-report loop",
+  "unique_passed_cases": 812,
+  "phases": [
+    {
+      "phase": "world core",
+      "passed": 285,
+      "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/core-base-accepted",
+      "receipt_sha256": "739824ca0b05716794765baac03af6a8c758bc73787bba6ac4d3fda69d5123ed",
+      "junit_sha256": "343ebc29542d96a5dac871917a3a4c6bdeedd2c0bf28ba14ccfc573a18abe50c",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "world continuous",
+      "passed": 1,
+      "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/continuous-base-accepted",
+      "receipt_sha256": "db3d9d9a09222c919a7bb65999678962b10bc716635e75e3624c7a54d24f21e9",
+      "junit_sha256": "b6ae0df2027bbf49d1c1b1307e128682cb343d8036aed6eb92fe95c27a05418f",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "world resume",
+      "passed": 1,
+      "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/resume-base-accepted",
+      "receipt_sha256": "2f8a09eec97bcea9ea05630a99750d2cffd01e4afcf477cbbb140403e945ff16",
+      "junit_sha256": "118d48d5ae6086c07f145a4d3f05ea8d4eff2713d49421eb181d78d05a6583d5",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "world loop",
+      "passed": 11,
+      "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/world-loop-base-accepted",
+      "receipt_sha256": "4d5a4f6a0414027a3b5abae60de9b18a8a2b8a2fdcadd81b274969a370e38f1b",
+      "junit_sha256": "057e0247195002898bfe9ee88e1db4100a8bfed80bccf38c7a310d39691c1769",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "calendar loop",
+      "passed": 7,
+      "path": "/private/tmp/drf-forecast-commitment-in9y9u3h/calendar-loop-base-accepted",
+      "receipt_sha256": "c769afcd70ab2ad7ce068c8f605c2143dce5baa574a5487c38c74697b7ce71ed",
+      "junit_sha256": "d494a8478764383b51af0da9f27bd75253efd38649f51b871654b900c40a4173",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "combined feedback",
+      "passed": 500,
+      "path": "/private/tmp/drf-feedback-final-20261021-1",
+      "receipt_sha256": "725fe118ce6127a6a92b8be2f43b02953f1cd45f9376454cf447266510a81320",
+      "junit_sha256": "2ed8d3fa9242ad819c86bc34ac0b3cb1b17cff96f5bf96f5cc7a6db09871b70e",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:external_read": 18,
+        "allowed:guarded_child": 4
+      },
+      "children": {
+        "5958": {
+          "exit_code": 0,
+          "receipt": "process-5958.json"
+        },
+        "5959": {
+          "exit_code": 0,
+          "receipt": "process-5959.json"
+        },
+        "5960": {
+          "exit_code": 0,
+          "receipt": "process-5960.json"
+        },
+        "6120": {
+          "exit_code": 0,
+          "receipt": "process-6120.json"
+        }
+      },
+      "normal_shutdown": true
+    },
+    {
+      "phase": "full workflow",
+      "passed": 7,
+      "path": "/private/tmp/drf-feedback-acceptance-final-_y02obqb-evidence",
+      "receipt_sha256": "b0e206210bb6d61dddc2d33876fd8ea93dd76e61e86c31d27d34c21d447a5777",
+      "junit_sha256": "98a0732d803897b4345d1fcab434b11ada9ce8227cc87819a519dd907310ceb1",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 1
+      },
+      "children": {
+        "13731": {
+          "exit_code": 0,
+          "receipt": "process-13731.json"
+        }
+      },
+      "normal_shutdown": true
+    },
+    {
+      "phase": "joint continuous",
+      "passed": 1,
+      "path": "/private/tmp/drf-feedback-world-continuous-20261021-1",
+      "receipt_sha256": "90d45d5bad67dbbc15a4423dd448c175123f010f55417dea4581018defd9e1fe",
+      "junit_sha256": "0111cb2a15e13a34750d66d6ac51c6f955ac536668b637bbdc24f2abc1999e49",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "children": {},
+      "normal_shutdown": true
+    },
+    {
+      "phase": "joint resume",
+      "passed": 1,
+      "path": "/private/tmp/drf-feedback-world-resume-20261021-1",
+      "receipt_sha256": "1790fe28a9ef0760ed9129b58ae964881672dda1c8ed392d748f02dc32248128",
+      "junit_sha256": "5a675d0b82119019f5e6de6f26756387adf093ec3b8b95375dd2702e942b80eb",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "children": {},
+      "normal_shutdown": true
+    }
+  ],
+  "source_sha256": {
+    "backend/app/api/sdk.py": "41537171afdf65b179718e38c39f3834709a58a567cafc5b8cbbed845c7f3ba9",
+    "backend/app/services/agent_decision.py": "695f29f4558f78f5fecc98cd8dfe79dab247f414fe669fe83ad6f5dee12c655f",
+    "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
+    "backend/app/services/forecast_ledger.py": "2576a04a669586c7ebe94550d5d5ef1a8754c51bf65b42809e068e7164c0edc5",
+    "backend/app/services/forecast_track_record.py": "6cd977828939223b239cd83ebb72c39f05c6a76714ad9ada3f9be5b73d9610b1",
+    "backend/app/services/report_agent.py": "880615f54c85e2f43a1d2a50f1c7bdd8949baf4f41ae46b75ed0c48886e4e46a",
+    "backend/app/services/world_model.py": "2673149b82e606abd008f62c31a4ea5019358ee31f8b376314052711730fea43",
+    "backend/app/services/world_update.py": "91116f0a92fce1a6b65a312f29b6b9cfe24094ffdb97da0b6cadbf1d1cf38f56",
+    "backend/scripts/backfill_report_visuals.py": "c8f36446dc8c72affb46b2458096878dd773154b7efaa66296be090404ff62bf",
+    "backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "backend/scripts/resolution_monitor.py": "b76349d721fb306f086b1284591255dae0d67dd562f9bdd8be4d68f3f16eb15c",
+    "backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "backend/tests/test_forecast_track_record.py": "b10619ed839a53d3b3ddeff5929f25428c89c7a3487daa3cbb7c1ccbb5963caf",
+    "backend/tests/test_report_official_publication_real.py": "208c6cd7919151d586e136e9db7168e0ccf350d17dd2123809e1658671fba8a6",
+    "backend/tests/test_world_commitment_fulfilment.py": "c404da182ed40a36fcb42a025e3958885259528ce60d0d423389a050dc534873",
+    "backend/tests/test_forecast_feedback_workflow.py": "b49be9a22dc19e49f72acd8a457635ac1f706c927078727852ce4bd0aa959362"
+  },
+  "source_drift": [],
+  "external_responses": "synthetic",
+  "deployment": false,
+  "production_accuracy_claim": false,
+  "main_commitment_commit": "303e5a88aa4fa097441b8b2161bc0209b3c42130",
+  "delivery": "local main integrated and remote legacy/main push successful after credential repair; delivery.json",
+  "deduplication": "JUnit classname normalized only for backend/ invocation prefix; same module/class and parameterized test name count once.",
+  "review": "closed; no remaining blocking findings; review.md"
+}

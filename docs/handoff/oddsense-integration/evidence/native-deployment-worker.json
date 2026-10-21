@@ -1,0 +1,559 @@
+{
+  "schema": "deployment-sidecar/v1",
+  "boundary": "macOS sandbox-exec",
+  "results": [
+    {
+      "test": "test_shell_scripts_parse[setup.sh]",
+      "status": "passed",
+      "elapsed_seconds": 0.0139
+    },
+    {
+      "test": "test_shell_scripts_parse[init.sh]",
+      "status": "passed",
+      "elapsed_seconds": 0.0121
+    },
+    {
+      "test": "test_shell_scripts_parse[scripts/doctor.sh]",
+      "status": "passed",
+      "elapsed_seconds": 0.0128
+    },
+    {
+      "test": "test_shell_scripts_parse[scripts/setup_datamcps.sh]",
+      "status": "passed",
+      "elapsed_seconds": 0.0127
+    },
+    {
+      "test": "test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness",
+      "status": "passed",
+      "elapsed_seconds": 0.7687
+    },
+    {
+      "test": "test_setup_datamcps_gates_old_node_and_opt_out",
+      "status": "passed",
+      "elapsed_seconds": 0.4916
+    },
+    {
+      "test": "test_datamcps_build_outputs_are_ignored_and_sources_are_not",
+      "status": "passed",
+      "elapsed_seconds": 0.3878
+    },
+    {
+      "test": "test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle",
+      "status": "passed",
+      "elapsed_seconds": 0.1162
+    },
+    {
+      "test": "test_session_hook_litter_is_never_deployed",
+      "status": "passed",
+      "elapsed_seconds": 0.0051
+    }
+  ],
+  "controls": {
+    "scratch_read_write": true,
+    "outside_read_denied": true,
+    "outside_write_denied": true,
+    "inet_bind_denied": true,
+    "unapproved_exec_denied": true,
+    "outside_signal_denied": true,
+    "anonymous_unix_pair": true,
+    "owned_ps_and_signal": true,
+    "outside_ps_request_denied": true
+  },
+  "identity_preserved": true,
+  "fake_tool_invocations": [
+    "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node -v",
+    "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node -v",
+    "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node -v"
+  ],
+  "child_cleanup_complete": true,
+  "commands": [
+    {
+      "command": [
+        "/bin/bash",
+        "-n",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/setup.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "-n",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/init.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "-n",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/doctor.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "-n",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh",
+        "--check",
+        "bls"
+      ],
+      "exit_code": 0,
+      "stdout": "\n== Data-source MCP servers (check only): /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/servers ==\n› node: /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node (v22.0.0)\n✓ bls: up to date (bls_mcp-main/dist/index.js)\n\n== Data-source MCP servers: summary ==\n  server status      detail\n  bls    up-to-date  bls_mcp-main/dist/index.js\n✓ All selected data-source MCP servers are ready.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh",
+        "--check",
+        "bls"
+      ],
+      "exit_code": 1,
+      "stdout": "\n== Data-source MCP servers (check only): /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/servers ==\n› node: /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node (v22.0.0)\n⚠ bls: build output missing or older than sources\n\n== Data-source MCP servers: summary ==\n  server status      detail\n  bls    stale       build output missing or older than sources\n⚠ 1 data-source server(s) not ready — research runs continue without them.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh",
+        "--check",
+        "fred"
+      ],
+      "exit_code": 1,
+      "stdout": "\n== Data-source MCP servers (check only): /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/servers ==\n› node: /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/toolchain/node (v22.0.0)\n⚠ fred: sources not found at /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/servers/fred-mcp-server-main — skipped.\n\n== Data-source MCP servers: summary ==\n  server status      detail\n  fred   skipped     sources missing (/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_check_mode_is_idempotent_and_detects_staleness/servers/fred-mcp-server-main)\n⚠ 1 data-source server(s) not ready — research runs continue without them.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh",
+        "--check",
+        "usgov"
+      ],
+      "exit_code": 1,
+      "stdout": "\n== Data-source MCP servers (check only): /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_gates_old_node_and_opt_out/servers ==\n› node: /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_gates_old_node_and_opt_out/toolchain/node (v20.11.0)\n⚠ usgov: needs node >= 22 but /private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_setup_datamcps_gates_old_node_and_opt_out/toolchain/node is v20.11.0 — skipped (set DATA_SOURCES_NODE to a newer node).\n\n== Data-source MCP servers: summary ==\n  server status      detail\n  usgov  skipped     node >= 22 required (found v20.11.0)\n⚠ 1 data-source server(s) not ready — research runs continue without them.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "› SETUP_DATAMCPS=0 — skipping the data-source MCP server builds.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/bin/bash",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo/scripts/setup_datamcps.sh",
+        "--bogus"
+      ],
+      "exit_code": 64,
+      "stdout": "",
+      "stderr": "setup_datamcps.sh: unknown argument --bogus (servers: fred bls bis imf wb usgov; options: --check --force --help)\n"
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/fred-mcp-server-main/build/index.js"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/fred-mcp-server-main/node_modules/x/index.js"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/bls_mcp-main/dist/index.js"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/mcp-bis-main/node_modules/tsx/package.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/us-gov-open-data-mcp-main/dist/server.js"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/imf-data-mcp-main/.venv/bin/imf-data-mcp"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/.venv/pyvenv.cfg"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/static/viz_specs/spec_vega.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/imf-data-mcp-main/imf_data_mcp/__pycache__/m.cpython-312.pyc"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/imf-data-mcp-main/imf_data_mcp.egg-info/PKG-INFO"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/bls_mcp-main/logs/pre_tool_use.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/bls_mcp-main/.claude/data/sessions/s.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/fred-mcp-server-main/src/index.ts"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/fred-mcp-server-main/package.json"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/fred-mcp-server-main/pnpm-lock.yaml"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/bls_mcp-main/package-lock.json"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/mcp-bis-main/package-lock.json"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/mcp-bis-main/bin/cli.js"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/us-gov-open-data-mcp-main/src/server.ts"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/imf-data-mcp-main/uv.lock"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/imf-data-mcp-main/imf_data_mcp/__init__.py"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/uv.lock"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/static/index.html"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/README.md"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/Cellar/git/2.51.2/bin/git",
+        "-C",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/repo",
+        "check-ignore",
+        "-q",
+        "--no-index",
+        "datamcps/data360-mcp-dev/LICENSE"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/bin/python3.12",
+        "-I",
+        "-S",
+        "-B",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/runtime_skill_sync.py",
+        "--source-root",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle/source",
+        "--deployed-public-root",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle/runtime/skills/public",
+        "--required-skill",
+        "alpha"
+      ],
+      "pid": 91351,
+      "concurrent": true
+    },
+    {
+      "command": [
+        "/Users/rogerlin/.local/share/uv/python/cpython-3.12.6-macos-aarch64-none/bin/python3.12",
+        "-I",
+        "-S",
+        "-B",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/runtime_skill_sync.py",
+        "--source-root",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle/source",
+        "--deployed-public-root",
+        "/private/tmp/drf-os-native-deploy-20261018-2/work/cases/test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle/runtime/skills/public",
+        "--required-skill",
+        "alpha"
+      ],
+      "pid": 91352,
+      "concurrent": true
+    }
+  ],
+  "exit_code": 0
+}

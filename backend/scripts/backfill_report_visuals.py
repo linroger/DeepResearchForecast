@@ -395,13 +395,21 @@ def _artifacts(report_dir: Path, handoff: Path, simulation_id: str,
 
 def _offline_report_agent(
         language: str, sources: List[Dict[str, Any]], handoff: Path,
-        artifacts: Dict[str, Any], forecast: Any) -> ReportAgent:
+        artifacts: Dict[str, Any], forecast: Any, *, report_id: Optional[str] = None) -> ReportAgent:
     """Reconstruct the subset of live ReportAgent state used by final repair/audit."""
     agent = ReportAgent.__new__(ReportAgent)
     agent.sources = sources
     agent._citation_index = {}
     agent.output_language = language
     agent.official_data = artifacts.get("official_data")
+    from app.services import news_market_context
+    context = ReportManager.load_report_news_market_context(report_id) if report_id else None
+    agent._news_context_sha256 = (context or {}).get("sha256")
+    agent._news_market_context_json = (json.dumps(context, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"), allow_nan=False) if context else None)
+    agent._news_context_block = news_market_context.render_context(
+        context, lang="zh" if language == "Chinese" else "en")
+    agent._news_context_attached = bool(context)
     if agent.official_data:
         # Same [S#] identities as the live report: research positions plus the
         # stored datasets no research source identifies (RPT-16).
@@ -432,7 +440,7 @@ def _backup(report_dir: Path) -> Path:
     for path in report_dir.glob("full_report*.pdf"):
         shutil.copy2(path, backup / path.name)
     for name in (
-            "meta.json", "forecast.json", "market_comparison.json",
+            "meta.json", "forecast.json", "forecast_track_record.json", "market_comparison.json",
             "viz_manifest.json", "pdf_export.json"):
         path = report_dir / name
         if path.exists():
@@ -456,7 +464,7 @@ def _restore_from_backup(report_dir: Path, backup: Path) -> None:
             if path.is_file() or path.is_symlink():
                 path.unlink()
     for name in (
-        "meta.json", "forecast.json", "market_comparison.json",
+        "meta.json", "forecast.json", "forecast_track_record.json", "market_comparison.json",
         "viz_manifest.json", "pdf_export.json",
     ):
         path = report_dir / name
@@ -572,7 +580,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
         cleaned, primary_language)
     language_lines_removed += removed_language
     main_agent = _offline_report_agent(
-        primary_language, sources, handoff, artifacts, forecast_obj)
+        primary_language, sources, handoff, artifacts, forecast_obj, report_id=report_id)
     cleaned, removed_quotes = main_agent._repair_quote_grounding(cleaned)
     ungrounded_quotes_removed += removed_quotes
     cleaned, main_lint = lint_report(
@@ -608,8 +616,10 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
     if main_markdown and main_agent is not None:
         main_agent._forecast_spine = (
             forecast if isinstance(forecast, dict) else forecast_obj)
-        final_audit = main_agent._enforce_final_publish_audit(
-            report_id, _Report(main_markdown))
+        audited_report = _Report(main_markdown)
+        final_audit = main_agent._enforce_final_publish_audit(report_id, audited_report)
+        main_markdown = audited_report.markdown_content
+        meta["markdown_content"] = main_markdown
 
     primary_citations = _read_json(report_dir / "citations.json")
     primary_citations = primary_citations if isinstance(primary_citations, dict) else {}
@@ -641,7 +651,7 @@ def _backfill_one_impl(pipeline_id: str, report_id: str, *, apply: bool) -> Dict
             candidate = candidate.replace(*scenario_label_change)
         candidate, _ = strip_circular_binary_rows(
             candidate, circular_ids, quality=quality)
-        variant_placer = _offline_report_agent(language, sources, handoff, artifacts, forecast_obj)
+        variant_placer = _offline_report_agent(language, sources, handoff, artifacts, forecast_obj, report_id=report_id)
         candidate = variant_placer._place_visualizations(
             candidate, str(report_dir), localized_manifest(manifest, language))
 

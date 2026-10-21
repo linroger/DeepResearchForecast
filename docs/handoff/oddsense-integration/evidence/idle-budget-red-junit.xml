@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="5" time="1.188" timestamp="2026-10-18T22:36:25.518841" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_news_signals" name="test_model_planning_gap_does_not_consume_source_allowance[newsapi]" time="0.966"><failure message="AssertionError: assert 1 == 2&#10; +  where 1 = len([{'headers': {'Accept': 'application/json', 'User-Agent': 'DeepResearchForecast-context/1', 'X-Api-Key': 'offline-news...en&amp;from=2026-09-18T12%3A00%3A00%2B00%3A00&amp;to=2026-10-18T12%3A00%3A00%2B00%3A00&amp;pageSize=20&amp;page=1&amp;sortBy=publishedAt'}])&#10; +    where [{'headers': {'Accept': 'application/json', 'User-Agent': 'DeepResearchForecast-context/1', 'X-Api-Key': 'offline-news...en&amp;from=2026-09-18T12%3A00%3A00%2B00%3A00&amp;to=2026-10-18T12%3A00%3A00%2B00%3A00&amp;pageSize=20&amp;page=1&amp;sortBy=publishedAt'}] = &lt;test_news_signals.Transport object at 0x107f4fef0&gt;.calls">tmp_path = PosixPath('/private/tmp/drf-os-idle-budget-red-20261018-1/pytest-tmp/test_model_planning_gap_does_n0')
+acquisition_clock = [220.0], next_provider = 'newsapi'
+
+    @pytest.mark.parametrize("next_provider", ["newsapi", "kalshi"])
+    def test_model_planning_gap_does_not_consume_source_allowance(tmp_path, acquisition_clock, next_provider):
+        transport = Transport()
+        instance = client(tmp_path, transport)
+        assert instance.search_news("prefetch")["status"]["state"] == "ok"
+        acquisition_clock[0] += 120  # The real engine plans between prefetch and tools.
+        reopened = client(tmp_path, transport)
+        if next_provider == "newsapi":
+            result = reopened.search_news("investigator")
+&gt;           assert len(transport.calls) == 2
+E           AssertionError: assert 1 == 2
+E            +  where 1 = len([{'headers': {'Accept': 'application/json', 'User-Agent': 'DeepResearchForecast-context/1', 'X-Api-Key': 'offline-news...en&amp;from=2026-09-18T12%3A00%3A00%2B00%3A00&amp;to=2026-10-18T12%3A00%3A00%2B00%3A00&amp;pageSize=20&amp;page=1&amp;sortBy=publishedAt'}])
+E            +    where [{'headers': {'Accept': 'application/json', 'User-Agent': 'DeepResearchForecast-context/1', 'X-Api-Key': 'offline-news...en&amp;from=2026-09-18T12%3A00%3A00%2B00%3A00&amp;to=2026-10-18T12%3A00%3A00%2B00%3A00&amp;pageSize=20&amp;page=1&amp;sortBy=publishedAt'}] = &lt;test_news_signals.Transport object at 0x107f4fef0&gt;.calls
+
+backend/tests/test_news_signals.py:401: AssertionError</failure></testcase><testcase classname="tests.test_news_signals" name="test_model_planning_gap_does_not_consume_source_allowance[kalshi]" time="0.007"><failure message="assert 0 == 1">tmp_path = PosixPath('/private/tmp/drf-os-idle-budget-red-20261018-1/pytest-tmp/test_model_planning_gap_does_n1')
+acquisition_clock = [220.0], next_provider = 'kalshi'
+
+    @pytest.mark.parametrize("next_provider", ["newsapi", "kalshi"])
+    def test_model_planning_gap_does_not_consume_source_allowance(tmp_path, acquisition_clock, next_provider):
+        transport = Transport()
+        instance = client(tmp_path, transport)
+        assert instance.search_news("prefetch")["status"]["state"] == "ok"
+        acquisition_clock[0] += 120  # The real engine plans between prefetch and tools.
+        reopened = client(tmp_path, transport)
+        if next_provider == "newsapi":
+            result = reopened.search_news("investigator")
+            assert len(transport.calls) == 2
+        else:
+            def acquire(reserve):
+                assert reserve()["allowed"] is True
+                return external_result("kalshi", "investigator")
+            result = reopened.capture_market("kalshi", "investigator", acquire)
+&gt;           assert result["request_count"] == 1
+E           assert 0 == 1
+
+backend/tests/test_news_signals.py:407: AssertionError</failure></testcase><testcase classname="tests.test_news_signals" name="test_real_acquisition_time_is_shared_and_survives_idle_restart" time="0.008"><failure message="AssertionError: assert 'timeout' == 'ok'&#10;  &#10;  - ok&#10;  + timeout">tmp_path = PosixPath('/private/tmp/drf-os-idle-budget-red-20261018-1/pytest-tmp/test_real_acquisition_time_is_0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x1080c7980&gt;
+acquisition_clock = [220.75]
+
+    def test_real_acquisition_time_is_shared_and_survives_idle_restart(tmp_path, monkeypatch, acquisition_clock):
+        monkeypatch.setenv("NEWS_CONTEXT_DEADLINE_SECONDS", "2")
+        def acquire_news(_):
+            acquisition_clock[0] += .75
+            return response(article())
+        instance = client(tmp_path, Transport(acquire_news))
+        assert instance.search_news("first")["status"]["state"] == "ok"
+        acquisition_clock[0] += 120
+        reopened = client(tmp_path, Transport(acquire_news))
+&gt;       assert reopened.search_news("second")["status"]["state"] == "ok"
+E       AssertionError: assert 'timeout' == 'ok'
+E         
+E         - ok
+E         + timeout
+
+backend/tests/test_news_signals.py:420: AssertionError</failure></testcase><testcase classname="tests.test_news_signals" name="test_interrupted_market_retains_reserved_time_across_restart" time="0.006"><failure message="KeyError: 'acquisition_seconds'">tmp_path = PosixPath('/private/tmp/drf-os-idle-budget-red-20261018-1/pytest-tmp/test_interrupted_market_retain0')
+acquisition_clock = [220.0]
+
+    def test_interrupted_market_retains_reserved_time_across_restart(tmp_path, acquisition_clock):
+        class Interrupted(BaseException):
+            pass
+        def crash(reserve):
+            assert reserve()["allowed"] is True
+            raise Interrupted
+        with pytest.raises(Interrupted):
+            client(tmp_path).capture_market("kalshi", "interrupted", crash)
+        acquisition_clock[0] += 120
+        reopened = client(tmp_path)
+&gt;       assert reopened.snapshot()["acquisition_seconds"] == 10
+E       KeyError: 'acquisition_seconds'
+
+backend/tests/test_news_signals.py:445: KeyError</failure></testcase><testcase classname="tests.test_news_signals" name="test_legacy_elapsed_budget_cannot_be_reset_by_upgrade" time="0.010"><failure message="AssertionError: assert 'ok' == 'timeout'&#10;  &#10;  - timeout&#10;  + ok">tmp_path = PosixPath('/private/tmp/drf-os-idle-budget-red-20261018-1/pytest-tmp/test_legacy_elapsed_budget_can0')
+
+    def test_legacy_elapsed_budget_cannot_be_reset_by_upgrade(tmp_path):
+        instance = client(tmp_path)
+        instance.search_news("legacy")
+        value = instance.snapshot()
+        value.pop("acquisition_seconds", None)
+        value["network_started_at"] = value["created_at"]
+        value["sha256"] = digest(value)
+        (tmp_path / news.CONTEXT_FILENAME).write_text(json.dumps(value))
+        transport = Transport()
+&gt;       state(client(tmp_path, transport).search_news("after upgrade"), "timeout", attempted=False)
+
+backend/tests/test_news_signals.py:460: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = {'capture_id': '3cbe7e089a174091bdff35c580dac81f:e7d6b44fa65f408e0341667f4a1393086d0b90322c7ada5c377cc55955bb4cba', 'c...tion date alone does not establish historical availability.', 'discarded': 0, 'from': '2026-09-18T12:00:00+00:00', ...}
+expected = 'timeout'
+
+    def state(result, expected, *, attempted):
+        assert result["status"]["state"] in CANONICAL_STATES
+&gt;       assert result["status"]["state"] == expected
+E       AssertionError: assert 'ok' == 'timeout'
+E         
+E         - timeout
+E         + ok
+
+backend/tests/test_news_signals.py:102: AssertionError</failure></testcase></testsuite></testsuites>

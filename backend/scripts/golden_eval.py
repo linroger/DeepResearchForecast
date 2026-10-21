@@ -40,6 +40,16 @@ INTENDED WORKFLOW (the whole point — read this before using):
          python backend/scripts/golden_eval.py score-ledger -o ledger_eval.json
 
 This script NEVER runs the pipeline itself — it only scores its outputs.
+``backend/scripts/backtest_eval.py`` runs the set end to end in backtest mode (every
+input cut at each question's ``as_of_date``) and scores it with this module's core.
+
+MODEL-KNOWLEDGE LEAKAGE: backtest mode cuts what the pipeline can READ, not what
+its LLM already KNOWS.  Each golden question carries ``knowledge_cutoff`` (the first
+date its outcome was public); pass the model's training cutoff
+(``--model-knowledge-cutoff`` or GOLDEN_MODEL_KNOWLEDGE_CUTOFF) and the report
+splits the scores into ``post_model_cutoff`` (outcome public after the model's
+data ended: clean), ``pre_model_cutoff`` (possibly memorised: an upper bound on
+skill) and ``unknown`` (no model cutoff given, or no knowledge_cutoff).
 
 The pure scoring core (brier / log-score / ECE bins / matching / breakdowns) is
 side-effect-free and offline-unit-tested (backend/tests/test_golden_eval.py).
@@ -51,7 +61,9 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,6 +74,8 @@ GOLDEN_PATH = os.path.join(EVAL_DIR, "golden_questions.json")
 
 DEFAULT_BINS = 10          # calibration bins over [0,1]
 _EPS = 1e-9                # log-score clamp so ln() never blows up on p∈{0,1}
+KNOWLEDGE_GROUPS = ("post_model_cutoff", "pre_model_cutoff", "unknown")
+_ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 # ============================================================ pure scoring core
@@ -219,7 +233,66 @@ def load_golden_set(path: str = GOLDEN_PATH) -> List[Dict[str, Any]]:
             raise ValueError(f"golden entry missing 'id': {q!r}")
         if not isinstance(q.get("resolved_outcome"), bool):
             raise ValueError(f"golden entry {q.get('id')!r} needs boolean 'resolved_outcome'")
+        known = q.get("knowledge_cutoff")
+        if known is not None:
+            if not _valid_day(known):
+                raise ValueError(f"golden entry {q.get('id')!r} knowledge_cutoff must be YYYY-MM-DD")
+            if q.get("as_of_date") and str(known) <= str(q["as_of_date"]):
+                # The outcome was public when the forecast is made: nothing to forecast.
+                raise ValueError(f"golden entry {q.get('id')!r}: knowledge_cutoff must follow as_of_date")
     return questions
+
+
+def _valid_day(value: Any) -> bool:
+    text = str(value or "")
+    if not _ISO_DAY_RE.match(text):
+        return False
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def knowledge_group(knowledge_cutoff: Any, model_cutoff: Optional[str]) -> str:
+    """Which side of the model's training cutoff a question's outcome became public on.
+
+    ``post_model_cutoff`` when the outcome was first public AFTER the model's
+    data ended (the model cannot know it), ``pre_model_cutoff`` otherwise (it may),
+    ``unknown`` when either date is missing."""
+    if not model_cutoff or not _valid_day(knowledge_cutoff):
+        return "unknown"
+    return "post_model_cutoff" if str(knowledge_cutoff) > str(model_cutoff) else "pre_model_cutoff"
+
+
+def knowledge_split(scored: List[Dict[str, Any]], model_cutoff: Optional[str],
+                    bins: int = DEFAULT_BINS) -> Dict[str, Any]:
+    """Scores per knowledge group (see :func:`knowledge_group`)."""
+    groups: Dict[str, List[Dict[str, Any]]] = {name: [] for name in KNOWLEDGE_GROUPS}
+    for row in scored:
+        groups[knowledge_group(row.get("knowledge_cutoff"), model_cutoff)].append(row)
+    return {
+        "model_knowledge_cutoff": model_cutoff,
+        "note": ("pre_model_cutoff scores may reflect the model's memory of the outcome, not "
+                 "forecasting skill; only post_model_cutoff questions are clean."
+                 if model_cutoff else
+                 "model knowledge cutoff not given: every question is 'unknown' (treat the "
+                 "scores as possibly memorised)."),
+        "groups": {name: (score_pairs(rows, bins=bins) if rows else {"n": 0})
+                   for name, rows in groups.items()},
+        "ids": {name: [row.get("id") for row in rows] for name, rows in groups.items()},
+    }
+
+
+def model_knowledge_cutoff(value: Any = None) -> Optional[str]:
+    """The model's training cutoff from an argument or GOLDEN_MODEL_KNOWLEDGE_CUTOFF
+    (``None`` when neither is set); ValueError when it is not YYYY-MM-DD."""
+    text = str(value or os.environ.get("GOLDEN_MODEL_KNOWLEDGE_CUTOFF") or "").strip()
+    if not text:
+        return None
+    if not _valid_day(text):
+        raise ValueError(f"model knowledge cutoff must be YYYY-MM-DD, got {text!r}")
+    return text
 
 
 def index_golden(questions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -274,6 +347,7 @@ def match_forecasts(binary_forecasts: List[Dict[str, Any]],
             "question": g.get("question"),
             "as_of_date": g.get("as_of_date"),
             "resolution_date": g.get("resolution_date"),
+            "knowledge_cutoff": g.get("knowledge_cutoff"),
             "brier": round(binary_brier(p, bool(g["resolved_outcome"])), 4),
             "log_score": round(binary_log_score(p, bool(g["resolved_outcome"])), 4),
         })
@@ -327,6 +401,18 @@ def render_markdown(report: Dict[str, Any]) -> str:
 
     _table("category", m.get("by_category", {}))
     _table("difficulty", m.get("by_difficulty", {}))
+
+    split = report.get("knowledge_split") or {}
+    if split.get("groups"):
+        lines += ["## Model-knowledge split", "",
+                  f"- model knowledge cutoff: {split.get('model_knowledge_cutoff') or 'not given'}",
+                  f"- {split.get('note', '')}", "",
+                  "| group | n | mean Brier | mean log-score | ECE |", "|---|---|---|---|---|"]
+        for name in KNOWLEDGE_GROUPS:
+            g = split["groups"].get(name) or {}
+            lines.append(f"| {name} | {g.get('n', 0)} | {_fmt(g.get('mean_brier'))} | "
+                         f"{_fmt(g.get('mean_log_score'))} | {_fmt((g.get('calibration') or {}).get('ece'))} |")
+        lines.append("")
 
     cal = m.get("calibration", {})
     if cal.get("bins"):
@@ -419,6 +505,8 @@ def cmd_score_forecast_file(args) -> int:
     binaries = extract_binary_forecasts(forecast_obj)
     match = match_forecasts(binaries, gindex)
     metrics = score_pairs(match["matched"], bins=args.bins)
+    split = knowledge_split(match["matched"], model_knowledge_cutoff(getattr(args, "model_knowledge_cutoff", None)),
+                            bins=args.bins)
 
     ledger_appended = 0
     if _ledger_enabled(args) and match["matched"]:
@@ -430,6 +518,7 @@ def cmd_score_forecast_file(args) -> int:
         "golden_path": args.golden,
         "golden_count": len(questions),
         "metrics": metrics,
+        "knowledge_split": split,
         "matched": match["matched"],
         "unmatched_forecast_ids": match["unmatched_forecast_ids"],
         "unmatched_golden_ids": match["unmatched_golden_ids"],
@@ -489,6 +578,13 @@ def cmd_score_ledger(args) -> int:
     return 0
 
 
+def _cutoff_arg(value: str) -> str:
+    try:
+        return model_knowledge_cutoff(value) or ""
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="golden-question forecast-quality evaluation (deterministic, offline)")
@@ -504,6 +600,9 @@ def main() -> int:
     a.add_argument("--to-ledger", action="store_true",
                    help="append matched outcomes to the calibration ledger (opt-in; else needs GOLDEN_EVAL_LEDGER)")
     a.add_argument("--ledger-dir", default=None, help="override ledger dir (default: FORECAST_LEDGER_DIR)")
+    a.add_argument("--model-knowledge-cutoff", default=None, metavar="YYYY-MM-DD", type=_cutoff_arg,
+                   help="the forecasting model's training cutoff: questions whose outcome became public "
+                        "after it are reported apart (default: GOLDEN_MODEL_KNOWLEDGE_CUTOFF)")
     a.set_defaults(func=cmd_score_forecast_file)
 
     b = sub.add_parser("score-ledger",

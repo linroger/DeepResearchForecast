@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "description": "Forward-testing template (docs/handoff/backtest/design.md §8): questions asked today that resolve 2-12 weeks later, each settled by a named official series or Polymarket market so the resolution monitor (RESOLUTION_MONITOR_AUTORUN_HOURS) resolves the pipeline's binary forecast without a human. Copy this file, replace the example entries with real questions (drop \"example\"), check it with `python backend/scripts/backtest_eval.py forward-check --questions <file>`, start one live pipeline per question with the printed prompt, and score the resolved forecasts with `backtest_eval.py forward-score`.",
+    "fields": {
+      "id": "short unique id",
+      "question": "one yes/no question",
+      "resolution_criteria": "the exact settle test (series ID or market, comparator, threshold, period)",
+      "resolution_source": "{kind: official_data, series, observation (YYYY-MM / YYYY-Qn / YYYY / YYYY-MM-DD), comparator (> >= < <=), threshold, units} or {kind: polymarket, market_id}",
+      "asked_on": "YYYY-MM-DD the pipeline is started",
+      "resolution_date": "YYYY-MM-DD by which the source settles it; 14-84 days after asked_on",
+      "example": "true marks a template entry; forward-check skips it unless --include-examples"
+    },
+    "horizon_days": [14, 84]
+  },
+  "questions": [
+    {
+      "id": "example-us-unemployment-2026-11",
+      "example": true,
+      "question": "Will the US unemployment rate for November 2026 be at least 4.5%?",
+      "resolution_criteria": "YES if fred:UNRATE (Percent, seasonally adjusted) for 2026-11, as first published, is >= 4.5.",
+      "resolution_source": {"kind": "official_data", "series": "fred:UNRATE", "observation": "2026-11",
+                            "comparator": ">=", "threshold": 4.5, "units": "Percent"},
+      "asked_on": "2026-10-21",
+      "resolution_date": "2026-12-04"
+    },
+    {
+      "id": "example-polymarket-market",
+      "example": true,
+      "question": "REPLACE with the market's own yes/no question",
+      "resolution_criteria": "YES if the Polymarket market named below resolves Yes.",
+      "resolution_source": {"kind": "polymarket", "market_id": "REPLACE_WITH_NUMERIC_MARKET_ID"},
+      "asked_on": "2026-10-21",
+      "resolution_date": "2026-12-15"
+    }
+  ]
+}

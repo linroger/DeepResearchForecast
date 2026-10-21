@@ -115,7 +115,7 @@ flowchart TB
 - [架构](#架构)
   - [运行时拓扑](#运行时拓扑) · [请求生命周期](#请求生命周期) · [管线生命周期、状态与恢复](#管线生命周期状态与恢复) · [各阶段读取什么](#各阶段读取什么) · [代码地图](#代码地图)
 - [逐阶段深入解析](#逐阶段深入解析)
-  - [1 · 研究](#阶段-1--研究deerflow-2) · [2 · 本体](#阶段-2--本体) · [3 · 知识图谱](#阶段-3--知识图谱) · [4 · 准备](#阶段-4--准备) · [5 · 模拟](#阶段-5--模拟) · [6 · 报告与发布](#阶段-6--报告与发布) · [运行结束之后](#运行结束之后集成账本与监测)
+  - [1 · 研究](#阶段-1--研究deerflow-2) · [2 · 本体](#阶段-2--本体) · [3 · 知识图谱](#阶段-3--知识图谱) · [4 · 准备](#阶段-4--准备) · [5 · 模拟](#阶段-5--模拟) · [6 · 报告与发布](#阶段-6--报告与发布) · [运行结束之后](#运行结束之后集成账本与监测) · [回测模式](#回测模式不带后见之明的准确度测量)
 - [可信度与质量保障](#可信度与质量保障)
 - [环境要求](#环境要求)
 - [安装与配置](#安装与配置)
@@ -1023,10 +1023,10 @@ sequenceDiagram
   - *观察。* 每个活跃智能体收到已提交的「世界状态」简报：追踪事实（由档案定量事实与官方数据快照播种，带单位、截止日与来源；某项事实连续两个时段以上同向变动时标注为趋势）、上一时段的行动及其后果（包括行动越过的红线）、结盟与对立的变动、每个角色的履约记录（承诺的兑现、失效或违背，以及其行动的结果）、以及未兑现的承诺。每个角色还会私下看到自己的履约记录，以及它在上一次行动后预期的各方反应与对方实际所为的对照。情景概率绝不展示给智能体。
   - *决策。* 每个决策角色（主角优先，其后为活跃具名角色，受 `SIM_WORLD_DECISION_MAX_ACTORS` 约束）从一份基于其封印角色简报与当前世界生成的菜单中做出**一次**结构化决策：对针对自己的行动的回应（被越过的红线优先）、档案记载的计划、其行动杠杆类别（政府、监管机构、立法机关、央行、企业、工会、NGO、联盟、个人领导者……）在剩余容量内的目录动作，以及 `hold_position`。答案携带目标、力度、公开声明、当行动是要约时的确切条款、带期限的承诺、结盟动作、它预期其他角色作出的反应与该行动所推向的情景。要约（谈判、结盟、让步、协议、交易）在对方从自己的菜单中接受、反要约、拒绝或暂缓之前对任何一方都不具约束力；两个时段无人应答的要约自动失效。无效或失败的回答降级为有类型标注的观望，而非沉默。
   - *行动。* 声明作为该角色的帖子在两个平台发布（每轮每个角色一次决策，跨平台共享），回应步骤让所有人回复。
-  - *世界更新。* 两个平台都交付本轮后，只运行**一次**更新：确定性内核消耗容量、结算要约（接受即对双方产生义务；义务失效或单方退出即为违约，损及声誉与关系）、登记承诺（到期时以行动兑现，否则失效）、推移关系、触发到期的延迟效应与研究事件，并掷出档案记载的外生冲击（写明概率、该概率对应的时间窗与来源的风险；触发的冲击是一个涌现事件，所有智能体在下一份简报中看到它，仲裁将其视为已确认事件，其记载的影响在同一钳制内作用于被跟踪事实；`SIM_WORLD_SHOCKS`）；随后一次有界的仲裁调用裁决争议行动——权衡每个行动者的履约记录、当期的各方预期与相关红线，因为市场与对手方在措施生效之前就会对宣布与预期作出反应——移动状态变量、报告越过红线的情况，并产生涌现事件与延迟效应。行动者本时段亲自宣布的数值（关税、利率、配额或价格）一次落地；其他一切变动（包括延迟效应）都受 `SIM_WORLD_MAX_CHANGE_RATIO` 钳制，宣布的设定也绝不越过零。单方退出绝不计为履行它所违背的义务。情景份额 WorldState 依据角色的情景承诺，并在仲裁成功时加入其基于世界状态的情景压力（权重为角色承诺权重的 `SIM_WORLD_PRESSURE_WEIGHT` 倍；即使所有角色都弃权，它也会推动份额），按日历惯性与熵下限推进。任一平台在第 *i* 轮更新提交前绝不开始第 *i+1* 轮。
+  - *世界更新。* 两个平台都交付本轮后，只运行**一次**更新：确定性内核消耗容量、结算要约（接受即对双方产生义务；义务失效或单方退出即为违约，损及声誉与关系）、登记承诺（只有针对该承诺的明确履行尝试，经仲裁确认行动者及轮次完全匹配后才算兑现；无关行动使其继续待履行）、推移关系、触发到期的延迟效应与研究事件，并掷出档案记载的外生冲击（写明概率、该概率对应的时间窗与来源的风险；触发的冲击是一个涌现事件，所有智能体在下一份简报中看到它，仲裁将其视为已确认事件，其记载的影响在同一钳制内作用于被跟踪事实；`SIM_WORLD_SHOCKS`）；随后一次有界的仲裁调用裁决争议行动——权衡每个行动者的履约记录、当期的各方预期与相关红线，因为市场与对手方在措施生效之前就会对宣布与预期作出反应——移动状态变量、报告越过红线的情况，并产生涌现事件与延迟效应。行动者本时段亲自宣布的数值（关税、利率、配额或价格）一次落地；其他一切变动（包括延迟效应）都受 `SIM_WORLD_MAX_CHANGE_RATIO` 钳制，宣布的设定也绝不越过零。单方退出绝不计为履行它所违背的义务。情景份额 WorldState 依据角色的情景承诺，并在仲裁成功时加入其基于世界状态的情景压力（权重为角色承诺权重的 `SIM_WORLD_PRESSURE_WEIGHT` 倍；即使所有角色都弃权，它也会推动份额），按日历惯性与熵下限推进。任一平台在第 *i* 轮更新提交前绝不开始第 *i+1* 轮。
   - *未来的分布。* 设 `SIM_WORLD_PATHS=K`（默认 1，至多 8）时，每个已提交的轮次运行 K 个带种子的世界更新，共享同一批角色决策：没有额外的决策调用，每轮至多 K 次仲裁调用。路径 0 是智能体所处的世界，计算方式与单路径完全相同；其余路径以各自的种子掷出延迟效应与冲击，并以 `SIM_WORLD_PATH_TEMPERATURE`（限定在 0–1）对仲裁采样。轨迹各行与世界摘要把各情景的份额报告为跨路径的分布（均值、离散度、分位数、领先次数），并给出每个冲击的触发频次；智能体绝不会看到份额或路径。
 
-  保存 `world_state.json`（最新世界，含其要约、种子的建模缺口与逐时段行为诊断）、`world_state_history.jsonl`、`world_actions.jsonl`、`world_state_trajectory.json` 与 `decisions.jsonl`（多于一条路径时另有 `world_paths.json`）；报告的诊断信号包渲染世界演化、要约、缺口与世界变量图，仪表盘的模拟页显示实时「世界状态」面板，其时段条可打开任一已提交轮次——旁边的信息流随之只显示该时段的帖子与回复。`SIM_WORLD_MODEL=false` 时旧的环内情景演化原样运行。
+  保存 `world_state.json`（最新世界，含其要约、种子的建模缺口与逐时段行为诊断）、`world_state_history.jsonl`、`world_actions.jsonl`、`world_state_trajectory.json` 与 `decisions.jsonl`（多于一条路径时另有 `world_paths.json`）；报告的诊断信号包渲染世界演化、要约、缺口、红线越界、承诺违约或失效的角色与世界变量图，仪表盘的模拟页显示实时「世界状态」面板，其时段条可打开任一已提交轮次——旁边的信息流随之只显示该时段的帖子与回复。面板列出每个角色的履约记录（承诺的兑现、失效、违约、解除或未到期，以及其行动的裁定结果；违约者在前），在越界发生的时段把被越过的红线明确标出，并在「回应上期」徽章旁显示预期反应中有多少得到被点名方的行动跟进。`SIM_WORLD_MODEL=false` 时旧的环内情景演化原样运行。
 - **监控与完成判定。**
   - 后端的一个监控线程每 2 秒把行为日志汇总进 `run_state.json`。
   - 管线每 5 秒轮询一次；连续 30 分钟没有回合进展的模拟会被停止。
@@ -1149,13 +1149,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    FJ[("forecast.json")]:::store --> LED[("预测账本<br/>ledger.jsonl")]:::store
+    FJ[("已审计 forecast.json")]:::store --> LED[("发布预测日志<br/>published_forecasts.jsonl")]:::store
     FJ --> MON["判定监测<br/>手动触发或<br/>每 N 小时一次"]:::det
     MON --> PT[("price_track.jsonl<br/>市场漂移")]:::store
     MON --> RES[("resolutions.jsonl<br/>Brier 分数")]:::store
     MON --> MR[("monitor_report.md")]:::store
-    LED -. "尚未自动关联" .-> CAL["后续预测中的<br/>historical_calibration"]:::det
-    RES -. "尚未自动关联" .-> CAL
+    LED --> CAL["后续预测中的<br/>historical_calibration"]:::det
+    RES -- "精确身份 + 原始概率" --> LED
     SCH["scheduled_rerun.py<br/>命令行 · 默认关闭"]:::det --> NEW["新管线<br/>同一个问题"]:::proc --> DRIFT["与上次预测比较漂移<br/>→ webhook"]:::det
     ENS["N_FORECAST_SEEDS > 1"]:::proc --> EF[("ensemble_forecast.json<br/>敏感性侧车")]:::store
     classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
@@ -1167,10 +1167,10 @@ flowchart LR
   - 系统会额外运行 N−1 条「准备 → 运行 → 报告」支线，种子为 `SIM_SEED + 7919·k`，同时最多运行 `ENSEMBLE_SEED_CONCURRENCY`（默认 2）条。每条支线都产出一份完整、经过门控的报告。
   - 各支线的情景概率在对数几率空间中汇总，连同离散度与一致性评分写入 `ensemble_forecast.json`。
   - 主报告与主预测不会被改写。
-- **预测账本。** 每一份定稿的预测都会把它的情景追加到 `uploads/pipelines/_forecast_ledger/ledger.jsonl`。
-- **判定监测**（`backend/scripts/resolution_monitor.py`）。针对最近的 10 份报告，它会：
+- **预测账本。** 通过审计的默认引擎报告将不可变的情景及二元预测契约登记到 `uploads/pipelines/_forecast_ledger/published_forecasts.jsonl`。相同重试幂等；修改原始概率或契约将被拒绝。草稿与评估记录不得进入生产日志。旧 `ledger.jsonl` 仍单独标示。
+- **判定监测**（`backend/scripts/resolution_monitor.py`）。每批有界处理（默认 10 份），公平轮询尚未判定的已发布预测，包括较早到期的问题，再用近期报告填充空位。独立的有界恢复步骤会先恢复内容未变、已通过审计但登记中断的报告，然后才获取判定依据。它会：
   - 重新报价已锚定的市场，写入 `price_track.jsonl`，并标记 5 个百分点及以上的变动；
-  - 把市场判定结果连同 Brier 分数记入 `resolutions.jsonl`；
+  - 保存原生市场及官方数据结果，按精确身份关联原始概率，分别计算各类 Brier 分数；同时具有两类锚点时，以官方数据锚点为准；
   - 列出需要人工判定的二元预测；
   - 写出 `monitor_report.md`。
 
@@ -1178,8 +1178,30 @@ flowchart LR
 - **校准工具。**
   - `backend/app/services/backtest.py` 提供 Brier 分数、对数损失、校准分箱与 Murphy 分解。
   - `backend/scripts/golden_eval.py` 用已判定的「黄金问题」打分。
-  - 把判定结果回填进账本，是让后续报告显示 `historical_calibration` 的前提，但这一步**尚未自动化**。
+  - `backend/scripts/backtest_eval.py` 在回测模式下端到端运行黄金问题，并按消融分支打分（见[回测模式](#回测模式不带后见之明的准确度测量)）。
+  - 下一份默认引擎报告会将已验证的历史记录冻结到 `historical_calibration.forecast_track_record` 和经审计的 Markdown，显示已判定及待判定数量，并分别呈现情景、市场二元及官方数据分数。报告排除自身；描述性分数不能证明模型已校准。`POST /api/v1/resolve/<report_id>` 按精确情景名保存人工判定，将提交的依据标记为人工提供，拒绝冲突重试，并能在重启后从持久日志修复报告内镜像。判定时不回填未登记的旧报告。
 - **定时重跑**（`backend/scripts/scheduled_rerun.py daemon|tick`，默认关闭）。它会重跑保存过的问题，记录 15 个百分点及以上的概率漂移，并可 POST 到 webhook。`scheduled_rerun.py diff <pipe_a> <pipe_b>` 可以比较两次运行。
+
+### 回测模式：不带后见之明的准确度测量
+
+如果管线能读到结局，回溯打分就毫无意义。**回测模式**给单条管线钉住一个截止日期（as-of），并把它读取的每一项输入都截断在这一天。它需要显式开启，默认关闭：不带它的管线与以前完全一样。设计与证据见 [docs/handoff/backtest/design.md](docs/handoff/backtest/design.md)。
+
+- **如何启动。** 调用 `POST /api/v1/run`（需要 `API_V1_ENABLED=true`），附上 `backtest` 块，例如 `{"as_of": "2024-11-01", "strict": true, "archive": "wayback", "arm": "production"}`，还可以附上可选的 `target` 黄金问题。准入时会拒绝不在过去的截止日期、旧版研究引擎以及 world-v1 引擎。
+- **截断哪些输入。** 研究子进程通过 `DRF_BACKTEST_POLICY` 收到该策略；实时运行永远不会继承它。
+  - *搜索：* Firecrawl 会带上截止当天为止的日期过滤，并附带有日期的新闻结果。随后每个提供方的每一条结果都按其自身字段和 URL 定日期，晚于截止日期的结果一律丢弃。
+  - *抓取：* 如果 Wayback Machine 在截止日期当天或之前有存档，就读取最后一份存档。否则读取实时页面，按页面元数据、URL 和对应搜索结果定日期；页面发布或修改晚于截止日期时拒绝读取。
+  - *官方数据：* 请求窗口截止于截止日期。FRED 的 API 路径返回截止日期当时的版本（ALFRED）；其他所有路径（包括 FRED 免密钥的 CSV）返回当前修订值，只计入截止日期前已经结束的时期（严格模式下还要早于截止日期一个发布滞后期）。
+  - *预测市场：* 已关闭的事件也会被检索。只有在截止日期时仍开放的市场才计入；其价格取自截止日期时的 CLOB 历史价格，已判定的价格和此后的字段都会被移除。报告阶段从不重新报价。
+  - *新闻、社交与跨平台上下文：* 回测时关闭当前 Oddsense 工具；已保存的实时上下文会被拒绝，不会作为历史证据重放。
+  - *日期与记录：* 研究计划日期、模拟日历和目标年份都从截止日期起算。`forecast.json` 带有 `backtest` 块，不写入生产账本，判定监测也会跳过这份报告。
+- **严格或宽松。** 严格模式（默认）丢弃没有日期的来源；宽松模式保留它们并加标记。每一个决定都记在 handoff 的 `backtest_audit.jsonl` 中，并汇总进 `research_meta.json`。
+- **它截不断的：模型自身的记忆。** LLM 可能知道其训练截止日期之前的结局。每个黄金问题都带有 `knowledge_cutoff`（其结局公开的日期），`golden_eval.py` 和 `backtest_eval.py` 接受 `--model-knowledge-cutoff`，分别报告 `post_model_cutoff`（干净）、`pre_model_cutoff`（可能被记住）和 `unknown`。现有的 30 个黄金问题都在 2025 年 2 月之前判定，因此对 2026 年的模型而言，它们的分数只是上限。
+- **消融分支**，每个分支各自作为一条管线运行：`research_only`（没有预测市场；模拟从不移动概率）· `markets` · `simulation`（模拟可以移动概率，这是只用于评估的设置）· `world_channel`（再加上反身性世界通道）· `production`（当前的线上设置）。
+- **驱动脚本**是 `backend/scripts/backtest_eval.py`：
+  - `plan --ids <黄金问题 id>` 列出要启动的管线以及每条管线收到的确切请求（quick 深度、4 轮），不联网；
+  - `run --base-url <后端地址> --run-dir <目录> --confirm-paid` 提交并等待它们完成；可以续跑，除非 `--max-pipelines` 放宽，否则拒绝超过 8 条管线的批次；
+  - `score --run-dir <目录>` 写出 `eval_report.json` 和一份 markdown 摘要：每个分支的 Brier、对数分数、ECE 与准确率，知识截止拆分，以及与 `research_only` 的配对差值。
+- **前向测试。** 几周内就能判定的预测才能给出干净的数字。设置 `RESOLUTION_MONITOR_AUTORUN_HOURS=24`，并把 `RESOLUTION_MONITOR_RECENT_N` 设得足够大，使每份尚未判定的短期报告都在监测范围内。按 `backend/tests/eval/forward_questions_template.json` 编写问题（2–12 周，每题由官方序列或 Polymarket 市场判定），用 `backtest_eval.py forward-check` 检查，再用 `backtest_eval.py forward-score` 为已判定的预测打分。
 
 ---
 
@@ -1476,6 +1498,24 @@ npm run dev               # 另一种方式：在前台同时运行两者（Ctrl
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | 搜索与抓取后端（推荐 Firecrawl） |
 | `PREDICTION_MARKETS_ENABLED` | `true` | 在研究与报告阶段免 Key 查询 Polymarket |
 
+**新闻与跨平台研究上下文**
+
+两种研究引擎在启用后提供 `news_search`、可选的 `social_search` 和 `market_compare`。配置 NewsAPI Key 后，调查前会进行一次有界主题预取；选中的出版方原文沿用既有抓取与引用流程。NewsAPI 摘要在原文抓取前仅是发现线索。Reddit 条目属于带出处的讨论，跨平台报价保留平台、原生标识、价格依据、单位和结算规则。主题相似不等于合约等价或可执行套利；这些来源不会成为自动概率锚点或结算证据。
+
+封存的 `handoff/news_market_context.json` 保留提供方状态、文章／报价时间、查询身份与哈希。父流程的提升／复用及模拟已消费研究世代的绑定保护所捕获版本。研究与预测界面显示同一份有界、带出处的上下文，预测 Markdown 也保留来源链接和局限。报告读取不会重新抓取这些来源。存在但无效的捕获会被拒绝；缺少捕获的旧运行保持兼容。
+
+| 设置 | 默认值 | 当前行为 |
+|---|---|---|
+| `NEWS_CONTEXT_ENABLED` | `true` | 新运行的新增检索／工具／快照总开关 |
+| `NEWSAPI_API_KEY` · `NEWSAPI_ENABLED` | — · `true` | Key 仅留在后端环境与 HTTP 请求头中；缺失凭证明确标为不可用 |
+| `NEWSAPI_MAX_REQUESTS` · `NEWSAPI_PAGE_SIZE` | `2` · `20` | 每个研究世代的物理请求数与单页文章数；次级研究轨不分配 NewsAPI 额度 |
+| `NEWSAPI_LOOKBACK_DAYS` | `30` | 有界发布时间回溯；实际历史范围与延迟取决于订阅 |
+| `NEWS_CONTEXT_DEADLINE_SECONDS` · `NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS` | `10` · `5` | 累计检索用时（不计模型规划与空闲间隔）及单请求时限；调用方截止时间只能收紧这些上限 |
+| `REDDIT_SIGNALS_ENABLED` · `REDDIT_MAX_REQUESTS` | `false` · `1` | 可选讨论发现；拒绝访问／限流不等于成功的空查询 |
+| `MARKET_INTELLIGENCE_ENABLED` · `MARKET_INTELLIGENCE_MAX_REQUESTS` | `true` · `4` | 有界的跨平台上下文发现；社区预测访问未建立时明确标为不支持 |
+
+NewsAPI 公布的 Developer 方案目前有 24 小时文章延迟、一个月历史及每天 100 次请求，且仅允许开发／测试用途。用于预发布／生产前须核对实际 Key 的方案；不能由持有 Key 推断权限。参见 [NewsAPI 方案](https://newsapi.org/pricing)、[配置](.env.example)及 [Oddsense 署名](docs/third-party/oddsense.md)。网络错误、缺少 Key、部分目录扫描及未知时间戳均保留明确的可用性／覆盖局限；缺失报价或观点不会变成零概率或中性证据。
+
 **官方数据（研究与预测报告）**
 
 | 设置 | 默认值 | 当前行为 |
@@ -1635,7 +1675,7 @@ FIRECRAWL_API_KEY=fc-...         # 可选，但推荐
 | `/api/graph`（14） | `GET /project/<id>` · `GET /project/list` · `DELETE /project/<id>` · `POST /project/<id>/reset` · `POST /ontology/generate` · `POST /build` · `GET /task/<task_id>` · `GET /tasks` · `POST /gc` · `DELETE /delete/<graph_id>` |
 | `/api/simulation`（32） | `GET /entities/<graph_id>` · `GET /entities/<graph_id>/<uuid>` · `GET /entities/<graph_id>/by-type/<type>` · `POST /create` · `POST /prepare` · `POST /prepare/status` · `GET /<sim_id>` · `GET /list` · `GET /history` · `GET /<sim_id>/profiles` · `GET /<sim_id>/config` · `GET /<sim_id>/config/realtime` · `GET /<sim_id>/config/download` · `GET /script/<name>/download` · `POST /generate-profiles` · `POST /start` · `POST /stop` · `GET /<sim_id>/run-status/detail` · `POST /interview` · `POST /interview/batch` · `POST /interview/all` · `POST /interview/history` · `POST /env-status` · `POST /close-env` |
 | `/api/report`（29） | `POST /generate` · `POST /generate/status` · `GET /by-simulation/<sim_id>` · `GET /list` · `DELETE /<report_id>` · `POST /chat` · `GET /<report_id>/progress` · `GET /<report_id>/sections` · `GET /<report_id>/section/<n>` · `GET /check/<sim_id>` · `GET /<report_id>/agent-log` · `GET /<report_id>/agent-log/stream` · `GET /<report_id>/console-log` · `GET /<report_id>/console-log/stream` · `POST /tools/search` · `POST /tools/statistics` |
-| `/api/v1`（6，仅当 `API_V1_ENABLED=true`） | `POST /run` · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
+| `/api/v1`（6，仅当 `API_V1_ENABLED=true`） | `POST /run`（接受 `backtest` 块）· `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
 
 许多额外的图谱、模拟与报告路由早于统一仪表盘出现，至今仍可用于脚本调用。处理函数位于 [`backend/app/api/`](backend/app/api/)。
 
@@ -1739,6 +1779,7 @@ flowchart LR
 | `backend/scripts/model_comparison.py` | 用多个提供方回答同一个问题，并排比较 |
 | `backend/scripts/forecast_tools.py` | 对 `forecast.json` 文件做集成汇总与回测 |
 | `backend/scripts/golden_eval.py` · `eval_forecast_quality.py` | 黄金问题评分 · 评分量规式 LLM 裁判（需显式开启） |
+| `backend/scripts/backtest_eval.py` | 回测驱动：在各自截止日期运行黄金问题 × 消融分支；前向问题检查与打分 |
 | `backend/scripts/export_demo_site_data.py` | 把运行导出到 `docs/demos/<run>/`，供演示站使用 |
 | `backend/scripts/backfill_report_visuals.py` | 离线为已有报告重建图表与引用（加 `--apply` 才写入） |
 | `backend/scripts/replay_zep_dead_letters.py` | 重放失败的模拟 → 图谱回写 |
@@ -1781,7 +1822,7 @@ flowchart LR
 | Lint | `npm run lint` | Ruff。CI 还会检查 `backend/scripts` 与 `deerflow_bridge`。 |
 | 配置漂移 | `npm run check:env` | `config.py` 读取的每一项设置都必须在 `.env.example` 中有说明 |
 | 阶段契约冒烟测试 | `npm run smoke` | 桩 LLM、确定性、零成本 |
-| 预测质量评估 | `backend/scripts/golden_eval.py`、`eval_forecast_quality.py` | 评估预测质量本身，而不只是代码形态 |
+| 预测质量评估 | `backend/scripts/golden_eval.py`、`backtest_eval.py`、`eval_forecast_quality.py` | 评估预测质量本身，而不只是代码形态 |
 
 **CI**（`.github/workflows/ci.yml`）在推送到 `main` 与提交 Pull Request 时运行三个离线任务：
 - Ruff lint 加上环境变量漂移门；

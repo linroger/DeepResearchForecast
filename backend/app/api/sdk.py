@@ -36,6 +36,7 @@ backtest 评分器），从而杜绝 v1 与底层路由的语义漂移（见 des
 
 import json
 import os
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -47,8 +48,9 @@ from ..services.pipeline_orchestrator import (
     simulation_admission_error,
 )
 from ..services.world_simulation.contracts import WorldError
+from ..services.backtest_mode import BacktestRequestError
 from ..services.report_agent import ReportManager
-from ..services.backtest import score_forecast
+from ..services import forecast_feedback, forecast_ledger
 from ..utils.atomic import write_json_atomic
 from ..utils.logger import get_logger
 
@@ -91,6 +93,8 @@ def v1_run():
         model: str        研究模型（可选；须在 Config.SUPPORTED_DEERFLOW_MODELS 内）
         simulation_engine: str  可选；省略采用 fresh default，显式 null 无效
         world_spec / world_policy_spec: dict  可选；使用同一 fresh admission 契约
+        backtest: dict    可选；回测模式 {as_of, strict, archive, arm, target, run_label}
+                          （docs/handoff/backtest/design.md），无效请求 → 400
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -145,7 +149,7 @@ def v1_run():
             language=language,
             model=model,
             **{key: data[key] for key in
-               ('simulation_engine', 'world_spec', 'world_policy_spec') if key in data},
+               ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest') if key in data},
         )
         return _ok({
             "pipeline_id": state.pipeline_id,
@@ -153,6 +157,8 @@ def v1_run():
             "mode": state.mode,
             "status": state.status,
         })
+    except BacktestRequestError as error:
+        return _err(f"backtest 请求无效（invalid backtest request）: {error}", 400)
     except WorldError as error:
         body, status = simulation_admission_error(error)
         return jsonify(body), status
@@ -290,14 +296,15 @@ def v1_forecast(report_id: str):
 
 @sdk_bp.route('/resolve/<report_id>', methods=['POST'])
 def v1_resolve(report_id: str):
-    """对一条结构化预测做判定（horizon 到期、真实结果已知后），返回 Brier/log-loss 评分。
+    """人工判定已登记的发布预测，并返回原始概率的 Brier/log-loss 评分。
 
-    EXECPLAN2 I-9-5 / I-9-2。委托 backtest.score_forecast（与 forecast_tools.py CLI 同源
-    评分器），并把 {outcome, scoring, resolved_at} 原子落盘到 resolved.json，供后续
-    calibration_report 跨多条已判定预测做校准。
+    不可变发布账本是判定事实的权威来源；resolved.json 是可在重试时修复的镜像。
+    同一结果重试保留最初的时间与证据，冲突返回 409。未登记的旧报告禁止事后补录。
 
     请求 (application/json):
-        outcome: str   实际发生的情景名（须匹配 forecast.scenarios[*].name；模糊匹配交由评分器处理）
+        outcome: str   发布快照中唯一、完全匹配的情景名（区分大小写）
+        outcomes: str | [str]   兼容别名；列表必须只有一项
+        evidence / source: 可选的人工判定依据，未经外部核验
 
     返回:
         {report_id, outcome, scoring: {brier, realized_probability, log_loss, ...}}
@@ -315,50 +322,84 @@ def v1_resolve(report_id: str):
                 409,
             )
 
-        forecast = _load_forecast(report_id)
-        if forecast is None:
+        published = forecast_ledger.read_published_forecast(report_id)
+        if published is None:
             return _err(
-                "该报告无结构化预测，无法判定（需在生成报告时启用 REPORT_STRUCTURED_FORECAST=true）",
+                "该报告没有发布时保留的原始预测快照，禁止在结果已知后补录。"
+                "请重新生成并发布报告以保留原始快照 "
+                "(regenerate/publish with a retained original forecast snapshot)。",
                 409,
             )
 
-        data = request.get_json(silent=True) or {}
-        # 接受 outcome（单一实际情景名）。design_sketch 写作 resolve(report_id, outcomes)，
-        # 故同时容忍 outcomes 别名（取列表首项或字符串），向后兼容更宽的调用方。
-        outcome = data.get('outcome')
-        if outcome is None and 'outcomes' in data:
-            raw = data.get('outcomes')
-            if isinstance(raw, list):
-                outcome = raw[0] if raw else None
-            else:
-                outcome = raw
-        outcome = (str(outcome).strip() if outcome is not None else "")
-        if not outcome:
-            return _err("缺少 outcome（实际发生的情景名）")
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return _err("请求必须是 JSON 对象，包含 outcome 或 outcomes")
+        outcome = data.get("outcome")
+        if "outcomes" in data:
+            alias = data["outcomes"]
+            if isinstance(alias, list):
+                if len(alias) != 1:
+                    return _err("outcomes 列表必须包含且仅包含一个情景名")
+                alias = alias[0]
+            if not isinstance(alias, str) or not alias.strip():
+                return _err("outcomes 必须是情景名字符串或单元素字符串列表")
+            if outcome is not None and outcome != alias:
+                return _err("outcome 与 outcomes 指定了不同的结果，无法唯一判定")
+            outcome = alias
+        if not isinstance(outcome, str) or not outcome.strip():
+            return _err("缺少有效 outcome（实际发生的情景名字符串）")
 
-        scoring = score_forecast(forecast, outcome)
+        forecast = published["forecast"]
+        matches = [
+            scenario for scenario in forecast.get("scenarios", [])
+            if isinstance(scenario, dict) and scenario.get("name") == outcome
+        ]
+        if len(matches) != 1:
+            return _err("outcome 必须完全匹配发布快照中唯一的情景名（区分大小写）")
 
-        from datetime import datetime
+        # A caller's citation is retained as submitted, never promoted to a
+        # verified external outcome. Older calls need no additional fields.
+        evidence = {"adjudication": "manual_user", "externally_verified": False}
+        for field in ("evidence", "source"):
+            if field in data:
+                evidence[field] = data[field]
+        resolution = forecast_ledger.resolve_published_scenario(
+            report_id,
+            outcome,
+            evidence=evidence,
+            resolved_at=datetime.now(timezone.utc).isoformat(),
+        )
+        scoring = resolution["score"]
         record = {
             "report_id": report_id,
             "simulation_id": report.simulation_id,
-            "outcome": outcome,
+            "outcome": resolution["outcome"],
             "scoring": scoring,
-            "resolved_at": datetime.now().isoformat(),
-            # 内嵌当时的预测快照，便于把多条 resolved.json 直接喂给 backtest 校准（{forecast, outcome}）。
+            "resolved_at": resolution["resolved_at"],
+            "kind": resolution["kind"],
+            "publication_sha256": resolution["publication_sha256"],
+            "evidence": resolution["evidence"],
             "forecast": forecast,
         }
-        # 原子落盘（write_json_atomic：tmp + fsync + os.replace），避免轮询读取读到半截文件。
-        write_json_atomic(_resolved_path(report_id), record)
+        # Persist the authoritative outcome first. If the mirror fails, expose
+        # the failure; a same-outcome retry after restart repairs it from the
+        # ledger's original timestamp, evidence, probabilities and score.
+        write_json_atomic(_resolved_path(report_id), record, allow_nan=False)
         logger.info(
             f"[v1] 预测已判定: {report_id} outcome='{outcome}' "
             f"brier={scoring.get('brier')} matched={scoring.get('outcome_matched_a_scenario')}"
         )
         return _ok({
             "report_id": report_id,
-            "outcome": outcome,
+            "outcome": resolution["outcome"],
             "scoring": scoring,
+            "resolved_at": resolution["resolved_at"],
+            "evidence": resolution["evidence"],
         })
+    # Look up the live class: a module reload can leave the ledger's re-export
+    # pointing at an older class while its functions raise the replacement.
+    except forecast_feedback.ForecastFeedbackError as e:
+        return _err(f"{e.code}: {e}", 409)
     except Exception as e:
         logger.error(f"[v1] 判定预测失败: {e}", exc_info=True)
         return _err(str(e), 500)

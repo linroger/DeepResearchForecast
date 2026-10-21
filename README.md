@@ -115,7 +115,7 @@ flowchart TB
 - [Architecture](#architecture)
   - [Runtime topology](#runtime-topology) · [Request lifecycle](#request-lifecycle) · [Pipeline lifecycle, state and resume](#pipeline-lifecycle-state-and-resume) · [What each stage reads](#what-each-stage-reads) · [Code map](#code-map)
 - [Stage-by-stage deep dive](#stage-by-stage-deep-dive)
-  - [1 · Research](#stage-1--research-deerflow-2) · [2 · Ontology](#stage-2--ontology) · [3 · Knowledge graph](#stage-3--knowledge-graph) · [4 · Prepare](#stage-4--prepare) · [5 · Simulation](#stage-5--simulation) · [6 · Report and publication](#stage-6--report-and-publication) · [After the run](#after-the-run-ensembles-ledgers-and-monitoring)
+  - [1 · Research](#stage-1--research-deerflow-2) · [2 · Ontology](#stage-2--ontology) · [3 · Knowledge graph](#stage-3--knowledge-graph) · [4 · Prepare](#stage-4--prepare) · [5 · Simulation](#stage-5--simulation) · [6 · Report and publication](#stage-6--report-and-publication) · [After the run](#after-the-run-ensembles-ledgers-and-monitoring) · [Backtest mode](#backtest-mode-accuracy-without-hindsight)
 - [Trust and quality guarantees](#trust-and-quality-guarantees)
 - [Requirements](#requirements)
 - [Installation and setup](#installation-and-setup)
@@ -1023,10 +1023,10 @@ sequenceDiagram
   - *Observe.* Each active agent receives the committed WORLD STATE brief: tracked facts (seeded from the dossier's quantitative facts and the official-data snapshot, each with unit, as-of date and provenance, and marked as a trend once a fact has moved the same way for two periods or more), last period's moves and their consequences (including any red line a move crossed), alliance and rivalry shifts, each actor's track record (commitments kept, lapsed or broken, and how its moves resolved) and open commitments. Privately, each actor also sees its own track record and, next to each reaction it expected after its last move, what the other side actually did. Scenario probabilities are never shown to agents.
   - *Decide.* Each deciding actor (principals first, then active named actors, capped by `SIM_WORLD_DECISION_MAX_ACTORS`) makes ONE structured decision from a menu grounded in its sealed role brief and the current world: responses to moves aimed at it (a crossed red line first), its documented plans, its agency class's catalogued levers (government, regulator, legislature, central bank, firm, union, NGO, coalition, individual leader…) filtered by remaining capacity, and `hold_position`. The answer carries targets, magnitude, a public statement, the exact terms when the move is an offer, a dated commitment, alliance moves, the reactions it expects from others and the scenario the move pushes toward. An offer (talks, alliance, concession, agreement, deal) binds nobody until the recipient accepts, counters, rejects or defers it from its own menu; unanswered offers lapse after two periods. Invalid or failed answers degrade to a typed hold, never to silence.
   - *Act.* The statement is published as that actor's post on both platforms (one decision per actor per round, shared across platforms) and the reaction step lets everybody reply.
-  - *World update.* When both platforms have delivered the round, ONE update runs: the deterministic kernel consumes capacity, settles offers (acceptance binds both parties with obligations; a lapsed obligation or a withdrawal is a breach that costs reputation and the relationship), registers commitments (honoured by acting when due, lapsing otherwise), nudges relationships, fires due delayed effects and research events, and rolls the exogenous shocks the dossier documents (a risk with a probability, the window it refers to and a source; a fired shock is an emergent event every agent sees in the next brief and the arbiter sees as a confirmed event, and its documented effects move tracked facts under the same clamp; `SIM_WORLD_SHOCKS`); then a single bounded arbiter call resolves contested moves — weighing each mover's track record, the expectations in play and the red lines at stake, since markets and counterparties react to announcements and expectations before measures take effect — moves state variables, reports red-line crossings, and emits emergent events and delayed effects. A figure the moving actor itself announced this period (a tariff, rate, quota or price) lands in full; every other change, delayed effects included, is clamped by `SIM_WORLD_MAX_CHANGE_RATIO`, and an announced setting never crosses zero. A withdrawal never counts as honouring the obligation it breaks. The scenario-share WorldState steps from the actors' scenario commitments and, when the arbiter applied, its world-grounded scenario pressure (`SIM_WORLD_PRESSURE_WEIGHT` of the actors' weight; it moves the shares even when every actor abstains), with the calendar inertia and entropy floor. A platform never starts round *i+1* before update *i* is committed.
+  - *World update.* When both platforms have delivered the round, ONE update runs: the deterministic kernel consumes capacity, settles offers (acceptance binds both parties with obligations; a lapsed obligation or a withdrawal is a breach that costs reputation and the relationship), registers commitments (only an explicit attempt on that exact promise, confirmed by the arbiter for the same actor and round, fulfils it; unrelated actions leave it open), nudges relationships, fires due delayed effects and research events, and rolls the exogenous shocks the dossier documents (a risk with a probability, the window it refers to and a source; a fired shock is an emergent event every agent sees in the next brief and the arbiter sees as a confirmed event, and its documented effects move tracked facts under the same clamp; `SIM_WORLD_SHOCKS`); then a single bounded arbiter call resolves contested moves — weighing each mover's track record, the expectations in play and the red lines at stake, since markets and counterparties react to announcements and expectations before measures take effect — moves state variables, reports red-line crossings, and emits emergent events and delayed effects. A figure the moving actor itself announced this period (a tariff, rate, quota or price) lands in full; every other change, delayed effects included, is clamped by `SIM_WORLD_MAX_CHANGE_RATIO`, and an announced setting never crosses zero. A withdrawal never counts as honouring the obligation it breaks. The scenario-share WorldState steps from the actors' scenario commitments and, when the arbiter applied, its world-grounded scenario pressure (`SIM_WORLD_PRESSURE_WEIGHT` of the actors' weight; it moves the shares even when every actor abstains), with the calendar inertia and entropy floor. A platform never starts round *i+1* before update *i* is committed.
   - *A distribution of futures.* With `SIM_WORLD_PATHS=K` (default 1, at most 8) every committed round runs K seeded world updates that share the actors' decisions: no extra decision call and at most K arbiter calls per round. Path 0 is the world the agents live in, computed exactly as with one path; the other paths roll pending effects and shocks with their own seeds and sample the arbiter at `SIM_WORLD_PATH_TEMPERATURE` (bounded to 0–1). The trajectory rows and the world summary report each scenario's share as a distribution across the paths (mean, spread, percentiles, leader counts) plus how often each shock fired; agents never see shares or paths.
 
-  `world_state.json` (latest world, with its offers, the seed's modelling gaps and per-round behaviour diagnostics), `world_state_history.jsonl`, `world_actions.jsonl`, `world_state_trajectory.json` and `decisions.jsonl` are saved (plus `world_paths.json` with more than one path); the report's diagnostic pack renders the evolution, offers, gaps and a world-variables chart, and the dashboard's simulation tab shows a live World State panel whose period strip opens any committed round — the feed beside it then shows that period's posts and replies only. With `SIM_WORLD_MODEL=false` the legacy in-band scenario evolution runs unchanged.
+  `world_state.json` (latest world, with its offers, the seed's modelling gaps and per-round behaviour diagnostics), `world_state_history.jsonl`, `world_actions.jsonl`, `world_state_trajectory.json` and `decisions.jsonl` are saved (plus `world_paths.json` with more than one path); the report's diagnostic pack renders the evolution, offers, gaps, red-line crossings, the actors with broken or lapsed commitments and a world-variables chart, and the dashboard's simulation tab shows a live World State panel whose period strip opens any committed round — the feed beside it then shows that period's posts and replies only. The panel lists each actor's track record (commitments kept, lapsed, broken, released or open, and how its moves resolved; breakers first), labels a crossed red line as such in the period it happened, and puts the count of expected reactions that the named actor followed with a move next to the responsive-moves badge. With `SIM_WORLD_MODEL=false` the legacy in-band scenario evolution runs unchanged.
 - **Monitoring and completion.**
   - A monitor thread in the backend tails the action logs every 2 s into `run_state.json`.
   - The pipeline polls every 5 s and stops a run that makes no round progress for 30 minutes.
@@ -1149,13 +1149,13 @@ Every export is served only through the publication gate. The agent log (`/agent
 
 ```mermaid
 flowchart LR
-    FJ[("forecast.json")]:::store --> LED[("Forecast ledger<br/>ledger.jsonl")]:::store
+    FJ[("Audited forecast.json")]:::store --> LED[("Published forecast journal<br/>published_forecasts.jsonl")]:::store
     FJ --> MON["Resolution monitor<br/>manual trigger or<br/>every N hours"]:::det
     MON --> PT[("price_track.jsonl<br/>market drift")]:::store
     MON --> RES[("resolutions.jsonl<br/>Brier scores")]:::store
     MON --> MR[("monitor_report.md")]:::store
-    LED -. "join not automated yet" .-> CAL["historical_calibration<br/>in later forecasts"]:::det
-    RES -. "join not automated yet" .-> CAL
+    LED --> CAL["historical_calibration<br/>in later forecasts"]:::det
+    RES -- "exact identity + original probability" --> LED
     SCH["scheduled_rerun.py<br/>CLI · off by default"]:::det --> NEW["New pipeline<br/>same question"]:::proc --> DRIFT["Drift vs previous<br/>forecast → webhook"]:::det
     ENS["N_FORECAST_SEEDS > 1"]:::proc --> EF[("ensemble_forecast.json<br/>sensitivity sidecar")]:::store
     classDef proc fill:#dbeafe,stroke:#2563eb,color:#0b1b3a
@@ -1167,10 +1167,10 @@ flowchart LR
   - The run adds N−1 extra prepare → run → report lanes, with seeds `SIM_SEED + 7919·k`, running at most `ENSEMBLE_SEED_CONCURRENCY` (default 2) at a time. Each lane produces a full, gated report.
   - Their scenario probabilities are pooled in log-odds space into `ensemble_forecast.json`, together with spreads and an agreement score.
   - The primary report and forecast are never rewritten.
-- **Forecast ledger.** Every finalized forecast appends its scenarios to `uploads/pipelines/_forecast_ledger/ledger.jsonl`.
-- **Resolution monitor** (`backend/scripts/resolution_monitor.py`). For the 10 most recent reports, it:
+- **Forecast ledger.** Audit-passed default-engine publications register immutable scenario and binary contracts in `uploads/pipelines/_forecast_ledger/published_forecasts.jsonl`. An exact retry is idempotent; changed original probabilities or contracts are rejected. Drafts and evaluation rows cannot enter this production journal. Legacy `ledger.jsonl` remains separately labeled.
+- **Resolution monitor** (`backend/scripts/resolution_monitor.py`). For a bounded batch (default 10), it fairly revisits outstanding published forecasts, including old due questions, then fills spare capacity with recent reports. A separate bounded recovery pass repairs interrupted registration of unchanged audited publications before acquisition. It:
   - re-quotes anchored markets into `price_track.jsonl`, flagging moves of 5 points or more;
-  - records market resolutions with Brier scores in `resolutions.jsonl`;
+  - records native market/data outcomes, joins exact identities to original probabilities and derives separate typed Brier scores; an official-data anchor takes precedence when both anchors exist;
   - lists binaries that need manual resolution;
   - writes `monitor_report.md`.
 
@@ -1178,8 +1178,30 @@ flowchart LR
 - **Calibration tooling.**
   - `backend/app/services/backtest.py` provides Brier score, log loss, calibration bins and the Murphy decomposition.
   - `backend/scripts/golden_eval.py` scores against resolved "golden" questions.
-  - Joining resolutions back into the ledger, which is what would let later reports show `historical_calibration`, is **not automated yet**.
+  - `backend/scripts/backtest_eval.py` runs golden questions end to end in backtest mode and scores them per ablation arm (see [Backtest mode](#backtest-mode-accuracy-without-hindsight)).
+  - The next default-engine report freezes a verified historical track record in `historical_calibration.forecast_track_record` and audited Markdown, with resolved/outstanding denominators and separate scenario, market-binary and official-data scores. The report excludes itself; descriptive scores do not establish calibration. `POST /api/v1/resolve/<report_id>` records an exact scenario adjudication, retains submitted evidence as manual, rejects conflicting retries and repairs its report-local mirror from the durable journal after restart. Unregistered legacy reports are not backfilled at resolution time.
 - **Scheduled reruns** (`backend/scripts/scheduled_rerun.py daemon|tick`, off by default). They re-run saved questions, record probability drift of 15 points or more, and can POST to a webhook. `scheduled_rerun.py diff <pipe_a> <pipe_b>` compares two runs.
+
+### Backtest mode: accuracy without hindsight
+
+A retrospective score means nothing if the pipeline can read the outcome. **Backtest mode** pins an as-of date on one pipeline and cuts every input it reads at that date. It is opt-in and off by default: a pipeline without it runs exactly as before. Design and evidence: [docs/handoff/backtest/design.md](docs/handoff/backtest/design.md).
+
+- **Starting one.** Call `POST /api/v1/run` (it needs `API_V1_ENABLED=true`) with a `backtest` block such as `{"as_of": "2024-11-01", "strict": true, "archive": "wayback", "arm": "production"}`, plus an optional `target` golden question. Admission refuses a cutoff that is not in the past, the legacy research engine and the world-v1 engine.
+- **What is cut.** The research child receives the policy as `DRF_BACKTEST_POLICY`; a live run never inherits it.
+  - *Search:* Firecrawl gets a date filter that ends on the as-of day, plus dated news rows. Every row from every provider is then dated from its own fields and its URL, and rows dated after the cutoff are dropped.
+  - *Fetch:* the last Wayback Machine capture at or before the cutoff is read when there is one. Otherwise the live page is dated from its metadata, its URL and its search hit, and refused when it was published or modified after the cutoff.
+  - *Official data:* request windows end at the cutoff. FRED's API route returns the as-of vintage (ALFRED); every other route, FRED's keyless CSV included, returns current revisions, which count only for periods that ended by the cutoff (in strict mode, a publication lag before it).
+  - *Markets:* closed events are searched too. A market counts only if it was open at the cutoff; it is priced from CLOB price history at the cutoff, with resolved prices and later fields removed. The report stage never re-quotes.
+  - *News/social/cross-platform context:* current Oddsense tools are disabled for backtests; previously captured live context is rejected instead of being replayed as historical evidence.
+  - *Dates and records:* the plan date, the simulation calendar and the target years start from the as-of date. `forecast.json` gets a `backtest` block, nothing goes to the production ledger, and the resolution monitor skips the report.
+- **Strict or lenient.** Strict mode (the default) drops undated sources; lenient mode keeps them with a flag. Every decision is logged in the handoff's `backtest_audit.jsonl` and summarized in `research_meta.json`.
+- **What it cannot cut: the model's memory.** The LLM may know outcomes from before its training cutoff. Each golden question carries `knowledge_cutoff` (the date its outcome became public), and `golden_eval.py` and `backtest_eval.py` take `--model-knowledge-cutoff` to report `post_model_cutoff` (clean), `pre_model_cutoff` (possibly memorized) and `unknown` separately. All 30 current golden questions resolved by February 2025, so for a 2026 model their scores are an upper bound.
+- **Ablation arms**, each run as its own pipeline: `research_only` (no markets; the simulation never moves probabilities) · `markets` · `simulation` (the simulation may move probabilities, an evaluation-only setting) · `world_channel` (adds the reflexive world channel) · `production` (today's live settings).
+- **The driver** is `backend/scripts/backtest_eval.py`:
+  - `plan --ids <golden ids>` lists the pipelines and the exact request each one gets (quick depth, 4 rounds), with no network;
+  - `run --base-url <backend> --run-dir <dir> --confirm-paid` submits them and waits; it can resume, and it refuses a batch of more than 8 pipelines unless `--max-pipelines` allows it;
+  - `score --run-dir <dir>` writes `eval_report.json` and a markdown summary: Brier, log score, ECE and accuracy per arm, the knowledge split, and paired differences against `research_only`.
+- **Forward testing.** Forecasts that resolve within weeks give clean numbers. Set `RESOLUTION_MONITOR_AUTORUN_HOURS=24`, and a `RESOLUTION_MONITOR_RECENT_N` large enough to keep every open short-horizon report in view. Write questions from `backend/tests/eval/forward_questions_template.json` (2–12 weeks, each settled by an official series or a Polymarket market), check them with `backtest_eval.py forward-check`, and score the resolved ones with `backtest_eval.py forward-score`.
 
 ---
 
@@ -1476,6 +1498,24 @@ Research models (`DEERFLOW_MODEL`), as defined by the stanzas in `deerflow_bridg
 | `FIRECRAWL_API_KEY` · `SERPER_API_KEY` · `TAVILY_API_KEY` · `EXA_API_KEY` | — | Search and fetch backends (Firecrawl is recommended) |
 | `PREDICTION_MARKETS_ENABLED` | `true` | Keyless Polymarket lookups during research and the report |
 
+**News and cross-platform research context**
+
+Both research engines expose `news_search`, optional `social_search`, and `market_compare` when enabled. A configured NewsAPI key enables one bounded topic prefetch before investigation; selected publisher pages use the ordinary fetch/citation path. NewsAPI snippets remain discovery evidence until the original page is fetched. Reddit records are attributed discussion, while cross-platform quotes retain their venue, native identity, price basis, units and rules. Topic similarity does not establish contract equivalence or executable arbitrage; these feeds never become automatic forecast anchors or settlement evidence.
+
+The sealed `handoff/news_market_context.json` records provider statuses, article/quote times, query identity and hashes. Parent promotion/reuse and the simulation's consumed research binding preserve the captured generation. Research and forecast views show the same bounded attributed context, and forecast Markdown carries its source links and limitations. Report readers do not refetch these sources. Invalid present captures fail validation; missing older captures remain compatible.
+
+| Setting | Default | Current behavior |
+|---|---|---|
+| `NEWS_CONTEXT_ENABLED` | `true` | Master switch for new acquisition/tools/snapshots on fresh runs |
+| `NEWSAPI_API_KEY` · `NEWSAPI_ENABLED` | — · `true` | Key stays in the backend environment and an HTTP header; missing credentials are explicitly unavailable |
+| `NEWSAPI_MAX_REQUESTS` · `NEWSAPI_PAGE_SIZE` | `2` · `20` | Physical requests per generation and articles per one-page request; secondary research lanes receive no NewsAPI allowance |
+| `NEWSAPI_LOOKBACK_DAYS` | `30` | Bounded publication lookback; actual accessible history and delay depend on the subscription |
+| `NEWS_CONTEXT_DEADLINE_SECONDS` · `NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS` | `10` · `5` | Cumulative acquisition time (excluding model/idle gaps) and shorter per-request caps; caller deadlines can only shorten them |
+| `REDDIT_SIGNALS_ENABLED` · `REDDIT_MAX_REQUESTS` | `false` · `1` | Optional discussion discovery; denied/rate-limited access is not an empty successful search |
+| `MARKET_INTELLIGENCE_ENABLED` · `MARKET_INTELLIGENCE_MAX_REQUESTS` | `true` · `4` | Bounded context-only cross-platform discovery; community-forecast access can remain explicitly unsupported |
+
+NewsAPI's published Developer plan currently has a 24-hour article delay, one-month history and 100 requests/day, and permits development/testing only. Verify the actual key's plan before staging/production use; no plan is inferred from possession of a key. See [NewsAPI pricing](https://newsapi.org/pricing), [configuration](.env.example), and [Oddsense attribution](docs/third-party/oddsense.md). Network errors, missing keys, partial catalog scans and unknown timestamps retain explicit availability/coverage limits; no missing price or opinion becomes zero or neutral evidence.
+
 **Official data (research and report)**
 
 | Setting | Default | Current behavior |
@@ -1635,7 +1675,7 @@ These are the routes the dashboard uses. The complete list follows in a collapsi
 | `/api/graph` (14) | `GET /project/<id>` · `GET /project/list` · `DELETE /project/<id>` · `POST /project/<id>/reset` · `POST /ontology/generate` · `POST /build` · `GET /task/<task_id>` · `GET /tasks` · `POST /gc` · `DELETE /delete/<graph_id>` |
 | `/api/simulation` (32) | `GET /entities/<graph_id>` · `GET /entities/<graph_id>/<uuid>` · `GET /entities/<graph_id>/by-type/<type>` · `POST /create` · `POST /prepare` · `POST /prepare/status` · `GET /<sim_id>` · `GET /list` · `GET /history` · `GET /<sim_id>/profiles` · `GET /<sim_id>/config` · `GET /<sim_id>/config/realtime` · `GET /<sim_id>/config/download` · `GET /script/<name>/download` · `POST /generate-profiles` · `POST /start` · `POST /stop` · `GET /<sim_id>/run-status/detail` · `POST /interview` · `POST /interview/batch` · `POST /interview/all` · `POST /interview/history` · `POST /env-status` · `POST /close-env` |
 | `/api/report` (29) | `POST /generate` · `POST /generate/status` · `GET /by-simulation/<sim_id>` · `GET /list` · `DELETE /<report_id>` · `POST /chat` · `GET /<report_id>/progress` · `GET /<report_id>/sections` · `GET /<report_id>/section/<n>` · `GET /check/<sim_id>` · `GET /<report_id>/agent-log` · `GET /<report_id>/agent-log/stream` · `GET /<report_id>/console-log` · `GET /<report_id>/console-log/stream` · `POST /tools/search` · `POST /tools/statistics` |
-| `/api/v1` (6, only when `API_V1_ENABLED=true`) | `POST /run` · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
+| `/api/v1` (6, only when `API_V1_ENABLED=true`) | `POST /run` (accepts a `backtest` block) · `GET /status/<pipeline_id>` · `GET /list` · `GET /dossier/<pipeline_id>` · `GET /forecast/<report_id>` · `POST /resolve/<report_id>` |
 
 Many of the extra graph, simulation and report routes predate the unified dashboard; they still work for scripting. The handlers live in [`backend/app/api/`](backend/app/api/).
 
@@ -1739,6 +1779,7 @@ flowchart LR
 | `backend/scripts/model_comparison.py` | The same question through several providers, compared side by side |
 | `backend/scripts/forecast_tools.py` | Ensemble aggregation and backtesting over `forecast.json` files |
 | `backend/scripts/golden_eval.py` · `eval_forecast_quality.py` | Golden-question scoring · rubric LLM-judge (opt-in) |
+| `backend/scripts/backtest_eval.py` | Backtest driver: golden questions × ablation arms at their as-of dates; forward-question check and score |
 | `backend/scripts/export_demo_site_data.py` | Export runs into `docs/demos/<run>/` for the demo site |
 | `backend/scripts/backfill_report_visuals.py` | Rebuild charts and citations for existing reports offline (`--apply` to write) |
 | `backend/scripts/replay_zep_dead_letters.py` | Replay failed simulation → graph feedback writes |
@@ -1781,7 +1822,7 @@ Run the backend scripts from `backend/` with `uv run python scripts/<name>.py --
 | Lint | `npm run lint` | Ruff. CI also lints `backend/scripts` and `deerflow_bridge`. |
 | Config drift | `npm run check:env` | Every setting `config.py` reads must be documented in `.env.example` |
 | Stage-contract smoke test | `npm run smoke` | Stub LLM, deterministic, $0 |
-| Forecast-quality evaluation | `backend/scripts/golden_eval.py`, `eval_forecast_quality.py` | Scores forecast quality rather than code shape |
+| Forecast-quality evaluation | `backend/scripts/golden_eval.py`, `backtest_eval.py`, `eval_forecast_quality.py` | Scores forecast quality rather than code shape |
 
 **CI** (`.github/workflows/ci.yml`) runs three offline jobs on pushes to `main` and on pull requests:
 - Ruff lint plus the env-drift gate;

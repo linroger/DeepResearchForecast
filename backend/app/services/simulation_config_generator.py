@@ -2163,10 +2163,20 @@ class SimulationConfigGenerator:
             arbiter_enabled=bool(getattr(Config, "SIM_WORLD_ARBITER", True)),
             max_change_ratio=float(getattr(Config, "SIM_WORLD_MAX_CHANGE_RATIO", 0.5) or 0.5),
             barrier_timeout_s=float(getattr(Config, "SIM_WORLD_BARRIER_TIMEOUT_S", 1800) or 1800),
+            pressure_weight=self._backtest_pressure_weight(simulation_id),
         )
         if not block.get("actors"):
             return None
         return block
+
+    @staticmethod
+    def _backtest_pressure_weight(simulation_id: Optional[str]) -> Optional[float]:
+        """Backtest ablation arm without the world channel → ``0.0``; ``None``
+        (the runner's SIM_WORLD_PRESSURE_WEIGHT) for every other run."""
+        if not simulation_id:
+            return None
+        from . import backtest_mode
+        return backtest_mode.world_pressure_weight(backtest_mode.policy_for_simulation(simulation_id))
 
     def _build_world_brief(
         self,

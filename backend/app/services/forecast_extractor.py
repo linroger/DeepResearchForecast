@@ -4362,6 +4362,36 @@ def _cap_at_line(text: str, cap: int) -> str:
     return (text[:cut] if cut > 0 else text[:max(0, cap - len(note))]) + note
 
 
+def _pinned_slug(value: Any) -> str:
+    """A golden id as ``_normalize_binaries`` normalizes a ``proposition_id``."""
+    return re.sub(r"[^a-z0-9]+", "-", str(value or "").lower()).strip("-")
+
+
+def _pinned_questions_rule(pinned: List[Dict[str, Any]]) -> str:
+    """Backtest mode: the prompt block that pins each golden question."""
+    lines = ["\nPINNED QUESTIONS: the set MUST include exactly one forecast for each question "
+             "below, with the given proposition_id, a statement that asserts the question's YES "
+             "outcome as one declarative sentence, these resolution criteria, and your own "
+             "probability from the dossier's evidence alone (they count toward the minimum):"]
+    for question in pinned:
+        lines.append(f'- proposition_id "{_pinned_slug(question.get("golden_id"))}": '
+                     f'{str(question.get("question") or "")[:600]}'
+                     + (f" | resolution criteria: {str(question.get('resolution_criteria'))[:600]}"
+                        if question.get("resolution_criteria") else "")
+                     + (f" | resolves on {question.get('resolution_date')}"
+                        if question.get("resolution_date") else ""))
+    return "\n".join(lines)
+
+
+def _mark_pinned_answers(binaries: List[Dict[str, Any]], pinned: List[Dict[str, Any]]) -> None:
+    """Mark the row answering each pinned question with ``golden_id`` (first match wins)."""
+    wanted = {_pinned_slug(q.get("golden_id")): str(q.get("golden_id")) for q in pinned}
+    for row in binaries:
+        golden = wanted.pop(str(row.get("proposition_id") or ""), None)
+        if golden is not None:
+            row["golden_id"] = golden
+
+
 def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              language: str = "English",
                              situation_brief: Optional[str] = None,
@@ -4373,7 +4403,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              ensemble_client_factory: Optional[Any] = None,
                              horizon_date: Optional[str] = None,
                              data_pack: Optional[str] = None,
-                             official_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                             official_data: Optional[Dict[str, Any]] = None,
+                             simulation_effect: Optional[str] = None,
+                             pinned_questions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -4390,6 +4422,13 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     PM-2：抽取后跑一次确定性市场匹配（anchor_binaries_to_markets）+ 10pp 分歧有界重述
     （enforce_market_divergence），并把对照负载放进返回值 ``market_comparison``（供落
     market_comparison.json）。RQ-2：dossier 切片改为 head+tail（结论在文末）。
+
+    Backtest mode (both default ``None`` = unchanged): ``simulation_effect``
+    replaces ``SIMULATION_FORECAST_EFFECT`` for this call (the ablation arm's
+    policy); ``pinned_questions`` (``[{golden_id, question, resolution_criteria,
+    resolution_date}]``) asks every draw to include one forecast per question
+    with that ``proposition_id``, and each row that answers one is marked
+    ``golden_id`` (the backtest driver maps forecasts to golden questions by it).
     """
     content = (report_markdown or "")
     _bbudget = int(_cfg("FORECAST_BINARY_EXTRACT_BUDGET", 48000))
@@ -4400,8 +4439,9 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
     # （特征化 fixture 专用）时才允许进入二元概率生成；默认 diagnostic_only 下模拟产出
     # 不得移动任何已发布概率（simulation adjustments 是未晋升的预测政策）。
-    _sim_effect = str(_cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
+    _sim_effect = str(simulation_effect or _cfg("SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                       or "diagnostic_only").strip().lower()
+    pinned = [q for q in (pinned_questions or []) if isinstance(q, dict) and q.get("golden_id")]
     sim_sensitive = (_sim_effect == "legacy_prompt"
                      and bool(_cfg("FORECAST_SIM_SENSITIVITY", True))
                      and bool((signal_pack or "").strip()))
@@ -4451,6 +4491,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             )
         if market_aware:
             user += _BINARY_MARKET_RULE
+        if pinned:
+            user += _pinned_questions_rule(pinned)
         if data_pack and official_data:
             pack = _cap_at_line(str(data_pack), OFFICIAL_PACK_PROMPT_CAP)
             user += (
@@ -4548,6 +4590,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     # renumber ids stably F1..Fn（锚定用稳定 id 匹配，故在此之后再跑市场锚定）
     for i, b in enumerate(binaries, start=1):
         b["id"] = f"F{i}"
+    if pinned:
+        _mark_pinned_answers(binaries, pinned)
     # ITEM 12：多模型集成——主模型抽完后，对每个所列（非主）提供方各跑一次同提示词二元抽取，
     # 按 id/陈述匹配同一条预测，用与种子集成同一套 extremizing log-odds（ENSEMBLE_EXTREMIZE_A）
     # 把各模型概率池化为发布概率，记 binary['ensemble']={models,probs,pooled,spread}。置于市场锚定

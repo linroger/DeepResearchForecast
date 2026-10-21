@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="1.741" timestamp="2026-10-18T21:42:13.161181" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_news_report_metadata" name="test_mixed_official_and_context_metadata_preserves_foreign_sources_but_rejects_authored_foreign_text[Chinese]" time="0.393"><failure message="AssertionError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：最终 Markdown 含 1 行目标语言污染&#10;assert &lt;ReportStatus...LED: 'failed'&gt; == &lt;ReportStatus...: 'completed'&gt;&#10;  &#10;  - completed&#10;  + failed">report_agent_factory = &lt;function report_agent_factory.&lt;locals&gt;.make at 0x10c7953a0&gt;
+report_root = PosixPath('/private/tmp/drf-os-mixed-metadata-red-20261018-1/pytest-tmp/test_mixed_official_and_contex0/reports')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10c422690&gt;
+language = 'Chinese'
+
+    @pytest.mark.parametrize("language", ["Chinese", "English"])
+    def test_mixed_official_and_context_metadata_preserves_foreign_sources_but_rejects_authored_foreign_text(
+        report_agent_factory, report_root, monkeypatch, language,
+    ):
+        from app.api import report as api
+        from app.services import official_data, report_lint
+        from scripts import export_demo_site_data as exporter
+    
+        monkeypatch.setenv("REPORT_OUTPUT_LANGUAGE", language)
+        item = _context()["items"][0]
+        item.update(provider="kalshi", id="kalshi:fixture", kind="market_quote",
+                    title="监管部门正式公布新增产能许可" if language == "English" else "Fixture capacity contract",
+                    yes_bid=0.0, yes_ask=0.44, last_price=0.41, price_unit="USD_per_contract",
+                    quote_basis="provider_reported_dollars_per_contract", outcome="Yes", quote_at=None,
+                    rules_primary="Resolve from the official annual capacity release published at year end.",
+                    rules_secondary="Use the original public release and preserve the stated outcome.")
+        context = _context(items=[item], providers={"kalshi": {"state": "ok", "attempted": True}})
+        carrier = {"schema_version": 1, "series": [{
+            "series": "fred:UNRATE", "provider": "fred", "title": "Unemployment Rate",
+            "units": "Percent", "frequency": "M", "geography": "USA", "transform": "",
+            "source_url": "https://fred.stlouisfed.org/series/UNRATE", "retrieved_at": "2026-10-18T00:00:00Z",
+            "observations": [{"date": "2026-09-01", "value": 4.0, "status": "observed"}],
+        }]}
+        def forbidden(*args, **kwargs):
+            pytest.fail("A report reader attempted upstream acquisition")
+        monkeypatch.setattr(official_data, "get_data_sources", forbidden)
+        agent = ReportAgent("graph_fixture", "sim_fixture", "Assess capacity",
+                            llm_client=FakeLLMClient(), zep_tools=SimpleNamespace(),
+                            official_data=carrier, news_market_context=context)
+        chinese = language == "Chinese"
+        title = "产能展望" if chinese else "Capacity outlook"
+        narrative = "产能取决于实际投资和交付进度。未来结果仍存在不确定性。" if chinese else (
+            "Capacity depends on executed investment and delivery schedules. The outcome remains uncertain.")
+        monkeypatch.setattr(agent, "plan_outline", lambda **kw: ReportOutline(
+            title=title, summary=narrative, sections=[ReportSection(title=title, description=narrative)]))
+        monkeypatch.setattr(agent, "_generate_section_with_retry", lambda **kw: narrative)
+        report = agent.generate_report(report_id="report_mixed_metadata")
+&gt;       assert report.status == ReportStatus.COMPLETED, report.error
+E       AssertionError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：最终 Markdown 含 1 行目标语言污染
+E       assert &lt;ReportStatus...LED: 'failed'&gt; == &lt;ReportStatus...: 'completed'&gt;
+E         
+E         - completed
+E         + failed
+
+backend/tests/test_news_report_metadata.py:61: AssertionError</failure></testcase><testcase classname="tests.test_news_report_metadata" name="test_mixed_official_and_context_metadata_preserves_foreign_sources_but_rejects_authored_foreign_text[English]" time="0.073"><failure message="AssertionError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：最终 Markdown 含 1 行目标语言污染&#10;assert &lt;ReportStatus...LED: 'failed'&gt; == &lt;ReportStatus...: 'completed'&gt;&#10;  &#10;  - completed&#10;  + failed">report_agent_factory = &lt;function report_agent_factory.&lt;locals&gt;.make at 0x10ca0ff60&gt;
+report_root = PosixPath('/private/tmp/drf-os-mixed-metadata-red-20261018-1/pytest-tmp/test_mixed_official_and_contex1/reports')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10c68c1d0&gt;
+language = 'English'
+
+    @pytest.mark.parametrize("language", ["Chinese", "English"])
+    def test_mixed_official_and_context_metadata_preserves_foreign_sources_but_rejects_authored_foreign_text(
+        report_agent_factory, report_root, monkeypatch, language,
+    ):
+        from app.api import report as api
+        from app.services import official_data, report_lint
+        from scripts import export_demo_site_data as exporter
+    
+        monkeypatch.setenv("REPORT_OUTPUT_LANGUAGE", language)
+        item = _context()["items"][0]
+        item.update(provider="kalshi", id="kalshi:fixture", kind="market_quote",
+                    title="监管部门正式公布新增产能许可" if language == "English" else "Fixture capacity contract",
+                    yes_bid=0.0, yes_ask=0.44, last_price=0.41, price_unit="USD_per_contract",
+                    quote_basis="provider_reported_dollars_per_contract", outcome="Yes", quote_at=None,
+                    rules_primary="Resolve from the official annual capacity release published at year end.",
+                    rules_secondary="Use the original public release and preserve the stated outcome.")
+        context = _context(items=[item], providers={"kalshi": {"state": "ok", "attempted": True}})
+        carrier = {"schema_version": 1, "series": [{
+            "series": "fred:UNRATE", "provider": "fred", "title": "Unemployment Rate",
+            "units": "Percent", "frequency": "M", "geography": "USA", "transform": "",
+            "source_url": "https://fred.stlouisfed.org/series/UNRATE", "retrieved_at": "2026-10-18T00:00:00Z",
+            "observations": [{"date": "2026-09-01", "value": 4.0, "status": "observed"}],
+        }]}
+        def forbidden(*args, **kwargs):
+            pytest.fail("A report reader attempted upstream acquisition")
+        monkeypatch.setattr(official_data, "get_data_sources", forbidden)
+        agent = ReportAgent("graph_fixture", "sim_fixture", "Assess capacity",
+                            llm_client=FakeLLMClient(), zep_tools=SimpleNamespace(),
+                            official_data=carrier, news_market_context=context)
+        chinese = language == "Chinese"
+        title = "产能展望" if chinese else "Capacity outlook"
+        narrative = "产能取决于实际投资和交付进度。未来结果仍存在不确定性。" if chinese else (
+            "Capacity depends on executed investment and delivery schedules. The outcome remains uncertain.")
+        monkeypatch.setattr(agent, "plan_outline", lambda **kw: ReportOutline(
+            title=title, summary=narrative, sections=[ReportSection(title=title, description=narrative)]))
+        monkeypatch.setattr(agent, "_generate_section_with_retry", lambda **kw: narrative)
+        report = agent.generate_report(report_id="report_mixed_metadata")
+&gt;       assert report.status == ReportStatus.COMPLETED, report.error
+E       AssertionError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：最终 Markdown 含 1 行目标语言污染
+E       assert &lt;ReportStatus...LED: 'failed'&gt; == &lt;ReportStatus...: 'completed'&gt;
+E         
+E         - completed
+E         + failed
+
+backend/tests/test_news_report_metadata.py:61: AssertionError</failure></testcase></testsuite></testsuites>

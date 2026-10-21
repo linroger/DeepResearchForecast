@@ -28,7 +28,9 @@ from pathlib import Path
 from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
+from . import backtest_mode as _backtest
 from . import report_filter_safe as _filter_safe
+from . import news_market_context as _news_context
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -2394,6 +2396,7 @@ class ReportAgent:
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         official_data: Optional[Dict[str, Any]] = None,
+        news_market_context: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化Report Agent
@@ -2422,6 +2425,12 @@ class ReportAgent:
             scenario_spine: 主跑情景脊柱 [{name, resolution_criteria}]（W9-5 多种子集成对齐）——
                 钉进骨架推导，让种子对同一组命名情景打分（概率自由，新情景可追加）。
         """
+        # Freeze the bounded envelope before constructing any clients or prompts.
+        # Returning a fresh copy from the property also prevents caller mutation.
+        _context = _news_context._validated_copy(news_market_context)
+        self._news_context_sha256 = (_context or {}).get("sha256")
+        self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
+            sort_keys=True, separators=(",", ":"), allow_nan=False) if _context else None)
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
@@ -2493,6 +2502,8 @@ class ReportAgent:
         self._sources_index, self._citation_index = self._build_sources_index()
         self._data_pack = self._build_data_pack()
         self._world_probability_input = self._build_world_probability_input()
+        self._news_context_block = _news_context.render_context(
+            self.news_market_context, lang="zh" if self.output_language == "Chinese" else "en")
         # EXECPLAN2 I-3-2: 模拟量化信号包（确定性接地下限），懒构建一次后缓存；
         # 关闭 REPORT_SIGNAL_PACK 时始终为空串，_prepend_research_background 自动跳过（行为不变）。
         self._signal_pack = ""
@@ -2612,8 +2623,50 @@ class ReportAgent:
         binding = getattr(self, "_world_binding", None)
         if binding:
             return binding["result"]["forecastEffect"]
+        # Backtest ablation arm (backtest_mode.ARMS): the arm decides whether the
+        # simulation may move probabilities; ``production`` keeps the live policy.
+        arm_effect = _backtest.simulation_effect(self._backtest())
+        if arm_effect is not None:
+            return arm_effect
         return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                    or "diagnostic_only").strip().lower()
+
+    def set_backtest_policy(self, option: Optional[Dict[str, Any]]) -> None:
+        """Pin the owning pipeline's backtest option (``None`` = live run).
+
+        The orchestrator calls this before ``generate_report``; an agent built
+        elsewhere (report regeneration) finds the option by its simulation id."""
+        self._backtest_option = option if isinstance(option, dict) else None
+        self._backtest_resolved = True
+
+    def _backtest(self) -> Optional[Dict[str, Any]]:
+        """This report's backtest option, ``None`` for a live run."""
+        if not getattr(self, "_backtest_resolved", False):
+            self.set_backtest_policy(_backtest.policy_for_simulation(getattr(self, "simulation_id", None)))
+        return getattr(self, "_backtest_option", None)
+
+    def _backtest_extraction_kwargs(self) -> Dict[str, Any]:
+        """Binary-extraction keywords of a backtest run: the arm's simulation effect
+        and the pinned golden question; ``{}`` for a live run (call unchanged)."""
+        backtest = self._backtest()
+        if backtest is None:
+            return {}
+        kwargs: Dict[str, Any] = {"simulation_effect": self._simulation_forecast_effect()}
+        target = backtest.get("target")
+        if isinstance(target, dict) and target.get("golden_id"):
+            kwargs["pinned_questions"] = [target]
+        return kwargs
+
+    def _backtest_now_year(self) -> Dict[str, Any]:
+        """``{"now_year": as-of year}`` for a backtest run: target years are judged
+        from the cutoff, not from today; ``{}`` for a live run."""
+        backtest = self._backtest()
+        if backtest is None:
+            return {}
+        try:
+            return {"now_year": int(str(backtest.get("as_of"))[:4])}
+        except (TypeError, ValueError):
+            return {}
 
     def _world_pathway(self) -> str:
         binding = self._verify_world()
@@ -3822,6 +3875,83 @@ class ReportAgent:
                 tags.add(tag)
         return next(iter(tags)) if len(tags) == 1 else ""
 
+    @property
+    def news_market_context(self) -> Optional[Dict[str, Any]]:
+        """A detached copy of the constructor's immutable sealed capture."""
+        frozen = getattr(self, "_news_market_context_json", None)
+        return json.loads(frozen) if frozen else None
+
+    def _news_context_canonical_line(self, line: str) -> bool:
+        """Exact validated source-table metadata, never an authored numeric claim."""
+        line = line.strip()
+        block = getattr(self, "_news_context_block", "")
+        begin, end = self._news_context_markers()
+        return bool(line and (line in {begin, end} or (
+            line.startswith("|") and line in {row.strip() for row in block.splitlines()})))
+
+    def _news_context_markers(self) -> Tuple[str, str]:
+        digest = getattr(self, "_news_context_sha256", None)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            return "", ""
+        prefix = "<!-- drf-news-market-context:" + digest
+        return prefix + ":start -->", prefix + ":end -->"
+
+    def _audit_context_metadata_lint(self, markdown: str, lint: Dict[str, Any], lang: str) -> None:
+        """Audit authored cells normally; exact sealed key/value rows are metadata.
+
+        Their completeness is checked against the validated carrier and canonical
+        block in the final audit. A long settlement-rule field is not a truncated
+        authored sentence. Changed/forged rows do not match and receive no waiver.
+        """
+        if not getattr(self, "_news_context_block", ""):
+            return
+        from . import report_lint as _rl
+        prose = "\n".join("" if (self._news_context_canonical_line(line)
+                                      or self._official_canonical_line(line)) else line
+                          for line in markdown.splitlines())
+        lint["table_cell_truncations"] = _rl.detect_table_cell_truncation(prose)
+        lint["language_contamination"] = _rl.detect_language_contamination(prose, lang)
+
+    def _append_news_market_context(self, report_id: str, report: "Report") -> None:
+        """Insert stored context before citation finalization and publication seal."""
+        block = getattr(self, "_news_context_block", "")
+        if not block:
+            return
+        begin, end = self._news_context_markers()
+        if not begin:
+            raise ValueError("News context metadata has no sealed identity")
+        markdown = (report.markdown_content or "").rstrip() + "\n\n" + begin + "\n" + block.rstrip() + "\n" + end + "\n"
+        report.markdown_content = markdown
+        self._news_context_attached = True
+        write_text_atomic(ReportManager._get_report_markdown_path(report_id), markdown)
+
+    def _restore_news_market_context(self, report_id: str, report: "Report") -> None:
+        """Restore only the machine-owned, validated metadata before final audit.
+
+        Editorial/citation passes may rewrite a dated title or metadata table
+        before numeric grounding recognizes its exact canonical lines. Its
+        authority is the detached sealed carrier, never a model-written heading
+        or an arbitrary Markdown exemption. A missing/ambiguous owned section
+        fails closed; no repair occurs after the read-only publication audit.
+        """
+        block = getattr(self, "_news_context_block", "").strip()
+        if not block or not getattr(self, "_news_context_attached", False):
+            return
+        context = _news_context._validated_copy(self.news_market_context)
+        stored = ReportManager.load_report_news_market_context(report_id)
+        if not context or stored != context:
+            raise ValueError("News context changed before report stabilization")
+        markdown = report.markdown_content or ""
+        begin, end_marker = self._news_context_markers()
+        starts = list(re.finditer(r"(?m)^" + re.escape(begin) + r"[ \t]*$", markdown))
+        ends = list(re.finditer(r"(?m)^" + re.escape(end_marker) + r"[ \t]*$", markdown))
+        if not begin or len(starts) != 1 or len(ends) != 1 or ends[0].start() <= starts[0].end():
+            raise ValueError("News context metadata section is missing or ambiguous")
+        restored = markdown[:starts[0].end()] + "\n" + block + "\n" + markdown[ends[0].start():]
+        if restored != markdown:
+            report.markdown_content = restored
+            write_text_atomic(ReportManager._get_report_markdown_path(report_id), restored)
+
     def _prepend_research_background(self, prompt: str, section_title: str = "") -> str:
         """T4.1: 把背景档案 + 来源索引钉到提示词最前；二者皆空时原样返回（回退冷图路径）。
 
@@ -3847,6 +3977,7 @@ class ReportAgent:
             self._forecast_spine_block, self._signal_pack,
             getattr(self, "_market_pack", ""),
             getattr(self, "_data_pack", ""),
+            getattr(self, "_news_context_block", ""),
             getattr(self, "_charts_block", ""),
         ) if p]
         # W9-8: 章节定向证据块——标题命中关键词时追加争议表 / 时间线（块为空时自动跳过）。
@@ -4141,11 +4272,13 @@ class ReportAgent:
         lines.append("注：这是结构化情景分析先验，不是观察事实；正文结论必须以研究来源和现实指标校验。")
         return "\n".join(lines)
 
-    def _world_evolution_block(self, max_variables: int = 6, max_moves: int = 8) -> str:
+    def _world_evolution_block(self, max_variables: int = 6, max_moves: int = 8, max_red_lines: int = 4,
+                               max_records: int = 6) -> str:
         """REFLEXIVE WORLD (design §2.9): render ``world_state.json`` / ``world_state_history.jsonl``
         as a bounded diagnostic block — variable trajectories per period, the decisive moves,
-        alliance shifts and arbiter failures.  Labeled an elicited model projection; absent
-        artifacts → "" (hours mode / legacy runs are byte-identical)."""
+        alliance shifts, red-line crossings, actors with broken or lapsed commitments and arbiter
+        failures.  Labeled an elicited model projection; absent artifacts → "" and absent fields add
+        nothing (hours mode / legacy runs are byte-identical)."""
         try:
             sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
                                    str(self.simulation_id or ""))
@@ -4261,6 +4394,36 @@ class ReportAgent:
         if shifts:
             lines.append("联盟/对立变动：")
             lines.extend(f"· {s}" for s in shifts[:6])
+        # RED LINES (reflexivity, design §2.11): crossings the arbiter reported and the kernel
+        # validated — the model's own verdicts, newest few only
+        crossings = [e for e in (world.get("events") or [])
+                     if isinstance(e, dict) and e.get("kind") == "red_line" and str(e.get("description") or "").strip()]
+        if crossings:
+            more = f"，列最近 {max_red_lines} 次" if len(crossings) > max_red_lines else ""
+            lines.append(f"红线越界（推演仲裁认定，共 {len(crossings)} 次{more}）：")
+            for e in crossings[-max_red_lines:]:
+                lines.append(f"· {str(e.get('period_label') or _lab(e.get('round')))}: {str(e.get('description')).strip()[:220]}")
+
+        def _count(value):
+            return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else 0
+
+        # TRACK RECORDS: actors whose recorded commitments were broken or lapsed, breakers first
+        records = []
+        for actor in world.get("actors") or []:
+            rec = actor.get("track_record") if isinstance(actor, dict) else None
+            if not isinstance(rec, dict):
+                continue
+            kept, broken, lapsed = _count(rec.get("kept")), _count(rec.get("broken")), _count(rec.get("lapsed"))
+            if broken or lapsed:
+                name = str(actor.get("name") or f"Agent {actor.get('agent_id')}")
+                records.append((-(broken + lapsed), -broken, -kept, name, kept, broken, lapsed))
+        if records:
+            lines.append("承诺履约（推演内记录，非现实信誉评估）：")
+            for _, _, _, name, kept, broken, lapsed in sorted(records)[:max_records]:
+                parts = [f"兑现 {kept}/{kept + broken + lapsed}"]
+                parts += [f"违约 {broken}"] if broken else []
+                parts += [f"失效 {lapsed}"] if lapsed else []
+                lines.append(f"· {name}：" + "，".join(parts))
         lines.append("注：世界变量由推演仲裁逐期更新并有界钳制，不是观察到的现实指标；现实世界的定量声明只能来自研究来源。")
         return "\n".join(lines)
 
@@ -4304,6 +4467,9 @@ class ReportAgent:
             max_n = int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20)
         except (TypeError, ValueError):
             max_n = 20
+        backtest = self._backtest()
+        if backtest is not None and not _backtest.markets_enabled(backtest):
+            return []  # ablation arm without markets
         # ① 研究 handoff 产物（延迟导入避免与 pipeline_orchestrator 的模块级循环依赖）。
         try:
             from .pipeline_orchestrator import PipelineManager
@@ -4328,6 +4494,10 @@ class ReportAgent:
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
+        if backtest is not None:
+            # A backtest report uses the research snapshot priced at the cutoff
+            # only; a live search would return today's prices (and outcomes).
+            return []
         # ② 现抓兜底（仅当 client + report LLM 可用）。Unlike the canonical research
         # artifact, this late path has no researcher to vet lexical matches, so it is
         # deliberately fail-closed: only rows carrying an explicit LLM relevance score
@@ -4424,6 +4594,10 @@ class ReportAgent:
         if not rows:
             self._markets_stale = False
             return rows
+        if self._backtest() is not None:
+            # Backtest: the rows carry the price at the cutoff; a re-quote is today's price.
+            self._markets_stale = False
+            return rows
         if not getattr(Config, "PREDICTION_MARKETS_REQUOTE", True):
             self._markets_stale = True  # 关闭重报价 → 用研究期价（包头标注时效性）
             return rows
@@ -4495,6 +4669,8 @@ class ReportAgent:
         _markets_stale。无数据/关闭旗标时返回 ""（注入自动跳过，行为与历史一致）。
         """
         if not getattr(Config, "PREDICTION_MARKETS_ENABLED", True):
+            return ""
+        if not _backtest.markets_enabled(self._backtest()):
             return ""
         markets = self._load_prediction_markets()
         if not markets:
@@ -4851,6 +5027,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     data_pack=getattr(self, "_data_pack", "") or None,
                     official_data=getattr(self, "official_data", None),
+                    **self._backtest_extraction_kwargs(),
                 )
                 if _bres.get("binary_forecasts"):
                     forecast["binary_forecasts"] = _bres["binary_forecasts"]
@@ -4882,7 +5059,7 @@ class ReportAgent:
                     try:
                         _apply_horizon_consistency(
                             forecast, getattr(self, "simulation_requirement", None),
-                            horizon_date=_hz_date)
+                            horizon_date=_hz_date, **self._backtest_now_year())
                     except Exception:  # noqa: BLE001 — 观测性校验，绝不影响产物
                         pass
                     # PM-2：确定性市场对照负载（预测 vs 市场隐含概率、|Δ|、>10pp 判定）——嵌入
@@ -4937,7 +5114,9 @@ class ReportAgent:
             pass
         # NEXTSTEPS P2-4: 把历史校准（已解析预测的 Brier/ECE）surfacing 进 confidence_rationale，
         # 让信心由 track record 赚得而非自评；无已解析样本时不改（degrade-safe）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
+        # A backtest report skips it: today's track record postdates its cutoff.
+        if (getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None)
+                and self._backtest() is None):
             _cs: Dict[str, Any] = {"n_resolved": 0, "mean_brier": None, "calibration_error": None}
             try:
                 from .forecast_ledger import calibration_summary as _cal
@@ -4963,18 +5142,15 @@ class ReportAgent:
                         "official_data_track_record": _otr}
             except Exception:  # noqa: BLE001
                 pass
+        backtest = self._backtest()
+        if backtest is not None:
+            # Evaluation output, never production evidence: marked here so the
+            # ledger, the resolution monitor and the driver can tell.
+            forecast["backtest"] = _backtest.forecast_block(backtest)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
-        # P2-4: 追加进校准账本（loop-closer；resolution 经 /api/v1/resolve 或 forecast_tools backtest）。
-        if getattr(Config, "REPORT_FORECAST_LEDGER", True) and not getattr(self, "_world_binding", None):
-            try:
-                from .forecast_ledger import append_forecast as _append
-                _append(forecast, report_id=report_id,
-                        horizon=str(forecast.get("horizon") or "") or None,
-                        created_at=datetime.now().isoformat())
-            except Exception:  # noqa: BLE001
-                pass
+        # Only the final, audit-passed publication enters the immutable ledger.
         logger.info(
             f"结构化预测已生成: {report_id} "
             f"({len(forecast.get('scenarios', []))} 情景, "
@@ -5313,7 +5489,7 @@ class ReportAgent:
                 if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
             )
             body = "\n".join(line for line in body.splitlines()
-                             if not self._official_canonical_line(line))
+                             if not (self._official_canonical_line(line) or self._news_context_canonical_line(line)))
             return _audit_grounding(
                 body,
                 index_map=self._citation_index_or_fallback(),
@@ -5448,6 +5624,7 @@ class ReportAgent:
                 or stripped.startswith("#")
                 or not _number_re.search(stripped)
                 or self._official_canonical_line(line)
+                or self._news_context_canonical_line(line)
             ):
                 if not stripped or (stripped and not table_cells):
                     active_table_headers = []
@@ -8342,10 +8519,10 @@ class ReportAgent:
                 getattr(self, "_forecast_spine", None), dict) else None),
         )
         scan_body = variant_body
-        if getattr(self, "official_data", None):
-            # Canonical official metadata (either language's form) keeps
-            # publisher names and units verbatim, as in the primary audit.
-            scan_body = "\n".join("" if self._official_canonical_line(line) else line
+        if getattr(self, "official_data", None) or getattr(self, "_news_context_block", ""):
+            # Validate both canonical metadata families before language scanning.
+            scan_body = "\n".join("" if (self._official_canonical_line(line)
+                                          or self._news_context_canonical_line(line)) else line
                                   for line in variant_body.split("\n"))
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
                 scan_body, target_name)
@@ -10261,6 +10438,7 @@ class ReportAgent:
 
     def _finalize_citations_for_publish(self, report_id: str, report: "Report") -> None:
         """Finalize citations; fail hard only when body markers would otherwise be dead."""
+        self._restore_news_market_context(report_id, report)
         body = "\n".join(
             chunk for chunk in self._split_markdown_h2_sections(
                 report.markdown_content or ""
@@ -10276,6 +10454,7 @@ class ReportAgent:
                     "正文含引用记号但引用最终化失败，拒绝发布：" f"{exc}"
                 ) from exc
             logger.warning(f"引用最终化失败（正文无引用记号，降级继续）: {exc}")
+        self._restore_news_market_context(report_id, report)
 
     def _stabilize_publish_markdown(
         self,
@@ -10311,6 +10490,25 @@ class ReportAgent:
             else None
         )
         folder = ReportManager._get_report_folder(report_id)
+        preserved_track = None
+        from .forecast_track_record import START as _track_start, END as _track_end
+        if _track_start in (report.markdown_content or "") or _track_end in (report.markdown_content or ""):
+            from .forecast_track_record import audit_and_strip
+            with open(os.path.join(folder, "forecast.json"), encoding="utf-8") as stream:
+                preserved_track = json.load(stream)
+            ReportManager._verify_forecast_track_record(report_id, preserved_track)
+            prose, track_audit = audit_and_strip(report.markdown_content, preserved_track)
+            if not track_audit.get("passed"):
+                raise ValueError("Cannot stabilize an invalid forecast track record")
+            report.markdown_content = prose
+            write_text_atomic(os.path.join(folder, "full_report.md"), prose)
+
+        def restore_track() -> None:
+            if preserved_track is not None:
+                from .forecast_track_record import insert
+                report.markdown_content = insert(report.markdown_content, preserved_track, lang)
+                write_text_atomic(os.path.join(folder, "full_report.md"), report.markdown_content)
+
         totals: Dict[str, Any] = {
             "passes": 0,
             "quotes_removed": 0,
@@ -10416,6 +10614,7 @@ class ReportAgent:
                     totals["lint_rewrites"],
                     totals["quantitative_rewrites"],
                 )
+                restore_track()
                 return totals
 
         # GLM-run 2026-09-18: the historical failure mode of this gate is NOT
@@ -10445,6 +10644,7 @@ class ReportAgent:
                     logger.info(
                         "发布 Markdown 按 lint 不动点收敛（语义门全绿，仅 lint "
                         "在附录再生成上振荡）: %s", report_id)
+                    restore_track()
                     return totals
             except Exception as _fp_exc:  # noqa: BLE001 — 保守回退到原失败路径
                 logger.warning("lint 不动点收敛尝试失败，按未收敛处理: %s", _fp_exc)
@@ -10573,6 +10773,11 @@ class ReportAgent:
         confidence demotion cannot repair them and publication must stop.
         """
         issues: List[str] = []
+        if (audit.get("forecast_track_record") or {}).get("passed") is False:
+            issues.append("Forecast track record differs from its frozen ledger snapshot")
+        context = audit.get("news_market_context") or {}
+        if context and (context.get("valid") is not True or context.get("markdown_present") is not True):
+            issues.append("news context artifact or audited Markdown differs from consumed generation")
         if (audit.get("official_chart_captions") or {}).get("passed") is False:
             issues.append("官方数据图表来源标注缺失或不匹配")
         failed_sections = list(audit.get("failed_sections") or [])
@@ -10711,11 +10916,51 @@ class ReportAgent:
                 + ("；".join(quality_issues) or "未提供质量门失败原因")
             )
 
+    def _prepare_forecast_track_record(self, report_id: str, report: "Report") -> None:
+        """Freeze past outcomes once, then render them after authored prose stabilizes."""
+        if (not getattr(Config, "REPORT_FORECAST_LEDGER", True)
+                or getattr(self, "_world_binding", None)
+                # A backtest report stands at its cutoff: today's track record postdates it
+                # (and may hold outcomes resolved after the cutoff), so it gets none.
+                or self._backtest() is not None):
+            return
+        from .forecast_ledger import production_track_record, verify_production_track_record
+        from .forecast_track_record import insert
+
+        path = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+        if not os.path.isfile(path):
+            return
+        with open(path, encoding="utf-8") as stream:
+            forecast = json.load(stream)
+        if not isinstance(forecast, dict):
+            raise ValueError("Invalid structured forecast for track record")
+        history = forecast.setdefault("historical_calibration", {})
+        if not isinstance(history, dict):
+            raise ValueError("Invalid historical calibration payload")
+        frozen_path = os.path.join(ReportManager._get_report_folder(report_id),
+                                   "forecast_track_record.json")
+        if os.path.isfile(frozen_path):
+            with open(frozen_path, encoding="utf-8") as stream:
+                frozen = json.load(stream)
+            verify_production_track_record(frozen, exclude_report_id=report_id)
+        else:
+            # Never trust model-supplied history. The companion capture freezes an
+            # exact journal prefix, verifiable after restart and newer outcomes.
+            frozen = production_track_record(exclude_report_id=report_id)
+            write_json_atomic(frozen_path, frozen, allow_nan=False)
+        history["forecast_track_record"] = frozen
+        report.markdown_content = insert(
+            report.markdown_content, forecast, getattr(self, "output_language", "English"))
+        write_text_atomic(path, json.dumps(forecast, ensure_ascii=False, indent=2, allow_nan=False))
+        write_text_atomic(ReportManager._get_report_markdown_path(report_id), report.markdown_content)
+        self._forecast_spine = forecast
+
     def _enforce_final_publish_audit(
         self, report_id: str, report: "Report"
     ) -> Dict[str, Any]:
         """Run the authoritative audit and convert execution failure into a hard stop."""
         try:
+            self._prepare_forecast_track_record(report_id, report)
             audit = self._audit_final_published_markdown(report_id, report)
             self._require_final_publish_audit(audit)
             return audit
@@ -10770,6 +11015,19 @@ class ReportAgent:
         # complete published document below.
         world = self._verify_world(report_id)
         audit_md = _world_prose(md, self._world_pathway()) if world else md
+        from .forecast_track_record import audit_and_strip
+        track_forecast_path = os.path.join(folder, "forecast.json")
+        try:
+            with open(track_forecast_path, encoding="utf-8") as stream:
+                track_forecast = json.load(stream)
+        except (OSError, ValueError):
+            track_forecast = {}
+        audit_md, track_audit = audit_and_strip(audit_md, track_forecast)
+        if track_audit.get("required") and track_audit.get("passed"):
+            try:
+                ReportManager._verify_forecast_track_record(report_id, track_forecast)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                track_audit.update(passed=False, reason=str(exc))
         chunks = self._split_markdown_h2_sections(audit_md)
         reference_chunks = [
             chunk for chunk in chunks
@@ -10785,7 +11043,7 @@ class ReportAgent:
         # unit label as an uncited empirical claim. Marker/semantic audits below
         # still inspect the full body and the same exact attribution validator.
         claim_body = "\n".join(line for line in body.splitlines()
-                               if not self._official_canonical_line(line))
+                               if not (self._official_canonical_line(line) or self._news_context_canonical_line(line)))
         citation_audit = _acg(
             claim_body,
             index_map=index_map,
@@ -10844,12 +11102,14 @@ class ReportAgent:
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
         )
+        self._audit_context_metadata_lint(audit_md, lint_audit, lang)
         if getattr(self, "official_data", None):
             # MISSED-1: canonical official metadata (exhibit attribution and
             # Key official indicators rows) is validated against the carrier
             # above and keeps publisher names/units verbatim in any language.
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
-                "\n".join("" if self._official_canonical_line(line) else line
+                "\n".join("" if (self._official_canonical_line(line)
+                                      or self._news_context_canonical_line(line)) else line
                           for line in audit_md.split("\n")), lang)
 
         audit: Dict[str, Any] = {
@@ -10876,6 +11136,7 @@ class ReportAgent:
             "citation_artifacts": citation_artifacts,
             "semantic_citations": semantic_citation_audit,
             "official_chart_captions": self._audit_official_chart_captions(md, folder),
+            "forecast_track_record": track_audit,
             "quote_provenance": quote_audit,
             "numeric_consistency": numeric_audit,
             "structured_forecast": structured_forecast_audit,
@@ -10886,6 +11147,23 @@ class ReportAgent:
             # ``changed`` means a deterministic final lint would still rewrite the
             # published bytes; the candidate rewrite is intentionally discarded.
             "lint": lint_audit,
+        }
+        # Context remains a distinct, immutable research artifact. Seal it with
+        # the report bundle so API readers cannot substitute a valid but different
+        # capture after the Markdown audit.
+        consumed_context = self.news_market_context
+        try:
+            stored_context = ReportManager.load_report_news_market_context(report_id)
+            context_valid = stored_context == consumed_context
+        except ValueError:
+            stored_context, context_valid = None, False
+        context_block = getattr(self, "_news_context_block", "").strip()
+        audit["news_market_context"] = {
+            "present": consumed_context is not None or stored_context is not None,
+            "valid": context_valid,
+            "sha256": (consumed_context or {}).get("sha256"),
+            "generation_id": (consumed_context or {}).get("generation_id"),
+            "markdown_present": not consumed_context or bool(context_block and context_block in md),
         }
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
@@ -13820,6 +14098,8 @@ class ReportAgent:
             # 初始化：创建报告文件夹并保存初始状态
             ReportManager._ensure_report_folder(report_id)
             self._bind_world_report(report)
+            if self.news_market_context:
+                ReportManager.save_news_market_context(report_id, self.news_market_context)
             # RPT-12 (fix contract §1.7): keep the exact stored carrier with the report.
             if getattr(self, "official_data", None):
                 self._persist_official_data(report_id)
@@ -14131,7 +14411,7 @@ class ReportAgent:
             # 使用ReportManager组装完整报告
             report.markdown_content = ReportManager.assemble_full_report(report_id, outline)
             report.status = ReportStatus.COMPLETED
-            report.completed_at = datetime.now().isoformat()
+            report.completed_at = datetime.now(timezone.utc).isoformat()
             # 部分完成（partial）：把失败（写入占位符）的章节标题挂到 report，经 to_dict 暴露
             # failed_sections / partial。状态仍为 completed（前端以 status==='completed' 判定终态），
             # 由 partial 标记区分「完整」与「部分完成」。无失败章节时为空列表 → 与历史一致。
@@ -14200,6 +14480,9 @@ class ReportAgent:
                     and not getattr(Config, "REPORT_STRUCTURED_FORECAST", True)
                     and getattr(Config, "REPORT_VISUALIZATIONS", True)):
                 self._inject_visualizations(report_id, report)
+            # Persisted contextual evidence is part of the audited Markdown,
+            # including when structured forecasts are disabled.
+            self._append_news_market_context(report_id, report)
 
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
@@ -14593,6 +14876,42 @@ class ReportManager:
     def _get_report_markdown_path(cls, report_id: str) -> str:
         """获取完整报告Markdown文件路径"""
         return os.path.join(cls._get_report_folder(report_id), "full_report.md")
+
+    NEWS_MARKET_CONTEXT_FILENAME = "news_market_context.json"
+
+    @classmethod
+    def save_news_market_context(cls, report_id: str, context: Dict[str, Any]) -> None:
+        """Keep the exact sealed envelope and its original digest (no wrapper)."""
+        copied = _news_context._validated_copy(context)
+        if not copied:
+            raise ValueError("Cannot persist an empty news context envelope")
+        folder = cls._ensure_report_folder(report_id)
+        if os.path.lexists(os.path.join(folder, cls.NEWS_MARKET_CONTEXT_FILENAME)):
+            if _news_context.load_context(folder) != copied:
+                raise ValueError("Report already consumes another news context generation")
+            return
+        # Atomic create-only publication, matching the consumed-generation
+        # binding owner: parallel retries cannot replace one another's capture.
+        import tempfile
+        raw = json.dumps(copied, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":"), allow_nan=False).encode("utf-8")
+        descriptor, temporary = tempfile.mkstemp(prefix=".news-context-", dir=folder)
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temporary, os.path.join(folder, cls.NEWS_MARKET_CONTEXT_FILENAME))
+            except FileExistsError:
+                if _news_context.load_context(folder) != copied:
+                    raise ValueError("Report already consumes another news context generation") from None
+        finally:
+            os.unlink(temporary)
+
+    @classmethod
+    def load_report_news_market_context(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        return _news_context.load_context(cls._get_report_folder(report_id)) or None
 
     OFFICIAL_DATA_FILENAME = "official_data.json"
 
@@ -15248,6 +15567,21 @@ class ReportManager:
         if world and not lang and audit.get("world_viz_sha256") != cls._sha256_file(
                 os.path.join(cls._get_report_folder(report_id), "viz_manifest.json")):
             result["reasons"].append("final audit chart manifest fingerprint does not match report")
+        if not lang:
+            context_entry = audit.get("news_market_context") or {}
+            try:
+                context = cls.load_report_news_market_context(report_id)
+                if context is not None:
+                    if (context_entry.get("present") is not True
+                            or context_entry.get("valid") is not True
+                            or context_entry.get("markdown_present") is not True
+                            or context_entry.get("sha256") != context.get("sha256")
+                            or context_entry.get("generation_id") != context.get("generation_id")):
+                        result["reasons"].append("news context differs from final audit generation")
+                elif context_entry.get("present"):
+                    result["reasons"].append("news context artifact is missing")
+            except ValueError:
+                result["reasons"].append("news context artifact is invalid")
         gate = audit.get("publish_gate") or {}
         if gate.get("enabled") and gate.get("passed") is not True:
             result["reasons"].append("professional publication gate did not pass")
@@ -15335,6 +15669,28 @@ class ReportManager:
                 result["reasons"].append(
                     "translation metadata is missing the exact report/source identity"
                 )
+        if not lang and (audit.get("forecast_track_record") or {}).get("required"):
+            try:
+                with open(os.path.join(cls._get_report_folder(report_id), "forecast.json"),
+                          encoding="utf-8") as stream:
+                    track_forecast = json.load(stream)
+                cls._verify_forecast_track_record(report_id, track_forecast)
+            except (OSError, ValueError, KeyError, TypeError):
+                result["reasons"].append("frozen forecast track record companion invalid")
+        if not lang and meta.get("forecast_feedback_required"):
+            try:
+                from .forecast_ledger import read_published_forecast, forecast_publication_digest
+                stored = read_published_forecast(report_id)
+                if stored is None:
+                    result["reasons"].append("published forecast tracking snapshot missing")
+                else:
+                    with open(os.path.join(cls._get_report_folder(report_id), "forecast.json"),
+                              encoding="utf-8") as stream:
+                        current_forecast = json.load(stream)
+                    if forecast_publication_digest(current_forecast) != stored["publication_sha256"]:
+                        result["reasons"].append("published forecast tracking snapshot mismatch")
+            except (OSError, ValueError, KeyError, TypeError):
+                result["reasons"].append("published forecast tracking snapshot invalid")
         result["publishable"] = not result["reasons"]
         return result
 
@@ -17007,13 +17363,90 @@ class ReportManager:
         return '\n'.join(result_lines)
     
     @classmethod
+    def _verify_forecast_track_record(cls, report_id: str, forecast: Dict[str, Any]) -> None:
+        history = forecast.get("historical_calibration") or {}
+        summary = history.get("forecast_track_record") if isinstance(history, dict) else None
+        if summary is None:
+            return
+        from .forecast_ledger import verify_production_track_record
+        with open(os.path.join(cls._get_report_folder(report_id), "forecast_track_record.json"),
+                  encoding="utf-8") as stream:
+            companion = json.load(stream)
+        canonical = lambda value: json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                            separators=(",", ":"), allow_nan=False)
+        if canonical(companion) != canonical(summary):
+            raise ValueError("Frozen track record companion does not match the sealed forecast")
+        verify_production_track_record(summary, exclude_report_id=report_id)
+
+    @classmethod
+    def register_published_forecast(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        """Register/recover only the unchanged bundle that passed every publication audit."""
+        if not getattr(Config, "REPORT_FORECAST_LEDGER", True):
+            return None
+        metadata = cls._read_report_meta(report_id)
+        if not metadata or metadata.get("world_result_ref") or metadata.get("simulation_engine") == "world-v1":
+            return None
+        status = cls.publication_status(report_id)
+        other_reasons = [reason for reason in status.get("reasons", [])
+                         if reason != "published forecast tracking snapshot missing"]
+        if any(reason.startswith("published forecast tracking") for reason in other_reasons):
+            raise ValueError("; ".join(other_reasons))
+        if other_reasons:
+            return None
+        path = os.path.join(cls._get_report_folder(report_id), "forecast.json")
+        if not os.path.isfile(path):
+            return None
+        from .forecast_ledger import record_published_forecast, verify_production_track_record
+        with open(path, "rb") as stream:
+            forecast_bytes = stream.read()
+        if hashlib.sha256(forecast_bytes).hexdigest() != status.get("forecast_sha256"):
+            raise ValueError("Forecast changed after its publication check")
+        forecast = json.loads(forecast_bytes)
+        history = forecast.get("historical_calibration") or {}
+        if isinstance(history, dict) and history.get("forecast_track_record") is not None:
+            verify_production_track_record(history["forecast_track_record"], exclude_report_id=report_id)
+        issued = metadata.get("completed_at") or metadata.get("created_at")
+        instant = datetime.fromisoformat(str(issued).replace("Z", "+00:00"))
+        # Legacy report timestamps were local wall time. astimezone interprets
+        # naive values in the local zone instead of incorrectly relabeling UTC.
+        issued = instant.astimezone(timezone.utc).isoformat()
+        registered = record_published_forecast(
+            forecast, report_id=report_id, created_at=issued)
+        return registered
+
+    @staticmethod
+    def _is_backtest_forecast_file(forecast_path: str) -> bool:
+        """True when forecast.json carries the backtest block (``backtest_mode.forecast_block``)."""
+        try:
+            with open(forecast_path, "r", encoding="utf-8") as f:
+                return _backtest.is_backtest_forecast(json.load(f))
+        except (OSError, ValueError):
+            return False
+
+    @classmethod
     def save_report(cls, report: Report) -> None:
         """保存报告元信息和完整报告"""
         cls._ensure_report_folder(report.report_id)
         
-        # 保存元信息JSON（原子写入，F-7-6）
+        # A complete new forecast cannot publish until its original scoring snapshot
+        # is durable. If interrupted before registration, the same audited bundle can
+        # be recovered explicitly, without acquiring any outcome first.
+        metadata = report.to_dict()
+        forecast_path = os.path.join(cls._get_report_folder(report.report_id), "forecast.json")
+        tracking = (getattr(Config, "REPORT_FORECAST_LEDGER", True)
+                    and report.status == ReportStatus.COMPLETED
+                    and bool(report.completed_at or report.created_at)
+                    and not getattr(report, "world_result_ref", None)
+                    and getattr(report, "simulation_engine", None) != "world-v1"
+                    and os.path.isfile(forecast_path)
+                    # A backtest forecast's outcome is already known: backtest_eval.py scores
+                    # it, and it never enters the production publication journal.
+                    and not cls._is_backtest_forecast_file(forecast_path))
+        previous = cls._read_report_meta(report.report_id) or {}
+        if tracking or previous.get("forecast_feedback_required"):
+            metadata["forecast_feedback_required"] = True
         write_text_atomic(cls._get_report_path(report.report_id),
-                          json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+                          json.dumps(metadata, ensure_ascii=False, indent=2))
 
         # 保存大纲
         if report.outline:
@@ -17026,6 +17459,8 @@ class ReportManager:
         # EXECPLAN2 F-7-3: 维护 simulation_id -> report_id 轻量索引，加速 by-simulation 查询
         cls._index_add(report.simulation_id, report.report_id)
 
+        if tracking:
+            cls.register_published_forecast(report.report_id)
         logger.info(f"报告已保存: {report.report_id}")
     
     @classmethod

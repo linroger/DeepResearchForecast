@@ -1,0 +1,197 @@
+{
+  "schema_version": 2,
+  "policy_version": 3,
+  "report_id": "report_feedback_next",
+  "audited_at": "2026-10-20T17:20:56.729366+00:00",
+  "read_only": true,
+  "markdown_chars": 10012,
+  "markdown_sha256": "e0d226ca9a16c31976fcf17f3282640df29d3e64bc9915c3bd0c7ebd9369e579",
+  "disk_sha256": "e0d226ca9a16c31976fcf17f3282640df29d3e64bc9915c3bd0c7ebd9369e579",
+  "disk_matches_memory": true,
+  "failed_sections": [],
+  "citation_grounding": {
+    "quantitative_claims": 0,
+    "cited": 0,
+    "coverage": 1.0,
+    "source_cited": 0,
+    "source_coverage": 1.0,
+    "unsupported_samples": [],
+    "resolved_cited": 0,
+    "resolved_coverage": 1.0,
+    "excluded_authored_forecast_claims": 46,
+    "authored_forecast_markers_valid": true
+  },
+  "citation_body_markers": {
+    "total_markers": 4,
+    "distinct_tags": 2,
+    "order": [
+      "S1",
+      "S2"
+    ],
+    "counts": {
+      "S1": 2,
+      "S2": 2
+    },
+    "dangling": [],
+    "uncited": []
+  },
+  "citation_markers": {
+    "total_markers": 6,
+    "distinct_tags": 2,
+    "order": [
+      "S1",
+      "S2"
+    ],
+    "counts": {
+      "S1": 3,
+      "S2": 3
+    },
+    "dangling": [],
+    "uncited": []
+  },
+  "citation_artifacts": {
+    "enabled": true,
+    "required": true,
+    "references_present": true,
+    "citations_json_present": true,
+    "citations_json_valid": true,
+    "expected_tags": [
+      "S1",
+      "S2"
+    ],
+    "artifact_tags": [
+      "S1",
+      "S2"
+    ],
+    "missing_tags": [],
+    "extra_tags": [],
+    "mismatched_urls": [],
+    "invalid_artifact_urls": [],
+    "missing_reference_tags": [],
+    "missing_reference_urls": [],
+    "issues": [],
+    "passed": true
+  },
+  "semantic_citations": {
+    "checked": 4,
+    "unsupported": 0,
+    "unverifiable": 0,
+    "unverifiable_ratio": 0.0,
+    "examples": [],
+    "max_per_source": 20,
+    "overused_sources": [],
+    "passed": true
+  },
+  "official_chart_captions": {
+    "required": false,
+    "checked": 0,
+    "issues": [],
+    "passed": true
+  },
+  "forecast_track_record": {
+    "required": true,
+    "passed": true,
+    "source_digest": "9dca3e76634183469e7cea5f3dc91e1a256ea1f16fdc2b41f4ecdbb936ac654c",
+    "snapshot_sha256": "fa288f4821328bf9df37d402d2e659179960fa61845ddf8629e057bc0f20bd8d"
+  },
+  "quote_provenance": {
+    "total_quotes": 1,
+    "ungrounded": 0,
+    "examples": [],
+    "cited_unverbatim": 0
+  },
+  "numeric_consistency": {
+    "scenario_prob_mismatches": [],
+    "mismatch_count": 0
+  },
+  "structured_forecast": {
+    "required": true,
+    "present": true,
+    "scenario_count": 2,
+    "binary_count": 10,
+    "valid": true
+  },
+  "scenario_contract": {
+    "valid": true,
+    "issue_count": 0,
+    "issues": [],
+    "examples": []
+  },
+  "proposition_consistency": {
+    "checked": 0,
+    "rows": [],
+    "mismatches": [],
+    "mismatch_count": 0,
+    "passed": true
+  },
+  "market_anchor_integrity": {
+    "anchored_count": 2,
+    "issues": [],
+    "issue_count": 0,
+    "passed": true
+  },
+  "stat_plausibility": {
+    "implausible_stats": [],
+    "count": 0,
+    "max_flagged": 0.0,
+    "cited_extreme_stats": []
+  },
+  "lint": {
+    "mode": "final",
+    "lang": "English",
+    "citation_residue": 0,
+    "edge_dumps": 0,
+    "dangling_edge_intros": 0,
+    "legacy_sim_labels": 0,
+    "tool_tokens": 0,
+    "generation_failure_placeholders": 0,
+    "internal_telemetry_appendices": 0,
+    "internal_basis_traces": 0,
+    "internal_graph_parentheticals": 0,
+    "internal_relation_bullets": 0,
+    "standalone_citation_lines": 0,
+    "corrupted_mixed_punctuation_lines": 0,
+    "empty_tables": 0,
+    "dangling_attributions": 0,
+    "pass_narration": {
+      "stripped": 0,
+      "flagged": 0
+    },
+    "citation_variants": 0,
+    "duplicate_sentences_removed": 0,
+    "citation_guard_rules": [],
+    "citation_guard_reverts": 0,
+    "simulation_mechanics": {
+      "rewritten": 0,
+      "sentences_removed": 0,
+      "table_cells_redacted": 0
+    },
+    "malformed_prose_repairs": 0,
+    "sentence_spaces_repaired": 0,
+    "empty_sections": 0,
+    "language_contamination": {
+      "lines": 0,
+      "samples": []
+    },
+    "table_cell_truncations": [],
+    "scenario_prob_mismatches": [],
+    "leakage_flags": 0,
+    "outcome_focus_ok": true,
+    "changed": false
+  },
+  "hard_issues": [],
+  "hard_passed": true,
+  "publish_gate": {
+    "enabled": true,
+    "passed": true,
+    "issues": [],
+    "hard_issues": [],
+    "epistemic_issues": [],
+    "hard_passed": true,
+    "citation_coverage": 1.0,
+    "citation_coverage_basis": "resolved_coverage",
+    "probability_sum": 1.0,
+    "has_residual_scenario": true
+  },
+  "forecast_sha256": "ec9214faa5223d7f74364f21c584bae09ccc78b7bde38086077edc323e3886e6"
+}

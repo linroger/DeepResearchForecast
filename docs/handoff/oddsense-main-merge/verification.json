@@ -1,0 +1,195 @@
+{
+  "main_base": "15c8453b60bede17e3e9ecbbbee862f6cbe9e607",
+  "oddsense_tip": "7c98895c98cc2bcaff4559b165f038975d3c0713",
+  "backend": {
+    "passed": 1889,
+    "existing_harness_skips": [
+      [
+        "tests.test_deerflow_bridge_sync_guard",
+        "test_subagent_overlay_preserves_current_vendor_observability"
+      ],
+      [
+        "tests.test_deerflow_bridge_sync_guard",
+        "test_subagent_overlay_fails_closed_on_model_inheritance_drift"
+      ]
+    ],
+    "modules": 44,
+    "exit_code": 0,
+    "shutdown_complete": true,
+    "identity_preserved": true,
+    "source_drift": [],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:process:subprocess.Popen": 4,
+      "blocked:external_read": 18,
+      "allowed:guarded_child": 33
+    },
+    "children": {
+      "26197": {
+        "exit_code": 0,
+        "receipt": "process-26197.json"
+      },
+      "26235": {
+        "exit_code": 0,
+        "receipt": "process-26235.json"
+      },
+      "26257": {
+        "exit_code": 0,
+        "receipt": "process-26257.json"
+      },
+      "26258": {
+        "exit_code": 0,
+        "receipt": "process-26258.json"
+      },
+      "26259": {
+        "exit_code": 0,
+        "receipt": "process-26259.json"
+      },
+      "26262": {
+        "exit_code": 0,
+        "receipt": "process-26262.json"
+      },
+      "26263": {
+        "exit_code": 0,
+        "receipt": "process-26263.json"
+      },
+      "26266": {
+        "exit_code": 0,
+        "receipt": "process-26266.json"
+      },
+      "26267": {
+        "exit_code": 0,
+        "receipt": "process-26267.json"
+      },
+      "26268": {
+        "exit_code": 0,
+        "receipt": "process-26268.json"
+      },
+      "26269": {
+        "exit_code": 0,
+        "receipt": "process-26269.json"
+      },
+      "26273": {
+        "exit_code": -15,
+        "receipt": "process-26273.json"
+      },
+      "26288": {
+        "exit_code": 0,
+        "receipt": "process-26288.json"
+      },
+      "26289": {
+        "exit_code": 0,
+        "receipt": "process-26289.json"
+      },
+      "26290": {
+        "exit_code": 0,
+        "receipt": "process-26290.json"
+      },
+      "26291": {
+        "exit_code": 0,
+        "receipt": "process-26291.json"
+      },
+      "26292": {
+        "exit_code": 0,
+        "receipt": "process-26292.json"
+      },
+      "26293": {
+        "exit_code": 0,
+        "receipt": "process-26293.json"
+      },
+      "26294": {
+        "exit_code": 0,
+        "receipt": "process-26294.json"
+      },
+      "26295": {
+        "exit_code": 0,
+        "receipt": "process-26295.json"
+      },
+      "26296": {
+        "exit_code": 0,
+        "receipt": "process-26296.json"
+      },
+      "26297": {
+        "exit_code": 0,
+        "receipt": "process-26297.json"
+      },
+      "26298": {
+        "exit_code": 0,
+        "receipt": "process-26298.json"
+      },
+      "26299": {
+        "exit_code": 0,
+        "receipt": "process-26299.json"
+      },
+      "26300": {
+        "exit_code": 0,
+        "receipt": "process-26300.json"
+      },
+      "26301": {
+        "exit_code": 0,
+        "receipt": "process-26301.json"
+      },
+      "26302": {
+        "exit_code": 0,
+        "receipt": "process-26302.json"
+      },
+      "26303": {
+        "exit_code": 0,
+        "receipt": "process-26303.json"
+      },
+      "26304": {
+        "exit_code": 23,
+        "receipt": "process-26304.json"
+      },
+      "27103": {
+        "exit_code": 0,
+        "receipt": "process-27103.json"
+      },
+      "27104": {
+        "exit_code": 0,
+        "receipt": "process-27104.json"
+      },
+      "27105": {
+        "exit_code": 0,
+        "receipt": "process-27105.json"
+      },
+      "27106": {
+        "exit_code": 0,
+        "receipt": "process-27106.json"
+      }
+    }
+  },
+  "frontend": {
+    "unit_passed": 261,
+    "unit_failed": 0,
+    "build": "passed",
+    "dependencies": "existing provisioned node_modules symlink; no install",
+    "node_version": "v22.22.3",
+    "source_sha256": {
+      "frontend/src/components/research/ForecastReport.vue": "781407fc1e62d4cea158c25f1073d9409cbf414d0aa12a61570514e2442e7a0c",
+      "frontend/src/components/research/DossierViewer.vue": "2c604110825f9c7974bd2ad193bed80594d3a6d8e4cf2fb2e63f9f874869041e",
+      "frontend/src/components/research/SourceContextPanel.vue": "44be3a9bfeccae31821326b57c7e2276bcb88c7d2a1efab6cb94c46c6998613d",
+      "frontend/src/utils/sourceContext.js": "f58d0eb37263c288e5145ab586d8d63f8692ab1446f5eeaaaeb49cba69f06563"
+    },
+    "logs": {
+      "frontend-unit.log": "403105a2aa6da5bf7170c5817749148adda6e17574b014ab837e8bd70286eddc",
+      "frontend-build.log": "e164dbe8cb2c9a2bf64da3f26f3e5be5be3fb6c28d9b72912cd7d637a3cadbd4"
+    }
+  },
+  "focused_merge_acceptance": {
+    "passed": 6,
+    "receipt": "/private/tmp/drf-oddsense-merge-final-20261021-g/completed.json"
+  },
+  "guarded_backtest_fixture": {
+    "passed": 24,
+    "receipt": "/private/tmp/drf-oddsense-merge-backtest-final-20261021-1/completed.json"
+  },
+  "source": "accepted-source.json",
+  "primary_observation": "External concurrent dirty-file changes retained; see preservation-after.json. This task did not edit the primary checkout.",
+  "live_provider_or_model_requests": false,
+  "deployment": false,
+  "review": "closed; no remaining blocking findings; review.md",
+  "delivery": "complete; merge7ae51b7 pushed to legacy/main; delivery.json"
+}

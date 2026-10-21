@@ -274,3 +274,70 @@ def test_score_ledger_over_golden_entries(tmp_path):
     assert report["n_resolved"] == 2 and report["mean_brier"] is not None
     assert report["golden"]["n"] == 2
     assert report["golden"]["by_category"]["elections"]["n"] == 1
+
+
+# ------------------------------------------------- model-knowledge leakage (backtest §6)
+def test_golden_set_carries_knowledge_cutoffs():
+    for q in ge.load_golden_set():
+        assert q["knowledge_cutoff"] > q["as_of_date"], q["id"]
+        assert q["knowledge_cutoff"] == q["resolution_date"], q["id"]
+
+
+def test_knowledge_cutoff_is_validated(tmp_path):
+    bad = tmp_path / "bad.json"
+    row = {"id": "x", "resolved_outcome": True, "as_of_date": "2024-11-01"}
+    for value in ("Nov 6", "2024-02-30", "2024-11-01", "2024-10-01"):
+        bad.write_text(json.dumps({"questions": [dict(row, knowledge_cutoff=value)]}), encoding="utf-8")
+        with pytest.raises(ValueError):
+            ge.load_golden_set(str(bad))
+
+
+def test_knowledge_groups_and_split():
+    assert ge.knowledge_group("2025-03-01", "2025-01-31") == "post_model_cutoff"
+    assert ge.knowledge_group("2025-01-31", "2025-01-31") == "pre_model_cutoff"  # the data includes that day
+    assert ge.knowledge_group("2024-11-06", None) == "unknown"
+    assert ge.knowledge_group(None, "2025-01-31") == "unknown"
+    rows = [{"id": "a", "probability": 0.9, "outcome": True, "knowledge_cutoff": "2024-11-06"},
+            {"id": "b", "probability": 0.2, "outcome": True, "knowledge_cutoff": "2025-06-01"},
+            {"id": "c", "probability": 0.5, "outcome": False}]
+    split = ge.knowledge_split(rows, "2025-01-31")
+    assert split["ids"] == {"post_model_cutoff": ["b"], "pre_model_cutoff": ["a"], "unknown": ["c"]}
+    assert split["groups"]["post_model_cutoff"]["mean_brier"] == pytest.approx(0.64)
+    assert split["groups"]["pre_model_cutoff"]["mean_brier"] == pytest.approx(0.01)
+    unknown = ge.knowledge_split(rows, None)
+    assert unknown["ids"]["unknown"] == ["a", "b", "c"] and "not given" in unknown["note"]
+
+
+def test_model_knowledge_cutoff_input(monkeypatch):
+    monkeypatch.delenv("GOLDEN_MODEL_KNOWLEDGE_CUTOFF", raising=False)
+    assert ge.model_knowledge_cutoff(None) is None
+    monkeypatch.setenv("GOLDEN_MODEL_KNOWLEDGE_CUTOFF", "2025-01-31")
+    assert ge.model_knowledge_cutoff(None) == "2025-01-31"
+    assert ge.model_knowledge_cutoff("2024-06-30") == "2024-06-30"
+    with pytest.raises(ValueError):
+        ge.model_knowledge_cutoff("June 2024")
+
+
+def test_score_forecast_file_reports_the_knowledge_split(tmp_path, monkeypatch):
+    monkeypatch.delenv("GOLDEN_MODEL_KNOWLEDGE_CUTOFF", raising=False)
+    golden = {"questions": [
+        {"id": "old", "question": "?", "resolution_criteria": "x", "resolved_outcome": True,
+         "resolution_date": "2024-11-06", "as_of_date": "2024-11-01", "knowledge_cutoff": "2024-11-06"},
+        {"id": "new", "question": "?", "resolution_criteria": "x", "resolved_outcome": False,
+         "resolution_date": "2026-03-01", "as_of_date": "2026-02-01", "knowledge_cutoff": "2026-03-01"},
+    ]}
+    gpath = tmp_path / "golden.json"
+    gpath.write_text(json.dumps(golden), encoding="utf-8")
+    fpath = tmp_path / "forecast.json"
+    fpath.write_text(json.dumps({"binary_forecasts": [{"id": "old", "probability": 0.8},
+                                                      {"id": "new", "probability": 0.3}]}), encoding="utf-8")
+    out, md = tmp_path / "eval_report.json", tmp_path / "eval_report.md"
+    args = SimpleNamespace(forecast=str(fpath), golden=str(gpath), bins=10, out=str(out), markdown=str(md),
+                           to_ledger=False, ledger_dir=str(tmp_path / "ledger"),
+                           model_knowledge_cutoff="2025-06-30")
+    assert ge.cmd_score_forecast_file(args) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["knowledge_split"]["ids"]["post_model_cutoff"] == ["new"]
+    assert report["knowledge_split"]["ids"]["pre_model_cutoff"] == ["old"]
+    assert [row["knowledge_cutoff"] for row in report["matched"]] == ["2024-11-06", "2026-03-01"]
+    assert "## Model-knowledge split" in md.read_text(encoding="utf-8")

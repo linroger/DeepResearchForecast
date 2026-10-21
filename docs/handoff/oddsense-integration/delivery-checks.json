@@ -1,0 +1,15 @@
+{
+  "links_checked": 183,
+  "link_errors": [],
+  "introduced_lint_findings": [],
+  "current_source_drift": [],
+  "secret_check": false,
+  "raw_junit_whitespace": "Raw failure JUnit retains pytest traceback whitespace and original hashes; source/document diff check excludes only evidence/*junit.xml and passes.",
+  "owned_paths_scanned": 97,
+  "independent_timing_review": "PR-4/PR-5 closed on exact final tested hashes",
+  "feature_commit": "69c124b34740ceed40dc670e33fc52b75d4f86b7",
+  "clean_after_feature_commit": true,
+  "original_status_entries": 91,
+  "original_hashed_drift": [],
+  "remote_push": "Uncompleted; previously observed configured GitHub authentication failure, no retry with unchanged credentials."
+}

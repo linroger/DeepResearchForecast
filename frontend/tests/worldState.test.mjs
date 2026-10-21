@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   agencyLabel,
   decisionsSummary,
+  eventKindLabel,
   formatWorldValue,
   headlineSummary,
   latestHistoryRound,
@@ -11,8 +13,15 @@ import {
   nextSelectedRound,
   resolveSelectedRound,
   summarizeWorldState,
+  trackRecordRows,
+  trackRecordSummary,
   variableDelta
 } from '../src/utils/worldState.js'
+
+// GET /world-state for the reflexivity scenario run through the real kernel (red line crossed in
+// round 1, expectation checked in round 2, US withdrawal = broken obligation in round 4); pinned
+// against the API by backend/tests/test_world_reader_signals.py
+const reflexive = () => JSON.parse(readFileSync(new URL('./fixtures/world/world_state.reflexive.json', import.meta.url), 'utf8'))
 
 test('formatWorldValue mirrors the backend rendering', () => {
   assert.equal(formatWorldValue(25, '%'), '25%')
@@ -277,4 +286,107 @@ test('modelling gaps and behaviour diagnostics are summarised when present', () 
   assert.deepEqual(vm.behaviour, { roundsScored: 1, moves: 3, responsiveMoves: 2, responsiveShare: 0.667, offersAnswered: 1 })
   assert.equal(summarizeWorldState({ committed_round: 1, history: [], summary: { behaviour: { responsive_share: null } } }).behaviour, null)
   assert.deepEqual(summarizeWorldState({ committed_round: 1, history: [] }).seedGaps, [])
+})
+
+const record = (o = {}) => ({ kept: 0, lapsed: 0, broken: 0, released: 0, open: 0, outcomes: {}, ...o })
+
+test('trackRecordRows lists actors with a record, breakers first, and skips empty or junk records', () => {
+  const rows = trackRecordRows([
+    { name: 'Clean', track_record: record({ kept: 3, reliability: 1 }) },
+    { name: 'Lapser', track_record: record({ kept: 1, lapsed: 2, reliability: 0.333 }) },
+    { name: 'Breaker', track_record: record({ broken: 1, lapsed: 1, outcomes: { blocked: 2, success: 1, bogus: 4 } }) },
+    { name: 'Tied', track_record: record({ lapsed: 2, kept: 4 }) },
+    { name: 'OpenOnly', track_record: record({ open: 2 }) },
+    { name: 'Nothing', track_record: record() },
+    { name: 'Legacy' },
+    { name: 'Junk', track_record: [1, 2] },
+    { agent_id: 7, track_record: record({ broken: true, lapsed: -1, kept: 'x', released: 1.7 }) },
+    null, 'junk'
+  ])
+  assert.deepEqual(rows.map((r) => r.actor), ['Breaker', 'Tied', 'Lapser', 'Clean', 'Agent 7', 'OpenOnly'])
+  assert.deepEqual(rows[0], { actor: 'Breaker', kept: 0, lapsed: 1, broken: 1, released: 0, open: 0, resolved: 2,
+    reliability: 0, outcomes: [{ outcome: 'success', count: 1 }, { outcome: 'blocked', count: 2 }] })
+  assert.equal(rows[1].reliability, 4 / 6)                         // no reliability in the row → kept / resolved
+  assert.equal(rows[2].reliability, 0.333)                         // the API's own figure when present
+  assert.equal(rows[4].released, 1)                                // junk counts read as zero, fractions floor
+  assert.equal(rows[4].reliability, null)                          // nothing resolved
+  assert.deepEqual(trackRecordRows(null), [])
+  assert.deepEqual(trackRecordRows([{ name: 'A' }]), [])
+})
+
+test('trackRecordSummary words a record and leaves zero buckets out', () => {
+  const [breaker, opener] = trackRecordRows([
+    { name: 'B', track_record: record({ kept: 1, broken: 1, lapsed: 1, released: 1, open: 2, outcomes: { success: 2, blocked: 1 } }) },
+    { name: 'O', track_record: record({ open: 1 }) }
+  ])
+  assert.equal(trackRecordSummary(breaker),
+    'kept 1 of 3 (33%) · 1 broken · 1 lapsed · 1 released · 2 open · moves: 2 succeeded, 1 blocked')
+  assert.equal(trackRecordSummary(opener), '1 open')
+  assert.equal(trackRecordSummary(breaker, {
+    kept: '兑现 {k}/{n}', broken: '项违约', lapsed: '项失效', released: '项因对方违约解除', open: '项未到期',
+    moves: '行动', success: '项成功', blocked: '项受阻', colon: '：', separator: '、'
+  }), '兑现 1/3 (33%) · 1 项违约 · 1 项失效 · 1 项因对方违约解除 · 2 项未到期 · 行动：2 项成功、1 项受阻')
+  assert.equal(trackRecordSummary(null), '')
+})
+
+test('eventKindLabel names a crossed red line and passes other kinds through', () => {
+  assert.equal(eventKindLabel('red_line'), 'red line crossed')
+  assert.equal(eventKindLabel('red_line', { red_line: '越过红线' }), '越过红线')
+  assert.equal(eventKindLabel('emergent'), 'emergent')
+  assert.equal(eventKindLabel('toString'), 'toString')                // never an inherited property
+  assert.equal(eventKindLabel(null), '')
+})
+
+test('expectation counts come from the run summary, apart from the move score', () => {
+  const vm = (behaviour) => summarizeWorldState({ committed_round: 2, history: [], summary: { behaviour } })
+  assert.deepEqual(vm({ responsive_share: 0.5, moves: 2, expectations_checked: 5, expectations_reacted: 3 }).expectations,
+    { checked: 5, reacted: 3 })
+  // every actor held after the expectations were stated: no move score, the counts still show
+  const held = vm({ responsive_share: null, moves: 0, expectations_checked: 2, expectations_reacted: 0 })
+  assert.equal(held.behaviour, null)
+  assert.deepEqual(held.expectations, { checked: 2, reacted: 0 })
+  assert.deepEqual(vm({ expectations_checked: 2, expectations_reacted: 9 }).expectations, { checked: 2, reacted: 2 })
+  assert.equal(vm({ expectations_checked: 0, expectations_reacted: 0 }).expectations, null)
+  assert.equal(vm({ responsive_share: 0.5 }).expectations, null)    // runs from before the counts
+  assert.equal(summarizeWorldState({ committed_round: 1 }).expectations, null)
+})
+
+test('track records describe the latest world; runs without them say so', () => {
+  const vm = summarizeWorldState(reflexive())
+  assert.equal(vm.trackRecordsAvailable, true)
+  assert.deepEqual(vm.trackRecords.map((r) => [r.actor, r.kept, r.broken, r.released, r.resolved, r.reliability]), [
+    ['United States Government', 0, 1, 0, 1, 0],
+    ['China Ministry of Commerce', 0, 0, 1, 0, null]
+  ])
+  assert.deepEqual(vm.trackRecords[0].outcomes, [{ outcome: 'success', count: 1 }])
+  assert.deepEqual(vm.expectations, { checked: 1, reacted: 1 })
+  assert.deepEqual(summarizeWorldState(reflexive(), 1).trackRecords, vm.trackRecords)   // a past period: same rows
+  const legacy = summarizeWorldState(fixture())
+  assert.equal(legacy.trackRecordsAvailable, false)
+  assert.deepEqual(legacy.trackRecords, [])
+  assert.equal(legacy.expectations, null)
+})
+
+test('red lines lead the consequences, also when a past period falls back to its history row', () => {
+  const crossing = "United States Government crossed China Ministry of Commerce's red line: No tariffs above 100% on Chinese goods"
+  const inWindow = summarizeWorldState(reflexive(), 1)
+  assert.equal(inWindow.eventsInWindow, true)
+  assert.deepEqual(inWindow.consequences, [{ kind: 'red_line', description: `${crossing} — 145% announced` }])
+  // the round's events left the API's recent-event window: the history row's red_lines_crossed stand in
+  const data = reflexive()
+  data.recent_events = data.recent_events.filter((e) => e.round > 2)
+  const past = summarizeWorldState(data, 1)
+  assert.equal(past.eventsInWindow, false)
+  assert.deepEqual(past.consequences, [{ kind: 'red_line', description: crossing }])
+  assert.deepEqual(summarizeWorldState(data, 2).consequences, [])
+  // within a period, a red line moves ahead of the other events and the rest keep their order
+  const mixed = fixture()
+  mixed.recent_events.push({ round: 2, kind: 'consequence', description: 'Ports slow' },
+    { round: 2, kind: 'red_line', description: 'Actor0 crossed Actor1\'s red line: no tariffs' })
+  assert.deepEqual(summarizeWorldState(mixed).consequences.map((c) => c.kind), ['red_line', 'emergent', 'consequence'])
+  // junk crossings in a history row are skipped
+  const junk = fixture()
+  junk.recent_events = junk.recent_events.filter((e) => e.round === 2)
+  junk.history[1].red_lines_crossed = ['junk', { actor: 'A', by: '', red_line: 'x' }, { actor: 'A', by: 'B', red_line: 'y' }]
+  assert.deepEqual(summarizeWorldState(junk, 1).consequences[0], { kind: 'red_line', description: "B crossed A's red line: y" })
 })

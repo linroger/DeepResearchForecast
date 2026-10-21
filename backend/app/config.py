@@ -1574,6 +1574,20 @@ class Config:
     # Polymarket 预测市场（官方公开 Gamma API，keyless）：研究阶段拉取与题目相关的活跃市场，
     # 把市场隐含概率（Yes 价）作为校准锚注入研究报告 + 报告章节 + 二元预测抽取（预测 vs 市场
     # 分歧 >10pt 须解释）。无需 API key；网络失败 → 静默跳过（degrade-safe），不影响主流程。
+    # Oddsense-derived contextual evidence: keys remain in the runtime environment.
+    # News/social/external quotes never become automatic forecast or resolution anchors.
+    NEWS_CONTEXT_ENABLED = os.environ.get('NEWS_CONTEXT_ENABLED', 'true').strip().lower() == 'true'
+    NEWSAPI_ENABLED = os.environ.get('NEWSAPI_ENABLED', 'true').strip().lower() == 'true'
+    NEWSAPI_MAX_REQUESTS = max(0, min(2, int(os.environ.get('NEWSAPI_MAX_REQUESTS', '2') or '2')))
+    NEWSAPI_PAGE_SIZE = max(1, min(20, int(os.environ.get('NEWSAPI_PAGE_SIZE', '20') or '20')))
+    NEWSAPI_LOOKBACK_DAYS = max(1, min(30, int(os.environ.get('NEWSAPI_LOOKBACK_DAYS', '30') or '30')))
+    NEWS_CONTEXT_DEADLINE_SECONDS = max(0.1, min(10.0, float(os.environ.get('NEWS_CONTEXT_DEADLINE_SECONDS', '10') or '10')))
+    NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS = max(0.1, min(5.0, float(os.environ.get('NEWS_CONTEXT_HTTP_TIMEOUT_SECONDS', '5') or '5')))
+    REDDIT_SIGNALS_ENABLED = os.environ.get('REDDIT_SIGNALS_ENABLED', 'false').strip().lower() == 'true'
+    REDDIT_MAX_REQUESTS = max(0, min(1, int(os.environ.get('REDDIT_MAX_REQUESTS', '1') or '1')))
+    MARKET_INTELLIGENCE_ENABLED = os.environ.get('MARKET_INTELLIGENCE_ENABLED', 'true').strip().lower() == 'true'
+    MARKET_INTELLIGENCE_MAX_REQUESTS = max(0, min(4, int(os.environ.get('MARKET_INTELLIGENCE_MAX_REQUESTS', '4') or '4')))
+
     PREDICTION_MARKETS_ENABLED = os.environ.get('PREDICTION_MARKETS_ENABLED', 'true').strip().lower() == 'true'
     # 市场快照上限（按成交量降序取头部）。新名 PREDICTION_MARKETS_MAX；旧名 ODDPOOL_MAX_MARKETS 仍读作兜底以平滑迁移。
     PREDICTION_MARKETS_MAX = int(os.environ.get('PREDICTION_MARKETS_MAX',

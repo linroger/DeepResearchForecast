@@ -1043,8 +1043,13 @@ def build_world_model_seed(
     arbiter_enabled: bool = True,
     max_change_ratio: float = 0.5,
     barrier_timeout_s: float = 1800.0,
+    pressure_weight: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """The sealed ``world_model`` block.  Degrades to a smaller block, never raises."""
+    """The sealed ``world_model`` block.  Degrades to a smaller block, never raises.
+
+    ``pressure_weight`` (backtest ablation) pins ``settings.pressure_weight``, the
+    world channel's weight the runner reads before SIM_WORLD_PRESSURE_WEIGHT;
+    ``None`` leaves the block as before."""
     block: Dict[str, Any] = {
         "schema_version": WORLD_MODEL_SEED_VERSION,
         "question": _clean(question, 400),
@@ -1061,6 +1066,8 @@ def build_world_model_seed(
             "barrier_timeout_s": float(barrier_timeout_s),
         },
     }
+    if pressure_weight is not None:
+        block["settings"]["pressure_weight"] = max(0.0, float(pressure_weight))
     actors_dict = actors if isinstance(actors, dict) else {}
     try:
         block["as_of_date"] = _clean(actors_dict.get("as_of_date"), 40) or None

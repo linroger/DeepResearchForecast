@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.219" timestamp="2026-10-21T12:44:43.095214" hostname="rogers-macbook-pro.taila5afbd.ts.net"><testcase classname="tests.test_oddsense_merge_guards" name="test_historical_prompt_context_never_reads_an_injected_live_snapshot" time="0.002"><failure message="AssertionError: assert ['read current capture'] == []&#10;  &#10;  Left contains one more item: 'read current capture'&#10;  Use -v to get more diff">def test_historical_prompt_context_never_reads_an_injected_live_snapshot():
+        from linear_research import _Engine
+        calls = []
+        def snapshot():
+            calls.append("read current capture")
+            return {}
+        engine = object.__new__(_Engine)
+        engine.backtest = object()
+        engine.tools = SimpleNamespace(context_client=SimpleNamespace(snapshot=snapshot))
+        engine.context_snapshot = {}
+        assert engine._context_text() == ""
+&gt;       assert calls == []
+E       AssertionError: assert ['read current capture'] == []
+E         
+E         Left contains one more item: 'read current capture'
+E         Use -v to get more diff
+
+backend/tests/test_oddsense_merge_guards.py:66: AssertionError</failure></testcase></testsuite></testsuites>

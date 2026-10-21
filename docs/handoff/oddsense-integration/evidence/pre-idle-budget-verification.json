@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "completed_at_utc": "2026-10-18T14:00:53.081870+00:00",
+  "branch": "codex/oddsense-integration",
+  "base_commit": "495000e",
+  "approved_slices": [
+    "OS-1",
+    "OS-2",
+    "OS-3"
+  ],
+  "controlled_backend": {
+    "joint": {
+      "path": "/private/tmp/drf-os-final-joint-20261018-2",
+      "counts": {
+        "passed": 1397,
+        "skipped": 2
+      },
+      "exit_code": 0,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "blocked:external_read": 18,
+        "allowed:guarded_child": 26
+      },
+      "source_drift": [],
+      "identity_preserved": true
+    },
+    "report_delta": {
+      "path": "/private/tmp/drf-os-mixed-metadata-green-20261018-1",
+      "counts": {
+        "passed": 92
+      },
+      "exit_code": 0,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:external_read": 18
+      },
+      "source_drift": [],
+      "identity_preserved": true
+    },
+    "bilingual": {
+      "path": "/private/tmp/drf-os-final-bilingual-20261018-1",
+      "counts": {
+        "passed": 61
+      },
+      "exit_code": 0,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:external_read": 18,
+        "blocked:process:os.kill": 3
+      },
+      "source_drift": [],
+      "identity_preserved": true
+    }
+  },
+  "distinct_final_backend_cases": {
+    "passed": 1437,
+    "skipped": 2
+  },
+  "frontend": {
+    "passed": 187,
+    "failed": 0,
+    "production_build": "passed",
+    "visual_scope": "Actual shared SFC, actual controlled workflow capture, EN/ZH native details and rule panels; temporary server and browser tabs stopped."
+  },
+  "native_operations": {
+    "deployment_fixture_cases": 9,
+    "boundary_controls": 9,
+    "env_pin_tests": 18,
+    "env_pin_controls": 3
+  },
+  "live_compatibility": {
+    "checked_at": "2026-10-18T13:58:25.836669+00:00",
+    "providers": {
+      "kalshi": {
+        "attempted": true,
+        "reason": "bounded_catalog_scan",
+        "state": "partial"
+      },
+      "metaculus": {
+        "attempted": false,
+        "reason": "authenticated_community_forecast_access_not_established",
+        "state": "unsupported"
+      },
+      "newsapi": {
+        "attempted": true,
+        "returned": 19,
+        "state": "ok",
+        "unknown_publication_dates": 0
+      },
+      "polymarket": {
+        "attempted": true,
+        "state": "ok"
+      },
+      "reddit": {
+        "attempted": true,
+        "reason": "http_403",
+        "state": "forbidden"
+      }
+    },
+    "network_requests": {
+      "market": 3,
+      "newsapi": 1,
+      "reddit": 1
+    },
+    "items_by_provider": {
+      "newsapi": 19,
+      "polymarket": 8
+    },
+    "items_by_kind": {
+      "news_snippet": 19,
+      "market_quote": 8
+    },
+    "capture_sha256": "e5b8c8a712f2bfd2ba08def28e0e6f16b8a0758ed8a608342e359509114f9f83",
+    "full_live_capture": "/private/tmp/drf-oddsense-live-final-20261018-1/news_market_context.json",
+    "note": "Only counts/statuses/digests retained in Git; live article/market payloads remain outside the repository. Credential not retained."
+  },
+  "review_files": [
+    "provider-review.md",
+    "downstream-review.md"
+  ],
+  "source_sha256": {
+    ".env.example": "f7389a854300d98a6651bf1ab709f7e422c9deffab8e2b979c3cb1e85d1f49cf",
+    "README.md": "3b1ca8f71642813466b163f2d9b12cf5989f6318b8c2ec22fcf0881c9a906a4a",
+    "README.zh-CN.md": "4bae88b901e8e974cf27e2b72ab3402492872a15d7d94bfa12ea302671586660",
+    "backend/app/api/report.py": "e5e394f7c9cbbb46a413228e6829a7a6f5cb11d40cc9d566eba80fd728334cea",
+    "backend/app/api/research.py": "6d0c1ab9fab189540ab2da9bee602510a6b33aa662f9addcc652e993dead2a37",
+    "backend/app/config.py": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+    "backend/app/services/news_market_context.py": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+    "backend/app/services/official_data.py": "43498ff019b2dac0f5b3cb0ee6a680579dcfe4805116f4214f29e45a764e6963",
+    "backend/app/services/pipeline_orchestrator.py": "a15e36fda51101added494a829d1f1f578b3d3fab53ed259aa5cc540fa8fc894",
+    "backend/app/services/report_agent.py": "06f1ab0068d9de12c3e7a0246fabcc040bdbe07ba69c550cbe077a21b54e054c",
+    "backend/tests/test_market_intelligence.py": "4c97eb3e76958b54ec517baf85d6b7884cc9848a2153490dfc68ff502a709298",
+    "backend/tests/test_news_context_pipeline.py": "3dc2d555414e25d41054beb2b5c18a41d68a27c9584dd002b38ab800f00931a8",
+    "backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "backend/tests/test_news_signals.py": "fc1dd9a5e69cfed2cc5408a9933a61eb32d54e3286e1ab83f1e2cfe71c25185e",
+    "backend/tests/test_oddsense_workflow.py": "d298dad0628c4e4f74eaf8eefb6091e9d991bb2792b9dadce5b2be3abf98be8f",
+    "backend/tests/test_research_engine_v3.py": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+    "deerflow_bridge/config.yaml": "ffdb3bebaec91745aa549a93cc2f994dd7db9ae5bc3963f8fd8eccf66e37a23d",
+    "deerflow_bridge/deerflow_research.py": "f7ff138fdbaa0cf84625bd92212a13ee8fa914c374c42fe57d7318d0b6214d87",
+    "deerflow_bridge/linear_research.py": "d34299e79d751848052c25ab999782cb94068a98d82d0daead97444052b68cd1",
+    "deerflow_bridge/market_intelligence.py": "e5f5525f0c34d651417808c5fd16453df00e0061cb3e02cf6ca4f31c2c796cae",
+    "deerflow_bridge/news_signals.py": "dc0dca47e0dc1c2d07878eb1a851c0c37a9b0c968a80b009e6fcbc97002f287b",
+    "deerflow_bridge/news_tools.py": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+    "deerflow_bridge/research_gateway.py": "f99839713cd2d50bed1580acaa843cc049ed7fe187219372b253e4b9e13b2003",
+    "deerflow_bridge/skills/deep-research/SKILL.md": "13c65c62d3398df524182c8c33dfd34500d22883fd3ff0cccd7dd13197f56257",
+    "deerflow_bridge/skills/prediction-markets/SKILL.md": "17c0070c0905d9d6106bbe95b594adde08f812e9224bcb23b5e5283e6b1f9cd1",
+    "frontend/src/components/research/DossierViewer.vue": "2c604110825f9c7974bd2ad193bed80594d3a6d8e4cf2fb2e63f9f874869041e",
+    "frontend/src/components/research/ForecastReport.vue": "8714d947e95bff1f0266251c87cf31c84783458f77efb070f532020cf347e3cc",
+    "frontend/src/components/research/SourceContextPanel.vue": "44be3a9bfeccae31821326b57c7e2276bcb88c7d2a1efab6cb94c46c6998613d",
+    "frontend/src/utils/sourceContext.js": "f58d0eb37263c288e5145ab586d8d63f8692ab1446f5eeaaaeb49cba69f06563",
+    "frontend/tests/sourceContext.test.mjs": "384d4ba6ab0dc8f9f4afa1c72474d2885432d32a9755c43aa91ce9cf032aa135",
+    "frontend/tests/sourceContextPanel.test.mjs": "a9ba3d5934f0cd1f30f053183e4ce2f70106d4594d5de5fe5d767128b39ef768",
+    "scripts/oddsense_live_probe.py": "78d967527a45091a8dd4ada19536f0bec666b6878b787f9b40c23de193fcbe10",
+    "scripts/oddsense_source_mirror.py": "844a012257ac71ecf95f2da1f6facceaf4c3a8f86aeb847c5e14f6930ab7b844",
+    "setup.sh": "4dbe2e0f2bf1b296e7ede63c246069985cf8f930581ca2f207f4ae08c0ee45d8"
+  },
+  "nonfrontend_drift_from_latest_backend_freeze": [],
+  "limits": [
+    "Controlled model/provider responses in backend E2E; no live LLM or live complete simulation launch.",
+    "Reddit live request forbidden (403); default remains disabled.",
+    "Metaculus explicit unsupported status pending authenticated access.",
+    "No service restart, existing-run mutation, deployment or primary-checkout code merge.",
+    "Git push previously failed with invalid configured GitHub authentication; no retry with unchanged credentials."
+  ]
+}

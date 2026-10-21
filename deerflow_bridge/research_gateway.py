@@ -2376,6 +2376,70 @@ def _fallback_valid_url(url: str) -> bool:
 _VALID_TIERS = ("S1", "S2", "S3")
 
 
+_CONTEXT_EVIDENCE_FIELDS = (
+    "outcome", "outcome_label", "yes_label", "no_label", "probability", "probability_basis",
+    "price", "bid", "ask", "last", "yes_bid", "yes_ask", "no_bid", "no_ask", "last_price",
+    "price_basis", "quote_basis", "price_unit", "quote_units", "units", "volume", "volume_unit",
+    "volume_units", "volume_24h", "open_interest", "forecaster_count", "quote_at", "quote_time",
+    "metadata_updated_at", "end_date", "expiration_time", "contract_type", "market_type",
+    "threshold", "floor_strike", "cap_strike", "strike_type", "rules_primary", "rules_secondary", "rules")
+
+
+def context_evidence_metadata(item: Mapping[str, Any]) -> dict:
+    """Bounded typed projection of supplied market evidence, including null and zero."""
+    if item.get("kind") not in ("market_quote", "community_forecast"):
+        return {}
+    result = {}
+    for name in _CONTEXT_EVIDENCE_FIELDS:
+        if name not in item:
+            continue
+        value = item[name]
+        if value is None or isinstance(value, bool):
+            result[name] = value
+        elif isinstance(value, (int, float)) and math.isfinite(value):
+            result[name] = value
+        elif isinstance(value, str):
+            result[name] = _collapse(_clean_web_text(value), 1600 if name.startswith("rules") else 500)
+    price_fields = item.get("source_price_fields")
+    if isinstance(price_fields, Mapping):
+        fields = {}
+        for name, value in list(price_fields.items())[:16]:
+            if not isinstance(name, str):
+                continue
+            values = value[:8] if isinstance(value, list) else [value]
+            kept = []
+            for part in values:
+                if part is None or isinstance(part, bool):
+                    kept.append(part)
+                elif isinstance(part, (int, float)) and math.isfinite(part):
+                    kept.append(part)
+                elif isinstance(part, str):
+                    kept.append(_collapse(_clean_web_text(part), 80))
+            fields[_collapse(name, 80)] = kept if isinstance(value, list) else (kept[0] if kept else None)
+        result["source_price_fields"] = fields
+    return result
+
+
+def context_evidence_text(item: Mapping[str, Any]) -> str:
+    """Captured contract details, never inferred probabilities, units or quote times."""
+    data = context_evidence_metadata(item)
+    if not data:
+        return ""
+    lines = ["Captured market evidence (context only; candidates are not established equivalent contracts):"]
+    for name, value in data.items():
+        if value is None:
+            rendered = "unknown"
+        elif isinstance(value, (dict, list)):
+            rendered = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        else:
+            rendered = str(value)
+        rendered = rendered.replace("<", "&lt;").replace(">", "&gt;")
+        lines.append(f"- {name}: {rendered}")
+    if "quote_at" not in data and "quote_time" not in data:
+        lines.append("- quote_at: unknown")
+    return "\n".join(lines)[:8000]
+
+
 class SourceLedger:
     """Thread-safe registry of every source seen in the run, with stable ids.
 
@@ -2516,21 +2580,58 @@ class SourceLedger:
             self._touch()
             return dict(row)
 
+    def register_context(self, item: Mapping[str, Any], *, by: str = "") -> dict | None:
+        """Keep discovery provenance without treating a snippet as a fetched page."""
+        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by)
+        if row is None:
+            return None
+        with self._lock:
+            stored = self._rows[row["sid"]]
+            for name in ("provider", "kind", "published_at", "retrieved_at", "publisher",
+                         "native_id", "language"):
+                value = item.get(name)
+                if value is None:
+                    stored.setdefault(name, None)
+                elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    if stored.get(name) in (None, ""):
+                        stored[name] = _collapse(_clean_web_text(str(value)), 300)
+            stored.setdefault("context_id", _collapse(item.get("id"), 300))
+            details = context_evidence_metadata(item)
+            if details:
+                stored.setdefault("context_metadata", details)
+                stored.setdefault("context_evidence_sha256", item.get("evidence_sha256"))
+            stored["eligibility"] = {"context_only": True, "anchor": False, "resolution": False}
+            self._touch()
+            return dict(stored)
+
     def mark_fetched(self, sid: int, *, content_sha256: str, chars: int, page_path: str,
-                     title: str | None = None) -> dict | None:
+                     title: str | None = None, backtest: Mapping[str, Any] | None = None) -> dict | None:
         with self._lock:
             row = self._rows.get(int(sid))
             if row is None:
                 return None
             row["fetched"] = True
+            row["fetched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             row["content_sha256"] = str(content_sha256)
             row["chars"] = int(chars)
             row["page_path"] = str(page_path)
             clean_title = _clean_title(title) if title else ""
             if clean_title:
                 row["title"] = clean_title
+            if backtest is not None:
+                # Backtest mode: how the page was dated (verdict, date, basis,
+                # archive capture), so a reader can audit what reached the model.
+                row["backtest"] = dict(backtest)
             self._touch()
             return dict(row)
+
+    def note_backtest(self, sid: int, detail: Mapping[str, Any]) -> None:
+        """Backtest mode: record a search hit's date verdict once (first sighting wins)."""
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is not None and "backtest" not in row:
+                row["backtest"] = dict(detail)
+                self._touch()
 
     def register_dataset(self, url: str, title: str, series: Mapping[str, Any],
                          agent_id: str, *, tier: str = "S1") -> dict | None:
@@ -3497,9 +3598,70 @@ AGENT_TOOLS_WITH_DATA_SCHEMA: list[dict] = AGENT_TOOLS_SCHEMA + [
 ]
 
 
+
+CONTEXT_TOOL_METHODS = {"news_search": "search_news", "social_search": "search_social",
+                        "market_compare": "market_compare"}
+CONTEXT_TOOLS_SCHEMA = [
+    {"type": "function", "function": {
+        "name": name, "description": description,
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "A concise query about the research topic."}},
+            "required": ["query"], "additionalProperties": False}}}
+    for name, description in (
+        ("news_search", "Discover dated news snippets with publisher links and availability. Snippets are "
+         "discovery context: web_fetch the publisher page before factual or numeric claims."),
+        ("social_search", "Discover attributed social opinions, with publication/retrieval times and "
+         "availability. Opinion is context only, never a probability or established fact."),
+        ("market_compare", "Compare source-aware prediction-market candidates, times, rules and quote "
+         "bases. Context only: similar titles do not establish equivalence, anchoring or arbitrage."))]
+
+
+def context_tool_names(env: Mapping[str, Any]) -> tuple[str, ...]:
+    """Trusted feature switches only; credential presence is the provider owner's job."""
+    if str(env.get("DRF_BACKTEST_POLICY") or "").strip():
+        return ()  # Current news/quotes have no point-in-time admissibility contract.
+    def on(name: str, default: str = "true") -> bool:
+        return str(env.get(name, default)).strip().lower() not in ("0", "false", "off", "no")
+    if not on("NEWS_CONTEXT_ENABLED"):
+        return ()
+    return tuple(name for name, enabled in (
+        ("news_search", on("NEWSAPI_ENABLED")),
+        ("social_search", on("REDDIT_SIGNALS_ENABLED", "false")),
+        ("market_compare", on("MARKET_INTELLIGENCE_ENABLED"))) if enabled)
+
+
+@lru_cache(maxsize=16)
+def agent_tools_schema(data_enabled: bool, context_names: tuple[str, ...] = ()) -> list[dict]:
+    """One fixed schema object for the whole run, including retries and forced notes."""
+    base = AGENT_TOOLS_WITH_DATA_SCHEMA if data_enabled else AGENT_TOOLS_SCHEMA
+    if not context_names:
+        return base
+    return base + [row for row in CONTEXT_TOOLS_SCHEMA if row["function"]["name"] in context_names]
+
+
+def _context_api() -> Any:
+    return importlib.import_module(f"{__package__}.news_signals" if __package__ else "news_signals")
+
+
 def _data_api() -> Any:
     """Lazy, package/bare compatible import; never starts a provider."""
     return importlib.import_module(f"{__package__}.data_sources" if __package__ else "data_sources")
+
+
+def _source_policy_rejection(url: str) -> str | None:
+    """The fetch layer's source-deny verdict for ``url`` (``cached_fetch``);
+    ``None`` when the URL is allowed or the policy module is not deployed."""
+    try:
+        cached_fetch = importlib.import_module("cached_fetch")
+    except ImportError:
+        return None
+    check = getattr(cached_fetch, "_source_policy_rejection", None)
+    return check(url) if callable(check) else None
+
+
+def _backtest_api() -> Any:
+    """``backtest_cutoff``, imported only by backtest runs (same import rule as ``_data_api``)."""
+    return importlib.import_module(f"{__package__}.backtest_cutoff" if __package__ else "backtest_cutoff")
 
 
 _DATA_FAILURE_LOG_MAX = 40
@@ -3796,13 +3958,26 @@ class ResearchTools:
     * error envelopes mapped to one actionable line each;
     * full pages stored once under ``pages_dir`` (re-reads are free) and
       returned as deterministic passages wrapped as untrusted evidence.
+
+    Backtest mode (``backtest`` = a ``backtest_cutoff.BacktestPolicy``; the
+    engine sets it from ``DRF_BACKTEST_POLICY``): search rows dated after the
+    cutoff never reach the model (undated ones neither, in strict mode) and
+    each shown hit carries its date; a fetch reads the last archive capture
+    at or before the cutoff when there is one, otherwise the live page, dated
+    from its own metadata, its URL and the search hit, and refused when it is
+    dated after the cutoff (or undated, in strict mode).  ``None`` = live.
     """
+
+    # The engine refuses backtest mode with tools that do not apply the cutoff.
+    backtest_capable = True
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
                  search_fn: Callable[[str, int], str] | None = None,
                  fetch_fn: Callable[[str], str] | None = None,
                  bridge: Any = None, plog: Any = None,
-                 limits: ToolLimits | None = None, data_sources: Any = None) -> None:
+                 limits: ToolLimits | None = None, data_sources: Any = None,
+                 context_client: Any = None, backtest: Any = None,
+                 archive_get: Callable[[str, float], str] | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -3822,6 +3997,10 @@ class ResearchTools:
         self._totals = _AgentCounters()
         self._agents: dict[str, _AgentCounters] = {}
         self.data_sources = data_sources
+        self.context_client = context_client
+        self._context_lock = threading.RLock()
+        self._context_cache: dict[tuple[str, str], str] = {}
+        self._context_frozen = False
         self._data_lock = threading.RLock()
         # Model-visible answers by request key ("get:<id>|<start>|<end>",
         # "search:<provider>:<query>").  Only successes and deterministic
@@ -3841,6 +4020,83 @@ class ResearchTools:
         self._failed_requests: list[dict[str, Any]] = []
         # KIQ id -> outcome ("requested"/"stored"/"failed") -> series IDs.
         self._kiq_data: dict[str, dict[str, list[str]]] = {}
+        self.backtest = backtest
+        self._archive_get = archive_get
+        # Backtest mode: canonical URL -> dates its search hits carried.
+        self._hit_dates: dict[str, list[Any]] = {}
+
+    def freeze_context(self) -> None:
+        # Cancellation may run in a signal handler while another thread owns
+        # the query lock. Close admission immediately; admitted I/O may finish.
+        self._context_frozen = True
+
+    def context_query(self, name: str, query: Any, *, agent_id: str,
+                      deadline: Deadline | None = None) -> str:
+        """Dispatch only the frozen context API, under run/agent search admission.
+
+        ContextClient owns shared attempt/network budgets and provider singleflight.
+        Gateway caches/replays consume neither provider nor local search admission.
+        """
+        if self.backtest is not None:
+            return "CONTEXT_UNAVAILABLE[backtest_unsupported]: historical context is not admissible."
+        if name not in CONTEXT_TOOL_METHODS or not isinstance(query, str) or not query.strip():
+            return "CONTEXT_UNAVAILABLE[invalid_input]: use a known context tool and a query string."
+        clean = " ".join(query.split())
+        if len(clean) > MAX_QUERY_CHARS:
+            return "CONTEXT_UNAVAILABLE[invalid_input]: shorten the query."
+        if deadline is not None:
+            remaining = (deadline.remaining() if callable(getattr(deadline, "remaining", None))
+                         else float(deadline) - time.monotonic())
+            if remaining <= 0:
+                return "CONTEXT_UNAVAILABLE[timeout]: research deadline exhausted."
+        key = (name, clean.casefold())
+        with self._context_lock:
+            if key in self._context_cache:
+                return self._context_cache[key]
+            client = self.context_client
+            if client is None:
+                return "CONTEXT_UNAVAILABLE[unavailable]: context provider is unavailable."
+            # A restored/sealed client may replay its own recorded queries, but
+            # cannot be asked a new query from a resumed gather.
+            if self._context_frozen:
+                return "CONTEXT_UNAVAILABLE[stored_only]: use the pinned research context."
+            if not self._reserve(str(agent_id), "search"):
+                return "CONTEXT_UNAVAILABLE[budget_exhausted]: research search allowance exhausted."
+            result = getattr(client, CONTEXT_TOOL_METHODS[name])(clean, deadline=deadline)
+            if not isinstance(result, Mapping):
+                return "CONTEXT_UNAVAILABLE[unavailable]: malformed provider result."
+            status = result.get("status") or {}
+            state = status.get("state", "unavailable") if isinstance(status, Mapping) else "unavailable"
+            lines = [f"CONTEXT {name}: {_collapse(state, 40)}; snippets/opinions/quotes are context only."]
+            providers = result.get("providers")
+            if isinstance(providers, list):
+                for provider in providers[:8]:
+                    if not isinstance(provider, Mapping):
+                        continue
+                    availability = provider.get("status")
+                    if not isinstance(availability, Mapping):
+                        continue
+                    lines.append("Provider " + _collapse(_clean_web_text(provider.get("provider")), 40)
+                                 + ": " + _collapse(_clean_web_text(availability.get("state")), 40)
+                                 + "; " + _collapse(_clean_web_text(availability.get("reason")), 100))
+            for item in list(result.get("items") or [])[:40]:
+                if not isinstance(item, Mapping):
+                    continue
+                row = self.ledger.register_context(item, by=agent_id)
+                if row is None:
+                    continue
+                lines += [f"[S{row['sid']}] {row['title']} — {row.get('provider') or 'unknown'} "
+                          f"({row.get('kind') or 'context'}; published {row.get('published_at') or 'unknown'}; "
+                          f"retrieved {row.get('retrieved_at') or 'unknown'})",
+                          f"    {row['url']}",
+                          delimit_untrusted("CONTEXT SNIPPET", row.get("snippet") or "")]
+                details = context_evidence_text(item)
+                if details:
+                    lines.append(delimit_untrusted("CAPTURED MARKET CONTRACT", details))
+            text = "\n".join(lines)
+            self._context_cache[key] = text
+            self.ledger.flush()
+            return text
 
     def freeze_data(self) -> None:
         """Close admission before synthesis. Stored evidence remains readable."""
@@ -4418,7 +4674,7 @@ class ResearchTools:
             self._failure(agent_id)
             self._log("result", f"web_search → SEARCH_TEMPORARILY_UNAVAILABLE ({type(exc).__name__})")
             return MSG_SEARCH_UNAVAILABLE
-        text, cacheable, count = self._render_search(raw, agent_id)
+        text, cacheable, count = self._render_search(raw, agent_id, clean)
         if cacheable:
             with self._lock:
                 self._search_cache[key] = text
@@ -4427,7 +4683,7 @@ class ResearchTools:
         self._log("result", f"web_search → {count} results" if count else f"web_search → {text.split(':', 1)[0]}")
         return text
 
-    def _render_search(self, raw: Any, agent_id: str) -> tuple[str, bool, int]:
+    def _render_search(self, raw: Any, agent_id: str, query: str = "") -> tuple[str, bool, int]:
         """(model text, cacheable, row count) for one backend payload."""
         try:
             payload = json.loads(raw) if isinstance(raw, str) else raw
@@ -4449,6 +4705,10 @@ class ResearchTools:
         results = payload.get("results")
         if not isinstance(results, list) or not results:
             return MSG_NO_RESULTS, True, 0
+        if self.backtest is not None:
+            results = self._cut_search_rows(results, query)
+            if not results:
+                return MSG_NO_RESULTS, True, 0
         rendered: list[str] = []
         total = 0
         for item in results:
@@ -4462,6 +4722,8 @@ class ResearchTools:
             if row is None:
                 continue
             entry = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
+            if self.backtest is not None:
+                entry += self._note_hit(row, item)
             # web_fetch takes a URL, so a hit the agent cannot see the URL of
             # cannot be read; long URLs are omitted rather than cut (a cut URL
             # would fetch the wrong page).
@@ -4477,6 +4739,34 @@ class ResearchTools:
         if not rendered:
             return MSG_NO_RESULTS, True, 0
         return "\n".join(rendered), True, len(rendered)
+
+    def _cut_search_rows(self, rows: Sequence[Any], query: str) -> list:
+        """Backtest mode: the rows that may reach the model, in their order.  Rows
+        the search tool already judged (they carry a ``backtest`` verdict) stay;
+        any other row (a custom ``search_fn``) is judged here."""
+        bt = _backtest_api()
+        out = []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            if isinstance(row.get("backtest"), Mapping):
+                out.append(row)
+            else:
+                out.extend(bt.filter_search_rows([row], self.backtest, query=query)[0])
+        return out
+
+    def _note_hit(self, row: Mapping[str, Any], item: Mapping[str, Any]) -> str:
+        """Backtest mode: remember a shown hit's own dates (the fetch of its page
+        uses them) and return its date label for the model."""
+        bt = _backtest_api()
+        spans = [span for span in bt.result_dates(item) if span.basis != "url"]
+        with self._lock:
+            known = self._hit_dates.setdefault(row["canonical"], [])
+            known.extend(span for span in spans if span not in known)
+        detail = item.get("backtest") if isinstance(item.get("backtest"), Mapping) else {}
+        self.ledger.note_backtest(row["sid"], detail)
+        stamp = detail.get("date")
+        return f" — dated {stamp}" if stamp else " — undated"
 
     # ------------------------------------------------------------------ fetch
     def fetch(self, url: Any, *, focus: str = "", agent_id: str, kiq_text: str = "") -> str:
@@ -4598,6 +4888,8 @@ class ResearchTools:
         if not self._reserve(agent_id, "fetch"):
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED")
             return MSG_FETCH_BUDGET
+        if self.backtest is not None:
+            return self._fetch_as_of(url, key, terms, context_terms, agent_id)
         try:
             raw = self._fetch_fn(url)
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
@@ -4632,6 +4924,87 @@ class ResearchTools:
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
             title=_page_title(stripped) or None) or row
         return self._render_page(row, stripped, terms, context_terms, cached=False)
+
+    def _fetch_as_of(self, url: str, key: str, terms: list[str], context_terms: list[str],
+                     agent_id: str) -> str:
+        """Backtest mode's fetch: the archive capture at or before the cutoff when
+        there is a readable one, else the live page; refused unless its date
+        verdict admits it.  Mirrors :meth:`_fetch_uncached` otherwise."""
+        bt = _backtest_api()
+        policy = self.backtest
+        if _source_policy_rejection(url):
+            # A capture is served from web.archive.org: the original URL must
+            # still pass the deny list the live fetch applies.
+            self._remember_failure(key, "source_quality_rejected", transient=False)
+            return self._fetch_failed(agent_id, "source_quality_rejected")
+        snapshot, archive_status = bt.lookup_snapshot(url, policy, http_get=self._archive_get)
+        text: str | None = None
+        if snapshot is not None:
+            try:
+                raw = self._fetch_fn(snapshot.url)
+            except Exception:  # noqa: BLE001 — an unreadable capture falls back to the live page
+                raw = None
+            candidate = raw if isinstance(raw, str) else str(raw or "")
+            if raw is not None and self._failure_reason(candidate, _json_object(candidate)) is None:
+                text = candidate.strip()
+        via = "archive" if text is not None else "live"
+        if text is None:
+            try:
+                raw = self._fetch_fn(url)
+            except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
+                self._remember_failure(key, type(exc).__name__, transient=True)
+                return self._fetch_failed(agent_id, type(exc).__name__)
+            candidate = raw if isinstance(raw, str) else str(raw or "")
+            envelope = _json_object(candidate)
+            if envelope is not None and envelope.get("error") == "research_budget_exhausted":
+                self._failure(agent_id)
+                self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
+                return MSG_FETCH_BUDGET
+            reason = self._failure_reason(candidate, envelope)
+            if reason is not None:
+                self._remember_failure(key, reason, transient=bool(_TRANSIENT_FETCH_REASON_RE.search(reason)))
+                return self._fetch_failed(agent_id, reason)
+            text = candidate.strip()
+        if via == "archive":
+            spans = [snapshot.span()]
+        else:
+            with self._lock:
+                spans = list(self._hit_dates.get(canonical_url(url), []))
+            spans += bt.page_dates(text)
+            url_span = bt.url_date(url)
+            if url_span is not None:
+                spans.append(url_span)
+        decision, span = bt.verdict(spans, policy)
+        detail = {"verdict": decision, "via": via,
+                  "date": span.end.isoformat() if span is not None else None,
+                  "basis": span.basis if span is not None else None, "archive": archive_status}
+        if via == "archive":
+            detail["snapshot"] = snapshot.url
+        admitted = bt.admits(decision, policy)
+        bt.record(policy, {"kind": "fetch", "url": url[:500], "action": "kept" if admitted else "dropped",
+                           **detail})
+        if not admitted:
+            reason = "published_after_cutoff" if decision == "after" else "undated_source"
+            self._remember_failure(key, reason, transient=False)
+            return self._fetch_failed(agent_id, reason)
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        page_path = f"{self.pages_dir.name}/{digest[:16]}.txt"
+        target = self._page_file(page_path)
+        try:
+            if not target.exists():
+                _atomic_write_text(target, text)
+        except OSError as exc:
+            return self._fetch_failed(agent_id, f"storage_{type(exc).__name__}")
+        row = self.ledger.register(url, "", "", "fetch", agent_id)
+        if row is None:
+            self._remember_failure(key, "invalid_url", transient=False)
+            return self._fetch_failed(agent_id, "invalid_url")
+        with self._lock:
+            self._failed_fetches.pop(key, None)
+        row = self.ledger.mark_fetched(
+            row["sid"], content_sha256=digest, chars=len(text), page_path=page_path,
+            title=_page_title(text) or None, backtest=detail) or row
+        return self._render_page(row, text, terms, context_terms, cached=False)
 
     @staticmethod
     def _failure_reason(text: str, envelope: Mapping[str, Any] | None) -> str | None:

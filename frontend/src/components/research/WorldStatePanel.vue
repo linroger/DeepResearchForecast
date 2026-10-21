@@ -28,6 +28,9 @@
         <span class="ws-badge st-behaviour" v-if="vm.behaviour" :title="behaviourTitle">
           {{ L('回应上期', 'responsive moves') }} {{ Math.round(vm.behaviour.responsiveShare * 100) }}%
         </span>
+        <span class="ws-badge st-behaviour" v-if="vm.expectations" :title="expectationsTitle">
+          {{ L('预期反应获跟进', 'expected reactions followed') }} {{ vm.expectations.reacted }}/{{ vm.expectations.checked }}
+        </span>
         <span class="ws-badge st-note">{{ L('推演投影，非观察证据', 'model projection, not evidence') }}</span>
       </div>
     </div>
@@ -96,8 +99,8 @@
           {{ L('后果与事件', 'Consequences and events') }} ({{ vm.consequences.length + vm.relationshipChanges.length }})
         </div>
         <ul class="ws-list">
-          <li v-for="(c, i) in vm.consequences.slice(0, 10)" :key="'c' + i" class="ws-event">
-            <span class="ws-kind mono">{{ c.kind }}</span><span>{{ c.description }}</span>
+          <li v-for="(c, i) in vm.consequences.slice(0, 10)" :key="'c' + i" class="ws-event" :class="{ 'ev-red-line': c.kind === 'red_line' }">
+            <span class="ws-kind mono">{{ kindLabel(c.kind) }}</span><span>{{ c.description }}</span>
           </li>
           <li v-for="(r, i) in vm.relationshipChanges.slice(0, 6)" :key="'r' + i" class="ws-event">
             <span class="ws-kind mono">{{ L('关系', 'relation') }}</span>
@@ -118,6 +121,17 @@
             <span class="ws-due mono" v-if="p.dueRound !== null">{{ L('第', 'round ') }}{{ p.dueRound }}{{ L('期', '') }}</span>
           </li>
           <li v-if="!vm.pending.length" class="ws-empty">{{ L('无待兑现承诺', 'No open commitments') }}</li>
+        </ul>
+      </div>
+      <div class="ws-card" v-if="!vm.isPast && vm.trackRecordsAvailable">
+        <div class="ws-card-head" :title="trackRecordsTitle">{{ L('履约记录', 'Track records') }} ({{ vm.trackRecords.length }})</div>
+        <ul class="ws-list">
+          <li v-for="(r, i) in vm.trackRecords.slice(0, 8)" :key="'tr' + i" class="ws-record"
+              :class="{ 'tr-broken': r.broken > 0, 'tr-lapsed': !r.broken && r.lapsed > 0 }">
+            <span class="ws-actor">{{ r.actor }}</span>
+            <span class="ws-record-text mono">{{ trackRecordLine(r) }}</span>
+          </li>
+          <li v-if="!vm.trackRecords.length" class="ws-empty">{{ L('尚无已结算的承诺或行动', 'No commitment or move resolved yet') }}</li>
         </ul>
       </div>
       <div class="ws-card" v-if="vm.offers.length || vm.offerCounts">
@@ -169,7 +183,9 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { L } from '../../i18n'
 import { getWorldState } from '../../api/simulation'
-import { decisionsSummary, nextSelectedRound, resolveSelectedRound, summarizeWorldState } from '../../utils/worldState'
+import {
+  decisionsSummary, eventKindLabel, nextSelectedRound, resolveSelectedRound, summarizeWorldState, trackRecordSummary
+} from '../../utils/worldState'
 
 const props = defineProps({
   simulationId: { type: String, default: '' },
@@ -213,6 +229,30 @@ const gapsTitle = computed(() => vm.value.seedGaps.map((g) => `${g.kind}: ${g.su
 const behaviourTitle = computed(() => vm.value.behaviour
   ? `${vm.value.behaviour.responsiveMoves}/${vm.value.behaviour.moves} ${L('项行动回应了上期的事实变化或他方行动', 'moves answered last period\'s changes or another actor')} (${vm.value.behaviour.roundsScored} ${L('个时段', 'periods')}, ${vm.value.behaviour.offersAnswered} ${L('项应答要约', 'offers answered')}). ${L('文本层面的诊断，非真实性判定', 'Textual diagnostic, not a realism verdict')}`
   : '')
+const expectationsTitle = computed(() => {
+  const e = vm.value.expectations
+  if (!e) return ''
+  return L(`角色在自身行动后预期他方作出的 ${e.checked} 项反应中，${e.reacted} 项在下一时段确有被点名方的行动跟进；该行动是否符合预期不作判定。`,
+    `${e.reacted} of the ${e.checked} reactions the actors expected after their own moves were followed by a move of the actor they named, one period later. Whether that move matched the expectation is not judged.`)
+})
+
+// TRACK RECORDS: one line per actor, breakers first (order and counts from utils/worldState)
+const trackRecordsTitle = computed(() => L(
+  '推演记录的各角色承诺：兑现、失效（到期未行动）、违约（违反或退出已达成协议的义务）；解除＝因对方违约而免除；未到期＝尚未到期。行动＝仲裁对其行动的裁定。违约与失效最多的角色排在最前。',
+  'Commitments the world recorded for each actor: kept, lapsed (not acted on when due) or broken (an agreed obligation breached or withdrawn from); released = freed by the other side\'s breach; open = not yet due. Moves = how the arbiter resolved the actor\'s moves. Actors with the most broken or lapsed commitments come first.'))
+function trackRecordLine(row) {
+  return trackRecordSummary(row, {
+    kept: L('兑现 {k}/{n}', 'kept {k} of {n}'), broken: L('项违约', 'broken'), lapsed: L('项失效', 'lapsed'),
+    released: L('项因对方违约解除', 'released'), open: L('项未到期', 'open'), moves: L('行动', 'moves'),
+    success: L('项成功', 'succeeded'), partial: L('项部分成功', 'partly succeeded'), blocked: L('项受阻', 'blocked'),
+    failed: L('项失败', 'failed'), colon: L('：', ': '), separator: L('、', ', ')
+  })
+}
+
+// RED LINES: a crossed red line reads as such in both languages; other kinds keep their tag
+function kindLabel(kind) {
+  return eventKindLabel(kind, { red_line: L('越过红线', 'red line crossed') })
+}
 
 function tickLabel(h) {
   const bits = [h.label, `${L('仲裁', 'arbiter')} ${h.arbiterStatus || L('无', 'none')}`]
@@ -326,7 +366,11 @@ onUnmounted(stopPolling)
 .ws-var-delta.dir-up { color: #15803d; }
 .ws-var-delta.dir-down { color: #b91c1c; }
 .ws-var-prov { font-size: 10px; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.03em; }
-.ws-move, .ws-pending, .ws-event, .ws-offer { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.ws-move, .ws-pending, .ws-event, .ws-offer, .ws-record { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.ws-record-text { font-size: 11px; opacity: 0.85; }
+.tr-broken .ws-actor { color: #b91c1c; }
+.tr-lapsed .ws-actor { color: #b45309; }
+.ev-red-line .ws-kind { border-color: #dc2626; color: #b91c1c; opacity: 0.9; }
 .st-gaps { border-color: #d97706; color: #b45309; cursor: help; }
 .st-behaviour { cursor: help; }
 .offer-open, .offer-deferred { border-color: #d97706; color: #b45309; }

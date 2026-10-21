@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="4.509" timestamp="2026-10-18T20:56:01.516525" hostname="Rogers-MacBook-Pro-7.local"><testcase classname="tests.test_oddsense_workflow" name="test_scripted_engine_to_published_report_api_and_export" time="3.909"><failure message="RuntimeError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：news context artifact or audited Markdown differs from consumed generation">self = &lt;app.services.report_agent.ReportAgent object at 0x10af897c0&gt;
+report_id = 'report_oddsense'
+report = Report(report_id='report_oddsense', simulation_id='sim_oddsense', graph_id='graph_oddsense', simulation_requirement='W..._at='2026-10-18T00:01:00Z', error=None, failed_sections=[], filter_safe_sections={}, telemetry=None, translations=None)
+
+    def _enforce_final_publish_audit(
+        self, report_id: str, report: "Report"
+    ) -&gt; Dict[str, Any]:
+        """Run the authoritative audit and convert execution failure into a hard stop."""
+        try:
+            audit = self._audit_final_published_markdown(report_id, report)
+&gt;           self._require_final_publish_audit(audit)
+
+backend/app/services/report_agent.py:10019: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+audit = {'audited_at': '2026-10-18T12:56:05.458012+00:00', 'citation_artifacts': {'artifact_tags': ['S2', 'S3', 'S1'], 'citati...uthored_forecast_markers_valid': True, 'cited': 0, 'coverage': 1.0, 'excluded_authored_forecast_claims': 34, ...}, ...}
+
+    @staticmethod
+    def _require_final_publish_audit(audit: Dict[str, Any]) -&gt; None:
+        """Raise when the final audit did not run cleanly enough to publish."""
+        if not isinstance(audit, dict) or not audit:
+            raise RuntimeError("最终只读审计未产生结果，拒绝标记报告为 completed")
+        hard = list(audit.get("hard_issues") or [])
+        gate = audit.get("publish_gate") or {}
+        hard.extend(
+            issue for issue in (gate.get("hard_issues") or []) if issue not in hard
+        )
+        if hard:
+&gt;           raise RuntimeError("最终发布完整性门未通过：" + "；".join(hard))
+E           RuntimeError: 最终发布完整性门未通过：news context artifact or audited Markdown differs from consumed generation
+
+backend/app/services/report_agent.py:10005: RuntimeError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/tmp/oddsense-e2e-fourth-20261018-1326/pytest-tmp/test_scripted_engine_to_publis0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x10ab76c60&gt;
+
+    @pytest.mark.guarded_runner
+    def test_scripted_engine_to_published_report_api_and_export(tmp_path, monkeypatch):
+        evidence_root = Path(os.environ["MAIN_OFFLINE_EVIDENCE"])
+        before = {name: _hash(REPO / name) for name in SOURCES}
+        receipt = {"schema": "oddsense-workflow/v1", "controlled_scripted": True,
+                   "live_provider_proof": False, "source_before": before, "stage": "imports"}
+        log = Log()
+        try:
+            monkeypatch.syspath_prepend(str(REPO / "deerflow_bridge"))
+            import news_signals as news
+            import market_intelligence as market
+            import research_gateway as rg
+            import linear_research as lr
+            import deerflow_research as bridge
+            from app.config import Config
+            from app.services import pipeline_orchestrator as po
+            from app.services import news_market_context as carrier_api
+            from app.services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
+            from app.services.official_data import capture_research_generation, bind_simulation_research
+            from app.services.simulation_manager import SimulationManager
+    
+            env = _config(monkeypatch)
+            transport, market_trace, model_trace, fetch_trace, tool_trace = NativeTransport(), [], [], [], []
+            receipt.update(provider_transport=transport.calls, market_transport=market_trace,
+                           model_trace=model_trace, fetch_trace=fetch_trace, tool_trace=tool_trace)
+            _market_http(monkeypatch, market, market_trace)
+            research = tmp_path / "research"
+            client = news.ContextClient(research, question=QUESTION, language="English", as_of=lr._utc_date(),
+                                      transport=transport, api_key="offline-news-sentinel",
+                                      news_enabled=True, social_enabled=False, max_news_requests=2)
+            model = ScriptedModel(rg, model_trace)
+            original_context = rg.ResearchTools.context_query
+    
+            def observed_context(self, name, query, *, agent_id, deadline=None):
+                result = original_context(self, name, query, agent_id=agent_id, deadline=deadline)
+                tool_trace.append({"name": name, "query": query, "agent_id": agent_id, "output": result})
+                return result
+            monkeypatch.setattr(rg.ResearchTools, "context_query", observed_context)
+    
+            def fetch(url):
+                assert url in [*NEWS_URLS, MARKET_URL], url
+                fetch_trace.append(url)
+                if url == MARKET_URL:
+                    return "# Synthetic capacity market\n\n" + _kalshi()["rules_primary"] + "\n\n" + ScriptedModel._paragraph("Market contract limitations", "")
+                return "# Synthetic capacity announcement\n\n" + ScriptedModel._paragraph("Publisher evidence", "")
+    
+            def tools_factory(ledger, pages, bridge, reporter, limits):
+                return rg.ResearchTools(ledger, pages, bridge=bridge, plog=reporter, limits=limits,
+                                        context_client=client, fetch_fn=fetch,
+                                        search_fn=lambda query, n: json.dumps({"query": query, "results": [
+                                            {"url": url, "title": article["title"], "content": article["description"]}
+                                            for url, article in zip(NEWS_URLS, _articles())]}))
+            args = SimpleNamespace(model=model.model_name, depth="quick", target_language="English", no_actors=True)
+            def gateway_factory(args, reporter, bridge, preset):
+                return rg.ModelGateway(model, reporter, max_concurrency=1, budget_units=preset.budget_units,
+                                       reserve_share=lr.RESERVE_SHARE, sleep=lambda seconds: None)
+            engine = lr._Engine(QUESTION, research, args, {}, log, lambda: None, bridge,
+                                gateway_factory, tools_factory, env)
+            receipt["stage"] = "full production engine"
+            assert engine.execute() == 0, (engine.meta, log.lines)
+            receipt["research_qa"] = engine.qa
+            assert engine.qa["passed"], engine.qa
+            assert all(engine.state.is_done(phase) for phase in lr.PHASES)
+            assert {row["name"] for row in tool_trace} &gt;= {"news_search", "market_compare"}
+            assert any(row["agent_id"] == "context-prefetch" for row in tool_trace)
+            assert any(row["agent_id"].startswith("K") and row["name"] == "market_compare" for row in tool_trace)
+            assert any(row["tool_results"] &gt;= 2 for row in model_trace if row["role"] == "agent")
+            assert set(fetch_trace) == {*NEWS_URLS, MARKET_URL}
+            assert any(row["host"] == "external-api.kalshi.com" for row in market_trace)
+            assert len([row for row in transport.calls if row["provider_host"] == "newsapi.org"]) &lt;= 2
+    
+            capture = news.load_context(research)
+            assert capture["sealed"] is True and capture["as_of"] == engine.plan.as_of
+            assert engine.qa["news_market_context_sha256"] == capture["sha256"]
+            items = {item["url"]: item for item in capture["items"]}
+            assert set(items) == {*NEWS_URLS, MARKET_URL}, capture
+            kalshi = items[MARKET_URL]
+            assert kalshi["id"] == "kalshi:" + TICKER and kalshi["probability"] == .41
+            assert kalshi["yes_bid"] == .4 and kalshi["yes_ask"] == .44
+            assert kalshi["quote_at"] is None and kalshi["rules_primary"] == _kalshi()["rules_primary"]
+            assert all(item["eligibility"] == ELIGIBILITY for item in items.values())
+            assert all(item["provider"] == "newsapi" for url, item in items.items() if url in NEWS_URLS)
+            assert "offline-news-sentinel" not in json.dumps(capture)
+            research_markdown = (research / "research_report.md").read_text()
+            sources = _json(research / "sources.json")
+            refs = {row["url"]: f"S{index}" for index, row in enumerate(sources, 1)}
+            assert set(refs) == set(items)
+            source_proofs = []
+            for row in sources:
+                item = items[row["url"]]
+                assert row["context_id"] == item["id"] and row["provider"] == item["provider"]
+                assert row["eligibility"] == ELIGIBILITY and row["source_origin"] == "fetched"
+                # Repeated discovery may retain several captures of one native item.
+                # The cited ledger row must match an actual retained capture exactly.
+                retained = [record for query in capture["queries"] for record in query["items"]
+                            if record["id"] == row["context_id"]
+                            and record["url"] == row["url"]
+                            and record["published_at"] == row["published_at"]
+                            and record["retrieved_at"] == row["retrieved_at"]]
+                assert retained, (row, capture["queries"])
+                source_proofs.append({"source_ref": refs[row["url"]], "capture": retained[0]})
+                assert f"[{refs[row['url']]}]" in research_markdown
+                ledger_row = engine.ledger.find(row["url"])
+                assert ledger_row["fetched"] is True
+                assert _hash(engine.work / ledger_row["page_path"]) == row["content_sha256"]
+            reloaded_ledger = rg.SourceLedger(engine.work / "sources_ledger.json", bridge=bridge)
+            assert reloaded_ledger.rows() == engine.ledger.rows()
+            assert not (research / "prediction_markets.json").exists()
+            assert _json(research / "quantitative.json") == []
+    
+            receipt["stage"] = "parent promotion and consumed generation"
+            monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"))
+            pipeline_id = "pipe_oddsense"
+            promoted = Path(po.PipelineManager.handoff_dir(pipeline_id))
+            seal = po._promote_research_contract(str(research), str(promoted))
+            assert po._validate_research_contract(str(promoted))
+            capture_raw = (research / news.CONTEXT_FILENAME).read_bytes()
+            assert (promoted / news.CONTEXT_FILENAME).read_bytes() == capture_raw
+            assert seal["files"][news.CONTEXT_FILENAME]["sha256"] == hashlib.sha256(capture_raw).hexdigest()
+            assert carrier_api.load_context(promoted) == capture
+            sims = tmp_path / "simulations"
+            (sims / "sim_oddsense").mkdir(parents=True)
+            monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(sims))
+            monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(sims))
+            consumed = capture_research_generation(promoted)
+            bind_simulation_research("sim_oddsense", promoted, pipeline_id=pipeline_id, expected_generation=consumed)
+            assert carrier_api.load_for_simulation("sim_oddsense") == capture
+            receipt.update(capture=capture, research_sources=sources, final_source_refs=refs,
+                           source_capture_proofs=source_proofs,
+                           promotion=seal, consumed_generation=consumed)
+    
+            receipt["stage"] = "real report publication"
+            for name, value in {"REPORT_STRUCTURED_FORECAST": True, "REPORT_PUBLISH_GATE": True,
+                                "REPORT_CITATION_FINALIZER": True, "REPORT_EDITORIAL_LINT": True,
+                                "REPORT_FINAL_READ_ONLY_AUDIT": True, "REPORT_VIZ_CHARTS": False}.items():
+                monkeypatch.setattr(Config, name, value, raising=False)
+            monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
+            report_id = "report_oddsense"
+            report_dir = Path(ReportManager._ensure_report_folder(report_id))
+            external = NoExternalIntelligence()
+            agent = ReportAgent("graph_oddsense", "", QUESTION, llm_client=external, zep_tools=external,
+                                research_report=research_markdown, sources=_json(promoted / "sources.json"),
+                                news_market_context=carrier_api.load_for_simulation("sim_oddsense"))
+            assert agent.news_market_context == capture
+            assert all(url in agent._prepend_research_background("Scripted analysis") for url in items)
+            assert not agent._prediction_markets
+            agent._forecast_spine = _forecast()
+            (report_dir / "forecast.json").write_text(json.dumps(agent._forecast_spine))
+            ReportManager.save_news_market_context(report_id, agent.news_market_context)
+            assert ReportManager.load_report_news_market_context(report_id) == capture
+            report_capture_raw = (report_dir / news.CONTEXT_FILENAME).read_bytes()
+            report = Report(report_id=report_id, simulation_id="sim_oddsense", graph_id="graph_oddsense",
+                            simulation_requirement=QUESTION, status=ReportStatus.COMPLETED,
+                            markdown_content=research_markdown, created_at="2026-10-18T00:00:00Z",
+                            completed_at="2026-10-18T00:01:00Z")
+            ReportManager.save_report(report)
+            # These are the same deterministic finalization/publication entrypoints
+            # exercised by the official-data acceptance test; no admission bypass.
+            agent._append_news_market_context(report_id, report)
+            agent._prepend_binary_forecasts_section(report_id, report)
+            agent._append_resolution_section(report_id, report)
+            agent._apply_report_lint(report_id, report)
+            stabilization = agent._stabilize_publish_markdown(report_id, report, max_passes=6)
+&gt;           audit = agent._enforce_final_publish_audit(report_id, report)
+
+backend/tests/test_oddsense_workflow.py:439: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;app.services.report_agent.ReportAgent object at 0x10af897c0&gt;
+report_id = 'report_oddsense'
+report = Report(report_id='report_oddsense', simulation_id='sim_oddsense', graph_id='graph_oddsense', simulation_requirement='W..._at='2026-10-18T00:01:00Z', error=None, failed_sections=[], filter_safe_sections={}, telemetry=None, translations=None)
+
+    def _enforce_final_publish_audit(
+        self, report_id: str, report: "Report"
+    ) -&gt; Dict[str, Any]:
+        """Run the authoritative audit and convert execution failure into a hard stop."""
+        try:
+            audit = self._audit_final_published_markdown(report_id, report)
+            self._require_final_publish_audit(audit)
+            return audit
+        except Exception as exc:  # noqa: BLE001 — caller must enter the failed-report path
+&gt;           raise RuntimeError(
+                "最终只读审计/发布完整性门失败，报告不标记为 completed："
+                f"{exc}"
+            ) from exc
+E           RuntimeError: 最终只读审计/发布完整性门失败，报告不标记为 completed：最终发布完整性门未通过：news context artifact or audited Markdown differs from consumed generation
+
+backend/app/services/report_agent.py:10022: RuntimeError</failure></testcase><testcase classname="tests.test_oddsense_workflow" name="test_optional_reddit_denial_and_unknown_time_reach_real_tool_and_store[403-forbidden]" time="0.033" /><testcase classname="tests.test_oddsense_workflow" name="test_optional_reddit_denial_and_unknown_time_reach_real_tool_and_store[200-partial]" time="0.029" /><testcase classname="tests.test_oddsense_workflow" name="test_off_engine_preserves_missing_context_without_acquisition" time="0.011" /></testsuite></testsuites>

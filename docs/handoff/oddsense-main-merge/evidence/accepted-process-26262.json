@@ -1,0 +1,25 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 26262,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/config.py": "91402879193ccfd58f4bccc2013ab26335c2dea63bd96459f4673e130fef12cf",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-oddsense-merge-accepted-hgwdqiet/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

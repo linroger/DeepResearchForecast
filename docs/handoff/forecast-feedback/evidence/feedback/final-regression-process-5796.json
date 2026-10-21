@@ -1,0 +1,68 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 5796,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 2,
+    "blocked:external_read": 18,
+    "allowed:guarded_child": 4
+  },
+  "source_sha256": {
+    "/private/tmp/drf-feedback-final-EE0asH/backend/scripts/main_offline_pytest.py": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_track_record.py": "b10619ed839a53d3b3ddeff5929f25428c89c7a3487daa3cbb7c1ccbb5963caf",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_ledger.py": "0b3bc917680e7e15c97470f29849ed3df874ebaa3defa6cdd2b2ef0c23ca1249",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_resolution_monitor.py": "6924482eacb5b4d099cd69091f84b280fddce09793d4e373fdbfc21ba156a19c",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_resolution_autorun.py": "ab630b8075cb0c4d40ed3ac7e086d1cb37bbda96d8300902fd23ab848ddbc412",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_sdk_publication_barrier.py": "e1bdf6daa385cc418b33bc1ecd03bf11c3efcde1def9803ba38d1a6cd6b846ea",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_report_publication_barrier.py": "31fde5d86d98d0266dfeed9a491b5946d59e3127c80a802abbb05be0c1075fe5",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_final_publish_audit.py": "877b6611b3cda22297fc9f8344a8042ab3ac828abff308f117d11b3404ba6d16",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_report_data_publication.py": "8472b3c32742524eecdc573dece0f8829d7bd452363af7b0b661444459cff3de",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_report_official_publication_real.py": "208c6cd7919151d586e136e9db7168e0ccf350d17dd2123809e1658671fba8a6",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_calibration_rigor.py": "eaab60f94fc10947859eb0006ba2000e49b97d31a548648dd96d2ca279700aa0",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_extractor_official.py": "ace7ebfefc99c2abc20670cfb88330729a1abb4a8f36ba95a30bb3f9ab01a2b9",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_report_forecast_localization.py": "9dbb1873f88540e35fe37ce957b4bd0d68aed175f24d3b7a45422925e6964fdb",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_report_official_data.py": "535151e0a25dd46274c6a81264734c8e1ae951ce1dd7703407a8041c35734481",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/app/config.py": "78447139477bf6da35fca2026fb3953f949a42cf880566ccfc65b0da757d9cbe",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-feedback-final-EE0asH/backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "/private/tmp/drf-feedback-final-20261021-1/pytest-tmp/test_separate_guarded_processe0/publish_child.py": "7a799eb9cebabb8fe3c6135beabd6c6a817d734888227e5aa05093083fa6a9ce"
+  },
+  "children": {
+    "5958": {
+      "exit_code": 0,
+      "receipt": "process-5958.json"
+    },
+    "5959": {
+      "exit_code": 0,
+      "receipt": "process-5959.json"
+    },
+    "5960": {
+      "exit_code": 0,
+      "receipt": "process-5960.json"
+    },
+    "6120": {
+      "exit_code": 0,
+      "receipt": "process-6120.json"
+    }
+  },
+  "identity_preserved": true
+}
