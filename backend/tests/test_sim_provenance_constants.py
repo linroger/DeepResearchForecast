@@ -113,6 +113,13 @@ def test_visualizer_and_brief_take_their_strings_from_the_constants():
         assert "simulation run" not in src, name
 
 
+def test_frontend_gallery_captions_carry_the_simulated_titles():
+    js = (REPO_ROOT / "frontend" / "src" / "utils" / "vizManifest.js").read_text(encoding="utf-8")
+    assert f"'{sp.CHART_OUTCOME_SHARES_EN}': '{sp.CHART_OUTCOME_SHARES_ZH}'" in js
+    assert f"'{sp.CHART_WORLD_VARIABLES_EN}': '{sp.CHART_WORLD_VARIABLES_ZH}'" in js
+    assert "Forecast Outcome-Share Trajectory" not in js
+
+
 def test_report_agent_quote_labels_are_the_constants():
     from app.services.report_agent import ReportAgent
     assert tuple(ReportAgent._SIM_QUOTE_LABELS) == tuple(sp.SIM_QUOTE_LABELS)
