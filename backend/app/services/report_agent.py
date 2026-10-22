@@ -5169,11 +5169,13 @@ class ReportAgent:
                         ).get("themes") or None
                     except Exception:  # noqa: BLE001 — 主题派生失败退回主题无关措辞
                         _themes = None
-                # XRUN-1(b): 注入模拟量化信号包（缺失时为骨架单独构建一次），让 Part-1 概率
-                # 对模拟敏感——两次不同模拟产出逐字节相同的概率向量即证明此前模拟被完全忽略。
+                # The simulation signal pack reaches binary extraction only under the
+                # fixture-only legacy_prompt policy (forecast_extractor gates it); under
+                # diagnostic_only the extractor ignores it (ADR 0003, I-21). Identical
+                # probabilities across different simulations are the intended outcome.
                 _sig = "" if getattr(self, "_world_binding", None) else self._signal_pack
                 if (not getattr(self, "_world_binding", None)
-                        and not _sig and getattr(Config, "FORECAST_SIM_SENSITIVITY", True)):
+                        and not _sig and getattr(Config, "FORECAST_SIM_SENSITIVITY", False)):
                     try:
                         _sig = self._build_signal_pack()
                     except Exception:  # noqa: BLE001
