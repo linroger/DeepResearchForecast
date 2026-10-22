@@ -550,3 +550,70 @@ def test_final_gate_scans_chinese_target_headings_tables_quotes_and_links(
     assert audit["lint"]["language_contamination"]["lines"] == 4
     assert audit["hard_passed"] is False
     assert audit["publish_gate"]["hard_passed"] is False
+
+
+# ── ADR 0003 slice S3, T13: the fenced scenario-simulation bridge ───────────
+
+def _bridge_audit_base() -> dict:
+    return {
+        "disk_matches_memory": True,
+        "citation_markers": {"dangling": []},
+        "citation_artifacts": {"issues": []},
+        "lint": {"changed": False},
+    }
+
+
+def test_final_integrity_flags_bridge_count_and_bytes_by_policy():
+    def issues(bridge: dict) -> list:
+        return ReportAgent._final_audit_integrity_issues({**_bridge_audit_base(), "simulation_bridge": bridge})
+
+    diagnostic = {"policy": "diagnostic_only", "expected_count": 1, "sha256": "abc"}
+    assert issues({**diagnostic, "count": 1, "bytes_match": True}) == []
+    for count in (0, 2):
+        found = issues({**diagnostic, "count": count, "bytes_match": False})
+        assert len(found) == 1 and "simulation bridge block count" in found[0] and "requires 1" in found[0]
+    found = issues({**diagnostic, "count": 1, "bytes_match": False})
+    assert found == ["simulation bridge bytes differ from the deterministic renderer"]
+    no_update = {"policy": "no_update", "expected_count": 0, "sha256": None}
+    assert issues({**no_update, "count": 0, "bytes_match": True}) == []
+    found = issues({**no_update, "count": 1, "bytes_match": False})
+    assert len(found) == 1 and "requires 0" in found[0] and "no_update" in found[0]
+    # an audit without the field (older audits) adds nothing
+    assert ReportAgent._final_audit_integrity_issues(_bridge_audit_base()) == []
+
+
+def test_sim_bridge_audit_block_counts_blocks_and_compares_bytes():
+    from app.services import sim_provenance as sp
+    from app.services.report_agent import _sim_bridge_blocks, render_sim_bridge
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", "sim",
+                           "simulation_record.paths.json"), encoding="utf-8") as handle:
+        record = json.load(handle)
+    block = render_sim_bridge(record, chinese=False, spine=_forecast(), chart_rel_paths=None,
+                              whatif_table_md="", record_sha256="feed")
+    body = "# R\n\n## A\n\nProse.\n\n"
+    one = body + block + "\n"
+    two = one + "\n" + block + "\n"
+    mutated = body + block.replace("| Escalation |", "| Escalation (edited) |") + "\n"
+    none = body
+    assert _sim_bridge_blocks(two) == [block, block]
+    expect_one = ReportAgent._sim_bridge_audit_block(one, block)
+    assert expect_one == {"expected_count": 1, "count": 1, "bytes_match": True,
+                          "sha256": hashlib.sha256(block.encode("utf-8")).hexdigest()}
+    assert ReportAgent._sim_bridge_audit_block(two, block)["count"] == 2
+    assert ReportAgent._sim_bridge_audit_block(two, block)["bytes_match"] is False
+    assert ReportAgent._sim_bridge_audit_block(none, block) == {
+        "expected_count": 1, "count": 0, "bytes_match": False,
+        "sha256": hashlib.sha256(block.encode("utf-8")).hexdigest()}
+    assert ReportAgent._sim_bridge_audit_block(mutated, block)["bytes_match"] is False
+    # no_update / other engines expect none: a stray block is counted, nothing is expected
+    assert ReportAgent._sim_bridge_audit_block(none, "") == {
+        "expected_count": 0, "count": 0, "bytes_match": True, "sha256": None}
+    assert ReportAgent._sim_bridge_audit_block(one, "")["bytes_match"] is False
+    # the marker pair is the fence: nothing inside it reaches the final lint
+    assert sp.BRIDGE_START in block and sp.BRIDGE_END in block
+    for audit_md in (one, two):
+        issues = ReportAgent._final_audit_integrity_issues({
+            **_bridge_audit_base(),
+            "simulation_bridge": {**ReportAgent._sim_bridge_audit_block(audit_md, block),
+                                  "policy": "diagnostic_only"}})
+        assert (issues == []) is (audit_md == one)
