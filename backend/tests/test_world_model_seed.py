@@ -374,6 +374,22 @@ def test_v3_plans_come_from_stated_commitments_and_action_phrased_goals():
     assert len(wms.derive_v3_plans(many)) == wms.MAX_PLANS
 
 
+def test_v3_plans_include_military_and_coercive_moves_but_not_postures():
+    """pipe_0827b81a9998 (Russia–Ukraine/Iran): the geopolitical dossier words goals as concrete
+    offensive/coercive moves ("Capture rest of Donetsk oblast") that the trade-war verb list
+    missed, so sovereign actors landed in actor_without_plans.  Posture verbs (preserve/keep/
+    maintain) stay excluded per the fixture comment above."""
+    russia = {"name": "Government of Russia", "stance": "Fighting while negotiating",
+              "goals": ["Capture rest of Donetsk oblast", "Economic normalization with US"]}
+    assert wms.derive_v3_plans(russia) == ["Capture rest of Donetsk oblast"]
+    irgc = {"name": "IRGC", "stance": "Threatens cables through Hormuz",
+            "goals": ["Preserve enrichment and asymmetric leverage", "Resist concessions"]}
+    assert wms.derive_v3_plans(irgc) == []          # postures, not committed moves
+    coercive = {"goals": ["Blockade the Strait", "Degrade drone launch capacity",
+                          "Strike refineries", "Target grid nodes"]}
+    assert wms.derive_v3_plans(coercive) == coercive["goals"]
+
+
 def test_v3_red_lines_come_from_non_negotiable_wording_only():
     trump, xi, piie, mofcom = _v3_actors()["actors"]
     assert wms.derive_v3_red_lines(trump) == ["Will not accept a deal without verified soybean purchases",

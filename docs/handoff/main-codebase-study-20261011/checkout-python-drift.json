@@ -1,0 +1,44 @@
+{
+  "checked_utc": "2026-10-11T15:40:39.745974+00:00",
+  "source_commit": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "current_head": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "difference_scope": "Concurrent working-tree differences, excluded from committed-main study. No attribution to a particular agent.",
+  "python_differences": [
+    {
+      "path": "backend/app/config.py",
+      "source_sha256": "9bf12830c853554755b874e5b2278ee6a8bb0e07df6be64ed909549a3c1b4f08",
+      "checkout_sha256": "664c3efc2163688bde8027e6035a4f227b1cea61d4b79012261c5bc59a8386ea"
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "source_sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+      "checkout_sha256": "bdc1c33e31320e1cf2a870663bcb1981f9f707fc967371d306ffbd3a5058a7a9"
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "source_sha256": "e01454bd2768b740b62c8ae7fa58828543fcffc57a006e8d06f04a05aab024d9",
+      "checkout_sha256": "1fcc05fc9b39ae8bddd8beed78c92f49ea9eded8794b6fa13a9126017512cfba"
+    },
+    {
+      "path": "backend/tests/test_bridge_extensions_config.py",
+      "source_sha256": "fc74fad7e9183f5fb811619e9732b910fdbd613f6f933a571b6c0f276fdf21d9",
+      "checkout_sha256": "d43b67670eca8fd8c7f988460a03229c775e08f71205175e80c13238d6796ace"
+    },
+    {
+      "path": "backend/tests/test_deerflow_bridge_sync_guard.py",
+      "source_sha256": "8650a55e5a165235d11f5f5afa3ff886c1d052f5b5db7a7e2999ccdac3c85a52",
+      "checkout_sha256": "f96c83410231ed14f557d26c8bd45405541a85a2dfa2e490688df8489b7ac059"
+    },
+    {
+      "path": "backend/tests/test_runtime_skill_sync.py",
+      "source_sha256": "e2c047def55cad0d6ebc72afc00a0c60fbed69bfc8d8546efd5a3ddd6b33afce",
+      "checkout_sha256": "a37d912570a6bd9302869265eefda67dd49cd089f1a57b9e1140af41bbcbf8e8"
+    },
+    {
+      "path": "deerflow_bridge/runtime_skill_sync.py",
+      "source_sha256": "f503ea00d3068cb965cf33dbf80f9ee3e44490a377f56304761365c4a559ab9a",
+      "checkout_sha256": "f34554b3581a17dcbb7118e2175136663e52fc09a32a161b2dbe983087fccb10"
+    }
+  ],
+  "study_write_scope": "docs/handoff/main-codebase-study-20261011 only, plus the explicitly assessed reusable-skill extension"
+}

@@ -281,6 +281,37 @@ def policy_fixture(**changes):
             "simulation_forecast_effect": "diagnostic_only", **changes}
 
 
+@pytest.mark.parametrize("admitted_effect", ["legacy_prompt", "diagnostic_only"])
+def test_merged_simulation_anchor_obeys_saved_policy_at_actual_report_caller(
+        make_agent, monkeypatch, tmp_path, admitted_effect):
+    """The new legacy anchor cannot turn diagnostic projections into forecast evidence."""
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT",
+                        "diagnostic_only" if admitted_effect == "legacy_prompt" else "legacy_prompt")
+    monkeypatch.setattr(Config, "REPORT_SPINE_ANCHOR_WORLDSTATE", True)
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "simulations"))
+    agent = make_agent(report_policy=policy_fixture(simulation_forecast_effect=admitted_effect))
+    folder = tmp_path / "simulations" / agent.simulation_id
+    folder.mkdir(parents=True)
+    shares = {"SIM_ANCHOR_MARKER": 1.0}
+    (folder / "world_state_trajectory.json").write_text(json.dumps({
+        "validity": "valid", "outcome": {"shares": shares}}))
+    (folder / "simulation_config.json").write_text(json.dumps({"temporal_config": {
+        "as_of_date": "2026-10-22", "horizon_date": "2029-12-31"}}))
+    report_id = "report_merged_anchor_" + admitted_effect
+    ReportManager._ensure_report_folder(report_id)
+    agent._derive_and_pin_forecast_spine(report_id)
+    assert agent._forecast_spine and agent.llm.calls
+    stored = json.loads((Path(ReportManager._get_report_folder(report_id)) / "forecast.json").read_text())
+    consumed = "SIM_ANCHOR_MARKER" in json.dumps(agent.llm.calls)
+    if admitted_effect == "legacy_prompt":
+        assert consumed
+        assert stored["base_distribution"] == shares
+        assert stored["simulation_anchor"]["mode"] == "band"
+    else:
+        assert not consumed
+        assert "base_distribution" not in stored and "simulation_anchor" not in stored
+
+
 def test_policy_is_detached_and_missing_or_invalid_controls_fail_closed(make_agent, monkeypatch):
     policy = policy_fixture()
     agent = make_agent(report_policy=policy)

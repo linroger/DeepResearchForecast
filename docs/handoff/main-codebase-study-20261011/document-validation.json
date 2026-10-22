@@ -1,0 +1,12 @@
+{
+  "checked_utc": "2026-10-11T16:24:48.140348+00:00",
+  "documents": 16,
+  "distinct_source_anchors_checked": 2833,
+  "source_anchor_errors": [],
+  "local_markdown_links_checked": 208,
+  "local_link_errors": [],
+  "independently_reviewed_study_sha256": "82f7db7e813ce9ab839b7f2d670086fe8c7dd548967bf7d274619708bad89d56",
+  "review_status": "All material factual corrections closed in independent-review.md.",
+  "verdict": "PASS",
+  "limits": "Path/line checks and independent source review; no runtime or remote URL availability proof."
+}

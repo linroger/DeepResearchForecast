@@ -1,0 +1,11 @@
+{
+  "source_commit": "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+  "checked_utc": "2026-10-15T20:41:31.896488+00:00",
+  "markdown_files": 14,
+  "distinct_source_anchors": 2896,
+  "markdown_links_checked": 1370,
+  "mermaid_blocks": 22,
+  "errors": [],
+  "status": "passed",
+  "mermaid": "Source claims and code fences checked; no raster-rendering proof claimed."
+}

@@ -1,0 +1,83 @@
+{
+  "policy_change": "Only signal zero for a previously registered child is admitted after reaping. Existing self/live-child rules preserved. Mutating signals to reaped or unknown PIDs, unknown zero probes and reaped process-group probes remain denied.",
+  "baseline_source": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+  "new_guard_sha256": "53fc29d5ec7657f31ade5265183e032dcfe54c8cea88d2e339ec905da14af2fa",
+  "controls_sha256": "db06ac101a22d22284ebaa7696ec97a6602d528d3471272fa7f6d96912acf4dd",
+  "self_test_cases": 24,
+  "focused_cases": 31,
+  "evidence": {
+    "self-evidence": {
+      "receipt": "/private/tmp/drf-oddsense-liveness-guard-9_vldm6d/self-evidence/completed.json",
+      "sha256": "9942bc8a249d82cc6ac34e1401b7502694f8bcec04d5382b3e9f746f80806228",
+      "exit_code": 0,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "allowed:guarded_child": 4,
+        "blocked:child_process_limit": 3,
+        "blocked:credential_path": 7,
+        "blocked:external_write": 11,
+        "blocked:identity_environment": 1,
+        "blocked:sqlite_uri": 9,
+        "blocked:network:socket.__new__": 2,
+        "blocked:network:socket.getaddrinfo": 3,
+        "blocked:network:socket.bind": 1,
+        "quarantine:oasis_import_cwd": 3,
+        "blocked:external_read": 25,
+        "blocked:process:subprocess.Popen": 6,
+        "allowed:child_liveness": 2,
+        "blocked:process:os.kill": 3,
+        "blocked:process:os.killpg": 1,
+        "blocked:saved_data": 1,
+        "blocked:changed_child_script": 1,
+        "allow:directory_traversal": 4
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "children": {
+        "46941": {
+          "exit_code": 0,
+          "receipt": "process-46941.json"
+        },
+        "46942": {
+          "exit_code": 0,
+          "receipt": "process-46942.json"
+        },
+        "47062": {
+          "exit_code": 0,
+          "receipt": "process-47062.json"
+        },
+        "47063": {
+          "exit_code": 0,
+          "receipt": "process-47063.json"
+        }
+      }
+    },
+    "focused-evidence": {
+      "receipt": "/private/tmp/drf-oddsense-liveness-guard-9_vldm6d/focused-evidence/completed.json",
+      "sha256": "049be72cff766c1e9085918757ce08920bc28f687ee1ef064ed039b9e12570cf",
+      "exit_code": 0,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 2,
+        "allowed:child_liveness": 2
+      },
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "children": {
+        "46943": {
+          "exit_code": 0,
+          "receipt": "process-46943.json"
+        },
+        "46944": {
+          "exit_code": 0,
+          "receipt": "process-46944.json"
+        }
+      }
+    }
+  }
+}

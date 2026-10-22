@@ -2147,7 +2147,7 @@ WORLD_STATE_MAX_BYTES = 8 * 1024 * 1024
 WORLD_STATE_MAX_HISTORY = 200
 WORLD_STATE_MAX_EVENTS = 40
 WORLD_STATE_MAX_PROBLEMS = 12      # arbiter problems kept per history row (the kernel records at most 12)
-WORLD_STATE_MAX_DIGEST = 2000      # per-round digest text, the same bound as the latest digest
+WORLD_STATE_MAX_DIGEST = 20000     # 2026-10-21: digest 不截断（保留病理上限）
 
 
 def _bounded_jsonl_rows(path: str):
@@ -2350,10 +2350,10 @@ def get_simulation_world_state(simulation_id: str):
             problems = row.get("arbiter_problems") if isinstance(row.get("arbiter_problems"), list) else []
             entry = {
                 "round": row.get("round"), "period_label": row.get("period_label"),
-                "headline": str(row.get("headline") or "")[:300],
-                "narrative": str(row.get("narrative") or "")[:700],
+                "headline": str(row.get("headline") or "")[:2000],
+                "narrative": str(row.get("narrative") or "")[:8000],
                 "arbiter_status": row.get("arbiter_status"),
-                "arbiter_problems": [str(p)[:200] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
+                "arbiter_problems": [str(p)[:600] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
                 "decisions": row.get("decisions"),
                 "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
                 "scenario_pressure": row.get("scenario_pressure") or {},
@@ -2399,9 +2399,9 @@ def get_simulation_world_state(simulation_id: str):
         data = {
             "simulation_id": str(simulation_id),
             "committed_round": payload.get("committed_round"),
-            "headline": str(payload.get("headline") or "")[:300],
+            "headline": str(payload.get("headline") or "")[:2000],
             "brief": str(payload.get("brief") or "")[:4000],
-            "digest": str(payload.get("digest") or "")[:2000],
+            "digest": str(payload.get("digest") or "")[:WORLD_STATE_MAX_DIGEST],
             "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
             "question": world.get("question"),
             "as_of_date": world.get("as_of_date"),
@@ -3237,3 +3237,35 @@ def get_world_result(simulation_id: str):
         return jsonify({"success": False, "error": str(exc), "code": exc.code}), 409 if conflict else 400
     except (ValueError, TypeError) as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
+
+
+# ───────────────────── 2026-10-21: simulation translation overlay ─────────────────────
+
+@simulation_bp.route('/<sim_id>/translations/<lang>', methods=['POST'])
+def generate_simulation_translation(sim_id: str, lang: str):
+    """Translate the simulation panel's text (question, scenario names, variable
+    names/rationales/latest causes, per-round digests) into <lang>. Sha-keyed cache
+    under the sim dir; compliance ladder degrades content-filter hits per fragment."""
+    lang = (lang or '').strip().lower()
+    if lang not in ('zh', 'en'):
+        return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
+    try:
+        from ..services.artifact_translation import start_translation
+        result = start_translation("simulation", sim_id, lang, force=bool(request.args.get('force')))
+        return jsonify({"success": True, "data": result}), 202
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"模拟翻译失败: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@simulation_bp.route('/<sim_id>/translations/<lang>', methods=['GET'])
+def get_simulation_translation(sim_id: str, lang: str):
+    lang = (lang or '').strip().lower()
+    if lang not in ('zh', 'en'):
+        return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
+    try:
+        from ..services.artifact_translation import translation_status
+        result = translation_status("simulation", sim_id, lang)
+        return jsonify({"success": True, "data": result})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"success": False, "error": str(e)}), 500

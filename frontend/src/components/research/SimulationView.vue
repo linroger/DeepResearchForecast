@@ -149,6 +149,9 @@
               </div>
               <div class="post-meta">
                 <span class="post-author">{{ authorName(post) }}</span>
+                <span class="repost-note" v-if="isRepost(post)">
+                  🔁 {{ L('转发自', 'reposted') }} <b>{{ repostAuthorName(post) }}</b>
+                </span>
                 <span class="post-sub">
                   <span class="plat-tag">{{ platformTag }}</span>
                   <span class="post-time mono" v-if="relativeTime(post)">· {{ relativeTime(post) }}</span>
@@ -319,6 +322,22 @@ function postText(post) {
   if (!isPlainObject(post)) return ''
   const raw = post.content ?? post.text ?? post.message ?? ''
   return raw == null ? '' : String(raw).trim()
+}
+
+// 2026-10-22: 转发行归因——repost 的 content 是原文的逐字副本，此前显示成转发者的
+// 原创（IRGC "转发" Trump 的推文被读成 IRGC 用 Trump 的口吻发帖）。现在标注转发关系。
+const postsById = computed(() => {
+  const m = {}
+  asArray(posts.value).forEach((p) => { if (p && p.post_id != null) m[String(p.post_id)] = p })
+  return m
+})
+function isRepost(post) {
+  return !!(post && post.original_post_id != null && String(post.original_post_id) !== 'None'
+            && String(post.original_post_id) !== String(post.post_id))
+}
+function repostAuthorName(post) {
+  const parent = postsById.value[String(post.original_post_id)]
+  return parent ? authorName(parent) : (L('原帖', 'original'))
 }
 
 function authorName(post) {
@@ -1310,4 +1329,9 @@ onUnmounted(() => {
     max-height: 480px;
   }
 }
+</style>
+
+<style scoped>
+.repost-note { display:block; font-size:11.5px; color: var(--muted, #888); margin: 1px 0 2px; }
+.repost-note b { color: inherit; font-weight: 600; }
 </style>

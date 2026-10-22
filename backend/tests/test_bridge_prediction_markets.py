@@ -1086,69 +1086,13 @@ def test_build_report_judge_prompt_is_json_only():
 
 # ---------------------------------------------------------------- PM-6 price-history parse
 
-def test_pm_parse_price_history_shapes():
-    data = {"history": [{"t": 1700000000, "p": 0.42}, {"t": 1700086400, "p": 0.5}]}
-    assert d._pm_parse_price_history(data, days=0) == [
-        {"t": 1700000000, "p": 0.42}, {"t": 1700086400, "p": 0.5}]
-    # 少数形态直接是点数组
-    assert d._pm_parse_price_history([{"t": 1, "p": 0.1}], days=0) == [{"t": 1, "p": 0.1}]
-    # 脏点（缺 t/缺 p/非 dict）跳过
-    assert d._pm_parse_price_history({"history": [{"t": None, "p": 0.1}, "x", {"p": 0.2}]}, days=0) == []
-    # 非预期形状 → []
-    assert d._pm_parse_price_history(None) == []
-    assert d._pm_parse_price_history({"nope": 1}) == []
 
 
-def test_pm_parse_price_history_days_trim():
-    import time
-    now = int(time.time())
-    old = now - 100 * 86400          # 100 天前 → 被 90 天窗口裁掉
-    recent = now - 10 * 86400        # 10 天前 → 保留
-    out = d._pm_parse_price_history({"history": [{"t": old, "p": 0.3}, {"t": recent, "p": 0.6}]}, days=90)
-    ts = [pt["t"] for pt in out]
-    assert old not in ts and recent in ts
 
 
-def test_pm_fetch_price_history_empty_token_no_network():
-    """空 token → [] 且不触网（degrade-to-empty）。"""
-    assert d._pm_fetch_price_history("") == []
-    assert d._pm_fetch_price_history(None) == []
 
 
-# ---------------------------------------------------------------- PM-6 clob_token_ids on normalize
 
-def test_normalize_market_extracts_clob_token_ids():
-    raw = {
-        "id": "123", "question": "Will X happen?",
-        "outcomes": '["Yes","No"]', "outcomePrices": '["0.4","0.6"]',
-        "volume": 5000, "closed": False,
-        "clobTokenIds": '["0xaaa","0xbbb"]',
-    }
-    row = d._pm_normalize_market(raw, matched_query="x", min_volume=200)
-    assert row is not None
-    assert row["clob_token_ids"] == ["0xaaa", "0xbbb"]
-    # 缺 clobTokenIds → 键不出现（不造假）
-    raw2 = dict(raw)
-    raw2.pop("clobTokenIds")
-    row2 = d._pm_normalize_market(raw2, matched_query="x", min_volume=200)
-    assert "clob_token_ids" not in row2
-
-
-# ---------------------------------------------------------------- LOOP-009 canonical in-loop market delivery
-
-def test_market_report_match_prefers_machine_identity_and_is_conservative():
-    market = {
-        "market_id": "691340",
-        "question": "AI bubble burst in 2026?",
-        "implied_yes_prob": 0.1545,
-        "url": "https://polymarket.com/event/ai-bubble-burst-in-2026",
-    }
-    assert d._market_is_cited_in_report(
-        "The evidence diverges from market 691340, currently 15.45%.", market)
-    assert d._market_is_cited_in_report(
-        "See https://polymarket.com/event/ai-bubble-burst-in-2026 for the live quote.", market)
-    assert not d._market_is_cited_in_report(
-        "A celebrity election market has no bearing on semiconductor demand.", market)
 
 
 def test_tool_candidate_loader_skips_bad_lines_and_keeps_latest_quote(tmp_path):
@@ -1257,38 +1201,51 @@ def test_pm_normalize_market_emits_yes_token_for_reversed_outcomes():
     assert row["implied_yes_prob"] == 0.125
 
 
-def test_pm_yes_leg_token_resolution_order():
-    assert d._pm_yes_leg_token({"clob_yes_token_id": "explicit"}) == "explicit"
-    assert d._pm_yes_leg_token({"clob_token_ids": ["tn", "ty"],
-                                "outcomes": ["No", "Yes"]}) == "ty"
-    # 定位不到 Yes 腿 → 空串（fail-closed，绝不猜 clob_ids[0]）
-    assert d._pm_yes_leg_token({"clob_token_ids": ["t0", "t1"]}) == ""
-    assert d._pm_yes_leg_token({"clob_token_ids": ["t0"],
-                                "outcomes": ["Alpha", "Beta"]}) == ""
 
 
-def test_collect_price_history_fetches_yes_leg_not_index_zero(monkeypatch, tmp_path):
-    """历史价抓取必须走 Yes 腿：["No","Yes"] 市场抓 tok-yes（旧行为抓 clob_ids[0]=NO 腿），
-    定位不到 Yes 腿的市场跳过而非猜腿。"""
-    from pathlib import Path
 
-    calls = []
 
-    def _fake_fetch(token, interval="1d", days=90):
-        calls.append(token)
-        return [{"t": 1, "p": 0.5}]
 
-    monkeypatch.setattr(d, "_pm_fetch_price_history", _fake_fetch)
+def test_market_query_prompt_pins_today_and_future_only_rule():
+    """PM-DATE（pipe_a19a0d5a4d39 复盘）：检索词派生提示词必须钉住今天的日期，
+    并只允许检索「今天及以后才判定」的事件——此前模型按训练期年份派生出
+    10/16 条 2025 已判定市场检索词，网络恢复也只会捞到已关闭市场。"""
+    from datetime import date as _d
+    prompt = d.build_market_queries_prompt(
+        "forecast every FOMC decision through end-2026", None, None)
+    assert _d.today().isoformat() in prompt
+    assert "ON OR AFTER today" in prompt
+    assert "already passed are resolved/closed" in prompt
 
-    class _Plog:
-        def write(self, *_a, **_k):
-            pass
 
-    markets = [
-        {"market_id": "rev", "clob_token_ids": ["tok-no", "tok-yes"],
-         "outcomes": ["No", "Yes"]},
-        {"market_id": "unknowable", "clob_token_ids": ["a", "b"]},
-    ]
-    n = d._collect_market_price_history(Path(str(tmp_path)), markets, _Plog())
-    assert calls == ["tok-yes"]
-    assert n == 1
+def test_market_snapshot_deadline_hang_is_attributed(monkeypatch):
+    """PM-NET：TLS/连接悬挂（无异常抛出、超死线未完成）必须显式归类——
+    真实事故 16/16 查询全悬挂（SNI 阻断：TCP 可连、TLS 永不完成），
+    payload 里 transport_failure_count=0 却被判 transport_failure，无可归因错误类。"""
+    import time as _time
+
+    def hang(*_args, **_kwargs):
+        _time.sleep(2.5)
+        return {}
+
+    monkeypatch.setattr(d, "_polymarket_get", hang)
+    monkeypatch.setenv("PREDICTION_MARKETS_DEADLINE_SECONDS", "1")
+    diagnostics = {}
+    assert d._pm_snapshot(["Fed decision December 2026", "Fed funds end-2026"],
+                          diagnostics=diagnostics) == []
+    assert diagnostics["attempted_query_count"] == 2
+    assert diagnostics["successful_query_count"] == 0
+    assert diagnostics.get("deadline_exhausted") == 1
+    assert diagnostics["transport_error_classes"].get("DeadlineHang:tls-or-connect") == 2
+
+
+def test_polymarket_base_urls_env_overridable():
+    """PM-NET：SNI 阻断网络下可把 Gamma/CLOB 指向本地代理/镜像路由。"""
+    import subprocess
+    env = dict(os.environ,
+               PREDICTION_MARKETS_API_BASE="http://127.0.0.1:9/",
+               PREDICTION_MARKETS_CLOB_BASE="http://127.0.0.1:8/")
+    fixture = os.path.join(_REPO_ROOT, "backend", "tests", "fixtures", "market_endpoint_configuration.py")
+    out = subprocess.run([sys.executable, "-B", fixture], capture_output=True,
+                         text=True, env=env, check=True).stdout.strip()
+    assert out == "http://127.0.0.1:9 http://127.0.0.1:8"

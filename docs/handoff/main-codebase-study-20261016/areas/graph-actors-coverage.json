@@ -1,0 +1,1294 @@
+[
+  {
+    "path": "backend/app/services/actor_context.py",
+    "sha256": "17f12e5ba2b8f02309ab3ba65a08ee14afe93383217e5707ccf941efea1a0dbf",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1603
+      ],
+      [
+        965,
+        1206
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines read without truncation in <=250-line chunks by resumed actor-contracts child; source only. Frozen hash verified by reader. Parent independently reread 965-1206 to reconcile row-level access policy against older memory leads."
+  },
+  {
+    "path": "backend/app/services/actor_dossier_compactor.py",
+    "sha256": "3f75746ff10171a17734b0f15d998f9da6676ec3716445794e547f7ff0b9c90d",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        320
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines read without truncation in <=250-line chunks by resumed actor-contracts child; source only. Frozen hash verified by reader."
+  },
+  {
+    "path": "backend/app/services/actor_role_prompt.py",
+    "sha256": "ddd46f53df939fb24c86507f86e69f6b74167371f25c4c088a73efc49278e83e",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2026
+      ],
+      [
+        1048,
+        1125
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines read without truncation in <=250-line chunks by resumed actor-contracts child; source only. Frozen hash verified by reader. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/graph_builder.py",
+    "sha256": "0eb3150596342ee3ea5de2603f36f1aefe8f5743323245161067070c2174c18c",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2250
+      ],
+      [
+        2251,
+        2500
+      ],
+      [
+        2501,
+        2750
+      ],
+      [
+        2751,
+        2873
+      ],
+      [
+        15,
+        25
+      ],
+      [
+        1055,
+        1081
+      ],
+      [
+        1170,
+        1400
+      ],
+      [
+        1514,
+        1606
+      ],
+      [
+        2248,
+        2286
+      ],
+      [
+        2288,
+        2460
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks; source interpretation only, no execution. Additional targeted boundary ranges returned by terminal runtime reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/graph_pruner.py",
+    "sha256": "b738cf7f16a69addfb46ce4f163228e48a2d036fc225f70e3481827725b5c995",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        428
+      ],
+      [
+        256,
+        345
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks. Runtime is not executed. Default claims cross-checked against frozen Config where cited. Additional targeted boundary ranges returned by terminal runtime reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/__init__.py",
+    "sha256": "afc1445c13617aef124c93f676e2a7bec6cdc62d15b12d2c05e7d42c319d3949",
+    "read_ranges": [
+      [
+        1,
+        33
+      ],
+      [
+        1,
+        33
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/client.py",
+    "sha256": "77f2ee80c7480cdb6a438876ef3af38da05b9227e1b97a6b31bf6c70b1dd4d5c",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        357
+      ],
+      [
+        195,
+        240
+      ],
+      [
+        243,
+        273
+      ],
+      [
+        305,
+        315
+      ],
+      [
+        316,
+        357
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/compat.py",
+    "sha256": "e095d3b204738790793bef6cadb04edb4f743326ec85e249b5057abc601a8aae",
+    "read_ranges": [
+      [
+        1,
+        56
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/cross_encoder.py",
+    "sha256": "a149143d94e046568ec1c1adc7be9c1a2d512152faba7e457eec24d46a80ea3c",
+    "read_ranges": [
+      [
+        1,
+        26
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/embedder.py",
+    "sha256": "e4ae175f4493b0e73accd1b6f989a7158e6c92074e98805361d4aa3d885daf6c",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        362
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/falkor_driver.py",
+    "sha256": "ace51006efddb7c42ff17d0681ba19610dcd9c2c5cf67c0dc15b6e143bf2b8e9",
+    "read_ranges": [
+      [
+        1,
+        99
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/llm_adapter.py",
+    "sha256": "7406cb068654fb1b707db2f7ae6129b86c735d5b5edae8cd97243bfa8b052693",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        275
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/ontology.py",
+    "sha256": "84bfd85ae9c709743ee5e622277129e56f01dd48b4bd04615c3207b17a67c9e1",
+    "read_ranges": [
+      [
+        1,
+        47
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/runtime.py",
+    "sha256": "a9461c52de48efb0c8d49eb3068094c1db6c7334b58df95144c8c13834907028",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2250
+      ],
+      [
+        2251,
+        2387
+      ],
+      [
+        380,
+        570
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines directly read in bounded chunks by resumed graph-runtime child; frozen SHA256 matches inventory; source only. Parent reread 380-570 for local Graphiti construction, ontology map, locks and error classification reconciliation."
+  },
+  {
+    "path": "backend/app/services/oasis_profile_generator.py",
+    "sha256": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2250
+      ],
+      [
+        2251,
+        2500
+      ],
+      [
+        2501,
+        2750
+      ],
+      [
+        2751,
+        3000
+      ],
+      [
+        3001,
+        3250
+      ],
+      [
+        3251,
+        3264
+      ],
+      [
+        62,
+        87
+      ],
+      [
+        130,
+        190
+      ],
+      [
+        476,
+        599
+      ],
+      [
+        600,
+        687
+      ],
+      [
+        695,
+        735
+      ],
+      [
+        860,
+        894
+      ],
+      [
+        2630,
+        2750
+      ],
+      [
+        2751,
+        2819
+      ],
+      [
+        2820,
+        3050
+      ],
+      [
+        3088,
+        3133
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full source read returned by resumed profile-memory-tools child; frozen hash verified by reader. Canonical role path and serialization/reuse gates inspected; no application execution. Additional targeted boundary ranges returned by terminal actor reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/ontology_generator.py",
+    "sha256": "7de5d93e1c79980b9fecc1b7c55464979e9b20616a70b175bc969018479583c3",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1212
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read including prompts, template selection, validation and endpoint reconciliation; no execution."
+  },
+  {
+    "path": "backend/app/services/zep_entity_reader.py",
+    "sha256": "bbf9376f46d77c19fa1500a444ab59f20a962eea7d9e1c89d93c5e9d55e8ec0e",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        613
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks. Runtime is not executed. Default claims cross-checked against frozen Config where cited."
+  },
+  {
+    "path": "backend/app/services/zep_entity_resolver.py",
+    "sha256": "93c0da56bf38069cfcdf84b71e237d389821a63ef69c66db8cf1110f3f4059e0",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        542
+      ],
+      [
+        475,
+        542
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks. Runtime is not executed. Default claims cross-checked against frozen Config where cited. Additional targeted boundary ranges returned by terminal runtime reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/zep_graph_memory_updater.py",
+    "sha256": "a78b2a1eb24ab6fc84b4805ba61732c780b6c7f911057e13f6b93e06f609eb67",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        719
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full source read returned by resumed profile-memory-tools child; no truncated chunks; source only. Terminal caller synthesis collected."
+  },
+  {
+    "path": "backend/app/services/zep_tools.py",
+    "sha256": "9d16968db17e6df30627574f39f71082f3cda06b2a65dfc43aa0ff51d97d4c61",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2250
+      ],
+      [
+        2251,
+        2500
+      ],
+      [
+        2501,
+        2750
+      ],
+      [
+        2751,
+        2854
+      ],
+      [
+        480,
+        500
+      ],
+      [
+        625,
+        725
+      ],
+      [
+        724,
+        815
+      ],
+      [
+        946,
+        1008
+      ],
+      [
+        2534,
+        2587
+      ],
+      [
+        2680,
+        2785
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full source read returned by resumed profile-memory-tools child; no truncated chunks; source only. Terminal caller synthesis collected. Additional targeted boundary ranges returned by terminal runtime reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/utils/actors.py",
+    "sha256": "793a292fda1f3b425291139d72423be77826751234d15b40c90aac63760a8ba6",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        750
+      ],
+      [
+        751,
+        1000
+      ],
+      [
+        1001,
+        1250
+      ],
+      [
+        1251,
+        1500
+      ],
+      [
+        1501,
+        1750
+      ],
+      [
+        1751,
+        2000
+      ],
+      [
+        2001,
+        2250
+      ],
+      [
+        2251,
+        2500
+      ],
+      [
+        2501,
+        2750
+      ],
+      [
+        2751,
+        3000
+      ],
+      [
+        3001,
+        3006
+      ]
+    ],
+    "depth": "full",
+    "notes": "All lines read without truncation in <=250-line chunks by resumed actor-contracts child; source only. Frozen hash verified by reader."
+  },
+  {
+    "path": "backend/app/utils/zep_paging.py",
+    "sha256": "b3a7715173dd9db6d2c0c294b5286cb88d986e64a9605b696143a55c990163f0",
+    "read_ranges": [
+      [
+        1,
+        247
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks. Runtime is not executed. Default claims cross-checked against frozen Config where cited."
+  },
+  {
+    "path": "backend/app/utils/zep_rate_limit.py",
+    "sha256": "9100f47e3d9005336572ce5d6d14ac5c814e6b48e31aad5ed9e88b8ebb1f2254",
+    "read_ranges": [
+      [
+        1,
+        52
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source read in bounded chunks. Runtime is not executed. Default claims cross-checked against frozen Config where cited."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "read_ranges": [
+      [
+        350,
+        385
+      ],
+      [
+        1010,
+        1042
+      ],
+      [
+        1230,
+        1368
+      ],
+      [
+        1540,
+        1555
+      ],
+      [
+        543,
+        565
+      ],
+      [
+        1359,
+        1382
+      ],
+      [
+        340,
+        350
+      ],
+      [
+        350,
+        370
+      ],
+      [
+        1010,
+        1029
+      ],
+      [
+        1026,
+        1043
+      ],
+      [
+        1220,
+        1260
+      ],
+      [
+        1260,
+        1380
+      ],
+      [
+        1381,
+        1385
+      ],
+      [
+        1683,
+        1691
+      ],
+      [
+        335,
+        395
+      ],
+      [
+        574,
+        585
+      ],
+      [
+        1010,
+        1045
+      ],
+      [
+        1255,
+        1285
+      ],
+      [
+        1380,
+        1425
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted application caller/config excerpt; not assigned full coverage. Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Additional targeted boundary ranges returned by terminal runtime reader; not a new full-file claim. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/api/graph.py",
+    "sha256": "1740f56f6c2ddbfa38ce75f410abb09ccbe0e27d8f29c0d013877664b5ae0268",
+    "read_ranges": [
+      [
+        185,
+        245
+      ],
+      [
+        350,
+        535
+      ],
+      [
+        675,
+        700
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted application caller/config excerpt; not assigned full coverage."
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "sha256": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+    "read_ranges": [
+      [
+        890,
+        965
+      ],
+      [
+        50,
+        222
+      ],
+      [
+        870,
+        899
+      ],
+      [
+        900,
+        1120
+      ],
+      [
+        1150,
+        1308
+      ],
+      [
+        1309,
+        1455
+      ],
+      [
+        965,
+        1110
+      ],
+      [
+        1111,
+        1154
+      ],
+      [
+        1170,
+        1285
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted application caller/config excerpt; not assigned full coverage. Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+    "read_ranges": [
+      [
+        1290,
+        1335
+      ],
+      [
+        7341,
+        7392
+      ],
+      [
+        7489,
+        7760
+      ],
+      [
+        8259,
+        8295
+      ],
+      [
+        9268,
+        9308
+      ],
+      [
+        12780,
+        13020
+      ],
+      [
+        13021,
+        13270
+      ],
+      [
+        13271,
+        13435
+      ],
+      [
+        13885,
+        13935
+      ],
+      [
+        1336,
+        1344
+      ],
+      [
+        7393,
+        7475
+      ],
+      [
+        8766,
+        8865
+      ],
+      [
+        12200,
+        12258
+      ],
+      [
+        13320,
+        13434
+      ],
+      [
+        13451,
+        13540
+      ],
+      [
+        13575,
+        13605
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted application caller/config excerpt; not assigned full coverage. Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/tests/test_wave9_kg.py",
+    "sha256": "66c20d8a026afde27b0fb54776ade12a430d1f134649747a6c1cdc51c3e9dcf5",
+    "read_ranges": [
+      [
+        277,
+        475
+      ],
+      [
+        733,
+        907
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted test source; evidence only, not executed. Additional targeted boundary ranges returned by terminal runtime reader; test source only, not executed."
+  },
+  {
+    "path": "backend/tests/test_graph_actor_v1_seed.py",
+    "sha256": "988840ab8515c3c63ec0dcec94b5624e88e5d6d0ab06f9c1c32901f5059735db",
+    "read_ranges": [
+      [
+        501,
+        613
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted test source; evidence only, not executed."
+  },
+  {
+    "path": "backend/tests/test_audit_fixes_graph.py",
+    "sha256": "d1d0d32872f045a17cf2fc02250f3aea1caa68217a57f0aca783a57d62f1eb9f",
+    "read_ranges": [
+      [
+        126,
+        166
+      ],
+      [
+        281,
+        308
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supporting targeted test source; evidence only, not executed."
+  },
+  {
+    "path": "backend/app/services/simulation_config_generator.py",
+    "sha256": "b58447c05f17f254342b3a6f3e1fef557cd3a1df6ceda6092fa8845caef0ed62",
+    "read_ranges": [
+      [
+        820,
+        880
+      ],
+      [
+        1039,
+        1090
+      ],
+      [
+        1400,
+        1649
+      ],
+      [
+        1650,
+        1885
+      ],
+      [
+        3270,
+        3380
+      ],
+      [
+        3549,
+        3650
+      ],
+      [
+        3651,
+        3775
+      ],
+      [
+        3776,
+        3925
+      ],
+      [
+        3926,
+        4035
+      ],
+      [
+        1675,
+        1798
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+    "read_ranges": [
+      [
+        510,
+        760
+      ],
+      [
+        680,
+        770
+      ],
+      [
+        843,
+        875
+      ],
+      [
+        1160,
+        1290
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Reader disclosed a 251-line command (510-760), a one-line chunk target overrun without truncation. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/scripts/run_parallel_simulation.py",
+    "sha256": "bad80718fb2c0292d7dcd5f3c46b20742327b171797dde379e71bdb95c809206",
+    "read_ranges": [
+      [
+        574,
+        672
+      ],
+      [
+        669,
+        693
+      ],
+      [
+        5285,
+        5332
+      ],
+      [
+        576,
+        670
+      ],
+      [
+        1435,
+        1486
+      ],
+      [
+        1487,
+        1625
+      ],
+      [
+        4873,
+        4903
+      ],
+      [
+        4910,
+        4940
+      ],
+      [
+        5125,
+        5158
+      ],
+      [
+        5284,
+        5332
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read. Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "4608299a7a125c563371d622282f52165d2f64598d679f51e77c008ee4cc3532",
+    "read_ranges": [
+      [
+        1374,
+        1405
+      ],
+      [
+        2945,
+        3020
+      ],
+      [
+        3090,
+        3303
+      ],
+      [
+        3304,
+        3526
+      ],
+      [
+        3793,
+        4042
+      ],
+      [
+        4043,
+        4090
+      ],
+      [
+        4296,
+        4545
+      ],
+      [
+        17420,
+        17470
+      ],
+      [
+        19060,
+        19120
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting producer/consumer/default excerpt returned by actor-contracts child; not a full-file read."
+  },
+  {
+    "path": "backend/tests/test_actor_dossier_compactor.py",
+    "sha256": "35afd44ec3e742f2b3b88e5fba7fbde19691e9b9aadbdb4dc00ab7b047a69558",
+    "read_ranges": [
+      [
+        16,
+        57
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting test source only; not run."
+  },
+  {
+    "path": "backend/tests/test_actor_role_prompt.py",
+    "sha256": "edad375d82e174f58e2cecf5230d53c6f0d5f14d7e3f0a51ce5c33b1909837b4",
+    "read_ranges": [
+      [
+        1072,
+        1137
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting test source only; not run."
+  },
+  {
+    "path": "backend/tests/test_actor_context_runtime.py",
+    "sha256": "df194583e8e645dc29767fac8a6feddaeb0aab08c8863f8896f0da6e839da756",
+    "read_ranges": [
+      [
+        332,
+        417
+      ],
+      [
+        801,
+        837
+      ],
+      [
+        838,
+        921
+      ],
+      [
+        922,
+        942
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted supporting test source only; not run. Additional targeted boundary ranges returned by terminal profile-memory reader; test source only, not executed."
+  },
+  {
+    "path": "backend/tests/test_graph_optimizations.py",
+    "sha256": "4fa0c4fc1741077c995d254861ea77e7875dd88128f8470e1497d8f08cf9e1e3",
+    "read_ranges": [
+      [
+        120,
+        205
+      ],
+      [
+        208,
+        365
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Additional targeted boundary ranges returned by terminal runtime reader; test source only, not executed."
+  },
+  {
+    "path": "backend/tests/test_graph_cost_containment.py",
+    "sha256": "e7f2e5fd721b806309a7000cb2b6438bf632ac84de84571b598c29f607fb2033",
+    "read_ranges": [
+      [
+        260,
+        418
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Additional targeted boundary ranges returned by terminal runtime reader; test source only, not executed."
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "sha256": "c7b33f0ad5c18779466391de5c3a861d574d874855b7365d1533d858beb1d641",
+    "read_ranges": [
+      [
+        2323,
+        2341
+      ],
+      [
+        10990,
+        11078
+      ],
+      [
+        11079,
+        11228
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/scripts/action_logger.py",
+    "sha256": "3dedcca3c76a11d4fb0ceafdd55ed3c3acae3aa299567fde363060c954f3f25e",
+    "read_ranges": [
+      [
+        22,
+        99
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Additional targeted boundary ranges returned by terminal profile-memory reader; not a new full-file claim."
+  },
+  {
+    "path": "backend/tests/test_oasis_v1_provenance.py",
+    "sha256": "14b9a206567de8545ea4bd1cf455524dc7e4df58b4e592d00133d22085b7b718",
+    "read_ranges": [
+      [
+        165,
+        253
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Additional targeted boundary ranges returned by terminal profile-memory reader; test source only, not executed."
+  }
+]

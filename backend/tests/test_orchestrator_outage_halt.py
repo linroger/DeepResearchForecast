@@ -346,3 +346,78 @@ def test_disabled_knob_is_legacy_behavior(
     upd = po.PipelineOrchestrator()._make_stage_updater(state, po.STAGE_ONTOLOGY)
     upd(5, "旋钮关闭：不注册熔断器，永不抬升 ProviderOutageHalt")
     assert state.stages[po.STAGE_ONTOLOGY].progress == 5
+
+
+# ---- 2026-10-18: resume resets the PROCESS-scoped provider breakers ----
+# Observed on pipe_fd2799f3ad41: after a 422/429 cascade, a fresh resume attempt
+# fast-failed at its first LLM call because the llm_client process-level cooldown
+# kept feeding synthetic circuit_breaker failures into the fresh run breaker.
+
+def test_reset_provider_circuit_breakers_clears_cooldowns_and_fallback_cache():
+    from app.utils import llm_client as lc
+    import time as _time
+    with lc._CB_LOCK:
+        lc._CB_STATE["glm"] = {
+            "consec": 5.0, "consec429": 5.0,
+            "tripped_until": _time.monotonic() + 9999.0,
+        }
+    lc._FB_AUTH_UNAVAILABLE_UNTIL[("fb", "k")] = _time.monotonic() + 9999.0
+    try:
+        assert lc._cb_tripped("glm") is True
+        lc.reset_provider_circuit_breakers("glm")
+        assert lc._cb_tripped("glm") is False
+        assert lc._FB_AUTH_UNAVAILABLE_UNTIL == {}
+        # Re-arm and clear-all path
+        lc._CB_STATE["glm"] = {"consec": 5.0, "tripped_until": _time.monotonic() + 9999.0}
+        lc.reset_provider_circuit_breakers()
+        assert lc._CB_STATE == {}
+    finally:
+        with lc._CB_LOCK:
+            lc._CB_STATE.clear()
+            lc._FB_AUTH_UNAVAILABLE_UNTIL.clear()
+
+
+# ---- 2026-10-18: orphan reclaimer honors owner liveness over heartbeat residue ----
+# A killed backend leaves heartbeats "fresh" for the 120s window; the reclaimer
+# withheld recycling and resume refused ("管线仍在运行") until manual cancel.
+
+def test_orphan_is_dead_when_owner_pid_dead_even_with_fresh_heartbeat(monkeypatch):
+    import json
+    from pathlib import Path
+    import select
+    import subprocess
+    import sys
+    import time as _time
+    from app.services.pipeline_orchestrator import PipelineOrchestrator, PipelineManager
+
+    # Keep real OS liveness: only the persisted state loader is replaced.
+    # Guarded runs must register this exact named fixture on their CLI.
+    fixture = Path(__file__).parent / "fixtures" / "orphan_owner.py"
+    child = subprocess.Popen([sys.executable, str(fixture), "--mode", "exit"],
+                             stdout=subprocess.PIPE, text=True)
+    output, _ = child.communicate(timeout=10)
+    assert child.returncode == 0 and json.loads(output)["pid"] == child.pid
+    now = _time.strftime("%Y-%m-%dT%H:%M:%S+00:00", _time.gmtime())
+    state = {
+        "pipeline_id": "pipe_orphan_liveness_test", "status": "running",
+        "owner_pid": child.pid, "owner_boot_id": "some-other-boot",
+        "heartbeat_at": now, "updated_at": now,
+    }
+    monkeypatch.setattr(PipelineManager, "load", classmethod(lambda cls, pid: dict(state)))
+    dead_verdict = PipelineOrchestrator._orphan_is_dead("pipe_orphan_liveness_test", stale_s=120.0)
+
+    live = subprocess.Popen([sys.executable, str(fixture), "--mode", "hold"],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        ready, _, _ = select.select([live.stdout], [], [], 10)
+        assert ready, "Owner fixture did not announce readiness"
+        assert json.loads(live.stdout.readline()) == {"pid": live.pid, "mode": "hold"}
+        assert live.poll() is None
+        state["owner_pid"] = live.pid
+        live_verdict = PipelineOrchestrator._orphan_is_dead("pipe_orphan_liveness_test", stale_s=120.0)
+    finally:
+        live.communicate(input="\n", timeout=10)
+    assert live.returncode == 0
+    # A dead owner's heartbeat is residue; a live owner's fresh heartbeat wins.
+    assert dead_verdict is True
+    assert live_verdict is False

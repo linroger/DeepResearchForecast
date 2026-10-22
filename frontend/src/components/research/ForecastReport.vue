@@ -1631,7 +1631,7 @@ onBeforeUnmount(() => {
   padding: 28px 28px 64px;
 }
 .md-body {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto;
   color: var(--ink);
 }
@@ -1909,7 +1909,7 @@ onBeforeUnmount(() => {
 
 /* ---------- Forecast dashboard (FORECAST-DASH) ---------- */
 .forecast-dash {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto 28px;
   border: 1px solid var(--border);
   background: var(--soft);
@@ -2206,7 +2206,7 @@ onBeforeUnmount(() => {
 
 /* ---------- Chart gallery (VIZ-1) ---------- */
 .chart-gallery {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto 28px;
 }
 .gallery-head {

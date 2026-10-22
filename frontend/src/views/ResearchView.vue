@@ -960,7 +960,8 @@ onUnmounted(() => {
 .nav-hist-btn { background:transparent; border:1px solid #444; border-radius:var(--radius, 2px); color:#ddd; font-family:var(--mono); font-size:.74rem; padding:6px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; transition:border-color var(--dur-1, 120ms) var(--ease, ease), color var(--dur-1, 120ms) var(--ease, ease), background var(--dur-1, 120ms) var(--ease, ease); }
 .nav-hist-btn:hover { border-color:var(--orange); color:#fff; background:rgba(255,69,0,.12); }
 
-.main-content { max-width:1480px; margin:0 auto; padding:40px; }
+.main-content { max-width:1840px; margin:0 auto; padding:40px 48px; }
+/* 2026-10-22: 加宽内容列（1480→1840）——宽屏下模拟/图谱面板此前被压在 ~1050px，右侧大量留白 */
 
 .history-drawer { position:fixed; top:0; right:0; width:380px; max-width:90vw; height:100vh; background:#fff; border-left:1px solid var(--border); z-index:40; box-shadow:var(--shadow-lg, -8px 0 32px rgba(0,0,0,.12)); display:flex; flex-direction:column; }
 .drawer-head { display:flex; justify-content:space-between; align-items:center; padding:18px 20px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:.85rem; height:60px; }
@@ -977,7 +978,7 @@ onUnmounted(() => {
 .version-text { color:#999; }
 .main-title { font-size:clamp(2rem, 4.5vw, 3.25rem); line-height:1.2; font-weight:500; letter-spacing:0; margin:0 0 22px; }
 .gradient-text { background:linear-gradient(90deg,#000,#FF4500); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.lead { color:#666; line-height:1.85; max-width:820px; margin-bottom:34px; }
+.lead { color:#666; line-height:1.85; max-width:960px; margin-bottom:34px; }
 .console-box { border:1px solid var(--color-border, #E5E5E5); border-radius:var(--radius, 2px); padding:8px; box-shadow:var(--shadow-sm, 0 1px 3px rgba(10,10,10,.06)); background:#fff; }
 .console-section { padding:20px; }
 .console-section.btn-section { padding-top:0; }

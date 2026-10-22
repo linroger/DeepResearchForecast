@@ -1,0 +1,9 @@
+# Activate approved Oddsense integration in the working checkout
+
+The three implementation slices were already approved and implemented on codex/oddsense-integration, then merged into main. The user now reports seeing only planning and requests actual deep-research integration. Current primary HEAD495000e contains the study only and unrelated dirty work. This task implements the approved capability in that active checkout; no new product scope or approval gate is introduced.
+
+1. Record all current source/index/branch identities and preserve dirty/untracked peer work. Compare original integration commit ancestry with primary before selecting the smallest safe reconciliation.
+2. Bring the implemented Python provider, v3/legacy agent tools, parent evidence promotion and report consumers into the working checkout using three-way reconciliation. Never stage or overwrite unrelated peer edits. Resolve shared-file conflicts with both features preserved. Preserve credentials privately and inspect presence only.
+3. Prove actual deep-research dispatch/tool consumption/publisher fetch/citations/artifacts and report continuity under the unchanged guarded runner with scripted external responses. Include off/unavailable/replay controls. Check safe enablement in the active launch environment.
+4. Verify syntax/build and relevant consumers for the combined primary bytes. Confirm managed process ownership and active-run safety before any local restart; do not launch a paid forecast or resume saved work. Use existing service/setup conventions.
+5. Obtain bounded independent review, record exact active-checkout hashes and receipts, and deliver owned changes without publishing peer work. Main implementation lineage is already present; any new main fix receives its own relevant checks and delivery.

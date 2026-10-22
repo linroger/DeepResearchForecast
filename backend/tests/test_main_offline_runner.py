@@ -250,6 +250,31 @@ print(json.dumps({'guarded': True, 'pid': os.getpid()}))
         with self.assertRaisesRegex(PermissionError, "process"):
             subprocess.run([sys.executable, "-c", "raise SystemExit(0)"], check=True)
 
+    def test_owned_child_liveness_preserves_read_only_and_mutating_boundaries(self):
+        import signal
+
+        script = self.work / "liveness_owner.py"
+        script.write_text("import sys\nprint('ready', flush=True)\nsys.stdin.readline()\n")
+        self.guard.allow_python_script(script)
+        child = subprocess.Popen([sys.executable, str(script)], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            os.kill(child.pid, 0)
+        finally:
+            child.communicate(input="\n", timeout=10)
+        self.assertEqual(child.returncode, 0)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(child.pid, 0)
+        # The exact same registered PID cannot receive a mutating signal once
+        # reaped. Unknown PIDs and process groups gain no new allowance.
+        for probe in (lambda: os.kill(child.pid, signal.SIGTERM),
+                      lambda: os.killpg(child.pid, 0),
+                      lambda: os.kill(2 ** 30, 0),
+                      lambda: os.kill(2 ** 30, signal.SIGTERM)):
+            with self.assertRaisesRegex(PermissionError, "process"):
+                probe()
+
     def test_identity_and_environment(self):
         self.assertTrue(all(os.environ.get(k) == v for k, v in self.guard.identity.items()))
         self.assertEqual(os.environ["DRF_TEST_PROCESS"], "1")

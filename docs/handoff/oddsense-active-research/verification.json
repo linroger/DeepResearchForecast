@@ -1,0 +1,250 @@
+{
+  "active_source_count": 39,
+  "active_drift": [],
+  "parent_exit": 0,
+  "parent_shutdown": true,
+  "parent_identity": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 26,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "children": [
+    {
+      "pid": "12198",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12199",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12200",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12201",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12202",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12203",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12204",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12205",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12206",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12207",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12208",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12209",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12210",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12211",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12212",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12213",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12214",
+      "expected_exit": 23,
+      "actual_exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12215",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12216",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12217",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12218",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12219",
+      "expected_exit": -15,
+      "actual_exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12223",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12224",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12225",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    },
+    {
+      "pid": "12226",
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "events": {}
+    }
+  ]
+}

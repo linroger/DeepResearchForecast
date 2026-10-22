@@ -310,7 +310,10 @@ def _drifting_section_translator(worker):
     the live defect reached this level through a parser-level fusion the unit checks
     could not see.
     """
+    worker._section_translation_calls = []
+
     def _section(section_md, target_language_name, extra_rules="", *, chunk_index=None):
+        worker._section_translation_calls.append((section_md, extra_rules, chunk_index))
         return _drifting_translate(section_md)
     worker._translate_section = _section
     return worker
@@ -330,6 +333,31 @@ def test_section_with_unrecoverable_number_drift_is_kept_verbatim_and_disclosed(
     assert regions[0]["scope"] == "section" and regions[0]["chunk"] == 1
     assert regions[0]["heading"] == "Executive Summary"
     assert "numeric tokens" in regions[0]["detail"]
+    repair_calls = [call for call in worker._section_translation_calls
+                    if "NUMERIC SURGICAL REPAIR" in call[1]]
+    assert len(repair_calls) == 1 and repair_calls[0][2] == 1
+
+
+def test_armed_small_numeric_repair_keeps_only_an_exact_candidate():
+    chunks = ReportAgent._split_markdown_h2_sections(SRC_CLEAN)
+    worker = _worker(_FilterLLM(sensitive=()), source=SRC_CLEAN)
+    calls = []
+
+    def translate(section_md, target_language_name, extra_rules="", *, chunk_index=None):
+        calls.append((section_md, extra_rules, chunk_index))
+        return (_translate(section_md) if "NUMERIC SURGICAL REPAIR" in extra_rules
+                else _drifting_translate(section_md))
+
+    worker._translate_section = translate
+    translated, drift = worker._translate_chunks_with_integrity(chunks, "zh", ZH, label="t")
+
+    repair_calls = [call for call in calls if "NUMERIC SURGICAL REPAIR" in call[1]]
+    assert len(repair_calls) == 1 and repair_calls[0][2] == 1
+    assert len([call for call in calls if call[0] == chunks[1]]) == 3  # first + integrity + numeric
+    assert translated[1] == _translate(chunks[1]) and drift == []
+    assert worker._translation_verbatim_regions == []
+    for source, variant in zip(chunks, translated):
+        assert worker._translation_chunk_quality(source, variant, "zh")["hard"] == []
 
 
 def test_knob_off_keeps_the_drifted_section_as_before(monkeypatch):
@@ -341,6 +369,8 @@ def test_knob_off_keeps_the_drifted_section_as_before(monkeypatch):
 
     assert "升级路径随之上升" in translated[1]
     assert worker._translation_verbatim_regions == []
+    assert not any("NUMERIC SURGICAL REPAIR" in call[1] for call in worker._section_translation_calls)
+    assert len([call for call in worker._section_translation_calls if call[0] == chunks[1]]) == 2
 
 
 # ─────────────────────────── audit semantics ───────────────────────────

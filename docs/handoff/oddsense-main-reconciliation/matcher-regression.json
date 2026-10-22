@@ -1,0 +1,19 @@
+{
+  "scope": "Original machine-ID/direct-URL positives and unrelated-topic negative restored in a new test-only module; all637full-gate files remain byte-identical.",
+  "original_controls_from": "main da1d3c4d backend/tests/test_bridge_prediction_markets.py::test_market_report_match_prefers_machine_identity_and_is_conservative",
+  "new_file": "backend/tests/test_oddsense_matcher_regression.py",
+  "new_sha256": "c99268f5d608368c7e53a419e5effd4bd49476048414ad23d8e1fd173c47ef8c",
+  "final_source_files": 638,
+  "evidence_root": "/private/tmp/drf-oddsense-final-matcher-i18uuygt/evidence-cwd",
+  "receipt_sha256": "07d2a355c95f6816bf919c2a89c754ef3225bbd0865b986e749062bdd0ab0716",
+  "exit_code": 0,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "allowed:guarded_child": 1
+  },
+  "shutdown_complete": true,
+  "identity_preserved": true,
+  "source_drift": [],
+  "retained_setup_error": "Original evidence/ invocation used primaryCWD and was rejected beforecollection by external-read guard; corrected private-repo CWD, no guardchange."
+}

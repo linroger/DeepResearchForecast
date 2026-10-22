@@ -199,47 +199,10 @@ def test_scenario_comparison_skips_when_outcome_distribution_missing(monkeypatch
     assert agent._scenario_diff_structured() is None
 
 
-def test_collect_viz_artifacts_populates_handoff_dir(report_folder, monkeypatch):
-    """PM-6 回归：_collect_viz_artifacts 必须把研究 handoff 目录钉进工件（arts['handoff_dir']），
-    否则 ReportVisualizer._load_price_history 永远拿不到 handoff/market_price_history.json，
-    市场价格历史折线族整族静默跳过（历史上就是这个断链）。"""
-
-    class _FakePM:
-        @staticmethod
-        def list_pipelines():
-            return [{"pipeline_id": "pipe_x"}]
-
-        @staticmethod
-        def load(pid):
-            return {"simulation_id": "sim_test", "handoff_dir": "/tmp/handoff_sim_test"}
-
-        @staticmethod
-        def handoff_dir(pid):
-            return "/tmp/handoff_sim_test"
-
-    # _locate_handoff_dir 延迟 `from .pipeline_orchestrator import PipelineManager`——
-    # 打桩该模块的 PipelineManager 名字即可拦截。
-    import app.services.pipeline_orchestrator as _po
-    monkeypatch.setattr(_po, "PipelineManager", _FakePM, raising=False)
-
-    a = _agent(simulation_id="sim_test")
-    arts = a._collect_viz_artifacts("rid", str(report_folder))
-    assert arts.get("handoff_dir") == "/tmp/handoff_sim_test"
 
 
-def test_locate_handoff_dir_degrades_to_none(report_folder, monkeypatch):
-    """无匹配管线 / PipelineManager 异常 → _locate_handoff_dir 返回 None（degrade-safe，
-    价格历史图自动跳过，行为不变）。"""
-    import app.services.pipeline_orchestrator as _po
 
-    class _BoomPM:
-        @staticmethod
-        def list_pipelines():
-            raise RuntimeError("boom")
 
-    monkeypatch.setattr(_po, "PipelineManager", _BoomPM, raising=False)
-    a = _agent(simulation_id="sim_nomatch")
-    assert a._locate_handoff_dir() is None
 
 
 def test_place_visualizations_bilingual_annex_zh(report_folder):

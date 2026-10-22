@@ -44,6 +44,20 @@ from app.services.zep_tools import (  # noqa: E402
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolated_report_storage(monkeypatch, tmp_path):
+    """Use real provenance readers with valid IDs and case-owned artifact roots."""
+    from app.services.simulation_manager import SimulationManager
+
+    simulations = tmp_path / "simulations"
+    pipelines = tmp_path / "pipelines"
+    simulations.mkdir()
+    pipelines.mkdir()
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(simulations))
+    monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(simulations))
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines))
+
+
 # ─────────────────────────────── helpers ────────────────────────────────
 class _JsonLLM:
     """chat_json stub scripted per prompt marker; records every prompt."""
@@ -61,7 +75,7 @@ class _JsonLLM:
 def _bare_agent(**over):
     a = ReportAgent.__new__(ReportAgent)
     a.graph_id = "g1"
-    a.simulation_id = "sim1"
+    a.simulation_id = "sim_audit_fixes"
     a.simulation_requirement = "会发生什么？"
     a.situation_brief = ""
     a.actors = None
@@ -694,3 +708,37 @@ def test_compact_retrieval_query_derivation(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_COMPACT_RETRIEVAL_QUERY", False, raising=False)
     a2 = _bare_agent(simulation_requirement=long_req)
     assert a2._compact_retrieval_query() == long_req
+
+
+# Pinned numeric citations need repair diagnostics and still obey the hard cap.
+def test_semantic_citation_overuse_pinned_numeric_lines_diagnosed_and_hard_capped(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_MAX_CITATIONS_PER_SOURCE", 20)
+    agent = ReportAgent.__new__(ReportAgent)
+    pinned_body = "\n".join(
+        f"Support stands at {i * 3} percent for the coalition [S1]."
+        for i in range(4, 30)
+    )
+    loose_claim = "The coalition weathered another difficult week in office"
+    idx = {"S1": {"title": "wire story", "url": "https://example.com/wire",
+                  "tier": "S2", "domain": "example.com",
+                  "excerpt": pinned_body.replace(" [S1]", "") + "\n" + loose_claim + "."}}
+    pinned_audit = agent._audit_semantic_citations(pinned_body, idx)
+    expected = [{"tag": "S1", "count": 26, "limit": 20}]
+    assert pinned_audit["unsupported"] == 0
+    assert pinned_audit["overused_pinned_sources"] == expected
+    assert pinned_audit["overused_sources"] == expected
+    assert pinned_audit["passed"] is False
+    hard_issues = agent._final_audit_integrity_issues({"semantic_citations": pinned_audit})
+    assert any("引用来源过度集中" in issue and "S1×26" in issue for issue in hard_issues)
+
+    loose_body = "\n".join(loose_claim + " [S1]." for _ in range(26))
+    loose_audit = agent._audit_semantic_citations(loose_body, idx)
+    assert loose_audit["overused_sources"] == expected
+    assert loose_audit["overused_pinned_sources"] == []
+    assert loose_audit["passed"] is False
+
+    # A supported numeric source exactly at the configured cap remains admissible.
+    at_limit = agent._audit_semantic_citations("\n".join(pinned_body.splitlines()[:20]), idx)
+    assert at_limit["overused_sources"] == []
+    assert at_limit["overused_pinned_sources"] == []
+    assert at_limit["passed"] is True

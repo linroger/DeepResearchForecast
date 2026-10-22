@@ -1,0 +1,6 @@
+{
+  "checked_at": "2026-10-22T09:31:47.906678+00:00",
+  "credential_sent": false,
+  "http_requests": 0,
+  "connection_error": "TimeoutError"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "oddsense-live-compatibility/v1",
+  "checked_at": "2026-10-22T08:37:48.690208+00:00",
+  "model_calls": 0,
+  "saved_runs_accessed": false,
+  "results": [
+    {
+      "provider": "newsapi",
+      "status": {
+        "attempted": true,
+        "reason": "transport_timeout",
+        "state": "timeout"
+      },
+      "items": 0
+    }
+  ],
+  "snapshot_sha256": "b9f94461a0ee504c24bca74cfa526ec0c105c7408b20faca1345c52852295307",
+  "source_sha256": {
+    "news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "market_intelligence.py": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f"
+  },
+  "scope": "Live source compatibility only; not paid-model, forecast-quality or deployment proof."
+}

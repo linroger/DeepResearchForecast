@@ -1,0 +1,15 @@
+{
+  "case": "tests/test_wave9_visualizer.py::test_kaleido_png_pair_standalone_builder",
+  "first_frozen_gate": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm/evidence",
+  "separate_diagnostic": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm/native-png-diagnostic",
+  "observed": "Actual standalone PNG export reaches existing Kaleido and fails because unchanged guard denies subprocess.Popen; warning is retained in diagnostic log.",
+  "diagnostic_events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 3,
+    "blocked:external_read": 18
+  },
+  "final_gate_disposition": "Exactly this native Chromium case is explicitly deselected alongside prior19vendor and2selfsignal cases. No whole visualization module exclusion and no guard permission change.",
+  "coverage_retained": "Actual deterministic figure/HTML/manifest and matplotlib fallback/exhibits remain selected. Native Kaleido binary output is unavailable proof, not a pass."
+}

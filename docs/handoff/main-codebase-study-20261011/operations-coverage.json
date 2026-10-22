@@ -1,0 +1,586 @@
+[
+  {
+    "path": "backend/app/utils/llm_client.py",
+    "sha256": "c943411e6f742f00f80228024398621147dcf2c070fe83b09bda5ebff914939f",
+    "read_ranges": [
+      [
+        1,
+        400
+      ],
+      [
+        401,
+        679
+      ],
+      [
+        680,
+        800
+      ],
+      [
+        801,
+        1135
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Provider construction, CLI/HTTP payloads, tier/fallback routing, retry/circuit/cache/native-tool/usage paths. Lines 680-800 were re-read after output truncation. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/app/utils/prediction_markets.py",
+    "sha256": "39fabbe003ba1d5741ca3795939da27f4fb39b9b49ea508b743ce6d61c103081",
+    "read_ranges": [
+      [
+        1,
+        450
+      ],
+      [
+        451,
+        884
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Gamma/CLOB transport, normalization, query/relevance helpers, requote/history/resolution and rendering contracts. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/app/utils/telemetry.py",
+    "sha256": "d1d1e63fc826be98467666e58542338914121011001f205fdfbb1be386756318",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        594
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Run/stage context, sole-run attribution, counters, cost/cache/budget, persistence and appendices. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/app/utils/token_budget.py",
+    "sha256": "248a036a8ebdfb9ce0addde58bd5c5a276db3b1b0f8c328905626f1eeecbea8c",
+    "read_ranges": [
+      [
+        1,
+        174
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "All pure estimation, truncation, allocation and input-fallback helpers. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/architecture_baseline.py",
+    "sha256": "2de1d1ced83cacb0c35ec90f4776b36d99654de493b9e23a2e21f878f3bd9ce1",
+    "read_ranges": [
+      [
+        1,
+        301
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Capture/secret quarantine, inventory consistency, verify/compare and exit codes. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/backfill_report_visuals.py",
+    "sha256": "648b90f78d945f2c3a83173cfa4a4df128cf248c105fcd0562e97107bd3a9a0b",
+    "read_ranges": [
+      [
+        1,
+        400
+      ],
+      [
+        401,
+        792
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Primary/variant replay, backup, audit/PDF publication and rollback paths. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/batch_runs.py",
+    "sha256": "108450c10e4bcc99113a57ae6a04899d86ce2330f7017170f7f48f0e5b83609f",
+    "read_ranges": [
+      [
+        1,
+        430
+      ],
+      [
+        431,
+        841
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Batch persistence, anchor waits, child state construction, shared simulation fallback and aggregation. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/check_env_drift.py",
+    "sha256": "5f416461f4e472ab95e87b8d4e5a883f8b16b68dd0e6b4baf07db06ddab4ba57",
+    "read_ranges": [
+      [
+        1,
+        327
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Documentation and pin modes, dotenv-style parsing, masking and strict exit behavior; no runtime .env opened. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/disk_usage_report.py",
+    "sha256": "a7c9f66ea9910ced825b37ba4cf9b639e21b84707dbc166b1b30d67a786ff700",
+    "read_ranges": [
+      [
+        1,
+        108
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Artifact-area accounting, top-child sizes, free space and read-only observations. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/eval_forecast_quality.py",
+    "sha256": "7574e01d1a36462d780ca5f9fc95eeceb43eca8d94183b9abd6a105067c38dcb",
+    "read_ranges": [
+      [
+        1,
+        220
+      ],
+      [
+        221,
+        439
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Rubric/score helpers, objective signals, judge construction, opt-in commands and baseline semantics. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/export_demo_site_data.py",
+    "sha256": "1d8d334cbf72a96940399f041472a7a094b3f2be426442e783a905a5cd47602b",
+    "read_ranges": [
+      [
+        1,
+        380
+      ],
+      [
+        381,
+        750
+      ],
+      [
+        751,
+        1093
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Publication identity/hash validation, graph export/rebuild, assets/variants and refresh commands. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/forecast_tools.py",
+    "sha256": "9267c662dc08ae77ac2e0c2ea45302453c87c37105dd84bcd08689e80f19d96c",
+    "read_ranges": [
+      [
+        1,
+        76
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Forecast-file ensemble/backtest delegates and JSON CLI. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/golden_eval.py",
+    "sha256": "243c403ec479c8e3f93b70820ba35b220890c16420d8d499b548950d5200615f",
+    "read_ranges": [
+      [
+        1,
+        260
+      ],
+      [
+        261,
+        522
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Golden matching, deterministic scores/calibration, evaluation-ledger bridge and CLI. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/model_comparison.py",
+    "sha256": "6dca7cb844d4b1e7b770d9b38c00e3137c46f4bff671ddf0d4530d4223005432",
+    "read_ranges": [
+      [
+        1,
+        270
+      ],
+      [
+        271,
+        524
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Local credential presence, per-provider report generation, telemetry isolation and comparison schema. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/preflight.py",
+    "sha256": "08696ef397965332e3f9861eb536dd2892c96d096b5ce9d36061e98dce3cb73d",
+    "read_ranges": [
+      [
+        1,
+        513
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Cheap readiness checks, opt-in network/cache/disk probes, rendering and exits. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/process_diagnostics.py",
+    "sha256": "9e544a7757bedc57aa67f2f650a0942fdc705355fe2e9bc06848defd78005c75",
+    "read_ranges": [
+      [
+        1,
+        118
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Process-table parsing, recursive output and explicit SIGUSR1 mode. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/reclaim_report_space.py",
+    "sha256": "0fdb7f69b1addc877df46b5bba1db8b480fe637b1550e1f18e846020725f2f06",
+    "read_ranges": [
+      [
+        1,
+        192
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Dry-run/apply backup purge and guarded Plotly extraction/temp-replace. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/replay_zep_dead_letters.py",
+    "sha256": "571ae6adc8c0b5df6c02f9523549b9b7657e8d360276bc1fb860e7f2d1e23fc2",
+    "read_ranges": [
+      [
+        1,
+        161
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Batched replay, failure remainder, malformed/appended-line retention and archive paths. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/resolution_monitor.py",
+    "sha256": "8162b8d74a420eb79349593ae5db36825ef346e5cff3f23fef7b1672500fcfcb",
+    "read_ranges": [
+      [
+        1,
+        360
+      ],
+      [
+        361,
+        704
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Report lookup, anchor requote/resolution/Brier/manual checks, ledger/JSONL/Markdown and dry run. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/scheduled_rerun.py",
+    "sha256": "e06da2fe9020ae0b92cbad1c51861999b8ace27cb7760572931f452e29da7648",
+    "read_ranges": [
+      [
+        1,
+        480
+      ],
+      [
+        481,
+        938
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Schedule store, due/inflight/cap checks, launch/await/diff/webhook and commands. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_deerflow_deep_research.py",
+    "sha256": "803df277893cdbaca4e52504b2bda20bec626b831219239add2de86aed84a151",
+    "read_ranges": [
+      [
+        1,
+        171
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_graphiti_migration.py",
+    "sha256": "a88711428896ec376a12f1c4fed14589bb30e0d84bd6170af68275ebbeb75dba",
+    "read_ranges": [
+      [
+        1,
+        118
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_graphiti_services.py",
+    "sha256": "740266107eb363ae9dc70a4cc5dd0932430b03340014221ca236b3b00b778a78",
+    "read_ranges": [
+      [
+        1,
+        129
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_pipeline_resume.py",
+    "sha256": "8d791bdb277427b490eac18ba11ce4a061b6418cba85c9722c5f31bb28d4a393",
+    "read_ranges": [
+      [
+        1,
+        302
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_profile_format.py",
+    "sha256": "c60feaff8d5727c7c473d9879742c85c352151b208ec8ff72d48ad9ff9e88f17",
+    "read_ranges": [
+      [
+        1,
+        166
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "backend/scripts/test_zep_rate_limit.py",
+    "sha256": "ea1f7fa6d3696732c4310cd162c269587af986f84c6127524999149130e57890",
+    "read_ranges": [
+      [
+        1,
+        116
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Assigned operations script test read in full, including assertions/fixtures, entrypoint and side effects. Not executed; this is distinct from partial backend/tests review. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/config/market_tools.py",
+    "sha256": "a26236a4608e6fe7e0166b069fc564901dad44bba232c875d038b43ec9ee65d4",
+    "read_ranges": [
+      [
+        1,
+        248
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Self-contained drf2 market transport/filter/schema and optional LangChain reflection. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/__init__.py",
+    "sha256": "40f7e45f04dca946285afed3d91a9f50385f209cfe42278c4a0130c31159bba1",
+    "read_ranges": [
+      [
+        1,
+        36
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Complete package documentation, exports and import relationships. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/cli.py",
+    "sha256": "99e8f2eeb010121b7de55eefd29b6699a45da280fca3b75d51e0c5eaf3c4a8e9",
+    "read_ranges": [
+      [
+        1,
+        227
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Driver config loading, fixtures, run/resume/status and exit handling. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/ensemble.py",
+    "sha256": "0677da43f4e296477a995c665c677eb1fed50dfa61b5cac3770a5a8cafd369cd",
+    "read_ranges": [
+      [
+        1,
+        126
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Legacy math reuse, normalized scenario aggregation and sequential seed isolation. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/gates.py",
+    "sha256": "33b86d4b26fc32d6fbd4a29ab850b8e005b060d2443191448256039a4995174f",
+    "read_ranges": [
+      [
+        1,
+        226
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Research, hollow-simulation, binary conviction and deliverable verdict logic. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/harness_client.py",
+    "sha256": "4653009d25bd721592059065d6fa7764044ce0e100e0246b9058ccbeebb8bce7",
+    "read_ranges": [
+      [
+        1,
+        295
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Runs API, dry fakes, expected HTTP simulation contract and watchdog polling. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/legacy.py",
+    "sha256": "a36fb77ad04b0c97b92f37cf88c23d626f56b2d4b5cf94c6458359e0966751e1",
+    "read_ranges": [
+      [
+        1,
+        25
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Backend-package importability/path bootstrap. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/manifest.py",
+    "sha256": "716e113516560925f0ab9d0a4814cd07e3e6ca086baa7ace57fbd2f3c7b6018b",
+    "read_ranges": [
+      [
+        1,
+        141
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Hashes/probes, artifact registration, stage verification and compatibility fallbacks. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/pipeline.py",
+    "sha256": "472a6ae16a84c023a2b23a552c5c5f3ceb095ac176701a59ffa8dfe57328aefd",
+    "read_ranges": [
+      [
+        1,
+        336
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Skills/artifact contracts, stage sequencing/resume, simulation bridge and seed ensemble. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/driver/state.py",
+    "sha256": "8787c54efb49043122b1f8de3388da23c67bc520aac294863179dbaf822efac9",
+    "read_ranges": [
+      [
+        1,
+        236
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "State records/transitions, schema boundary, migration loop and atomic StateStore. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/kg/__init__.py",
+    "sha256": "8436586d400087aabc1911f7ed268058bc425c4ebef0e053e7d997312f894c25",
+    "read_ranges": [
+      [
+        1,
+        9
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Complete package documentation, exports and import relationships. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/kg/server.py",
+    "sha256": "ed3b1852de290bcf3d93d98994443e334a21a1336dd67e207bc4e85beb958a3e",
+    "read_ranges": [
+      [
+        1,
+        173
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Complete MCP server registration, tool signatures/delegation, errors and stdio entrypoint. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/kg/tools.py",
+    "sha256": "91700fff192f9f765c9a3f48c5ad7f46344ffa4c47fef70595def846bd64b437",
+    "read_ranges": [
+      [
+        1,
+        402
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "All eight KG MCP delegates, lazy services, graph resolution, cache invalidation and error/text schemas. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/simulation/__init__.py",
+    "sha256": "df2bcd4ad179eb4621b6ea42976e0e9185518d2cc0678b38f3ad747081d3be41",
+    "read_ranges": [
+      [
+        1,
+        15
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Complete package documentation, exports and import relationships. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/simulation/jobs.py",
+    "sha256": "1cccf396fee147c2d932c299b556aca69cd79174ff7b64d7c5adde716b06da5c",
+    "read_ranges": [
+      [
+        1,
+        430
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Simulation config/directory resolution, runner delegation, health, results and interview paths. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "drf2/engines/simulation/server.py",
+    "sha256": "6c6b88546c24bb8fe3f097fccbb33012db06cb2dd7a6f8c786dedec208f1d24c",
+    "read_ranges": [
+      [
+        1,
+        214
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Complete MCP server registration, tool signatures/delegation, errors and stdio entrypoint. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "scripts/salvage_orphaned_pipelines.py",
+    "sha256": "478b4298dc9dca4f7dd5e0bea5580be1b89b6e19ee4a01b89206c7799fb074bf",
+    "read_ranges": [
+      [
+        1,
+        231
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Eligibility, completed/degraded conversion, apply/dry run and running-state race guard. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  },
+  {
+    "path": "scripts/watch_pipeline_progress.py",
+    "sha256": "f3c1906cf6c8e8225ab0ef68b3ccbe52ba52ebed7078c86f4ef28bc5a7aa74df",
+    "read_ranges": [
+      [
+        1,
+        187
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "State signatures, progress buckets, events, discovery/history suppression and polling. Actual complete reads occurred before interruption from frozen main c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Restored-mirror hashes checked at closeout; no repeated semantic read. Unreviewed owned ranges: none."
+  }
+]

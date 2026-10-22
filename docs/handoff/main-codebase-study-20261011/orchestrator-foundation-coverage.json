@@ -1,0 +1,192 @@
+[
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+    "read_ranges": [
+      [
+        1,
+        7526
+      ],
+      [
+        7636,
+        7771
+      ],
+      [
+        7808,
+        8351
+      ],
+      [
+        8949,
+        9051
+      ],
+      [
+        9499,
+        9563
+      ],
+      [
+        9703,
+        9908
+      ],
+      [
+        9941,
+        10085
+      ],
+      [
+        10331,
+        10472
+      ],
+      [
+        10841,
+        11831
+      ],
+      [
+        11882,
+        12440
+      ],
+      [
+        12445,
+        12555
+      ],
+      [
+        12630,
+        12665
+      ],
+      [
+        13034,
+        13052
+      ],
+      [
+        13182,
+        13191
+      ],
+      [
+        13360,
+        13492
+      ]
+    ],
+    "depth": "complete owned-range read; selective caller/consumer boundary read",
+    "notes": "All lines 1-7526 read consecutively in 19 untruncated line-numbered chunks. Later ranges read directly to verify lifecycle entrypoints, state/artifact consumers, budget/checkpoint callers, synthesis and alternate merge paths, actor reception, graph readback callers, manifest writers and terminal handlers. Not a full-file read. Source digest also matched git show of authorized main commit c20ec60909fa1aa15154bb6fdb3fdb71c421e10e. Simulation completion/reuse callers at 9976-10085 were read in the final boundary pass. Every coverage-entry SHA-256 was compared directly with git show at the authorized commit and matched."
+  },
+  {
+    "path": "backend/app/utils/atomic.py",
+    "sha256": "aade316f53664d993e64b099d429a663a81b59a3c1aafa5987822546a500cae8",
+    "read_ranges": [
+      [
+        1,
+        77
+      ]
+    ],
+    "depth": "complete file read",
+    "notes": "Read the entire helper to verify state/artifact write primitive, temporary names, fsync and JSON serialization behavior."
+  },
+  {
+    "path": "backend/app/utils/security.py",
+    "sha256": "d1ea1e8788389a84d38def99a23a1b42b59a60f2e0bdafe4da264fb586235501",
+    "read_ranges": [
+      [
+        1,
+        60
+      ]
+    ],
+    "depth": "selective implementation read",
+    "notes": "Read secret-redaction definitions and implementation used by run-manifest writers; other security utilities not studied."
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+    "read_ranges": [
+      [
+        1,
+        260
+      ],
+      [
+        306,
+        340
+      ],
+      [
+        380,
+        442
+      ],
+      [
+        688,
+        880
+      ]
+    ],
+    "depth": "selective caller/consumer boundary read",
+    "notes": "Read run/cancel/resume/continue/scenario routes, state/list and dossier consumers, edit seal/refresh behavior and artifact serving. Combined secondary output truncation was repaired by rereading affected ranges. Progress endpoint body after line 880 not read."
+  },
+  {
+    "path": "backend/app/api/sdk.py",
+    "sha256": "56ebd542e406b6399a94a2225afda48c3ee9e432f0610ac9fd1ee67ef530fcb1",
+    "read_ranges": [
+      [
+        73,
+        205
+      ]
+    ],
+    "depth": "selective caller/consumer boundary read",
+    "notes": "Read optional SDK run/status/list consumers and beginning of static handoff dossier loading; module remainder not read."
+  },
+  {
+    "path": "backend/app/api/report.py",
+    "sha256": "e99d4622dce36d178e8fcd42295452e3c5bfa52eb1b167ea40b330acd7e55ba7",
+    "read_ranges": [
+      [
+        370,
+        402
+      ],
+      [
+        1545,
+        1580
+      ]
+    ],
+    "depth": "selective consumer boundary read",
+    "notes": "Read manual report generation and chat construction to identify exactly which fields from load_research_dossier_for_simulation are passed to ReportAgent."
+  },
+  {
+    "path": "backend/app/__init__.py",
+    "sha256": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
+    "read_ranges": [
+      [
+        125,
+        147
+      ],
+      [
+        198,
+        215
+      ]
+    ],
+    "depth": "selective caller boundary read",
+    "notes": "Read lifecycle hook invocation and research/optional SDK blueprint registration."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "9bf12830c853554755b874e5b2278ee6a8bb0e07df6be64ed909549a3c1b4f08",
+    "read_ranges": [
+      [
+        1183,
+        1222
+      ],
+      [
+        1578,
+        1586
+      ]
+    ],
+    "depth": "selective definition boundary read",
+    "notes": "Read engine/outer-track/global-synthesis/concurrency/lease defaults and pipeline-data-root definition. Additional rg matches navigated to the definitions; no provider configuration study."
+  },
+  {
+    "path": "backend/app/api/__init__.py",
+    "sha256": "ff26909731a3631ebd38ce71554972c1d3ec4cb3b96976229abad7b7d75ee76e",
+    "read_ranges": [],
+    "depth": "symbol search only; no implementation-read coverage asserted",
+    "notes": "rg returned research_bp definition and sdk_bp import. Route mount claims use directly read backend/app/__init__.py ranges instead."
+  },
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "abef7d74ca76ae28b68f5b69dd9fe526191c1e8113e37176da635b77865f2674",
+    "read_ranges": [],
+    "depth": "symbol search only; no implementation-read coverage asserted",
+    "notes": "rg inspected function/checkpoint/synthesis/actor-production symbol locations for boundary questions. Child producer, checkpoint reconstruction and manifest-loader implementation were not read or established by this specialist."
+  }
+]

@@ -8,8 +8,27 @@ arbiter attributes (``caused_by``) to the actor whose move this period stated th
 full — never across zero.
 """
 
+import pytest
+
 from app.services import world_update as wu
-from app.services.world_model import PendingEffect, WorldModel, announced_figures
+from app.services.world_model import (
+    DEFAULT_MAX_CHANGE_RATIO, DEFAULT_MAX_DRIFT_RATIO, DEFAULT_REVERSION_KAPPA,
+    PendingEffect, WorldModel, announced_figures,
+)
+
+
+def _expected_damped_numeric(current, requested, *, anchor=None, ratio=DEFAULT_MAX_CHANGE_RATIO):
+    """Independent arithmetic oracle for the positive numeric fixtures, not a kernel call.
+
+    First bound the requested step, then retain (1-kappa) of its distance from
+    the research anchor, then intersect with the anchor's cumulative drift band.
+    """
+    anchor = current if anchor is None else anchor
+    step = requested if ratio is None else max(
+        current - abs(current) * ratio, min(requested, current + abs(current) * ratio))
+    reverted = anchor + (step - anchor) * (1 - DEFAULT_REVERSION_KAPPA)
+    return max(anchor * (1 - DEFAULT_MAX_DRIFT_RATIO),
+               min(reverted, anchor * (1 + DEFAULT_MAX_DRIFT_RATIO)))
 
 
 def _world(ratio: float | None = 0.5):
@@ -80,17 +99,21 @@ def test_unannounced_or_misattributed_jumps_stay_clamped():
         _move(2, "Market Analysts", "publish_report", "communication", "Tariffs could reach 145%."),
     ])
     _apply(world, {"variable_id": "us_tariff_on_chinese_goods", "new_value": 145, "caused_by": "United States Government"})
-    assert world.variables["us_tariff_on_chinese_goods"].value == 30.0          # no figure stated: clamp
+    expected = pytest.approx(_expected_damped_numeric(20, 145))
+    assert world.variables["us_tariff_on_chinese_goods"].value == expected     # no figure stated: damp
+    assert world.variables["us_tariff_on_chinese_goods"].provenance == "arbiter"
     world = _world()
     world.start_round(1, None)
     world.register_decisions(1, [_move(2, "Market Analysts", "publish_report", "communication",
                                        "Tariffs could reach 145%.")])
     _apply(world, {"variable_id": "us_tariff_on_chinese_goods", "new_value": 145, "caused_by": "Market Analysts"})
-    assert world.variables["us_tariff_on_chinese_goods"].value == 30.0          # commentary sets nothing
+    assert world.variables["us_tariff_on_chinese_goods"].value == expected     # commentary sets nothing
+    assert world.variables["us_tariff_on_chinese_goods"].provenance == "arbiter"
     world = _world()
     world.start_round(1, None)
     _apply(world, {"variable_id": "us_tariff_on_chinese_goods", "new_value": 145})
-    assert world.variables["us_tariff_on_chinese_goods"].value == 30.0          # no attribution
+    assert world.variables["us_tariff_on_chinese_goods"].value == expected     # no attribution
+    assert world.variables["us_tariff_on_chinese_goods"].provenance == "arbiter"
 
 
 def test_a_move_from_an_earlier_period_or_a_hold_announces_nothing():
@@ -101,7 +124,9 @@ def test_a_move_from_an_earlier_period_or_a_hold_announces_nothing():
     world.start_round(2, None)
     world.apply_arbiter_update(2, {"variable_changes": [{"variable_id": "us_tariff_on_chinese_goods",
                                                          "new_value": 145, "caused_by": "United States Government"}]})
-    assert world.variables["us_tariff_on_chinese_goods"].value == 30.0
+    assert world.variables["us_tariff_on_chinese_goods"].value == pytest.approx(
+        _expected_damped_numeric(20, 145))
+    assert world.variables["us_tariff_on_chinese_goods"].provenance == "arbiter"
 
 
 def test_an_announced_setting_never_crosses_zero():
@@ -110,7 +135,10 @@ def test_an_announced_setting_never_crosses_zero():
     world.register_decisions(1, [_move(1, "China Ministry of Commerce", "impose_measure", "policy",
                                        "The balance will swing to -40 within the month.")])
     _apply(world, {"variable_id": "trade_balance", "new_value": -40, "caused_by": "China Ministry of Commerce"})
-    assert world.variables["trade_balance"].value == 60.0                       # falls back to the clamp
+    assert world.variables["trade_balance"].value == pytest.approx(
+        _expected_damped_numeric(120, -40))                                   # falls back to damping
+    assert world.variables["trade_balance"].value > 0
+    assert world.variables["trade_balance"].provenance == "arbiter"
 
 
 def test_an_acceptance_announces_the_figures_of_the_offer_it_adopts():
@@ -135,14 +163,34 @@ def test_delayed_effects_are_clamped_like_immediate_changes():
                                                variable_id="rare_earth_export_volume", op="add", value=-3900,
                                                source="arbiter"))
     world.fire_due_effects(1, None)
-    assert world.variables["rare_earth_export_volume"].value == 2000.0          # was unbounded: 100
+    expected = _expected_damped_numeric(4000, 4000 - 3900)
+    var = world.variables["rare_earth_export_volume"]
+    assert var.value == pytest.approx(expected)
+    assert var.provenance == "effect" and "damped" in var.history[-1]["cause"]
+    immediate = _world()
+    immediate.start_round(1, None)
+    _apply(immediate, {"variable_id": "rare_earth_export_volume", "delta": -3900})
+    assert immediate.variables["rare_earth_export_volume"].value == var.value
+
+    # Turning off only the per-step clamp leaves anchor/drift controls active.
+    step_unbounded = _world(ratio=None)
+    step_unbounded.start_round(1, None)
+    step_unbounded.pending_effects.append(PendingEffect("fx1", due_round=1, description="Freeze",
+                                                       variable_id="rare_earth_export_volume", op="add",
+                                                       value=-3900, source="arbiter"))
+    step_unbounded.fire_due_effects(1, None)
+    assert step_unbounded.variables["rare_earth_export_volume"].value == pytest.approx(
+        _expected_damped_numeric(4000, 100, ratio=None))
+
+    # Explicit all-controls-off compatibility is confined to this pure unit control.
     unbounded = _world(ratio=None)
+    unbounded.settings.update(reversion_kappa=None, max_drift_ratio=None)
     unbounded.start_round(1, None)
     unbounded.pending_effects.append(PendingEffect("fx1", due_round=1, description="Freeze",
                                                    variable_id="rare_earth_export_volume", op="add",
                                                    value=-3900, source="arbiter"))
     unbounded.fire_due_effects(1, None)
-    assert unbounded.variables["rare_earth_export_volume"].value == 100.0       # ratio disabled: as before
+    assert unbounded.variables["rare_earth_export_volume"].value == 100.0
 
 
 def test_validation_keeps_a_cast_attribution_and_drops_an_unknown_one():

@@ -1,0 +1,916 @@
+[
+  {
+    "path": "backend/app/services/backtest.py",
+    "sha256": "68af452f1701c80accb405434ae2db1ecf886060eedaf5b64b06794409707bb0",
+    "read_ranges": [
+      [
+        1,
+        237
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 237
+  },
+  {
+    "path": "backend/app/services/ensemble.py",
+    "sha256": "04ecbeeffe12490fbe3cdaf2d383800fbb065191c5b84cebb0803848e5f0a207",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        419
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 419
+  },
+  {
+    "path": "backend/app/services/exec_brief.py",
+    "sha256": "e2c404edb53bdecc2a8d9a74a1426fc5f7fbcbfe47221cc13c846835b8a2db1c",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1060
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded full read; no application execution. Lint 200-250 revisited after display cap.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 1060
+  },
+  {
+    "path": "backend/app/services/forecast_extractor.py",
+    "sha256": "07080e1866ddff300412ef94842938f6a9ec071a8a890602434f7312d25ae3af",
+    "read_ranges": [
+      [
+        1,
+        310
+      ],
+      [
+        311,
+        620
+      ],
+      [
+        621,
+        930
+      ],
+      [
+        931,
+        1240
+      ],
+      [
+        1241,
+        1550
+      ],
+      [
+        1551,
+        1860
+      ],
+      [
+        1861,
+        2170
+      ],
+      [
+        2171,
+        2480
+      ],
+      [
+        2481,
+        2790
+      ],
+      [
+        2791,
+        3100
+      ],
+      [
+        3101,
+        3410
+      ],
+      [
+        3411,
+        3720
+      ],
+      [
+        3721,
+        4030
+      ],
+      [
+        4031,
+        4340
+      ],
+      [
+        4341,
+        4650
+      ],
+      [
+        4651,
+        4960
+      ],
+      [
+        4961,
+        5270
+      ],
+      [
+        5271,
+        5580
+      ],
+      [
+        5581,
+        5834
+      ],
+      [
+        5835,
+        6084
+      ]
+    ],
+    "depth": "full",
+    "notes": "Delegated full bounded source reading, 20 chunks. The initially capped combined 2171-2790 output was fully reread as separate chunks with matching hashes. Terminal result collected; reader closed. No application execution.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 6084
+  },
+  {
+    "path": "backend/app/services/forecast_ledger.py",
+    "sha256": "1b646da24d47bd6eb9a233b5381eb2ab0612989838cdbe82191dfb06ef9864e5",
+    "read_ranges": [
+      [
+        1,
+        275
+      ],
+      [
+        276,
+        523
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded full read completed; static source only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 523
+  },
+  {
+    "path": "backend/app/services/official_data.py",
+    "sha256": "3dc344a86e5b760c597611123dcf48c8b0071cb957e0a3661b6a17519d4fab1b",
+    "read_ranges": [
+      [
+        1,
+        310
+      ],
+      [
+        311,
+        623
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 623
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "sha256": "c7b33f0ad5c18779466391de5c3a861d574d874855b7365d1533d858beb1d641",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3901,
+        4200
+      ],
+      [
+        4201,
+        4500
+      ],
+      [
+        4501,
+        4800
+      ],
+      [
+        4801,
+        5100
+      ],
+      [
+        5101,
+        5400
+      ],
+      [
+        5401,
+        5700
+      ],
+      [
+        5701,
+        6000
+      ],
+      [
+        6001,
+        6300
+      ],
+      [
+        6301,
+        6600
+      ],
+      [
+        6601,
+        6900
+      ],
+      [
+        6901,
+        7200
+      ],
+      [
+        7201,
+        7500
+      ],
+      [
+        7501,
+        7800
+      ],
+      [
+        7801,
+        8100
+      ],
+      [
+        8101,
+        8400
+      ],
+      [
+        8401,
+        8700
+      ],
+      [
+        8701,
+        9000
+      ],
+      [
+        9001,
+        9300
+      ],
+      [
+        9301,
+        9600
+      ],
+      [
+        9601,
+        9900
+      ],
+      [
+        9901,
+        10200
+      ],
+      [
+        10201,
+        10500
+      ],
+      [
+        10501,
+        10800
+      ],
+      [
+        10801,
+        11090
+      ],
+      [
+        11091,
+        11380
+      ],
+      [
+        11381,
+        11670
+      ],
+      [
+        11671,
+        11960
+      ],
+      [
+        11961,
+        12250
+      ],
+      [
+        12251,
+        12540
+      ],
+      [
+        12541,
+        12830
+      ],
+      [
+        12831,
+        13120
+      ],
+      [
+        13121,
+        13410
+      ],
+      [
+        13411,
+        13700
+      ],
+      [
+        13701,
+        13990
+      ],
+      [
+        13991,
+        14280
+      ],
+      [
+        14281,
+        14570
+      ],
+      [
+        14571,
+        14860
+      ],
+      [
+        14861,
+        15150
+      ],
+      [
+        15151,
+        15440
+      ],
+      [
+        15441,
+        15730
+      ],
+      [
+        15731,
+        16046
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full reading by three disjoint delegated readers: report1 1-5400, report2 5401-10800, report3 10801-16046. All 3 terminal results collected and readers closed; hash rechecked. These are actual bounded full reads, not AST/inventory. Later supplemental overlapping checks are not added to unique primary count.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 16046
+  },
+  {
+    "path": "backend/app/services/report_lint.py",
+    "sha256": "a45d47cfaf0e0e862b85e395e96f55ceea2d7daaee0b261769a3d39a25d78501",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        200,
+        250
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1648
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct full source reading. First 1-300 aggregate display capped inside 200-250; 200-250 fully revisited to recover missing text. Coverage union is full. Pure functions documented, not executed.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 1648
+  },
+  {
+    "path": "backend/app/services/report_visualizer.py",
+    "sha256": "fd4cc22e52abc8e24616b3c594b3126f81fa2540fcf351a3ec1327171a048083",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3901,
+        4200
+      ],
+      [
+        4201,
+        4500
+      ],
+      [
+        4501,
+        4800
+      ],
+      [
+        4801,
+        5100
+      ],
+      [
+        5101,
+        5423
+      ],
+      [
+        5424,
+        5746
+      ],
+      [
+        5747,
+        6069
+      ]
+    ],
+    "depth": "full",
+    "notes": "Delegated full bounded source reading, 20 chunks (17x300 plus 3x323), no truncated assigned reads. Terminal result collected; reader closed. Optional dependency/rendering paths not executed.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 6069
+  },
+  {
+    "path": "backend/app/services/resolution_autorun.py",
+    "sha256": "0ef1e9ae85e8f5ca11a12d299163d9b298b7df6addde4bd39131ea689f897f81",
+    "read_ranges": [
+      [
+        1,
+        117
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 117
+  },
+  {
+    "path": "backend/app/services/translation_dates.py",
+    "sha256": "e5700b9e862fa4789a0600294fb114677939d92bc993c37ce035374690c7d9eb",
+    "read_ranges": [
+      [
+        1,
+        300
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded full read; no application execution. Lint 200-250 revisited after display cap.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 300
+  },
+  {
+    "path": "backend/app/services/translation_quantities.py",
+    "sha256": "e68210f423f3ec75776dfb3865e9437e6bc097aeb9901f49dd640313e15a355a",
+    "read_ranges": [
+      [
+        1,
+        309
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded full read; deterministic source only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 309
+  },
+  {
+    "path": "backend/scripts/eval_forecast_quality.py",
+    "sha256": "7574e01d1a36462d780ca5f9fc95eeceb43eca8d94183b9abd6a105067c38dcb",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        439
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded full read; live judge is documented but never called.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 439
+  },
+  {
+    "path": "backend/scripts/forecast_tools.py",
+    "sha256": "9267c662dc08ae77ac2e0c2ea45302453c87c37105dd84bcd08689e80f19d96c",
+    "read_ranges": [
+      [
+        1,
+        76
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 76
+  },
+  {
+    "path": "backend/scripts/resolution_monitor.py",
+    "sha256": "2d994b9f46053aeffbc46f5b4ec3b66bbeccaaa4e72d0403806bf10ffb9fa1fe",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        979
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 979
+  },
+  {
+    "path": "drf2/driver/ensemble.py",
+    "sha256": "0677da43f4e296477a995c665c677eb1fed50dfa61b5cac3770a5a8cafd369cd",
+    "read_ranges": [
+      [
+        1,
+        126
+      ]
+    ],
+    "depth": "full",
+    "notes": "Direct bounded source reads; caller trace ongoing; static evidence only.",
+    "scope": "assigned application",
+    "owner": "forecast-report",
+    "lines": 126
+  },
+  {
+    "path": "backend/app/api/report.py",
+    "sha256": "b541488608412b3dc0ad0f42945fabb49d1e396ea192e20cb793461d4ef44db6",
+    "read_ranges": [
+      [
+        1,
+        245
+      ],
+      [
+        35,
+        104
+      ],
+      [
+        545,
+        670
+      ],
+      [
+        760,
+        865
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "api-operations",
+    "lines": 2235
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+    "read_ranges": [
+      [
+        320,
+        365
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "api-operations",
+    "lines": 921
+  },
+  {
+    "path": "backend/app/api/sdk.py",
+    "sha256": "56ebd542e406b6399a94a2225afda48c3ee9e432f0610ac9fd1ee67ef530fcb1",
+    "read_ranges": [
+      [
+        235,
+        340
+      ],
+      [
+        340,
+        356
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "api-operations",
+    "lines": 356
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "read_ranges": [
+      [
+        140,
+        340
+      ],
+      [
+        150,
+        184
+      ],
+      [
+        155,
+        185
+      ],
+      [
+        184,
+        196
+      ],
+      [
+        185,
+        434
+      ],
+      [
+        316,
+        367
+      ],
+      [
+        392,
+        402
+      ],
+      [
+        425,
+        435
+      ],
+      [
+        625,
+        640
+      ],
+      [
+        629,
+        660
+      ],
+      [
+        630,
+        655
+      ],
+      [
+        717,
+        750
+      ],
+      [
+        1099,
+        1142
+      ],
+      [
+        1470,
+        1500
+      ],
+      [
+        1512,
+        1562
+      ],
+      [
+        1513,
+        1536
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "coordinator",
+    "lines": 1691
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+    "read_ranges": [
+      [
+        9020,
+        9260
+      ],
+      [
+        9261,
+        9460
+      ],
+      [
+        13860,
+        14090
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "coordinator",
+    "lines": 14097
+  },
+  {
+    "path": "backend/run.py",
+    "sha256": "885007d53a25098e9914de6d589867f4f580737846bc709643faf84840103c14",
+    "read_ranges": [
+      [
+        30,
+        50
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "api-operations",
+    "lines": 62
+  },
+  {
+    "path": "backend/scripts/backfill_report_visuals.py",
+    "sha256": "1539763cc4a979c04589232df741a8464106950a2139097b736c8090c4969b5e",
+    "read_ranges": [
+      [
+        300,
+        599
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "api-operations",
+    "lines": 825
+  },
+  {
+    "path": "backend/tests/test_final_publish_audit.py",
+    "sha256": "877b6611b3cda22297fc9f8344a8042ab3ac828abff308f117d11b3404ba6d16",
+    "read_ranges": [
+      [
+        75,
+        143
+      ],
+      [
+        239,
+        299
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted source boundary reads only; searches not counted. Tests inspected as evidence only and not run.",
+    "scope": "test evidence",
+    "owner": "test-index",
+    "lines": 552
+  },
+  {
+    "path": "backend/tests/test_report_publication_barrier.py",
+    "sha256": "31fde5d86d98d0266dfeed9a491b5946d59e3127c80a802abbb05be0c1075fe5",
+    "read_ranges": [
+      [
+        176,
+        308
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted source boundary reads only; searches not counted. Tests inspected as evidence only and not run.",
+    "scope": "test evidence",
+    "owner": "test-index",
+    "lines": 308
+  },
+  {
+    "path": "deerflow_bridge/data_sources.py",
+    "sha256": "8090d2d26fda2a65b190144b40d48daf38151ebbe1a619d1778b71705b8f635c",
+    "read_ranges": [
+      [
+        158,
+        285
+      ],
+      [
+        760,
+        812
+      ],
+      [
+        1235,
+        1380
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Targeted caller/contract/default reads only, including delegated supplemental receipts; not a full-file study. No runtime evidence.",
+    "scope": "supplemental application boundary",
+    "owner": "v3-data",
+    "lines": 3117
+  }
+]

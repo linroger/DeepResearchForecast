@@ -1,0 +1,3932 @@
+{
+  "checked_utc": "2026-10-11T16:14:32.760577+00:00",
+  "source_commit": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "scoped_python_files": 146,
+  "scoped_source_lines": 151957,
+  "fully_read_scoped_python": 146,
+  "backend_tests_indexed": 180,
+  "backend_tests_full_read": 12,
+  "backend_tests_partial_read": 15,
+  "missing_scoped_full_read": [],
+  "errors": [],
+  "receipt_sha256": {
+    "coordinator-coverage.json": "ad763a78ac67bf53278bb1ee367cd438d120eef8bf01e08dd1d0892b0800c560",
+    "graph-actors-coverage.json": "8a5906be7fd4380fca23827e8c99bda26c1cb5422dfca68545e66c259633fb43",
+    "operations-coverage.json": "155d505a3c02865cba1c777438a24d5fe2d55d6855c68d1670fba42987722f3b",
+    "orchestrator-execution-coverage.json": "2b1c4d2e9d4cb6ecdf7abff137157ba3701a7d87e2af5a0b108c27797c264258",
+    "orchestrator-foundation-coverage.json": "0a97f28ee010e53b1c608595da64148a10404204692ec51c46453084786d1d1b",
+    "report-coverage.json": "a9b03c461c1ce63067b9bad8d9ebe8000ed87fc4ec22193b81e62a449e013733",
+    "research-coverage.json": "f276570ae1c82bd7472ba102682f8bf4c044cffbbc75fa770ea6b22c0538014c",
+    "simulation-coverage.json": "4bc471e1bc20afe0e737522096086ce87b691892030a7f69f4eb43fb33991aff",
+    "ui-api-coverage.json": "a9e0c6da073223c01607d3c74c36cdeb25ecdbe620bd44f6a744aa26f798c10c"
+  },
+  "verdict": "PASS",
+  "files": [
+    {
+      "path": "backend/app/__init__.py",
+      "owner": "ui-api",
+      "lines": 260,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          260
+        ]
+      ],
+      "receipts": [
+        "orchestrator-execution-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/__init__.py",
+      "owner": "ui-api",
+      "lines": 22,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          22
+        ]
+      ],
+      "receipts": [
+        "orchestrator-foundation-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/graph.py",
+      "owner": "ui-api",
+      "lines": 725,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          725
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/report.py",
+      "owner": "report",
+      "lines": 2176,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2176
+        ]
+      ],
+      "receipts": [
+        "orchestrator-foundation-coverage.json",
+        "report-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/research.py",
+      "owner": "ui-api",
+      "lines": 921,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          921
+        ]
+      ],
+      "receipts": [
+        "orchestrator-execution-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "research-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/sdk.py",
+      "owner": "ui-api",
+      "lines": 356,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          356
+        ]
+      ],
+      "receipts": [
+        "orchestrator-execution-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/settings.py",
+      "owner": "ui-api",
+      "lines": 186,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          186
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/api/simulation.py",
+      "owner": "ui-api",
+      "lines": 2871,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2871
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/config.py",
+      "owner": "ui-api",
+      "lines": 1656,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1656
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "research-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/mcp/__init__.py",
+      "owner": "ui-api",
+      "lines": 24,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          24
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/mcp/kg_server.py",
+      "owner": "ui-api",
+      "lines": 358,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          358
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/mcp/sim_server.py",
+      "owner": "ui-api",
+      "lines": 312,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          312
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/models/__init__.py",
+      "owner": "coordinator",
+      "lines": 9,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          9
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/models/project.py",
+      "owner": "coordinator",
+      "lines": 309,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          309
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/models/task.py",
+      "owner": "coordinator",
+      "lines": 184,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          184
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/__init__.py",
+      "owner": "coordinator",
+      "lines": 73,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          73
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/actor_context.py",
+      "owner": "graph-actors",
+      "lines": 1601,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1601
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/actor_dossier_compactor.py",
+      "owner": "graph-actors",
+      "lines": 320,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          320
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/actor_role_prompt.py",
+      "owner": "graph-actors",
+      "lines": 2026,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2026
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/agent_dynamics.py",
+      "owner": "simulation",
+      "lines": 405,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          405
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/backtest.py",
+      "owner": "report",
+      "lines": 237,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          237
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/decision_channel.py",
+      "owner": "simulation",
+      "lines": 775,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          775
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/ensemble.py",
+      "owner": "simulation",
+      "lines": 419,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          419
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/exec_brief.py",
+      "owner": "report",
+      "lines": 927,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          927
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/forecast_extractor.py",
+      "owner": "report",
+      "lines": 4201,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          4201
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/forecast_ledger.py",
+      "owner": "report",
+      "lines": 436,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          436
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graph_builder.py",
+      "owner": "graph-actors",
+      "lines": 2873,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2873
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graph_pruner.py",
+      "owner": "graph-actors",
+      "lines": 428,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          428
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/__init__.py",
+      "owner": "graph-actors",
+      "lines": 33,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          33
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/client.py",
+      "owner": "graph-actors",
+      "lines": 357,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          357
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/compat.py",
+      "owner": "graph-actors",
+      "lines": 56,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          56
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/cross_encoder.py",
+      "owner": "graph-actors",
+      "lines": 26,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          26
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/embedder.py",
+      "owner": "graph-actors",
+      "lines": 362,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          362
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/falkor_driver.py",
+      "owner": "graph-actors",
+      "lines": 99,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          99
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/llm_adapter.py",
+      "owner": "graph-actors",
+      "lines": 275,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          275
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/ontology.py",
+      "owner": "graph-actors",
+      "lines": 47,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          47
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/graphiti_client/runtime.py",
+      "owner": "graph-actors",
+      "lines": 2387,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2387
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/oasis_profile_generator.py",
+      "owner": "simulation",
+      "lines": 3264,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          3264
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/ontology_generator.py",
+      "owner": "graph-actors",
+      "lines": 1212,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1212
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "owner": "coordinator",
+      "lines": 13492,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          13492
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "orchestrator-execution-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "research-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "owner": "report",
+      "lines": 14478,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          14478
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "report-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/report_lint.py",
+      "owner": "report",
+      "lines": 1632,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1632
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/report_visualizer.py",
+      "owner": "report",
+      "lines": 5411,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          5411
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/requirement_spec.py",
+      "owner": "coordinator",
+      "lines": 105,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          105
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/research_progress.py",
+      "owner": "coordinator",
+      "lines": 564,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          564
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/resolution_autorun.py",
+      "owner": "report",
+      "lines": 117,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          117
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/simulation_config_generator.py",
+      "owner": "simulation",
+      "lines": 4006,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          4006
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/simulation_ipc.py",
+      "owner": "simulation",
+      "lines": 732,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          732
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/simulation_manager.py",
+      "owner": "simulation",
+      "lines": 1544,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1544
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/simulation_runner.py",
+      "owner": "simulation",
+      "lines": 3021,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          3021
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "simulation-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/text_processor.py",
+      "owner": "coordinator",
+      "lines": 86,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          86
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/translation_dates.py",
+      "owner": "report",
+      "lines": 300,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          300
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/translation_quantities.py",
+      "owner": "report",
+      "lines": 309,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          309
+        ]
+      ],
+      "receipts": [
+        "report-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/world_delta.py",
+      "owner": "simulation",
+      "lines": 80,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          80
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/worldstate.py",
+      "owner": "simulation",
+      "lines": 304,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          304
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/zep_entity_reader.py",
+      "owner": "graph-actors",
+      "lines": 613,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          613
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/zep_entity_resolver.py",
+      "owner": "graph-actors",
+      "lines": 542,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          542
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/zep_graph_memory_updater.py",
+      "owner": "graph-actors",
+      "lines": 719,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          719
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/zep_tools.py",
+      "owner": "graph-actors",
+      "lines": 2854,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2854
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/__init__.py",
+      "owner": "coordinator",
+      "lines": 9,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          9
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/actors.py",
+      "owner": "graph-actors",
+      "lines": 3006,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          3006
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/atomic.py",
+      "owner": "coordinator",
+      "lines": 77,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          77
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json",
+        "orchestrator-foundation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/chart_html.py",
+      "owner": "coordinator",
+      "lines": 77,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          77
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/dates.py",
+      "owner": "coordinator",
+      "lines": 69,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          69
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/file_parser.py",
+      "owner": "coordinator",
+      "lines": 192,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          192
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/llm_client.py",
+      "owner": "operations",
+      "lines": 1135,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1135
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/logger.py",
+      "owner": "coordinator",
+      "lines": 153,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          153
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/oasis_llm.py",
+      "owner": "simulation",
+      "lines": 616,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          616
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/prediction_markets.py",
+      "owner": "operations",
+      "lines": 884,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          884
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/security.py",
+      "owner": "coordinator",
+      "lines": 156,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          156
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/sim_timeline.py",
+      "owner": "simulation",
+      "lines": 570,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          570
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/telemetry.py",
+      "owner": "operations",
+      "lines": 594,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          594
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/token_budget.py",
+      "owner": "operations",
+      "lines": 174,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          174
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/zep_paging.py",
+      "owner": "coordinator",
+      "lines": 247,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          247
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/zep_rate_limit.py",
+      "owner": "coordinator",
+      "lines": 52,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          52
+        ]
+      ],
+      "receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/run.py",
+      "owner": "ui-api",
+      "lines": 62,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          62
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/action_logger.py",
+      "owner": "simulation",
+      "lines": 323,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          323
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/architecture_baseline.py",
+      "owner": "operations",
+      "lines": 301,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          301
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/backfill_report_visuals.py",
+      "owner": "operations",
+      "lines": 792,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          792
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/batch_runs.py",
+      "owner": "operations",
+      "lines": 841,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          841
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/check_env_drift.py",
+      "owner": "operations",
+      "lines": 327,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          327
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/disk_usage_report.py",
+      "owner": "operations",
+      "lines": 108,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          108
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/eval_forecast_quality.py",
+      "owner": "operations",
+      "lines": 439,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          439
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/export_demo_site_data.py",
+      "owner": "operations",
+      "lines": 1093,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1093
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/forecast_tools.py",
+      "owner": "operations",
+      "lines": 76,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          76
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/golden_eval.py",
+      "owner": "operations",
+      "lines": 522,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          522
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/model_comparison.py",
+      "owner": "operations",
+      "lines": 524,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          524
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/preflight.py",
+      "owner": "operations",
+      "lines": 513,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          513
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/process_diagnostics.py",
+      "owner": "operations",
+      "lines": 118,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          118
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/reclaim_report_space.py",
+      "owner": "operations",
+      "lines": 192,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          192
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/replay_zep_dead_letters.py",
+      "owner": "operations",
+      "lines": 161,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          161
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/resolution_monitor.py",
+      "owner": "operations",
+      "lines": 704,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          704
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/run_parallel_simulation.py",
+      "owner": "simulation",
+      "lines": 6154,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          6154
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/run_reddit_simulation.py",
+      "owner": "simulation",
+      "lines": 1108,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1108
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/run_twitter_simulation.py",
+      "owner": "simulation",
+      "lines": 1117,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1117
+        ]
+      ],
+      "receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/scheduled_rerun.py",
+      "owner": "operations",
+      "lines": 938,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          938
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_deerflow_deep_research.py",
+      "owner": "operations",
+      "lines": 171,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          171
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_graphiti_migration.py",
+      "owner": "operations",
+      "lines": 118,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          118
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_graphiti_services.py",
+      "owner": "operations",
+      "lines": 129,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          129
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_pipeline_resume.py",
+      "owner": "operations",
+      "lines": 302,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          302
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_profile_format.py",
+      "owner": "operations",
+      "lines": 166,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          166
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/scripts/test_zep_rate_limit.py",
+      "owner": "operations",
+      "lines": 116,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          116
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "owner": "test-reference",
+      "lines": 206,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_actor_cast_discipline.py",
+      "owner": "test-reference",
+      "lines": 530,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_actor_context_runtime.py",
+      "owner": "test-reference",
+      "lines": 1377,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          172,
+          229
+        ],
+        [
+          250,
+          481
+        ],
+        [
+          927,
+          1006
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_actor_dossier_compactor.py",
+      "owner": "test-reference",
+      "lines": 142,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_actor_dossier_judge.py",
+      "owner": "test-reference",
+      "lines": 52,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_actor_intelligence_producer.py",
+      "owner": "test-reference",
+      "lines": 1628,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          695,
+          778
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_actor_role_prompt.py",
+      "owner": "test-reference",
+      "lines": 1359,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          466,
+          559
+        ],
+        [
+          675,
+          703
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_agent_dynamics.py",
+      "owner": "test-reference",
+      "lines": 115,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_agent_log_publication_gate.py",
+      "owner": "test-reference",
+      "lines": 114,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_architecture_baseline_cli.py",
+      "owner": "test-reference",
+      "lines": 172,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_architecture_characterization.py",
+      "owner": "test-reference",
+      "lines": 320,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_graph.py",
+      "owner": "test-reference",
+      "lines": 379,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_infra.py",
+      "owner": "test-reference",
+      "lines": 657,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_ontology.py",
+      "owner": "test-reference",
+      "lines": 213,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          160,
+          213
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_prepare.py",
+      "owner": "test-reference",
+      "lines": 407,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_report.py",
+      "owner": "test-reference",
+      "lines": 696,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_research.py",
+      "owner": "test-reference",
+      "lines": 684,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_runloop.py",
+      "owner": "test-reference",
+      "lines": 384,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_audit_fixes_runner.py",
+      "owner": "test-reference",
+      "lines": 1002,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_auth_gate_forwarded.py",
+      "owner": "test-reference",
+      "lines": 96,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          96
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_backfill_report_visuals.py",
+      "owner": "test-reference",
+      "lines": 378,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_bridge_extensions_config.py",
+      "owner": "test-reference",
+      "lines": 196,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_bridge_market_tools.py",
+      "owner": "test-reference",
+      "lines": 335,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_bridge_overhaul_v3.py",
+      "owner": "test-reference",
+      "lines": 1002,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_bridge_prediction_markets.py",
+      "owner": "test-reference",
+      "lines": 1294,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_bridge_search_and_cache.py",
+      "owner": "test-reference",
+      "lines": 331,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_calendar_event_bucketing.py",
+      "owner": "test-reference",
+      "lines": 225,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_calendar_round_loop.py",
+      "owner": "test-reference",
+      "lines": 547,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_calibration_rigor.py",
+      "owner": "test-reference",
+      "lines": 327,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_cast_reconcile.py",
+      "owner": "test-reference",
+      "lines": 55,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_chart_serve_inline.py",
+      "owner": "test-reference",
+      "lines": 118,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_claude_prompt_cache.py",
+      "owner": "test-reference",
+      "lines": 469,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_config_optimization_defaults.py",
+      "owner": "test-reference",
+      "lines": 134,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          134
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_decision_channel.py",
+      "owner": "test-reference",
+      "lines": 147,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_deerflow_bridge_sync_guard.py",
+      "owner": "test-reference",
+      "lines": 689,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_dossier_coverage.py",
+      "owner": "test-reference",
+      "lines": 46,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_dossier_edit_continue.py",
+      "owner": "test-reference",
+      "lines": 148,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          148
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_drf2_driver.py",
+      "owner": "test-reference",
+      "lines": 655,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_drf2_kg.py",
+      "owner": "test-reference",
+      "lines": 445,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_drf2_simulation.py",
+      "owner": "test-reference",
+      "lines": 500,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_drf2_skills_config.py",
+      "owner": "test-reference",
+      "lines": 700,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_ensemble_backtest.py",
+      "owner": "test-reference",
+      "lines": 71,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_env_drift_pins.py",
+      "owner": "test-reference",
+      "lines": 231,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_eval_forecast_quality.py",
+      "owner": "test-reference",
+      "lines": 199,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_exec_brief.py",
+      "owner": "test-reference",
+      "lines": 459,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_export_demo_site_data.py",
+      "owner": "test-reference",
+      "lines": 896,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_faction_brief.py",
+      "owner": "test-reference",
+      "lines": 242,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_final_publish_audit.py",
+      "owner": "test-reference",
+      "lines": 552,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_foglamp_containment.py",
+      "owner": "test-reference",
+      "lines": 425,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_forecast_diff.py",
+      "owner": "test-reference",
+      "lines": 57,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_forecast_extractor.py",
+      "owner": "test-reference",
+      "lines": 1524,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_forecast_ledger.py",
+      "owner": "test-reference",
+      "lines": 155,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_forecast_visuals_manifest.py",
+      "owner": "test-reference",
+      "lines": 940,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_golden_eval.py",
+      "owner": "test-reference",
+      "lines": 276,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_graph_actor_v1_seed.py",
+      "owner": "test-reference",
+      "lines": 767,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          270,
+          613
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_graph_cost_containment.py",
+      "owner": "test-reference",
+      "lines": 433,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          186,
+          257
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_graph_optimizations.py",
+      "owner": "test-reference",
+      "lines": 365,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_graph_research_boundary.py",
+      "owner": "test-reference",
+      "lines": 50,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          50
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_live_research_progress.py",
+      "owner": "test-reference",
+      "lines": 442,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          231,
+          442
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_llm_fallback_model.py",
+      "owner": "test-reference",
+      "lines": 204,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_logger.py",
+      "owner": "test-reference",
+      "lines": 18,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_loop006_static_viz_fallbacks.py",
+      "owner": "test-reference",
+      "lines": 298,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_loop007_research_budget.py",
+      "owner": "test-reference",
+      "lines": 953,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          118,
+          180
+        ],
+        [
+          317,
+          339
+        ],
+        [
+          384,
+          416
+        ],
+        [
+          742,
+          755
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_loop010_global_synthesis.py",
+      "owner": "test-reference",
+      "lines": 948,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_loop010_research_contracts.py",
+      "owner": "test-reference",
+      "lines": 363,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_market_influence_boundary.py",
+      "owner": "test-reference",
+      "lines": 361,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_mcp_servers.py",
+      "owner": "test-reference",
+      "lines": 493,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          493
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_multipart_synthesis.py",
+      "owner": "test-reference",
+      "lines": 1006,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_oasis_v1_provenance.py",
+      "owner": "test-reference",
+      "lines": 485,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_ontology_actors_optimizations.py",
+      "owner": "test-reference",
+      "lines": 250,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          125,
+          187
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_ontology_refinements.py",
+      "owner": "test-reference",
+      "lines": 591,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_orchestrator_outage_halt.py",
+      "owner": "test-reference",
+      "lines": 348,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_orchestrator_research_wiring.py",
+      "owner": "test-reference",
+      "lines": 1938,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_parallel_research_merge.py",
+      "owner": "test-reference",
+      "lines": 422,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_pipeline_actor_contract.py",
+      "owner": "test-reference",
+      "lines": 1382,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_prediction_markets.py",
+      "owner": "test-reference",
+      "lines": 872,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_projected_edges.py",
+      "owner": "test-reference",
+      "lines": 34,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_prompt_injection_boundaries.py",
+      "owner": "test-reference",
+      "lines": 253,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_publish_gate.py",
+      "owner": "test-reference",
+      "lines": 126,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_reclaim_report_space.py",
+      "owner": "test-reference",
+      "lines": 120,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_bilingual.py",
+      "owner": "test-reference",
+      "lines": 1314,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_chart_quality.py",
+      "owner": "test-reference",
+      "lines": 568,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_concurrent_sections.py",
+      "owner": "test-reference",
+      "lines": 97,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_draft_exposure.py",
+      "owner": "test-reference",
+      "lines": 413,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_forecast_localization.py",
+      "owner": "test-reference",
+      "lines": 354,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_lint_citations.py",
+      "owner": "test-reference",
+      "lines": 380,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_market_crosscheck.py",
+      "owner": "test-reference",
+      "lines": 467,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_market_evidence.py",
+      "owner": "test-reference",
+      "lines": 128,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_publication_barrier.py",
+      "owner": "test-reference",
+      "lines": 308,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_repair_and_reflection.py",
+      "owner": "test-reference",
+      "lines": 976,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_section_concurrency_parity.py",
+      "owner": "test-reference",
+      "lines": 107,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_sections_partial.py",
+      "owner": "test-reference",
+      "lines": 178,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_spine_and_turns.py",
+      "owner": "test-reference",
+      "lines": 352,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_visualizer.py",
+      "owner": "test-reference",
+      "lines": 936,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_visualizer_axes.py",
+      "owner": "test-reference",
+      "lines": 123,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_viz_and_pdf.py",
+      "owner": "test-reference",
+      "lines": 648,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_viz_manifest_api.py",
+      "owner": "test-reference",
+      "lines": 172,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_report_zh_presentation.py",
+      "owner": "test-reference",
+      "lines": 139,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_checkpoint.py",
+      "owner": "test-reference",
+      "lines": 559,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          165,
+          204
+        ],
+        [
+          453,
+          517
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_research_contract_finalization.py",
+      "owner": "test-reference",
+      "lines": 411,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_dossier_translation.py",
+      "owner": "test-reference",
+      "lines": 150,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3.py",
+      "owner": "test-reference",
+      "lines": 1185,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          714,
+          804
+        ],
+        [
+          870,
+          992
+        ],
+        [
+          1116,
+          1148
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_hardening.py",
+      "owner": "test-reference",
+      "lines": 335,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_residuals.py",
+      "owner": "test-reference",
+      "lines": 333,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_round2.py",
+      "owner": "test-reference",
+      "lines": 937,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_round3_loop.py",
+      "owner": "test-reference",
+      "lines": 564,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_round3_robust.py",
+      "owner": "test-reference",
+      "lines": 712,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_round3_synth.py",
+      "owner": "test-reference",
+      "lines": 895,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3_text.py",
+      "owner": "test-reference",
+      "lines": 259,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_evidence_quality.py",
+      "owner": "test-reference",
+      "lines": 274,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_fanout.py",
+      "owner": "test-reference",
+      "lines": 94,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_fork_handoff.py",
+      "owner": "test-reference",
+      "lines": 162,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_gateway.py",
+      "owner": "test-reference",
+      "lines": 3197,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          522,
+          563
+        ],
+        [
+          673,
+          734
+        ],
+        [
+          1460,
+          1490
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_research_round3_parent.py",
+      "owner": "test-reference",
+      "lines": 204,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_research_spend_flush.py",
+      "owner": "test-reference",
+      "lines": 365,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_resolution_autorun.py",
+      "owner": "test-reference",
+      "lines": 122,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_resolution_monitor.py",
+      "owner": "test-reference",
+      "lines": 337,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_runtime_lifecycle_isolation.py",
+      "owner": "test-reference",
+      "lines": 115,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          115
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_runtime_skill_sync.py",
+      "owner": "test-reference",
+      "lines": 301,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          150,
+          193
+        ],
+        [
+          235,
+          285
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_sdk_publication_barrier.py",
+      "owner": "test-reference",
+      "lines": 113,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          113
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_seed_ensemble.py",
+      "owner": "test-reference",
+      "lines": 19,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_downstream_gates.py",
+      "owner": "test-reference",
+      "lines": 287,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_firecrawl.py",
+      "owner": "test-reference",
+      "lines": 285,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_firecrawl_guardrails.py",
+      "owner": "test-reference",
+      "lines": 292,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_forecast_charts.py",
+      "owner": "test-reference",
+      "lines": 356,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_forecast_provenance.py",
+      "owner": "test-reference",
+      "lines": 277,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_json_extract.py",
+      "owner": "test-reference",
+      "lines": 287,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_judge_normalization.py",
+      "owner": "test-reference",
+      "lines": 405,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_report_prompts.py",
+      "owner": "test-reference",
+      "lines": 289,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_research_viz.py",
+      "owner": "test-reference",
+      "lines": 391,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_scenario_parser.py",
+      "owner": "test-reference",
+      "lines": 115,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_sim_additivity.py",
+      "owner": "test-reference",
+      "lines": 301,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_skill_hygiene.py",
+      "owner": "test-reference",
+      "lines": 125,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_translation_reallm.py",
+      "owner": "test-reference",
+      "lines": 329,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_translation_structure.py",
+      "owner": "test-reference",
+      "lines": 343,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sessionb_viz_signal.py",
+      "owner": "test-reference",
+      "lines": 223,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_settings_endpoint_fallback.py",
+      "owner": "test-reference",
+      "lines": 71,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          71
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_settings_provider_info.py",
+      "owner": "test-reference",
+      "lines": 31,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          31
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_sim_config_incentives.py",
+      "owner": "test-reference",
+      "lines": 70,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_config_v1_provenance.py",
+      "owner": "test-reference",
+      "lines": 716,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_context_persona.py",
+      "owner": "test-reference",
+      "lines": 453,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_market_priors.py",
+      "owner": "test-reference",
+      "lines": 260,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_meter_persistence.py",
+      "owner": "test-reference",
+      "lines": 425,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_reaction_phase.py",
+      "owner": "test-reference",
+      "lines": 720,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_realism_item20.py",
+      "owner": "test-reference",
+      "lines": 351,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_resume_reuse.py",
+      "owner": "test-reference",
+      "lines": 410,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_sim_timeline.py",
+      "owner": "test-reference",
+      "lines": 480,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_simulation_config_seal.py",
+      "owner": "test-reference",
+      "lines": 301,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_simulation_runner_throttle.py",
+      "owner": "test-reference",
+      "lines": 60,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_simulation_trajectory_api.py",
+      "owner": "test-reference",
+      "lines": 151,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          151
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_smoke_realrun_residue.py",
+      "owner": "test-reference",
+      "lines": 141,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_spa_serving.py",
+      "owner": "test-reference",
+      "lines": 98,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          98
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_stage1_model_boundaries.py",
+      "owner": "test-reference",
+      "lines": 711,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_start_script_progress.py",
+      "owner": "test-reference",
+      "lines": 300,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_status_live_block.py",
+      "owner": "test-reference",
+      "lines": 132,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          132
+        ]
+      ],
+      "receipts": [
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_telemetry.py",
+      "owner": "test-reference",
+      "lines": 238,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_telemetry_fallback_attribution.py",
+      "owner": "test-reference",
+      "lines": 212,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_temporal_mode_contract.py",
+      "owner": "test-reference",
+      "lines": 564,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_three_part_and_fetch_retry.py",
+      "owner": "test-reference",
+      "lines": 231,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_token_budget.py",
+      "owner": "test-reference",
+      "lines": 155,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_translation_dates.py",
+      "owner": "test-reference",
+      "lines": 310,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_translation_quantities.py",
+      "owner": "test-reference",
+      "lines": 194,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_translation_robustness.py",
+      "owner": "test-reference",
+      "lines": 383,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_utils_atomic.py",
+      "owner": "test-reference",
+      "lines": 94,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_utils_dates.py",
+      "owner": "test-reference",
+      "lines": 34,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_utils_file_parser.py",
+      "owner": "test-reference",
+      "lines": 43,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_utils_security.py",
+      "owner": "test-reference",
+      "lines": 62,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_viz_manifest_provenance.py",
+      "owner": "test-reference",
+      "lines": 70,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_citations.py",
+      "owner": "test-reference",
+      "lines": 714,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_kg.py",
+      "owner": "test-reference",
+      "lines": 907,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          158,
+          335
+        ],
+        [
+          386,
+          426
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/tests/test_wave9_orchestrator.py",
+      "owner": "test-reference",
+      "lines": 544,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_report_focus.py",
+      "owner": "test-reference",
+      "lines": 654,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_report_integration.py",
+      "owner": "test-reference",
+      "lines": 143,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_research_quality.py",
+      "owner": "test-reference",
+      "lines": 276,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_research_speed.py",
+      "owner": "test-reference",
+      "lines": 482,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_wave9_visualizer.py",
+      "owner": "test-reference",
+      "lines": 714,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_world_delta.py",
+      "owner": "test-reference",
+      "lines": 114,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_worldstate.py",
+      "owner": "test-reference",
+      "lines": 119,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_worldstate_calendar.py",
+      "owner": "test-reference",
+      "lines": 204,
+      "status": "indexed-only",
+      "ranges": [],
+      "receipts": []
+    },
+    {
+      "path": "backend/tests/test_zep_entity_resolver.py",
+      "owner": "test-reference",
+      "lines": 505,
+      "status": "partial-read-receipted",
+      "ranges": [
+        [
+          61,
+          139
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/cached_fetch.py",
+      "owner": "research",
+      "lines": 854,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          854
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "owner": "research",
+      "lines": 17986,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          17986
+        ]
+      ],
+      "receipts": [
+        "graph-actors-coverage.json",
+        "orchestrator-foundation-coverage.json",
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "owner": "research",
+      "lines": 6379,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          6379
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/market_tools.py",
+      "owner": "research",
+      "lines": 648,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          648
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/apply_lead_agent_overlays.py",
+      "owner": "research",
+      "lines": 138,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          138
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/apply_model_factory_overlays.py",
+      "owner": "research",
+      "lines": 65,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          65
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/apply_subagent_overlays.py",
+      "owner": "research",
+      "lines": 410,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          410
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/middlewares/loop_detection_middleware.py",
+      "owner": "research",
+      "lines": 635,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          635
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/middlewares/model_concurrency_middleware.py",
+      "owner": "research",
+      "lines": 76,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          76
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/middlewares/summarization_middleware.py",
+      "owner": "research",
+      "lines": 513,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          513
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/middlewares/title_middleware.py",
+      "owner": "research",
+      "lines": 194,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          194
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/middlewares/tool_error_handling_middleware.py",
+      "owner": "research",
+      "lines": 257,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          257
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/models/claude_provider.py",
+      "owner": "research",
+      "lines": 514,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          514
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/models/credential_loader.py",
+      "owner": "research",
+      "lines": 278,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          278
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/models/patched_minimax.py",
+      "owner": "research",
+      "lines": 239,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          239
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/conftest.py",
+      "owner": "research",
+      "lines": 23,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          23
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/test_client_usage_overlay.py",
+      "owner": "research",
+      "lines": 137,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          137
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/test_lead_agent_trim_none.py",
+      "owner": "research",
+      "lines": 191,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          191
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/test_model_factory_metadata.py",
+      "owner": "research",
+      "lines": 42,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          42
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/test_subagent_runtime_contract.py",
+      "owner": "research",
+      "lines": 369,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          369
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/patches/tests/test_summarization_trim_env.py",
+      "owner": "research",
+      "lines": 90,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/research_budget.py",
+      "owner": "research",
+      "lines": 1508,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          1508
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/research_gateway.py",
+      "owner": "research",
+      "lines": 3812,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          3812
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/runtime_skill_sync.py",
+      "owner": "research",
+      "lines": 615,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          615
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/search_tools.py",
+      "owner": "research",
+      "lines": 746,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          746
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "deerflow_bridge/skills/forecast-visuals/scripts/render.py",
+      "owner": "research",
+      "lines": 2138,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          2138
+        ]
+      ],
+      "receipts": [
+        "research-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/config/market_tools.py",
+      "owner": "operations",
+      "lines": 248,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          248
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/__init__.py",
+      "owner": "operations",
+      "lines": 36,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          36
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/cli.py",
+      "owner": "operations",
+      "lines": 227,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          227
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/ensemble.py",
+      "owner": "operations",
+      "lines": 126,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          126
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/gates.py",
+      "owner": "operations",
+      "lines": 226,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          226
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/harness_client.py",
+      "owner": "operations",
+      "lines": 295,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          295
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/legacy.py",
+      "owner": "operations",
+      "lines": 25,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          25
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/manifest.py",
+      "owner": "operations",
+      "lines": 141,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          141
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/pipeline.py",
+      "owner": "operations",
+      "lines": 336,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          336
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/driver/state.py",
+      "owner": "operations",
+      "lines": 236,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          236
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/kg/__init__.py",
+      "owner": "operations",
+      "lines": 9,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          9
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/kg/server.py",
+      "owner": "operations",
+      "lines": 173,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          173
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/kg/tools.py",
+      "owner": "operations",
+      "lines": 402,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          402
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/simulation/__init__.py",
+      "owner": "operations",
+      "lines": 15,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          15
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/simulation/jobs.py",
+      "owner": "operations",
+      "lines": 430,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          430
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "drf2/engines/simulation/server.py",
+      "owner": "operations",
+      "lines": 214,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          214
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "scripts/salvage_orphaned_pipelines.py",
+      "owner": "operations",
+      "lines": 231,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          231
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "scripts/watch_pipeline_progress.py",
+      "owner": "operations",
+      "lines": 187,
+      "status": "full-read-receipted",
+      "ranges": [
+        [
+          1,
+          187
+        ]
+      ],
+      "receipts": [
+        "operations-coverage.json"
+      ]
+    }
+  ],
+  "meaning": "Range-union and source-hash validation of actual reader receipts. Semantic accuracy is separately reviewed; this is not runtime acceptance."
+}

@@ -154,7 +154,6 @@ def test_extraction_prompt_and_resolution_use_canonical_data(monkeypatch, offici
 @pytest.fixture
 def viz(monkeypatch):
     monkeypatch.setattr(rv.ReportVisualizer, "_png_export_ok", lambda self: False)
-    monkeypatch.setattr(rv.ReportVisualizer, "_load_price_history", staticmethod(lambda *args: {}))
     return rv.ReportVisualizer()
 
 

@@ -1,0 +1,714 @@
+[
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "4608299a7a125c563371d622282f52165d2f64598d679f51e77c008ee4cc3532",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3901,
+        4237
+      ],
+      [
+        4238,
+        4573
+      ],
+      [
+        4574,
+        4873
+      ],
+      [
+        4874,
+        5173
+      ],
+      [
+        5174,
+        5473
+      ],
+      [
+        5474,
+        5773
+      ],
+      [
+        5774,
+        6073
+      ],
+      [
+        6074,
+        6373
+      ],
+      [
+        6374,
+        6673
+      ],
+      [
+        6674,
+        6973
+      ],
+      [
+        6974,
+        7273
+      ],
+      [
+        7274,
+        7573
+      ],
+      [
+        7574,
+        7873
+      ],
+      [
+        7874,
+        8173
+      ],
+      [
+        8174,
+        8473
+      ],
+      [
+        8474,
+        8803
+      ],
+      [
+        8804,
+        9103
+      ],
+      [
+        9104,
+        9403
+      ],
+      [
+        9404,
+        9703
+      ],
+      [
+        9704,
+        10003
+      ],
+      [
+        10004,
+        10303
+      ],
+      [
+        10304,
+        10603
+      ],
+      [
+        10604,
+        10903
+      ],
+      [
+        10904,
+        11203
+      ],
+      [
+        11204,
+        11503
+      ],
+      [
+        11504,
+        11803
+      ],
+      [
+        11804,
+        12103
+      ],
+      [
+        12104,
+        12403
+      ],
+      [
+        12404,
+        12703
+      ],
+      [
+        12704,
+        12953
+      ],
+      [
+        12954,
+        13253
+      ],
+      [
+        13254,
+        13553
+      ],
+      [
+        13554,
+        13853
+      ],
+      [
+        13854,
+        14153
+      ],
+      [
+        14154,
+        14453
+      ],
+      [
+        14454,
+        14753
+      ],
+      [
+        14754,
+        15053
+      ],
+      [
+        15054,
+        15353
+      ],
+      [
+        15354,
+        15653
+      ],
+      [
+        15654,
+        15953
+      ],
+      [
+        15954,
+        16253
+      ],
+      [
+        16254,
+        16553
+      ],
+      [
+        16554,
+        16853
+      ],
+      [
+        16854,
+        17174
+      ],
+      [
+        17175,
+        17495
+      ],
+      [
+        17496,
+        17795
+      ],
+      [
+        17796,
+        18095
+      ],
+      [
+        18096,
+        18395
+      ],
+      [
+        18396,
+        18695
+      ],
+      [
+        18696,
+        18945
+      ],
+      [
+        18946,
+        19136
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete collective bounded source read by five disjoint specialists: research-core 1-4573, research-synthesis 4574-8803, research-loop 8804-12953, research-stages 12954-17495, research-entry 17496-19136. All final receipts received; zero assigned gaps. Rereads repaired clipped ranges 9154-9403 and 13554-13853, plus supplemental 17927-18200 and 10800-10801. Only actual file EOF 19136 credited."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_lead_agent_overlays.py",
+    "sha256": "33a2ea2df20f216ee08c0c5cc12a09e40fb51f793433d5456e001f741eb06998",
+    "read_ranges": [
+      [
+        1,
+        138
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_model_factory_overlays.py",
+    "sha256": "6c43999c3ed8887453743dc901bf599cd329794826e6df7c72aa10e408b8cf93",
+    "read_ranges": [
+      [
+        1,
+        65
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_subagent_overlays.py",
+    "sha256": "99518447028caf217b37151b18e10c29516b5bb59fecacb49ed4898defaf94be",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        410
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/loop_detection_middleware.py",
+    "sha256": "902122f56588c2cfcb8aabe8ed858b65552c5b65647e160e0420af40ee7d9b25",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        635
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/model_concurrency_middleware.py",
+    "sha256": "1401a60a92199ef261bed1e8c663903d38d04bb4b5c5caa189296b47c38a5e17",
+    "read_ranges": [
+      [
+        1,
+        76
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/summarization_middleware.py",
+    "sha256": "ec408ce01976bb98713ceafbfe5a26e19e286249d9fd0da38e58e30e1aa59c12",
+    "read_ranges": [
+      [
+        1,
+        260
+      ],
+      [
+        261,
+        513
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/title_middleware.py",
+    "sha256": "41f8bf4eb9b380bed5d5220c51f782445c11d5ae7cc376427b34419601635f74",
+    "read_ranges": [
+      [
+        1,
+        194
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/tool_error_handling_middleware.py",
+    "sha256": "1e2ef2ca6ee1b0df1fe72cbe80a712c8eb4f14bc3b74739c319551f4d87f1f65",
+    "read_ranges": [
+      [
+        1,
+        159
+      ],
+      [
+        160,
+        205
+      ],
+      [
+        206,
+        257
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution. Combined-output gap repaired by rereading 160-205."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/claude_provider.py",
+    "sha256": "90f92212049d800bf1e080b2fe5a5cf64e30a5d8bd3c7d0182818bb872de339f",
+    "read_ranges": [
+      [
+        1,
+        260
+      ],
+      [
+        261,
+        514
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/credential_loader.py",
+    "sha256": "39630f00ba066ebbadf5b3396936c533217ba5e1ab2d7d2a343521db813ef809",
+    "read_ranges": [
+      [
+        1,
+        278
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/patched_minimax.py",
+    "sha256": "6653c755fe40f1a8dc10474947b65052ed3cb6e7b628e0567fdee7cdbc2965a8",
+    "read_ranges": [
+      [
+        1,
+        239
+      ]
+    ],
+    "depth": "full",
+    "notes": "Complete direct bounded source read by legacy-harness owner. No overlay/application execution."
+  },
+  {
+    "path": "deerflow_bridge/research_gateway.py",
+    "sha256": "831dc381b7eafa5fdf443cce48da805ba4f23639111e047184fd24768d2e3929",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3901,
+        4200
+      ],
+      [
+        4201,
+        4500
+      ],
+      [
+        4501,
+        4709
+      ]
+    ],
+    "depth": "full",
+    "notes": "research-gateway specialist final receipt: all 4709 lines read in bounded chunks; internally clipped 2927-2970 reread. Source only. Supplemental caller coverage recorded separately."
+  },
+  {
+    "path": "deerflow_bridge/runtime_skill_sync.py",
+    "sha256": "f34554b3581a17dcbb7118e2175136663e52fc09a32a161b2dbe983087fccb10",
+    "read_ranges": [
+      [
+        1,
+        311
+      ],
+      [
+        312,
+        622
+      ]
+    ],
+    "depth": "full",
+    "notes": "research-entry specialist complete final receipt; all 622 lines read in two bounded chunks. No execution or deployed runtime inspection."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+    "read_ranges": [
+      [
+        829,
+        890
+      ],
+      [
+        1340,
+        1410
+      ],
+      [
+        1500,
+        1830
+      ],
+      [
+        2160,
+        2769
+      ],
+      [
+        4077,
+        4610
+      ],
+      [
+        6145,
+        6500
+      ],
+      [
+        7430,
+        7745
+      ],
+      [
+        12555,
+        13135
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental direct source read at cross-area consumer/deployment boundary; no broader module coverage claimed."
+  },
+  {
+    "path": "backend/app/services/actor_context.py",
+    "sha256": "17f12e5ba2b8f02309ab3ba65a08ee14afe93383217e5707ccf941efea1a0dbf",
+    "read_ranges": [
+      [
+        410,
+        465
+      ],
+      [
+        1190,
+        1490
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental direct source read at cross-area consumer/deployment boundary; no broader module coverage claimed."
+  },
+  {
+    "path": "backend/app/services/graph_builder.py",
+    "sha256": "0eb3150596342ee3ea5de2603f36f1aefe8f5743323245161067070c2174c18c",
+    "read_ranges": [
+      [
+        1760,
+        2315
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental direct source read at cross-area consumer/deployment boundary; no broader module coverage claimed."
+  },
+  {
+    "path": "setup.sh",
+    "sha256": "aeb3399f923b84795a008cd7ab179eebced78153850de820b5e20c8db79348d9",
+    "read_ranges": [
+      [
+        485,
+        730
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental direct source read at cross-area consumer/deployment boundary; no broader module coverage claimed."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_lead_agent_trim_none.py",
+    "sha256": "fb8fdc4dc23350bef66b363471ba16bf78b342785dd0cf2ebeb6147ca85605ce",
+    "read_ranges": [
+      [
+        1,
+        191
+      ]
+    ],
+    "depth": "full",
+    "notes": "Supplemental test source inspected as evidence only; not executed."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_client_usage_overlay.py",
+    "sha256": "d1e79ec2208b4f8c52ebf361e7d4df0307bdb93cd0fdaec2e5f150be9787f946",
+    "read_ranges": [
+      [
+        1,
+        137
+      ]
+    ],
+    "depth": "full",
+    "notes": "Supplemental test source inspected as evidence only; not executed."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "read_ranges": [
+      [
+        1140,
+        1245
+      ],
+      [
+        1570,
+        1620
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental Config defaults and depth-budget boundary only; effective environment/provider configuration not inspected."
+  },
+  {
+    "path": "deerflow_bridge/extensions_config.json",
+    "sha256": "db342f39f3f514a311162bd3a93cffa83aeeb46a7cb0c36292e7f1a8b7b20bd3",
+    "read_ranges": [
+      [
+        1,
+        41
+      ]
+    ],
+    "depth": "full",
+    "notes": "Supplemental registration-template read only. Server descriptions are not treated as verified server implementation behavior."
+  },
+  {
+    "path": "deerflow_bridge/linear_research.py",
+    "sha256": "18896eaaa89991803e3f7396488de2f4065234bb93a5f24f36a35d19548594ab",
+    "read_ranges": [
+      [
+        85,
+        115
+      ],
+      [
+        185,
+        195
+      ],
+      [
+        1210,
+        1310
+      ],
+      [
+        3590,
+        3598
+      ],
+      [
+        3770,
+        4119
+      ],
+      [
+        4550,
+        5218
+      ],
+      [
+        5660,
+        5720
+      ],
+      [
+        6245,
+        6295
+      ],
+      [
+        6795,
+        6830
+      ],
+      [
+        7210,
+        7385
+      ],
+      [
+        7790,
+        7910
+      ],
+      [
+        8085,
+        8298
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental gateway specialist caller read; only listed ranges are covered."
+  },
+  {
+    "path": "deerflow_bridge/research_budget.py",
+    "sha256": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+    "read_ranges": [
+      [
+        20,
+        120
+      ],
+      [
+        860,
+        1069
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Supplemental synthesis specialist exact model-lease boundary read only; broader budget module owned elsewhere."
+  }
+]

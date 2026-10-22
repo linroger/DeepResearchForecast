@@ -1,0 +1,15 @@
+{
+  "phase": "first merged freeze",
+  "python_files": 636,
+  "test_modules": 151,
+  "passed": 5268,
+  "failed": 22,
+  "errors": 25,
+  "skipped": 3,
+  "deselected": 21,
+  "xfail": 11,
+  "seconds": 648.48,
+  "evidence_root": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm",
+  "triage": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm/triage.json",
+  "disposition": "red retained; disjoint fixes and new final freeze required"
+}

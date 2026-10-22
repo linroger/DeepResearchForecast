@@ -113,6 +113,50 @@ def test_lint_table_cell_truncation_spares_official_series_titles():
     assert rl.detect_table_cell_truncation(md) == []
 
 
+def test_lint_table_cell_truncation_spares_complete_unpunctuated_prose():
+    # Regression (2026-10-16 Burnham run): LLM scenario-matrix cells hold full
+    # clause lists that simply end without terminal punctuation — content words
+    # close the clause, so they are not width cuts and must not fail the gate.
+    cells = [
+        "(a) Burnham is Prime Minister; (b) a Railways Act has received Royal "
+        "Assent devolving specified rail services to Greater Manchester control; "
+        "(c) the GM Integrated Settlement envelope is confirmed at or near the "
+        "NAO-recorded £3.5 billion",
+        "at least two of three fail: funding — no confirmation of the GM envelope "
+        "at NAO scale; rail — the January 2028 phase slips beyond mid-2028; "
+        "fiscal powers — trailblazer provisions remain prospective or only "
+        "partially commenced",
+        "sustained national polling with Labour's lead below roughly three "
+        "points; Burnham's favourability sustained below about +6 across two "
+        "quarters",
+    ]
+    md = "| Scenario | Criteria |\n|---|---|\n"
+    for i, c in enumerate(cells):
+        md += f"| {i + 1} | {c} |\n"
+    assert rl.detect_table_cell_truncation(md) == []
+
+
+def test_lint_table_cell_truncation_flags_mid_clause_cuts():
+    # Dangling function word, orphan tail after the last boundary, unbalanced
+    # bracket and machine-length token are genuine width-cut signatures.
+    base = ("The committee reviews the settlement profile, the January 2028 "
+            "phase and the audited capital numbers published by the spending "
+            "review each spring against the wider envelope ")
+    assert len(base) > 160 or True  # each cut below must clear min_len=160
+    cuts = [
+        base + "with confirmation expected at or near",           # dangling word
+        base + "across two consecutive; and the",                 # orphan tail
+        base + "if the Railways Act carries section 7 (b",        # unbalanced paren
+        base + "measured against the blended basket used in Q3 " + "x" * 60,  # machine token
+    ]
+    md = "| # | criteria |\n|---|---|\n"
+    for i, c in enumerate(cuts):
+        assert len(c) >= 160, f"cut {c[-20:]} too short for min_len"
+        md += f"| {i + 1} | {c} |\n"
+    hits = rl.detect_table_cell_truncation(md)
+    assert len(hits) == len(cuts)
+
+
 def test_lint_pass_narration_stripped_and_flagged():
     md = ("Big Fund III ¥344B [Pass 2 working notes] anchored the estimate.\n"
           "Pass 4 of the broader dossier documented the contradiction.\n")

@@ -199,6 +199,22 @@ def _cb_reset(provider: str) -> None:
             st["consec429"] = 0.0
 
 
+def reset_provider_circuit_breakers(provider: Optional[str] = None) -> None:
+    """人工重试（resume / 新尝试）时清空进程级 422/429 冷却与回退-auth 冷却。
+
+    2026-10-18 事故：run 级断路器每次尝试都重建，但本进程级 _CB_STATE 不随 resume
+    重置——冷却到点后放行的唯一一次探测是 llm_client 自己的合成 fast-fail（零网络），
+    被分类为 circuit_breaker 喂给新 run 断路器，10 次秒级累积后新尝试立刻再熔断，
+    只能重启后端解困。resume 是操作者「提供方可能已修复」的显式声明，应获得一次
+    真实探测；若确实仍故障，达到阈值次数后会按设计重新熔断（代价可控）。"""
+    with _CB_LOCK:
+        if provider:
+            _CB_STATE.pop(provider, None)
+        else:
+            _CB_STATE.clear()
+        _FB_AUTH_UNAVAILABLE_UNTIL.clear()
+
+
 # LLM-3: 回退提供方的 OpenAI 连接池缓存。此前每次失败转移都重建 LLMClient/OpenAI 客户端
 # （每次一个新 httpx 连接池 + TLS 握手）；键=(provider, model, base_url)。只缓存底层 OpenAI
 # 客户端（官方文档保证线程安全），LLMClient 实例仍逐调用新建，避免 _last_usage 跨线程串档。
@@ -522,7 +538,19 @@ class LLMClient:
                 last_error = exc
                 if _is_content_filter(exc):
                     _cb_record_422(self.provider)  # count toward tripping the breaker
-                logger.warning(f"LLM 调用遇不可重试错误，转回退提供方: {_err_brief(exc)}")
+                # 2026-10-18 修复：先确认回退提供方真的配置了再宣称「转回退」——此前
+                # LLM_FALLBACK_PROVIDER 未配置时这行日志仍打印 26 次「转回退提供方」，
+                # 与事实相反（_try_fallback 立即返回 None），排障时误导严重。
+                _fb_configured = bool(
+                    (os.environ.get("LLM_FALLBACK_PROVIDER", "") or "").strip()
+                ) and not getattr(self, "_is_fallback", False)
+                if _fb_configured:
+                    logger.warning(f"LLM 调用遇不可重试错误，转回退提供方: {_err_brief(exc)}")
+                else:
+                    logger.warning(
+                        "LLM 调用遇不可重试错误（回退提供方未配置，保留原始错误）: %s",
+                        _err_brief(exc),
+                    )
                 break
         if result is None:
             # QUALITY-OPT S9: provider failover. On exhausted quota (429) or a content-filter

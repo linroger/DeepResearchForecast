@@ -240,7 +240,7 @@ function influenceTitle(row) {
 
 <style scoped>
 .bft {
-  max-width: 760px;
+  max-width: 1200px;
   margin: 0 auto 28px;
   border: 1px solid var(--color-border, #E5E5E5);
   background: var(--color-soft, #FAFAFA);

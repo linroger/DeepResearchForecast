@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-10-22T08:47:29.801722+00:00",
+  "source_commit": "7fc32cb8b115cf04143f2c9d3f47048ca05654ee",
+  "remote_branch": "legacy/codex/oddsense-active-research",
+  "remote_source_verified": true,
+  "remote_main_at_check": "da1d3c4dbb581f15aaba43da776608708c5cd356",
+  "main_merge": "held: concurrent primary MERGE_HEAD149b947b with19unmergedpaths; owner clarification pending",
+  "primary_edits_after_detection": false,
+  "earlier_active_acceptance": "796 backend/187 frontend passes; frozen pre-concurrent-merge bytes only",
+  "live_newsapi": "transport_timeout; authentication unverified"
+}

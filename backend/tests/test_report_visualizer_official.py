@@ -37,7 +37,6 @@ def forbid_fetch(monkeypatch):
 @pytest.fixture
 def viz(monkeypatch):
     monkeypatch.setattr(rv.ReportVisualizer, "_png_export_ok", lambda self: False)
-    monkeypatch.setattr(rv.ReportVisualizer, "_load_price_history", staticmethod(lambda *args: {}))
     return rv.ReportVisualizer()
 
 

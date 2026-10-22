@@ -1502,6 +1502,8 @@ Research models (`DEERFLOW_MODEL`), as defined by the stanzas in `deerflow_bridg
 
 Both research engines expose `news_search`, optional `social_search`, and `market_compare` when enabled. A configured NewsAPI key enables one bounded topic prefetch before investigation; selected publisher pages use the ordinary fetch/citation path. NewsAPI snippets remain discovery evidence until the original page is fetched. Reddit records are attributed discussion, while cross-platform quotes retain their venue, native identity, price basis, units and rules. Topic similarity does not establish contract equivalence or executable arbitrage; these feeds never become automatic forecast anchors or settlement evidence.
 
+`GET /api/research/preflight?mode=research_only&format=full` exposes `research_context`: the selected engine, registered source tools, controls, request limits and credential presence. This read-only check makes no provider request; captured per-run statuses report observed availability. Existing sealed dossiers replay their saved captures without retroactive acquisition.
+
 The sealed `handoff/news_market_context.json` records provider statuses, article/quote times, query identity and hashes. Parent promotion/reuse and the simulation's consumed research binding preserve the captured generation. Research and forecast views show the same bounded attributed context, and forecast Markdown carries its source links and limitations. Report readers do not refetch these sources. Invalid present captures fail validation; missing older captures remain compatible.
 
 | Setting | Default | Current behavior |

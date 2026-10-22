@@ -1,0 +1,7 @@
+{
+  "path": "backend/app/services/news_market_context.py",
+  "source": "main da1d3c4 / accepted context-audit snippet rendering fix",
+  "before_sha256": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+  "after_sha256": "5465d580213e473baad5933139eee8b4dc408c3e05034f85d00d37baea9b7dd9",
+  "scope": "Bounded captured news snippet and omission count rendering; no API/binding/world interfaces replaced."
+}

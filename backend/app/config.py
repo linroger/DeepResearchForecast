@@ -457,6 +457,19 @@ class Config:
     PIPELINE_HEARTBEAT_ENABLED = os.environ.get('PIPELINE_HEARTBEAT_ENABLED', 'true').strip().lower() == 'true'
     PIPELINE_HEARTBEAT_INTERVAL_S = float(os.environ.get('PIPELINE_HEARTBEAT_INTERVAL_S', '30') or '30')
     PIPELINE_HEARTBEAT_STALE_S = float(os.environ.get('PIPELINE_HEARTBEAT_STALE_S', '120') or '120')
+    # 2026-10-18: heartbeat_status 的 progress_stale 阈值——owner 活但进度超时未动
+    # （深研究阶段合法静默较久，默认保守 30 分钟；仅供 UI/运维标记 wedge，不杀管线）。
+    PIPELINE_PROGRESS_STALE_S = float(os.environ.get('PIPELINE_PROGRESS_STALE_S', '1800') or '1800')
+    # LOG-17: 早期 Final Answer 放行门槛（ReACT 工具下限旁路）——干净 + 达长 + ≥N 个
+    # [S#] 引用标记 = 卷宗接地充足，不强制整章重写（AI-datacenter 跑曾白烧 ~18% 输出）。
+    REPORT_EARLY_FA_MIN_CITATIONS = int(os.environ.get('REPORT_EARLY_FA_MIN_CITATIONS', '3') or '3')
+    REPORT_EARLY_FA_MIN_CHARS = int(os.environ.get('REPORT_EARLY_FA_MIN_CHARS', '2000') or '2000')
+    # LOG-15: 数字 token 差异的分级容差（相对比例）。≤ max(2, ratio×总数) 的差异降级为
+    # warning；超过仍是硬否决。0.005 = 200 个数字 token 的译文容 1 个 token 漂移。
+    REPORT_TRANSLATION_NUMERIC_TOLERANCE_RATIO = float(os.environ.get('REPORT_TRANSLATION_NUMERIC_TOLERANCE_RATIO', '0.005') or '0.005')
+    # 2026-10-22: central_question 派生判定日的最小预测时域（天）。更近的 anchored_period
+    # 视为当前新闻窗伪命中（"October 2026"），不采纳为战争/冲突类多年问题的模拟时域。
+    SIM_HORIZON_MIN_DAYS = int(os.environ.get('SIM_HORIZON_MIN_DAYS', '60') or '60')
     # I-5-6 状态 API 的 staleness 判定与 ETA 外推上限。
     PIPELINE_STALE_S = float(os.environ.get('PIPELINE_STALE_S', '300') or '300')
     PIPELINE_ETA_CAP_S = float(os.environ.get('PIPELINE_ETA_CAP_S', '7200') or '7200')

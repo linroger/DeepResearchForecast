@@ -1,0 +1,42 @@
+{
+  "source_commit": "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+  "primary_specialists": 6,
+  "delegated_readers": 26,
+  "all_primary_specialists_completed": true,
+  "all_delegated_readers_completed": true,
+  "completed_readers_closed_after_receipt": true,
+  "owners": {
+    "legacy-harness": {
+      "agent_id": "01a14074-4066-79b0-9f78-9c4afc8fd72f",
+      "children": 6
+    },
+    "v3-data": {
+      "agent_id": "01a14074-4128-7692-b444-b7278b8e8d8b",
+      "children": 6
+    },
+    "graph-actors": {
+      "agent_id": "01a14074-41e5-7660-91d1-d275d3635705",
+      "children": 3
+    },
+    "simulation": {
+      "agent_id": "01a14074-430b-73b3-afc8-834fd74dc46b",
+      "children": 3
+    },
+    "forecast-report": {
+      "agent_id": "01a14074-43d6-7b32-8ff6-262d3757dc6d",
+      "children": 5
+    },
+    "api-operations": {
+      "agent_id": "01a14074-449c-7ff0-b97e-0b3d4ade2a18",
+      "children": 3
+    }
+  },
+  "basis": "Terminal primary tool results confirm all nested readers completed; source coverage receipts separately validated.",
+  "later_main_followup": {
+    "agent_id": "01a14074-4066-79b0-9f78-9c4afc8fd72f",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "completed": true,
+    "closed_after_receipt": true,
+    "additional_delegated_readers": 0
+  }
+}

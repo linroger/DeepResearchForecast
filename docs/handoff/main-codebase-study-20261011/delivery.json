@@ -1,0 +1,18 @@
+{
+  "checked_utc": "2026-10-11T16:24:16.717805+00:00",
+  "source_commit": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "documentation_branch": "codex/main-workflow-study-20261011",
+  "documentation_commit": "89da102703e57ac09eb70a0dd4546faa9b27d203",
+  "remote": "origin",
+  "remote_url": "https://github.com/linroger/DeepAgentForecast.git",
+  "push_attempts": 1,
+  "push_exit_code": 128,
+  "remote_published": false,
+  "failure": "GitHub rejected configured credentials: Invalid username or token.",
+  "retry_policy": "No retry without changed authentication. No credentials read, replaced or persisted by this study.",
+  "owned_files_in_documentation_commit": 35,
+  "application_files_changed": 0,
+  "main_head_unchanged_by_delivery": true,
+  "shared_index_unchanged_by_delivery": true,
+  "local_followup": "This receipt and closing handoff are committed as a local follow-up on the same documentation branch."
+}

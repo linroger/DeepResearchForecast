@@ -34,7 +34,7 @@ import struct
 import threading
 from collections import OrderedDict
 from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.concurrency import ContextThreadPoolExecutor as ThreadPoolExecutor  # LOG-16: run 上下文随任务传播
 
 from graphiti_core.embedder.client import EmbedderClient
 

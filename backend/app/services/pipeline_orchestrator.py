@@ -3294,7 +3294,7 @@ _RESEARCH_CONTRACT_FILES = (
     "actor_dossier_judge.json", "actors.json", "sources.json",
     ACTOR_INTELLIGENCE_LINEAGE_FILENAME,
     "timeline.json", "quantitative.json", "contested.json",
-    "prediction_markets.json", "market_price_history.json",
+    "prediction_markets.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
     "charts.json", "news_market_context.json",
 )
@@ -7322,33 +7322,6 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
     }
 
 
-def merge_market_price_histories(track_histories: list[Any],
-                                 selected_market_ids: set[str]) -> dict[str, list[dict]]:
-    """Union price series for selected markets only, latest point per timestamp wins."""
-    merged: dict[str, dict[int, dict]] = {}
-    for history in track_histories:
-        if not isinstance(history, dict):
-            continue
-        for market_id, points in history.items():
-            mid = str(market_id or "").strip()
-            if mid not in selected_market_ids or not isinstance(points, list):
-                continue
-            bucket = merged.setdefault(mid, {})
-            for point in points:
-                if not isinstance(point, dict):
-                    continue
-                try:
-                    timestamp = int(float(point.get("t")))
-                    probability = float(point.get("p"))
-                except (TypeError, ValueError):
-                    continue
-                if timestamp <= 0 or not (0.0 <= probability <= 1.0):
-                    continue
-                bucket[timestamp] = {"t": timestamp, "p": probability}
-    return {
-        market_id: [points[t] for t in sorted(points)]
-        for market_id, points in merged.items() if points
-    }
 
 
 def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
@@ -8581,7 +8554,13 @@ class PipelineOrchestrator:
         if _pid_alive(owner_pid):
             # 心跳仍新鲜 → 真在跑，保留；心跳过期 → 那进程 hung 或 pid 被复用 → 回收。
             return not fresh
-        # owner 进程不存在 / 字段缺失：心跳新鲜（极少见，刚崩溃）也给一个宽限，否则回收。
+        # 2026-10-18 修复：有 owner_pid 记录且进程确证已死（os.kill ESRCH）时，新鲜的
+        # 心跳只是刚崩溃后的残影（宽限窗口内重启后端即可观察到「暂不回收」误判，
+        # 且 resume 也被「管线仍在运行」拒绝，只能手动 cancel 解困）。进程死 → 立即判死。
+        # （_pid_alive 的 EPERM→True 语义已保护「别人的活进程」不被误回收。）
+        if owner_pid:
+            return True
+        # owner 字段缺失（老状态文件）：心跳新鲜（极少见，刚崩溃）也给一个宽限，否则回收。
         # ORCH-2: owner/heartbeat 双缺失（老状态文件、或手工修复过的状态）此前零宽限、立即判死。
         # 改为退回 updated_at 给同一个心跳窗口的宽限，避免刚手工编辑/刚崩溃的状态被秒杀。
         if hb_age is None:
@@ -9193,6 +9172,18 @@ class PipelineOrchestrator:
                     state.options["safety_policy_v1"]["simulation_forecast_effect"],
                 )
             PipelineManager.save(state)
+
+            # 2026-10-18 修复：resume 是操作者「提供方可能已修复」的显式声明。进程级
+            # 422/429 熔断冷却若不清零，冷却到点放行的唯一探测是 llm_client 的合成
+            # fast-fail（零网络、被分类为 circuit_breaker），10 次秒级累积即把全新
+            # 尝试再熔断（LLM_OUTAGE_HALT 洪泛），只能重启后端解困。
+            try:
+                from ..utils.llm_client import reset_provider_circuit_breakers
+                reset_provider_circuit_breakers(
+                    str(getattr(Config, "LLM_PROVIDER", "") or "") or None
+                )
+            except Exception:  # noqa: BLE001 — 复位失败不阻断 resume 本身
+                logger.debug("reset_provider_circuit_breakers 失败（忽略）", exc_info=True)
 
             cls._cancel_events[pipeline_id] = threading.Event()
             t = threading.Thread(
@@ -9913,14 +9904,15 @@ class PipelineOrchestrator:
                     except Exception as _se:  # noqa: BLE001 — 单个种子失败不拖垮集成
                         logger.warning("[%s] 集成种子 %s 失败（跳过）: %s", state.pipeline_id, k, _se)
             else:
-                from concurrent.futures import ThreadPoolExecutor, as_completed
+                from concurrent.futures import as_completed
+                from ..utils.concurrency import ContextThreadPoolExecutor
                 st = state.stages.setdefault(STAGE_REPORT, StageState(name=STAGE_REPORT))
                 st.message = f"多种子集成：并行 {len(seed_jobs)} 个额外种子（并发 {seed_conc}）…"
                 if state.owner_boot_id is not None:  # W9-2
                     state.heartbeat_at = _utcnow()
                 PipelineManager.save(state)
                 cancelled: Optional[PipelineCancelled] = None
-                with ThreadPoolExecutor(max_workers=seed_conc, thread_name_prefix="ens-seed") as ex:
+                with ContextThreadPoolExecutor(max_workers=seed_conc, thread_name_prefix="ens-seed") as ex:
                     futs = {ex.submit(_do_seed, k, seed): (k, seed) for k, seed in seed_jobs}
                     for fut in as_completed(futs):
                         k, seed = futs[fut]
@@ -10873,7 +10865,6 @@ class PipelineOrchestrator:
             specs.append(("quantitative", os.path.join(hd, "quantitative.json")))
             specs.append(("contested", os.path.join(hd, "contested.json")))
             specs.append(("prediction_markets", os.path.join(hd, "prediction_markets.json")))
-            specs.append(("market_price_history", os.path.join(hd, "market_price_history.json")))
             specs.append(("news_market_context", os.path.join(hd, "news_market_context.json")))
             specs.append(("prediction_market_candidates",
                           os.path.join(hd, "prediction_market_candidates.jsonl")))
@@ -11767,6 +11758,25 @@ class PipelineOrchestrator:
         info["owner_alive"] = _pid_alive(state.owner_pid) if state.owner_pid else None
         hb_age = _age_seconds(state.heartbeat_at)
         info["heartbeat_age_s"] = int(hb_age) if hb_age is not None else None
+        # 2026-10-18 修复：新增复合液体性真值字段。「心跳新鲜」单独不可作为 running
+        # 依据——壁钟心跳线程按设计在阶段无进展时也照跳（长研究子进程合法静默），
+        # 而 owner 进程被杀后的 120s 窗口内心跳仍是残影。live = owner 活 且 心跳新鲜；
+        # progress_stale 标记「owner 活但进度长时间未动」的 wedge 供 UI/运维区分。
+        try:
+            stale_s = float(getattr(Config, "PIPELINE_HEARTBEAT_STALE_S", 120) or 120)
+        except (TypeError, ValueError):
+            stale_s = 120.0
+        info["live"] = bool(
+            info.get("owner_alive")
+            and hb_age is not None
+            and hb_age <= stale_s
+        )
+        prog_age = _age_seconds(getattr(state, "last_progress_at", None))
+        info["progress_stale"] = bool(
+            state.status == "running"
+            and prog_age is not None
+            and prog_age > float(getattr(Config, "PIPELINE_PROGRESS_STALE_S", 1800) or 1800)
+        )
         if bool(getattr(Config, "LLM_TELEMETRY_ENABLED", True)):
             try:
                 from ..utils.telemetry import LLMMeter
@@ -13186,15 +13196,6 @@ class PipelineOrchestrator:
             max_total=int(getattr(Config, "PREDICTION_MARKETS_MAX", 20) or 20),
             max_per_event=int(getattr(Config, "PREDICTION_MARKETS_MAX_PER_EVENT", 3) or 3),
         )
-        selected_market_ids = {
-            str(row.get("market_id") or "").strip()
-            for row in ((merged_pm or {}).get("markets") or [])
-            if isinstance(row, dict) and str(row.get("market_id") or "").strip()
-        }
-        merged_market_history = merge_market_price_histories(
-            [_read_json(os.path.join(td, "market_price_history.json")) for td in track_dirs],
-            selected_market_ids,
-        )
 
         if degraded:
             merged_rq["degraded"] = True
@@ -13232,8 +13233,6 @@ class PipelineOrchestrator:
             merged_meta["prediction_markets_count"] = len(merged_pm.get("markets") or [])
             merged_meta["prediction_markets_as_of"] = merged_pm.get("as_of")
             merged_meta["prediction_market_status"] = merged_pm.get("status")
-        if merged_market_history:
-            merged_meta["prediction_market_price_history_count"] = len(merged_market_history)
 
         # W9-7：合并卷宗的一次有界 LLM 整理——合并 K 份执行摘要为统一开篇、点名跨轨冲突的
         # 头条数字、'# Track N' H1 降级为 Part H2。只喂各轨执行摘要（cap ~30K 字符）；
@@ -13289,11 +13288,6 @@ class PipelineOrchestrator:
             write_json_atomic(os.path.join(handoff_dir, "contested.json"), merged_contested)
         if isinstance(merged_pm, dict):
             write_json_atomic(os.path.join(handoff_dir, "prediction_markets.json"), merged_pm)
-        if merged_market_history:
-            write_json_atomic(
-                os.path.join(handoff_dir, "market_price_history.json"),
-                merged_market_history,
-            )
         write_json_atomic(os.path.join(handoff_dir, "meta.json"), merged_meta)
 
         # 合并遥测：token/工具量求和；wall_s 取最大（并行）；model/depth 取首轨。

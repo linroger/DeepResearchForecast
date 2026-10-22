@@ -620,8 +620,12 @@ def start_research_translation(pipeline_id: str, lang: str):
         "status": "generating", "available": False, "source_sha256": source_sha,
         "owner": f"pid:{os.getpid()}",
     })
+    # 2026-10-18 修复：线程不继承 contextvars → 计量落入 _global 桶（per-run 预算/
+    # 成本归集失真）。复制当前上下文再提交（telemetry.py 的警告点名了这一点）。
+    import contextvars as _cv
+    _ctx = _cv.copy_context()
     threading.Thread(
-        target=_run_research_translation, args=(pipeline_id, lang), daemon=True,
+        target=_ctx.run, args=(_run_research_translation, pipeline_id, lang), daemon=True,
     ).start()
     return jsonify({"success": True, "data": {
         "status": "generating", "available": False, "source_sha256": source_sha,

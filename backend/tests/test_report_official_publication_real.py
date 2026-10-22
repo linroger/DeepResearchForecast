@@ -893,11 +893,17 @@ def test_canonical_official_lines_do_not_count_toward_the_per_source_cap(env, mo
     for heading in ra._REFS_HEADINGS:
         body = body.split("\n" + heading + "\n")[0]
     assert body.count("[S1]") > 20  # 12 watch rows, the indicator row, 2 captions and 7 prose claims
-    # Reliance on one source in prose is still capped: 14 more cited notes push prose alone past 20.
+    # All seven native-value prose claims count; canonical attribution stays exempt.
+    # Fourteen additional prose notes bring reliance to exactly 21, over the cap of 20.
     notes = [f"Labour demand cools in the {word} sector [S1]." for word in (
         "retail", "housing", "energy", "health", "transport", "finance", "education", "mining",
         "software", "leisure", "farming", "media", "defence", "utilities")]
     flooded = body + "\n\n" + "\n\n".join(notes) + "\n"
-    assert agent._audit_semantic_citations(flooded)["overused_sources"] == [{"tag": "S1", "count": 21, "limit": 20}]
+    semantic = agent._audit_semantic_citations(flooded)
+    assert semantic["overused_sources"] == [{"tag": "S1", "count": 21, "limit": 20}]
+    assert any("引用来源过度集中" in issue for issue in agent._final_audit_integrity_issues(
+        {"semantic_citations": semantic}))
     capped, stripped = agent._repair_overused_citations(flooded)
     assert stripped == 1 and all(line in capped.split("\n") for line in watch)
+    assert all(sentence in capped for sentence in extra)
+    assert agent._audit_semantic_citations(capped)["overused_sources"] == []

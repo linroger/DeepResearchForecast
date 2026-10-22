@@ -1,0 +1,638 @@
+{
+  "checked_at": "2026-10-22T09:37:24.617997+00:00",
+  "status": "Accepted full frozen gate and independent bounded review; matcher addendum separately accepted",
+  "gate_root": "/private/tmp/drf-oddsense-merged-gate-kzhepta3",
+  "passed": 5339,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 3,
+  "deselected": 22,
+  "expected_failures": 11,
+  "seconds": 572.62,
+  "python_files": 637,
+  "source_freeze_sha256": "d96c7df7e3d7a8349cfc79bfb4332eb483c272ab504ae02c4ba881c6a81deaa3",
+  "receipt_sha256": "34d1c15d4037bbed1bfad783a75e2a076db2bfa7046d27be7cce6b72ab89ebed",
+  "junit_sha256": "33709dc7f5a202fff4924b51b206fe1de73dabc9f469f033f6956011677a24a9",
+  "guard_events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 11,
+    "blocked:external_read": 25,
+    "blocked:network:socket.__new__": 2,
+    "quarantine:oasis_import_cwd": 3,
+    "allowed:guarded_child": 48,
+    "blocked:child_process_limit": 3,
+    "blocked:credential_path": 7,
+    "blocked:external_write": 11,
+    "blocked:identity_environment": 1,
+    "blocked:sqlite_uri": 9,
+    "blocked:network:socket.getaddrinfo": 3,
+    "blocked:network:socket.bind": 1,
+    "allowed:child_liveness": 4,
+    "blocked:process:os.kill": 3,
+    "blocked:process:os.killpg": 3,
+    "blocked:saved_data": 1,
+    "blocked:changed_child_script": 1,
+    "allow:directory_traversal": 236
+  },
+  "guard_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "guard_parent_exit": 0,
+  "shutdown_complete": true,
+  "identity_preserved": true,
+  "source_drift": [],
+  "children": [
+    {
+      "pid": "47960",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "9ed9b1defd2f3d2990b54af28470765e97c302b0c768f1e9f214e4969f158929"
+    },
+    {
+      "pid": "47967",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "921b8d4453258f3902f9bb950e752e159d0a147c5d63a6549215067d498bc173"
+    },
+    {
+      "pid": "47969",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "65afae6bc1f33cdbd525b35c0b2953e4c4b12971de88d42dc21cbeea80f8bb9b"
+    },
+    {
+      "pid": "49228",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "05fda40b1a0bcafdd3e8a175f4806978687f164b1f9e75360e661594339c96b5"
+    },
+    {
+      "pid": "49229",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "dff8b31560d52dbf6e45dee87c0e327f18cb7aa0f460318c62993f1e3bc56e6f"
+    },
+    {
+      "pid": "49230",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "e23ee7bbe2a5916613660e63998e5faf92adfbd6e9c50981a605fce9fffa7790"
+    },
+    {
+      "pid": "49237",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "884d0ba2d0b43b2375cc63d9eaa2f144d26534bdcf6d3ce7b88a88d7ee07f830"
+    },
+    {
+      "pid": "49240",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "1df56f097a5b1246e4532f8bb7bc3b297af293a95548a74763cebdd13dfcd3ef"
+    },
+    {
+      "pid": "49315",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "1c27650c1123ecd04e71a960ce1437fba2225a106ca7722b120168eb0a54926e"
+    },
+    {
+      "pid": "49320",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "410cf4c4121b5c9ccf08dd36bf6697d1752e4f39e72b8fa029157bec65c4ce24"
+    },
+    {
+      "pid": "49321",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "ad9a69f18560467b5f5c176f1e141d1d429cfd91002245cd25527a3ba38c8717"
+    },
+    {
+      "pid": "49322",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "05dd2ae9be11de783e6f32c659e5f7a8de9cde238785c9fe518d18b7e9b3c0f3"
+    },
+    {
+      "pid": "49323",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "9c9f6b97de5f3f7631ce324d414151e18272c911b370932f36f3530c74ab7d62"
+    },
+    {
+      "pid": "49324",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "6b04c1d21b1b57307af76ce5921f3c15547ad1658da05b2e525d0cd927a3669c"
+    },
+    {
+      "pid": "49325",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "e311ba643b5006faece11a6010bfbcf980d857535ce2094cced8867fd7838250"
+    },
+    {
+      "pid": "49326",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "db7fb2f0c17f1942e0c4e5e98c259e7070236acdf40aa8d70c61292681e9ec6c"
+    },
+    {
+      "pid": "49327",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "797d026db129702f96c0b744ce1bfbb1200d2c16200c0e76cb695a9a5bd9861a"
+    },
+    {
+      "pid": "49328",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "c2104ea02191693f8bba10bd2a3da13ba66a6522928bd616d793555d50fd869a"
+    },
+    {
+      "pid": "49330",
+      "expected_exit": -15,
+      "status": "started",
+      "actual_exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "bb77414d06170239cc09a04c5d5f9988bff0e7c682bb1897345dfb6a85c024ee"
+    },
+    {
+      "pid": "49348",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "6fa8833146bfcedafc454f544deb1ac5fdccd4a2efaf8200a75360bc808a4526"
+    },
+    {
+      "pid": "49349",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "e69fa28efd6e76d79677423ddeeb165f72aacd23a74db156f7f385ef908a3f6d"
+    },
+    {
+      "pid": "49350",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "ce629bf5c2c840a2c898182b4253546a6e7a29b76967ae8e53246028879522f3"
+    },
+    {
+      "pid": "49351",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "471c8cd7792c3348fa70993a98faf6effe54e5653abe96a188656ea6b270064f"
+    },
+    {
+      "pid": "49352",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "2c3e6cd053294a55879a3b4339f8006b50d8e126e27d8930de6dac7a7dab6eb2"
+    },
+    {
+      "pid": "49353",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "a418e88fddcfdad4a0b7bf2234706694d9cf8df586b9c82e079bc8fe7457653b"
+    },
+    {
+      "pid": "49354",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "33183f4b7ca4b5651e4644ee4fa6d692777f6260c8a2f7a87c431ffd79b3ca7a"
+    },
+    {
+      "pid": "49355",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "11d9e7c42c635f1e8993e2eaf650e5dac31e61a0aaee62fcc95e154875865c0e"
+    },
+    {
+      "pid": "49356",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "924119c8c6ad0ede89589a205393e16df52b3860ecc6e6da6f84e32cb88d9b58"
+    },
+    {
+      "pid": "49357",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "591f81a5b41804ec2889ee8dd41e8cd7c899c818206c25a5e721c801c1deee07"
+    },
+    {
+      "pid": "49358",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "723b3a3b26133508bbd1c6d89177bf91fd63fd941e2d052aa84fec4e44097d63"
+    },
+    {
+      "pid": "49359",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "2a59b330a79a85d69dfba31233d71a11c2a1099721826a68bef90617576c818a"
+    },
+    {
+      "pid": "49360",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "aeaf1a0317cb8b3d92e2c7d721c8fb34af86d0276a7e959075b21d74831d2de1"
+    },
+    {
+      "pid": "49361",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "113df3b4dd6b55fee5df059045e9f012bc2e866c3e6ec9bc876156a594d7d3a9"
+    },
+    {
+      "pid": "49362",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "e8b95606356dd90852f34622e76c89ce3274768d24aa29f2a02222aebbe1b5da"
+    },
+    {
+      "pid": "49363",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "90c76a7668a087c4e6f43261723912d4f0f857a9a0b7dda8606d58386751676a"
+    },
+    {
+      "pid": "49365",
+      "expected_exit": 23,
+      "status": "started",
+      "actual_exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "3e3d2e52f219372445741e3a16845af50d558c4213e708efa8111697b22546db"
+    },
+    {
+      "pid": "49397",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "bcd0147cdbfba02301d63faab66c65749085ada8d8017ad595fe28744cda78d5"
+    },
+    {
+      "pid": "49398",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "c9f44d56285518c666c38391960be883ca3b3c2681b43967fa3643cfa24ccdf1"
+    },
+    {
+      "pid": "49400",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "8483b9133db1421f2811a3de3300029a7bbff3c07bc5eabffa55817388711d8c"
+    },
+    {
+      "pid": "49401",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "1e94f63bb3a622c0b0f42877c4be840c9fc673fe24ca353d8360d6c306c84a9d"
+    },
+    {
+      "pid": "50707",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "836d9cd7358b5bd6b0f58520427ee20a7c7fd990a4f5c87edf6693b68061080c"
+    },
+    {
+      "pid": "50709",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "c12dda3a31ef02e91e5b5d7418ed03749b454ffb18cbdc218983e37589e6e1e8"
+    },
+    {
+      "pid": "50868",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "79fb924bb04f7008a9228496656675af2a1be364826f67cc94d9ca49220f9355"
+    },
+    {
+      "pid": "50869",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "27d4856da586fa41610db70a675c7aa72cf5880d3a3c41972943c4ea138fc359"
+    },
+    {
+      "pid": "50870",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "0ceef4b407ec76ad74eafa8a90f62864d6c418302b5ee4025b0b58b64178acf7"
+    },
+    {
+      "pid": "50871",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "7bdd7b8bb05c3ec45233afc6265ef830fc9d2170f8f9a1e4d434d014eacb43fa"
+    },
+    {
+      "pid": "50986",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "ef010cee6f8e35fdd2d7cb42bde013ed4c0abca9b951746855e80b0da48af02e"
+    },
+    {
+      "pid": "51067",
+      "expected_exit": 0,
+      "status": "completed",
+      "actual_exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": [],
+      "receipt_sha256": "cf85f8b1a255c872573080501698c9810d34fad0f065b3716620d4664b219f26"
+    }
+  ],
+  "unexecuted_or_expected_cases": [
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_10_prevents_shared_graph_feedback",
+      "type": "pytest.xfail",
+      "reason": "WP10: observed projection immutable; every generated write lands in a run/seed/scenario-scoped overlay"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_6_prevents_market_descendant_reuse",
+      "type": "pytest.xfail",
+      "reason": "WP6: one influence cluster per source family; duplicate descendants cannot alter the aggregate"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_11_prevents_social_to_institutional_laundering",
+      "type": "pytest.xfail",
+      "reason": "WP11: ActionProposal \u2192 FeasibilityResult \u2192 ExecutedAction gate before any institutional effect"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_11_prevents_neutral_weight_for_unknown_power",
+      "type": "pytest.xfail",
+      "reason": "WP11: unknown authority/power is quantitatively ineligible, not neutrally weighted"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_12_prevents_fork_seed_shared_mutation",
+      "type": "pytest.xfail",
+      "reason": "WP12: seeds/forks get isolated overlays, checkpoint streams, and RNG state over one sealed snapshot"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_6_prevents_structured_spine_omissions",
+      "type": "pytest.xfail",
+      "reason": "WP6: every enabled input flows through a hash-bound ForecastEvidencePack or fails the run visibly (I-18)"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_6_prevents_dormant_typed_worldstate_anchor",
+      "type": "pytest.xfail",
+      "reason": "WP6: the legacy base_distribution stays diagnostic; only a promoted registered contrast may move probability"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_4_prevents_edit_without_research_generation",
+      "type": "pytest.xfail",
+      "reason": "WP4: edits create a new sealed ResearchGeneration with explicit downstream invalidation"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_6_prevents_write_only_quality_and_late_health",
+      "type": "pytest.xfail",
+      "reason": "WP6: pre-forecast RunQualityAssessment gate runs before forecast/report construction"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_13_prevents_disconnected_resolution_lifecycle",
+      "type": "pytest.xfail",
+      "reason": "WP13: one idempotent resolution service closes the same target/revision that was published"
+    },
+    {
+      "module": "tests.test_architecture_characterization",
+      "name": "test_wp_14_prevents_answer_bearing_golden_harness",
+      "type": "pytest.xfail",
+      "reason": "WP14: sealed EvaluationCase registry with hidden outcome store and leak canary"
+    },
+    {
+      "module": "tests.test_deerflow_bridge_sync_guard",
+      "name": "test_subagent_overlay_preserves_current_vendor_observability",
+      "type": "pytest.skip",
+      "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+    },
+    {
+      "module": "tests.test_deerflow_bridge_sync_guard",
+      "name": "test_subagent_overlay_fails_closed_on_model_inheritance_drift",
+      "type": "pytest.skip",
+      "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+    },
+    {
+      "module": "tests.test_wave9_visualizer",
+      "name": "test_build_all_real_handoff_integration",
+      "type": "pytest.skip",
+      "reason": "real handoff artifacts not present"
+    }
+  ],
+  "frontend": {
+    "source_paths": 45,
+    "unit_passed": 261,
+    "unit_failed": 0,
+    "build": "passed"
+  },
+  "source_scope": "Controlled scripted external responses through real engine/QA/ledger/report/API/export; no live model/forecast reliability or native binary proof.",
+  "independent_review": {
+    "private_path": "/private/tmp/drf-oddsense-active-postreview.md",
+    "private_sha256": "b73f7064d9aee1d7002292e89808003dcbd63cc85406d2b672a1f49698803566",
+    "copy_sha256": "0f9c6b5b6b9a77279b5308de041c51811f7b58dadd77d1ffd232cc9636adac25",
+    "copy_normalization": "Trailing blank lines only",
+    "verdict": "Accepted, no open source/guard/regression finding"
+  },
+  "matcher_addendum": {
+    "passed": 73,
+    "new_cases": 3,
+    "original637unchanged": true,
+    "manifest": "final-source-freeze.json",
+    "source_files_after_new_test": 638,
+    "receipt": "matcher-regression.json"
+  }
+}

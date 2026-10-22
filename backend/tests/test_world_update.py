@@ -156,7 +156,7 @@ def test_run_world_round_applies_arbiter_and_builds_digest():
     record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=llm, rng=random.Random(3),
                                 scenarios=world.scenarios, language="English")
     assert record["arbiter_status"] == "applied" and record["arbiter_problems"] == []
-    assert world.variables["regional_capacity"].value == 180.0                  # 120 → clamped to +50%
+    assert world.variables["regional_capacity"].value == 162.0  # 1000→步长钳180→回归171→漂移上限162
     assert world.variables["permit_status"].value == "under review"
     assert world.committed_round == 1
     assert record["decisions"] == {"total": 3, "ok": 3, "held": 1, "failed": 0, "invalid": 0,
@@ -168,7 +168,7 @@ def test_run_world_round_applies_arbiter_and_builds_digest():
     assert digest.startswith("Alpha's pledge lifts expected capacity")
     assert '- Alpha Systems: Commit capital: new plant: "We commit $2bn to Aurora this quarter."' in digest
     assert "Held position: Beta Union" in digest
-    assert "- Regional capacity: 120 MW → 180 MW" in digest
+    assert "- Regional capacity: 120 MW → 162 MW" in digest
     assert "Bond market prices Aurora financing" in digest
     assert "Alpha Systems — Grid Regulator: adversarial" in digest or "Grid Regulator — Alpha Systems" in digest
     # herding guard: no scenario shares / percentages in agent-facing text

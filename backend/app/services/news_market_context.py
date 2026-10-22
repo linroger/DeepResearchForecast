@@ -39,6 +39,29 @@ def _bridge_api():
         return module
 
 
+def research_tool_status():
+    """Describe default live-research wiring without acquiring data or exposing keys."""
+    from ..config import Config
+    from .pipeline_orchestrator import _news_context_subprocess_env, research_engine_for_run
+    controls = _news_context_subprocess_env()
+    _bridge_api()  # Establish the same fixed bridge namespace as evidence readers.
+    gateway = importlib.import_module("deerflow_bridge.research_gateway")
+    names = list(gateway.context_tool_names(controls))
+    key = os.environ.get("NEWSAPI_API_KEY", "").strip()
+    return {
+        "scope": "default_live_research", "integration": "oddsense",
+        "research_engine": research_engine_for_run({}),
+        "enabled": controls["NEWS_CONTEXT_ENABLED"] == "true", "tools": names,
+        "newsapi": {"enabled": "news_search" in names,
+                    "credential_configured": bool(key) and not Config._is_placeholder(key),
+                    "max_requests": int(controls["NEWSAPI_MAX_REQUESTS"])},
+        "social": {"enabled": "social_search" in names},
+        "markets": {"enabled": "market_compare" in names,
+                    "max_requests": int(controls["MARKET_INTELLIGENCE_MAX_REQUESTS"])},
+        "availability_checked": False,
+    }
+
+
 def _validated_copy(context):
     """Bound and detach JSON input before it reaches prompts or report storage."""
     if context is None or context == {}:

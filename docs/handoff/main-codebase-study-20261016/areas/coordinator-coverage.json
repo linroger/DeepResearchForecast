@@ -1,0 +1,273 @@
+[
+  {
+    "path": "backend/app/config.py",
+    "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "read_ranges": [
+      [
+        1019,
+        1052
+      ],
+      [
+        1510,
+        1548
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": false,
+    "historical_receipt": null,
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+    "read_ranges": [
+      [
+        1,
+        248
+      ],
+      [
+        660,
+        852
+      ],
+      [
+        880,
+        1021
+      ],
+      [
+        1136,
+        1221
+      ],
+      [
+        2163,
+        2505
+      ],
+      [
+        2600,
+        2763
+      ],
+      [
+        3868,
+        3936
+      ],
+      [
+        4077,
+        4198
+      ],
+      [
+        6140,
+        6255
+      ],
+      [
+        6378,
+        6453
+      ],
+      [
+        8406,
+        8465
+      ],
+      [
+        8468,
+        8836
+      ],
+      [
+        9457,
+        9557
+      ],
+      [
+        9669,
+        10070
+      ],
+      [
+        10352,
+        10676
+      ],
+      [
+        12447,
+        14097
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": false,
+    "historical_receipt": null,
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads."
+  },
+  {
+    "path": "backend/app/services/requirement_spec.py",
+    "sha256": "8f7d944f892ae52a97b7b3f3898540082d7d085fa818bb25c7fb2ae4c73a8f97",
+    "read_ranges": [
+      [
+        1,
+        105
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/services/research_progress.py",
+    "sha256": "e8b3c4def4a4fd556a21a251ba4dd139924798502eb52d15dbd5e4a14a8c9e41",
+    "read_ranges": [
+      [
+        1,
+        584
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": false,
+    "historical_receipt": null,
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads."
+  },
+  {
+    "path": "backend/app/services/text_processor.py",
+    "sha256": "7c39d3586169b396afdc85816ea555f5846789e32cf6e7046e12e241b94a4627",
+    "read_ranges": [
+      [
+        1,
+        86
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/atomic.py",
+    "sha256": "aade316f53664d993e64b099d429a663a81b59a3c1aafa5987822546a500cae8",
+    "read_ranges": [
+      [
+        1,
+        77
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/dates.py",
+    "sha256": "58822ea54caaa7516f852e9c74ad5a628bac106c5be2245e9ea6d287f522b615",
+    "read_ranges": [
+      [
+        1,
+        69
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/llm_client.py",
+    "sha256": "c943411e6f742f00f80228024398621147dcf2c070fe83b09bda5ebff914939f",
+    "read_ranges": [
+      [
+        110,
+        260
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/logger.py",
+    "sha256": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "read_ranges": [
+      [
+        1,
+        153
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/oasis_llm.py",
+    "sha256": "bceec7b7122e8d1c436f206e70badea16692f459fc941b47a2eb9be1c927558f",
+    "read_ranges": [
+      [
+        1,
+        140
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/prediction_markets.py",
+    "sha256": "39fabbe003ba1d5741ca3795939da27f4fb39b9b49ea508b743ce6d61c103081",
+    "read_ranges": [
+      [
+        1,
+        135
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/sim_timeline.py",
+    "sha256": "1b067727cdfb59ee27fbc3e62d50e19bf451b5b7e65650dde5e967f1829b98c3",
+    "read_ranges": [
+      [
+        1,
+        110
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/telemetry.py",
+    "sha256": "d1d1e63fc826be98467666e58542338914121011001f205fdfbb1be386756318",
+    "read_ranges": [
+      [
+        1,
+        150
+      ]
+    ],
+    "depth": "partial",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  },
+  {
+    "path": "backend/app/utils/token_budget.py",
+    "sha256": "248a036a8ebdfb9ce0addde58bd5c5a276db3b1b0f8c328905626f1eeecbea8c",
+    "read_ranges": [
+      [
+        1,
+        174
+      ]
+    ],
+    "depth": "full",
+    "historical_full_read_reused": true,
+    "historical_receipt": "historical-support-coverage.json",
+    "notes": "Fresh boundary-focused source trace. Historical reads, when present, are separately identified and hash-matched; they are not current-session full reads.",
+    "historical_receipt_origin": "../main-codebase-study-20261011/python-inventory.json"
+  }
+]

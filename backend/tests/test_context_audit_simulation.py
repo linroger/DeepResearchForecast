@@ -13,6 +13,7 @@ import pytest
 from test_world_model_loop import (
     _WorldLLM, _patch_world, _read_jsonl, _run, _world_config, rps,
 )
+from test_world_announced_settings import _expected_damped_numeric
 
 
 def _json(path):
@@ -247,9 +248,25 @@ def test_real_committed_artifacts_feed_summary_and_report_projection(tmp_path, m
     summary = SimulationRunner.write_run_summary(config["simulation_id"])
     assert summary["world_model"]["committed_round"] == 3
     assert summary["world_model"]["arbiter_failed_rounds"] == 0
+    committed = _json(sim_dir / "world_state.json")
+    trajectory = _json(sim_dir / "world_state_trajectory.json")
+    tariff = next(v for v in committed["world"]["variables"] if v["id"] == "tariff_rate")
+    seed_value = config["world_model"]["state_variables"][0]["value"]
+    expected = _expected_damped_numeric(
+        seed_value, 25, ratio=config["world_model"]["settings"]["max_change_ratio"])
+    assert tariff["value"] == pytest.approx(expected)
+    assert tariff["history"][0]["value"] == seed_value
+    assert tariff["history"][-1]["value"] == tariff["value"]
+    assert "damped" in tariff["history"][-1]["cause"]
+    history = _read_jsonl(sim_dir / "world_state_history.jsonl")
+    change = next(v for v in history[0]["diff"]["variables_changed"] if v["id"] == "tariff_rate")
+    assert change["from"] == seed_value and change["to"] == tariff["value"]
+    assert {k: summary["world_model"][k] for k in committed["summary"]} == committed["summary"]
+    assert trajectory["world_model"] == committed["summary"]
+    assert _json(sim_dir / "run_summary.json")["world_model"] == summary["world_model"]
     block = _bare_report_agent(config["simulation_id"])._world_evolution_block()
     assert "elicited model projection" in block and "Tariff rate: 10%" in block
-    assert "25%" in block and "2026-Q3" in block and "Actor0" in block
+    assert f"{tariff['value']:g}%" in block and "2026-Q3" in block and "Actor0" in block
     assert "protect domestic producers" not in block
     assert "0.797478" not in block  # numeric scenario shares are not world-fact evidence
 

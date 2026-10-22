@@ -1,0 +1,66 @@
+{
+  "source_commit": "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+  "checked_utc": "2026-10-15T20:41:31.896488+00:00",
+  "application_files": 144,
+  "application_lines": 173655,
+  "assigned_specialist_files": 130,
+  "specialist_full_files": 130,
+  "fresh_full_primary_files": 137,
+  "coordinator_note": "Fresh partial ranges and exact-hash historical reads remain separately labeled.",
+  "tests_indexed": 279,
+  "vendor_non_test_indexed": 46,
+  "supplemental_receipt_entries": 49,
+  "owners": [
+    {
+      "owner": "api-operations",
+      "files": 54,
+      "lines": 21377,
+      "full_files": 54,
+      "partial_files": 0
+    },
+    {
+      "owner": "coordinator",
+      "files": 14,
+      "lines": 20835,
+      "full_files": 7,
+      "partial_files": 7
+    },
+    {
+      "owner": "forecast-report",
+      "files": 16,
+      "lines": 35055,
+      "full_files": 16,
+      "partial_files": 0
+    },
+    {
+      "owner": "graph-actors",
+      "files": 23,
+      "lines": 23401,
+      "full_files": 23,
+      "partial_files": 0
+    },
+    {
+      "owner": "legacy-harness",
+      "files": 14,
+      "lines": 27786,
+      "full_files": 14,
+      "partial_files": 0
+    },
+    {
+      "owner": "simulation",
+      "files": 12,
+      "lines": 19844,
+      "full_files": 12,
+      "partial_files": 0
+    },
+    {
+      "owner": "v3-data",
+      "files": 11,
+      "lines": 25357,
+      "full_files": 11,
+      "partial_files": 0
+    }
+  ],
+  "errors": [],
+  "status": "passed"
+}

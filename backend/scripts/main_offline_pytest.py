@@ -310,6 +310,12 @@ class Guard:
                 return  # Read-only liveness probe of this guarded process.
             with self.child_lock:
                 child = self.children.get(args[0])
+            if event == "os.kill" and args[1] == 0 and child is not None:
+                # Signal zero observes only existence/permission. Keep the owned
+                # child's registration after reaping so ESRCH reaches real liveness
+                # consumers; mutating signals to reaped/reused PIDs stay denied below.
+                self.record("allowed:child_liveness", child_pid=args[0], reaped=child.poll() is not None)
+                return
             if child is None or child.poll() is not None:
                 self.deny("process:" + event)
         elif event in {"os.system", "os.exec", "os.posix_spawn", "os.fork", "os.forkpty", "pty.spawn"}:

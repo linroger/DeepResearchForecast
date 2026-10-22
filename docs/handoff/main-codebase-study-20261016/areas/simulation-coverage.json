@@ -1,0 +1,666 @@
+[
+  {
+    "path": "backend/app/services/agent_dynamics.py",
+    "sha256": "dadb2a3449c367d18793b809bc715fe69722a960b327d285341fd2bd3722e3e4",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        405
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full assigned read by Dewey after successful recovery. Child did not compute hash; primary independently computed mirror hash and matched inventory."
+  },
+  {
+    "path": "backend/app/services/decision_channel.py",
+    "sha256": "a8a3e1088ab631b35332c68404b2115c3aaa60961d5ed917889fecbd6018da60",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        1,
+        300
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        315,
+        445
+      ],
+      [
+        501,
+        775
+      ],
+      [
+        535,
+        775
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full delegated read plus primary full read. Combined-output truncation of primary 251-500 repaired by 315-445 reread. No application execution."
+  },
+  {
+    "path": "backend/app/services/simulation_config_generator.py",
+    "sha256": "b58447c05f17f254342b3a6f3e1fef557cd3a1df6ceda6092fa8845caef0ed62",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        650,
+        949
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1041,
+        1340
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3901,
+        4200
+      ],
+      [
+        4201,
+        4281
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full assigned read by Epicurus after successful recovery; no pre-disconnect completed reads recoverable. Mirror hash verified by child and primary against inventory. Supplemental producer reads also preserved."
+  },
+  {
+    "path": "backend/app/services/simulation_ipc.py",
+    "sha256": "181faf1829b1ad54a842637725ff4132482655d4ce4619b1fa606567478d7254",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        732
+      ]
+    ],
+    "depth": "full",
+    "notes": "Primary reader full file; client, optional telemetry and reusable server distinguished from script-local IPC."
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "sha256": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1544
+      ],
+      [
+        1512,
+        1544
+      ]
+    ],
+    "depth": "full",
+    "notes": "Primary reader complete 1544-line read; seal/roster/context/profile/config preparation and validation."
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        450
+      ],
+      [
+        446,
+        486
+      ],
+      [
+        451,
+        750
+      ],
+      [
+        751,
+        1050
+      ],
+      [
+        760,
+        814
+      ],
+      [
+        850,
+        1290
+      ],
+      [
+        1051,
+        1350
+      ],
+      [
+        1351,
+        1550
+      ],
+      [
+        1384,
+        1412
+      ],
+      [
+        1551,
+        1800
+      ],
+      [
+        1801,
+        2025
+      ],
+      [
+        2026,
+        2299
+      ],
+      [
+        2145,
+        2225
+      ],
+      [
+        2260,
+        2285
+      ],
+      [
+        2300,
+        2599
+      ],
+      [
+        2600,
+        2899
+      ],
+      [
+        2900,
+        3021
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full coverage union: primary 1-450,1351-2025,2300-3021; parallel reader 451-1350,2026-2299. Actual ranges retained; no application execution."
+  },
+  {
+    "path": "backend/app/services/world_delta.py",
+    "sha256": "016c537267eacbe3a068d1a81d1813acc15d278686bca68c8ea3ef4f9454c2b1",
+    "read_ranges": [
+      [
+        1,
+        80
+      ]
+    ],
+    "depth": "full",
+    "notes": "Primary reader; complete pure qualitative formatter."
+  },
+  {
+    "path": "backend/app/services/worldstate.py",
+    "sha256": "3fafe510cb0e544bbb265ecc31027218a1ba7954828e35795d23c517fb25e351",
+    "read_ranges": [
+      [
+        1,
+        304
+      ]
+    ],
+    "depth": "full",
+    "notes": "Primary and parallel delegated reader; complete pure state/round-validity module."
+  },
+  {
+    "path": "backend/scripts/action_logger.py",
+    "sha256": "3dedcca3c76a11d4fb0ceafdd55ed3c3acae3aa299567fde363060c954f3f25e",
+    "read_ranges": [
+      [
+        1,
+        323
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full source read by Wegener and Dewey. Primary computed frozen mirror hash against inventory; compatibility and active loggers distinguished."
+  },
+  {
+    "path": "backend/scripts/run_parallel_simulation.py",
+    "sha256": "bad80718fb2c0292d7dcd5f3c46b20742327b171797dde379e71bdb95c809206",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        1875,
+        1965
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2480,
+        2520
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        3001,
+        3300
+      ],
+      [
+        3301,
+        3600
+      ],
+      [
+        3601,
+        3900
+      ],
+      [
+        3888,
+        3933
+      ],
+      [
+        3901,
+        4200
+      ],
+      [
+        3990,
+        4073
+      ],
+      [
+        4201,
+        4500
+      ],
+      [
+        4501,
+        4800
+      ],
+      [
+        4801,
+        5100
+      ],
+      [
+        4957,
+        4984
+      ],
+      [
+        5067,
+        5090
+      ],
+      [
+        5101,
+        5400
+      ],
+      [
+        5148,
+        5227
+      ],
+      [
+        5401,
+        5700
+      ],
+      [
+        5508,
+        5535
+      ],
+      [
+        5612,
+        5635
+      ],
+      [
+        5698,
+        5778
+      ],
+      [
+        5701,
+        6000
+      ],
+      [
+        5779,
+        6100
+      ],
+      [
+        6001,
+        6154
+      ]
+    ],
+    "depth": "full",
+    "notes": "Delegated reader Wegener returned full-read receipt; truncated supplemental reads revisited. Primary synthesis ongoing."
+  },
+  {
+    "path": "backend/scripts/run_reddit_simulation.py",
+    "sha256": "841444e7f0c25203bbd1abb70aeca4b9ff43ac635b624d1947d52246f456cdaa",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1108
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full assigned read by Dewey after successful recovery. Child did not compute hash; primary independently computed mirror hash and matched inventory."
+  },
+  {
+    "path": "backend/scripts/run_twitter_simulation.py",
+    "sha256": "25a4007a82052f253513c4869e74aab5409a702ace715df11ed106473968466c",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1117
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full assigned read by Dewey after successful recovery. Child did not compute hash; primary independently computed mirror hash and matched inventory."
+  },
+  {
+    "path": "backend/app/utils/oasis_llm.py",
+    "sha256": "bceec7b7122e8d1c436f206e70badea16692f459fc941b47a2eb9be1c927558f",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        616
+      ]
+    ],
+    "depth": "full",
+    "notes": "Delegated parallel reader supplemental model factory/fallback/concurrency; not owner assignment."
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "sha256": "c7b33f0ad5c18779466391de5c3a861d574d874855b7365d1533d858beb1d641",
+    "read_ranges": [
+      [
+        3680,
+        3979
+      ],
+      [
+        4080,
+        4379
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Delegated parallel reader simulation-signal and forecast-policy consumer."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "61fd71f5714ac49602f7cfce452c81cbe61296285ef4a28a4dc11e859d399007",
+    "read_ranges": [
+      [
+        580,
+        607
+      ],
+      [
+        599,
+        633
+      ],
+      [
+        1055,
+        1108
+      ],
+      [
+        1301,
+        1600
+      ],
+      [
+        1388,
+        1403
+      ],
+      [
+        1504,
+        1513
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Delegated parallel reader simulation/dynamics/decision defaults."
+  },
+  {
+    "path": "backend/app/utils/actors.py",
+    "sha256": "793a292fda1f3b425291139d72423be77826751234d15b40c90aac63760a8ba6",
+    "read_ranges": [
+      [
+        1398,
+        1697
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Delegated parallel reader event-to-round helpers."
+  },
+  {
+    "path": "backend/tests/test_calendar_round_loop.py",
+    "sha256": "ab9228c4c49eb79973d330acde698b5a7d144857a52085e6b8426d1f5c3a2249",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        248,
+        547
+      ]
+    ],
+    "depth": "full",
+    "notes": "Test-source evidence only; delegated parallel reader; no execution."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+    "read_ranges": [
+      [
+        9284,
+        9320
+      ],
+      [
+        13340,
+        13540
+      ],
+      [
+        13541,
+        13740
+      ],
+      [
+        13567,
+        13602
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Primary reader supplemental caller/consumer boundary ranges; not whole-file coverage."
+  },
+  {
+    "path": "backend/app/api/simulation.py",
+    "sha256": "dc68ad1f6802bf28afb5c6858aa28a1c1c676f4289df0c9c1322b9452e03f212",
+    "read_ranges": [
+      [
+        1540,
+        1678
+      ],
+      [
+        1633,
+        1660
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Primary reader supplemental caller/consumer boundary ranges; not whole-file coverage."
+  },
+  {
+    "path": "backend/app/__init__.py",
+    "sha256": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
+    "read_ranges": [
+      [
+        118,
+        145
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Primary reader supplemental caller/consumer boundary ranges; not whole-file coverage."
+  },
+  {
+    "path": "backend/app/services/zep_graph_memory_updater.py",
+    "sha256": "a78b2a1eb24ab6fc84b4805ba61732c780b6c7f911057e13f6b93e06f609eb67",
+    "read_ranges": [
+      [
+        320,
+        450
+      ],
+      [
+        515,
+        598
+      ],
+      [
+        644,
+        697
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Primary reader supplemental caller/consumer boundary ranges; not whole-file coverage."
+  },
+  {
+    "path": "backend/app/services/zep_tools.py",
+    "sha256": "9d16968db17e6df30627574f39f71082f3cda06b2a65dfc43aa0ff51d97d4c61",
+    "read_ranges": [
+      [
+        1995,
+        2170
+      ],
+      [
+        2457,
+        2590
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Primary reader supplemental caller/consumer boundary ranges; not whole-file coverage."
+  }
+]

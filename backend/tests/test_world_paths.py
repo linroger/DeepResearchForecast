@@ -29,6 +29,7 @@ from app.services import world_paths as wp  # noqa: E402
 from app.services.world_model import WorldModel  # noqa: E402
 from test_calendar_round_loop import _run, _world_clock_notes  # noqa: E402
 from test_world_model_loop import _WorldLLM, _patch_world, _read_jsonl, _world_config  # noqa: E402
+from test_world_announced_settings import _expected_damped_numeric  # noqa: E402
 
 
 # ============================================================================ pure
@@ -238,7 +239,12 @@ def test_resume_restores_the_siblings_from_world_paths(tmp_path, monkeypatch):
     worlds = {p["path"]: {v["id"]: v for v in p["world"]["variables"]} for p in after["paths"]}
     assert worlds[1]["tariff_rate"]["value"] == 99.0
     assert any(h["cause"] == "marker" for h in worlds[1]["tariff_rate"]["history"])
-    assert worlds[2]["tariff_rate"]["value"] == 25.0
+    cfg = _world_config()
+    expected = _expected_damped_numeric(
+        cfg["world_model"]["state_variables"][0]["value"], 25,
+        ratio=cfg["world_model"]["settings"]["max_change_ratio"])
+    assert worlds[2]["tariff_rate"]["value"] == pytest.approx(expected)
+    assert worlds[2]["tariff_rate"]["history"][-1]["value"] == worlds[2]["tariff_rate"]["value"]
     traj = _json(sim_dir / "world_state_trajectory.json")
     assert [r.get("paths", {}).get("k") for r in traj["trajectory"]] == [None, 3, 3, 3]
     assert traj["world_model"]["paths"]["variables"]["tariff_rate"]["max"] == 99.0
@@ -312,11 +318,22 @@ def test_shocks_make_paths_diverge_without_extra_sampling(tmp_path, monkeypatch)
     assert paths["shocks"]["shock_port_strike"]["paths_fired"] == sum(1 for f in fired if f)
     assert paths["shocks"]["shock_port_strike"]["base_rate"] == "50% per quarter"
     # the seeded rolls split the paths in time: three draw the strike in the first period, path 3 two
-    # periods later, after the arbiter had already moved the tariff it hits (10% → 25%, then +5)
+    # periods later, after the arbiter's damped tariff change, then the same +5 shock.
     assert fired == [[1], [1], [1], [3]]
     assert paths["shocks"]["shock_port_strike"]["first_rounds"] == {"0": 1, "1": 1, "2": 1, "3": 3}
-    assert paths["variables"]["tariff_rate"] == {"name": "Tariff rate", "unit": "%", "min": 15.0, "p50": 15.0,
-                                                 "max": 30.0}
+    initial = cfg["world_model"]["state_variables"][0]["value"]
+    damped = _expected_damped_numeric(initial, 25, ratio=cfg["world_model"]["settings"]["max_change_ratio"])
+    expected_values = [initial + 5] * 3 + [damped + 5]
+    tariffs = [next(v for v in w["variables"] if v["id"] == "tariff_rate") for w in worlds]
+    committed_values = [v["value"] for v in tariffs]
+    assert committed_values == pytest.approx(expected_values)
+    assert all(v["history"][-1]["source"] == "shock" and v["history"][-1]["value"] == v["value"]
+               for v in tariffs)
+    expected_spread = {"name": "Tariff rate", "unit": "%", "min": min(committed_values),
+                       "p50": sum(sorted(committed_values)[1:3]) / 2, "max": max(committed_values)}
+    assert paths["variables"]["tariff_rate"] == expected_spread
+    trajectory = _json(tmp_path / "world_state_trajectory.json")
+    assert trajectory["world_model"]["paths"]["variables"]["tariff_rate"] == expected_spread
     # every fired shock reached that path's arbiter as a confirmed event
     shock_prompts = [c for c in _WorldLLM.calls if c["kind"] == "arbiter" and "Exogenous shock: Port strike" in c["content"]]
     assert len(shock_prompts) == sum(len(f) for f in fired)

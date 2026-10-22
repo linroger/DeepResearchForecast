@@ -38,6 +38,20 @@ def _src(obj) -> str:
     return inspect.getsource(obj)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_characterization_storage(monkeypatch, tmp_path):
+    """Keep real owner/provenance lookups inside each characterization case."""
+    from app.services.simulation_manager import SimulationManager
+
+    simulations = tmp_path / "simulations"
+    pipelines = tmp_path / "pipelines"
+    simulations.mkdir()
+    pipelines.mkdir()
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(simulations))
+    monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(simulations))
+    monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(pipelines))
+
+
 # ───────────────────────── 1. shared_graph_feedback (owner: WP10) ─────────────
 def test_characterizes_shared_graph_feedback():
     """Simulated activity, when feedback is (explicitly) enabled, is written to
@@ -190,17 +204,14 @@ def test_wp_12_prevents_fork_seed_shared_mutation():
 
 # ─────────────── 7. structured_spine_omissions (owner: WP6) ───────────────────
 def test_characterizes_structured_spine_omissions(monkeypatch):
-    """derive_forecast_spine supports base_distribution and quantitative_facts.
-    The production caller never passes base_distribution — that structured input
-    is silently absent from probability generation. Since the official-data
-    integration it does pass quantitative_facts: the stored official-data pack
-    (empty when no official data is bound, so the spine prompt is unchanged)."""
+    """Official facts reach the spine; diagnostic runs omit simulation anchors.
+
+    The extractor also supports the optional legacy band/advisory API. Actual
+    report admission is policy-gated; a missing anchor does not send placeholder
+    anchor kwargs into the legacy call shape.
+    """
     sig = inspect.signature(fe.derive_forecast_spine)
-    assert "base_distribution" in sig.parameters
-    assert "quantitative_facts" in sig.parameters
-    call_src = _src(ra.ReportAgent._derive_and_pin_forecast_spine)
-    assert "base_distribution=" not in call_src
-    assert "quantitative_facts=" in call_src
+    assert {"base_distribution", "quantitative_facts", "anchor_mode", "anchor_meta"} <= set(sig.parameters)
 
     seen = []
 
@@ -210,8 +221,7 @@ def test_characterizes_structured_spine_omissions(monkeypatch):
 
     monkeypatch.setattr(fe, "derive_forecast_spine", capture)
     monkeypatch.setattr(ra.ReportAgent, "_define_tools", lambda self: {})
-    monkeypatch.setattr(ra.ReportAgent, "_locate_timeline", lambda self: None)
-    monkeypatch.setattr(ra.ReportAgent, "_locate_handoff_dir", lambda self: None)
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", False)
     official = {"schema_version": 1, "series": [{
         "series": "fred:UNRATE", "provider": "fred", "provider_name": "FRED",
         "title": "Unemployment Rate", "title_zh": "失业率", "units": "Percent",
@@ -223,12 +233,16 @@ def test_characterizes_structured_spine_omissions(monkeypatch):
                          {"date": "2025-04-01", "value": 4.25, "flag": ""}]}]}
     for carrier in (official, None):
         agent = ra.ReportAgent(
-            "fixture_graph", "fixture_simulation", "Forecast unemployment in 2026",
+            "fixture_graph", "sim_architecture", "Forecast unemployment in 2026",
             llm_client=FakeLLMClient(), zep_tools=object(), official_data=carrier,
+            report_policy={"report_spine_selfconsistency_k": 1, "ensemble_extremize_a": 1.0,
+                           "simulation_forecast_effect": "diagnostic_only"},
             sources=[{"title": "Unemployment Rate",
                       "url": "https://fred.stlouisfed.org/series/UNRATE"}])
         agent._derive_and_pin_forecast_spine("fixture_report")
-    assert len(seen) == 2 and all("base_distribution" not in call for call in seen)
+    assert len(seen) == 2
+    assert all(not ({"base_distribution", "anchor_mode", "anchor_meta"} & call.keys())
+               for call in seen)
     with_data, without_data = (call["quantitative_facts"] for call in seen)
     assert "4.25" in with_data and "[S1]" in with_data  # stored value + its source marker
     assert without_data == ""
@@ -243,14 +257,48 @@ def test_wp_6_prevents_structured_spine_omissions():
 
 
 # ─────────── 8. dormant_typed_worldstate_anchor (owner: WP6) ──────────────────
-def test_characterizes_dormant_typed_worldstate_anchor():
-    """REPORT_SPINE_ANCHOR_WORLDSTATE defaults on, yet the typed anchor is
-    dormant (production passes no base_distribution). WP1 additionally gated
-    the implicit signal-pack path to legacy_prompt only."""
+def test_characterizes_dormant_typed_worldstate_anchor(monkeypatch, tmp_path):
+    """Available trajectory shares reach the real caller only under legacy_prompt.
+
+    The saved effect wins over the opposite ambient default. Band/advisory is
+    an optional legacy channel; diagnostic_only does not feed it probabilities.
+    """
     assert bool(getattr(Config, "REPORT_SPINE_ANCHOR_WORLDSTATE", False)) is True
-    call_src = _src(ra.ReportAgent._derive_and_pin_forecast_spine)
-    assert "base_distribution=" not in call_src            # anchor stays dormant
-    assert "legacy_prompt" in call_src                     # WP1 gate present
+    sim_dir = tmp_path / "simulations" / "sim_architecture"
+    sim_dir.mkdir()
+    shares = {"Base": 0.7, "Other": 0.3}
+    (sim_dir / "world_state_trajectory.json").write_text(json.dumps({
+        "schema_version": 3, "validity": "valid", "mode": "calendar",
+        "outcome": {"shares": shares}, "horizon_date": "2027-10-22"}), encoding="utf-8")
+    (sim_dir / "simulation_config.json").write_text(json.dumps({
+        "temporal_config": {"mode": "calendar", "as_of_date": "2026-10-22",
+                            "horizon_date": "2027-10-22"}}), encoding="utf-8")
+    seen = []
+
+    def capture(llm, **kwargs):
+        seen.append(kwargs)
+        return None
+
+    monkeypatch.setattr(fe, "derive_forecast_spine", capture)
+    monkeypatch.setattr(ra.ReportAgent, "_define_tools", lambda self: {})
+    monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", False)
+    for effect, ambient in (("diagnostic_only", "legacy_prompt"),
+                            ("legacy_prompt", "diagnostic_only")):
+        monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", ambient)
+        agent = ra.ReportAgent(
+            "fixture_graph", "sim_architecture", "Forecast the outcome by October 2027",
+            llm_client=FakeLLMClient(), zep_tools=object(),
+            report_policy={"report_spine_selfconsistency_k": 1, "ensemble_extremize_a": 1.0,
+                           "simulation_forecast_effect": effect})
+        agent._derive_and_pin_forecast_spine("fixture_report")
+    assert len(seen) == 2
+    diagnostic, legacy = seen
+    assert not ({"base_distribution", "anchor_mode", "anchor_meta"} & diagnostic.keys())
+    assert diagnostic["signal_pack"] == ""
+    assert legacy["base_distribution"] == shares
+    assert legacy["anchor_mode"] == "band"
+    assert legacy["anchor_meta"]["sim_horizon"] == "2027-10-22"
+    assert legacy["report_policy"]["simulation_forecast_effect"] == "legacy_prompt"
 
 
 @pytest.mark.xfail(strict=True, reason="WP6: the legacy base_distribution stays "

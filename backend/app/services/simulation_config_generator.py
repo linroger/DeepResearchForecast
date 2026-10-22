@@ -997,13 +997,34 @@ class SimulationConfigGenerator:
         if as_of_defaulted:
             logger.warning(f"as_of_date 不可解析（{as_of_raw!r}），默认取运行日 {as_of.isoformat()}")
 
-        # 判定日阶梯：确定性抽取 → LLM 兜底 → 默认 12 个月
+        # 判定日阶梯：确定性抽取 → LLM 兜底 → 默认 12 个月。
+        # 2026-10-22（pipe_0827b81a9998）：分层抽取——**模拟需求（用户 prompt）里明示的
+        # 期限无条件尊重**（哪怕很短，那是用户意图）；但研究派生 central_question 里的
+        # 近距 anchored_period（如"October 2026"＝当前新闻窗）不再直接采纳：< 最小预测
+        # 时域（SIM_HORIZON_MIN_DAYS，默认 60 天）即视为新闻窗伪命中，交给 LLM 兜底
+        # 判断真实判定日。该跑因此把「两场战争何时结束」的多年级问题压成了 9 天日粒度。
         cq = str(actors.get("central_question", "") or "") if isinstance(actors, dict) else ""
-        horizon = sim_timeline.extract_horizon(f"{simulation_requirement}\n{cq}", as_of)
+        horizon = sim_timeline.extract_horizon(simulation_requirement, as_of)
+        if horizon is None and cq:
+            cq_horizon = sim_timeline.extract_horizon(cq, as_of)
+            if cq_horizon is not None:
+                try:
+                    from datetime import date as _date
+                    h = _date.fromisoformat(str(cq_horizon.horizon_date))
+                    gap_days = (h - as_of).days
+                except (ValueError, TypeError):
+                    gap_days = None
+                min_days = int(getattr(Config, "SIM_HORIZON_MIN_DAYS", 60) or 60)
+                if gap_days is not None and gap_days >= min_days:
+                    horizon = cq_horizon
+                elif gap_days is not None:
+                    logger.warning(
+                        f"central_question 判定日 {cq_horizon.horizon_date} 距 as_of 仅 {gap_days} 天"
+                        f"（<{min_days}）：按新闻窗伪命中丢弃，交 LLM 兜底（文本={cq_horizon.matched_text!r}）"
+                    )
         if horizon is None and isinstance(actors, dict):
-            # The dossier can carry an explicit forecast window independently
-            # of the question prose. Use it before a model/default substitutes
-            # a different endpoint; an explicit question date still wins.
+            # An explicit dossier endpoint survives the central-question news-window
+            # filter and precedes any model/default replacement. User dates still win.
             dossier_horizon = actors.get("forecast_horizon") or actors.get("horizon")
             if isinstance(dossier_horizon, str):
                 horizon = sim_timeline.extract_horizon(dossier_horizon, as_of)

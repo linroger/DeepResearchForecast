@@ -22,7 +22,7 @@ import contextvars
 import logging
 import threading
 import typing
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.concurrency import ContextThreadPoolExecutor as ThreadPoolExecutor  # LOG-16: run 上下文随任务传播
 
 from pydantic import BaseModel
 

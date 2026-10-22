@@ -1,3 +1,5 @@
+> Current implementation and main reconciliation: see [the current handoff](../oddsense-main-reconciliation/handoff.md) for source, actual GATHER use, guarded acceptance and running-backend status. Earlier study and delivery history are retained below.
+
 # Oddsense integration handoff
 
 **Last Updated (UTC):** 2026-10-18T14:50:06.051873+00:00

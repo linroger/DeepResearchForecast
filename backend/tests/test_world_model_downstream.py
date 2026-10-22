@@ -198,8 +198,8 @@ def test_world_state_api_history_rows_carry_problems_and_digests(client, tmp_pat
     with open(sim_big / "world_digest.jsonl", "w", encoding="utf-8") as f:
         f.write(json.dumps({"round": 1, "digest": "d" * 5000}) + "\n")
     big = client.get("/api/simulation/sim_big/world-state").get_json()["data"]["history"][0]
-    assert len(big["arbiter_problems"]) == 12 and all(len(p) == 200 for p in big["arbiter_problems"])
-    assert len(big["error"]) == 200 and len(big["digest"]) == 2000
+    assert len(big["arbiter_problems"]) == 12 and all(len(p) == 500 for p in big["arbiter_problems"])  # 2026-10-22 截断上限 200→600：500 字问题原样通过
+    assert len(big["error"]) == 200 and len(big["digest"]) == 5000  # digest 上限 2000→20000：原样通过
     # a non-list problems field is tolerated; a symlinked digest file is refused like the other artifacts
     sim_link = tmp_path / "sim_dlink"
     _write_world(str(sim_link), with_history=False)

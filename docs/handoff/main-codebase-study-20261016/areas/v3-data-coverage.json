@@ -1,0 +1,470 @@
+[
+  {
+    "path": "deerflow_bridge/cached_fetch.py",
+    "sha256": "1e187e30f25fc816a4a74dcb629d7d752734cde789a612fc159430cae0c686fb",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        854
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full search-fetch reader receipt; combined initial chunk was reread untruncated. Static source only."
+  },
+  {
+    "path": "deerflow_bridge/data_catalog.py",
+    "sha256": "602c92c3d7ec31f8cb5e840edbdbbca6429c765b9f846a0be8a550f01a30919c",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1750
+      ],
+      [
+        1751,
+        2100
+      ],
+      [
+        2101,
+        2450
+      ],
+      [
+        2451,
+        2800
+      ],
+      [
+        2689,
+        3038
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full transport reader receipt recovered after disconnects; initial combined 1-350 reread standalone. Static source only."
+  },
+  {
+    "path": "deerflow_bridge/data_mcp.py",
+    "sha256": "484a8973ea630956d32801023e47e39a7e22ceb53dc3010d9e83601c29a84f66",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1201,
+        1523
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full transport reader receipt recovered after disconnects; initial combined 1-350 reread standalone. Default launch specs are not runtime availability proof."
+  },
+  {
+    "path": "deerflow_bridge/data_sources.py",
+    "sha256": "8090d2d26fda2a65b190144b40d48daf38151ebbe1a619d1778b71705b8f635c",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        900
+      ],
+      [
+        901,
+        1200
+      ],
+      [
+        1201,
+        1500
+      ],
+      [
+        1501,
+        1800
+      ],
+      [
+        1801,
+        2100
+      ],
+      [
+        2101,
+        2400
+      ],
+      [
+        2401,
+        2700
+      ],
+      [
+        2701,
+        3000
+      ],
+      [
+        2818,
+        3117
+      ],
+      [
+        351,
+        650
+      ],
+      [
+        1561,
+        1860
+      ],
+      [
+        1861,
+        2210
+      ],
+      [
+        2312,
+        2611
+      ],
+      [
+        2612,
+        2911
+      ],
+      [
+        2816,
+        3115
+      ],
+      [
+        1301,
+        1600
+      ],
+      [
+        2112,
+        2411
+      ],
+      [
+        1,
+        350
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full normalization reader receipt plus targeted transport overlaps; initial 1-300 reread standalone after truncation. Persisted/source policy only; no provider calls."
+  },
+  {
+    "path": "deerflow_bridge/data_tools.py",
+    "sha256": "c6a73dd9649efdff2ac1307a28ca814d3cd164dce8aba88e90ec453debea7d0d",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        565,
+        864
+      ],
+      [
+        465,
+        714
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full normalization reader receipt plus targeted transport overlap. Legacy tool facade documented at boundary; no legacy run execution."
+  },
+  {
+    "path": "deerflow_bridge/linear_research.py",
+    "sha256": "18896eaaa89991803e3f7396488de2f4065234bb93a5f24f36a35d19548594ab",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        5801,
+        6150
+      ],
+      [
+        6151,
+        6500
+      ],
+      [
+        6501,
+        6850
+      ],
+      [
+        6851,
+        7200
+      ],
+      [
+        7201,
+        7550
+      ],
+      [
+        7551,
+        7900
+      ],
+      [
+        7901,
+        8298
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1750
+      ],
+      [
+        1751,
+        2100
+      ],
+      [
+        2101,
+        2450
+      ],
+      [
+        2451,
+        2800
+      ],
+      [
+        2801,
+        3150
+      ],
+      [
+        3151,
+        3500
+      ],
+      [
+        3501,
+        3800
+      ],
+      [
+        3801,
+        4150
+      ],
+      [
+        4151,
+        4500
+      ],
+      [
+        4501,
+        4850
+      ],
+      [
+        4851,
+        5200
+      ],
+      [
+        5201,
+        5550
+      ],
+      [
+        5551,
+        5800
+      ],
+      [
+        4701,
+        5000
+      ],
+      [
+        5401,
+        5700
+      ],
+      [
+        4050,
+        4108
+      ],
+      [
+        8190,
+        8210
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full union: lead 1-700 and 5801-8298; linear-foundation 701-3500; linear-middle 3501-5800. Extra targeted reader overlaps retained. Initial lead/combined middle truncations reread fully; no application execution."
+  },
+  {
+    "path": "deerflow_bridge/market_tools.py",
+    "sha256": "eed4d54cf31202a07c4ad88091b6f5cdb57292c0001f4b6e9f12c827ea2bc061",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        648
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full lead read in bounded numbered chunks; no market API invocation."
+  },
+  {
+    "path": "deerflow_bridge/research_budget.py",
+    "sha256": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1508
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full lead read in bounded numbered chunks; no SQLite admission or application import executed."
+  },
+  {
+    "path": "deerflow_bridge/search_tools.py",
+    "sha256": "f03651f926dafb4a5d9b80fd9abc59d7f9179631d2bbc972402bb0126cc55f3c",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        600
+      ],
+      [
+        601,
+        746
+      ],
+      [
+        447,
+        746
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full search-fetch reader receipt with overlapping verification tail; initial combined chunk reread untruncated. Static source only."
+  },
+  {
+    "path": "deerflow_bridge/skills/data-visuals/scripts/render_data.py",
+    "sha256": "06ca497078857e15b4f07d1ee8edfc769a2330b2f37f0f6925cf239008b562b2",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1750
+      ],
+      [
+        1751,
+        2100
+      ],
+      [
+        2101,
+        2450
+      ],
+      [
+        2374,
+        2623
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full renderer reader receipt; overlapping EOF tail retained. No rendering or library availability verification."
+  },
+  {
+    "path": "deerflow_bridge/skills/forecast-visuals/scripts/render.py",
+    "sha256": "8ca9b27f10c2217ed552f459312ab19178e51cd160a339c2052c23e2978503ea",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1750
+      ],
+      [
+        1751,
+        2100
+      ],
+      [
+        1889,
+        2138
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full renderer reader receipt; overlapping EOF tail retained. No rendering or library availability verification."
+  }
+]

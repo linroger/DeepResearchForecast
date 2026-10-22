@@ -1,6 +1,6 @@
 """确定性报告可视化器（VIZ-1 → WAVE9 plotly-first 重建）—— 无 LLM、纯数据驱动，把已落盘的
 结构化工件（forecast / ensemble_forecast / timeline / actors / quantitative / sources /
-contested / graph_priors / world_state_trajectory / comparison / market_price_history /
+contested / graph_priors / world_state_trajectory / comparison /
 校准账本统计）渲染成三族可视化：
 
   (A) Mermaid 纯函数助手（保留为库函数，build_all 不再产出 mermaid——旧 mermaid 时间线/
@@ -84,7 +84,6 @@ CHART_TITLES_ZH: Dict[str, str] = {
     "Simulated World Variables (indexed, seed = 100)": "推演世界变量（指数化，种子值 = 100）",
     "Baseline vs Scenario": "基线与情景对比",
     "Calibration Curve": "校准曲线",
-    "Market-Implied P(yes) History vs Model": "市场隐含 P(是) 历史与模型对比",
 }
 
 _CHART_IMAGE_RE = re.compile(r"!\[([^\]\n]*)\]\((charts/[^)\s]+)\)")
@@ -2087,17 +2086,6 @@ class ReportVisualizer:
     def _chart_ok(self) -> bool:
         return MATPLOTLIB_AVAILABLE and bool(_cfg("REPORT_VIZ_CHARTS", True))
 
-    def _price_hist_ok(self) -> bool:
-        """PM-6 市场价格历史折线族开关（默认开）。Config 未定义该属性时回退直接读 os.environ
-        （避免跨文件改动 config.py 也能被 env 切换），仍缺 → 默认 True（degrade-safe）。"""
-        val = _cfg("REPORT_VIZ_PRICE_HISTORY", None)
-        if val is None:
-            raw = os.environ.get("REPORT_VIZ_PRICE_HISTORY")
-            if raw is None:
-                return True
-            return raw.strip().lower() == "true"
-        return bool(val)
-
     def _dpi(self) -> int:
         try:
             return max(72, int(_cfg("REPORT_VIZ_DPI", 160) or 160))
@@ -2778,90 +2766,12 @@ class ReportVisualizer:
         finally:
             _close_matplotlib_figure(fig)
 
-    def render_market_price_history(self, price_history: Any, anchors: Any,
-                                    out_dir: str) -> List[str]:
-        """(6) PM-6：每个带市场锚点的二元预测 → market-implied P(yes) 历史价折线图。
-
-        对每个「有市场锚点且 market_id 命中 price_history」的二元预测，画一张：市场隐含
-        P(yes) 随时间的折线 + 模型概率作带标签的水平参考线 + 分歧（model − market）标注。
-        用途：报告 Part-1「Market Cross-Check」区（placement_hint='binary_forecasts'）。
-
-        入参：
-          price_history  {market_id: [{t,p}, ...]}（bridge/report 落盘；t 为 unix 秒，p∈[0,1]）；
-          anchors        锚点列表——每项可为二元预测（含 market_anchor 子 dict）或已抽平的
-                         {market_id, probability/model_prob, id/statement/label, divergence}。
-                         仅保留 market_id 命中 price_history 且有效历史点 ≥2 的锚点，按原序去重。
-        分组：锚点数 >6 时每图最多 2 个子图（压缩图数量）；否则一锚一图。锚点总数超
-              REPORT_VIZ_MAX_NODES 时确定性截断（保留首现）。
-        返回：相对 report_dir 的路径列表 ['charts/market_price_history_1.png', ...]；
-        matplotlib 缺失/关闭、无 price_history、无可用锚点 → []（never raises）。"""
-        if not self._chart_ok():
-            return []
-        fig = None
-        try:
-            if not isinstance(price_history, dict) or not price_history:
-                return []
-            norm = _normalize_price_anchors(anchors, price_history)
-            if not norm:
-                return []
-            cap = int(_cfg("REPORT_VIZ_MAX_NODES", 40) or 40)
-            if cap > 0 and len(norm) > cap:
-                norm = norm[:cap]  # 病态超长输入的确定性上限（保留首现锚点）
-            label_text = " ".join(str(anchor.get("label") or "") for anchor in norm)
-            if not _mpl_labels_supported(label_text):
-                logger.info("price-history static chart skipped: no installed font covers CJK labels")
-                return []
-            label_font = _mpl_font_for_text(label_text)
-            import matplotlib.dates as _mdates  # 惰性导入（matplotlib 已确认可用）
-            per_fig = 2 if len(norm) > 6 else 1  # >6 锚点 → 每图 2 子图，降低图数量
-            groups = [norm[i:i + per_fig] for i in range(0, len(norm), per_fig)]
-            paths: List[str] = []
-            for gi, group in enumerate(groups, 1):
-                n = len(group)
-                fig, axes = plt.subplots(n, 1, figsize=(9, max(3.2, 3.0 * n)),
-                                         squeeze=False)
-                for ai, a in enumerate(group):
-                    ax = axes[ai][0]
-                    xs = [t for t, _ in a["series"]]
-                    ys = [p for _, p in a["series"]]
-                    ax.plot(xs, ys, color="#c0603a", linewidth=1.8, marker="o",
-                            markersize=3, zorder=2, label="Market implied P(yes)")
-                    mp = a["model_p"]
-                    if mp is not None:
-                        ax.axhline(mp, color="#3b6fb0", linestyle="--", linewidth=1.6,
-                                   zorder=1, label=f"Model P(yes) = {mp * 100:.0f}%")
-                    div = a["divergence"]
-                    if div is not None:
-                        ax.annotate(f"Divergence (model − market): {div * 100:+.0f} pp",
-                                    xy=(0.02, 0.04), xycoords="axes fraction",
-                                    fontsize=8, color="#2b2b2b",
-                                    bbox={"boxstyle": "round,pad=0.3", "fc": "#f2f2f2",
-                                          "ec": "#9aa5b1", "alpha": 0.85})
-                    ax.set_ylim(0, 1)
-                    ax.set_ylabel("P(yes)", fontsize=9)
-                    ax.set_title(a["label"], fontsize=11, fontweight="bold",
-                                 fontproperties=label_font)
-                    ax.xaxis.set_major_formatter(_mdates.DateFormatter("%Y-%m-%d"))
-                    ax.legend(loc="best", fontsize=8, framealpha=0.85)
-                    ax.grid(linestyle=":", alpha=0.4)
-                axes[-1][0].set_xlabel("Date", fontsize=10)
-                fig.autofmt_xdate()
-                fig.tight_layout()
-                rel = self._save(fig, out_dir, f"market_price_history_{gi}.png")
-                if rel:
-                    paths.append(rel)
-            return paths
-        except Exception:  # noqa: BLE001
-            return []
-        finally:
-            _close_matplotlib_figure(fig)
-
     # ============================ (C) plotly 交互式 HTML 族 ============================
     # ITEM-16：全部为实例方法，入参普通 dict/list + 输出目录，成功落盘 HTML 返回相对路径，
     # 否则 None（或 []）。plotly 缺失/关闭 → 直接跳过（build_all 会整族略过）。每个 HTML 用
     # include_plotlyjs='directory' 引用同目录共享 plotly.min.js（一份 ~4.9MB 全报告共享，
     # 不依赖 CDN/外链；见 _ensure_plotly_bundle，写不出 bundle 时回退 inline）。数据抽取逻辑与
-    # 对应 matplotlib 构建器逐字对齐（复用 _to_float / _first_float / _normalize_price_anchors），
+    # 对应 matplotlib 构建器逐字对齐（复用 _to_float / _first_float），
     # 保证同一工件下 PNG 与 HTML 描绘同一份数据。
 
     def _interactive_ok(self) -> bool:
@@ -3327,63 +3237,6 @@ class ReportVisualizer:
         except Exception as exc:  # noqa: BLE001
             logger.debug("build_worldstate_area_html 失败（跳过该图）：%s", exc)
             return None
-
-    def render_market_price_history_html(self, price_history: Any, anchors: Any,
-                                         out_dir: str) -> List[str]:
-        """(C4) 市场价格历史折线的交互式 HTML（对应 render_market_price_history）。
-
-        每个「有市场锚点且 market_id 命中 price_history」的二元预测 → 一张自包含 HTML：市场隐含
-        P(yes) 随时间折线 + 模型概率水平参考线 + 分歧标注（交互 hover）。锚点总数超
-        REPORT_VIZ_MAX_NODES 确定性截断（保留首现）。返回相对 report_dir 路径列表；
-        plotly 缺失/关闭、无 price_history、无可用锚点 → []（never raises）。"""
-        if not self._interactive_ok():
-            return []
-        try:
-            if not isinstance(price_history, dict) or not price_history:
-                return []
-            norm = _normalize_price_anchors(anchors, price_history)
-            if not norm:
-                return []
-            cap = int(_cfg("REPORT_VIZ_MAX_NODES", 40) or 40)
-            if cap > 0 and len(norm) > cap:
-                norm = norm[:cap]  # 病态超长输入的确定性上限（保留首现锚点）
-            paths: List[str] = []
-            for gi, a in enumerate(norm, 1):
-                xs = [t for t, _ in a["series"]]
-                ys = [p for _, p in a["series"]]
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, mode="lines+markers", name="Market implied P(yes)",
-                    line=dict(color=_COLOR_MARKET, width=2), marker=dict(size=5),
-                    hovertemplate="%{x|%Y-%m-%d}: %{y:.1%}<extra></extra>",
-                ))
-                mp = a["model_p"]
-                if mp is not None:
-                    fig.add_hline(y=mp, line_dash="dash", line_color=_COLOR_MODEL,
-                                  annotation_text=f"Model P(yes) = {mp * 100:.0f}%",
-                                  annotation_position="top left")
-                div = a["divergence"]
-                if div is not None:
-                    fig.add_annotation(
-                        xref="paper", yref="paper", x=0.02, y=0.04, showarrow=False,
-                        text=f"Divergence (model − market): {div * 100:+.0f} pp",
-                        bgcolor="#f2f2f2", bordercolor=_COLOR_NEU, borderwidth=1,
-                        font=dict(size=11, color=_INK_2),
-                    )
-                _apply_layout(fig, a["label"], height=420)
-                fig.update_layout(
-                    xaxis_title="Date", yaxis_title="P(yes)",
-                    yaxis=dict(range=[0, 1], tickformat=".0%"),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                )
-                stem = f"market_price_history_{gi}"
-                rel = self._save_pair(fig, out_dir, stem, stem)
-                if rel:
-                    paths.append(rel)
-            return paths
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("render_market_price_history_html 失败（跳过该族）：%s", exc)
-            return []
 
     # ==================== (D) WAVE9 新 plotly 构建器（HTML+PNG 对） ====================
     # 全部实例方法：入参普通 dict/list + 输出目录，成功返回 'charts/<name>.html' 相对路径，
@@ -5145,8 +4998,6 @@ class ReportVisualizer:
           world_state           world_state.json（dict，reflexive world：变量历史 → 指数化折线）
           comparison            comparison.json（dict，matplotlib 专属）
           calibration           校准统计（matplotlib 专属）
-          market_price_history  {market_id:[{t,p}]}（缺则回退读 reports/{id}/ 与 handoff/ 同名文件）
-          handoff_dir           研究 handoff 目录（定位 handoff/market_price_history.json）
 
         manifest 每项：{id,path,type,title,caption,source,placement_hint}
           + 可选 png_path（交互式 HTML 图的 kaleido 静态 PNG 对，供 PDF/exec-brief 内嵌）。
@@ -5326,34 +5177,8 @@ class ReportVisualizer:
                      isinstance(wsm, dict) and bool((wsm.get("world") or {}).get("variables")),
                      lambda: self.build_world_variables_html(wsm, charts_dir))
 
-            # 市场价格历史折线（多图族，逐图登记）。
-            if not self._price_hist_ok():
-                skipped.append({"builder": "market_price_history", "reason": "disabled"})
-            else:
-                price_history = self._load_price_history(report_dir, artifacts)
-                ph_anchors = (forecast.get("binary_forecasts")
-                              if isinstance(forecast, dict) else None)
-                if not (isinstance(price_history, dict) and price_history
-                        and isinstance(ph_anchors, list) and ph_anchors):
-                    skipped.append({"builder": "market_price_history", "reason": "no_input"})
-                elif not plotly_on:
-                    skipped.append({"builder": "market_price_history",
-                                    "reason": "plotly_unavailable_or_disabled"})
-                else:
-                    ph_rels = self.render_market_price_history_html(
-                        price_history, ph_anchors, charts_dir)
-                    if not ph_rels:
-                        skipped.append({"builder": "market_price_history",
-                                        "reason": "empty_after_parse"})
-                    for rel in ph_rels:
-                        stem = os.path.splitext(os.path.basename(rel))[0]
-                        items.append({
-                            "id": stem, "path": rel, "type": "html",
-                            "title": "Market-Implied P(yes) History vs Model",
-                            "caption": "Market-Implied P(yes) History vs Model",
-                            "source": "market_price_history",
-                            "placement_hint": "binary_forecasts",
-                        })
+            # NOTE: market_price_history 图族已于 2026-10-17 移除：Polymarket CLOB /prices-history
+            # 的 interval 档位是回看窗口（"1d" 只返回最近 24h），对多月视野的预测没有信息量。
         finally:
             self._batch_mode = False
 
@@ -5538,31 +5363,6 @@ class ReportVisualizer:
                   lambda: self.build_worldstate_area(
                       artifacts.get("world_state_trajectory"), charts_dir))
 
-        # 价格历史回退：任何 plotly 价格历史项缺 PNG 时重画 matplotlib 版（同名 stem 覆盖挂载）。
-        ph_items = [it for it in items if it["id"].startswith("market_price_history")]
-        need_ph = ((not ph_items) or any(not it.get("png_path") for it in ph_items))
-        if need_ph and self._price_hist_ok():
-            price_history = self._load_price_history(report_dir, artifacts)
-            ph_anchors = (forecast.get("binary_forecasts")
-                          if isinstance(forecast, dict) else None)
-            if isinstance(price_history, dict) and price_history \
-                    and isinstance(ph_anchors, list) and ph_anchors:
-                for rel in self.render_market_price_history(price_history, ph_anchors,
-                                                            charts_dir):
-                    stem = os.path.splitext(os.path.basename(rel))[0]
-                    existing = by_id.get(stem)
-                    if existing is not None:
-                        if not existing.get("png_path"):
-                            existing["png_path"] = rel
-                    else:
-                        items.append({
-                            "id": stem, "path": rel, "type": "png",
-                            "title": "Market-Implied P(yes) History vs Model",
-                            "caption": "Market-Implied P(yes) History vs Model",
-                            "source": "market_price_history",
-                            "placement_hint": "binary_forecasts",
-                        })
-
         # comparison / calibration：matplotlib 专属图（无 plotly 等价）。
         comp = artifacts.get("comparison")
         if comp:
@@ -5680,39 +5480,6 @@ class ReportVisualizer:
         except Exception:  # noqa: BLE001 — 溯源是旁路增强
             return {}
 
-    @staticmethod
-    def _load_price_history(report_dir: str, artifacts: Dict[str, Any]) -> Dict[str, Any]:
-        """PM-6：汇集市场价格历史 {market_id:[{t,p}]}。优先级：artifacts['market_price_history']
-        （dict，已加载）> reports/{id}/market_price_history.json > handoff/market_price_history.json
-        （artifacts['handoff_dir'] 指定）。同 market_id 以高优先级为准，文件仅补缺键。任何缺失/
-        畸形静默跳过（degrade-safe），全无 → {}。"""
-        merged: Dict[str, Any] = {}
-
-        def _absorb(d: Any) -> None:
-            if isinstance(d, dict):
-                for k, v in d.items():
-                    key = str(k)
-                    if key not in merged and isinstance(v, list):
-                        merged[key] = v
-
-        arts = artifacts or {}
-        # ① artifacts 内联 dict 最高优先，先 absorb。
-        _absorb(arts.get("market_price_history"))
-        # ② 文件来源（仅补 artifacts 缺失的 market_id）。
-        candidates: List[str] = [os.path.join(report_dir or "", "market_price_history.json")]
-        hd = arts.get("handoff_dir")
-        if isinstance(hd, str) and hd.strip():
-            candidates.append(os.path.join(hd, "market_price_history.json"))
-        for path in candidates:
-            try:
-                if path and os.path.exists(path):
-                    with open(path, "r", encoding="utf-8") as f:
-                        _absorb(json.load(f))
-            except Exception:  # noqa: BLE001
-                continue  # 单个文件坏了不影响其余来源
-        return merged
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 模块级解析助手（供 Mermaid/图表族共享，纯函数）
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5812,63 +5579,6 @@ def _first_float(d: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[float]:
             if v is not None:
                 return v
     return None
-
-
-def _normalize_price_anchors(anchors: Any,
-                             price_history: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """PM-6：把锚点列表规整为可绘制条目（供 render_market_price_history）。每项抽出
-    {market_id, label, model_p, market_p, divergence, series}，其中 series 为按时间升序的
-    [(datetime, p)] 列表（p 夹逼到 [0,1]）。
-
-    锚点项兼容两种形态：① 二元预测 dict（含 market_anchor 子 dict）；② 已抽平 dict
-    （market_id/probability/... 直接在顶层）。仅保留 market_id 命中 price_history 且有效历史点
-    ≥2 的锚点，按首次出现顺序去重（确定性）。model_p 取二元预测的 probability；market_p 取
-    market_anchor.implied_yes_prob，缺失则用最新历史点；divergence 取 market_anchor.divergence，
-    缺失则由 model_p − market_p 现算。任何畸形 → 跳过该项，绝不抛。"""
-    if not isinstance(anchors, list):
-        return []
-    import datetime as _dt
-    out: List[Dict[str, Any]] = []
-    seen: set = set()
-    for it in anchors:
-        if not isinstance(it, dict):
-            continue
-        anchor = it.get("market_anchor") if isinstance(it.get("market_anchor"), dict) else it
-        market_id = str(anchor.get("market_id") or it.get("market_id") or "").strip()
-        if not market_id or market_id in seen:
-            continue
-        raw_series = price_history.get(market_id)
-        if not isinstance(raw_series, list) or len(raw_series) < 2:
-            continue
-        pts: List[Tuple[Any, float]] = []
-        for pt in raw_series:
-            if not isinstance(pt, dict):
-                continue
-            tf = _to_float(pt.get("t"))
-            p = _to_float(pt.get("p"))
-            if tf is None or p is None:
-                continue
-            try:
-                dt = _dt.datetime.utcfromtimestamp(tf)
-            except (OverflowError, OSError, ValueError):
-                continue  # 病态时间戳跳过
-            pts.append((dt, max(0.0, min(1.0, p))))
-        if len(pts) < 2:
-            continue
-        pts.sort(key=lambda x: x[0])
-        model_p = _first_float(it, ("probability", "model_prob", "model_p", "p"))
-        market_p = _first_float(anchor, ("implied_yes_prob", "implied_prob"))
-        if market_p is None:
-            market_p = pts[-1][1]  # 缺市场概率 → 用最新历史点近似
-        divergence = _first_float(anchor, ("divergence",))
-        if divergence is None and model_p is not None and market_p is not None:
-            divergence = model_p - market_p
-        label = _mpl_text(it.get("id") or it.get("statement") or it.get("label") or market_id,
-                          fallback=market_id, max_len=52)
-        out.append({"market_id": market_id, "label": label, "model_p": model_p,
-                    "market_p": market_p, "divergence": divergence, "series": pts})
-        seen.add(market_id)
-    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────

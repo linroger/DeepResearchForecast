@@ -1,0 +1,526 @@
+[
+  {
+    "path": "backend/app/api/report.py",
+    "sha256": "e99d4622dce36d178e8fcd42295452e3c5bfa52eb1b167ea40b330acd7e55ba7",
+    "read_ranges": [
+      [
+        1,
+        376
+      ],
+      [
+        377,
+        780
+      ],
+      [
+        781,
+        1170
+      ],
+      [
+        1171,
+        1580
+      ],
+      [
+        1581,
+        1970
+      ],
+      [
+        1971,
+        2176
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by report owner: all routes, asynchronous task/language retry contracts, draft activity exception, publication gating and chart confinement. Initial combined output clipping was recovered by separate full numbered reads. Cross-module details are separately anchored in report.md; no runtime execution inferred."
+  },
+  {
+    "path": "backend/app/services/backtest.py",
+    "sha256": "68af452f1701c80accb405434ae2db1ecf886060eedaf5b64b06794409707bb0",
+    "read_ranges": [
+      [
+        1,
+        237
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by bounded forecast-ledger reader: scenario-name matching, multiclass Brier/log-loss, scenario-level calibration, smoothing/decomposition and recalibrator. Runtime sample counts and caller activation not inferred."
+  },
+  {
+    "path": "backend/app/services/exec_brief.py",
+    "sha256": "d21d6a990a26adb8b216df0bdcb5c4f48563fff6c2febc7c80f1ec37256e912f",
+    "read_ranges": [
+      [
+        1,
+        330
+      ],
+      [
+        331,
+        650
+      ],
+      [
+        651,
+        927
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by report owner: deterministic brief/digest derivation, shared forecast inputs, translated thesis, mtime caching, no-TOC brief PDF and fallback. Rendering success not inferred."
+  },
+  {
+    "path": "backend/app/services/forecast_extractor.py",
+    "sha256": "19a62bbc6c14ed985524324a4595452a2ccab02040d5544a8789f04ce0977de8",
+    "read_ranges": [
+      [
+        1,
+        200
+      ],
+      [
+        201,
+        400
+      ],
+      [
+        401,
+        600
+      ],
+      [
+        601,
+        800
+      ],
+      [
+        801,
+        1000
+      ],
+      [
+        1001,
+        1200
+      ],
+      [
+        1201,
+        1400
+      ],
+      [
+        1401,
+        1600
+      ],
+      [
+        1601,
+        1800
+      ],
+      [
+        1801,
+        2000
+      ],
+      [
+        2001,
+        2200
+      ],
+      [
+        2201,
+        2400
+      ],
+      [
+        2401,
+        2600
+      ],
+      [
+        2601,
+        2800
+      ],
+      [
+        2801,
+        3000
+      ],
+      [
+        3001,
+        3200
+      ],
+      [
+        3201,
+        3400
+      ],
+      [
+        3401,
+        3600
+      ],
+      [
+        3601,
+        3800
+      ],
+      [
+        3801,
+        4000
+      ],
+      [
+        4001,
+        4201
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by bounded forecast-ledger reader: spine/post-hoc schemas, normalization, scenario contract, binaries/membership/provenance, markets/influence, reconciliation, citation claims and deterministic renderers. 2601-2800 reread separately after aggregate display clipping. Provider outcomes not inferred."
+  },
+  {
+    "path": "backend/app/services/forecast_ledger.py",
+    "sha256": "10ae2db0033a05c2e166fe7690fe3708e21833480eece7793e43bd86812b81fa",
+    "read_ranges": [
+      [
+        1,
+        220
+      ],
+      [
+        221,
+        436
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by bounded forecast-ledger reader: scenario ledger.jsonl, evaluation isolation, resolution selection, calibration and separate resolutions.jsonl lock/dedup. SDK report-local resolved.json is a separate reviewed caller contract, not an inferred scenario-ledger update."
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "sha256": "7b316111f484289a1841f75b23ae366fccaea577ea44349a6341dc06105c5365",
+    "read_ranges": [
+      [
+        1,
+        350
+      ],
+      [
+        351,
+        700
+      ],
+      [
+        701,
+        1050
+      ],
+      [
+        1051,
+        1400
+      ],
+      [
+        1401,
+        1750
+      ],
+      [
+        1751,
+        2100
+      ],
+      [
+        2101,
+        2450
+      ],
+      [
+        2451,
+        2800
+      ],
+      [
+        2801,
+        3150
+      ],
+      [
+        3151,
+        3500
+      ],
+      [
+        3501,
+        3850
+      ],
+      [
+        3851,
+        4200
+      ],
+      [
+        4201,
+        4550
+      ],
+      [
+        4551,
+        4900
+      ],
+      [
+        4901,
+        5000
+      ],
+      [
+        5001,
+        5200
+      ],
+      [
+        5201,
+        5500
+      ],
+      [
+        5501,
+        5800
+      ],
+      [
+        5801,
+        6100
+      ],
+      [
+        6101,
+        6400
+      ],
+      [
+        6401,
+        6700
+      ],
+      [
+        6701,
+        7000
+      ],
+      [
+        7001,
+        7300
+      ],
+      [
+        7301,
+        7600
+      ],
+      [
+        7601,
+        7900
+      ],
+      [
+        7901,
+        8200
+      ],
+      [
+        8201,
+        8500
+      ],
+      [
+        8501,
+        8800
+      ],
+      [
+        8801,
+        9100
+      ],
+      [
+        9101,
+        9400
+      ],
+      [
+        9401,
+        9700
+      ],
+      [
+        9701,
+        10000
+      ],
+      [
+        10001,
+        10063
+      ],
+      [
+        10064,
+        10263
+      ],
+      [
+        10264,
+        10663
+      ],
+      [
+        10664,
+        11063
+      ],
+      [
+        11064,
+        11463
+      ],
+      [
+        11464,
+        11863
+      ],
+      [
+        11864,
+        12263
+      ],
+      [
+        12264,
+        12663
+      ],
+      [
+        12664,
+        13063
+      ],
+      [
+        13064,
+        13463
+      ],
+      [
+        13464,
+        13863
+      ],
+      [
+        13864,
+        14263
+      ],
+      [
+        14264,
+        14478
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full across three bounded readers: 1-5000 generation/evidence; 5001-10063 translation/publication/tools/planning; 10064-14478 section lifecycle/manager/render. Listed ranges are their actual inclusive chunks. Clipped 8801-9100 and affected supporting excerpts were reread separately. Parent additionally checked key publication, sealed forecast, generation/chat/composition interfaces. Full-module review, not inference from symbol searches or prior maps."
+  },
+  {
+    "path": "backend/app/services/report_lint.py",
+    "sha256": "a42a0ebe793bfb1a7cebcebba21f330e886752be5755b142ce48722a87341a83",
+    "read_ranges": [
+      [
+        1,
+        360
+      ],
+      [
+        361,
+        720
+      ],
+      [
+        721,
+        1080
+      ],
+      [
+        1081,
+        1420
+      ],
+      [
+        1421,
+        1632
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by report owner: pure final/research lint, citation order/Counter guard, deduplication, mechanics cleanup, language/table/scenario detectors and result dictionary. Test behavior is source characterization only."
+  },
+  {
+    "path": "backend/app/services/report_visualizer.py",
+    "sha256": "9bccfad258e3df0833443aa71a86f97e2cb81566e5ca1c9df9add28e1d520bad",
+    "read_ranges": [
+      [
+        1,
+        240
+      ],
+      [
+        241,
+        480
+      ],
+      [
+        481,
+        720
+      ],
+      [
+        721,
+        960
+      ],
+      [
+        961,
+        1200
+      ],
+      [
+        1201,
+        1440
+      ],
+      [
+        1441,
+        1680
+      ],
+      [
+        1681,
+        1920
+      ],
+      [
+        1921,
+        2160
+      ],
+      [
+        2161,
+        2400
+      ],
+      [
+        2401,
+        2640
+      ],
+      [
+        2641,
+        2880
+      ],
+      [
+        2881,
+        3120
+      ],
+      [
+        3121,
+        3360
+      ],
+      [
+        3361,
+        3600
+      ],
+      [
+        3601,
+        3840
+      ],
+      [
+        3841,
+        4080
+      ],
+      [
+        4081,
+        4320
+      ],
+      [
+        4321,
+        4560
+      ],
+      [
+        4561,
+        4800
+      ],
+      [
+        4801,
+        5040
+      ],
+      [
+        5041,
+        5280
+      ],
+      [
+        5281,
+        5411
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by bounded visualization reader: all chart builders/preparers, active/opt-in/excluded families, Plotly/Matplotlib/Kaleido/font fallbacks, manifests/provenance, history fallback and placement inputs. Dependency availability and successful renderer output not inferred."
+  },
+  {
+    "path": "backend/app/services/resolution_autorun.py",
+    "sha256": "0ef1e9ae85e8f5ca11a12d299163d9b298b7df6addde4bd39131ea689f897f81",
+    "read_ranges": [
+      [
+        1,
+        117
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by bounded forecast-ledger reader and parent: subprocess command/timeout, process in-flight lock, daemon schedule, disabled default and stop event. Scheduler/monitor never launched."
+  },
+  {
+    "path": "backend/app/services/translation_dates.py",
+    "sha256": "e5700b9e862fa4789a0600294fb114677939d92bc993c37ce035374690c7d9eb",
+    "read_ranges": [
+      [
+        1,
+        300
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by report owner: conservative date recognizer/NamedTuple, target render, canonical facts/masking, target language and translation prompt rules, redundant-unit cleanup. Calendar-validity beyond coded range checks not inferred."
+  },
+  {
+    "path": "backend/app/services/translation_quantities.py",
+    "sha256": "e68210f423f3ec75776dfb3865e9437e6bc097aeb9901f49dd640313e15a355a",
+    "read_ranges": [
+      [
+        1,
+        309
+      ]
+    ],
+    "depth": "full",
+    "notes": "Reviewed in full by report owner: Decimal quantities/ranges, magnitude and currency localization, canonical value facts/masking, false-positive exclusions and redundant-unit cleanup. Currency identity intentionally excluded from value facts."
+  }
+]

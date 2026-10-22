@@ -1,11 +1,11 @@
 ---
 name: deep-research
-description: Use for web research, comparisons, explanations that depend on external evidence, and every forecast investigation. Provides the always-on core for KIQ decomposition, source grading, evidence-yield stopping, disconfirmation, forecast inputs, provenance, and phase-aware handoffs. Tradecraft and the final-dossier contract are lazy references.
+description: Use for external-evidence research and forecasting. Core rules cover KIQs, provenance, convergence, disconfirmation and phase handoffs; details are lazy references.
 ---
 
 # Deep Research — Core Contract
 
-Produce decision-grade research: real fetched evidence, graded provenance, explicit uncertainty, and forecast-useful structure.
+Produce forecast-useful research with fetched evidence, graded provenance and explicit uncertainty.
 
 ## Activation discipline
 
@@ -13,10 +13,10 @@ When this body is injected, do **not** reread `SKILL.md`. Load only a named lazy
 
 ## Phase type comes first
 
-Identify the current phase from its prompt. The phase contract overrides any final-output rule:
+The prompt's phase overrides final-output rules:
 
-- **Working phases** — opening/source-map notes, scoped worker notes, KIQ top-ups, verification notes, actor passes, correction messages, and fan-out absorption. Return concise evidence-ledger notes and gaps. **They are explicitly exempt from every final word-count, section-count, and polished-dossier floor.** Do not pad or synthesize the final report.
-- **Final dossier synthesis only** — the prompt explicitly says to write/synthesize/finalize the complete research dossier. Only this phase uses the long-form output contract in `references/final-dossier-contract.md`.
+- **Working phases**: opening/source maps, scoped workers, KIQ top-ups, verification, actor/correction passes and fan-out absorption return concise evidence notes and gaps. They are exempt from final word-count, section-count and prose floors. Do not pad or synthesize the final report.
+- **Final dossier synthesis only**: only an explicit complete-dossier request uses the long-form and handoff contract in `references/final-dossier-contract.md`.
 - **Structured extraction/judging** — follow the requested JSON/scorecard schema, not the prose length contract.
 
 ## Core loop
@@ -27,6 +27,10 @@ Identify the current phase from its prompt. The phase contract overrides any fin
 4. Prefer primary origins, verify numbers/units/as-of dates, trace repeated claims back to their origin, and seek the strongest opposing case.
 5. Check convergence after every evidence-bearing call. Continue only for a named unresolved KIQ with a credible next upgrade.
 6. Before final synthesis, verify the synthesis gate and load the final-dossier reference.
+
+## News and market context
+
+`news_search` discovers publisher URLs; `web_fetch` originals before factual/numeric claims. Reuse prefetch. Optional `social_search` is opinion; `market_compare` is context, never automatic anchors or settlement evidence. Keep provider/native IDs, dates, units, quote bases, rules and horizons; similar titles do not establish equivalence/arbitrage. Distinguish outages, denials, partial and verified-empty results; replay sealed evidence. Full rules: `references/news-market-context.md`.
 
 ## Evidence discipline
 
@@ -39,9 +43,7 @@ Only cite sources actually fetched and read. Preserve their true URL and on-page
 
 For each quantitative fact record the metric, value/range, unit, as-of date, definition, geography/population, and source URL. Sanity-check magnitude, currency, nominal/real basis, denominators, totals, and compounding. Quote stored official series exactly with period and `[S<n>]`; projections are not history.
 
-For query operators, document targeting, source maps, grading, number checks, adversarial analysis, and obstacle routing, load:
-
-`references/source-tradecraft.md`
+Load `references/source-tradecraft.md` for targeting, source grading, numeric checks, adversarial analysis and obstacle routing.
 
 ## KIQ and evidence-yield stopping
 
@@ -56,7 +58,7 @@ Tool counts and source counts are safety telemetry, never quotas or quality prox
 
 ## Forecast-specific requirements
 
-Research forecasting inputs, not only present-state description:
+Collect forecast inputs:
 
 - outside-view reference classes and base rates (long official history via `data_get` where a series exists);
 - named actors, stated versus revealed behavior, incentives, capabilities, constraints, and what each gains/loses;
@@ -83,6 +85,4 @@ Final synthesis may begin only when:
 
 If one item fails, run one targeted gap pass. Do not restart broad research.
 
-## Final synthesis routing
-
-When—and only when—the prompt requests the complete final research dossier, load and follow `references/final-dossier-contract.md`: long-form floor, handoff fields, citations, scenarios, market section, tables, conflicts and failure checklist.
+Final dossier synthesis follows `references/final-dossier-contract.md`: prose floors, handoff fields, citations, scenarios, markets, tables, conflicts and failure checks.

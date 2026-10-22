@@ -1,0 +1,714 @@
+[
+  {
+    "path": "backend/app/services/actor_context.py",
+    "sha256": "ff9dd29047c139edca8b46bbda74eecdfe2dc2329e425ad9822d6023e188e024",
+    "read_ranges": [
+      [
+        1,
+        800
+      ],
+      [
+        801,
+        1601
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/actor_dossier_compactor.py",
+    "sha256": "3f75746ff10171a17734b0f15d998f9da6676ec3716445794e547f7ff0b9c90d",
+    "read_ranges": [
+      [
+        1,
+        320
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/actor_role_prompt.py",
+    "sha256": "ddd46f53df939fb24c86507f86e69f6b74167371f25c4c088a73efc49278e83e",
+    "read_ranges": [
+      [
+        1,
+        700
+      ],
+      [
+        701,
+        1400
+      ],
+      [
+        1401,
+        2026
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graph_builder.py",
+    "sha256": "0eb3150596342ee3ea5de2603f36f1aefe8f5743323245161067070c2174c18c",
+    "read_ranges": [
+      [
+        1,
+        720
+      ],
+      [
+        721,
+        1450
+      ],
+      [
+        1451,
+        2180
+      ],
+      [
+        2181,
+        2873
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graph_pruner.py",
+    "sha256": "b738cf7f16a69addfb46ce4f163228e48a2d036fc225f70e3481827725b5c995",
+    "read_ranges": [
+      [
+        1,
+        428
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/__init__.py",
+    "sha256": "afc1445c13617aef124c93f676e2a7bec6cdc62d15b12d2c05e7d42c319d3949",
+    "read_ranges": [
+      [
+        1,
+        33
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/client.py",
+    "sha256": "77f2ee80c7480cdb6a438876ef3af38da05b9227e1b97a6b31bf6c70b1dd4d5c",
+    "read_ranges": [
+      [
+        1,
+        357
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/compat.py",
+    "sha256": "e095d3b204738790793bef6cadb04edb4f743326ec85e249b5057abc601a8aae",
+    "read_ranges": [
+      [
+        1,
+        56
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/cross_encoder.py",
+    "sha256": "a149143d94e046568ec1c1adc7be9c1a2d512152faba7e457eec24d46a80ea3c",
+    "read_ranges": [
+      [
+        1,
+        26
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/embedder.py",
+    "sha256": "e4ae175f4493b0e73accd1b6f989a7158e6c92074e98805361d4aa3d885daf6c",
+    "read_ranges": [
+      [
+        1,
+        362
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/falkor_driver.py",
+    "sha256": "ace51006efddb7c42ff17d0681ba19610dcd9c2c5cf67c0dc15b6e143bf2b8e9",
+    "read_ranges": [
+      [
+        1,
+        99
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/llm_adapter.py",
+    "sha256": "7406cb068654fb1b707db2f7ae6129b86c735d5b5edae8cd97243bfa8b052693",
+    "read_ranges": [
+      [
+        1,
+        275
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/ontology.py",
+    "sha256": "84bfd85ae9c709743ee5e622277129e56f01dd48b4bd04615c3207b17a67c9e1",
+    "read_ranges": [
+      [
+        1,
+        47
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/graphiti_client/runtime.py",
+    "sha256": "a9461c52de48efb0c8d49eb3068094c1db6c7334b58df95144c8c13834907028",
+    "read_ranges": [
+      [
+        1,
+        650
+      ],
+      [
+        651,
+        1300
+      ],
+      [
+        1301,
+        1900
+      ],
+      [
+        1901,
+        2387
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/ontology_generator.py",
+    "sha256": "7de5d93e1c79980b9fecc1b7c55464979e9b20616a70b175bc969018479583c3",
+    "read_ranges": [
+      [
+        1,
+        420
+      ],
+      [
+        421,
+        759
+      ],
+      [
+        760,
+        915
+      ],
+      [
+        916,
+        1212
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only. Supplemental 760-915 read closes the combined-output truncation; listed ranges describe the fully visible reads."
+  },
+  {
+    "path": "backend/app/services/zep_entity_reader.py",
+    "sha256": "bbf9376f46d77c19fa1500a444ab59f20a962eea7d9e1c89d93c5e9d55e8ec0e",
+    "read_ranges": [
+      [
+        1,
+        613
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/zep_entity_resolver.py",
+    "sha256": "93c0da56bf38069cfcdf84b71e237d389821a63ef69c66db8cf1110f3f4059e0",
+    "read_ranges": [
+      [
+        1,
+        542
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/zep_graph_memory_updater.py",
+    "sha256": "a78b2a1eb24ab6fc84b4805ba61732c780b6c7f911057e13f6b93e06f609eb67",
+    "read_ranges": [
+      [
+        1,
+        719
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/services/zep_tools.py",
+    "sha256": "9d16968db17e6df30627574f39f71082f3cda06b2a65dfc43aa0ff51d97d4c61",
+    "read_ranges": [
+      [
+        1,
+        720
+      ],
+      [
+        721,
+        1440
+      ],
+      [
+        1441,
+        2160
+      ],
+      [
+        2161,
+        2854
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/utils/actors.py",
+    "sha256": "793a292fda1f3b425291139d72423be77826751234d15b40c90aac63760a8ba6",
+    "read_ranges": [
+      [
+        1,
+        750
+      ],
+      [
+        751,
+        1500
+      ],
+      [
+        1501,
+        2250
+      ],
+      [
+        2251,
+        3006
+      ]
+    ],
+    "depth": "full-read-reviewed",
+    "notes": "Owned graph-actors source. Every line reviewed in numbered chunks against the frozen main snapshot; byte-identical to the specified commit blob. Static descriptive study only."
+  },
+  {
+    "path": "backend/app/api/graph.py",
+    "sha256": "1740f56f6c2ddbfa38ce75f410abb09ccbe0e27d8f29c0d013877664b5ae0268",
+    "read_ranges": [
+      [
+        677,
+        694
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "9bf12830c853554755b874e5b2278ee6a8bb0e07df6be64ed909549a3c1b4f08",
+    "read_ranges": [
+      [
+        347,
+        379
+      ],
+      [
+        473,
+        483
+      ],
+      [
+        1011,
+        1039
+      ],
+      [
+        1235,
+        1250
+      ],
+      [
+        1250,
+        1402
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/mcp/kg_server.py",
+    "sha256": "b6ae14da0676d9f4a07b3fbeb5a396530e6460c32c93a985d9f307dc6c07abd8",
+    "read_ranges": [
+      [
+        142,
+        160
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/oasis_profile_generator.py",
+    "sha256": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
+    "read_ranges": [
+      [
+        62,
+        235
+      ],
+      [
+        474,
+        730
+      ],
+      [
+        2255,
+        2437
+      ],
+      [
+        2643,
+        2792
+      ],
+      [
+        2794,
+        3046
+      ],
+      [
+        3081,
+        3125
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+    "read_ranges": [
+      [
+        1298,
+        1329
+      ],
+      [
+        1329,
+        1346
+      ],
+      [
+        5194,
+        5475
+      ],
+      [
+        5476,
+        5667
+      ],
+      [
+        5668,
+        5743
+      ],
+      [
+        6855,
+        6920
+      ],
+      [
+        7004,
+        7245
+      ],
+      [
+        11620,
+        11720
+      ],
+      [
+        12175,
+        12685
+      ],
+      [
+        12685,
+        12740
+      ],
+      [
+        12978,
+        13007
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "sha256": "7b316111f484289a1841f75b23ae366fccaea577ea44349a6341dc06105c5365",
+    "read_ranges": [
+      [
+        9563,
+        9660
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/simulation_config_generator.py",
+    "sha256": "79155e6fa7a004ac7d5255a8a0285f53e4e853535f3e9e756861edb2553987bc",
+    "read_ranges": [
+      [
+        1385,
+        1778
+      ],
+      [
+        3010,
+        3095
+      ],
+      [
+        3395,
+        3527
+      ],
+      [
+        3528,
+        3555
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "sha256": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+    "read_ranges": [
+      [
+        224,
+        535
+      ],
+      [
+        862,
+        1115
+      ],
+      [
+        1235,
+        1307
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+    "read_ranges": [
+      [
+        527,
+        724
+      ],
+      [
+        721,
+        753
+      ],
+      [
+        849,
+        865
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/scripts/run_parallel_simulation.py",
+    "sha256": "bad80718fb2c0292d7dcd5f3c46b20742327b171797dde379e71bdb95c809206",
+    "read_ranges": [
+      [
+        576,
+        705
+      ],
+      [
+        5280,
+        5327
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  },
+  {
+    "path": "backend/tests/test_actor_context_runtime.py",
+    "sha256": "bc5e597536abd94c1e2e72e7ed2f7c15863072f31b9b0cd59417f078e39e8167",
+    "read_ranges": [
+      [
+        172,
+        229
+      ],
+      [
+        250,
+        481
+      ],
+      [
+        927,
+        1006
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_actor_intelligence_producer.py",
+    "sha256": "bd921fc8ca9b6fee3f02334e7f0a750ef0adeacd2b3635c67eeadebe22d05dd3",
+    "read_ranges": [
+      [
+        695,
+        778
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_actor_role_prompt.py",
+    "sha256": "edad375d82e174f58e2cecf5230d53c6f0d5f14d7e3f0a51ce5c33b1909837b4",
+    "read_ranges": [
+      [
+        466,
+        559
+      ],
+      [
+        675,
+        703
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_audit_fixes_ontology.py",
+    "sha256": "db756d287c3da37e94ee1ab4971c7b5f5ad3bba85e6c3924536fd70fc2fecf96",
+    "read_ranges": [
+      [
+        160,
+        213
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_graph_actor_v1_seed.py",
+    "sha256": "988840ab8515c3c63ec0dcec94b5624e88e5d6d0ab06f9c1c32901f5059735db",
+    "read_ranges": [
+      [
+        270,
+        613
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_graph_cost_containment.py",
+    "sha256": "e7f2e5fd721b806309a7000cb2b6438bf632ac84de84571b598c29f607fb2033",
+    "read_ranges": [
+      [
+        186,
+        257
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_graph_research_boundary.py",
+    "sha256": "0c87beff34ec09b1ed8a6d86d1c36dfeb83b5fe3c4a2aff9b8e039c88d9b7d50",
+    "read_ranges": [
+      [
+        1,
+        50
+      ]
+    ],
+    "depth": "full-read-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_ontology_actors_optimizations.py",
+    "sha256": "0d36930dd9a542b9963948769584bde1855bf28a026fd595e7e2e9d7962ff0cc",
+    "read_ranges": [
+      [
+        125,
+        187
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_wave9_kg.py",
+    "sha256": "66c20d8a026afde27b0fb54776ade12a430d1f134649747a6c1cdc51c3e9dcf5",
+    "read_ranges": [
+      [
+        158,
+        335
+      ],
+      [
+        386,
+        426
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "backend/tests/test_zep_entity_resolver.py",
+    "sha256": "bdd2bac127bb5af743a819726907addb5c844bc28b32c8dfe9072575fe3e56c0",
+    "read_ranges": [
+      [
+        61,
+        139
+      ]
+    ],
+    "depth": "partial-reviewed-test-reference",
+    "notes": "Reviewed test source assertions only in these ranges. No tests executed; unlisted fixture/helper bodies and test cases are not claimed reviewed."
+  },
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "abef7d74ca76ae28b68f5b69dd9fe526191c1e8113e37176da635b77865f2674",
+    "read_ranges": [
+      [
+        1364,
+        1400
+      ],
+      [
+        2431,
+        2496
+      ],
+      [
+        2925,
+        3055
+      ],
+      [
+        3139,
+        3272
+      ],
+      [
+        3628,
+        3924
+      ],
+      [
+        4131,
+        4350
+      ],
+      [
+        4351,
+        4455
+      ]
+    ],
+    "depth": "partial-reviewed-boundary-reference",
+    "notes": "Focused producer/caller/consumer/config excerpts reviewed in these ranges. Whole-module behavior outside these ranges is not claimed reviewed; all bytes match frozen main."
+  }
+]

@@ -1,0 +1,258 @@
+{
+  "world": {
+    "receipt": "/private/tmp/drf-world-damping-fixtures-_nij0a8d/verification.json",
+    "sha256": "bdbe4b91baa4f5e5774208114fe9e43fa2673418a24101f7fe2167cca194bbc3",
+    "summary": {
+      "scope": "Three owned test files only; no production, guard, Git, provider, service or saved-run mutations.",
+      "baseline": "Full 636-Python first joint source mirror; only the three owned test files overlaid after retaining focused red.",
+      "owned_sha256": {
+        "backend/tests/test_context_audit_simulation.py": "6bf5559e5e291a5c94e298e7d1a9d6f9a89887b1177ecfb42d8002092bcc84fb",
+        "backend/tests/test_world_announced_settings.py": "a384045d235e871158fcbde924ba8bb878c9a8ef3c112acbc086156fa4f5b7ef",
+        "backend/tests/test_world_paths.py": "ac03730cf8c33617565807be954f7615cbaac4ca7f1ecc1d556f1acf6796124e"
+      },
+      "production_sha256": {
+        "backend/app/api/simulation.py": "f4d7d3ca88184e324339e08b64d6da6ab9452f4f897d842c01b0c303fb6f4710",
+        "backend/app/services/simulation_config_generator.py": "c57101cbbacdccbbb0318e7349caaca65158948c3e2618ca462972c6f3bb261f",
+        "backend/app/services/world_model.py": "6a3dc34acb8f2ed6e96f32f29ad89784fcd3fdc7a19b12e83bb69949234962ab"
+      },
+      "unchanged_mirror_python_files": 633,
+      "post_shutdown_full636_mirror_drift": [],
+      "post_shutdown_primary_owned_drift": [],
+      "independent_oracle": "For these positive numeric fixtures: s = clamp(requested, current*(1-ratio), current*(1+ratio)); r = anchor + (s-anchor)*(1-DEFAULT_REVERSION_KAPPA); result = clamp(r, anchor*(1-DEFAULT_MAX_DRIFT_RATIO), anchor*(1+DEFAULT_MAX_DRIFT_RATIO)). ratio=None skips only the first bound. No kernel helper is called for the expected value.",
+      "arithmetic": {
+        "tariff_unannounced": 27,
+        "balance_cross_zero_rejected": 78,
+        "delayed_export_volume": 2600,
+        "tariff_loop_and_resume": 13.5,
+        "late_shock_tariff": 18.5
+      },
+      "controls_preserved": [
+        "Exact announced actions and accepted offer figures still land in full",
+        "Counterparty and commitment fulfilment tests unchanged",
+        "Sibling resume marker 99 and history marker retained",
+        "Seeded shock firing rounds and extra-sampling limits unchanged",
+        "Report projection remains explicitly non-observational and private rationale/scenario shares excluded",
+        "Summary and trajectory metadata compared with actual committed state",
+        "New mechanical expected value compared with committed variable/history/diff and actual report block",
+        "Step-clamp-only off retains anchor/drift control; all-off is explicit unit compatibility only"
+      ],
+      "gate_modules": [
+        "test_context_audit_simulation.py",
+        "test_world_announced_settings.py",
+        "test_world_paths.py",
+        "test_world_commitment_fulfilment.py",
+        "test_sim_reconciliation.py",
+        "test_world_model.py",
+        "test_world_model_loop.py",
+        "test_world_model_downstream.py",
+        "test_world_reflexivity.py",
+        "test_world_update.py",
+        "test_world_boundary_failures.py"
+      ],
+      "phases": {
+        "red": {
+          "receipt": "/private/tmp/drf-world-damping-fixtures-_nij0a8d/red-evidence/completed.json",
+          "receipt_sha256": "4ab92ea08ec4e057cbcf6a81e8528401cb49a4600ff5045f9ccea152f961f5cf",
+          "junit_sha256": "70f19652eda1298ed9b07edade2a99c2101eff1a7151dca27762abc749a46958",
+          "junit_counts": {
+            "tests": "7",
+            "failures": "7",
+            "errors": "0",
+            "skipped": "0",
+            "time": "16.465"
+          },
+          "exit_code": 1,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "blocked:network:socket.__new__": 1,
+            "blocked:process:subprocess.Popen": 4,
+            "quarantine:oasis_import_cwd": 1,
+            "blocked:external_read": 20,
+            "redirect:app.services.simulation_manager": 1
+          },
+          "source_drift": [],
+          "children": {},
+          "contained_library_probes": {
+            "fc-list": 1,
+            "system_profiler": 1,
+            "font_directory_scan": 18
+          }
+        },
+        "green": {
+          "receipt": "/private/tmp/drf-world-damping-fixtures-_nij0a8d/green-evidence/completed.json",
+          "receipt_sha256": "26675826c083f10b8163a8115cbb1e43987fcb205ea1186775faa53a13ebd7c5",
+          "junit_sha256": "f8bead09a8b421707dc9b6899d97b27a692241167042ec1af48378b68c0a5804",
+          "junit_counts": {
+            "tests": "236",
+            "failures": "0",
+            "errors": "0",
+            "skipped": "0",
+            "time": "23.871"
+          },
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "blocked:network:socket.__new__": 1,
+            "blocked:process:subprocess.Popen": 5,
+            "quarantine:oasis_import_cwd": 1,
+            "blocked:external_read": 20,
+            "redirect:app.services.simulation_manager": 1
+          },
+          "source_drift": [],
+          "children": {},
+          "contained_library_probes": {
+            "fc-list": 1,
+            "system_profiler": 1,
+            "font_directory_scan": 18
+          }
+        }
+      },
+      "guard_interpretation": "Blocked attempts remain explicit. Green had one denied socket creation, five denied Popen, twenty denied external reads and one oasis-import-cwd quarantine. Known probe counters: fc-list=1, system_profiler=1, font-directory scans=18. Event records also identify uname and an unregistered executable; a final Popen has no program/stack attribution. No child was admitted or executed. This is CPython audited offline proof, not zero-attempt, OS-sandbox or live-provider proof.",
+      "remaining": "Coordinator combined freeze/review/rerun. This focused receipt does not close unrelated first-joint failures or claim whole-pipeline acceptance."
+    }
+  },
+  "report": {
+    "receipt": "/private/tmp/drf-oddsense-report-reconcile-52z1kx4l/verification.json",
+    "sha256": "a18121b19e60dfb5adb0c2c85dc29c3a33f0080fa775cec859a1291ac41f4141",
+    "summary": {
+      "status": "READY_FROZEN_SCOPED_GREEN",
+      "base_joint_mirror": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm/repo",
+      "owned_sha256": {
+        "backend/app/services/report_agent.py": "ca73cffc042230286b65157823a1221b5a4106a85f9580c155eb5e19fd2bcc93",
+        "backend/tests/test_report_bilingual.py": "e2f3c3749b5b86e91d73682e5aad0a8db450b937223da6dc7fabf1a65b814a51",
+        "backend/tests/test_report_bilingual_filter_safe.py": "6528126179d7bf37990fb41b0f41fc03c1523426cf33493d275c2829fb01f222",
+        "backend/tests/test_report_official_publication_real.py": "7e9b20a8a276862bda3f8ab7d7b5c6d2d1279a027e7f1b22e2c5235d8ed64a6d",
+        "backend/tests/test_report_official_data.py": "fb92382c1904e64e1f5eed6f9584920715718c7dbb05e005d0cf61cb78685f9a",
+        "backend/tests/test_report_visualizer_official.py": "a7d8df8a057b5dbc518f7f1a148354aae140073d85e2a9adfbcc49f7df9f6324"
+      },
+      "changed_production_methods": [
+        "ReportAgent._translate_markdown_unit",
+        "ReportAgent._translate_chunks_with_integrity"
+      ],
+      "mirror_python_count": 636,
+      "mirror_source_drift": [],
+      "exact_primary_owned_bytes_match_green": true,
+      "previous_two_owned_tests_unchanged": true,
+      "other_three_prior_owned_sources_unchanged": true,
+      "runs": {
+        "red-evidence": {
+          "exit_code": 1,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1,
+            "blocked:process:subprocess.Popen": 2,
+            "blocked:external_read": 18
+          },
+          "contained_library_probes": {
+            "fc-list": 1,
+            "system_profiler": 1,
+            "font_directory_scan": 18
+          },
+          "children": {},
+          "passed": 178,
+          "failures": 5,
+          "errors": 0,
+          "skipped": 0,
+          "receipt_sha256": "0680d8305edaea687caec61df7b8fc65fa23fbe064988e7124219e58ea059507",
+          "junit_sha256": "6869d1893e5ca8848add62e791d3af884c7d3413ca4257558453a69c880a7535"
+        },
+        "green-evidence": {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1,
+            "blocked:process:subprocess.Popen": 2,
+            "blocked:external_read": 18
+          },
+          "contained_library_probes": {
+            "fc-list": 1,
+            "system_profiler": 1,
+            "font_directory_scan": 18
+          },
+          "children": {},
+          "passed": 183,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "receipt_sha256": "f54838fe2e727bb3b87a230306a9354e8e8038401aef5f376850f7bfd76cb7f5",
+          "junit_sha256": "bc758231dd38c360fe9f88c0bfad60ad9257209840c9c27b4c3d4d737c8e312c"
+        }
+      },
+      "guard": "unchanged CPython audit hooks; not OS sandbox",
+      "limits": "Controlled five-module report/official-chart slice only. All remaining coordinator/peer changes require replacement full joint freeze2."
+    }
+  },
+  "early_fixtures": {
+    "receipt": "/private/tmp/drf-oddsense-owned-fixtures-xwwn0vvs/verification.json",
+    "sha256": "77dd230e49d5fe9f7d6dac09fc10b58b89c3c415311bf9f5c84f5065b3bee2de",
+    "summary": {
+      "status": "scoped-green",
+      "owned_test_hashes": {
+        "backend/tests/test_architecture_characterization.py": "7e7c792614fbbb422e5f913f81b18576f833b7b1cfaca952522cb93ad950c6a5",
+        "backend/tests/test_audit_fixes_report.py": "7721a1d724fd397771303ac1994259c1cd65fa666979322ce9b34ffdbd38b947"
+      },
+      "mirror_python_count": 636,
+      "mirror_source_drift": [],
+      "delta_paths": [
+        "backend/tests/test_audit_fixes_report.py",
+        "backend/tests/test_architecture_characterization.py"
+      ],
+      "runs": {
+        "evidence": {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          },
+          "children": {},
+          "passed": 43,
+          "failures": 0,
+          "errors": 0,
+          "expected_failures": 11,
+          "receipt_sha256": "ff36cb398486d9c60292efa4fd56ec89d7f7f823b1bf32f7734ceeed707b7e00",
+          "junit_sha256": "385f0cd03d31b5c7f3dfc970ae03f05e14dfa46951154c59c8fe42a813d43ae9"
+        },
+        "evidence-reverse": {
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "identity_preserved": true,
+          "source_drift": [],
+          "events": {
+            "redirect:app.config": 1,
+            "redirect:app.utils.logger": 1,
+            "redirect:app.services.simulation_manager": 1
+          },
+          "children": {},
+          "passed": 43,
+          "failures": 0,
+          "errors": 0,
+          "expected_failures": 11,
+          "receipt_sha256": "79f53ef90c4632b2127c21559eda25893baddd2ac060fec3ad521ccff3faf621",
+          "junit_sha256": "3f927bb7655fd6bd1fd6504762e7449790c7495f577587148bc792bd705dcea3"
+        }
+      },
+      "original_red": "/private/tmp/drf-oddsense-merged-gate-7mlok6dm/early-failure-evidence",
+      "production_changes": false,
+      "guard_changes": false,
+      "limits": "Two owned modules only; 11 pre-existing strict expected-failure characterization checks remain. Coordinator full-joint freeze2 is still required."
+    }
+  }
+}

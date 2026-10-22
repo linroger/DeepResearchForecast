@@ -1,0 +1,9 @@
+{
+  "updated_utc": "2026-10-15T20:40:16.309506+00:00",
+  "review_receipt": "independent-review.md",
+  "review_status": "core and bounded later-main delta accepted; no material findings open",
+  "post_review_report_change": "Frontmatter only: status review_pending -> complete. No source claim or diagram changed.",
+  "reviewed_study_sha256": "38b9170f57e6823102c68928f77709c9de2b0b552a0887923c23efee25ad2f16",
+  "final_study_sha256": "17e0c0f6e486e5dde08ee7d5e9e22657fad495896128d3323b7b2699e2c5a7e9",
+  "all_source_readers_and_reviewer_completed_and_closed": true
+}

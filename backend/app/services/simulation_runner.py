@@ -1053,8 +1053,15 @@ class SimulationRunner:
         current end of file, so the runner's records stay intact next to the captured console
         output."""
         path = os.path.join(sim_dir, "simulation.log")
-        with open(path, "w", encoding="utf-8"):
-            pass
+        # 2026-10-18 修复：断点续跑不再截断主日志。此前每次 launch 都 "w" 清空——
+        # 续跑前「为何中断」的证据（sim_df28ee974d89 第 1-11 轮的日志）被不可逆销毁，
+        # 事故只能靠旁证重建。改为归档旧日志后新开：保留完整事故链，O_APPEND 语义不变。
+        if os.path.exists(path):
+            try:
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                os.replace(path, os.path.join(sim_dir, f"simulation.{stamp}.log"))
+            except OSError:
+                pass
         return open(path, "a", encoding="utf-8")
 
     @staticmethod

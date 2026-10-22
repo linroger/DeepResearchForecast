@@ -1,0 +1,194 @@
+[
+  {
+    "path": "backend/app/models/__init__.py",
+    "sha256": "96a34db0a666946383a5ef35541b99235b0e949e97ed968b39b17e571a422e8c",
+    "read_ranges": [
+      [
+        1,
+        9
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/models/project.py",
+    "sha256": "dc543e9a48fa0c34757b2fdaa96db912ca3caa22c11e60f9ec9a5d6a881ff096",
+    "read_ranges": [
+      [
+        1,
+        309
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/models/task.py",
+    "sha256": "88ad8881c0d94165777b637fa038915cfc7014ad196cb015a2b9fda2e63afcc6",
+    "read_ranges": [
+      [
+        1,
+        184
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/services/__init__.py",
+    "sha256": "5c78b7c2e902a80197acfeb9493ad81da903002eda04dd9870a2de1e42c12112",
+    "read_ranges": [
+      [
+        1,
+        73
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/services/requirement_spec.py",
+    "sha256": "8f7d944f892ae52a97b7b3f3898540082d7d085fa818bb25c7fb2ae4c73a8f97",
+    "read_ranges": [
+      [
+        1,
+        105
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/services/research_progress.py",
+    "sha256": "9dcfe9b52ecf45ed10264055239956064eaa6c7d77050d59c8d2152d63081e43",
+    "read_ranges": [
+      [
+        1,
+        564
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/services/text_processor.py",
+    "sha256": "7c39d3586169b396afdc85816ea555f5846789e32cf6e7046e12e241b94a4627",
+    "read_ranges": [
+      [
+        1,
+        86
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/__init__.py",
+    "sha256": "f6c032b9128aea0edbf0ac478fc93c9036549a7521d16e8af8b1192cbab12c98",
+    "read_ranges": [
+      [
+        1,
+        9
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/atomic.py",
+    "sha256": "aade316f53664d993e64b099d429a663a81b59a3c1aafa5987822546a500cae8",
+    "read_ranges": [
+      [
+        1,
+        77
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/chart_html.py",
+    "sha256": "3dc2f44da099c2be9589b7c8e4b543bb8b11fa2e143ff84a05d844f3706df722",
+    "read_ranges": [
+      [
+        1,
+        77
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/dates.py",
+    "sha256": "58822ea54caaa7516f852e9c74ad5a628bac106c5be2245e9ea6d287f522b615",
+    "read_ranges": [
+      [
+        1,
+        69
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/file_parser.py",
+    "sha256": "c43f3ce53188feb2f2fe02c0516461875a4bc77d713de21363466c5f5e99b31d",
+    "read_ranges": [
+      [
+        1,
+        192
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/logger.py",
+    "sha256": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "read_ranges": [
+      [
+        1,
+        153
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/security.py",
+    "sha256": "d1ea1e8788389a84d38def99a23a1b42b59a60f2e0bdafe4da264fb586235501",
+    "read_ranges": [
+      [
+        1,
+        156
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/zep_paging.py",
+    "sha256": "b3a7715173dd9db6d2c0c294b5286cb88d986e64a9605b696143a55c990163f0",
+    "read_ranges": [
+      [
+        1,
+        247
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  },
+  {
+    "path": "backend/app/utils/zep_rate_limit.py",
+    "sha256": "9100f47e3d9005336572ce5d6d14ac5c814e6b48e31aad5ed9e88b8ebb1f2254",
+    "read_ranges": [
+      [
+        1,
+        52
+      ]
+    ],
+    "depth": "full source read",
+    "notes": "Coordinator read the complete file directly; no imports or runtime execution."
+  }
+]

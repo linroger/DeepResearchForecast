@@ -1,0 +1,114 @@
+{
+  "merge_parents": {
+    "main": "da1d3c4dbb581f15aaba43da776608708c5cd356",
+    "feature": "149b947b89146d3673627112cb4b0a0ed9d5decd"
+  },
+  "conflict_decisions": [
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 1386,
+      "keep": "ours",
+      "ours_lead": [
+        "    \"research_skills.py\", \"backtest_cutoff.py\",",
+        "    \"news_signals.py\", \"news_tools.py\", \"market_intelligence.py\","
+      ],
+      "theirs_lead": [
+        "    \"research_skills.py\", \"news_signals.py\", \"news_tools.py\", \"market_intelligence.py\","
+      ]
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 2261,
+      "keep": "ours",
+      "ours_lead": [
+        "        backtest: Optional[dict[str, Any]] = None,"
+      ],
+      "theirs_lead": []
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 7342,
+      "keep": "ours",
+      "ours_lead": [
+        "        \"actor_dossier\": None, \"official_data\": None, \"news_market_context\": None,",
+        "        \"report_artifacts\": {},"
+      ],
+      "theirs_lead": [
+        "        \"actor_dossier\": None,  # \u53cc\u8f68 Track B\uff1a\u89d2\u8272\u672c\u4f53\u6863\u6848\uff0c\u4f9b\u624b\u52a8\u62a5\u544a\u8def\u5f84\u4f5c\u80cc\u666f\u4e0a\u4e0b\u6587\uff08\u7f3a\u5931\u4e3a None\uff09",
+        "        \"official_data\": None, \"news_market_context\": None,"
+      ]
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 10221,
+      "keep": "ours",
+      "ours_lead": [
+        "        _agent_kwargs[\"report_policy\"] = state.options.get(\"safety_policy_v1\")",
+        "        _agent_kwargs.update(self._report_scenario_context(state))"
+      ],
+      "theirs_lead": []
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 10893,
+      "keep": "theirs",
+      "ours_lead": [
+        "            specs.append((\"market_price_history\", os.path.join(hd, \"market_price_history.json\")))"
+      ],
+      "theirs_lead": []
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 11252,
+      "keep": "ours",
+      "ours_lead": [
+        "        if self._simulation_engine(state) == \"world-v1\" and stage in {STAGE_PREPARE, STAGE_RUN}:",
+        "            SimulationManager().validate_prepared_simulation_config(state.simulation_id)"
+      ],
+      "theirs_lead": []
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 14518,
+      "keep": "ours",
+      "ours_lead": [],
+      "theirs_lead": [
+        "                except Exception as exc:  # noqa: BLE001 \u2014 seal proof is mandatory",
+        "                    _prepare_reuse = False"
+      ]
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "line": 14944,
+      "keep": "ours",
+      "ours_lead": [
+        "                _ra_kwargs[\"report_policy\"] = state.options.get(\"safety_policy_v1\")",
+        "                if self._simulation_engine(state) == \"world-v1\":"
+      ],
+      "theirs_lead": [
+        "                try:"
+      ]
+    },
+    {
+      "path": "feature_list.json",
+      "line": 243,
+      "keep": "ours",
+      "ours_lead": [
+        "    \"id\": \"feature_reflexive_world_simulation\",",
+        "    \"category\": \"cross-stage\","
+      ],
+      "theirs_lead": []
+    }
+  ],
+  "api_report_repair": "Restored owner policy/scenario kwargs and bound report_artifacts in both manual constructors; incoming translation task lifecycle/context propagation retained.",
+  "bridge_scope": "Main backtest/context audit/citations and incoming date-anchored market query updates retained; duplicate dispatch removed.",
+  "world_scope": "Main exact delivery/feedback/consent and retirement/history proof preserved; peer damping, future-date pending effects and translation routes retained.",
+  "report_scope": "Canonical context, consumed generation, scoring and hard publication contracts preserved. Legacy simulation anchoring remains under admitted legacy_prompt; numeric translation diagnostics retained without permitting mismatched publication.",
+  "frontend_acceptance": {
+    "passed": 261,
+    "failed": 0,
+    "skipped": 0,
+    "production_build": "passed"
+  },
+  "current_unmerged_paths": []
+}

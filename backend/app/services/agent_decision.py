@@ -41,8 +41,11 @@ DECISION_CONTRACT_VERSION = "world-decision/v1"
 ABSTAIN = "abstain"
 HOLD_OPTION_ID = "hold_position"
 MAX_OPTIONS = 10
-STATEMENT_MAX_CHARS = 480
-RATIONALE_MAX_CHARS = 320
+# 2026-10-21: 取消 UI 可见文本的截断（用户明确要求 digest/feed/moves/consequences 不裁剪）。
+# 480→4000：public_statement 直接进 feed 帖子与世界状态事件语句，此前 480+"…" 截断
+# 到处可见。上限保留为病理防护，正常声明（数百字符）永不触顶。
+STATEMENT_MAX_CHARS = 4000
+RATIONALE_MAX_CHARS = 2000
 LANGUAGE_MISMATCH = "language_mismatch"
 DECISION_STATUSES = ("ok", "invalid", "failed", LANGUAGE_MISMATCH)
 MAX_PROBLEMS = 6

@@ -723,3 +723,38 @@ def delete_graph(graph_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+# ───────────────────── 2026-10-21: graph translation overlay ─────────────────────
+
+@graph_bp.route('/<graph_id>/translations/<lang>', methods=['POST'])
+def generate_graph_translation(graph_id: str, lang: str):
+    """Translate the graph panel's text (node summaries / edge facts) into <lang>.
+
+    Bounded inventory (degree-ranked top nodes + their edges), sha-keyed cache under
+    uploads/graph_translations/<graph_id>/<lang>.json — incremental regeneration
+    only translates new/changed entries; content-filter failures degrade per
+    fragment via the compliance ladder instead of failing the overlay."""
+    lang = (lang or '').strip().lower()
+    if lang not in ('zh', 'en'):
+        return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
+    try:
+        from ..services.artifact_translation import start_translation
+        result = start_translation("graph", graph_id, lang, force=bool(request.args.get('force')))
+        return jsonify({"success": True, "data": result}), 202
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"图谱翻译失败: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@graph_bp.route('/<graph_id>/translations/<lang>', methods=['GET'])
+def get_graph_translation(graph_id: str, lang: str):
+    lang = (lang or '').strip().lower()
+    if lang not in ('zh', 'en'):
+        return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
+    try:
+        from ..services.artifact_translation import translation_status
+        result = translation_status("graph", graph_id, lang)
+        return jsonify({"success": True, "data": result})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -1,0 +1,514 @@
+{
+  "schema": "oddsense-final-joint-gather-proof/v2",
+  "status": "passed",
+  "checked_at": "2026-10-22T09:37:45.221267+00:00",
+  "mode": "hash-pinned extraction from final joint artifacts; no application or test execution",
+  "primary": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "guarded_mirror": "/private/tmp/drf-oddsense-merged-gate-kzhepta3/repo",
+  "guarded_execution": {
+    "tests": 5353,
+    "bookkeeping": {
+      "executed": 5353,
+      "passed": 5339,
+      "failed": 0,
+      "errors": 0,
+      "xfailed": 11,
+      "skipped": 3,
+      "deselected": 22,
+      "xfail_cases": {
+        "tests.test_architecture_characterization::test_wp_10_prevents_shared_graph_feedback": "WP10: observed projection immutable; every generated write lands in a run/seed/scenario-scoped overlay",
+        "tests.test_architecture_characterization::test_wp_6_prevents_market_descendant_reuse": "WP6: one influence cluster per source family; duplicate descendants cannot alter the aggregate",
+        "tests.test_architecture_characterization::test_wp_11_prevents_social_to_institutional_laundering": "WP11: ActionProposal \u2192 FeasibilityResult \u2192 ExecutedAction gate before any institutional effect",
+        "tests.test_architecture_characterization::test_wp_11_prevents_neutral_weight_for_unknown_power": "WP11: unknown authority/power is quantitatively ineligible, not neutrally weighted",
+        "tests.test_architecture_characterization::test_wp_12_prevents_fork_seed_shared_mutation": "WP12: seeds/forks get isolated overlays, checkpoint streams, and RNG state over one sealed snapshot",
+        "tests.test_architecture_characterization::test_wp_6_prevents_structured_spine_omissions": "WP6: every enabled input flows through a hash-bound ForecastEvidencePack or fails the run visibly (I-18)",
+        "tests.test_architecture_characterization::test_wp_6_prevents_dormant_typed_worldstate_anchor": "WP6: the legacy base_distribution stays diagnostic; only a promoted registered contrast may move probability",
+        "tests.test_architecture_characterization::test_wp_4_prevents_edit_without_research_generation": "WP4: edits create a new sealed ResearchGeneration with explicit downstream invalidation",
+        "tests.test_architecture_characterization::test_wp_6_prevents_write_only_quality_and_late_health": "WP6: pre-forecast RunQualityAssessment gate runs before forecast/report construction",
+        "tests.test_architecture_characterization::test_wp_13_prevents_disconnected_resolution_lifecycle": "WP13: one idempotent resolution service closes the same target/revision that was published",
+        "tests.test_architecture_characterization::test_wp_14_prevents_answer_bearing_golden_harness": "WP14: sealed EvaluationCase registry with hidden outcome store and leak canary"
+      },
+      "skip_cases": {
+        "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_preserves_current_vendor_observability": "vendored deer-flow harness snapshot is not present in this checkout",
+        "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_fails_closed_on_model_inheritance_drift": "vendored deer-flow harness snapshot is not present in this checkout",
+        "tests.test_wave9_visualizer::test_build_all_real_handoff_integration": "real handoff artifacts not present"
+      },
+      "summary": "5339 passed, 3 skipped, 22 deselected, 11 xfailed in 572.62s (0:09:32)",
+      "test_modules": 151,
+      "core_selectors_passed": {
+        "backend/tests/test_news_research.py::test_real_engine_context_tools_to_fetched_publisher_to_cited_report": 1,
+        "backend/tests/test_news_research.py::test_market_contract_reaches_real_gateway_kiq_synthesis_and_source_projection": 1,
+        "backend/tests/test_news_research.py::test_legacy_preserved_config_trusted_registration_allowlist_and_off": 1,
+        "backend/tests/test_news_research.py::test_legacy_real_stream_prefetch_fetch_and_pre_qa_cited_context": 1,
+        "backend/tests/test_oddsense_workflow.py::test_scripted_engine_to_published_report_api_and_export": 1,
+        "backend/tests/test_news_context_reports.py::test_real_report_sequence_seals_context_and_api_markdown_export": 2
+      },
+      "signal_exclusions": [
+        "test_r3_sigint_during_a_fan_out_starts_no_queued_kiq_and_no_new_call",
+        "test_r3_sigterm_leaves_a_terminal_status_and_a_closed_progress_log"
+      ],
+      "native_deselections": [
+        "tests/test_legacy_official_data.py::test_runtime_registration_reaches_old_config_before_first_agent",
+        "tests/test_legacy_official_data.py::test_runtime_registration_disabled_is_noop",
+        "tests/test_legacy_official_data.py::test_runtime_registration_idempotent_and_preserves_custom_settings",
+        "tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[custom]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[duplicate]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_respects_existing_tool_conflicts[disabled]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_respects_guardrail_denial[policy0]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_respects_guardrail_denial[policy1]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_does_not_infer_custom_guardrail_permission",
+        "tests/test_legacy_official_data.py::test_runtime_registration_scoped_denial_keeps_effective_filter",
+        "tests/test_legacy_official_data.py::test_runtime_registration_preserves_explicit_empty_permissions[custom0-scoped_tool_denial]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_preserves_explicit_empty_permissions[custom1-scoped_skills_disabled]",
+        "tests/test_legacy_official_data.py::test_runtime_registration_preserves_inheritance_and_effective_override",
+        "tests/test_legacy_official_data.py::test_runtime_registration_rejects_live_agent_and_missing_implementation",
+        "tests/test_legacy_official_data.py::test_runtime_registration_disabled_definition_is_absent_from_native_tools",
+        "tests/test_legacy_official_data.py::test_runtime_conflict_does_not_bypass_other_disabled_definition[data_search-data_get]",
+        "tests/test_legacy_official_data.py::test_runtime_conflict_does_not_bypass_other_disabled_definition[data_get-data_search]",
+        "tests/test_legacy_official_data.py::test_delegated_researcher_learns_when_official_data_answers_its_focus",
+        "tests/test_legacy_official_data.py::test_agents_learn_the_year_over_year_route_for_index_levels"
+      ],
+      "additional_native_deselections": {
+        "tests/test_wave9_visualizer.py::test_kaleido_png_pair_standalone_builder": "Actual isolated diagnostic reaches native Kaleido; unchanged guard denies Chromium subprocess. HTML/manifest/matplotlib cases remain selected."
+      }
+    },
+    "shutdown_complete": true,
+    "identity_preserved": true,
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:process:subprocess.Popen": 11,
+      "blocked:external_read": 25,
+      "blocked:network:socket.__new__": 2,
+      "quarantine:oasis_import_cwd": 3,
+      "allowed:guarded_child": 48,
+      "blocked:child_process_limit": 3,
+      "blocked:credential_path": 7,
+      "blocked:external_write": 11,
+      "blocked:identity_environment": 1,
+      "blocked:sqlite_uri": 9,
+      "blocked:network:socket.getaddrinfo": 3,
+      "blocked:network:socket.bind": 1,
+      "allowed:child_liveness": 4,
+      "blocked:process:os.kill": 3,
+      "blocked:process:os.killpg": 3,
+      "blocked:saved_data": 1,
+      "blocked:changed_child_script": 1,
+      "allow:directory_traversal": 236
+    },
+    "boundary": "CPython audit hooks; not an OS sandbox"
+  },
+  "selectors_passed": {
+    "backend/tests/test_news_research.py::test_real_engine_context_tools_to_fetched_publisher_to_cited_report": 1,
+    "backend/tests/test_news_research.py::test_market_contract_reaches_real_gateway_kiq_synthesis_and_source_projection": 1,
+    "backend/tests/test_news_research.py::test_legacy_preserved_config_trusted_registration_allowlist_and_off": 1,
+    "backend/tests/test_news_research.py::test_legacy_real_stream_prefetch_fetch_and_pre_qa_cited_context": 1,
+    "backend/tests/test_oddsense_workflow.py::test_scripted_engine_to_published_report_api_and_export": 1,
+    "backend/tests/test_news_context_reports.py::test_real_report_sequence_seals_context_and_api_markdown_export": 2
+  },
+  "prefetch_excluded_from_gather": [
+    {
+      "tool": "news_search",
+      "agent_id": "context-prefetch"
+    }
+  ],
+  "gather_phase_attribution": "KIQ IDs corroborated by persisted phase state, engine source and gather logs",
+  "gather_window": {
+    "started_at": "2026-10-22T09:29:10.178546+00:00",
+    "status": "done",
+    "detail": "2 KIQs",
+    "finished_at": "2026-10-22T09:29:10.241560+00:00"
+  },
+  "gather_tool_messages": [
+    {
+      "phase": "GATHER",
+      "kiq": "K1",
+      "tool": "news_search",
+      "message": "CONTEXT news_search: ok; snippets/opinions/quotes are context only.",
+      "output_sha256": "93f59f4f8191176fea315ca7b65ffe6c516c62e0f1d40a3b24c4b827a809f21f",
+      "sources": [
+        {
+          "tool_ref": "S1",
+          "final_ref": "S2",
+          "url": "https://publisher.example/news/capacity-1"
+        },
+        {
+          "tool_ref": "S2",
+          "final_ref": "S3",
+          "url": "https://publisher.example/news/capacity-2"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K1",
+      "tool": "market_compare",
+      "message": "CONTEXT market_compare: partial; snippets/opinions/quotes are context only.",
+      "output_sha256": "aa48e6274a9b195e5ee28569a958e773f0bffe70b756dfda6761472a69f88104",
+      "sources": [
+        {
+          "tool_ref": "S3",
+          "final_ref": "S1",
+          "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K2",
+      "tool": "news_search",
+      "message": "CONTEXT news_search: ok; snippets/opinions/quotes are context only.",
+      "output_sha256": "93f59f4f8191176fea315ca7b65ffe6c516c62e0f1d40a3b24c4b827a809f21f",
+      "sources": [
+        {
+          "tool_ref": "S1",
+          "final_ref": "S2",
+          "url": "https://publisher.example/news/capacity-1"
+        },
+        {
+          "tool_ref": "S2",
+          "final_ref": "S3",
+          "url": "https://publisher.example/news/capacity-2"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K2",
+      "tool": "market_compare",
+      "message": "CONTEXT market_compare: partial; snippets/opinions/quotes are context only.",
+      "output_sha256": "aa48e6274a9b195e5ee28569a958e773f0bffe70b756dfda6761472a69f88104",
+      "sources": [
+        {
+          "tool_ref": "S3",
+          "final_ref": "S1",
+          "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW"
+        }
+      ]
+    }
+  ],
+  "agent_turns_consuming_tool_messages": 4,
+  "source_citation_consumption": [
+    {
+      "ref": "S1",
+      "provider": "kalshi",
+      "kind": "market_quote",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW",
+      "content_sha256": "2fe24427c6f60d2b35f83f9c587b4633fd01f0a7009977e1d1d9ed7aacc80ca5"
+    },
+    {
+      "ref": "S2",
+      "provider": "newsapi",
+      "kind": "news_snippet",
+      "url": "https://publisher.example/news/capacity-1",
+      "content_sha256": "c57ce33c8e33ea71877ec2bc5d3a778fa8158b70d049671e51514293e7dea4a1"
+    },
+    {
+      "ref": "S3",
+      "provider": "newsapi",
+      "kind": "news_snippet",
+      "url": "https://publisher.example/news/capacity-2",
+      "content_sha256": "c57ce33c8e33ea71877ec2bc5d3a778fa8158b70d049671e51514293e7dea4a1"
+    }
+  ],
+  "section_writer_consumption": [
+    {
+      "call": 1,
+      "supplied_quote_context_sha256": "bf7e48d9bb0897e09e8319cff1e5731e743d51f52d5e1f61c3774fd00e19e6af",
+      "required_fields_preserved": [
+        "yes_bid",
+        "yes_ask",
+        "last_price",
+        "price_unit",
+        "quote_basis",
+        "probability_basis",
+        "quote_at",
+        "rules_primary",
+        "rules_secondary"
+      ]
+    },
+    {
+      "call": 2,
+      "supplied_quote_context_sha256": "bf7e48d9bb0897e09e8319cff1e5731e743d51f52d5e1f61c3774fd00e19e6af",
+      "required_fields_preserved": [
+        "yes_bid",
+        "yes_ask",
+        "last_price",
+        "price_unit",
+        "quote_basis",
+        "probability_basis",
+        "quote_at",
+        "rules_primary",
+        "rules_secondary"
+      ]
+    }
+  ],
+  "capture_sha256": "1e639d74acc6dba924bff3aeeb8dc0eb13d5adbac18ebfd66e61400f5286a867",
+  "research_digest_sha256": "402ee9c7fdf85565b03a4c3e99cb26a120467936c117a6dcb751f1c266b21dc3",
+  "research_markdown_sha256": "1b999be6b647c18b58ad8d28af27eea57f70b9eef4b142128f80839400d49293",
+  "published_markdown": {
+    "path": "/private/tmp/drf-oddsense-merged-gate-kzhepta3/evidence/pytest-tmp/test_scripted_engine_to_publis0/reports/report_oddsense/full_report.md",
+    "sha256": "7ea5a738708c89a50008ca565b475dbc6979670feb10795e4e9b44e4b197f4e9"
+  },
+  "consumer_status": {
+    "/api/research/pipe_oddsense/dossier": 200,
+    "/api/report/report_oddsense": 200,
+    "download": 200
+  },
+  "replay_no_new_calls": true,
+  "tamper_http_status": 409,
+  "installed_primary_matches_all_recorded_sources": true,
+  "source_sha256": {
+    "backend/app/api/report.py": "21f75b7f6345686b04b01fc841aec2becf205d636a5bc928cc5dbd8053f49879",
+    "backend/app/api/research.py": "0dc2ede657c13664ea7d066b986dd5ae4164370c82e85ee7cd2356af662d6323",
+    "backend/app/api/sdk.py": "1c93cea4f79eb6812d6b3fe6bf4be08cf7419095b9b4f9d062670def575b76e5",
+    "backend/app/services/forecast_extractor.py": "2ac73d6ca00c3dc1cf3a0fe44a6bc8095236fd39bc4ed271313286dbfe100056",
+    "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
+    "backend/app/services/forecast_ledger.py": "2576a04a669586c7ebe94550d5d5ef1a8754c51bf65b42809e068e7164c0edc5",
+    "backend/app/services/forecast_track_record.py": "6cd977828939223b239cd83ebb72c39f05c6a76714ad9ada3f9be5b73d9610b1",
+    "backend/app/services/news_market_context.py": "8d5f3e7885ab46e94a91abbd56152733ea38271d0633e14ce67427f6701f4038",
+    "backend/app/services/official_data.py": "c5859983f9424660efe7fc8a6a56952736654824b76fc78a02296e7586de4c01",
+    "backend/app/services/pipeline_orchestrator.py": "24edb02a246fb6bd48c3e91c3e3493ef637787977e75a47f9178bf6f7747a0d3",
+    "backend/app/services/report_agent.py": "ca73cffc042230286b65157823a1221b5a4106a85f9580c155eb5e19fd2bcc93",
+    "backend/app/services/report_lint.py": "67e91a0805f95c7b073cd21d6e2d2979fff6b47bebd474715b9d13cf04d59899",
+    "backend/scripts/backfill_report_visuals.py": "e8850ae44a04d5461f2e638fbd7a21c9ab9b3808830747a2ef73e571fdae5e2d",
+    "backend/scripts/export_demo_site_data.py": "1d8d334cbf72a96940399f041472a7a094b3f2be426442e783a905a5cd47602b",
+    "backend/scripts/main_offline_pytest.py": "53fc29d5ec7657f31ade5265183e032dcfe54c8cea88d2e339ec905da14af2fa",
+    "backend/tests/test_oddsense_workflow.py": "2162d5c3088e4294b12821ff3360ff6831f6f419805ec0447278d829a833ebfb",
+    "deerflow_bridge/deerflow_research.py": "d651c7d30455c1309040b6ea5360472642051211699d2bc46ed46fe065303ae2",
+    "deerflow_bridge/linear_research.py": "8a1951320c0a6bd6ab5022369c7ab2cb367c485139a4fa6594bbd6e75b5c669f",
+    "deerflow_bridge/market_intelligence.py": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f",
+    "deerflow_bridge/news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "deerflow_bridge/news_tools.py": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+    "deerflow_bridge/research_budget.py": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+    "deerflow_bridge/research_gateway.py": "cf37859ede05202ce591a51c290c05175c5811c011fd66aad8ef1f0a59233d40"
+  },
+  "input_pins": {
+    "path": "/private/tmp/drf-oddsense-merged-final-gather-proof.pins-v2.json",
+    "sha256": "ab1654739863c47ea72a5c17d7df308f39e52f51ba0268cb1d09d8c31b681871"
+  },
+  "guard_change": {
+    "first_joint_sha256": "8c8bb8f6c0e4e5decee8f167603a4eb47711ec562e028d19f9d3d6bee1741815",
+    "final_sha256": "53fc29d5ec7657f31ade5265183e032dcfe54c8cea88d2e339ec905da14af2fa",
+    "changed": true,
+    "allowed_child_liveness_events": 4
+  },
+  "children": {
+    "47960": {
+      "exit_code": 0,
+      "receipt": "process-47960.json"
+    },
+    "47967": {
+      "exit_code": 0,
+      "receipt": "process-47967.json"
+    },
+    "47969": {
+      "exit_code": 0,
+      "receipt": "process-47969.json"
+    },
+    "49228": {
+      "exit_code": 0,
+      "receipt": "process-49228.json"
+    },
+    "49229": {
+      "exit_code": 0,
+      "receipt": "process-49229.json"
+    },
+    "49230": {
+      "exit_code": 0,
+      "receipt": "process-49230.json"
+    },
+    "49237": {
+      "exit_code": 0,
+      "receipt": "process-49237.json"
+    },
+    "49240": {
+      "exit_code": 0,
+      "receipt": "process-49240.json"
+    },
+    "49315": {
+      "exit_code": 0,
+      "receipt": "process-49315.json"
+    },
+    "49320": {
+      "exit_code": 0,
+      "receipt": "process-49320.json"
+    },
+    "49321": {
+      "exit_code": 0,
+      "receipt": "process-49321.json"
+    },
+    "49322": {
+      "exit_code": 0,
+      "receipt": "process-49322.json"
+    },
+    "49323": {
+      "exit_code": 0,
+      "receipt": "process-49323.json"
+    },
+    "49324": {
+      "exit_code": 0,
+      "receipt": "process-49324.json"
+    },
+    "49325": {
+      "exit_code": 0,
+      "receipt": "process-49325.json"
+    },
+    "49326": {
+      "exit_code": 0,
+      "receipt": "process-49326.json"
+    },
+    "49327": {
+      "exit_code": 0,
+      "receipt": "process-49327.json"
+    },
+    "49328": {
+      "exit_code": 0,
+      "receipt": "process-49328.json"
+    },
+    "49330": {
+      "exit_code": -15,
+      "receipt": "process-49330.json"
+    },
+    "49348": {
+      "exit_code": 0,
+      "receipt": "process-49348.json"
+    },
+    "49349": {
+      "exit_code": 0,
+      "receipt": "process-49349.json"
+    },
+    "49350": {
+      "exit_code": 0,
+      "receipt": "process-49350.json"
+    },
+    "49351": {
+      "exit_code": 0,
+      "receipt": "process-49351.json"
+    },
+    "49352": {
+      "exit_code": 0,
+      "receipt": "process-49352.json"
+    },
+    "49353": {
+      "exit_code": 0,
+      "receipt": "process-49353.json"
+    },
+    "49354": {
+      "exit_code": 0,
+      "receipt": "process-49354.json"
+    },
+    "49355": {
+      "exit_code": 0,
+      "receipt": "process-49355.json"
+    },
+    "49356": {
+      "exit_code": 0,
+      "receipt": "process-49356.json"
+    },
+    "49357": {
+      "exit_code": 0,
+      "receipt": "process-49357.json"
+    },
+    "49358": {
+      "exit_code": 0,
+      "receipt": "process-49358.json"
+    },
+    "49359": {
+      "exit_code": 0,
+      "receipt": "process-49359.json"
+    },
+    "49360": {
+      "exit_code": 0,
+      "receipt": "process-49360.json"
+    },
+    "49361": {
+      "exit_code": 0,
+      "receipt": "process-49361.json"
+    },
+    "49362": {
+      "exit_code": 0,
+      "receipt": "process-49362.json"
+    },
+    "49363": {
+      "exit_code": 0,
+      "receipt": "process-49363.json"
+    },
+    "49365": {
+      "exit_code": 23,
+      "receipt": "process-49365.json"
+    },
+    "49397": {
+      "exit_code": 0,
+      "receipt": "process-49397.json"
+    },
+    "49398": {
+      "exit_code": 0,
+      "receipt": "process-49398.json"
+    },
+    "49400": {
+      "exit_code": 0,
+      "receipt": "process-49400.json"
+    },
+    "49401": {
+      "exit_code": 0,
+      "receipt": "process-49401.json"
+    },
+    "50707": {
+      "exit_code": 0,
+      "receipt": "process-50707.json"
+    },
+    "50709": {
+      "exit_code": 0,
+      "receipt": "process-50709.json"
+    },
+    "50868": {
+      "exit_code": 0,
+      "receipt": "process-50868.json"
+    },
+    "50869": {
+      "exit_code": 0,
+      "receipt": "process-50869.json"
+    },
+    "50870": {
+      "exit_code": 0,
+      "receipt": "process-50870.json"
+    },
+    "50871": {
+      "exit_code": 0,
+      "receipt": "process-50871.json"
+    },
+    "50986": {
+      "exit_code": 0,
+      "receipt": "process-50986.json"
+    },
+    "51067": {
+      "exit_code": 0,
+      "receipt": "process-51067.json"
+    }
+  },
+  "external_guard_source_sha256": {
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33"
+  },
+  "probe_sha256": "67c02e82c17852417e4cc27706a738163c19bb93b506d885cfc6a5f1873b6515",
+  "limits": [
+    "The final joint guarded execution is reused; this extractor runs no tests or application code.",
+    "External responses are scripted; no live provider/model or paid pipeline proof.",
+    "Native legacy delegation is not live; its configuration/stream fixture is scripted.",
+    "Persisted KIQ findings are REPORTED (verified=0); fetched pages and hashes are separately checked.",
+    "Tool selection is scripted and does not predict choices made by a live model.",
+    "Inline hashes cover the workflow source cohort; the full final source freeze and skill hashes are in the companion.",
+    "External dependency hashes are captured guard metadata; this extractor does not reread files outside the source/evidence trees.",
+    "No claim about running-service activation, credential validity or browser rendering.",
+    "The final guard changed: its exact hash and child-liveness events are recorded. CPython audit hooks are not an OS sandbox."
+  ],
+  "full_source_snapshot": {
+    "path": "/private/tmp/drf-oddsense-merged-final-gather-proof-source-sha256.json",
+    "sha256": "48f0756640bfe67ddbe90e3d5ebf3ebe9fed5406d00447cd61bb76340d835863",
+    "source_files": 641,
+    "python_files": 637,
+    "matches_primary": true
+  },
+  "output_path": "/private/tmp/drf-oddsense-merged-final-gather-proof.json"
+}

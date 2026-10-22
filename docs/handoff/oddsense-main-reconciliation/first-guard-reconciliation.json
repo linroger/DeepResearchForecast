@@ -1,0 +1,399 @@
+{
+  "parent_exit": 1,
+  "parent_shutdown_complete": true,
+  "identity_preserved": true,
+  "source_drift": [],
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:process:subprocess.Popen": 10,
+    "blocked:external_read": 20,
+    "blocked:network:socket.__new__": 1,
+    "quarantine:oasis_import_cwd": 1,
+    "allowed:guarded_child": 42,
+    "blocked:process:os.killpg": 2,
+    "allow:directory_traversal": 232
+  },
+  "children": [
+    {
+      "pid": "32644",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "32647",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "32649",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33323",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33324",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33325",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33345",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33346",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33369",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33486",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33490",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33491",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33492",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33493",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33500",
+      "parent_exit": -15,
+      "receipt_status": "started",
+      "exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33717",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33718",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33719",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33720",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33721",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33722",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33723",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33724",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33728",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33729",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33730",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33731",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33733",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33734",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33735",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33736",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33737",
+      "parent_exit": 23,
+      "receipt_status": "started",
+      "exit": null,
+      "shutdown": false,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33751",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "33753",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35021",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35028",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35200",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35201",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35202",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35204",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35213",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    },
+    {
+      "pid": "35416",
+      "parent_exit": 0,
+      "receipt_status": "completed",
+      "exit": 0,
+      "shutdown": true,
+      "identity": true,
+      "drift": []
+    }
+  ],
+  "receipt_sha256": "708134cf4482ad8fb14e94481d07ceb45ce8e36cc81565413c8f0e8b4e6a9362"
+}

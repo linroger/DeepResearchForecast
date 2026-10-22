@@ -611,11 +611,6 @@ def test_comparison_numeric_extraction(tmp_path):
 # ============================ (B2) PM-6 market price-history ============================
 # 合成价格历史：{market_id: [{t,p}]}（t=unix 秒，p∈[0,1]）。默认 market_id 命中 FORECAST 的 F5 锚点。
 
-def _synthetic_price_history(market_id="SENATEOHS-26-D", n=6, base=0.45):
-    t0 = 1_750_000_000  # 2025-ish unix 秒
-    return {market_id: [{"t": t0 + i * 86400, "p": round(base + 0.012 * i, 4)} for i in range(n)]}
-
-
 def _assert_png(path):
     assert os.path.exists(path)
     with open(path, "rb") as f:
@@ -623,168 +618,6 @@ def _assert_png(path):
 
 
 @pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_price_history_writes_figure(tmp_path):
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    ph = _synthetic_price_history()
-    # FORECAST: F1 无 market_anchor、F5 有 SENATEOHS-26-D → 恰 1 个命中锚点 → 1 张图
-    paths = viz.render_market_price_history(ph, FORECAST["binary_forecasts"], charts)
-    assert len(paths) == 1
-    rel = paths[0]
-    assert rel.startswith("charts/market_price_history_") and rel.endswith(".png")
-    _assert_png(str(tmp_path / rel))
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_price_history_grouping_two_per_figure(tmp_path):
-    # >6 锚点 → 每图最多 2 子图 → ceil(7/2)=4 张图（分组降低图数量）
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    anchors = [{"id": f"F{i}", "probability": 0.5,
-                "market_anchor": {"market_id": f"M{i}", "implied_yes_prob": 0.5,
-                                  "divergence": 0.0}} for i in range(7)]
-    ph = {f"M{i}": [{"t": 1_750_000_000 + k * 86400, "p": 0.4 + 0.02 * k}
-                    for k in range(4)] for i in range(7)}
-    paths = viz.render_market_price_history(ph, anchors, charts)
-    assert len(paths) == 4
-    for rel in paths:
-        _assert_png(str(tmp_path / rel))
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_price_history_one_per_figure_when_leq6(tmp_path):
-    # ≤6 锚点 → 一锚一图（不分组）
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    anchors = [{"id": f"F{i}", "probability": 0.5,
-                "market_anchor": {"market_id": f"M{i}", "implied_yes_prob": 0.5}}
-               for i in range(3)]
-    ph = {f"M{i}": [{"t": 1_750_000_000 + k * 86400, "p": 0.5}
-                    for k in range(3)] for i in range(3)}
-    paths = viz.render_market_price_history(ph, anchors, charts)
-    assert len(paths) == 3
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_price_history_missing_input_safety(tmp_path):
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    bf = FORECAST["binary_forecasts"]
-    # 各种缺失/畸形 price_history → [] 且不抛
-    assert viz.render_market_price_history(None, bf, charts) == []
-    assert viz.render_market_price_history({}, bf, charts) == []
-    assert viz.render_market_price_history("nope", bf, charts) == []
-    # 缺失/畸形 anchors → []
-    assert viz.render_market_price_history(_synthetic_price_history(), None, charts) == []
-    assert viz.render_market_price_history(_synthetic_price_history(), [], charts) == []
-    assert viz.render_market_price_history(_synthetic_price_history(), "x", charts) == []
-    # market_id 不命中 price_history → []
-    assert viz.render_market_price_history(
-        {"OTHER": [{"t": 1, "p": 0.5}, {"t": 2, "p": 0.6}]}, bf, charts) == []
-    # 命中但历史点 <2 → 该锚点跳过 → []
-    assert viz.render_market_price_history(
-        {"SENATEOHS-26-D": [{"t": 1, "p": 0.5}]}, bf, charts) == []
-
-
-def test_price_history_matplotlib_missing_returns_empty(tmp_path, monkeypatch):
-    # matplotlib 缺失 → 直接 []（不触碰绘图）
-    monkeypatch.setattr(rv, "MATPLOTLIB_AVAILABLE", False)
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    assert viz.render_market_price_history(
-        _synthetic_price_history(), FORECAST["binary_forecasts"], charts) == []
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_build_all_price_history_from_artifact(tmp_path):
-    # market_price_history 作为内联 artifact → build_all 生成图并登记 manifest（placement_hint=binary_forecasts）
-    viz = ReportVisualizer()
-    arts = dict(_full_artifacts())
-    arts["market_price_history"] = _synthetic_price_history()
-    manifest = viz.build_all("report_ph", str(tmp_path), arts)
-    ph_items = [e for e in manifest if e["source"] == "market_price_history"]
-    assert len(ph_items) == 1
-    e = ph_items[0]
-    assert e["placement_hint"] == "binary_forecasts"
-    assert e["path"].startswith("charts/market_price_history_")
-    # plotly 可用 → HTML 主图 + matplotlib 回退 PNG 挂 png_path；否则纯 PNG 项
-    if rv.PLOTLY_AVAILABLE:
-        assert e["type"] == "html"
-        assert e["png_path"].startswith("charts/market_price_history_")
-        _assert_png(str(tmp_path / e["png_path"]))
-    else:
-        assert e["type"] == "png"
-        _assert_png(str(tmp_path / e["path"]))
-    # manifest 落盘可回读
-    reloaded = json.loads((tmp_path / "viz_manifest.json").read_text(encoding="utf-8"))
-    assert reloaded["items"] == manifest
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_build_all_price_history_from_report_dir_file(tmp_path):
-    # 无内联 artifact，但 reports/{id}/market_price_history.json 存在 → build_all 自动读取
-    (tmp_path / "market_price_history.json").write_text(
-        json.dumps(_synthetic_price_history()), encoding="utf-8")
-    viz = ReportVisualizer()
-    manifest = viz.build_all("report_phfile", str(tmp_path), _full_artifacts())
-    assert any(e["source"] == "market_price_history" for e in manifest)
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_build_all_price_history_from_handoff_dir_file(tmp_path):
-    # handoff_dir 指向的 handoff/market_price_history.json 也被采纳
-    hd = tmp_path / "handoff"
-    hd.mkdir()
-    (hd / "market_price_history.json").write_text(
-        json.dumps(_synthetic_price_history()), encoding="utf-8")
-    viz = ReportVisualizer()
-    arts = dict(_full_artifacts())
-    arts["handoff_dir"] = str(hd)
-    manifest = viz.build_all("report_phhd", str(tmp_path), arts)
-    assert any(e["source"] == "market_price_history" for e in manifest)
-
-
-def test_build_all_price_history_absent_skipped(tmp_path):
-    # 无任何 price_history 来源 → 无 market_price_history 项（静默跳过，不影响其余图）
-    viz = ReportVisualizer()
-    manifest = viz.build_all("report_noph", str(tmp_path), _full_artifacts())
-    assert not any(e.get("source") == "market_price_history" for e in manifest)
-
-
-@pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_build_all_price_history_knob_off(tmp_path, monkeypatch):
-    # REPORT_VIZ_PRICE_HISTORY=False → 整族跳过（其余图仍生成）
-    monkeypatch.setattr(
-        rv, "_cfg",
-        lambda name, default: False if name == "REPORT_VIZ_PRICE_HISTORY" else default)
-    viz = ReportVisualizer()
-    arts = dict(_full_artifacts())
-    arts["market_price_history"] = _synthetic_price_history()
-    manifest = viz.build_all("report_phoff", str(tmp_path), arts)
-    assert not any(e.get("source") == "market_price_history" for e in manifest)
-    # 其余 PNG（如 scenario）仍在 → 证明只是该族被关
-    assert any(e["type"] == "png" for e in manifest)
-
-
-def test_price_history_deterministic_and_dedup(tmp_path):
-    # 相同锚点 market_id 去重（保留首现）；同输入两次规整完全一致
-    if not rv.MATPLOTLIB_AVAILABLE:
-        pytest.skip("matplotlib not installed")
-    ph = _synthetic_price_history()
-    anchors = [
-        {"id": "F5a", "probability": 0.45,
-         "market_anchor": {"market_id": "SENATEOHS-26-D", "implied_yes_prob": 0.52}},
-        {"id": "F5b", "probability": 0.30,  # 同 market_id → 去重丢弃
-         "market_anchor": {"market_id": "SENATEOHS-26-D", "implied_yes_prob": 0.40}},
-    ]
-    a = rv._normalize_price_anchors(anchors, ph)
-    b = rv._normalize_price_anchors(anchors, ph)
-    assert len(a) == 1 and a[0]["label"] == "F5a"
-    assert [x["market_id"] for x in a] == [x["market_id"] for x in b]
-
-
-# ============================ (C) ITEM-16 plotly 交互式 HTML 族 ============================
-
 def _assert_offline_html(path):
     """离线 HTML 断言（include_plotlyjs='directory' 契约，见 _save_html/TASK 4a）：
     文件存在、含 <html>、以相对路径引用同目录共享 plotly.min.js，且该 bundle 确实
@@ -912,31 +745,6 @@ def test_world_variables_html_skips_zero_seed_and_sets_chronological_category_or
 
 
 @pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")
-def test_html_price_history_writes_files(tmp_path):
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    ph = _synthetic_price_history()
-    # 恰 1 个命中锚点（F5 → SENATEOHS-26-D）→ 1 张交互式 HTML
-    paths = viz.render_market_price_history_html(ph, FORECAST["binary_forecasts"], charts)
-    assert len(paths) == 1
-    rel = paths[0]
-    assert rel.startswith("charts/market_price_history_") and rel.endswith(".html")
-    _assert_offline_html(str(tmp_path / rel))
-
-
-@pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")
-def test_html_price_history_missing_input_safety(tmp_path):
-    viz = ReportVisualizer()
-    charts = str(tmp_path / "charts")
-    bf = FORECAST["binary_forecasts"]
-    assert viz.render_market_price_history_html(None, bf, charts) == []
-    assert viz.render_market_price_history_html({}, bf, charts) == []
-    assert viz.render_market_price_history_html(_synthetic_price_history(), None, charts) == []
-    # market_id 不命中 → []
-    assert viz.render_market_price_history_html(
-        {"OTHER": [{"t": 1, "p": 0.5}, {"t": 2, "p": 0.6}]}, bf, charts) == []
-
-
 def test_html_builders_plotly_missing_returns_none(tmp_path, monkeypatch):
     # plotly 缺失 → 全部构建器返回 None/[]（不触碰 plotly）
     monkeypatch.setattr(rv, "PLOTLY_AVAILABLE", False)
@@ -945,20 +753,18 @@ def test_html_builders_plotly_missing_returns_none(tmp_path, monkeypatch):
     assert viz.build_scenario_bars_html(FORECAST, charts) is None
     assert viz.build_model_vs_market_html(FORECAST, charts) is None
     assert viz.build_worldstate_area_html(WORLD_STATE, charts) is None
-    assert viz.render_market_price_history_html(
-        _synthetic_price_history(), FORECAST["binary_forecasts"], charts) == []
+    assert viz.build_worldstate_area_html(WORLD_STATE, charts) is None
 
 
 @pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")
 def test_build_all_includes_html_when_plotly(tmp_path):
     viz = ReportVisualizer()
     arts = dict(_full_artifacts())
-    arts["market_price_history"] = _synthetic_price_history()
     manifest = viz.build_all("report_html", str(tmp_path), arts)
     htmls = [e for e in manifest if e["type"] == "html"]
-    # WAVE9：至少 scenario + binary dotplot + model-vs-market + timeline + worldstate +
-    # 1 市场价格历史（actor_network 已降为 opt-in，默认不占槽位）。
-    assert len(htmls) >= 6
+    # WAVE9：至少 scenario + binary dotplot + model-vs-market + timeline + worldstate
+    # （actor_network 已降为 opt-in；market_price_history 图族已于 2026-10-17 移除）。
+    assert len(htmls) >= 5
     hints = {e["placement_hint"] for e in htmls}
     assert {"scenarios", "binary_forecasts", "timeline"} <= hints
     assert "actors" not in hints  # 关系结构图默认不入报告

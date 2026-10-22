@@ -524,3 +524,20 @@ def test_context_on_changed_question_archives_capture_and_uses_new_generation(tm
     new_state = json.loads((out / "v3/state.json").read_text())
     assert new_state["news_market_context_binding"]["sha256"] == new_capture["sha256"]
     assert "archived it to v3.stale-" in log2.text()
+
+
+def test_market_query_prompt_preserves_historical_cutoff_and_live_date(monkeypatch):
+    import backtest_cutoff as cutoff
+    import deerflow_research as bridge
+    from datetime import date
+
+    policy = cutoff.parse_policy({"as_of": "2024-11-01"})
+    monkeypatch.setenv("DRF_BACKTEST_POLICY", policy.to_env())
+    historical = bridge.build_market_queries_prompt("Election outlook", actor_names=[None, "Candidate"])
+    assert "RESEARCH AS-OF DATE IS 2024-11-01" in historical
+    assert "Treat 'today' below as this historical cutoff" in historical
+    assert "KEY ACTORS: Candidate" in historical and "None" not in historical
+    monkeypatch.delenv("DRF_BACKTEST_POLICY")
+    current = bridge.build_market_queries_prompt("Election outlook")
+    assert f"TODAY IS {date.today().isoformat()}" in current
+    assert "ON OR AFTER today" in current

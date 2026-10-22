@@ -15564,12 +15564,17 @@ def run_actor_ontology_stage(client, question: str, depth: str, target_language:
 
 PREDICTION_MARKETS_FILENAME = "prediction_markets.json"
 PREDICTION_MARKET_CANDIDATES_FILENAME = "prediction_market_candidates.jsonl"
-# PM-6: 通过相关性门的锚点市场的 CLOB 历史价时间线，落这里 {market_id: [{t,p}]}。
+# Historical backtests retain cutoff-bounded history; live history charts stay removed.
 PRICE_HISTORY_FILENAME = "market_price_history.json"
-_POLYMARKET_BASE_URL = "https://gamma-api.polymarket.com"
+# PM-NET（pipe_a19a0d5a4d39 复盘）：直连 gamma-api 在部分网络下被 SNI 级阻断
+#（TCP 可连、TLS 永不完成——16/16 查询全悬挂）。默认官方端点不变；需要时经
+# PREDICTION_MARKETS_API_BASE / PREDICTION_MARKETS_CLOB_BASE 指向本地代理/镜像路由。
+_POLYMARKET_BASE_URL = os.environ.get(
+    "PREDICTION_MARKETS_API_BASE", "https://gamma-api.polymarket.com").rstrip("/")
 # PM-6: CLOB 官方公开端点（keyless）——历史价与重报价走不同宿主（Gamma=gamma-api / 历史价=clob）；
 # 镜像 backend/app/utils/prediction_markets.py 的 CLOB_BASE_URL。
-_CLOB_BASE_URL = "https://clob.polymarket.com"
+_CLOB_BASE_URL = os.environ.get(
+    "PREDICTION_MARKETS_CLOB_BASE", "https://clob.polymarket.com").rstrip("/")
 _POLYMARKET_TRANSIENT = (429, 500, 502, 503, 504)
 # TRANSPORT-DIAG: gamma-api 前面的 Cloudflare 会拦/降权默认的 "Python-urllib/3.x" UA
 #（真实运行 41/41 查询全灭、同日 requests 工具正常的差分根因）；统一发浏览器形 UA。
@@ -15752,7 +15757,16 @@ def degrade_market_queries(queries: "list[str]") -> "list[tuple[str, list[str]]]
 def build_market_queries_prompt(question: str, hot_topics: list | None = None,
                                 actor_names: list | None = None) -> str:
     """PM-1: LLM 主派生路径的提示词——从问题+热点+actor 名产出 10-16 条『市场标题形状』
-    的短检索词（如 'House control 2026'、'Ohio Senate winner'）。只要一个 JSON 字符串数组。"""
+    的短检索词（如 'House control 2026'、'Ohio Senate winner'）。只要一个 JSON 字符串数组。
+
+    PM-DATE（2026-10-22，pipe_a19a0d5a4d39 复盘）：必须钉住今天的日期并要求
+    「只检索尚未判定的未来事件」——此前模型按训练期的"当前年"派生，10/16 条
+    检索词指向 2025（已判定市场），即使网络可达也只会捞到已关闭市场。"""
+    from datetime import date as _date
+    backtest = _pm_backtest_policy()
+    today = backtest.cutoff.date().isoformat() if backtest is not None else _date.today().isoformat()
+    date_basis = (f"RESEARCH AS-OF DATE IS {today}. Treat 'today' below as this historical cutoff. "
+                  if backtest is not None else f"TODAY IS {today}. ")
     hot = ", ".join(str(t) for t in (hot_topics or []) if str(t or "").strip())[:600]
     actors = ", ".join(str(n) for n in (actor_names or []) if str(n or "").strip())[:600]
     ctx = ""
@@ -15762,14 +15776,20 @@ def build_market_queries_prompt(question: str, hot_topics: list | None = None,
         ctx += f"\nKEY ACTORS: {actors}"
     return (
         "You generate short search queries for a prediction-market catalog (Polymarket). "
-        "Given a forecasting question, output 10-16 queries SHAPED LIKE MARKET TITLES — "
-        "the concrete, resolvable propositions a market would list (e.g. \"House control "
-        "2026\", \"Ohio Senate winner\", \"Fed rate cut March\", \"Trump approval\"). Keep "
-        "each 2-6 words, include the relevant YEAR when the question is time-bound, and "
-        "cover the distinct sub-outcomes and named actors — not one generic restatement.\n\n"
+        f"{date_basis}Given a forecasting question, output 10-16 queries SHAPED LIKE "
+        "MARKET TITLES — the concrete, resolvable propositions a market would list (e.g. "
+        "\"Fed decision December 2026\", \"Ohio Senate winner\", \"Trump approval\"). Keep "
+        "each 2-6 words, include the relevant YEAR, and cover the distinct sub-outcomes and "
+        "named actors — not one generic restatement.\n"
+        "CRITICAL: only query events that resolve ON OR AFTER today. Markets about meetings, "
+        "decisions or deadlines that already passed are resolved/closed and useless as "
+        "anchors. When the question names a horizon, anchor queries to the REMAINING dates "
+        "inside that horizon (e.g. for 'through end-2026' asked in late 2026, query the "
+        "Nov/Dec 2026 meetings — never that year's earlier ones), plus still-open structural "
+        "markets (year-end levels, next-year appointments).\n\n"
         f"FORECASTING QUESTION:\n{question}{ctx}\n\n"
         "Output ONLY a JSON array of strings (no prose, no code fences), e.g. "
-        '["House control 2026","Ohio Senate winner"].'
+        '["Fed decision December 2026","Fed funds rate end-2026"].'
     )
 
 
@@ -16169,7 +16189,7 @@ def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
     best_ask = _pm_float(raw.get("bestAsk"))
     if best_ask is not None:
         row["best_ask"] = round(best_ask, 4)
-    # PM-6: CLOB token id（Yes/No 各一）——画历史价时间线（_pm_fetch_price_history）的入口；
+    # CLOB token metadata: live history charts are removed; backtests retain cutoff-bounded history.
     # Gamma 里是 JSON 串 '["0x..","0x.."]'，规整成 list 保留；缺失不造假（键不出现）。镜像 backend。
     # i7（LOOP-017 P1 收尾，镜像 market_tools.normalize_market）：clobTokenIds 与 outcomes
     # **位置对齐**（Gamma 契约），市场偶有 ["No","Yes"] 排序——额外落 outcomes/outcome_prices
@@ -16337,6 +16357,14 @@ def _pm_snapshot(queries: list[str], per_query: int = 8, max_total: int = 20,
             diagnostics["transport_circuit_open"] = 1
         if len(completed) < attempted:
             diagnostics["deadline_exhausted"] = 1
+            # PM-NET（pipe_a19a0d5a4d39 复盘）：跑满 deadline 仍在挂起的查询 =
+            # TLS/连接悬挂（SNI 阻断的典型形态：TCP 可连、TLS 永不完成、异常也不
+            # 抛）——悬挂计数记为显式错误类，事故自解释，不再出现
+            # transport_failure_count=0 却判 transport_failure 的哑谜。
+            _hung = max(0, attempted - len(completed))
+            _cls = diagnostics.setdefault("transport_error_classes", {})
+            _cls["DeadlineHang:tls-or-connect"] = (
+                _cls.get("DeadlineHang:tls-or-connect", 0) + _hung)
     return _pm_cap_per_event(ranked, max_per_event, max_total)
 
 
@@ -16864,6 +16892,11 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
             )
         ),
     }
+    # PM-NET（pipe_a19a0d5a4d39 复盘）：分类依据（熔断/死线）与错误类随状态落盘——
+    # transport_failure_count=0 + deadline_exhausted=16 + DeadlineHang 类即自解释。
+    for _flag in ("transport_circuit_open", "deadline_exhausted"):
+        if refresh_diagnostics.get(_flag):
+            payload["status"][_flag] = refresh_diagnostics[_flag]
     # TRANSPORT-DIAG: additive——失败查询的具体错误类名[:HTTP 状态] 计数，使断网可诊断
     #（真实事故里只有 failure 计数、无错误类别，41/41 全灭无从归因）。
     if refresh_diagnostics.get("transport_error_classes"):
@@ -16871,8 +16904,17 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
             refresh_diagnostics["transport_error_classes"])
     if not markets:
         # PM-HZ: 空结果也**始终落盘**——显式 no_relevant_markets 标记（含尝试过的检索词），
-        # 报告节不追加（没有市场行可渲染）。
+        # 报告节不追加（没有市场行可渲染）。PM-NET：transport 失败写人类可读 reason，
+        # 区分「目录里没有对应市场」与「根本没连上 Polymarket」。
         payload["no_relevant_markets"] = True
+        if all_queries_failed:
+            _cls_txt = refresh_diagnostics.get("transport_error_classes") or {}
+            payload["reason"] = (
+                f"all {len(queries)} market queries failed at network level — the "
+                "Polymarket catalog was unreachable from this network "
+                f"(error classes: {_cls_txt or 'unknown'})")
+        elif not combined_candidates:
+            payload["reason"] = "catalog reachable but no active markets matched the queries"
         _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
                            json.dumps(payload, ensure_ascii=False, indent=2))
         meta["prediction_markets_count"] = 0
@@ -16894,15 +16936,16 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     meta["prediction_markets_as_of"] = as_of
     plog.write("ok", f"wrote {PREDICTION_MARKETS_FILENAME} ({len(markets)} markets, "
                      f"{len(queries)} queries) + appended report section")
-    # PM-6: 为通过相关性门的锚点市场抓 CLOB 历史价时间线（keyless），落 market_price_history.json。
-    # degrade-safe：任何失败只记一行日志，绝不影响已落盘的市场快照/报告节。
-    try:
-        if _env_flag("PREDICTION_MARKETS_PRICE_HISTORY", True):
-            _hist_n = _collect_market_price_history(out_dir, markets, plog)
-            if _hist_n:
-                meta["prediction_market_price_history_count"] = _hist_n
-    except Exception as _ph_err:  # noqa: BLE001 — 历史价为可选增强
-        plog.write("warn", f"market price history skipped (non-fatal): {_ph_err}")
+    # Peer removal applies to live history charts. Historical research still
+    # persists the cutoff-bounded series required by its backtest contract.
+    if backtest is not None:
+        try:
+            if _env_flag("PREDICTION_MARKETS_PRICE_HISTORY", True):
+                history_count = _collect_market_price_history(out_dir, markets, plog)
+                if history_count:
+                    meta["prediction_market_price_history_count"] = history_count
+        except Exception as exc:  # noqa: BLE001 — optional historical exhibit
+            plog.write("warn", f"backtest market price history skipped (non-fatal): {exc}")
 
 
 def _pm_yes_leg_token(m: dict) -> str:
@@ -16961,6 +17004,7 @@ def _collect_market_price_history(out_dir: Path, markets: list[dict],
     plog.write("ok", f"wrote {PRICE_HISTORY_FILENAME} ({len(hist_map)} market price series, "
                      f"≤{days}d @ {interval})")
     return len(hist_map)
+
 
 
 # ---------------------------------------------------------------------------

@@ -277,7 +277,15 @@ def _gate_agent_log(report_id: str, logs):
 
 
 def _active_translation_task(report_id: str, lang: str):
-    """Return the newest in-flight task for exactly one report/language pair."""
+    """Return the newest in-flight task for exactly one report/language pair.
+
+    2026-10-18 修复：进程内 PROCESSING 状态没有时限——worker 线程若在失败处理路径
+    本身死掉（BaseException / 写状态文件的 OSError），任务永远停在 PROCESSING，
+    _active_translation_task 无年龄上限地命中 → 之后每次 POST 都 202「进行中」，
+    只能重启后端解困（TaskManager.cleanup_old_tasks 只清终态且无人调用）。这里按
+    updated_at 加 15 分钟上限：超龄的 in-flight 任务视为僵尸、不再短路重试。"""
+    _ZOMBIE_TASK_S = 900.0
+    now = time.time()
     for task in TaskManager().list_tasks(task_type="report_translate"):
         metadata = task.get("metadata") or {}
         if (metadata.get("report_id") == report_id
@@ -285,13 +293,28 @@ def _active_translation_task(report_id: str, lang: str):
                 and task.get("status") in {
                     TaskStatus.PENDING.value, TaskStatus.PROCESSING.value,
                 }):
+            updated = task.get("updated_at")
+            age = None
+            if isinstance(updated, str):
+                try:
+                    from datetime import datetime as _dt
+                    age = now - _dt.fromisoformat(updated).timestamp()
+                except ValueError:
+                    age = None
+            if age is not None and age > _ZOMBIE_TASK_S:
+                continue  # 僵尸 in-flight：不再当作「正在跑」阻塞重试
             return task
     return None
 
 
 def _launch_translation_thread(target) -> None:
-    """Small seam kept explicit so API tests can run the worker synchronously."""
-    threading.Thread(target=target, daemon=True).start()
+    """Small seam kept explicit so API tests can run the worker synchronously.
+
+    2026-10-18 修复：复制 contextvars 再提交——裸线程不继承 run 上下文，worker 的
+    LLM 计量全部落入 _global 桶，per-run 预算/成本归集失真（telemetry 警告已点名）。"""
+    import contextvars as _cv
+    _ctx = _cv.copy_context()
+    threading.Thread(target=_ctx.run, args=(target,), daemon=True).start()
 
 
 # ============== 报告生成接口 ==============
