@@ -1,6 +1,6 @@
 # Scheduled translation/provenance reconciliation
 
-**Last updated (UTC):** 2026-10-22T21:04:31.540245+00:00
+**Last updated (UTC):** 2026-10-22T21:19:00.305009+00:00
 **Status:** Complete
 **Current focus:** Delivered to remote main; preserve the recorded S0-only scope and acceptance evidence.
 
