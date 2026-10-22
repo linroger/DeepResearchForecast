@@ -1,19 +1,52 @@
 <template>
-  <WorldSimulationView
-    v-if="engine === WORLD_ENGINE"
-    :key="simulationId + ':' + worldGenerationId"
-    :simulation-id="simulationId"
-    :generation-id="worldGenerationId"
-  />
+  <!-- ADR 0003: once a gate-passed after-action record (simulation-record/v1) exists, the
+       Record view is the default for both engines; the toggle returns to the live view.
+       While the run is in progress, or when /record answers 404/409, today's layout stands. -->
+  <template v-if="engine === WORLD_ENGINE">
+    <section v-if="record" class="sim-view sim-record-shell">
+      <header class="sv-header">
+        <div class="sv-title-block">
+          <div class="sv-title">
+            <span class="diamond">◇</span>
+            <span class="sv-title-text">{{ L('情景模拟', 'Scenario simulation') }}</span>
+            <span class="sv-engine mono">world-v1</span>
+          </div>
+          <p v-if="showRecord" class="sv-caveat">{{ L('声明假设下的条件路径；不是经过校准的概率预测。', 'Conditional pathway under declared assumptions; not a calibrated probability forecast.') }}</p>
+        </div>
+        <div class="sv-controls">
+          <div class="segmented" role="tablist" :aria-label="L('视图选择', 'Select view')">
+            <button type="button" class="seg-btn" :class="{ active: showRecord }" :aria-pressed="showRecord" @click="showRecord = true">{{ L('记录', 'Record') }}</button>
+            <button type="button" class="seg-btn" :class="{ active: !showRecord }" :aria-pressed="!showRecord" @click="showRecord = false">{{ L('实时视图', 'Live view') }}</button>
+          </div>
+        </div>
+      </header>
+      <SimulationRecordView v-if="showRecord" :record="record" />
+    </section>
+    <WorldSimulationView
+      v-if="!record || !showRecord"
+      :key="simulationId + ':' + worldGenerationId"
+      :simulation-id="simulationId"
+      :generation-id="worldGenerationId"
+    />
+  </template>
   <div v-else-if="engine === LEGACY_ENGINE" class="sim-view">
     <!-- ===== Header ===== -->
     <header class="sv-header">
-      <div class="sv-title">
-        <span class="diamond">◇</span>
-        <span class="sv-title-text">{{ L('群体模拟 · OASIS','Crowd Simulation · OASIS') }}</span>
+      <div class="sv-title-block">
+        <div class="sv-title">
+          <span class="diamond">◇</span>
+          <span class="sv-title-text">{{ L('群体模拟 · OASIS','Crowd Simulation · OASIS') }}</span>
+        </div>
+        <!-- ADR 0003: both engines carry the fixed caveat (sim_provenance.SIM_CAVEAT_*) -->
+        <p class="sv-caveat">{{ L('声明假设下的条件路径；不是经过校准的概率预测。', 'Conditional pathway under declared assumptions; not a calibrated probability forecast.') }}</p>
       </div>
 
       <div class="sv-controls">
+        <!-- ADR 0003: Record | Live view toggle, present only once a gate-passed record exists -->
+        <div v-if="record" class="segmented" role="tablist" :aria-label="L('视图选择', 'Select view')">
+          <button type="button" class="seg-btn" :class="{ active: showRecord }" :aria-pressed="showRecord" @click="showRecord = true">{{ L('记录', 'Record') }}</button>
+          <button type="button" class="seg-btn" :class="{ active: !showRecord }" :aria-pressed="!showRecord" @click="showRecord = false">{{ L('实时视图', 'Live view') }}</button>
+        </div>
         <!-- Platform segmented toggle -->
         <div class="segmented" role="tablist" :aria-label="L('平台选择','Select platform')">
           <button
@@ -56,6 +89,10 @@
       <span class="err-text">{{ error }}</span>
     </div>
 
+    <!-- ===== ADR 0003: after-action record — the default view once a gate-passed record exists;
+         the live layout (stats, world state, feed) is one toggle away ===== -->
+    <SimulationRecordView v-if="record && showRecord" :record="record" />
+    <template v-else>
     <!-- ===== Stats strip ===== -->
     <section class="stats-strip" v-if="statTiles.length || hasRoundInfo">
       <div class="stat-tile" v-if="hasRoundInfo">
@@ -210,6 +247,7 @@
         </div>
       </section>
     </div>
+    </template>
   </div>
   <section v-else class="sim-view" :aria-busy="loading">
     <p :role="error ? 'alert' : 'status'">{{ error || (loading
@@ -226,6 +264,7 @@ import { ref, computed, onUnmounted, watch } from 'vue'
 import { L } from '../../i18n'
 import WorldStatePanel from './WorldStatePanel.vue'
 import WorldSimulationView from './WorldSimulationView.vue'
+import SimulationRecordView from './SimulationRecordView.vue'
 import { WORLD_ENGINE, LEGACY_ENGINE, WORLD_REQUEST_TIMEOUT_MS, savedSimulationEngine, createRequestGate } from '../../utils/worldSimulationView'
 import {
   getSimulation,
@@ -234,8 +273,10 @@ import {
   getSimulationComments,
   getFeedRounds,
   getAgentStats,
-  getRunStatus
+  getRunStatus,
+  fetchRecord
 } from '../../api/simulation'
+import { isSimulationRecord } from '../../utils/simRecord'
 import { feedRequest, postPeriodNote, roundLabel as periodRoundLabel, selectionFromPanel } from '../../utils/feedRounds'
 
 const props = defineProps({
@@ -262,6 +303,51 @@ const engine = ref(null)
 const worldGenerationId = ref('')
 const requests = createRequestGate()
 let refreshTimer = null
+
+// ===== ADR 0003: the gate-passed after-action record =====
+// `record` is null while the run is in progress, while no record exists (404) or when the
+// record failed its gate (409); the parent is told so the Simulation tab can badge "record
+// ready".  Stage 5 finalization writes the record a few seconds after the runner reports
+// completion, so a 404 right after completion is re-asked a bounded number of times.
+const emit = defineEmits(['record-state'])
+const record = ref(null)
+const recordStatus = ref(null)
+const showRecord = ref(true)
+let recordRetries = 0
+const RECORD_RETRY_MS = 15000
+const RECORD_RETRY_MAX = 4
+
+function announceRecord() {
+  if (typeof emit === 'function') emit('record-state', { available: !!record.value, status: recordStatus.value })
+}
+
+function clearRecord() {
+  record.value = null
+  recordStatus.value = null
+}
+
+function isRunnerActive() {
+  const rs = isPlainObject(runState.value) ? runState.value : {}
+  const st = String(rs.runner_status || '').toLowerCase()
+  return st === 'running' || st === 'starting'
+}
+
+// A record or route failure never surfaces as an error: the layout simply stays live.
+async function loadRecord(simId, request) {
+  try {
+    const res = await fetchRecord(simId, { signal: request.signal, timeout: WORLD_REQUEST_TIMEOUT_MS })
+    if (!request.isCurrent()) return
+    const next = res && isSimulationRecord(res.record) ? res.record : null
+    record.value = next
+    const status = res ? Number(res.status) : NaN
+    recordStatus.value = Number.isFinite(status) ? status : null
+    if (next) recordRetries = 0
+  } catch {
+    if (!request.isCurrent()) return
+    clearRecord()
+  }
+  announceRecord()
+}
 
 // ===== Defensive helpers =====
 function asArray(v) {
@@ -593,6 +679,8 @@ async function loadAll() {
     userMap.value = {}
     error.value = ''
     engine.value = null
+    clearRecord()
+    announceRecord()
     loading.value = false
     return
   }
@@ -619,7 +707,12 @@ async function loadAll() {
     }
     worldGenerationId.value = response.data.world_generation_id || ''
     engine.value = savedEngine
-    if (savedEngine === WORLD_ENGINE) { loading.value = false; return }
+    if (savedEngine === WORLD_ENGINE) {
+      // ADR 0003: the record applies to both engines; a 404/409 leaves the world view as is
+      await loadRecord(simId, request)
+      if (request.isCurrent()) loading.value = false
+      return
+    }
   } catch {
     if (!request.isCurrent()) return
     engine.value = null
@@ -714,6 +807,16 @@ async function loadAll() {
     error.value = (reason && reason.message) ? reason.message : L('加载模拟数据失败', 'Failed to load simulation data')
   }
 
+  // ADR 0003: ask for the gate-passed record once the runner is no longer running; while
+  // it runs, the live layout stays exactly as today.
+  if (isRunnerActive()) {
+    clearRecord()
+    announceRecord()
+  } else {
+    await loadRecord(simId, request)
+    if (!request.isCurrent()) return
+  }
+
   loading.value = false
   scheduleAutoRefresh()
 }
@@ -729,10 +832,15 @@ function switchPlatform(next) {
 // live without a manual refresh. Stops automatically once the run completes.
 function scheduleAutoRefresh() {
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
-  const rs = isPlainObject(runState.value) ? runState.value : {}
-  const st = String(rs.runner_status || '').toLowerCase()
-  if (props.simulationId && (st === 'running' || st === 'starting')) {
+  if (!props.simulationId) return
+  if (isRunnerActive()) {
     refreshTimer = setTimeout(loadAll, 10000)
+    return
+  }
+  // ADR 0003: the record lands shortly after completion; re-ask for it a bounded number of times
+  if (!record.value && recordStatus.value === 404 && recordRetries < RECORD_RETRY_MAX) {
+    recordRetries += 1
+    refreshTimer = setTimeout(loadAll, RECORD_RETRY_MS)
   }
 }
 
@@ -746,6 +854,10 @@ watch(
     selectedRound.value = null
     feedRounds.value = []
     feedPeriodLabel.value = ''
+    clearRecord()
+    recordRetries = 0
+    showRecord.value = true
+    announceRecord()
     loadAll()
   },
   { immediate: true, flush: 'sync' }
@@ -801,6 +913,30 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ADR 0003: fixed caveat under the title, engine tag, record shell spacing */
+.sv-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sv-caveat {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.sv-engine {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.sim-record-shell {
+  margin-bottom: 12px;
 }
 
 .diamond {

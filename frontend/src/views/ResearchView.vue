@@ -241,8 +241,8 @@
                   </template>
                 </div>
               </div>
-              <SimulationView v-show="activeTab==='sim'" :simulation-id="simulationId" />
-              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" />
+              <SimulationView v-show="activeTab==='sim'" :simulation-id="simulationId" @record-state="onSimRecordState" />
+              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" @open-simulation-record="pickTab('sim')" />
             </div>
           </div>
         </div>
@@ -433,6 +433,8 @@ const runTiming = ref({ createdAt: '', updatedAt: '', resumedAt: '' })
 // —— 标签 / 图谱 ——
 const activeTab = ref('log')
 const userPickedTab = ref(false)
+// ADR 0003: the Simulation tab badge says "record ready" once SimulationView has a gate-passed record.
+const simRecordReady = ref(false)
 const graphData = ref(null)
 const graphLoading = ref(false)
 const graphMax = ref(false)
@@ -505,13 +507,14 @@ const tabs = computed(() => {
     { key: 'log', label: L('实时日志', 'Live log'), enabled: true },
     { key: 'dossier', label: L('研究档案', 'Dossier'), enabled: !!researchDone, badge: actorCount || '' },
     { key: 'graph', label: L('知识图谱', 'Graph'), enabled: !!graphId.value },
-    { key: 'sim', label: L('群体模拟', 'Simulation'), enabled: !!simulationId.value },
+    { key: 'sim', label: L('群体模拟', 'Simulation'), enabled: !!simulationId.value, badge: simRecordReady.value ? L('记录就绪', 'record ready') : '' },
     { key: 'report', label: L('预测报告', 'Forecast'), enabled: !!reportId.value }
   ]
 })
 
 function toggleLocale() { setLocale(locale.value === 'en' ? 'zh' : 'en') }
 function onProviderChanged() { return checkPreflight() }
+function onSimRecordState(state) { simRecordReady.value = !!(state && state.available) }
 
 function pickTab(key) {
   const t = tabs.value.find(x => x.key === key)

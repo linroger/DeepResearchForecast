@@ -113,6 +113,8 @@
           </tr>
         </tbody>
       </table>
+      <!-- ADR 0003：概率只来自研究证据；情景模拟（模拟记录类）从不进入任何概率。策略来自报告负载的 forecast_effect。 -->
+      <p class="bft-foot">{{ probabilityFootnote }}</p>
     </div>
   </section>
 </template>
@@ -126,10 +128,12 @@ import { L } from '../../i18n'
 // 组件只负责双语标签与 tooltip 的拼装。
 // officialSeries：报告官方数据的 series → {label, sourceId, sourceUrl}（数据锚点的读者标签与 [S#]）；
 // lang：官方数据展示语种（大额数值的量级说明，如「≈45万亿美元」）。
+// forecastEffect：报告负载的 forecast_effect（情景模拟对概率的策略；缺省即生产策略 diagnostic_only）。
 const props = defineProps({
   forecast: { type: Object, default: null },
   officialSeries: { type: Object, default: null },
   lang: { type: String, default: 'en' },
+  forecastEffect: { type: String, default: '' },
 })
 
 const open = ref(true)
@@ -138,6 +142,13 @@ const rows = computed(() => binaryForecastRows(props.forecast, {
   lang: props.lang,
 }))
 const hasDataAnchors = computed(() => rows.value.some(row => row.dataAnchor))
+
+// ADR 0003 (design §3.6): the fixed footnote under the table names the policy under which the
+// scenario simulation ran; the probabilities themselves come from research evidence only.
+const probabilityFootnote = computed(() => {
+  const policy = String(props.forecastEffect || '').trim() || 'diagnostic_only'
+  return L(`概率仅来自研究证据（策略：${policy}）`, `Probabilities come from research evidence only (policy: ${policy})`)
+})
 
 // 命题列：截断展示，原生 title 露出全文（附 anchor-and-adjust 理由，若有）。
 function statementTitle(row) {
@@ -244,6 +255,14 @@ function influenceTitle(row) {
   margin: 0 auto 28px;
   border: 1px solid var(--color-border, #E5E5E5);
   background: var(--color-soft, #FAFAFA);
+}
+
+/* ---------- ADR 0003 footnote: probabilities are research-only ---------- */
+.bft-foot {
+  margin: 8px 18px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs, 11px);
+  color: var(--color-muted, #666);
 }
 
 /* ---------- Collapsible header (monospace ◇ panel-label convention) ---------- */

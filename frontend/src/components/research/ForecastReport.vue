@@ -171,6 +171,19 @@
         </details>
 
         <div ref="scrollEl" class="report-scroll">
+          <!-- ADR 0003：来源图例——正文里三类记录各有标记；模拟内容只出现在带标记的桥接框内，从不进入概率。 -->
+          <div class="prov-legend" role="note" :aria-label="L('来源图例', 'Provenance legend')">
+            <span class="prov-item prov-observed"><span class="prov-swatch" aria-hidden="true"></span>{{ L('观察事实 [S#]', 'Observed [S#]') }}</span>
+            <span class="prov-item prov-forecast"><span class="prov-swatch" aria-hidden="true"></span>{{ L('预测（作者判断）', 'Forecast (authors’ judgement)') }}</span>
+            <span class="prov-item prov-simulated"><span class="prov-swatch" aria-hidden="true"></span>{{ L('模拟（模型推演，非证据）', 'Simulated (model exercise, not evidence)') }}</span>
+          </div>
+          <!-- ADR 0003：门禁通过的情景模拟记录的锚点卡（报告负载 simulation_record_ref）；缺失则不渲染。 -->
+          <div v-if="simulationRecordRef" class="sim-record-anchor">
+            <span class="diamond">◇</span>
+            <span class="sra-text">{{ L('情景模拟事后记录已通过门禁（模拟记录：非证据，未进入任何概率）', 'Scenario simulation after-action record passed its gate (simulated record: not evidence, not an input to any probability)') }}</span>
+            <code v-if="simulationRecordRef.sha256" class="sra-sha" :title="simulationRecordRef.sha256">SHA-256 {{ simulationRecordSha }}</code>
+            <button class="sra-btn" type="button" @click="openSimulationRecord">{{ L('在模拟标签页查看记录', 'Open the record in the Simulation tab') }} →</button>
+          </div>
           <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片 + 官方指标瓦片）。
                端点 404/409（旧报告 / 未启用结构化预测 / 无官方数据）→ 对应区块隐藏（degrade-safe）。 -->
           <section v-if="showDashboard || officialTiles.length" class="forecast-dash">
@@ -278,7 +291,7 @@
           </section>
           <!-- LOOP-017：一等公民二元预测表（forecast.binary_forecasts，与仪表盘同源同门）。
                行模型在 utils/binaryForecasts.js（纯函数）；无二元预测 → 组件整体不渲染。 -->
-          <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" />
+          <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" :forecast-effect="forecastEffect" />
           <SourceContextPanel v-if="meta.news_market_context" :context="meta.news_market_context" />
           <!-- VIZ-1：图表画廊（确定性生成的 PNG/SVG 图表 + 图注）。无工件时整体不渲染。 -->
           <section v-if="galleryCharts.length" class="chart-gallery">
@@ -342,7 +355,7 @@ import {
   reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast, getReportOfficialData
 } from '../../api/report'
 import BinaryForecastTable from './BinaryForecastTable.vue'
-import { renderMarkdown, extractHeadings } from '../../utils/markdown'
+import { renderMarkdown, extractHeadings, splitMarkedBlock } from '../../utils/markdown'
 import {
   chartAssetKind,
   chartAttribution,
@@ -383,6 +396,19 @@ const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPan
 const props = defineProps({
   reportId: { type: String, default: '' }
 })
+
+// ADR 0003 (S2): the only event — the reader asks for the gate-passed simulation record,
+// which the parent shows on the Simulation tab.
+const emit = defineEmits(['open-simulation-record'])
+
+// ADR 0003: the one fenced simulation bridge the backend renders between
+// sim_provenance.BRIDGE_START / BRIDGE_END is shown as a shaded, labelled box.  The markers
+// are HTML comments the renderer drops, so a report without a bridge renders as before.
+const SIM_BRIDGE_START = '<!-- sim-bridge:start -->'
+const SIM_BRIDGE_END = '<!-- sim-bridge:end -->'
+// A plain-word slot paragraph (no markdown syntax): renderMarkdown emits it as <p>…</p>,
+// which is then replaced by the rendered bridge box.
+const SIM_BRIDGE_SLOT = 'SIMBRIDGESLOT4c9e1b'
 
 const md = ref('')
 const meta = ref({})
@@ -619,9 +645,27 @@ const renderOpts = computed(() => ({
   interactiveHref
 }))
 
+function escapeText(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+// ADR 0003: the bridge block, when the markdown carries one (null otherwise).
+const bridgeSplit = computed(() => splitMarkedBlock(currentMd.value || '', SIM_BRIDGE_START, SIM_BRIDGE_END))
+
 const renderedHtml = computed(() => {
   try {
-    return renderMarkdown(currentMd.value || '', renderOpts.value)
+    const split = bridgeSplit.value
+    if (!split) return renderMarkdown(currentMd.value || '', renderOpts.value)
+    // The surrounding document renders in one pass (References detection and heading ids
+    // untouched); the bridge renders through the same renderer into a shaded box.
+    const main = renderMarkdown(`${split.before}\n\n${SIM_BRIDGE_SLOT}\n\n${split.after}`, renderOpts.value)
+    const box = '<section class="sim-bridge" data-record-class="simulated">'
+      + '<div class="sim-bridge-eyebrow"><span class="sim-bridge-mark" aria-hidden="true">◇</span>'
+      + escapeText(L('情景模拟 · 模拟记录：非证据，未进入任何概率', 'Scenario simulation · simulated record: not evidence, not an input to any probability'))
+      + '</div><div class="sim-bridge-body">' + renderMarkdown(split.inner, renderOpts.value) + '</div></section>'
+    const slot = `<p>${SIM_BRIDGE_SLOT}</p>`
+    // function replacer: the bridge body may contain `$` (amounts) that String.replace would treat as patterns
+    return main.includes(slot) ? main.replace(slot, () => box) : main + '\n' + box
   } catch (e) {
     return ''
   }
@@ -982,6 +1026,33 @@ const fc = computed(() => {
   const own = cache[viewLang.value || '']
   if (own) return own
   return cache[sourceLang.value || ''] || cache[''] || null
+})
+
+// ---------- ADR 0003：门禁通过的情景模拟记录引用与模拟策略 ----------
+// GET /api/report/<id> MAY carry simulation_record_ref {sha256, url}（仅当记录通过门禁）与
+// forecast_effect；二者缺失时锚点卡不渲染、脚注回退为生产策略 diagnostic_only（degrade-safe）。
+const simulationRecordRef = computed(() => {
+  const value = meta.value && meta.value.simulation_record_ref
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const sha256 = typeof value.sha256 === 'string' ? value.sha256.trim() : ''
+  const url = typeof value.url === 'string' ? value.url.trim() : ''
+  return sha256 || url ? { sha256, url } : null
+})
+const simulationRecordSha = computed(() => {
+  const sha = (simulationRecordRef.value && simulationRecordRef.value.sha256) || ''
+  return sha.length > 13 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha
+})
+function openSimulationRecord() {
+  emit('open-simulation-record', simulationRecordRef.value)
+}
+const forecastEffect = computed(() => {
+  const fromReport = meta.value && meta.value.forecast_effect
+  if (typeof fromReport === 'string' && fromReport.trim()) return fromReport.trim()
+  const bridge = fc.value && fc.value.simulation_bridge
+  const fromBridge = bridge && typeof bridge === 'object' ? bridge.forecast_effect : ''
+  if (typeof fromBridge === 'string' && fromBridge.trim()) return fromBridge.trim()
+  const fromForecast = fc.value && fc.value.forecast_effect
+  return typeof fromForecast === 'string' ? fromForecast.trim() : ''
 })
 
 // 0..1 概率 → 百分比字符串（保留 1 位小数，去掉尾零由 Math.round 保证）。
@@ -1635,6 +1706,63 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   color: var(--ink);
 }
+
+/* ---------- ADR 0003: provenance legend, record anchor card, shaded simulation bridge ---------- */
+.prov-legend {
+  max-width: 1200px;
+  margin: 0 auto 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.prov-item { display: inline-flex; align-items: center; gap: 6px; }
+.prov-swatch { width: 10px; height: 10px; border: 1px solid var(--border); background: var(--paper); }
+.prov-observed .prov-swatch { border-color: var(--ink); }
+.prov-forecast .prov-swatch { background: var(--ink); border-color: var(--ink); }
+.prov-simulated .prov-swatch { background: #FFF1EA; border-color: var(--orange); }
+.sim-record-anchor {
+  max-width: 1200px;
+  margin: 0 auto 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--orange);
+  background: #FFF1EA;
+  font-size: 12.5px;
+}
+.sra-sha { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sra-btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.sra-btn:hover { opacity: 0.85; }
+.md-body :deep(.sim-bridge) {
+  margin: 1.6em 0;
+  padding: 14px 18px 6px;
+  border: 1px solid var(--orange);
+  border-left-width: 4px;
+  background: #FFF7F2;
+}
+.md-body :deep(.sim-bridge-eyebrow) {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 8px;
+}
+.md-body :deep(.sim-bridge-mark) { margin-right: 6px; }
 
 /* ---------- Markdown typography ---------- */
 .md-body :deep(.md-h),

@@ -296,3 +296,25 @@ export function extractHeadings(md) {
   })
   return out
 }
+
+/**
+ * Split `md` around the first block fenced by a pair of marker lines (for example the
+ * report's `<!-- sim-bridge:start -->` / `<!-- sim-bridge:end -->` pair from ADR 0003).
+ * Returns { before, inner, after } with the markers removed, or null when the pair is
+ * absent or out of order, so callers fall back to rendering the document as one piece.
+ * The markers themselves are HTML comments, which renderMarkdown drops anyway.
+ */
+export function splitMarkedBlock(md, startMarker, endMarker) {
+  const src = String(md || '')
+  if (!src || !startMarker || !endMarker) return null
+  const start = src.indexOf(startMarker)
+  if (start < 0) return null
+  const innerStart = start + startMarker.length
+  const end = src.indexOf(endMarker, innerStart)
+  if (end < 0) return null
+  return {
+    before: src.slice(0, start),
+    inner: src.slice(innerStart, end),
+    after: src.slice(end + endMarker.length)
+  }
+}
