@@ -71,7 +71,7 @@
     'tab.dossier':      { en: '② Research dossier', zh: '② 研究档案' },
     'tab.ontology':     { en: '③ Ontology', zh: '③ 本体生成' },
     'tab.graph':        { en: '④ Knowledge graph', zh: '④ 知识图谱' },
-    'tab.forum':        { en: '⑤ Simulated forum', zh: '⑤ 模拟论坛' },
+    'tab.forum':        { en: '⑤ Scenario simulation (raw feed)', zh: '⑤ 情景模拟（原始动作流）' },
     'tab.report':       { en: '⑥ Forecast report', zh: '⑥ 预测报告' },
     'viewer.loading':   { en: 'Loading…', zh: '加载中…' },
     'viewer.loadfail':  { en: 'Failed to load:', zh: '加载失败：' },
@@ -116,7 +116,8 @@
     'forum.comment':    { en: 'replied', zh: '回复' },
     'forum.empty':      { en: 'No feed recorded for this platform.', zh: '该平台没有记录到动作流。' },
 
-    'report.intro':     { en: 'Stage 6: the final forecast, written by a tool-augmented ReAct agent that queried both the knowledge graph and the simulation.', zh: '阶段 6：最终预测报告，由同时检索知识图谱与模拟结果的工具增强 ReAct Agent 撰写。' },
+    'report.intro':     { en: 'Stage 6: the final forecast. Probabilities come from the research evidence only; the scenario simulation reaches the report only as the fenced "Scenario simulation" section (ADR 0003).', zh: '阶段 6：最终预测报告。概率仅来自研究证据；情景模拟只以围栏的「情景模拟」章节进入报告（ADR 0003）。' },
+    'report.prepolicy': { en: 'Pre-policy report (before 2026-07-17): written when simulation output could still enter report prose and probabilities; it does not reflect the current ADR 0003 contract.', zh: '策略前报告（2026-07-17 之前）：当时模拟产出仍可进入报告正文与概率，不代表当前 ADR 0003 契约。' },
     'doclang.report':   { en: 'Report language', zh: '报告语言' },
     'doclang.dossier':  { en: 'Dossier language', zh: '档案语言' },
     'doclang.original': { en: 'Original', zh: '原文' },
