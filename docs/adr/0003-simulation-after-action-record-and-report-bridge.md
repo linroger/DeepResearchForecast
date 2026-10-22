@@ -129,6 +129,28 @@ sanctioned place, so it is either hidden or disguised.
   (`【预测结果分布` vs `【推演结果分布`), so one constants module is shared by renderers,
   lint and tests.
 
+## Implementation status (2026-10-23)
+
+- **Where.** Branch `claude/sim-provenance-impl` (integration; S2–S4 merged) on top of
+  `claude/sim-provenance-s0` (S0 and its review fixes). Nothing pushed.
+- **Done.** S0 constants, chart titles, brief disclosure, lint flipped from relabelling to
+  removal, one attribution rule, header alignment, defaults, what-if labels; S1 record
+  compiler, deterministic gate G1–G9, orchestrator wiring, record routes; S2 dashboard record
+  view, legend, bridge box, research-only footnote; S3 fenced bridge, prompt isolation on the
+  default engine, section-aware lint with the canonical label as a hard pattern outside the
+  fence, interview tool removal, final-audit bridge checks, report payload fields, T1
+  byte-identical prompt test; S4 README (EN/ZH), demo-site intro and pre-policy badge,
+  design.md §10 deltas. Three adversarial reviews (S0, S2, S1+S3) with every confirmed finding
+  fixed or recorded as a deliberate deviation in design.md §10.
+- **Verification.** Integrated full backend suite in a clean worktree: 7,801 passed, 8 failed,
+  19 errors, 1,667 skipped; every failure and error reproduces at the base commit except one
+  found and fixed on the branch. Frontend 290/290 and `vite build` green.
+- **Owed before Accepted.** One live default-engine run whose published report carries exactly
+  one bridge block and whose Simulation tab shows a gate-passed record; one live `no_update`
+  run with neither; the record's LLM synthesis exercised against a real provider; the
+  `plan_outline` prompt still receives `simulation_outcomes` text under `diagnostic_only`
+  (design.md §10). These need the owner's paid runs and decisions D1–D6.
+
 ## Alternatives considered
 
 1. **Full integration with attribution (status quo plus better prompts).** Rejected:
