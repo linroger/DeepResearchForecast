@@ -13,6 +13,8 @@ from flask import request, jsonify, send_file, send_from_directory, Response
 from . import report_bp
 from ..config import Config
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus, load_simulation_world
+from ..services import simulation_record_contract as _src
+from ..services.exec_brief import _load_pinned_simulation_policy as _pinned_simulation_policy
 from ..services.pipeline_orchestrator import load_research_dossier_for_simulation
 from ..services.backtest_mode import pipeline_for_simulation
 from ..services.simulation_manager import SimulationManager
@@ -71,11 +73,60 @@ def _withhold_outline_drafts(outline):
     }
 
 
+def _report_forecast_effect(report):
+    """The pinned SIMULATION_FORECAST_EFFECT this report was generated under (ADR 0003).
+
+    Read from the sealed ``forecast.json`` first (``simulation_bridge.forecast_effect`` is
+    written under ``diagnostic_only``), then from the run's pinned ``safety_policy_v1`` by
+    the same lookup the executive brief uses; ``None`` when neither records it — the
+    payload never asserts a policy it did not read.
+    """
+    try:
+        forecast = ReportManager.load_structured_forecast(report.report_id)
+    except Exception:  # noqa: BLE001 — an unreadable forecast never hides the report
+        forecast = None
+    bridge = (forecast or {}).get("simulation_bridge") if isinstance(forecast, dict) else None
+    if isinstance(bridge, dict) and bridge.get("forecast_effect"):
+        return str(bridge["forecast_effect"])
+    try:
+        return _pinned_simulation_policy(ReportManager._get_report_folder(report.report_id))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _simulation_record_ref(report):
+    """``{sha256, url}`` of this report's gate-passed Simulation After-Action Record, or
+    ``None`` (absent record, failed or missing gate, or an unsafe simulation id)."""
+    sim_id = str(getattr(report, "simulation_id", "") or "").strip()
+    if not sim_id or sim_id in (".", "..") or "/" in sim_id or os.sep in sim_id:
+        return None
+    sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "", sim_id)
+    try:
+        if not _src.is_published(sim_dir):
+            return None
+        audit = _src.load_audit(sim_dir) or {}
+        sha = str(audit.get("sha256") or "").strip()
+        if not sha:
+            md_path = _src.record_paths(sim_dir)["md"]
+            if os.path.islink(md_path) or not os.path.isfile(md_path):
+                return None
+            with open(md_path, "rb") as handle:
+                sha = hashlib.sha256(handle.read()).hexdigest()
+    except (OSError, ValueError, TypeError):
+        return None
+    return {"sha256": sha, "url": f"/api/simulation/{sim_id}/record"}
+
+
 def _report_publication_payload(report):
     """Return report metadata without leaking an unaudited draft body.
 
     Unpublishable reports keep their state and outline skeleton, but both the
     assembled Markdown and every outline section's draft content are withheld.
+
+    ADR 0003 (S3): the payload carries ``forecast_effect`` (the pinned policy, or
+    ``None``) and, only when the Simulation After-Action Record passed its gate,
+    ``simulation_record_ref`` ``{sha256, url}``; the frontend renders the record anchor
+    from the latter and never infers a policy the payload did not state.
     """
     publication = ReportManager.publication_status(report.report_id)
     if any("news context" in str(reason) for reason in publication.get("reasons") or []):
@@ -100,6 +151,10 @@ def _report_publication_payload(report):
             and verified.get("markdown_sha256")
             and verified.get("final_audit_sha256")):
         payload["translations"] = [verified]
+    payload["forecast_effect"] = _report_forecast_effect(report)
+    record_ref = _simulation_record_ref(report)
+    if record_ref:
+        payload["simulation_record_ref"] = record_ref
     return payload
 
 
