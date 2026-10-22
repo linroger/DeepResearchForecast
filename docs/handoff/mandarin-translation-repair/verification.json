@@ -1,5 +1,5 @@
 {
-  "status": "Accepted bounded source/offline implementation; limited synthetic live model checks passed; Git delivery in progress",
+  "status": "Accepted and delivered to remote main; bounded source/offline and synthetic live evidence recorded",
   "base_commit": "589d5d92adad404d18a0e306ee47b1e73e7b7946",
   "delivery_branch": "codex/model-led-mandarin",
   "engine": "model-translation/v1",
@@ -939,5 +939,8 @@
     "root": "/private/tmp/drf-model-review-closure-mtkay4l3",
     "verification_sha256": "f44139e55e2f1cd88fe93b3178d016f4e7b8e5e2d372f1954e677cd3d51b8aba",
     "findings_remaining": []
-  }
+  },
+  "source_commit": "3ae37cfbde808e7c71f02f8eb2568b3bd718e8ef",
+  "remote": "legacy",
+  "remote_main_source_verified": true
 }

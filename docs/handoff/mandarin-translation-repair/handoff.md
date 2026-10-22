@@ -1,8 +1,8 @@
 # Handoff — Mandarin translation repair
 
-**Last updated (UTC):** 2026-10-22T10:03:15.189545+00:00
-**Status:** In progress
-**Current focus:** Commit and publish the accepted isolated model-led translation implementation to main.
+**Last updated (UTC):** 2026-10-22T17:43:45.654460+00:00
+**Status:** Complete
+**Current focus:** Delivered on main; preserve this acceptance record for later translation changes.
 
 ## 1. Request and context
 
@@ -27,8 +27,8 @@ PLANS.md describes the approved repair. Coordinator owns report numeric integrit
 - [x] Verify main/dirty state and read previous handoff/verification boundaries.
 - [x] Capture current failure and producer-consumer coverage map.
 - [x] Implement numeric preservation and visible Mandarin content coverage; final follow-up range/forecast-only retry checks are in progress.
-- [ ] Freeze and verify service/API/UI behavior and independent review.
-- [ ] Safe local activation and scoped commit/push.
+- [x] Freeze and verify service/API/UI behavior and independent review; final440 backend,318 frontend and11 unchanged independent cases are green.
+- [x] Scoped commit/push/main fast-forward verified. This architecture change used bounded synthetic live calls and did not start services or bulk-regenerate saved reports.
 
 ## 5. Findings and decisions
 
@@ -44,11 +44,11 @@ Controlled tests now reach actual translators, persisted readers, Flask publicat
 
 ## 8. Verification summary
 
-Current source gates and follow-up findings are recorded in verification.json and review.md; baseline5339 results remain historical. Final integrated proof must apply to the latest range and structured-repair bytes.
+The final440-case23-suite gate,11-case unchanged independent replay,318 frontend tests and production build2.06s pass. All744 tested code entries match the delivered source, and all six guarded children completed cleanly. Denied font probes are explicit. A live GLM5.3 sample passed translation/review and a further reviewer call rejected altered magnitude and negation. The earlier gates remain historical in verification-legacy.json and verification-model-candidate1.json.
 
 ## 9. Remaining work and next steps
 
-Inspect actual failed audit/source pairs, then finish one shared translation contract through both user-visible tabs. Preserve unrelated work and avoid launching a new paid forecast.
+No implementation or delivery item remains in this approved scope. Future work, if requested, can benchmark representative full saved reports with human semantic review and an agreed call budget; the present three-call synthetic evidence is intentionally bounded. Shared peer simulation work and unrelated newskills remain untouched. A saved backend process may need its normal managed restart to load newly merged code; no service lifecycle or pipeline recovery was performed in this architecture slice.
 
 ## 10. Updates
 
@@ -99,3 +99,5 @@ Inspect actual failed audit/source pairs, then finish one shared translation con
 - 2026-10-23: Relationship corrections are frozen after retained owned3-failure red and40/40 affected green at /private/tmp/drf-model-relation-green-38n_j7zc/evidence. Both typed IDs and name-valued endpoints stay canonical; rendered scalar basis is translated, typed basis/provenance stays unchanged, source credits are selected only in known data/chart schemas. Current two-file hashes match the affected mirror; no assertion or model gate was relaxed. Replacement440-case target gate and unchanged11-case independent rereplay are running.
 
 - 2026-10-23: Independent unchanged11-case probe is11/11 green at /private/tmp/drf-model-review-closure-mtkay4l3/evidence, on the same744-file manifest as final440/440. Reviewer closed the three material findings without weakening cases or legacy positives and accepted the bounded target scope; reviewer makes no live-model claim. Coordinator separately retains the three-call live sample/reviewer evidence. Feature fix_full_mandarin_translation is marked passing within these documented acceptance boundaries. Source is ready for scoped commit/push/main merge; broad semantic infallibility and bulk saved-run regeneration are not claimed.
+
+- 2026-10-22T17:43:45.654460+00:00: Source commit 3ae37cfbde808e7c71f02f8eb2568b3bd718e8ef was pushed as codex/model-led-mandarin and fast-forwarded/pushed to main on legacy (github.com/linroger/DeepResearchForecast). Remote branch and main both independently returned the source SHA. Closing documentation changes no tested application bytes. Delivery record: delivery.json.

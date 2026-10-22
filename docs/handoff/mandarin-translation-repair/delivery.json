@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-10-22T17:43:45.654460+00:00",
+  "status": "Source committed, pushed and fast-forwarded into remote main",
+  "source_commit": "3ae37cfbde808e7c71f02f8eb2568b3bd718e8ef",
+  "branch": "codex/model-led-mandarin",
+  "primary_branch": "main",
+  "remote": "legacy",
+  "remote_url": "https://github.com/linroger/DeepResearchForecast.git",
+  "source_commit_verified_on_remote_main": true,
+  "backend_tests_passed": 440,
+  "frontend_tests_passed": 318,
+  "independent_unchanged_cases_passed": 11,
+  "frontend_build_seconds": 2.06,
+  "code_manifest_entries": 744,
+  "source_drift": [],
+  "guarded_children": 6,
+  "independent_review": "Accepted within bounded target scope; no unresolved material finding",
+  "live_provider": "GLM5.3 synthetic translation+review2calls and reviewer discrimination1call; no full saved report regeneration",
+  "unchanged_application_sources_since_acceptance": true,
+  "peer_changes_excluded": true,
+  "no_service_restart_or_saved_pipeline_resume": true,
+  "closing_documentation_follows_source_commit": true
+}
