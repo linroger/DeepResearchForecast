@@ -1,3 +1,5 @@
+> Active implementation: the approved tools are now installed in this working checkout. See [current activation handoff](../oddsense-active-research/handoff.md) for exact combined-source tests, private configuration and runtime verification. The study below is retained as historical context.
+
 # Oddsense integration handoff
 
 **Last Updated (UTC):** 2026-10-18T12:27:00Z

@@ -1,0 +1,20 @@
+{
+  "installed_root": "/Users/rogerlin/.agents/skills/source-command-research-codebase",
+  "modified_files": [
+    "SKILL.md",
+    "references/python-workflow-study.md"
+  ],
+  "files": {
+    "SKILL.md": "c6b5ca3af333c1eafe80f075768a1701a1fcbe538c62d83d74067594ab53f387",
+    "references/python-workflow-study.md": "c3d3d0dd9580dbdc70a3401ca33b9b262cf7e8c5fb23e8abd295336c961b3807"
+  },
+  "validator": "quick_validate.py",
+  "validator_result": "Skill is valid!",
+  "independent_forward_test": "skill-forward-test.md",
+  "review_result": "F1/F2 resolved; no material defects observed for the tested request.",
+  "post_review_change": "Corrected three example metadata cross-references from step4 to step5; label-only edits self-reviewed, structural validator rerun.",
+  "baseline_recovery": "Reconstructed pre-repair text from observed edits and matched its independent forward-test SHA-256 before generating the full patch.",
+  "unchanged": "No custom agents, automations, or Codex Memory records modified.",
+  "portable_patch_round_trip": "PASS: reverse-check/apply then forward-check/apply reproduces both installed files exactly in an isolated temporary folder.",
+  "patch_whitespace": "Unified diff blank context lines retain their required leading space; excluded only from trailing-whitespace lint, validated by actual patch application."
+}

@@ -1,0 +1,130 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# 环境变量（保护敏感信息）
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Cursor
+.cursor/
+.claude/
+
+# 文档与测试程序
+mydoc/
+mytest/
+
+# 日志文件
+backend/logs/
+*.log
+
+# start.sh 进程 pid 文件
+.backend.pid
+.frontend.pid
+
+# Claude Code / agent session logs & transcripts (MAY CONTAIN SECRETS — never commit)
+logs/
+/logs/
+.remember/
+*.jsonl
+.learnings/
+
+# 本地临时产物（截图/PDF 抓取等）
+/tmp/
+
+# 上传文件（运行时数据：研究档案/模拟/报告）
+backend/uploads/
+# 本地知识图谱数据（嵌入式 FalkorDB / Kuzu 落盘）+ 旧路径残留
+backend/app/uploads/
+graphiti_db/
+# Graphiti 上游源码的本地参考 checkout（运行时用 pip 安装的 graphiti_core，不入库）
+graphiti-0.29.2/
+
+# Docker 数据
+data/
+
+# DeerFlow 2.0 research/agent engine — assembled into ./deer-flow by ./setup.sh
+# (seeded from the vendored RC below, or a pinned upstream clone, + bridge
+# overlay; the built runtime carries a ~900MB venv and is never committed).
+deer-flow/
+# Vendored DeerFlow 2.0 source drop (the exact build the bridge targets). It is
+# the preferred seed for ./setup.sh but is a large third-party tree, so it is
+# kept local-only rather than committed. Drop a newer deer-flow-2.0-* here to
+# pin a different build.
+deer-flow-2.0-m1-rc3/
+deer-flow-2.0-*/
+# 当前的 vendored DeerFlow 2.0 正式版源码（setup.sh DEERFLOW_VENDOR_DIR 默认指向此处；
+# 大体量第三方源码树，保持 local-only 不入库）
+deer-flow-2.0.0/
+
+# Local agent/session artifacts (never commit)
+CLAUDE.md
+**/CLAUDE.md
+handoff.md
+
+# Foglamp codebase scan state (the lock file contains a private edit token)
+.foglamp/
+# linear-engine / search-tool runtime caches
+deerflow_bridge/.cache/
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+bower_components/
+jspm_packages/
+site-packages/
+coverage/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

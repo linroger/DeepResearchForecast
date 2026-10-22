@@ -1,0 +1,38 @@
+{
+  "observed_utc": "2026-10-15T20:26:34.010724+00:00",
+  "source_commit": "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+  "current_main_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "note": "Includes later committed source changes and any working-tree edits; no source bytes were changed by this study.",
+  "files": [
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "core_sha256": "f5bd4154c48f35bcb388f09f42146009ee8847e6f3cef2c68712d49ac749dddd",
+      "current_checkout_sha256": "c1112bde148628c901e6ca68a755a9044bba0122545de1e124804c8872f0483e"
+    },
+    {
+      "path": "backend/tests/test_drf2_skills_config.py",
+      "core_sha256": "9ab3ab71d3ab244e74afbc0c064a0a3d0322b2560af96e53b632ca1d7c7db90d",
+      "current_checkout_sha256": "032e409078f23fcbb02129c116b42b73bd02f0f0958df69912f8776eda7b5061"
+    },
+    {
+      "path": "backend/tests/test_legacy_official_data.py",
+      "core_sha256": "8a89c16a8ad6a69f85e34485258e06efd64f067b469a31b8aac55aaddf255758",
+      "current_checkout_sha256": "d46b59e3a114cf7a795f11535be31b672416a93e725df7ce2c5e7a896b864c67"
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3.py",
+      "core_sha256": "129ae923d9ea53b5d956c8f27eadc881d972a0a0e44b14b346ed7de1acc85610",
+      "current_checkout_sha256": "d8070f98bbf97cc6a45694ea3cd572e539c2c01df5850f9491d78a5dacf577eb"
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "core_sha256": "4608299a7a125c563371d622282f52165d2f64598d679f51e77c008ee4cc3532",
+      "current_checkout_sha256": "42da5160e09135627214bbc67747511ded67ba59193e884e0cabd5ee823e0e8d"
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "core_sha256": "18896eaaa89991803e3f7396488de2f4065234bb93a5f24f36a35d19548594ab",
+      "current_checkout_sha256": "ef1cace336782afc558034873c767438f97e323524c443ba4eecb4948dec824c"
+    }
+  ]
+}

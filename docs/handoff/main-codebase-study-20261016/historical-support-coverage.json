@@ -1,0 +1,1086 @@
+{
+  "historical_source_commit": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "original_inventory_sha256": "cbb208d70f8ab80cfe85463d58459d32f918d0f7601dd92bbcc9d8f62e97fe09",
+  "original_inventory_path": "docs/handoff/main-codebase-study-20261011/python-inventory.json",
+  "purpose": "Portable excerpt of the11 historical full-read records already matched independently to unchanged core source; not new current-session reads.",
+  "files": [
+    {
+      "path": "backend/app/services/requirement_spec.py",
+      "sha256": "8f7d944f892ae52a97b7b3f3898540082d7d085fa818bb25c7fb2ae4c73a8f97",
+      "lines": 105,
+      "bytes": 4314,
+      "owner": "coordinator",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "_cjk_ratio",
+          "kind": "FunctionDef",
+          "line": 25,
+          "end_line": 31
+        },
+        {
+          "name": "detect_output_language",
+          "kind": "FunctionDef",
+          "line": 34,
+          "end_line": 45
+        },
+        {
+          "name": "_parse_binary_min",
+          "kind": "FunctionDef",
+          "line": 48,
+          "end_line": 64
+        },
+        {
+          "name": "_parse_page_budget",
+          "kind": "FunctionDef",
+          "line": 67,
+          "end_line": 82
+        },
+        {
+          "name": "parse_requirement_spec",
+          "kind": "FunctionDef",
+          "line": 85,
+          "end_line": 105
+        }
+      ],
+      "imports": [
+        "__future__",
+        "re",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          105
+        ]
+      ],
+      "coverage_receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/services/text_processor.py",
+      "sha256": "7c39d3586169b396afdc85816ea555f5846789e32cf6e7046e12e241b94a4627",
+      "lines": 86,
+      "bytes": 2924,
+      "owner": "coordinator",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "TextProcessor",
+          "kind": "ClassDef",
+          "line": 15,
+          "end_line": 85
+        }
+      ],
+      "imports": [
+        "config",
+        "re",
+        "typing",
+        "utils.file_parser"
+      ],
+      "read_ranges": [
+        [
+          1,
+          86
+        ]
+      ],
+      "coverage_receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/atomic.py",
+      "sha256": "aade316f53664d993e64b099d429a663a81b59a3c1aafa5987822546a500cae8",
+      "lines": 77,
+      "bytes": 2476,
+      "owner": "coordinator",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "write_text_atomic",
+          "kind": "FunctionDef",
+          "line": 20,
+          "end_line": 50
+        },
+        {
+          "name": "write_json_atomic",
+          "kind": "FunctionDef",
+          "line": 53,
+          "end_line": 77
+        }
+      ],
+      "imports": [
+        "__future__",
+        "json",
+        "os",
+        "tempfile",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          77
+        ]
+      ],
+      "coverage_receipts": [
+        "coordinator-coverage.json",
+        "orchestrator-foundation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/dates.py",
+      "sha256": "58822ea54caaa7516f852e9c74ad5a628bac106c5be2245e9ea6d287f522b615",
+      "lines": 69,
+      "bytes": 2636,
+      "owner": "coordinator",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "_make",
+          "kind": "FunctionDef",
+          "line": 27,
+          "end_line": 35
+        },
+        {
+          "name": "parse_as_of",
+          "kind": "FunctionDef",
+          "line": 38,
+          "end_line": 69
+        }
+      ],
+      "imports": [
+        "__future__",
+        "datetime",
+        "re",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          69
+        ]
+      ],
+      "coverage_receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/llm_client.py",
+      "sha256": "c943411e6f742f00f80228024398621147dcf2c070fe83b09bda5ebff914939f",
+      "lines": 1135,
+      "bytes": 58351,
+      "owner": "operations",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "llm_call_timeout",
+          "kind": "FunctionDef",
+          "line": 74,
+          "end_line": 88
+        },
+        {
+          "name": "_err_brief",
+          "kind": "FunctionDef",
+          "line": 91,
+          "end_line": 101
+        },
+        {
+          "name": "_is_content_filter",
+          "kind": "FunctionDef",
+          "line": 126,
+          "end_line": 129
+        },
+        {
+          "name": "_is_quota",
+          "kind": "FunctionDef",
+          "line": 145,
+          "end_line": 149
+        },
+        {
+          "name": "_cb_tripped",
+          "kind": "FunctionDef",
+          "line": 152,
+          "end_line": 155
+        },
+        {
+          "name": "_cb_record_422",
+          "kind": "FunctionDef",
+          "line": 158,
+          "end_line": 165
+        },
+        {
+          "name": "_cb_record_429",
+          "kind": "FunctionDef",
+          "line": 168,
+          "end_line": 176
+        },
+        {
+          "name": "_cb_reset",
+          "kind": "FunctionDef",
+          "line": 179,
+          "end_line": 184
+        },
+        {
+          "name": "_is_deterministic_auth_error",
+          "kind": "FunctionDef",
+          "line": 198,
+          "end_line": 208
+        },
+        {
+          "name": "_is_deterministic_invalid_request_error",
+          "kind": "FunctionDef",
+          "line": 211,
+          "end_line": 226
+        },
+        {
+          "name": "_retry_delay",
+          "kind": "FunctionDef",
+          "line": 233,
+          "end_line": 244
+        },
+        {
+          "name": "LLMClient",
+          "kind": "ClassDef",
+          "line": 247,
+          "end_line": 1135
+        }
+      ],
+      "imports": [
+        "config",
+        "contextlib",
+        "contextvars",
+        "httpx",
+        "json",
+        "logger",
+        "openai",
+        "os",
+        "re",
+        "subprocess",
+        "telemetry",
+        "threading",
+        "time",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          1135
+        ]
+      ],
+      "coverage_receipts": [
+        "operations-coverage.json",
+        "ui-api-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/logger.py",
+      "sha256": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+      "lines": 153,
+      "bytes": 4929,
+      "owner": "coordinator",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "ClosedStreamSafeHandler",
+          "kind": "ClassDef",
+          "line": 12,
+          "end_line": 31
+        },
+        {
+          "name": "_ensure_utf8_stdout",
+          "kind": "FunctionDef",
+          "line": 34,
+          "end_line": 44
+        },
+        {
+          "name": "setup_logger",
+          "kind": "FunctionDef",
+          "line": 51,
+          "end_line": 116
+        },
+        {
+          "name": "get_logger",
+          "kind": "FunctionDef",
+          "line": 119,
+          "end_line": 132
+        },
+        {
+          "name": "debug",
+          "kind": "FunctionDef",
+          "line": 140,
+          "end_line": 141
+        },
+        {
+          "name": "info",
+          "kind": "FunctionDef",
+          "line": 143,
+          "end_line": 144
+        },
+        {
+          "name": "warning",
+          "kind": "FunctionDef",
+          "line": 146,
+          "end_line": 147
+        },
+        {
+          "name": "error",
+          "kind": "FunctionDef",
+          "line": 149,
+          "end_line": 150
+        },
+        {
+          "name": "critical",
+          "kind": "FunctionDef",
+          "line": 152,
+          "end_line": 153
+        }
+      ],
+      "imports": [
+        "logging",
+        "logging.handlers",
+        "os",
+        "sys"
+      ],
+      "read_ranges": [
+        [
+          1,
+          153
+        ]
+      ],
+      "coverage_receipts": [
+        "coordinator-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/oasis_llm.py",
+      "sha256": "bceec7b7122e8d1c436f206e70badea16692f459fc941b47a2eb9be1c927558f",
+      "lines": 616,
+      "bytes": 27907,
+      "owner": "simulation",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "_env_or_config_flag",
+          "kind": "FunctionDef",
+          "line": 41,
+          "end_line": 57
+        },
+        {
+          "name": "_tool_emulation_enabled",
+          "kind": "FunctionDef",
+          "line": 60,
+          "end_line": 62
+        },
+        {
+          "name": "_sim_llm_fallback_enabled",
+          "kind": "FunctionDef",
+          "line": 65,
+          "end_line": 67
+        },
+        {
+          "name": "_tool_schema_summaries",
+          "kind": "FunctionDef",
+          "line": 78,
+          "end_line": 94
+        },
+        {
+          "name": "_tool_names",
+          "kind": "FunctionDef",
+          "line": 97,
+          "end_line": 98
+        },
+        {
+          "name": "_render_tool_prompt",
+          "kind": "FunctionDef",
+          "line": 101,
+          "end_line": 112
+        },
+        {
+          "name": "_has_tool_result",
+          "kind": "FunctionDef",
+          "line": 115,
+          "end_line": 119
+        },
+        {
+          "name": "_parse_tool_call_text",
+          "kind": "FunctionDef",
+          "line": 122,
+          "end_line": 146
+        },
+        {
+          "name": "_estimate_tokens_of",
+          "kind": "FunctionDef",
+          "line": 149,
+          "end_line": 159
+        },
+        {
+          "name": "_build_chat_completion",
+          "kind": "FunctionDef",
+          "line": 162,
+          "end_line": 210
+        },
+        {
+          "name": "_sanitize_messages",
+          "kind": "FunctionDef",
+          "line": 213,
+          "end_line": 225
+        },
+        {
+          "name": "_wrap_openai_empty_guard",
+          "kind": "FunctionDef",
+          "line": 228,
+          "end_line": 253
+        },
+        {
+          "name": "get_llm_fallback_stats",
+          "kind": "FunctionDef",
+          "line": 267,
+          "end_line": 269
+        },
+        {
+          "name": "_record_llm_fallback",
+          "kind": "FunctionDef",
+          "line": 272,
+          "end_line": 298
+        },
+        {
+          "name": "_should_fallback_exc",
+          "kind": "FunctionDef",
+          "line": 301,
+          "end_line": 311
+        },
+        {
+          "name": "_extract_messages_tools",
+          "kind": "FunctionDef",
+          "line": 314,
+          "end_line": 317
+        },
+        {
+          "name": "_fallback_completion",
+          "kind": "FunctionDef",
+          "line": 320,
+          "end_line": 345
+        },
+        {
+          "name": "_wrap_openai_fallback_guard",
+          "kind": "FunctionDef",
+          "line": 348,
+          "end_line": 376
+        },
+        {
+          "name": "CLIModel",
+          "kind": "ClassDef",
+          "line": 379,
+          "end_line": 478
+        },
+        {
+          "name": "_resolve_provider",
+          "kind": "FunctionDef",
+          "line": 481,
+          "end_line": 487
+        },
+        {
+          "name": "_create_openai_model",
+          "kind": "FunctionDef",
+          "line": 490,
+          "end_line": 532
+        },
+        {
+          "name": "_inject_coding_agent_ua",
+          "kind": "FunctionDef",
+          "line": 535,
+          "end_line": 554
+        },
+        {
+          "name": "create_oasis_model",
+          "kind": "FunctionDef",
+          "line": 557,
+          "end_line": 600
+        },
+        {
+          "name": "get_oasis_semaphore",
+          "kind": "FunctionDef",
+          "line": 603,
+          "end_line": 616
+        }
+      ],
+      "imports": [
+        "asyncio",
+        "camel.models",
+        "camel.models.openai_model",
+        "camel.types",
+        "config",
+        "json",
+        "llm_client",
+        "logger",
+        "math",
+        "openai",
+        "openai.types.chat.chat_completion",
+        "os",
+        "time",
+        "typing",
+        "uuid"
+      ],
+      "read_ranges": [
+        [
+          1,
+          616
+        ]
+      ],
+      "coverage_receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/prediction_markets.py",
+      "sha256": "39fabbe003ba1d5741ca3795939da27f4fb39b9b49ea508b743ce6d61c103081",
+      "lines": 884,
+      "bytes": 46673,
+      "owner": "operations",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "_backoff_sleep",
+          "kind": "FunctionDef",
+          "line": 50,
+          "end_line": 52
+        },
+        {
+          "name": "_cfg",
+          "kind": "FunctionDef",
+          "line": 60,
+          "end_line": 66
+        },
+        {
+          "name": "_coerce_float",
+          "kind": "FunctionDef",
+          "line": 69,
+          "end_line": 77
+        },
+        {
+          "name": "_as_list",
+          "kind": "FunctionDef",
+          "line": 80,
+          "end_line": 91
+        },
+        {
+          "name": "_extract_json_payload",
+          "kind": "FunctionDef",
+          "line": 94,
+          "end_line": 117
+        },
+        {
+          "name": "_yes_price",
+          "kind": "FunctionDef",
+          "line": 120,
+          "end_line": 129
+        },
+        {
+          "name": "_fresh_yes_price",
+          "kind": "FunctionDef",
+          "line": 132,
+          "end_line": 143
+        },
+        {
+          "name": "_parse_resolution",
+          "kind": "FunctionDef",
+          "line": 146,
+          "end_line": 184
+        },
+        {
+          "name": "_cap_per_event",
+          "kind": "FunctionDef",
+          "line": 187,
+          "end_line": 206
+        },
+        {
+          "name": "PolymarketClient",
+          "kind": "ClassDef",
+          "line": 209,
+          "end_line": 562
+        },
+        {
+          "name": "_esc_cell",
+          "kind": "FunctionDef",
+          "line": 566,
+          "end_line": 568
+        },
+        {
+          "name": "_requote_move",
+          "kind": "FunctionDef",
+          "line": 571,
+          "end_line": 577
+        },
+        {
+          "name": "render_markets_block",
+          "kind": "FunctionDef",
+          "line": 580,
+          "end_line": 626
+        },
+        {
+          "name": "_salient_phrases",
+          "kind": "FunctionDef",
+          "line": 660,
+          "end_line": 696
+        },
+        {
+          "name": "derive_market_queries",
+          "kind": "FunctionDef",
+          "line": 699,
+          "end_line": 733
+        },
+        {
+          "name": "_clean_query",
+          "kind": "FunctionDef",
+          "line": 742,
+          "end_line": 746
+        },
+        {
+          "name": "derive_market_queries_llm",
+          "kind": "FunctionDef",
+          "line": 749,
+          "end_line": 806
+        },
+        {
+          "name": "score_market_relevance",
+          "kind": "FunctionDef",
+          "line": 810,
+          "end_line": 884
+        }
+      ],
+      "imports": [
+        "__future__",
+        "config",
+        "httpx",
+        "json",
+        "logging",
+        "random",
+        "re",
+        "time",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          884
+        ]
+      ],
+      "coverage_receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/sim_timeline.py",
+      "sha256": "1b067727cdfb59ee27fbc3e62d50e19bf451b5b7e65650dde5e967f1829b98c3",
+      "lines": 570,
+      "bytes": 22825,
+      "owner": "simulation",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "HorizonResult",
+          "kind": "ClassDef",
+          "line": 57,
+          "end_line": 62
+        },
+        {
+          "name": "RoundPeriod",
+          "kind": "ClassDef",
+          "line": 66,
+          "end_line": 70
+        },
+        {
+          "name": "SimulationTimeline",
+          "kind": "ClassDef",
+          "line": 74,
+          "end_line": 90
+        },
+        {
+          "name": "_to_date",
+          "kind": "FunctionDef",
+          "line": 98,
+          "end_line": 105
+        },
+        {
+          "name": "_add_months",
+          "kind": "FunctionDef",
+          "line": 108,
+          "end_line": 114
+        },
+        {
+          "name": "_month_end",
+          "kind": "FunctionDef",
+          "line": 117,
+          "end_line": 120
+        },
+        {
+          "name": "_quarter_end",
+          "kind": "FunctionDef",
+          "line": 126,
+          "end_line": 130
+        },
+        {
+          "name": "_cn_to_int",
+          "kind": "FunctionDef",
+          "line": 145,
+          "end_line": 161
+        },
+        {
+          "name": "_h_dec31",
+          "kind": "FunctionDef",
+          "line": 173,
+          "end_line": 174
+        },
+        {
+          "name": "_h_jun30",
+          "kind": "FunctionDef",
+          "line": 177,
+          "end_line": 178
+        },
+        {
+          "name": "_h_quarter_qy",
+          "kind": "FunctionDef",
+          "line": 181,
+          "end_line": 182
+        },
+        {
+          "name": "_h_quarter_yq",
+          "kind": "FunctionDef",
+          "line": 185,
+          "end_line": 186
+        },
+        {
+          "name": "_h_quarter_cjk",
+          "kind": "FunctionDef",
+          "line": 189,
+          "end_line": 191
+        },
+        {
+          "name": "_h_half_hy",
+          "kind": "FunctionDef",
+          "line": 194,
+          "end_line": 196
+        },
+        {
+          "name": "_h_half_yh",
+          "kind": "FunctionDef",
+          "line": 199,
+          "end_line": 201
+        },
+        {
+          "name": "_h_half_cjk",
+          "kind": "FunctionDef",
+          "line": 204,
+          "end_line": 206
+        },
+        {
+          "name": "_h_month_en",
+          "kind": "FunctionDef",
+          "line": 209,
+          "end_line": 211
+        },
+        {
+          "name": "_h_month_cjk",
+          "kind": "FunctionDef",
+          "line": 214,
+          "end_line": 215
+        },
+        {
+          "name": "_relative_target",
+          "kind": "FunctionDef",
+          "line": 248,
+          "end_line": 263
+        },
+        {
+          "name": "extract_horizon",
+          "kind": "FunctionDef",
+          "line": 266,
+          "end_line": 335
+        },
+        {
+          "name": "default_horizon",
+          "kind": "FunctionDef",
+          "line": 338,
+          "end_line": 344
+        },
+        {
+          "name": "select_calendar_unit",
+          "kind": "FunctionDef",
+          "line": 352,
+          "end_line": 381
+        },
+        {
+          "name": "_next_grid",
+          "kind": "FunctionDef",
+          "line": 389,
+          "end_line": 406
+        },
+        {
+          "name": "_slot_label",
+          "kind": "FunctionDef",
+          "line": 409,
+          "end_line": 424
+        },
+        {
+          "name": "_period_label",
+          "kind": "FunctionDef",
+          "line": 427,
+          "end_line": 432
+        },
+        {
+          "name": "build_round_periods",
+          "kind": "FunctionDef",
+          "line": 435,
+          "end_line": 479
+        },
+        {
+          "name": "_field",
+          "kind": "FunctionDef",
+          "line": 487,
+          "end_line": 488
+        },
+        {
+          "name": "round_for_date",
+          "kind": "FunctionDef",
+          "line": 491,
+          "end_line": 510
+        },
+        {
+          "name": "build_timeline",
+          "kind": "FunctionDef",
+          "line": 518,
+          "end_line": 570
+        }
+      ],
+      "imports": [
+        "__future__",
+        "bisect",
+        "calendar",
+        "dataclasses",
+        "dates",
+        "datetime",
+        "math",
+        "re",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          570
+        ]
+      ],
+      "coverage_receipts": [
+        "simulation-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/telemetry.py",
+      "sha256": "d1d1e63fc826be98467666e58542338914121011001f205fdfbb1be386756318",
+      "lines": 594,
+      "bytes": 28062,
+      "owner": "operations",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "set_run_context",
+          "kind": "FunctionDef",
+          "line": 42,
+          "end_line": 55
+        },
+        {
+          "name": "set_stage",
+          "kind": "FunctionDef",
+          "line": 58,
+          "end_line": 59
+        },
+        {
+          "name": "get_run_context",
+          "kind": "FunctionDef",
+          "line": 62,
+          "end_line": 63
+        },
+        {
+          "name": "active_run_ids",
+          "kind": "FunctionDef",
+          "line": 66,
+          "end_line": 69
+        },
+        {
+          "name": "_sole_active_run",
+          "kind": "FunctionDef",
+          "line": 72,
+          "end_line": 77
+        },
+        {
+          "name": "_clear_active_runs",
+          "kind": "FunctionDef",
+          "line": 80,
+          "end_line": 83
+        },
+        {
+          "name": "BudgetExceeded",
+          "kind": "ClassDef",
+          "line": 86,
+          "end_line": 87
+        },
+        {
+          "name": "_cost_overrides",
+          "kind": "FunctionDef",
+          "line": 128,
+          "end_line": 155
+        },
+        {
+          "name": "estimate_cost",
+          "kind": "FunctionDef",
+          "line": 158,
+          "end_line": 167
+        },
+        {
+          "name": "cost_is_estimated",
+          "kind": "FunctionDef",
+          "line": 170,
+          "end_line": 173
+        },
+        {
+          "name": "_Counter",
+          "kind": "ClassDef",
+          "line": 178,
+          "end_line": 205
+        },
+        {
+          "name": "_RunMeter",
+          "kind": "ClassDef",
+          "line": 209,
+          "end_line": 215
+        },
+        {
+          "name": "LLMMeter",
+          "kind": "ClassDef",
+          "line": 224,
+          "end_line": 399
+        },
+        {
+          "name": "check_budget",
+          "kind": "FunctionDef",
+          "line": 403,
+          "end_line": 426
+        },
+        {
+          "name": "estimate_tokens",
+          "kind": "FunctionDef",
+          "line": 430,
+          "end_line": 434
+        },
+        {
+          "name": "build_stage_telemetry",
+          "kind": "FunctionDef",
+          "line": 445,
+          "end_line": 488
+        },
+        {
+          "name": "render_telemetry_appendix",
+          "kind": "FunctionDef",
+          "line": 491,
+          "end_line": 528
+        },
+        {
+          "name": "LLMCache",
+          "kind": "ClassDef",
+          "line": 536,
+          "end_line": 594
+        }
+      ],
+      "imports": [
+        "__future__",
+        "atomic",
+        "config",
+        "contextlib",
+        "contextvars",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "logging",
+        "os",
+        "threading",
+        "time",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          594
+        ]
+      ],
+      "coverage_receipts": [
+        "operations-coverage.json"
+      ]
+    },
+    {
+      "path": "backend/app/utils/token_budget.py",
+      "sha256": "248a036a8ebdfb9ce0addde58bd5c5a276db3b1b0f8c328905626f1eeecbea8c",
+      "lines": 174,
+      "bytes": 7395,
+      "owner": "operations",
+      "read_status": "full-read-receipted",
+      "symbols": [
+        {
+          "name": "_coerce_chars_per_token",
+          "kind": "FunctionDef",
+          "line": 30,
+          "end_line": 36
+        },
+        {
+          "name": "estimate_tokens",
+          "kind": "FunctionDef",
+          "line": 39,
+          "end_line": 47
+        },
+        {
+          "name": "truncate_to_tokens",
+          "kind": "FunctionDef",
+          "line": 50,
+          "end_line": 66
+        },
+        {
+          "name": "context_budget",
+          "kind": "FunctionDef",
+          "line": 69,
+          "end_line": 74
+        },
+        {
+          "name": "slice_budget_chars",
+          "kind": "FunctionDef",
+          "line": 77,
+          "end_line": 120
+        },
+        {
+          "name": "clamp_chars",
+          "kind": "FunctionDef",
+          "line": 123,
+          "end_line": 137
+        },
+        {
+          "name": "fit_to_budget",
+          "kind": "FunctionDef",
+          "line": 140,
+          "end_line": 174
+        }
+      ],
+      "imports": [
+        "__future__",
+        "math",
+        "typing"
+      ],
+      "read_ranges": [
+        [
+          1,
+          174
+        ]
+      ],
+      "coverage_receipts": [
+        "operations-coverage.json"
+      ]
+    }
+  ]
+}

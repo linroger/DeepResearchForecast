@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-10-22T08:41:08.255421+00:00",
+  "primary_head_preserved": true,
+  "staged_files": [],
+  "unrelated_concurrent_drift": [
+    "ISSUES_LIST_ZCODE.md",
+    "backend/tests/test_bridge_prediction_markets.py"
+  ],
+  "active_frozen_paths": 39,
+  "all_390_python_sources_match_gather_proof": true,
+  "backend_cases_passed": 796,
+  "backend_failures": 0,
+  "backend_skips": 0,
+  "frontend_cases_passed": 187,
+  "frontend_build": "passed",
+  "guard_parent_exit": 0,
+  "guard_parent_shutdown_complete": true,
+  "guard_identity_preserved": true,
+  "source_drift": [],
+  "guard_events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 26,
+    "blocked:process:subprocess.Popen": 2
+  },
+  "child_records": 26,
+  "child_normal": 24,
+  "child_intentional_crash_exit": 23,
+  "child_intentional_termination_exit": -15,
+  "interrupted_receipts": "started-only; no false shutdown claim",
+  "evidence_sha256": {
+    "/private/tmp/drf-oddsense-active-final-6x_2v01i/evidence-registered/completed.json": "261225616df64234acbfa73eca2b106fdcb9064e17367a319f82f14aad6eaab8",
+    "/private/tmp/drf-oddsense-active-final-6x_2v01i/evidence-registered/junit.xml": "821efd77abdef258a741c081a0101b3b1ecfe4f5a41744d04885c5679af19c28",
+    "/private/tmp/drf-oddsense-readiness-main-d9k2_v43/evidence/completed.json": "8c3dc4bf3f3e808cbf1c289925efaca19802941f721d671a5a67f82c7d5c5a66"
+  }
+}

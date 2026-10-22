@@ -1,0 +1,62 @@
+[
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+    "read_ranges": [
+      [
+        7527,
+        13492
+      ]
+    ],
+    "depth": "complete line-by-line static reading of all 5966 assigned class lines and all 70 methods; control-flow, artifacts, validation, alternatives and recoverable stops traced; no runtime validation",
+    "notes": "Frozen bytes match the authorized git commit. Untruncated class chunks: 7527-7810, 7811-8150, 8151-8490, 8491-8761, 8762-9108, 9109-9444, 9445-9797, 9798-10126, 10127-10472, 10473-10840, 10841-11180, 11181-11520, 11521-11882, 11883-12220, 12221-12540, 12541-12880, 12881-13180, 13181-13492. An initial truncated combined read was replaced by these reads. Supplemental same-file context reads (inclusive): 87-115, 860-935, 1100-1155, 3140-3165, 3280-3340, 3811-3905, 7420-7526. They were inspected for constants, paths, loader, timing, schema and completion probes; no completeness claim for the rest of this module. Symbol searches outside those spans are navigation only."
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+    "read_ranges": [
+      [
+        1,
+        335
+      ],
+      [
+        389,
+        460
+      ],
+      [
+        779,
+        920
+      ]
+    ],
+    "depth": "targeted complete reading of listed line ranges; caller and consumer boundary tracing only",
+    "notes": "Targeted boundary reading: admission/lifecycle/status endpoints, dossier, artifact serving, and progress. Some adjacent helper fragments were read; this is not whole-module coverage."
+  },
+  {
+    "path": "backend/app/api/sdk.py",
+    "sha256": "56ebd542e406b6399a94a2225afda48c3ee9e432f0610ac9fd1ee67ef530fcb1",
+    "read_ranges": [
+      [
+        75,
+        165
+      ]
+    ],
+    "depth": "targeted complete reading of listed line ranges; caller and consumer boundary tracing only",
+    "notes": "Targeted SDK admission reading and initial status-handler fragment; no whole-module or SDK-client completeness claim."
+  },
+  {
+    "path": "backend/app/__init__.py",
+    "sha256": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
+    "read_ranges": [
+      [
+        116,
+        147
+      ],
+      [
+        198,
+        218
+      ]
+    ],
+    "depth": "targeted complete reading of listed line ranges; caller and consumer boundary tracing only",
+    "notes": "Targeted lifecycle enablement/bootstrap and blueprint mounting context; no whole-module coverage."
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "source_commit": "c20ec60909fa1aa15154bb6fdb3fdb71c421e10e",
+  "checked_utc": "2026-10-11T16:17:27.369600+00:00",
+  "python_files_compared_to_git_blobs": 326,
+  "python_files_hashed": 326,
+  "python_files_ast_parsed": 326,
+  "errors": [],
+  "application_imports": 0,
+  "application_tests_run": 0,
+  "provider_calls": 0,
+  "meaning": "Static source integrity and parse checks; not runtime acceptance."
+}

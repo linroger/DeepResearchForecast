@@ -1,0 +1,330 @@
+[
+  {
+    "path": "backend/app/services/agent_dynamics.py",
+    "sha256": "dadb2a3449c367d18793b809bc715fe69722a960b327d285341fd2bd3722e3e4",
+    "read_ranges": [
+      [
+        1,
+        349
+      ],
+      [
+        350,
+        405
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Pure received-interaction affect dynamics and deterministic realism helpers."
+  },
+  {
+    "path": "backend/app/services/decision_channel.py",
+    "sha256": "a8a3e1088ab631b35332c68404b2115c3aaa60961d5ed917889fecbd6018da60",
+    "read_ranges": [
+      [
+        1,
+        400
+      ],
+      [
+        401,
+        775
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Active rosters and elicitation-to-serial-replay projection, validity and forecast-effect policy."
+  },
+  {
+    "path": "backend/app/services/ensemble.py",
+    "sha256": "04ecbeeffe12490fbe3cdaf2d383800fbb065191c5b84cebb0803848e5f0a207",
+    "read_ranges": [
+      [
+        1,
+        419
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Scenario alignment, seed-run aggregation and binary multi-model pooling."
+  },
+  {
+    "path": "backend/app/services/oasis_profile_generator.py",
+    "sha256": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
+    "read_ranges": [
+      [
+        1,
+        550
+      ],
+      [
+        551,
+        1100
+      ],
+      [
+        1101,
+        1650
+      ],
+      [
+        1651,
+        2200
+      ],
+      [
+        2201,
+        2750
+      ],
+      [
+        2751,
+        3264
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Canonical role-only profiles, legacy graph/LLM/rule/stub alternatives, ordered preview prefix, audience, CSV/JSON serialization and manifest validation."
+  },
+  {
+    "path": "backend/app/services/simulation_config_generator.py",
+    "sha256": "79155e6fa7a004ac7d5255a8a0285f53e4e853535f3e9e756861edb2553987bc",
+    "read_ranges": [
+      [
+        1,
+        500
+      ],
+      [
+        501,
+        1000
+      ],
+      [
+        1001,
+        1500
+      ],
+      [
+        1501,
+        2050
+      ],
+      [
+        2051,
+        2600
+      ],
+      [
+        2601,
+        3300
+      ],
+      [
+        3301,
+        4006
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Time/event/behavior/platform schemas, canonical/legacy evidence boundary, follows, scheduling, audience and shared brief."
+  },
+  {
+    "path": "backend/app/services/simulation_ipc.py",
+    "sha256": "181faf1829b1ad54a842637725ff4132482655d4ce4619b1fa606567478d7254",
+    "read_ranges": [
+      [
+        1,
+        380
+      ],
+      [
+        381,
+        732
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Atomic filesystem command/response IPC, cancellation, lifecycle and telemetry."
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "sha256": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+    "read_ranges": [
+      [
+        1,
+        550
+      ],
+      [
+        551,
+        1050
+      ],
+      [
+        1051,
+        1544
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Cast admission, preparation, profiles/config/context seals and durable state."
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+    "read_ranges": [
+      [
+        1,
+        550
+      ],
+      [
+        551,
+        1100
+      ],
+      [
+        1101,
+        1650
+      ],
+      [
+        1651,
+        2200
+      ],
+      [
+        2201,
+        2650
+      ],
+      [
+        2651,
+        3021
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Parent subprocess/monitor, admission seals, persisted state, completion, restarts, process cleanup, summary artifacts and IPC interview facade."
+  },
+  {
+    "path": "backend/app/services/world_delta.py",
+    "sha256": "016c537267eacbe3a068d1a81d1813acc15d278686bca68c8ea3ef4f9454c2b1",
+    "read_ranges": [
+      [
+        1,
+        80
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Qualitative event/post/momentum digest for next calendar round; numeric shares remain in audit artifacts."
+  },
+  {
+    "path": "backend/app/services/worldstate.py",
+    "sha256": "3fafe510cb0e544bbb265ecc31027218a1ba7954828e35795d23c517fb25e351",
+    "read_ranges": [
+      [
+        1,
+        304
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Scenario commitments, typed round validity, inertia/entropy and convergence policy."
+  },
+  {
+    "path": "backend/app/utils/oasis_llm.py",
+    "sha256": "bceec7b7122e8d1c436f206e70badea16692f459fc941b47a2eb9be1c927558f",
+    "read_ranges": [
+      [
+        1,
+        320
+      ],
+      [
+        321,
+        616
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "CAMEL model bridge, native/text tool calls, empty-content guards, provider fallback and semaphore allocation."
+  },
+  {
+    "path": "backend/app/utils/sim_timeline.py",
+    "sha256": "1b067727cdfb59ee27fbc3e62d50e19bf451b5b7e65650dde5e967f1829b98c3",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        570
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Horizon extraction and natural calendar periods over (as_of,horizon]."
+  },
+  {
+    "path": "backend/scripts/action_logger.py",
+    "sha256": "3dedcca3c76a11d4fb0ceafdd55ed3c3acae3aa299567fde363060c954f3f25e",
+    "read_ranges": [
+      [
+        1,
+        323
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Platform event/action JSONL logger and legacy compatibility interface."
+  },
+  {
+    "path": "backend/scripts/run_parallel_simulation.py",
+    "sha256": "bad80718fb2c0292d7dcd5f3c46b20742327b171797dde379e71bdb95c809206",
+    "read_ranges": [
+      [
+        1,
+        600
+      ],
+      [
+        601,
+        1200
+      ],
+      [
+        1201,
+        1800
+      ],
+      [
+        1801,
+        2400
+      ],
+      [
+        2401,
+        3000
+      ],
+      [
+        3001,
+        3600
+      ],
+      [
+        3601,
+        4200
+      ],
+      [
+        4201,
+        4800
+      ],
+      [
+        4801,
+        5450
+      ],
+      [
+        5451,
+        6154
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Full source reviewed: shared asyncio platform loops, model/tool guards, role attestation, DB-to-log extraction, reactions, in-band/post-hoc world evolution, checkpoints, telemetry and command-mode lifecycle."
+  },
+  {
+    "path": "backend/scripts/run_reddit_simulation.py",
+    "sha256": "841444e7f0c25203bbd1abb70aeca4b9ff43ac635b624d1947d52246f456cdaa",
+    "read_ranges": [
+      [
+        1,
+        560
+      ],
+      [
+        561,
+        1108
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Full source reviewed: separately selectable hours-style Reddit runner, fresh DB, global action set, trace logger and local interview IPC; does not use the parallel calendar/resume/reaction machinery."
+  },
+  {
+    "path": "backend/scripts/run_twitter_simulation.py",
+    "sha256": "25a4007a82052f253513c4869e74aab5409a702ace715df11ed106473968466c",
+    "read_ranges": [
+      [
+        1,
+        560
+      ],
+      [
+        561,
+        1117
+      ]
+    ],
+    "depth": "full-source-reviewed",
+    "notes": "Full source reviewed: separately selectable hours-style Twitter runner, six-action set, fresh DB, trace logger and local interview IPC; distinct from Twitter coroutine inside parallel script."
+  }
+]

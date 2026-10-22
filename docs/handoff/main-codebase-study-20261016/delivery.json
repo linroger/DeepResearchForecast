@@ -1,0 +1,24 @@
+{
+  "documentation_branch": "codex/main-architecture-study-20261016",
+  "base_main_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+  "content_commit": "9691e4523c956e5f1e45a46e135145d7dc6d404b",
+  "local_status": "committed",
+  "push_status": "blocked_authentication",
+  "push_attempts": 1,
+  "push_result": {
+    "attempted_utc": "2026-10-15T20:40:54.777232+00:00",
+    "exit_code": 128,
+    "output": "remote: Invalid username or token. Password authentication is not supported for Git operations.\nfatal: Authentication failed for 'https://github.com/linroger/DeepAgentForecast.git/'\n"
+  },
+  "remote_publication_verified": false,
+  "retry_policy": "Do not retry unchanged rejected credentials. No credential from chat or memory was used.",
+  "scope": "Only docs/handoff/main-codebase-study-20261016; shared main checkout and index preserved.",
+  "source_commits": [
+    "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+    "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b"
+  ],
+  "recorded_utc": "2026-10-15T20:41:31.675534+00:00",
+  "content_owned_path_count": 40,
+  "final_owned_path_count": 41,
+  "closing_record": "A local closing commit records the push rejection and final artifact manifest; its identity is the documentation branch head."
+}

@@ -238,5 +238,38 @@
     ],
     "passes": true,
     "note": "Offline: tests/test_world_model*.py, test_agent_decision.py, test_world_update.py, test_world_model_loop.py (2026-10-16). Live (owner-approved, 2026-10-16/17): pipe_d569f211eb14 / sim_d6ebcc77e22d on glm-5.3, 9 monthly rounds, 7 agents: arbiter applied 7/9 (2 provider content-filter rejections committed mechanically), 50 valid decisions with 12 distinct option ids by agency class, one decision per actor per round on both platforms, 11 caused fact changes inside the clamp, rounds 39-140 s vs the 1800 s barrier, dashboard panel + run_summary + report chart/block verified. Evidence: docs/handoff/reflexive-world-state/handoff.md section 7 'Live run'. Follow-ups listed there (section 9)."
+  },
+  {
+    "id": "feature_newsapi_research_evidence",
+    "category": "research",
+    "description": "Both research engines use bounded NewsAPI discovery and optional Reddit context with persisted provider/time/status metadata, fetched-source citations and immutable replay.",
+    "steps": [
+      "Run a controlled forecast through the actual research engine and observe news_search invocation, bounded provider acquisition, publisher-page fetch and cited final research output.",
+      "Verify invalid credentials, rate limits, forbidden social access, empty results, deadlines, disabled mode and duplicate queries retain distinct states without leaking credentials.",
+      "Promote the sealed context generation through the parent and replay/resume without refetch; reject tampering and changed-input reuse."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_cross_platform_market_context",
+    "category": "research",
+    "description": "Research agents compare provider-qualified Polymarket and Kalshi context using current source shapes, honest units and availability without external automatic forecast anchors.",
+    "steps": [
+      "Invoke market_compare with native-shaped current Polymarket/Kalshi responses and retain identity, quote basis, rules, units, times and source links in the sealed context.",
+      "Exercise absent prices, reversed outcomes, native ID collisions, differing horizons/rules, pagination failures and provider access errors without fabricating probabilities or equivalence.",
+      "Trace context into research and report consumers and assert external IDs never reach Gamma/CLOB refresh, automatic anchors or resolution. Record live compatibility separately."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_news_market_context_delivery",
+    "category": "reporting",
+    "description": "The exact sealed news/social/external-market context reaches ordinary, manual, seed and ensemble report entrypoints, audited Markdown and API/UI/export with immutable generation binding.",
+    "steps": [
+      "Run a controlled source-to-research-to-handoff-to-report publication scenario and verify identical provider/capture/source identities and context-only labels at the API and Markdown/PDF export boundary.",
+      "Verify dossier and forecast UI render bounded safe linked evidence with times, source types, explicit empty/unavailable statuses and English/Chinese labels.",
+      "Exercise stale/tampered generations, old handoffs, disabled behavior, multi-track merges and scenario reuse without provider refetch or actor/world-state privilege expansion."
+    ],
+    "passes": true
   }
 ]

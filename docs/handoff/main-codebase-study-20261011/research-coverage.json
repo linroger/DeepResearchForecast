@@ -1,0 +1,642 @@
+[
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "abef7d74ca76ae28b68f5b69dd9fe526191c1e8113e37176da635b77865f2674",
+    "read_ranges": [
+      [
+        1,
+        388
+      ],
+      [
+        389,
+        479
+      ],
+      [
+        480,
+        850
+      ],
+      [
+        851,
+        2100
+      ],
+      [
+        2101,
+        3600
+      ],
+      [
+        3601,
+        5100
+      ],
+      [
+        5101,
+        6600
+      ],
+      [
+        6601,
+        8100
+      ],
+      [
+        8101,
+        9600
+      ],
+      [
+        9601,
+        11100
+      ],
+      [
+        11101,
+        12600
+      ],
+      [
+        12601,
+        14100
+      ],
+      [
+        14101,
+        15700
+      ],
+      [
+        15701,
+        17300
+      ],
+      [
+        17301,
+        17986
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source in recorded chunks. CLI dispatch, legacy research and Track B, source/search receipts, evidence manifest, multipart synthesis, judges, structured extraction, extract-only lineage modes, markets, charts, final actor-intelligence sealing. Initial tool rendering truncated 389-479; that exact gap was separately reread. No uncovered assigned lines."
+  },
+  {
+    "path": "deerflow_bridge/linear_research.py",
+    "sha256": "c0a82f353462ce7cda61d95c5b2393d4e085de57e26cde51259c0ee4f005c4a4",
+    "read_ranges": [
+      [
+        1,
+        1400
+      ],
+      [
+        1401,
+        2850
+      ],
+      [
+        2851,
+        4300
+      ],
+      [
+        4301,
+        5700
+      ],
+      [
+        5701,
+        6379
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. v3.0 persisted plan/gather/gap/synthesize/qa/finalize phases; bounded KiqAgent tool loops, number/source verification, canonical scenario frame, shared digest, section parsing/repair, positional citation projection, unsealed actor extraction, identity reuse and cancellation. No execution."
+  },
+  {
+    "path": "deerflow_bridge/cached_fetch.py",
+    "sha256": "1e187e30f25fc816a4a74dcb629d7d752734cde789a612fc159430cae0c686fb",
+    "read_ranges": [
+      [
+        1,
+        854
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Async web_fetch wrapper, positive disk TTL/LRU cache, source-domain policy, shared attempt/network/negative-cache/singleflight admission; Firecrawl -> Jina -> Exa -> opt-in direct fallback and successful fetch receipts. See report tool and budget sections."
+  },
+  {
+    "path": "deerflow_bridge/search_tools.py",
+    "sha256": "f03651f926dafb4a5d9b80fd9abc59d7f9179631d2bbc972402bb0126cc55f3c",
+    "read_ranges": [
+      [
+        1,
+        746
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Credential-presence routing Serper/Tavily/Firecrawl/DDG, delegate signature adaptation, positive TTL/LRU and negative result handling, shared admission/singleflight and Firecrawl call/rate/retry limits."
+  },
+  {
+    "path": "deerflow_bridge/research_budget.py",
+    "sha256": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+    "read_ranges": [
+      [
+        1,
+        1508
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. SQLite WAL counters, negative and positive ledgers, fetched provenance, provider circuit, exact request claims, heartbeating model/subagent leases, separate tool-run and application-lifetime telemetry; failure-open paths."
+  },
+  {
+    "path": "deerflow_bridge/research_gateway.py",
+    "sha256": "d840bcf83da03cb90f2d718a10d24daedc57194ddd66220ff2cffcaad5ec03a7",
+    "read_ranges": [
+      [
+        1,
+        1300
+      ],
+      [
+        1301,
+        2600
+      ],
+      [
+        2601,
+        3812
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Typed provider gateway with parameter profiles, weighted usage, retries/fallback/deadlines, cache-stable messages; SourceLedger, focused passages and bounded ResearchTools async fetch adaptation. Budget check projects input; actual usage adds output. Timeout releases caller; daemon call can continue."
+  },
+  {
+    "path": "deerflow_bridge/market_tools.py",
+    "sha256": "eed4d54cf31202a07c4ad88091b6f5cdb57292c0001f4b6e9f12c827ea2bc061",
+    "read_ranges": [
+      [
+        1,
+        648
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Keyless Gamma prediction_market_search; market normalization including Yes-leg CLOB identity, process LRU/singleflight and typed verified-empty/transport outcomes, append-only run candidate JSONL."
+  },
+  {
+    "path": "deerflow_bridge/runtime_skill_sync.py",
+    "sha256": "f503ea00d3068cb965cf33dbf80f9ee3e44490a377f56304761365c4a559ab9a",
+    "read_ranges": [
+      [
+        1,
+        615
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Deterministic four-bundle inventories including lazy resources, POSIX lock, staged full public tree, atomic exchange/rollback, managed-name/noise pruning and child-start manifest revalidation."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_lead_agent_overlays.py",
+    "sha256": "33a2ea2df20f216ee08c0c5cc12a09e40fb51f793433d5456e001f741eb06998",
+    "read_ranges": [
+      [
+        1,
+        138
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Idempotent exact-text transforms on lead_agent/agent.py forwarding explicit null trim and active summarization model; upstream shape drift raises. Vendor target absent from frozen tracked source; applied vendor behavior is bounded inference from transform plus test source."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_model_factory_overlays.py",
+    "sha256": "6c43999c3ed8887453743dc901bf599cd329794826e6df7c72aa10e408b8cf93",
+    "read_ranges": [
+      [
+        1,
+        65
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Narrow factory.py transform excluding context_window_tokens from provider constructor fields, with applied/already_applied/missing states and drift rejection; target bytes absent from frozen source."
+  },
+  {
+    "path": "deerflow_bridge/patches/apply_subagent_overlays.py",
+    "sha256": "99518447028caf217b37151b18e10c29516b5bb59fecacb49ed4898defaf94be",
+    "read_ranges": [
+      [
+        1,
+        410
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Client exact AppConfig and same-message usage deltas, task inherited model resolution, executor lifecycle lease and failed terminal classification for provider fallback/typed blocked/all-denied tool outcomes. Vendor targets absent; surrounding vendor implementation not claimed fully reviewed."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/model_concurrency_middleware.py",
+    "sha256": "1401a60a92199ef261bed1e8c663903d38d04bb4b5c5caa189296b47c38a5e17",
+    "read_ranges": [
+      [
+        1,
+        76
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Sync/async exact-call provider permits and async subagent lifecycle adapter using optional research_budget."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/tool_error_handling_middleware.py",
+    "sha256": "1e2ef2ca6ee1b0df1fe72cbe80a712c8eb4f14bc3b74739c319551f4d87f1f65",
+    "read_ranges": [
+      [
+        1,
+        257
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Tool failures become error ToolMessage while GraphBubbleUp propagates; task terminal status stamping; ordered lead/subagent runtime middleware composition and optional deferred/safety/vision middleware."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/title_middleware.py",
+    "sha256": "41f8bf4eb9b380bed5d5220c51f782445c11d5ae7cc376427b34419601635f74",
+    "read_ranges": [
+      [
+        1,
+        194
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Eligibility after first exchange, content normalization and local sync title; async title model under permit with local fallback. Template disables title generation."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/loop_detection_middleware.py",
+    "sha256": "902122f56588c2cfcb8aabe8ed858b65552c5b65647e160e0420af40ee7d9b25",
+    "read_ranges": [
+      [
+        1,
+        635
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Per-run reset, stable tool-set hashes and per-tool frequency limits, deferred warning injection after tool responses, hard-stop metadata clearing, LRU and transient warning caps."
+  },
+  {
+    "path": "deerflow_bridge/patches/middlewares/summarization_middleware.py",
+    "sha256": "ec408ce01976bb98713ceafbfe5a26e19e286249d9fd0da38e58e30e1aa59c12",
+    "read_ranges": [
+      [
+        1,
+        513
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Trim override parser, precompression hooks, recent skill tool-pair rescue, dynamic reminder preservation, nostream model copy and leased summary calls."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/claude_provider.py",
+    "sha256": "90f92212049d800bf1e080b2fe5a5cf64e30a5d8bd3c7d0182818bb872de339f",
+    "read_ranges": [
+      [
+        1,
+        514
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. OAuth-first credential resolution/Bearer setup, billing block, <=4 prompt-cache breakpoints, optional thinking allocation, sync/async bounded rate/server retries and Retry-After cap. Credential values never read."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/credential_loader.py",
+    "sha256": "39630f00ba066ebbadf5b3396936c533217ba5e1ab2d7d2a343521db813ef809",
+    "read_ranges": [
+      [
+        1,
+        278
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. Claude env/FD/override/default-file/macOS Keychain lookup, expiry buffer, Codex top-level/nested token parsing. Only source text read; no credential stores invoked."
+  },
+  {
+    "path": "deerflow_bridge/patches/models/patched_minimax.py",
+    "sha256": "6653c755fe40f1a8dc10474947b65052ed3cb6e7b628e0567fdee7cdbc2965a8",
+    "read_ranges": [
+      [
+        1,
+        239
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source. ChatOpenAI adapter enforces reasoning_split, strips user message names, maps split/inline reasoning and stream usage into LangChain messages."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/conftest.py",
+    "sha256": "2fc6c4c80a0cb84c7bdfe4685d5b1cff74147cc9a08f2039937205cc6e8d3a48",
+    "read_ranges": [
+      [
+        1,
+        23
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source only. Adds installed harness paths and executor MagicMock shim to isolate imports; not loaded or collected."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_client_usage_overlay.py",
+    "sha256": "d1e79ec2208b4f8c52ebf361e7d4df0307bdb93cd0fdaec2e5f150be9787f946",
+    "read_ranges": [
+      [
+        1,
+        137
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full test source. Synthetic old accounting characterization, idempotence, same-id positive deltas and shrink/duplicate behavior, context drift rejection, optional deployed-copy check. Not run."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_lead_agent_trim_none.py",
+    "sha256": "fb8fdc4dc23350bef66b363471ba16bf78b342785dd0cf2ebeb6147ca85605ce",
+    "read_ranges": [
+      [
+        1,
+        191
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full test source. Explicit null forwarding, inherited/explicit summary model, runtime factory call-site wiring. Imports deployed harness in intended test environment; not run."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_model_factory_metadata.py",
+    "sha256": "bd0b58859a14ac5d74b7169d024250e1ec52aba86c7c77e9df0a438a53bc392e",
+    "read_ranges": [
+      [
+        1,
+        42
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full test source. Capturing fake constructor asserts context_window_tokens is not forwarded. Not run."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_subagent_runtime_contract.py",
+    "sha256": "7cc4fed64a1eb262eb24972b2c563b7b760251924efb7e52781b1257734c9140",
+    "read_ranges": [
+      [
+        1,
+        369
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full test source. Configurable parent-model inheritance, provider fallback/all-denied/typed blocked failures, partial evidence surviving later denial, isolated real-executor imports. Not run."
+  },
+  {
+    "path": "deerflow_bridge/patches/tests/test_summarization_trim_env.py",
+    "sha256": "61d290732c0d6b0b03e413555610e062fef3a0cf52ca39a60b1bd659555b5440",
+    "read_ranges": [
+      [
+        1,
+        90
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full test source. Unset/default/null/positive/sentinel/invalid trim semantics through installed middleware. Not run."
+  },
+  {
+    "path": "deerflow_bridge/skills/forecast-visuals/scripts/render.py",
+    "sha256": "8ca9b27f10c2217ed552f459312ab19178e51cd160a339c2052c23e2978503ea",
+    "read_ranges": [
+      [
+        1,
+        1100
+      ],
+      [
+        1101,
+        2138
+      ]
+    ],
+    "depth": "reviewed-full",
+    "notes": "Reviewed full source in two chunks. Structured artifact preparation for same-denominator panels, >=3-year trajectories and >=3-vintage revisions; Plotly/PNG/Matplotlib fallback, optional context/diagnostics and locked manifest merge preserving external producers."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+    "read_ranges": [
+      [
+        800,
+        865
+      ],
+      [
+        1350,
+        1735
+      ],
+      [
+        2159,
+        2455
+      ],
+      [
+        2530,
+        2695
+      ],
+      [
+        3140,
+        3215
+      ],
+      [
+        3492,
+        3740
+      ],
+      [
+        5888,
+        6000
+      ],
+      [
+        11210,
+        11240
+      ],
+      [
+        11280,
+        11445
+      ],
+      [
+        12125,
+        12185
+      ],
+      [
+        12245,
+        12370
+      ],
+      [
+        12455,
+        12502
+      ],
+      [
+        13270,
+        13330
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed only listed boundary ranges. Runtime sync/launch/environment, selector and pinned actor policy, parent watchdog/salvage, manifest promotion/finalization, shared baseline dossier manifest, ontology/graph/report consumers. Other content only located with rg or unreviewed; no full-file claim."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "9bf12830c853554755b874e5b2278ee6a8bb0e07df6be64ed909549a3c1b4f08",
+    "read_ranges": [
+      [
+        1140,
+        1260
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed 1140-1260 research configuration/default and topology boundary; not full file. Template defaults are source declarations, not live env observations."
+  },
+  {
+    "path": "setup.sh",
+    "sha256": "40297565d3c44324699416f79a9f107b3dde738283373316445040f736349b95",
+    "read_ranges": [
+      [
+        490,
+        714
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed 490-714 installer/acquisition/bridge overlay/config preservation boundary only; not executed."
+  },
+  {
+    "path": "deerflow_bridge/config.yaml",
+    "sha256": "8fcaddc2760c5ce5b0ea3d611ecc71de1ff3e00294aa12ea22783204b1daf681",
+    "read_ranges": [
+      [
+        1,
+        280
+      ],
+      [
+        706,
+        741
+      ],
+      [
+        792,
+        811
+      ],
+      [
+        830,
+        965
+      ],
+      [
+        1163,
+        1230
+      ],
+      [
+        1280,
+        1382
+      ],
+      [
+        1388,
+        1414
+      ],
+      [
+        1482,
+        1503
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed only recorded selected template ranges for model declarations, tool registration, subagent whitelist, loop/compaction/title/memory/database settings. First broad read was truncated; coverage claims only explicit subsequent bounded ranges."
+  },
+  {
+    "path": "deerflow_bridge/extensions_config.json",
+    "sha256": "db342f39f3f514a311162bd3a93cffa83aeeb46a7cb0c36292e7f1a8b7b20bd3",
+    "read_ranges": [
+      [
+        1,
+        41
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed full template as boundary data. Optional KG/simulation stdio MCP registration and path placeholders; underlying MCP servers delegated to other owners and not read here."
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+    "read_ranges": [
+      [
+        389,
+        448
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed 389-448 GET dossier projection only. Remaining API, translation/edit paths not reviewed."
+  },
+  {
+    "path": "backend/tests/test_research_engine_v3.py",
+    "sha256": "f9cbd8b5dbc26f835dd47c42311875a7c58d77eb447c11184d019a2df7cff3ef",
+    "read_ranges": [
+      [
+        714,
+        804
+      ],
+      [
+        870,
+        992
+      ],
+      [
+        1116,
+        1148
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed only specified full test bodies/ranges for end-to-end artifact and citation/scenario contract, reuse/identity archive, provider failure/partial gather, deterministic fallback, zero-paid-call budget and URL exposure. Other test names located only; not run."
+  },
+  {
+    "path": "backend/tests/test_research_checkpoint.py",
+    "sha256": "252209a94dd91028e8562e573c53b5f68f929b8d079f148178d6d086eac7dea4",
+    "read_ranges": [
+      [
+        165,
+        204
+      ],
+      [
+        453,
+        517
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed selected cross-lineage/tamper checks and runner prior-checkpoint/fresh-budget wiring test. Not full test file or executed."
+  },
+  {
+    "path": "backend/tests/test_loop007_research_budget.py",
+    "sha256": "8b691edbed40e2cd036ad8d01f2f3eba1ea217c59e5f487e680fd4f533a60950",
+    "read_ranges": [
+      [
+        118,
+        180
+      ],
+      [
+        317,
+        339
+      ],
+      [
+        384,
+        416
+      ],
+      [
+        742,
+        755
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed selected multiprocessing lease/request, separate-ledger telemetry, caps/negative retry and ledger fail-open test bodies only. Worker helpers outside ranges inferred from test usage; no execution."
+  },
+  {
+    "path": "backend/tests/test_research_gateway.py",
+    "sha256": "fc7b70a5494edfd92e985e6778c4aefbff9ab0e7639e309f368dc503a418a96c",
+    "read_ranges": [
+      [
+        522,
+        563
+      ],
+      [
+        673,
+        734
+      ],
+      [
+        1460,
+        1490
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed selected fallback/profile, quota, budget/deadline, estimated usage and async-fetch adapter test bodies only. Fake/helper implementations outside ranges not fully reviewed; no execution."
+  },
+  {
+    "path": "backend/tests/test_runtime_skill_sync.py",
+    "sha256": "e2c047def55cad0d6ebc72afc00a0c60fbed69bfc8d8546efd5a3ddd6b33afce",
+    "read_ranges": [
+      [
+        150,
+        193
+      ],
+      [
+        235,
+        285
+      ]
+    ],
+    "depth": "reviewed-boundary-ranges",
+    "notes": "Reviewed staged-copy failure and tamper rejection bodies plus beginning of bridge runtime telemetry test. The latter is partial (235-285 ends inside test); no outcome claim for that partial test."
+  }
+]

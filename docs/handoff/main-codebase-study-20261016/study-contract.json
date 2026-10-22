@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-16",
+  "source_commit": "72545c65d8dbaee40e1c1e71e9909ab4741c7b9f",
+  "source_branch": "main",
+  "mirror": "/tmp/drf-main-study-20261016-72545c65d8db",
+  "output": "/Users/rogerlin/Downloads/DeepResearchForecast/docs/handoff/main-codebase-study-20261016",
+  "scope": "Committed main Python architecture and workflow; working tree differences are recorded separately.",
+  "verification": "Static source study only; no imports, application execution, provider calls or saved-run mutation."
+}

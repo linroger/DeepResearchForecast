@@ -1,0 +1,894 @@
+{
+  "root": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "base": "495000ea98d6bcd20daa7eff1398ed5ad2663310",
+  "target": "7c98895c98cc2bcaff4559b165f038975d3c0713",
+  "files": [
+    {
+      "path": ".env.example",
+      "kind": "M",
+      "original_sha256": "5aac1e764e4781d09440dca15d9aa370f4d9cb7e9acf9dae1271b945c1b7f428",
+      "target_sha256": "17383c4af23aeec98b85fa1b2def5b7ff4bb81684a4a5fac10d992c2d259b20b",
+      "merge": "clean"
+    },
+    {
+      "path": "README.md",
+      "kind": "M",
+      "original_sha256": "45e2f6a0b02e9a191f7eae6fa81632615f1cdac1e2d926d3230847e7fe8ecf59",
+      "target_sha256": "5d5a7cdbf8b58f2b8f8aa0fffe7688eb42c5056094f449ba564aaf5de0792fe5",
+      "merge": "clean"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "kind": "M",
+      "original_sha256": "24b025bca6d413901985cee7afebbafc6bb8dba02feab7554322672f37d7b78e",
+      "target_sha256": "327e79eed38e2feb34afc42055ad6af928f8cf1da37f851ea8f9956692f38076",
+      "merge": "clean"
+    },
+    {
+      "path": "agent-progress.txt",
+      "kind": "M",
+      "original_sha256": "f3558cae42dbae05e3869dc94a463e0f4320e52ab6cf07d9cdfc4b3f0cd62773",
+      "target_sha256": "d3dce71b917bd60bbfc6b14953a1e79a6a9e071486f9e969baeb7dc1bac2ae2a",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/app/api/report.py",
+      "kind": "M",
+      "original_sha256": "099af2fbc475ffd01f957ff83e7f69688251e1b952fcdd91f6b4165c7bfe6a76",
+      "target_sha256": "e5e394f7c9cbbb46a413228e6829a7a6f5cb11d40cc9d566eba80fd728334cea",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "backend/app/api/research.py",
+      "kind": "M",
+      "original_sha256": "5e5c10a97665fafb57d72ee8682e1ff7f222d07687ce3fa98e8d80aa685e89b5",
+      "target_sha256": "6d0c1ab9fab189540ab2da9bee602510a6b33aa662f9addcc652e993dead2a37",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "backend/app/config.py",
+      "kind": "M",
+      "original_sha256": "f65874e5537c5a4ecd22236b0877a5ca940be74c976b1ed8422b56682a992c88",
+      "target_sha256": "82568ba922484c37930c1f0bb4d63d602138b5663984f0518169d29346f38fd3",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "backend/app/services/news_market_context.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/app/services/official_data.py",
+      "kind": "M",
+      "original_sha256": "3dc344a86e5b760c597611123dcf48c8b0071cb957e0a3661b6a17519d4fab1b",
+      "target_sha256": "43498ff019b2dac0f5b3cb0ee6a680579dcfe4805116f4214f29e45a764e6963",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "kind": "M",
+      "original_sha256": "d2c9d364628aeabd7db6c248921dade25b9e55a8011568ed22aa5a333e53318d",
+      "target_sha256": "a15e36fda51101added494a829d1f1f578b3d3fab53ed259aa5cc540fa8fc894",
+      "merge": "resolved-preserve-peer",
+      "merge_exit_code": 1,
+      "resolution": "Keep peer deletion of market_price_history artifact row; add only new news_market_context artifact row."
+    },
+    {
+      "path": "backend/app/services/report_agent.py",
+      "kind": "M",
+      "original_sha256": "b0158b63efab1c265b2f51faada99c3114871ce12f3260c8bf286d2ace81a2a6",
+      "target_sha256": "06f1ab0068d9de12c3e7a0246fabcc040bdbe07ba69c550cbe077a21b54e054c",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "backend/tests/test_market_intelligence.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_news_context_pipeline.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "3dc2d555414e25d41054beb2b5c18a41d68a27c9584dd002b38ab800f00931a8",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_news_context_reports.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_news_report_metadata.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_news_research.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_news_signals.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_oddsense_workflow.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "5d9799ca0efa09a386bf7255fa51840a28024dfa5a036042b87f6fdbf839891c",
+      "merge": "clean"
+    },
+    {
+      "path": "backend/tests/test_research_engine_v3.py",
+      "kind": "M",
+      "original_sha256": "d8070f98bbf97cc6a45694ea3cd572e539c2c01df5850f9491d78a5dacf577eb",
+      "target_sha256": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/config.yaml",
+      "kind": "M",
+      "original_sha256": "f7122c6feaaf03a8b344e791cb3dfabc176d044517b3d881b978f8c9a9ce7c26",
+      "target_sha256": "ffdb3bebaec91745aa549a93cc2f994dd7db9ae5bc3963f8fd8eccf66e37a23d",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/deerflow_research.py",
+      "kind": "M",
+      "original_sha256": "4e3ab7b2a2f756b1ecefcb8cf19f960a763104d6663874376783d296439a1938",
+      "target_sha256": "f7ff138fdbaa0cf84625bd92212a13ee8fa914c374c42fe57d7318d0b6214d87",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "deerflow_bridge/linear_research.py",
+      "kind": "M",
+      "original_sha256": "ef1cace336782afc558034873c767438f97e323524c443ba4eecb4948dec824c",
+      "target_sha256": "d34299e79d751848052c25ab999782cb94068a98d82d0daead97444052b68cd1",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/market_intelligence.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/news_signals.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/news_tools.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/research_gateway.py",
+      "kind": "M",
+      "original_sha256": "831dc381b7eafa5fdf443cce48da805ba4f23639111e047184fd24768d2e3929",
+      "target_sha256": "f99839713cd2d50bed1580acaa843cc049ed7fe187219372b253e4b9e13b2003",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/skills/deep-research/SKILL.md",
+      "kind": "M",
+      "original_sha256": "20f6abe44f0ac7f68cca630b287f7a333fff83539243e39219a964fd989aedeb",
+      "target_sha256": "13c65c62d3398df524182c8c33dfd34500d22883fd3ff0cccd7dd13197f56257",
+      "merge": "clean"
+    },
+    {
+      "path": "deerflow_bridge/skills/prediction-markets/SKILL.md",
+      "kind": "M",
+      "original_sha256": "f168caad332f486b75a7cec133236f649ac32b333bfa79f56ec3c23d524a10d2",
+      "target_sha256": "17c0070c0905d9d6106bbe95b594adde08f812e9224bcb23b5e5283e6b1f9cd1",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/PLANS.md",
+      "kind": "M",
+      "original_sha256": "82d6e7d91d609adebf8fd0b3fe4f06ff1f80446e78b5a5a914e3d1d90c3af56f",
+      "target_sha256": "d7bf1fc007ee9b394faa0a17103a4e82d1d2157f54cafea3c7b7b2b836f1a084",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/backend-implementation.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "5620c2509114e388947c79276a557ba809311078a6fc243a5497290205dac182",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/credential-check.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "c07ec2cc62ddae2d76e77633f546a2b4301ef8e0b5c6e35f8f86db95e43825db",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/delivery-checks.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "f1dd80513ab52f03a6f4576da62dc4d4b5b98fe7e4eb0fa5b8111b4c826ae1ca",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/downstream-review.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "0b064d239a14e81f4021a69dd36b993fbcbcc74cb5d8b0aecc165f94973e3a5d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/end-to-end-acceptance.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "d743f4ad78daee54fe1f0982e07455047cf6ab8aeee92f5e5927bbcbeb53b15d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/bilingual-final-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "93ccae5133b75001859e54ece15d9601e09d0ce46e4ade97825c17f63e27c9ed",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/bilingual-final-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "34385bef12765ca121ce27d64b44d51ddc82b3ce89413ab524921f4c9797e5ba",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/context-bilingual.png",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "724ff771dc4137d4d008c559d84cab628d80300ceb4d11f59debad8b3ddd8aed",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/context-panel.png",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "0ed604635f6861ae5af701ef8ea573d106b40c012d9b04e9c4cf8c5c1e20fcd6",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-final-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "21754e9aedbd82fc49135baee60d87f01ba4616291b8a6d2aa62ec7a6c702eeb",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-final-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "913e0a9ec6b9b254b5174d39bd16a0b720d95f71e3ded76dd2ae152a92433d4d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-reviewed-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "377cff51cea9e9507d56c9a98a12fe3baa354fbe365837af273d9aa84107e0d8",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/delivery-reviewed-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "df5a4d8524025c454ed7d1b7cf214beb947a29d1dfdf73c7d0d39042ddccad21",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-focused-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "b8e7eae139915cb7f95142c49b8c9019f3f6cbda7bdf40148137491ac3d1adfd",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-focused-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "9c8365bf1fc47b2742b734a46c4ba04cf43db68e0fecc6e7732f32b2329e45fa",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-red-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "4c786a1d30d891631928b98addeb75b5d0f32da573d4e4c06cce19dbd4b94b27",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-red-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "4cbed396b95323fe348bbf5e88269f11d30b13e2d9d046e3dfb46c5fb92c194d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-transition-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "96a50184bf82f17335898c214250e962858001e0b1d6818ad0d54abd0ac82377",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/idle-budget-transition-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "6eb7d0963e35c3dd1be1b09bdf699b208b6c0130824f637369a43edfe2dc4d4b",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/joint-final-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "2f591bcde3d10fcee73643674cbd6b2678c74e33417c27053a0b0869d5dc2759",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/joint-final-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "d5f2ec5838ab11ba2d699da4933dd5ab6ef8300b2ddbca8ce8b7efc36d3054a7",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/live-final-compatibility.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "4a4d900b490b7f4a8f2e64587bd90c8378b5626a454561e78f9f7c4be2a0cbfd",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/live-final-summary.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "43930e0d08d912e0f616f6601db727c1b0d2304acd7441250c3c1672e5221a71",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/market-quote-panel.png",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "49777c34a20a41d447433c9c16b03920fff8d724e3e1937261de449888eaf284",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "d8c4756235621414dac1c64f77cd3cc9a584e3e356ce536d57b15b4c34a6ca7c",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "43b57a111e3a405763b530c8a82cb5777af6ab7fdd5ce1e43f267295c1ea9086",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "c59e92a9a4acbe9c792ebb64dd4c4e5088a6f258dd7d89367b8ae097f2b77714",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "54d724b85cc978dbb3c653d218c309a60147077e9fd34ceee447ed7f18fbbc01",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-deployment-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "2a7dd7ff3df2d4770ba410c6e6e67d9656ca08ade27c7ee416d253f4ba31ac61",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-deployment-worker.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "96e184b2a75d974660a2aea38ce096ace9e692450f30c4a16ddc5a136d282ce0",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-envpins-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "b9c7c45f248cdd98c6688b291d039298756058fad4a97a9dc82b7000d1a3d904",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/native-envpins-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "60a0a9526455d0670f2dcb7cdcbdf8048eb673a2204b6a43a55a2abc33e29361",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/oddsense-reddit-200.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "fa87d94922a792b969acfc30fd131ab77bc2423f483e9843e75de1b3ef534168",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/oddsense-reddit-403.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "43a761c04effcffeb1d307288f8192190d443eb357f237f197d9e943122a464a",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/oddsense-workflow.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "ffb8e1c5b7c57e556ba8bcd80eab9ee2112c9d6d25cf9adbdc8e62d06aef677f",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/pre-idle-budget-verification.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "846df2884d774d10b1b19a69ed02cde2abeba98a23f148c18da04b4b022bc12f",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/pre-idle-budget-workflow.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "5ec21be03c57f9ba4b6607100d535ce95f9958cf935c71f4556570bc58b3e75b",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/pre-review-timing-verification.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "e7cd5d812cea4bc9697678d70541dbf3760fc6822c3508d7c8918cb042cebc03",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/pre-review-timing-workflow.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "07acef4c246777c60b442253ab4a95b4a8355ef11e8208b00c14121ee1b86bca",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/publication-context-red-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "67f051e0c3911ee3073c99cb062cf56bea871a5b9aa7c27e781ec858da3a98a6",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/publication-context-red-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "d93ccfa7eff5fecf729697fc3eaead7df984b64fafd8e964dbd2d2a8854e870d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/receipt-index.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "8072bede6732e9a1a8db06823f9124056a47e381816d84e05dad7e321fc509d8",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/timing-review-red-completed.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "04f2280107632c2a53e0167f28e9713ebf4bb61d93a5de4149339b87f585cf3d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/evidence/timing-review-red-junit.xml",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "9672b4d10d1de0ca9b742add460e05c611a982ba40aa4597829f504b77deabcf",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/final-verification.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "b752af57a3588fa7a63aabe7fe0cfeba09178018e77ffcab059d32596b91baf0",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/final-verification.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "bdd6f6d259a937cae151f0f80603798e3f201ccbee94d896826efc88272223d8",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/frontend-implementation.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "259b894cd29fe4d238b341b92ac86a0cf9dfd715f2b7e4fbe2ec00555259d943",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/handoff.md",
+      "kind": "M",
+      "original_sha256": "0cc9a592ea57f2361cd6ddc61aabf912ab382196dac11cc7e69cdf041445beed",
+      "target_sha256": "0916f135f35e28f3a7430b3cd05541c1d717af425ac7fd4a4aef731bce4530c1",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/implementation-source.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "a7eca7ce8124cf11bd3f145dd0aef598d0176163f944c881cc10ff148a78249f",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/integration-contract.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "9b18861d78eacd80ac1af1b96467fc62a4baa3d982e734553a050a0e5606066d",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/issues.md",
+      "kind": "M",
+      "original_sha256": "c36576f1a33e08fdc0039a5b5ffaf4e9659ead10cd7b61dff14bcb6855b5f4b4",
+      "target_sha256": "c2530bd7736645852de5b63b4b0999b4442370a2c097b67830d27e6de1f62293",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/lint-verification.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "26a7c4bed4038c8e21f2477d119089a25958fafd3e7223c690e271336ac5478c",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/live-compatibility.json",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "2cefda088e2f4738ae9d63e52fd56046eebd414b684a47cf2c237119be5cd2e2",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/market-implementation.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "05b771872c387b2d9c43e31476050fd0e32ce8f6587209cf232b010d91b2d5de",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/provider-review.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "9e6733f1f4a6b56919f4c179a6ae630a3334f7f7d1c460c15afd8ab6ca7e2662",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/providers-implementation.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "20acc6484989bd3ddb0fedfd8ba99d457771c5771feaa5d12169db2f507a80ab",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/handoff/oddsense-integration/research-implementation.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "1947d8da4b72bec82b5c310eb5e48e55e2122f15bf00b3eafc2df45542610d22",
+      "merge": "clean"
+    },
+    {
+      "path": "docs/third-party/oddsense.md",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "449122b3831876f568ee11b2445af396df5b744ca2a40e39e44a11c594635298",
+      "merge": "clean"
+    },
+    {
+      "path": "feature_list.json",
+      "kind": "M",
+      "original_sha256": "dfa804f56ec143558d360373136cf5ffbfc37b97a4861ae73b7fe391e8168670",
+      "target_sha256": "8fc48712d6e5648d88ab151277bd085035e4b71e830f6f8c059bc7fcf1c3f2ec",
+      "merge": "clean"
+    },
+    {
+      "path": "frontend/src/components/research/DossierViewer.vue",
+      "kind": "M",
+      "original_sha256": "d7d8ab0cbbe41595417fc17c3fac9e40e4583f49f0b210bae883a538704e4964",
+      "target_sha256": "2c604110825f9c7974bd2ad193bed80594d3a6d8e4cf2fb2e63f9f874869041e",
+      "merge": "clean"
+    },
+    {
+      "path": "frontend/src/components/research/ForecastReport.vue",
+      "kind": "M",
+      "original_sha256": "72a6b6f68df6afc76866d7251fe5eb30db20597adfc4502eb5efe3f404a5e692",
+      "target_sha256": "8714d947e95bff1f0266251c87cf31c84783458f77efb070f532020cf347e3cc",
+      "merge": "clean",
+      "merge_exit_code": 0
+    },
+    {
+      "path": "frontend/src/components/research/SourceContextPanel.vue",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "44be3a9bfeccae31821326b57c7e2276bcb88c7d2a1efab6cb94c46c6998613d",
+      "merge": "clean"
+    },
+    {
+      "path": "frontend/src/utils/sourceContext.js",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "f58d0eb37263c288e5145ab586d8d63f8692ab1446f5eeaaaeb49cba69f06563",
+      "merge": "clean"
+    },
+    {
+      "path": "frontend/tests/sourceContext.test.mjs",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "384d4ba6ab0dc8f9f4afa1c72474d2885432d32a9755c43aa91ce9cf032aa135",
+      "merge": "clean"
+    },
+    {
+      "path": "frontend/tests/sourceContextPanel.test.mjs",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "a9ba3d5934f0cd1f30f053183e4ce2f70106d4594d5de5fe5d767128b39ef768",
+      "merge": "clean"
+    },
+    {
+      "path": "scripts/oddsense_live_probe.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "78d967527a45091a8dd4ada19536f0bec666b6878b787f9b40c23de193fcbe10",
+      "merge": "clean"
+    },
+    {
+      "path": "scripts/oddsense_source_mirror.py",
+      "kind": "A",
+      "original_sha256": null,
+      "target_sha256": "844a012257ac71ecf95f2da1f6facceaf4c3a8f86aeb847c5e14f6930ab7b844",
+      "merge": "clean"
+    },
+    {
+      "path": "setup.sh",
+      "kind": "M",
+      "original_sha256": "a2a9bc506c423ed1a549c4ed5c14c2f76d9fdb9df44450bcfb5c11cf865556fb",
+      "target_sha256": "4dbe2e0f2bf1b296e7ede63c246069985cf8f930581ca2f207f4ae08c0ee45d8",
+      "merge": "clean"
+    }
+  ],
+  "installed_sha256": {
+    ".env.example": "17383c4af23aeec98b85fa1b2def5b7ff4bb81684a4a5fac10d992c2d259b20b",
+    "README.md": "5d5a7cdbf8b58f2b8f8aa0fffe7688eb42c5056094f449ba564aaf5de0792fe5",
+    "README.zh-CN.md": "327e79eed38e2feb34afc42055ad6af928f8cf1da37f851ea8f9956692f38076",
+    "agent-progress.txt": "d3dce71b917bd60bbfc6b14953a1e79a6a9e071486f9e969baeb7dc1bac2ae2a",
+    "backend/app/api/report.py": "e19198d0aa483e50c6707e0feb12288b5c8687e87e6276e6478b4246e397ff0c",
+    "backend/app/api/research.py": "3ea56c403371bd12d7a57b91a6890113062ca1de5957c7212368ae348334c49b",
+    "backend/app/config.py": "3cc536afc42bbc67205bda780e17d65e7b829dd62d11409815badb2a24977b9a",
+    "backend/app/services/news_market_context.py": "b52a36170ef81c7760cb14ea46fd762d27144052c91dbc6649e0a5153ab2e136",
+    "backend/app/services/official_data.py": "43498ff019b2dac0f5b3cb0ee6a680579dcfe4805116f4214f29e45a764e6963",
+    "backend/app/services/pipeline_orchestrator.py": "123233a6bc1b053858a2b497c80ced8166b5565a59faa211ee8f89a22aa4b210",
+    "backend/app/services/report_agent.py": "0bd18338dfe0a45aa2fd8b5ed205d31bb88307f68c44c4e228ebb6c2b9a5724d",
+    "backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "backend/tests/test_news_context_pipeline.py": "3dc2d555414e25d41054beb2b5c18a41d68a27c9584dd002b38ab800f00931a8",
+    "backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "backend/tests/test_news_signals.py": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+    "backend/tests/test_oddsense_workflow.py": "5d9799ca0efa09a386bf7255fa51840a28024dfa5a036042b87f6fdbf839891c",
+    "backend/tests/test_research_engine_v3.py": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+    "deerflow_bridge/config.yaml": "ffdb3bebaec91745aa549a93cc2f994dd7db9ae5bc3963f8fd8eccf66e37a23d",
+    "deerflow_bridge/deerflow_research.py": "9ec11300abdc184b34443c6c4556c9321bc4f7e8cc5f10d03030ac336092447b",
+    "deerflow_bridge/linear_research.py": "d34299e79d751848052c25ab999782cb94068a98d82d0daead97444052b68cd1",
+    "deerflow_bridge/market_intelligence.py": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f",
+    "deerflow_bridge/news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "deerflow_bridge/news_tools.py": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+    "deerflow_bridge/research_gateway.py": "f99839713cd2d50bed1580acaa843cc049ed7fe187219372b253e4b9e13b2003",
+    "deerflow_bridge/skills/deep-research/SKILL.md": "13c65c62d3398df524182c8c33dfd34500d22883fd3ff0cccd7dd13197f56257",
+    "deerflow_bridge/skills/prediction-markets/SKILL.md": "17c0070c0905d9d6106bbe95b594adde08f812e9224bcb23b5e5283e6b1f9cd1",
+    "docs/handoff/oddsense-integration/PLANS.md": "d7bf1fc007ee9b394faa0a17103a4e82d1d2157f54cafea3c7b7b2b836f1a084",
+    "docs/handoff/oddsense-integration/backend-implementation.md": "5620c2509114e388947c79276a557ba809311078a6fc243a5497290205dac182",
+    "docs/handoff/oddsense-integration/credential-check.json": "c07ec2cc62ddae2d76e77633f546a2b4301ef8e0b5c6e35f8f86db95e43825db",
+    "docs/handoff/oddsense-integration/delivery-checks.json": "f1dd80513ab52f03a6f4576da62dc4d4b5b98fe7e4eb0fa5b8111b4c826ae1ca",
+    "docs/handoff/oddsense-integration/downstream-review.md": "0b064d239a14e81f4021a69dd36b993fbcbcc74cb5d8b0aecc165f94973e3a5d",
+    "docs/handoff/oddsense-integration/end-to-end-acceptance.md": "d743f4ad78daee54fe1f0982e07455047cf6ab8aeee92f5e5927bbcbeb53b15d",
+    "docs/handoff/oddsense-integration/evidence/bilingual-final-completed.json": "93ccae5133b75001859e54ece15d9601e09d0ce46e4ade97825c17f63e27c9ed",
+    "docs/handoff/oddsense-integration/evidence/bilingual-final-junit.xml": "34385bef12765ca121ce27d64b44d51ddc82b3ce89413ab524921f4c9797e5ba",
+    "docs/handoff/oddsense-integration/evidence/context-bilingual.png": "724ff771dc4137d4d008c559d84cab628d80300ceb4d11f59debad8b3ddd8aed",
+    "docs/handoff/oddsense-integration/evidence/context-panel.png": "0ed604635f6861ae5af701ef8ea573d106b40c012d9b04e9c4cf8c5c1e20fcd6",
+    "docs/handoff/oddsense-integration/evidence/delivery-final-completed.json": "21754e9aedbd82fc49135baee60d87f01ba4616291b8a6d2aa62ec7a6c702eeb",
+    "docs/handoff/oddsense-integration/evidence/delivery-final-junit.xml": "913e0a9ec6b9b254b5174d39bd16a0b720d95f71e3ded76dd2ae152a92433d4d",
+    "docs/handoff/oddsense-integration/evidence/delivery-reviewed-completed.json": "377cff51cea9e9507d56c9a98a12fe3baa354fbe365837af273d9aa84107e0d8",
+    "docs/handoff/oddsense-integration/evidence/delivery-reviewed-junit.xml": "df5a4d8524025c454ed7d1b7cf214beb947a29d1dfdf73c7d0d39042ddccad21",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-focused-completed.json": "b8e7eae139915cb7f95142c49b8c9019f3f6cbda7bdf40148137491ac3d1adfd",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-focused-junit.xml": "9c8365bf1fc47b2742b734a46c4ba04cf43db68e0fecc6e7732f32b2329e45fa",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-red-completed.json": "4c786a1d30d891631928b98addeb75b5d0f32da573d4e4c06cce19dbd4b94b27",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-red-junit.xml": "4cbed396b95323fe348bbf5e88269f11d30b13e2d9d046e3dfb46c5fb92c194d",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-transition-completed.json": "96a50184bf82f17335898c214250e962858001e0b1d6818ad0d54abd0ac82377",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-transition-junit.xml": "6eb7d0963e35c3dd1be1b09bdf699b208b6c0130824f637369a43edfe2dc4d4b",
+    "docs/handoff/oddsense-integration/evidence/joint-final-completed.json": "2f591bcde3d10fcee73643674cbd6b2678c74e33417c27053a0b0869d5dc2759",
+    "docs/handoff/oddsense-integration/evidence/joint-final-junit.xml": "d5f2ec5838ab11ba2d699da4933dd5ab6ef8300b2ddbca8ce8b7efc36d3054a7",
+    "docs/handoff/oddsense-integration/evidence/live-final-compatibility.json": "4a4d900b490b7f4a8f2e64587bd90c8378b5626a454561e78f9f7c4be2a0cbfd",
+    "docs/handoff/oddsense-integration/evidence/live-final-summary.json": "43930e0d08d912e0f616f6601db727c1b0d2304acd7441250c3c1672e5221a71",
+    "docs/handoff/oddsense-integration/evidence/market-quote-panel.png": "49777c34a20a41d447433c9c16b03920fff8d724e3e1937261de449888eaf284",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-completed.json": "d8c4756235621414dac1c64f77cd3cc9a584e3e356ce536d57b15b4c34a6ca7c",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-junit.xml": "43b57a111e3a405763b530c8a82cb5777af6ab7fdd5ce1e43f267295c1ea9086",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-completed.json": "c59e92a9a4acbe9c792ebb64dd4c4e5088a6f258dd7d89367b8ae097f2b77714",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-junit.xml": "54d724b85cc978dbb3c653d218c309a60147077e9fd34ceee447ed7f18fbbc01",
+    "docs/handoff/oddsense-integration/evidence/native-deployment-completed.json": "2a7dd7ff3df2d4770ba410c6e6e67d9656ca08ade27c7ee416d253f4ba31ac61",
+    "docs/handoff/oddsense-integration/evidence/native-deployment-worker.json": "96e184b2a75d974660a2aea38ce096ace9e692450f30c4a16ddc5a136d282ce0",
+    "docs/handoff/oddsense-integration/evidence/native-envpins-completed.json": "b9c7c45f248cdd98c6688b291d039298756058fad4a97a9dc82b7000d1a3d904",
+    "docs/handoff/oddsense-integration/evidence/native-envpins-junit.xml": "60a0a9526455d0670f2dcb7cdcbdf8048eb673a2204b6a43a55a2abc33e29361",
+    "docs/handoff/oddsense-integration/evidence/oddsense-reddit-200.json": "fa87d94922a792b969acfc30fd131ab77bc2423f483e9843e75de1b3ef534168",
+    "docs/handoff/oddsense-integration/evidence/oddsense-reddit-403.json": "43a761c04effcffeb1d307288f8192190d443eb357f237f197d9e943122a464a",
+    "docs/handoff/oddsense-integration/evidence/oddsense-workflow.json": "ffb8e1c5b7c57e556ba8bcd80eab9ee2112c9d6d25cf9adbdc8e62d06aef677f",
+    "docs/handoff/oddsense-integration/evidence/pre-idle-budget-verification.json": "846df2884d774d10b1b19a69ed02cde2abeba98a23f148c18da04b4b022bc12f",
+    "docs/handoff/oddsense-integration/evidence/pre-idle-budget-workflow.json": "5ec21be03c57f9ba4b6607100d535ce95f9958cf935c71f4556570bc58b3e75b",
+    "docs/handoff/oddsense-integration/evidence/pre-review-timing-verification.json": "e7cd5d812cea4bc9697678d70541dbf3760fc6822c3508d7c8918cb042cebc03",
+    "docs/handoff/oddsense-integration/evidence/pre-review-timing-workflow.json": "07acef4c246777c60b442253ab4a95b4a8355ef11e8208b00c14121ee1b86bca",
+    "docs/handoff/oddsense-integration/evidence/publication-context-red-completed.json": "67f051e0c3911ee3073c99cb062cf56bea871a5b9aa7c27e781ec858da3a98a6",
+    "docs/handoff/oddsense-integration/evidence/publication-context-red-junit.xml": "d93ccfa7eff5fecf729697fc3eaead7df984b64fafd8e964dbd2d2a8854e870d",
+    "docs/handoff/oddsense-integration/evidence/receipt-index.json": "8072bede6732e9a1a8db06823f9124056a47e381816d84e05dad7e321fc509d8",
+    "docs/handoff/oddsense-integration/evidence/timing-review-red-completed.json": "04f2280107632c2a53e0167f28e9713ebf4bb61d93a5de4149339b87f585cf3d",
+    "docs/handoff/oddsense-integration/evidence/timing-review-red-junit.xml": "9672b4d10d1de0ca9b742add460e05c611a982ba40aa4597829f504b77deabcf",
+    "docs/handoff/oddsense-integration/final-verification.json": "b752af57a3588fa7a63aabe7fe0cfeba09178018e77ffcab059d32596b91baf0",
+    "docs/handoff/oddsense-integration/final-verification.md": "bdd6f6d259a937cae151f0f80603798e3f201ccbee94d896826efc88272223d8",
+    "docs/handoff/oddsense-integration/frontend-implementation.md": "259b894cd29fe4d238b341b92ac86a0cf9dfd715f2b7e4fbe2ec00555259d943",
+    "docs/handoff/oddsense-integration/handoff.md": "0916f135f35e28f3a7430b3cd05541c1d717af425ac7fd4a4aef731bce4530c1",
+    "docs/handoff/oddsense-integration/implementation-source.json": "a7eca7ce8124cf11bd3f145dd0aef598d0176163f944c881cc10ff148a78249f",
+    "docs/handoff/oddsense-integration/integration-contract.md": "9b18861d78eacd80ac1af1b96467fc62a4baa3d982e734553a050a0e5606066d",
+    "docs/handoff/oddsense-integration/issues.md": "c2530bd7736645852de5b63b4b0999b4442370a2c097b67830d27e6de1f62293",
+    "docs/handoff/oddsense-integration/lint-verification.json": "26a7c4bed4038c8e21f2477d119089a25958fafd3e7223c690e271336ac5478c",
+    "docs/handoff/oddsense-integration/live-compatibility.json": "2cefda088e2f4738ae9d63e52fd56046eebd414b684a47cf2c237119be5cd2e2",
+    "docs/handoff/oddsense-integration/market-implementation.md": "05b771872c387b2d9c43e31476050fd0e32ce8f6587209cf232b010d91b2d5de",
+    "docs/handoff/oddsense-integration/provider-review.md": "9e6733f1f4a6b56919f4c179a6ae630a3334f7f7d1c460c15afd8ab6ca7e2662",
+    "docs/handoff/oddsense-integration/providers-implementation.md": "20acc6484989bd3ddb0fedfd8ba99d457771c5771feaa5d12169db2f507a80ab",
+    "docs/handoff/oddsense-integration/research-implementation.md": "1947d8da4b72bec82b5c310eb5e48e55e2122f15bf00b3eafc2df45542610d22",
+    "docs/third-party/oddsense.md": "449122b3831876f568ee11b2445af396df5b744ca2a40e39e44a11c594635298",
+    "feature_list.json": "8fc48712d6e5648d88ab151277bd085035e4b71e830f6f8c059bc7fcf1c3f2ec",
+    "frontend/src/components/research/DossierViewer.vue": "2c604110825f9c7974bd2ad193bed80594d3a6d8e4cf2fb2e63f9f874869041e",
+    "frontend/src/components/research/ForecastReport.vue": "e8c41bd38786928e6cd0f7ec8cf48c7512f39e8c72b2d7a061263989adb1d672",
+    "frontend/src/components/research/SourceContextPanel.vue": "44be3a9bfeccae31821326b57c7e2276bcb88c7d2a1efab6cb94c46c6998613d",
+    "frontend/src/utils/sourceContext.js": "f58d0eb37263c288e5145ab586d8d63f8692ab1446f5eeaaaeb49cba69f06563",
+    "frontend/tests/sourceContext.test.mjs": "384d4ba6ab0dc8f9f4afa1c72474d2885432d32a9755c43aa91ce9cf032aa135",
+    "frontend/tests/sourceContextPanel.test.mjs": "a9ba3d5934f0cd1f30f053183e4ce2f70106d4594d5de5fe5d767128b39ef768",
+    "scripts/oddsense_live_probe.py": "78d967527a45091a8dd4ada19536f0bec666b6878b787f9b40c23de193fcbe10",
+    "scripts/oddsense_source_mirror.py": "844a012257ac71ecf95f2da1f6facceaf4c3a8f86aeb847c5e14f6930ab7b844",
+    "setup.sh": "4dbe2e0f2bf1b296e7ede63c246069985cf8f930581ca2f207f4ae08c0ee45d8"
+  },
+  "active_allowlist": [
+    ".env.example",
+    "README.md",
+    "README.zh-CN.md",
+    "backend/app/api/report.py",
+    "backend/app/api/research.py",
+    "backend/app/config.py",
+    "backend/app/services/news_market_context.py",
+    "backend/app/services/official_data.py",
+    "backend/app/services/pipeline_orchestrator.py",
+    "backend/app/services/report_agent.py",
+    "backend/tests/test_market_intelligence.py",
+    "backend/tests/test_news_context_pipeline.py",
+    "backend/tests/test_news_context_reports.py",
+    "backend/tests/test_news_report_metadata.py",
+    "backend/tests/test_news_research.py",
+    "backend/tests/test_news_signals.py",
+    "backend/tests/test_oddsense_workflow.py",
+    "backend/tests/test_research_engine_v3.py",
+    "deerflow_bridge/config.yaml",
+    "deerflow_bridge/deerflow_research.py",
+    "deerflow_bridge/linear_research.py",
+    "deerflow_bridge/market_intelligence.py",
+    "deerflow_bridge/news_signals.py",
+    "deerflow_bridge/news_tools.py",
+    "deerflow_bridge/research_gateway.py",
+    "deerflow_bridge/skills/deep-research/SKILL.md",
+    "deerflow_bridge/skills/prediction-markets/SKILL.md",
+    "docs/third-party/oddsense.md",
+    "feature_list.json",
+    "frontend/src/components/research/DossierViewer.vue",
+    "frontend/src/components/research/ForecastReport.vue",
+    "frontend/src/components/research/SourceContextPanel.vue",
+    "frontend/src/utils/sourceContext.js",
+    "frontend/tests/sourceContext.test.mjs",
+    "frontend/tests/sourceContextPanel.test.mjs",
+    "scripts/oddsense_live_probe.py",
+    "setup.sh"
+  ],
+  "historical_paths_restored_or_removed": [
+    "agent-progress.txt",
+    "docs/handoff/oddsense-integration/PLANS.md",
+    "docs/handoff/oddsense-integration/backend-implementation.md",
+    "docs/handoff/oddsense-integration/credential-check.json",
+    "docs/handoff/oddsense-integration/delivery-checks.json",
+    "docs/handoff/oddsense-integration/downstream-review.md",
+    "docs/handoff/oddsense-integration/end-to-end-acceptance.md",
+    "docs/handoff/oddsense-integration/evidence/bilingual-final-completed.json",
+    "docs/handoff/oddsense-integration/evidence/bilingual-final-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/context-bilingual.png",
+    "docs/handoff/oddsense-integration/evidence/context-panel.png",
+    "docs/handoff/oddsense-integration/evidence/delivery-final-completed.json",
+    "docs/handoff/oddsense-integration/evidence/delivery-final-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/delivery-reviewed-completed.json",
+    "docs/handoff/oddsense-integration/evidence/delivery-reviewed-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-focused-completed.json",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-focused-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-red-completed.json",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-red-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-transition-completed.json",
+    "docs/handoff/oddsense-integration/evidence/idle-budget-transition-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/joint-final-completed.json",
+    "docs/handoff/oddsense-integration/evidence/joint-final-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/live-final-compatibility.json",
+    "docs/handoff/oddsense-integration/evidence/live-final-summary.json",
+    "docs/handoff/oddsense-integration/evidence/market-quote-panel.png",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-completed.json",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-final-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-completed.json",
+    "docs/handoff/oddsense-integration/evidence/mixed-metadata-red-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/native-deployment-completed.json",
+    "docs/handoff/oddsense-integration/evidence/native-deployment-worker.json",
+    "docs/handoff/oddsense-integration/evidence/native-envpins-completed.json",
+    "docs/handoff/oddsense-integration/evidence/native-envpins-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/oddsense-reddit-200.json",
+    "docs/handoff/oddsense-integration/evidence/oddsense-reddit-403.json",
+    "docs/handoff/oddsense-integration/evidence/oddsense-workflow.json",
+    "docs/handoff/oddsense-integration/evidence/pre-idle-budget-verification.json",
+    "docs/handoff/oddsense-integration/evidence/pre-idle-budget-workflow.json",
+    "docs/handoff/oddsense-integration/evidence/pre-review-timing-verification.json",
+    "docs/handoff/oddsense-integration/evidence/pre-review-timing-workflow.json",
+    "docs/handoff/oddsense-integration/evidence/publication-context-red-completed.json",
+    "docs/handoff/oddsense-integration/evidence/publication-context-red-junit.xml",
+    "docs/handoff/oddsense-integration/evidence/receipt-index.json",
+    "docs/handoff/oddsense-integration/evidence/timing-review-red-completed.json",
+    "docs/handoff/oddsense-integration/evidence/timing-review-red-junit.xml",
+    "docs/handoff/oddsense-integration/final-verification.json",
+    "docs/handoff/oddsense-integration/final-verification.md",
+    "docs/handoff/oddsense-integration/frontend-implementation.md",
+    "docs/handoff/oddsense-integration/handoff.md",
+    "docs/handoff/oddsense-integration/implementation-source.json",
+    "docs/handoff/oddsense-integration/integration-contract.md",
+    "docs/handoff/oddsense-integration/issues.md",
+    "docs/handoff/oddsense-integration/lint-verification.json",
+    "docs/handoff/oddsense-integration/live-compatibility.json",
+    "docs/handoff/oddsense-integration/market-implementation.md",
+    "docs/handoff/oddsense-integration/provider-review.md",
+    "docs/handoff/oddsense-integration/providers-implementation.md",
+    "docs/handoff/oddsense-integration/research-implementation.md",
+    "scripts/oddsense_source_mirror.py"
+  ]
+}

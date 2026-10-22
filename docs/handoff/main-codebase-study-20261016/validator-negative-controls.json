@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "checks": {
+    "complete": [],
+    "omitted": [
+      "Missing Python inventory path: scripts/watch_pipeline_progress.py"
+    ],
+    "duplicated": [
+      "Duplicate Python inventory paths"
+    ],
+    "extra": [
+      "Unexpected Python inventory path: missing-from-git.py"
+    ]
+  }
+}

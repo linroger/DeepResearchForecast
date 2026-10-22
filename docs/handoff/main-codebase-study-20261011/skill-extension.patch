@@ -1,0 +1,157 @@
+--- a/source-command-research-codebase/SKILL.md
++++ b/source-command-research-codebase/SKILL.md
+@@ -1,17 +1,19 @@
+ ---
+ name: "source-command-research-codebase"
+-description: "Document codebase as-is with thoughts directory for historical context"
++description: "Document existing codebase behavior and end-to-end workflows with source references, using repository research history when available."
+ ---
+ 
+ # source-command-research-codebase
+ 
+-Use this skill when the user asks to run the migrated source command `research_codebase`.
++Use this skill for the migrated source command `research_codebase` or a source-backed codebase familiarization/workflow study.
+ 
+ ## Command Template
+ 
+ # Research Codebase
+ 
+ You are tasked with conducting comprehensive research across the codebase to answer user questions by spawning parallel sub-agents and synthesizing their findings.
++
++For an end-to-end Python workflow study, use [references/python-workflow-study.md](references/python-workflow-study.md) to establish source authority, account for file and line-range coverage, and reconcile producer/consumer boundaries. Apply this reference to broad workflow studies; ordinary focused code questions can use the steps below directly.
+ 
+ ## CRITICAL: YOUR ONLY JOB IS TO DOCUMENT AND EXPLAIN THE CODEBASE AS IT EXISTS TODAY
+ - DO NOT suggest improvements or changes unless the user explicitly asks for them
+@@ -24,18 +26,18 @@
+ 
+ ## Initial Setup:
+ 
+-When this command is invoked, respond with:
++If the user has not supplied a research question or area of interest, respond with:
+ ```
+ I'm ready to research the codebase. Please provide your research question or area of interest, and I'll analyze it thoroughly by exploring relevant components and connections.
+ ```
+ 
+-Then wait for the user's research query.
++In that case, wait for the user's research query. When the request already provides a question, scope, or workflow to study, proceed directly with that request.
+ 
+ ## Steps to follow after receiving the research query:
+ 
+ 1. **Read any directly mentioned files first:**
+    - If the user mentions specific files (tickets, docs, JSON), read them FULLY first
+-   - **IMPORTANT**: Use the Read tool WITHOUT limit/offset parameters to read entire files
++   - Read the complete files, using bounded chunks when necessary to avoid truncated tool output.
+    - **CRITICAL**: Read these files yourself in the main context before spawning any sub-tasks
+    - This ensures you have full context before decomposing the research
+ 
+@@ -80,7 +82,7 @@
+ 4. **Wait for all sub-agents to complete and synthesize findings:**
+    - IMPORTANT: Wait for ALL sub-agent tasks to complete before proceeding
+    - Compile all sub-agent results (both codebase and thoughts findings)
+-   - Prioritize live codebase findings as primary source of truth
++   - Prioritize code from the selected branch/checkout authority as the primary source of truth; label any different live working-tree bytes separately.
+    - Use thoughts/ findings as supplementary historical context
+    - Connect findings across different components
+    - Include specific file paths and line numbers for reference
+@@ -89,8 +91,8 @@
+    - Answer the user's specific questions with concrete evidence
+ 
+ 5. **Gather metadata for the research document:**
+-   - Run the `hack/spec_metadata.sh` script to generate all relevant metadata
+-   - Filename: `thoughts/shared/research/YYYY-MM-DD-ENG-XXXX-description.md`
++   - Use `hack/spec_metadata.sh` when it exists and belongs to the repository's applicable research workflow. Otherwise gather date, selected commit/branch, and repository identity with read-only metadata commands; omit unavailable optional fields or mark them unknown.
++   - Use the user's requested destination or established repository research directory. In repositories using a thoughts workspace, a conventional filename is `thoughts/shared/research/YYYY-MM-DD-ENG-XXXX-description.md`.
+      - Format: `YYYY-MM-DD-ENG-XXXX-description.md` where:
+        - YYYY-MM-DD is today's date
+        - ENG-XXXX is the ticket number (omit if no ticket)
+@@ -100,7 +102,7 @@
+        - Without ticket: `2025-01-08-authentication-flow.md`
+ 
+ 6. **Generate research document:**
+-   - Use the metadata gathered in step 4
++   - Use the metadata gathered in step 5 and adapt the template to the repository's established format.
+    - Structure the document with YAML frontmatter followed by content:
+      ```markdown
+      ---
+@@ -118,10 +120,10 @@
+ 
+      # Research: [User's Question/Topic]
+ 
+-     **Date**: [Current date and time with timezone from step 4]
++     **Date**: [Current date and time with timezone from step 5]
+      **Researcher**: [Researcher name from thoughts status]
+-     **Git Commit**: [Current commit hash from step 4]
+-     **Branch**: [Current branch name from step 4]
++     **Git Commit**: [Selected commit hash from step 5]
++     **Branch**: [Selected branch name from step 5]
+      **Repository**: [Repository name]
+ 
+      ## Research Question
+@@ -168,7 +170,7 @@
+    - Replace local file references with permalinks in the document
+ 
+ 8. **Sync and present findings:**
+-   - Run `humanlayer thoughts sync` to sync the thoughts directory
++   - Run `humanlayer thoughts sync` only when the repository uses that configured workflow and synchronization is within the user's authorization. Otherwise keep the result in the selected local destination; do not install or configure a synchronization service for a source study.
+    - Present a concise summary of findings to the user
+    - Include key file references for easy navigation
+    - Ask if they have follow-up questions or need clarification
+@@ -179,7 +181,7 @@
+    - Add `last_updated_note: "Added follow-up research for [brief description]"` to frontmatter
+    - Add a new section: `## Follow-up Research [timestamp]`
+    - Spawn new sub-agents as needed for additional investigation
+-   - Continue updating the document and syncing
++   - Continue updating the document; synchronize only when the same applicability and authorization conditions hold.
+ 
+ ## Important notes:
+ - Always use parallel Task agents to maximize efficiency and minimize context usage
+@@ -197,11 +199,11 @@
+ - **CRITICAL**: You and all sub-agents are documentarians, not evaluators
+ - **REMEMBER**: Document what IS, not what SHOULD BE
+ - **NO RECOMMENDATIONS**: Only describe the current state of the codebase
+-- **File reading**: Always read mentioned files FULLY (no limit/offset) before spawning sub-tasks
++- **File reading**: Read mentioned files completely before delegating dependent work; use bounded, untruncated chunks for large files.
+ - **Critical ordering**: Follow the numbered steps exactly
+   - ALWAYS read mentioned files first before spawning sub-tasks (step 1)
+   - ALWAYS wait for all sub-agents to complete before synthesizing (step 4)
+-  - ALWAYS gather metadata before writing the document (step 5 before step 6)
++  - Gather applicable source metadata before finalizing the document (step 5 before step 6); environment-specific helpers and synchronization remain conditional as described above.
+   - NEVER write the research document with placeholder values
+ - **Path handling**: The thoughts/searchable/ directory contains hard links for searching
+   - Always document paths by removing ONLY "searchable/" - preserve all other subdirectories
+--- /dev/null
++++ b/source-command-research-codebase/references/python-workflow-study.md
+@@ -0,0 +1,33 @@
++# End-to-end Python workflow study
++
++Produce a navigable map of the requested branch or checkout: actual entry points, control flow, data/artifact contracts, process boundaries, recovery behavior, and the Python modules that implement them. Keep documentation of current behavior separate from a requested audit or improvement task.
++
++## Establish what source is authoritative
++
++Read the current handoff, Git status, and recent history. Resolve the user's branch/worktree choice before following older architecture notes. A branch under active development may have a different engine, artifact schema, or recovery contract from main. Historical notes and existing maps are leads until checked against the selected source.
++
++Record the selected commit and any local edits that affect the study. When the user requests committed branch behavior, read dirty files through `git show <commit>:<path>` or a temporary source mirror; preserve the live checkout. When the user requests the working tree, include its changed bytes and label them. Do not silently switch between these two interpretations. Never copy credentials or saved private runs into a source mirror.
++
++An inventory should record each scoped Python path, line count, hash, owner, and review depth. Inventorying or parsing a file is not reading it. Separate application source, tests inspected as evidence, vendored runtime boundaries, generated code, and explicitly excluded material. Retain small scripts and package initializers when they participate in startup or import behavior.
++
++## Divide the study without losing the workflow
++
++Use delegated readers only when the user or applicable instructions authorize delegation. Assign disjoint areas and output files. Split very large modules by explicit line ranges; reconcile those ranges into one file-level result. Read in chunks small enough that tool output remains complete. If output is truncated, read the missing portion before claiming full coverage.
++
++Give each reader the same source authority and a concrete question. Useful areas include orchestration/state, research/tools, data/graph/identity, preparation/runtime, reports/publication, UI/API, and operations. The coordinator should trace cross-area boundaries while readers work, rather than independently repeating every area study.
++
++Require source anchors, caller/callee relationships, emitted/consumed artifacts, relevant schemas/hashes/identities, error and fallback paths, and explicit uncertainties. Readers should report actual read ranges and distinguish a direct read from inference. Existing diagrams and comments do not establish that a path is active; follow the caller.
++
++## Reconcile boundaries before synthesis
++
++Trace a representative user scenario from its public entry point to its final consumer. For each handoff, identify the producer, payload or persisted file, validation/admission rule, consumer, and stopping condition. Include restart/resume/fork/cancellation behavior when present. Check that an intermediate successful status is not being described as a published or usable deliverable.
++
++Look explicitly at subprocess interpreters, runtime overlays, MCP/HTTP boundaries, queues/IPC, and process-local registries versus durable state. Configuration names and source defaults can be documented without reading secret values. A copied runtime file may differ from its tracked producer; label whether runtime deployment was inspected or merely described from code.
++
++Review the synthesized boundary claims independently when the study is broad enough to justify it. Resolve conflicting descriptions in source. Validate coverage unions, source hashes, cited paths/line anchors, and document links. A coverage receipt supports the reported read scope; it does not prove that every interpretation is correct.
++
++## Deliver and stop
++
++Write one concise workflow spine with links to granular area reports and the module inventory. State the selected source, exclusions, static versus executed checks, unresolved facts, and a useful next-session starting point. Do not launch paid pipelines, mutate saved runs, import side-effectful application modules, or run integration tests merely to support a source-only familiarization task. If execution is requested, use the project's applicable verification procedure and report that evidence separately.
++
++The study is complete when its requested scope is accounted for, the public workflow and important alternative paths are connected, material boundary discrepancies are resolved or explicitly qualified, and the durable report can answer where and how the behavior occurs without repeating the original discovery work.

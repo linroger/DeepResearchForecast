@@ -1,0 +1,1282 @@
+[
+  {
+    "path": "backend/app/__init__.py",
+    "sha256": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
+    "read_ranges": [
+      [
+        1,
+        260
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Factory, auth gate, CORS, lifecycle suppression, SPA fallback."
+  },
+  {
+    "path": "backend/app/api/__init__.py",
+    "sha256": "ff26909731a3631ebd38ce71554972c1d3ec4cb3b96976229abad7b7d75ee76e",
+    "read_ranges": [
+      [
+        1,
+        22
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Blueprint declarations and imports."
+  },
+  {
+    "path": "backend/app/api/graph.py",
+    "sha256": "1740f56f6c2ddbfa38ce75f410abb09ccbe0e27d8f29c0d013877664b5ae0268",
+    "read_ranges": [
+      [
+        1,
+        250
+      ],
+      [
+        251,
+        500
+      ],
+      [
+        501,
+        725
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Upload/ontology alternate workflow, graph build/task/data/detail/GC/delete APIs."
+  },
+  {
+    "path": "backend/app/api/report.py",
+    "sha256": "e99d4622dce36d178e8fcd42295452e3c5bfa52eb1b167ea40b330acd7e55ba7",
+    "read_ranges": [
+      [
+        26,
+        246
+      ],
+      [
+        543,
+        629
+      ],
+      [
+        1580,
+        1786
+      ],
+      [
+        1838,
+        1893
+      ]
+    ],
+    "depth": "partial-read",
+    "notes": "Reviewed directly by ui-api lead. Selective direct verification of browser-facing publication payload, forecast, section/progress and interview-unlock contracts; full ownership is report."
+  },
+  {
+    "path": "backend/app/api/research.py",
+    "sha256": "ef1feac4f5aa5ae6e7d19ef7de1c3b878158fe6e85b407a28adac11b0b97aa01",
+    "read_ranges": [
+      [
+        1,
+        220
+      ],
+      [
+        221,
+        470
+      ],
+      [
+        471,
+        700
+      ],
+      [
+        701,
+        921
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Primary research lifecycle, durable status, dossier/translation/PDF, edits, chart artifacts and progress contracts."
+  },
+  {
+    "path": "backend/app/api/sdk.py",
+    "sha256": "56ebd542e406b6399a94a2225afda48c3ee9e432f0610ac9fd1ee67ef530fcb1",
+    "read_ranges": [
+      [
+        1,
+        180
+      ],
+      [
+        181,
+        356
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 356 lines read in numbered chunks; truncated output reread. No routes or pipelines executed."
+  },
+  {
+    "path": "backend/app/api/settings.py",
+    "sha256": "9f4952482e9abf2bc3703a37f3ec59f2c0284ff8c339f8d14ea7a9a11bc7108c",
+    "read_ranges": [
+      [
+        1,
+        186
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 186 lines read with line numbers. No settings mutation or provider probe executed."
+  },
+  {
+    "path": "backend/app/api/simulation.py",
+    "sha256": "ea22356b98021923e772faf0f1fd9a29e859baeb554492f675ce981a42cb225b",
+    "read_ranges": [
+      [
+        1,
+        240
+      ],
+      [
+        241,
+        520
+      ],
+      [
+        521,
+        810
+      ],
+      [
+        811,
+        1100
+      ],
+      [
+        1101,
+        1390
+      ],
+      [
+        1391,
+        1680
+      ],
+      [
+        1681,
+        1990
+      ],
+      [
+        1991,
+        2280
+      ],
+      [
+        2281,
+        2570
+      ],
+      [
+        2571,
+        2871
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Complete entity/preparation/config/run/status/trajectory/feed/interview/environment API read."
+  },
+  {
+    "path": "backend/app/config.py",
+    "sha256": "9bf12830c853554755b874e5b2278ee6a8bb0e07df6be64ed909549a3c1b4f08",
+    "read_ranges": [
+      [
+        1,
+        200
+      ],
+      [
+        201,
+        400
+      ],
+      [
+        401,
+        600
+      ],
+      [
+        601,
+        800
+      ],
+      [
+        801,
+        1000
+      ],
+      [
+        1001,
+        1200
+      ],
+      [
+        1201,
+        1384
+      ],
+      [
+        1380,
+        1400
+      ],
+      [
+        1401,
+        1600
+      ],
+      [
+        1601,
+        1656
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 1656 lines read in numbered bounded chunks; truncated tail reread. Not imported or executed."
+  },
+  {
+    "path": "backend/app/mcp/__init__.py",
+    "sha256": "c9f3ffac36f8e80db1f83216223803ee6b7541df42ec01a9563741c08b5b4a43",
+    "read_ranges": [
+      [
+        1,
+        24
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 24 lines read with line numbers. Not imported."
+  },
+  {
+    "path": "backend/app/mcp/kg_server.py",
+    "sha256": "b6ae14da0676d9f4a07b3fbeb5a396530e6460c32c93a985d9f307dc6c07abd8",
+    "read_ranges": [
+      [
+        1,
+        190
+      ],
+      [
+        191,
+        358
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 358 lines read in numbered chunks; truncated output reread. No server or graph service started."
+  },
+  {
+    "path": "backend/app/mcp/sim_server.py",
+    "sha256": "48f4808236044bc2993ee87ea85e7342d7da1be3d6b8d851d05e4d438b42a7c5",
+    "read_ranges": [
+      [
+        1,
+        170
+      ],
+      [
+        171,
+        312
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 312 lines read in numbered chunks. No server, simulation state, or IPC accessed."
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "4dde9e617a39f2677a831b5ae76dda2870ec527d9877a83db90d7d8874a95010",
+    "read_ranges": [
+      [
+        70,
+        110
+      ],
+      [
+        660,
+        774
+      ],
+      [
+        860,
+        960
+      ],
+      [
+        1136,
+        1228
+      ],
+      [
+        3423,
+        3476
+      ],
+      [
+        6779,
+        6854
+      ],
+      [
+        7870,
+        7981
+      ],
+      [
+        7982,
+        8034
+      ],
+      [
+        8107,
+        8279
+      ],
+      [
+        8280,
+        8435
+      ],
+      [
+        8949,
+        9055
+      ],
+      [
+        9790,
+        9825
+      ],
+      [
+        10302,
+        10330
+      ],
+      [
+        11883,
+        11905
+      ],
+      [
+        12290,
+        12340
+      ],
+      [
+        12730,
+        12790
+      ],
+      [
+        12935,
+        13035
+      ],
+      [
+        13180,
+        13240
+      ],
+      [
+        13305,
+        13492
+      ],
+      [
+        13241,
+        13304
+      ],
+      [
+        683,
+        775
+      ],
+      [
+        860,
+        902
+      ],
+      [
+        1136,
+        1255
+      ],
+      [
+        1379,
+        1425
+      ],
+      [
+        2390,
+        2435
+      ],
+      [
+        6779,
+        6920
+      ]
+    ],
+    "depth": "partial-read",
+    "notes": "Reviewed directly by ui-api lead. Selective direct reading at API/service and durable-state boundaries; remaining service internals owned by coordinator and not claimed full-read. Additional stated partial ranges reviewed by reader Boole."
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "depth": "partial-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "7b316111f484289a1841f75b23ae366fccaea577ea44349a6341dc06105c5365",
+    "read_ranges": [
+      [
+        11860,
+        11870
+      ],
+      [
+        11878,
+        11972
+      ],
+      [
+        12435,
+        12603
+      ]
+    ]
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "depth": "partial-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "8d97257a95252a9aca269386a9796d9decf97923c7cbb12ac15979b4179dea37",
+    "read_ranges": [
+      [
+        204,
+        245
+      ],
+      [
+        276,
+        291
+      ],
+      [
+        1897,
+        2035
+      ],
+      [
+        2613,
+        2689
+      ]
+    ]
+  },
+  {
+    "path": "backend/app/services/zep_tools.py",
+    "depth": "partial-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "9d16968db17e6df30627574f39f71082f3cda06b2a65dfc43aa0ff51d97d4c61",
+    "read_ranges": [
+      [
+        1335,
+        1455
+      ],
+      [
+        2719,
+        2798
+      ]
+    ]
+  },
+  {
+    "path": "backend/app/utils/llm_client.py",
+    "depth": "partial-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "c943411e6f742f00f80228024398621147dcf2c070fe83b09bda5ebff914939f",
+    "read_ranges": [
+      [
+        25,
+        42
+      ],
+      [
+        250,
+        420
+      ],
+      [
+        520,
+        600
+      ],
+      [
+        637,
+        659
+      ]
+    ]
+  },
+  {
+    "path": "backend/app/utils/security.py",
+    "depth": "partial-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "d1ea1e8788389a84d38def99a23a1b42b59a60f2e0bdafe4da264fb586235501",
+    "read_ranges": [
+      [
+        68,
+        156
+      ]
+    ]
+  },
+  {
+    "path": "backend/run.py",
+    "sha256": "885007d53a25098e9914de6d589867f4f580737846bc709643faf84840103c14",
+    "read_ranges": [
+      [
+        1,
+        62
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Validation, entrypoint, monitor scheduling and host binding."
+  },
+  {
+    "path": "backend/tests/test_auth_gate_forwarded.py",
+    "sha256": "6b206a9f6c30f093316d0a8b7bf24281cbc37449bffdfd26141c65182abc3c7f",
+    "read_ranges": [
+      [
+        1,
+        96
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "backend/tests/test_config_optimization_defaults.py",
+    "sha256": "4431410b87a22a58ef7f18edb030b3b30f00707f76ec3f83ba09b2c051eb34c5",
+    "read_ranges": [
+      [
+        1,
+        134
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 134 lines read. Expected defaults and child-program source inspected; no subprocess test executed."
+  },
+  {
+    "path": "backend/tests/test_dossier_edit_continue.py",
+    "sha256": "27f2eb74ba8579652014a43b32f5053514bf5feca8b189351cb7f1f8a7e02076",
+    "read_ranges": [
+      [
+        1,
+        148
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "backend/tests/test_live_research_progress.py",
+    "sha256": "9bb5638a7882aa804065d7c12b047e494aae38391cd8711e2cded85d4db592e6",
+    "read_ranges": [
+      [
+        231,
+        442
+      ]
+    ],
+    "depth": "partial-read",
+    "notes": "Reviewed directly by ui-api lead. Selective static characterization of bounded/full progress, no-cache and dossier payload; not executed."
+  },
+  {
+    "path": "backend/tests/test_mcp_servers.py",
+    "sha256": "82a168a16c91c254e1f66dc2362c387c5ef7117390c480d263aa423cafe4e100",
+    "read_ranges": [
+      [
+        1,
+        180
+      ],
+      [
+        181,
+        360
+      ],
+      [
+        361,
+        493
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 493 lines read in numbered chunks. Stub, handshake, and subprocess smoke-test definitions were not executed."
+  },
+  {
+    "path": "backend/tests/test_runtime_lifecycle_isolation.py",
+    "sha256": "5acecff9273b4066fe2558a174bee5063224f180ee8cce15e325e9537ebf3057",
+    "read_ranges": [
+      [
+        1,
+        115
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "backend/tests/test_sdk_publication_barrier.py",
+    "sha256": "e1bdf6daa385cc418b33bc1ecd03bf11c3efcde1def9803ba38d1a6cd6b846ea",
+    "read_ranges": [
+      [
+        1,
+        113
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 113 lines read. Static publication-barrier evidence only; no fixtures or writes executed."
+  },
+  {
+    "path": "backend/tests/test_settings_endpoint_fallback.py",
+    "sha256": "0dbb033580e2143568b204f56a155adef02853960fca05205b16751b5242a59e",
+    "read_ranges": [
+      [
+        1,
+        71
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 71 lines read. Static fixture and assertion evidence only; not executed."
+  },
+  {
+    "path": "backend/tests/test_settings_provider_info.py",
+    "sha256": "3ba0c5f713ec763028579c86baee8dd73f0ce175f5db3978714e5b6bf4a6519e",
+    "read_ranges": [
+      [
+        1,
+        31
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api configuration/SDK/MCP reader Boole. All 31 lines read. Static assertion evidence only; not executed."
+  },
+  {
+    "path": "backend/tests/test_simulation_trajectory_api.py",
+    "sha256": "6c49798730d0ebed2eb46e3157e5550fe710f3d9febf0a1beea2051c74388a6f",
+    "read_ranges": [
+      [
+        1,
+        151
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "backend/tests/test_spa_serving.py",
+    "sha256": "b5d297b25bd76ac92bbbeacb33a80d57b248b7c70f948377d6713893ecd5691c",
+    "read_ranges": [
+      [
+        1,
+        98
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "backend/tests/test_status_live_block.py",
+    "sha256": "3fa0f2022fc3b6212e2f28beb882ac960b4b5c4274dea54fbc62c32a1ec60052",
+    "read_ranges": [
+      [
+        1,
+        132
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead. Static characterization only; not executed."
+  },
+  {
+    "path": "deerflow_bridge/extensions_config.json",
+    "depth": "full-read",
+    "notes": "Reviewed by ui-api configuration/SDK/MCP reader Boole as supporting boundary evidence; no execution.",
+    "sha256": "db342f39f3f514a311162bd3a93cffa83aeeb46a7cb0c36292e7f1a8b7b20bd3",
+    "read_ranges": [
+      [
+        1,
+        41
+      ]
+    ]
+  },
+  {
+    "path": "frontend/package.json",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "0034f0a544ba16337bdf99dee51e48bcfe1541a52da0130f2e739edb0ffd0145",
+    "read_ranges": [
+      [
+        1,
+        26
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/graph.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "1d30a1b8d07a849b38f163c3d8bcd4da85350b0f5c0a89a38e02a00ced24245f",
+    "read_ranges": [
+      [
+        1,
+        109
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/index.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "da7159448f2d26fbece16045be184142ee15283cf4d652410d38dec4ce3520bc",
+    "read_ranges": [
+      [
+        1,
+        88
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/report.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "b3031a2b1e423bd4a1ca4a22cfa4d2e8367669d528d92f25796c6a478099aebe",
+    "read_ranges": [
+      [
+        1,
+        156
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/research.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "78206df56726dacf7a796644a1605bc6e5d44985030b8f12f326937c4e70c8a1",
+    "read_ranges": [
+      [
+        1,
+        236
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/settings.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "1cdf23e65dd4f87569585844a13b600882823307434242fe8c1c25e6572ccd4c",
+    "read_ranges": [
+      [
+        1,
+        23
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/api/simulation.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "cb50b1699d96145bb012bd2f9f69300d0364f7b1d82cc59ba19864ca8c45a4ab",
+    "read_ranges": [
+      [
+        1,
+        203
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/App.vue",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "31524da99c7a20fcb1f24ea8f14bca43487681869a2b657266f7135daa17a964",
+    "read_ranges": [
+      [
+        1,
+        40
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/components/GraphPanel.vue",
+    "sha256": "03a88afe4a0109820fe67bb4409272408e2be95a03703ba2bdf5f044a56fe4d9",
+    "read_ranges": [
+      [
+        1,
+        210
+      ],
+      [
+        211,
+        430
+      ],
+      [
+        431,
+        650
+      ],
+      [
+        651,
+        880
+      ],
+      [
+        881,
+        1100
+      ],
+      [
+        1101,
+        1320
+      ],
+      [
+        1321,
+        1550
+      ],
+      [
+        1551,
+        1780
+      ],
+      [
+        1781,
+        2010
+      ],
+      [
+        2011,
+        2230
+      ],
+      [
+        2231,
+        2450
+      ],
+      [
+        2451,
+        2625
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 2625 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/BinaryForecastTable.vue",
+    "sha256": "ccd75805e512b01dcee0666a4300eecac3e9ad6f2f5fb98644a989508d461fdb",
+    "read_ranges": [
+      [
+        1,
+        319
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 319 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/ConfirmDialog.vue",
+    "sha256": "952c00f8f04d5203328739296a064a88f87e49f2d18286395e5cd37dca26acf9",
+    "read_ranges": [
+      [
+        1,
+        118
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 118 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/DossierViewer.vue",
+    "sha256": "17d8ba90036838e5e7471cf552975f6dc8f88826fa45095691f2c0c42cb24b99",
+    "read_ranges": [
+      [
+        1,
+        220
+      ],
+      [
+        221,
+        440
+      ],
+      [
+        441,
+        660
+      ],
+      [
+        661,
+        900
+      ],
+      [
+        901,
+        1140
+      ],
+      [
+        1141,
+        1380
+      ],
+      [
+        1381,
+        1567
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 1567 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/ForecastReport.vue",
+    "sha256": "97ef671b71ab77c0846f89f32576a93f00e6050a35cbb3a5e86a1699fc4b5c78",
+    "read_ranges": [
+      [
+        1,
+        210
+      ],
+      [
+        211,
+        430
+      ],
+      [
+        431,
+        650
+      ],
+      [
+        651,
+        870
+      ],
+      [
+        871,
+        1100
+      ],
+      [
+        1101,
+        1350
+      ],
+      [
+        1351,
+        1600
+      ],
+      [
+        1601,
+        1820
+      ],
+      [
+        1821,
+        1955
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 1955 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/PipelineHistory.vue",
+    "sha256": "895ebd7df662698d248f2274128b07f2a9bac7cf85397c76467acc2dd8f84a40",
+    "read_ranges": [
+      [
+        1,
+        230
+      ],
+      [
+        231,
+        450
+      ],
+      [
+        451,
+        651
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 651 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/ResearchConsole.vue",
+    "sha256": "fe24b13b300952ab729bec0161ce5413783adf3f77fee7f05da49e04c9f4c5b1",
+    "read_ranges": [
+      [
+        1,
+        230
+      ],
+      [
+        231,
+        444
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 444 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/RunVitals.vue",
+    "sha256": "a4bf3062f484413d6ed0a9d457c9303084e4ae1c1ceedb8260ea91f0c9f4e32f",
+    "read_ranges": [
+      [
+        1,
+        281
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 281 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/SettingsMenu.vue",
+    "sha256": "f2c5a2cc124ccb10abca8aa68bdb9b8c14c348012c9c5f20ff96fec8c8de1593",
+    "read_ranges": [
+      [
+        1,
+        160
+      ],
+      [
+        161,
+        316
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 316 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/SimulationView.vue",
+    "sha256": "6bb267f2c291ef543737f71b1a054d2ddce0666ae9801e2f53fd85f1623add4f",
+    "read_ranges": [
+      [
+        1,
+        220
+      ],
+      [
+        221,
+        450
+      ],
+      [
+        451,
+        680
+      ],
+      [
+        681,
+        940
+      ],
+      [
+        941,
+        1184
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 1184 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/components/research/StageTimeline.vue",
+    "sha256": "31923f6070393147b8f8cc5c4795b9fa26dc6cb75ec5ea1ecefedece7b3ae223",
+    "read_ranges": [
+      [
+        1,
+        230
+      ],
+      [
+        231,
+        450
+      ],
+      [
+        451,
+        660
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 660 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/src/i18n.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "b564f730662107198f493a6e22eeeb1d36e75f3a7409b90118323769ab3f41dd",
+    "read_ranges": [
+      [
+        1,
+        52
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/main.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "b32c91f0c71e5ac60c04a8163c4e9885308d12878d456c5aa3740730016e1d15",
+    "read_ranges": [
+      [
+        1,
+        26
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/router/index.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "a9893c7c2bcb89187a00c67b8bf91231a67f900808bfab1ae89b242e136e3970",
+    "read_ranges": [
+      [
+        1,
+        29
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/styles/tokens.css",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "85464239b68ff30e4670a4585ba7dddb46cbc76df5af8da048dcf63c6a6636a0",
+    "read_ranges": [
+      [
+        1,
+        126
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/binaryForecasts.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "ea60ec7452c9007cd47f680272fde3858791dec0ea244ec606f16770410d4516",
+    "read_ranges": [
+      [
+        1,
+        166
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/graphPayload.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "468e6742615019ea3abc65c7e36788442e8d601f4b43e09d37812bbbef43141c",
+    "read_ranges": [
+      [
+        1,
+        103
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/graphStyle.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "f77057ca190173badaaddc437203ec36c293210f81b3f74e734a426db304da6b",
+    "read_ranges": [
+      [
+        1,
+        82
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/liveProgress.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "80479e90f09735ca977999eefab6c9687066ba3453ecf72a091a157f3f6103da",
+    "read_ranges": [
+      [
+        1,
+        96
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/markdown.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "f2acc64518a8ef7576318d2164587406b101a57875810ecb582f90fa46f76357",
+    "read_ranges": [
+      [
+        1,
+        160
+      ],
+      [
+        161,
+        298
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/reportLanguages.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "df7ae581ba4a9331fbad4eef86b69432bf56bb3b4cdc289c5e7d2670882837f5",
+    "read_ranges": [
+      [
+        1,
+        160
+      ],
+      [
+        161,
+        294
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/researchTranslation.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "789419e1d6f75a09bb492c8fc357092b9510aa2630f243daf2c54d4f8fbdf225",
+    "read_ranges": [
+      [
+        1,
+        65
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/runVitals.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "dbaccea4a4be86e1e5b023e1bee3816aabb4678f982ef377242c191b0e4ed80c",
+    "read_ranges": [
+      [
+        1,
+        204
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/utils/vizManifest.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "24ac5f30c19e8a9f8b416b08212af43b947b3e2402838630275c02f4fae5f6dc",
+    "read_ranges": [
+      [
+        1,
+        123
+      ]
+    ]
+  },
+  {
+    "path": "frontend/src/views/ResearchView.vue",
+    "sha256": "f5b45949afd38304118aff57192812dc70effe70bc111fa253270c2e3a4f35ce",
+    "read_ranges": [
+      [
+        1,
+        180
+      ],
+      [
+        181,
+        360
+      ],
+      [
+        361,
+        560
+      ],
+      [
+        561,
+        760
+      ],
+      [
+        761,
+        880
+      ],
+      [
+        881,
+        1016
+      ]
+    ],
+    "depth": "full-read",
+    "notes": "Reviewed in full by ui-api frontend reader Godel. All 1016 lines read, including template, script, comments, and styles; no unread ranges."
+  },
+  {
+    "path": "frontend/tests/graphPayload.test.mjs",
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead as static characterization; not executed.",
+    "sha256": "305d1019089dfc04c337355bf208498f23e7e039dceb2997abd67c0f4ab121e7",
+    "read_ranges": [
+      [
+        1,
+        45
+      ]
+    ]
+  },
+  {
+    "path": "frontend/tests/liveProgress.test.mjs",
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead as static characterization; not executed.",
+    "sha256": "a0aa6945c1fd3d6bb1ea746f7a51fb580db25112a843330d5ce8dae8a5185c94",
+    "read_ranges": [
+      [
+        1,
+        71
+      ]
+    ]
+  },
+  {
+    "path": "frontend/tests/markdown.test.mjs",
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead as static characterization; not executed.",
+    "sha256": "eda7393478900260d29f66dac5c5eacce9cae1ab6e9a4d26689e28aba8597be4",
+    "read_ranges": [
+      [
+        1,
+        28
+      ]
+    ]
+  },
+  {
+    "path": "frontend/tests/researchTranslation.test.mjs",
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead as static characterization; not executed.",
+    "sha256": "b169a0c0e109db05f17a988db5256c33175559c7eb03ac199930c7b557e14704",
+    "read_ranges": [
+      [
+        1,
+        66
+      ]
+    ]
+  },
+  {
+    "path": "frontend/tests/vizManifest.test.mjs",
+    "depth": "full-read",
+    "notes": "Reviewed directly by ui-api lead as static characterization; not executed.",
+    "sha256": "429482473ae8c1d3902c5786bfbe25728b78e04cceb61c8d6ca52e795a66491b",
+    "read_ranges": [
+      [
+        1,
+        120
+      ]
+    ]
+  },
+  {
+    "path": "frontend/vite.config.js",
+    "depth": "full-read",
+    "notes": "Reviewed in full directly by ui-api lead; templates/bootstrap, API helpers, utility logic, or frontend config/style as applicable. Reader reassignment completed after no usable delegated plumbing receipt.",
+    "sha256": "97a64f0b54ad1be9b09c15e34d55540c788a6dbfb32f2c929db28a460eb682da",
+    "read_ranges": [
+      [
+        1,
+        34
+      ]
+    ]
+  }
+]

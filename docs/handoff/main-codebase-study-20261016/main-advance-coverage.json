@@ -1,0 +1,927 @@
+[
+  {
+    "path": ".env.example",
+    "sha256": "cd19fde749abb58d43d1b778c0365224a264fb32b2c226fe48e353669b081d5a",
+    "read_ranges": [
+      [
+        137,
+        146
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "support_or_index"
+  },
+  {
+    "path": "README.md",
+    "sha256": "703b49349f51399efc74f355807fc7b7ef36b4892460351babe36a408b129036",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "README.zh-CN.md",
+    "sha256": "41997db8af96beb489364acbab006b91a452c0c68e4cb6b70a10dbad4127f687",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "agent-progress.txt",
+    "sha256": "69ccf3bdf0d1d7a56f7bfbb2bc2df127eddc3f372b42804dcbef870c934b182c",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "backend/app/services/pipeline_orchestrator.py",
+    "sha256": "c1112bde148628c901e6ca68a755a9044bba0122545de1e124804c8872f0483e",
+    "read_ranges": [
+      [
+        1358,
+        1374
+      ],
+      [
+        1540,
+        1605
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full. Targeted current-generation callers/support ranges also read; no wider coverage claim.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "application"
+  },
+  {
+    "path": "backend/tests/test_drf2_skills_config.py",
+    "sha256": "032e409078f23fcbb02129c116b42b73bd02f0f0958df69912f8776eda7b5061",
+    "read_ranges": [
+      [
+        172,
+        188
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "test_evidence"
+  },
+  {
+    "path": "backend/tests/test_legacy_official_data.py",
+    "sha256": "d46b59e3a114cf7a795f11535be31b672416a93e725df7ce2c5e7a896b864c67",
+    "read_ranges": [
+      [
+        217,
+        233
+      ],
+      [
+        536,
+        554
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "test_evidence"
+  },
+  {
+    "path": "backend/tests/test_research_engine_v3.py",
+    "sha256": "d8070f98bbf97cc6a45694ea3cd572e539c2c01df5850f9491d78a5dacf577eb",
+    "read_ranges": [
+      [
+        36,
+        53
+      ],
+      [
+        139,
+        156
+      ],
+      [
+        203,
+        219
+      ],
+      [
+        369,
+        393
+      ],
+      [
+        809,
+        884
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "test_evidence"
+  },
+  {
+    "path": "backend/tests/test_research_skills.py",
+    "sha256": "d107f4b6edafbd7ab56216f9b993f0a4797f1fe502478ef312ba590dd579da16",
+    "read_ranges": [
+      [
+        1,
+        300
+      ],
+      [
+        301,
+        582
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "complete_new_file",
+    "category": "test_evidence"
+  },
+  {
+    "path": "deerflow_bridge/deerflow_research.py",
+    "sha256": "42da5160e09135627214bbc67747511ded67ba59193e884e0cabd5ee823e0e8d",
+    "read_ranges": [
+      [
+        5193,
+        5285
+      ],
+      [
+        5504,
+        5520
+      ],
+      [
+        5535,
+        5551
+      ],
+      [
+        5575,
+        5591
+      ],
+      [
+        5658,
+        5674
+      ],
+      [
+        5739,
+        5755
+      ],
+      [
+        5777,
+        5793
+      ],
+      [
+        5849,
+        5865
+      ],
+      [
+        6271,
+        6287
+      ],
+      [
+        6787,
+        6803
+      ],
+      [
+        6869,
+        6885
+      ],
+      [
+        11136,
+        11152
+      ],
+      [
+        18125,
+        18148
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "application"
+  },
+  {
+    "path": "deerflow_bridge/linear_research.py",
+    "sha256": "ef1cace336782afc558034873c767438f97e323524c443ba4eecb4948dec824c",
+    "read_ranges": [
+      [
+        486,
+        525
+      ],
+      [
+        1366,
+        1395
+      ],
+      [
+        1411,
+        1428
+      ],
+      [
+        4258,
+        4293
+      ],
+      [
+        4726,
+        4745
+      ],
+      [
+        4793,
+        4891
+      ],
+      [
+        5506,
+        5538
+      ],
+      [
+        5585,
+        5601
+      ],
+      [
+        5660,
+        5677
+      ],
+      [
+        5983,
+        6003
+      ],
+      [
+        6226,
+        6243
+      ],
+      [
+        6525,
+        6544
+      ],
+      [
+        6767,
+        6784
+      ],
+      [
+        7523,
+        7560
+      ],
+      [
+        7563,
+        7579
+      ],
+      [
+        7694,
+        7717
+      ],
+      [
+        1360,
+        1435
+      ],
+      [
+        5495,
+        5690
+      ],
+      [
+        4665,
+        4745
+      ],
+      [
+        7420,
+        7465
+      ],
+      [
+        7515,
+        7710
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full. Targeted current-generation callers/support ranges also read; no wider coverage claim.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "application"
+  },
+  {
+    "path": "deerflow_bridge/research_skills.py",
+    "sha256": "abb480e1f8ee3a661b0779b56e302770fcf180f59af526627137864e052a1530",
+    "read_ranges": [
+      [
+        1,
+        260
+      ],
+      [
+        261,
+        520
+      ],
+      [
+        521,
+        769
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "complete_new_file",
+    "category": "application"
+  },
+  {
+    "path": "deerflow_bridge/skills/competitive-landscape-forecasting/SKILL.md",
+    "sha256": "4ad6c5e6a24778397163219ca0f923c3d36f32b69702f6e5c925a1c0a3d68135",
+    "read_ranges": [
+      [
+        1,
+        83
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/competitive-landscape-forecasting/references/leadership-metrics.md",
+    "sha256": "73b4a54678c5b9c7d22b9056d1f34df98c0dfb1a2411370c19b9dd3c0c9904ba",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/competitive-landscape-forecasting/references/persistence-and-share-dynamics.md",
+    "sha256": "d06d416ad14d8ad47cc804979465ccbacfabc2bf708548882003cc059f951f87",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/competitive-landscape-forecasting/references/tech-race-indicators.md",
+    "sha256": "c6074ec73b3be65eef186ea655484e5aba6a0c15c3b72a57664855a0ff4514c1",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/election-forecasting/SKILL.md",
+    "sha256": "ae5485f31b17b0ba697ad553b3a4ab0df7e5432cac825c0d70835273a0c9efcf",
+    "read_ranges": [
+      [
+        1,
+        105
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/election-forecasting/references/fundamentals-and-polls.md",
+    "sha256": "278fa9c3523dab981d3fc1bbaa04851621d5b1ea9cc780c308be5e4c03e4b8cc",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/election-forecasting/references/non-us-elections.md",
+    "sha256": "df7f0d44e753fbae11044a834d8d2073b85eaeb529b8d24d1175c658b52c0938",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/election-forecasting/references/us-election-mechanics.md",
+    "sha256": "0f3a42fa70c634f8c13cd1c5231c9fd19c402b11fcd398c49398407c645354c9",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/financial-markets-forecasting/SKILL.md",
+    "sha256": "6bf5e61bf504fabd1398cd86c489f23cfb0b1fe1d4832a7e925bcf5cca46625b",
+    "read_ranges": [
+      [
+        1,
+        81
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/financial-markets-forecasting/references/empirical-and-volatility-base-rates.md",
+    "sha256": "5fcf896beac88fb321a3fd3e4376e08fc1a5c363047e63547b128a6d15098863",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/financial-markets-forecasting/references/implied-distributions.md",
+    "sha256": "146cbd95b28a4f2430fcd5115cc68cca1c23bb801de9381d0bd98c03dd1408bd",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/financial-markets-forecasting/references/listings-and-ipos.md",
+    "sha256": "94311213ac900a88a5367cd1bf48249b5795e7a812351158351cf0c0b554fdc3",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/geopolitical-forecasting/SKILL.md",
+    "sha256": "4bd2b65071c23796c61227160ec38d2ed4270c5c18f9a61d5c25d698fe77dbe4",
+    "read_ranges": [
+      [
+        1,
+        75
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/geopolitical-forecasting/references/conflict-base-rates.md",
+    "sha256": "8103207f91012df6800884e78716c40778d498d76d453e635db9b2ab13968d10",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/geopolitical-forecasting/references/escalation-and-negotiation.md",
+    "sha256": "89a56f1988b79dde0e3dbf7073cbdb9b13aab6c79b74f071508ee64e043d307a",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/geopolitical-forecasting/references/evidence-under-information-war.md",
+    "sha256": "5e70295008c764a165e9544bce30dd53f6794ecfaeae7a11c7a2c122026bba81",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-forecasting/SKILL.md",
+    "sha256": "be6505fc197f46cfa30bd327faad22c8507b8bbe94ea0516f068f1981fb4e25e",
+    "read_ranges": [
+      [
+        1,
+        79
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-forecasting/references/forecasting-methods.md",
+    "sha256": "d046d2692d510b3f8cf9917a00038ffefe9f9fed059653746ac6b82bdc6b7eff",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-forecasting/references/outlook-reconciliation.md",
+    "sha256": "cd50927fbdb74d1a459d652bbe99504ab7e93afc3bf6ac6643f437e12b9384dd",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-forecasting/references/reference-classes-and-lead-times.md",
+    "sha256": "626f2c50f2eabd7145386a3c3a3b04abc29e52253674e814a6ea9666b1f9d5e3",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/SKILL.md",
+    "sha256": "c84a4e233d985833ab0d82df44138d6aa4b0287132f4760619c58cb4fe394825",
+    "read_ranges": [
+      [
+        1,
+        80
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/references/cycles-and-capacity.md",
+    "sha256": "afdab895c62eb5e13928400809b0ab7a1d8cf8d07049cafe0a6fce6c416a8d43",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/references/industry-sources.md",
+    "sha256": "f12dbd5c47617abb290e9aae4ca39ffaf51839021e41df57e8a8273a095d3116",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/references/sectors-economy.md",
+    "sha256": "d8554ac27fd06934c6ad99f136ef917dfdcbbc26d827b6cd6ee16fae82f3ed5a",
+    "read_ranges": [
+      [
+        1,
+        110
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/references/sectors-technology.md",
+    "sha256": "a85911b8b2dd9af422ebcdef16d892f8aa88b07fa55ab01c0eaba3969bdc7380",
+    "read_ranges": [
+      [
+        1,
+        83
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/industry-research/references/value-chain-and-sizing.md",
+    "sha256": "037eb1cc3b26701856b42802b2f1d4c52117c957b55342cc4520df34728850f9",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/macro-research/SKILL.md",
+    "sha256": "e8076b29e2d6c2dca00b20a6af47b2f7566ba94f37a18b1ba61b842c724755f4",
+    "read_ranges": [
+      [
+        1,
+        61
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/macro-research/references/central-bank-reaction-functions.md",
+    "sha256": "233563c25b7f65b86497aa988063ca0266cf3f1d40e3d91228460b00d556fd23",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/macro-research/references/macro-base-rates.md",
+    "sha256": "5ca2bcfb6585e3ed1eee40b00d0d67282a1c8b68bf9733bf1befb3512ee5460d",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/macro-research/references/nowcasting-and-releases.md",
+    "sha256": "53ce7929a5c36ae1c934602dd39ec92b1cba77d2c1ca16b85d069b3f21584ba0",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/policy-and-trade-forecasting/SKILL.md",
+    "sha256": "f924a98cf3da65c56c23a72a699e5f22db02ff3becb35c19fe62bc0cfd1b24f5",
+    "read_ranges": [
+      [
+        1,
+        58
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/policy-and-trade-forecasting/references/signals-and-credibility.md",
+    "sha256": "c15e3827b90d6ccbbc90e80a4f32a51b3edb0ebc69e14ccbbbd9c3a529c590bd",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/policy-and-trade-forecasting/references/trade-instruments.md",
+    "sha256": "242e1290dc4146dff6e1a8cc1b5b262d4542d23c7262e7ca5d29c2495b774293",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/policy-and-trade-forecasting/references/us-process-and-base-rates.md",
+    "sha256": "f75007c73a6bcf100542995a46ec102aebfc52517d1d4ef1a94d9ca6a5d87936",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/reference-class-forecasting/SKILL.md",
+    "sha256": "39f71aed4e68e95a8b2e86953f6c3f2fda5992c11ab819d334674502c2ed491b",
+    "read_ranges": [
+      [
+        1,
+        65
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_full_read",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/reference-class-forecasting/references/base-rate-recipes.md",
+    "sha256": "f101b214ef371659423bb1c3d4cf67ca7ab943c48a7bd4949e4934c1d01bf16e",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/reference-class-forecasting/references/prediction-market-anchoring.md",
+    "sha256": "cb416e7c77a30695fbd4bfdfcb61d4a90679e80b3faba021226947c1b6a0ae38",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "deerflow_bridge/skills/reference-class-forecasting/references/probability-toolkit.md",
+    "sha256": "73c70e0323c495b56b3937019c0a3fab422ef44e93f4e346c92dd86560e19bff",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "skill_resource"
+  },
+  {
+    "path": "docs/handoff/research-skills/authoring-results.md",
+    "sha256": "5e98124f4862a4f2567aa06c643538e8dbad4f6d29fa410d748190beba2189eb",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "docs/handoff/research-skills/check_skill.py",
+    "sha256": "0a3437922acb201642e65b762b9f238c652d4f0217b6e33e285d2c2a1a75f684",
+    "read_ranges": [
+      [
+        1,
+        152
+      ]
+    ],
+    "depth": "full",
+    "notes": "Full bounded source read; no import/execution.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "complete_new_file",
+    "category": "authoring_checker"
+  },
+  {
+    "path": "docs/handoff/research-skills/design.md",
+    "sha256": "de8a7e42190ac199cc1ba5bd08654d9ed9c0691f0764598ef489263ef8e243d7",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "docs/handoff/research-skills/inspiration-digest.md",
+    "sha256": "cf003629f1614aee0daa50885d377f3579d68749a013bc03fd9ba3c32f97aa84",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "docs/handoff/research-skills/legacy-skill-mechanics.md",
+    "sha256": "de0f0834f31cdbc8c87b28f23cdb5ce230f3f6c7aa7b6f68038acc920e04a730",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "docs/handoff/research-skills/review-results.md",
+    "sha256": "832db6e7e6fcdeb92efd779dde06b6485c1f6ce7bb030dfc8a158bc26b470cd6",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "docs/handoff/research-skills/v3-prompt-architecture.md",
+    "sha256": "78935188f3824f4d1a8a6b3288c1629b388b11496e559933390a24dd26ca67a1",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "feature_list.json",
+    "sha256": "8329a45d44dcadf5d0df2518c427c81058feed8982d69ffbceaeff9440f3ee94",
+    "read_ranges": [],
+    "depth": "partial",
+    "notes": "Indexed committed path/hash/size only; content not read or used as behavioral proof.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "index_only",
+    "category": "support_or_index"
+  },
+  {
+    "path": "init.sh",
+    "sha256": "1c848f8a7995170da0f2ea1bf22972a975ec06aff107e946603eee494cb439af",
+    "read_ranges": [
+      [
+        17,
+        31
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "support_or_index"
+  },
+  {
+    "path": "setup.sh",
+    "sha256": "a2a9bc506c423ed1a549c4ed5c14c2f76d9fdb9df44450bcfb5c11cf865556fb",
+    "read_ranges": [
+      [
+        594,
+        625
+      ],
+      [
+        630,
+        660
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full. Targeted current-generation callers/support ranges also read; no wider coverage claim.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "all_changed_hunks_with_context",
+    "category": "support_or_index"
+  },
+  {
+    "path": "deerflow_bridge/runtime_skill_sync.py",
+    "sha256": "f34554b3581a17dcbb7118e2175136663e52fc09a32a161b2dbe983087fccb10",
+    "read_ranges": [
+      [
+        40,
+        71
+      ],
+      [
+        113,
+        219
+      ],
+      [
+        412,
+        537
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full. Targeted current-generation callers/support ranges also read; no wider coverage claim.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_partial_read",
+    "category": "application"
+  },
+  {
+    "path": "backend/app/utils/actors.py",
+    "sha256": "793a292fda1f3b425291139d72423be77826751234d15b40c90aac63760a8ba6",
+    "read_ranges": [
+      [
+        1930,
+        1955
+      ],
+      [
+        2880,
+        2945
+      ]
+    ],
+    "depth": "partial",
+    "notes": "Every changed hunk with bounded committed Git context read. Current file not reread in full. Targeted current-generation callers/support ranges also read; no wider coverage claim.",
+    "source_commit": "8852ce123fa15a6b4f4c3e6e4e492435c0e3137b",
+    "delta_read": "supporting_partial_read",
+    "category": "application"
+  }
+]

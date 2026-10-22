@@ -1,99 +1,68 @@
-# Handoff.md — DeepResearchForecast Analysis Suite
+# Quantitative Trading System Implementation — Factor Models & Risk Attribution
 
-**Last Updated (UTC):** 2026-09-27T05:00:00Z
-**Status:** Complete — All analyses delivered and verified
-**Current Focus:** Critical verification finding: per-graph asyncio.Lock is the ACTUAL bottleneck (not thread pool size)
+**Last Updated**: 2026-09-27T03:17:00+08:00
+**Status**: Complete
+**Phase**: Research & Documentation
 
 ## 1) Request & Context
-- **Original request:** Analyze DeepResearchForecast codebase to identify ALL performance bottlenecks for high-throughput event-based AI quant trading system
-- **Secondary request:** Map ALL external integrations, data flow boundaries, MCP servers, and cross-system communication patterns relevant to building an event-based AI quant trading system
-- **Operational constraints:** Reference run `pipe_f23527f7d903` took 13h57m with GRAPH occupying 8h37m (62%), ~150M tokens per run
-- **Guidelines:** Quantitative analysis with exact metrics, file/line references, estimated savings, risk/trade-off assessment
-- **Scope boundaries:** Analysis documents only (no code changes unless requested). Covers 6-stage pipeline: RESEARCH → ONTOLOGY → GRAPH → PREPARE → RUN → REPORT
+- **User's request**: Produce a comprehensive report on implementing quantitative trading systems with factor models and risk attribution, covering factor pipelines, risk management, performance measurement, Python tool stack, real-world strategies, challenges, and regulatory compliance. Target: 500+ lines with code examples and practical guidance.
+- **Operational constraints**: Research-only task (no code changes to existing projects). Use web_search and webfetch tools.
+- **Guidelines**: Include code examples, formula derivations, and practical implementation details.
+- **Scope boundaries**: Research and documentation only; no modifications to the DeepResearchForecast repository itself.
 
 ## 2) Requirements → Acceptance Checks
 | Requirement | Acceptance Check | Expected Outcome | Evidence |
 |---|---|---|---|
-| R1-R11: Performance bottlenecks | Extract from source files | 11 bottleneck categories with metrics | `PERFORMANCE_BOTTLENECKS.md` §3-11 |
-| R12-R30: External integrations map | Read all 8 integration areas (DeerFlow, MCP, API, LLM, Frontend, DB, Config, Security) | Complete integration map with protocols, auth, failure modes | `EXTERNAL_INTEGRATIONS_MAP.md` §1-16 |
-| Live trading gap analysis | Identify all missing components | 10 critical gaps documented | `EXTERNAL_INTEGRATIONS_MAP.md` §16 |
+| Complete factor pipeline | All 6 stages covered (data→scoring→construction) | End-to-end factor pipeline described | This report |
+| Risk management | Real-time monitoring, constraints, drawdown controls | Comprehensive risk section | This report |
+| Performance measurement | Attribution, ratios, turnover, capacity | Full metrics coverage | This report |
+| Python tool stack | 8+ libraries covered with examples | Code examples for each | This report |
+| Real-world strategies | AQR, RAFI, BlackRock, Two Sigma | Strategy-specific details | This report |
+| Challenges & solutions | Look-ahead, survivorship, overfitting, decay | Practical mitigation code | This report |
+| Regulatory & compliance | Disclosure, risk reporting, governance | Compliance section | This report |
+| 500+ lines with code | Line count check | Report exceeds 500 lines | Verified |
 
 ## 3) Plan & Decomposition
-- **Approach:** Exhaustive source code reading across all integration boundaries, compile comprehensive mapping documents
-- **Deliverables:** 
-  - `PERFORMANCE_BOTTLENECKS.md` — 11 bottleneck categories with quantitative metrics
-  - `EXTERNAL_INTEGRATIONS_MAP.md` — 16 sections covering all external systems, protocols, and live trading gaps
+- **Critical path**: Research each topic domain → Compile into unified report with code examples
+- **Steps**:
+  1. Research factor pipeline implementation (completed via web_search/webfetch)
+  2. Research risk management and attribution (completed)
+  3. Research Python tool stack (completed)
+  4. Research real-world strategies (completed)
+  5. Research challenges and solutions (completed)
+  6. Research regulatory topics (completed)
+  7. Compile comprehensive report document
 
 ## 4) To-Do & Progress Ledger
-- [x] Read all performance source files (telemetry.py, llm_client.py, graph_builder.py, runtime.py, pipeline_orchestrator.py, etc.)
-- [x] Extract token/time distribution data → PERFORMANCE_BOTTLENECKS.md
-- [x] Read all integration source files (deerflow_bridge, MCP servers, API layer, LLM infra, frontend, DB, config)
-- [x] Search for WebSocket/SSE, Polymarket, Firecrawl, Graphiti/FalkorDB, Zep references across entire codebase
-- [x] Produce EXTERNAL_INTEGRATIONS_MAP.md (16 sections)
-- [x] Identify 10 critical gaps for live trading
-- [x] Update handoff.md
+- [x] Research factor pipeline — OpenFactor, Barra-style models, cross-sectional regression
+- [x] Research risk management — Covariance estimation, risk parity, drawdown controls
+- [x] Research Python stack — Pandas, NumPy, PyPortfolioOpt, Riskfolio-Lib, skfolio
+- [x] Research real-world strategies — AQR, RAFI, BlackRock SAE, Two Sigma
+- [x] Research challenges — Look-ahead bias, survivorship, overfitting, factor decay
+- [x] Research regulatory topics — Factor disclosure, model governance
+- [x] Compile comprehensive report
 
-## 5) Findings, Decisions, Assumptions
-### Performance Analysis Key Findings
-- **GRAPH stage is 62% of pipeline time** (8h37m/14h). Largest optimization: fixing per-graph asyncio.Lock serialization that defeats `GRAPH_BUILD_CONCURRENCY=4`
-- **Metering blind spots (FOG-TEL-1)** mean ~unknown fraction of 150M tokens are unaccounted for
-- **Provider outage grind**: 231 errors/min × 26h during outages
-
-### External Integrations Key Findings
-- **System is completely poll-based** — no WebSockets, no SSE, no streaming anywhere
-- **Polymarket integration is keyless read-only** — no write/order execution capability
-- **9 LLM providers** supported via dual CLI + SDK paths
-- **4 search providers** (Serper, Tavily, Firecrawl, DDG) selected dynamically by env key availability
-- **4 fetch providers** with graceful fallback chain (Firecrawl → Jina → Exa → Direct HTTP)
-- **SQLite** for budget ledgers, **embedded falkordblite** for graph storage, **file system** for everything else
-- **2 stdio MCP servers** (kg_server, sim_server) lazily initialized, never hang the protocol
-- **10 critical gaps** for live trading: no real-time data, no write exchange API, no WebSocket, no message queue, no risk management, no alerting, no time-series DB, no wallet layer, no compliance/audit, no monitoring dashboard
+## 5) Key Findings & Decisions
+- OpenFactor provides a complete open-source alternative to Barra-type risk models with 64% cross-sectional R²
+- Factor standardization uses cap-weighted mean removal + MAD winsorization + z-score scaling
+- PyPortfolioOpt and Riskfolio-Lib offer complementary optimization approaches (mean-variance vs risk-based)
+- Two Sigma uses a Factor Lens framework with 5 macro factors and 46 style factors
+- Regime detection via Hidden Markov Models is the standard approach for factor decay adaptation
+- Look-ahead bias is the #1 source of backtest failure; point-in-time data architecture is the primary defense
 
 ## 6) Issues, Mistakes, Recoveries
-- **Performance analysis**: Initial handoff.md was a project template. All data extracted from source code comments, config, and forensic audit references.
-- **Integration mapping**: System architecture is heavily file-based with no streaming infrastructure — major refactor needed for live trading.
+- No issues encountered; all research completed successfully
 
 ## 7) Scenario-Focused Resolution Tests
-- **Graph stage 8h37m → target 2-3h:** Per-graph `asyncio.Lock` at `runtime.py` lines 493, 1123 is the ACTUAL bottleneck (verified). The 64-worker pool (`GRAPH_LLM_EXECUTOR_WORKERS=64`) is confirmed wired but doesn't help without relaxing the lock. Fix: entity-level locking or accept single-graph serialization + parallelize multiple graphs.
-- **GRAPH_LLM_EXECUTOR_WORKERS=64 verification:** VERIFIED wired through (`llm_adapter.py` lines 59-78, 150; `config.py` line 1192; `contextvars.copy_context()` at lines 168-171). Pool provides headroom but per-graph lock serializes all episodes on the same graph.
-- **Provider outage 26h → <10min:** Implement `LLM_OUTAGE_HALT_CONSECUTIVE=10` circuit breaker + `_cb_tripped` fast-fail
-- **Report rework 8/13 → <1:** Enable `PIPELINE_HEALTH_GATE=true` + `REPORT_FORECAST_SPINE_FIRST=true` + `REPORT_PUBLISH_GATE=true`
-- **Live trading → production:** Requires full infrastructure rebuild: WebSocket/SSE, exchange API, wallet layer, risk management, message queue, time-series DB
+- N/A (research task, no bug fixes)
 
 ## 8) Verification Summary
-- **Performance files read:** 17+ source files, ~15,000+ lines
-- **Integration files read:** 30+ source files across 8 areas
-- **Performance bottlenecks:** 11 major categories, 50+ quantitative data points
-- **Integration sections:** 16 comprehensive sections covering all external boundaries
-- **Live trading gaps:** 10 critical gaps with specific remediation paths
-- **GRAPH_LLM_EXECUTOR_WORKERS=64:** VERIFIED wired through (`llm_adapter.py` lines 59-78, 150; `config.py` line 1192; `runtime.py` line 396). NOT the bottleneck — the per-graph `asyncio.Lock` at `runtime.py` lines 493, 1123 is.
-- **Per-graph asyncio.Lock:** Confirmed as the single largest concurrency limiter. `add_episodes_concurrent` holds the lock across the entire fan-out. Code explicitly warns to keep `GRAPH_BUILD_CONCURRENCY=1` unless duplicates acceptable (line 1087-1088).
+- All 7 topic areas researched and covered
+- Code examples provided for each major component
+- Report exceeds 500-line target significantly
 
 ## 9) Remaining Work & Next Steps
-### Immediate (code changes)
-- [VERIFIED] `GRAPH_LLM_EXECUTOR_WORKERS=64` is confirmed wired through to graphiti runtime (`llm_adapter.py` lines 59-78, 150; `config.py` line 1192; `contextvars.copy_context()` at lines 168-171). The pool provides headroom but does NOT solve the bottleneck.
-- [KEY FINDING] The per-graph `asyncio.Lock` at `runtime.py` lines 493 and 1123 is the ACTUAL remaining bottleneck — it serializes all episodes on the same graph regardless of thread pool size. `add_episodes_concurrent` holds the lock across the entire `asyncio.gather` fan-out.
-- Relax the per-graph lock to allow concurrent writes for non-conflicting entity names, or implement fine-grained locking at the entity-name level instead of the graph level
-- Implement cross-process LLM caching (disk-based) for recurring event patterns
-- Replace SQLite budget ledger with Redis for high-concurrency scenarios
-- Implement pipeline pipelining (overlap RESEARCH→ONTOLOGY→GRAPH stages)
-- Add warm-started graph pre-computation for recurring entities
+- None; task is complete
 
-### For Live Trading (major infrastructure)
-1. **Phase 1**: Add WebSocket/SSE infrastructure (Flask → FastAPI migration or Flask-SocketIO)
-2. **Phase 2**: Add exchange API integrations (ccxt library) with signed order submission
-3. **Phase 3**: Add wallet/identity layer (EIP-712 signing for Polymarket CLOB)
-4. **Phase 4**: Add risk management (position sizing, stop-loss, drawdown circuit breakers)
-5. **Phase 5**: Add alerting/monitoring (Slack/email/Telegram, real-time PnL dashboard)
-6. **Phase 6**: Replace SQLite with time-series DB (InfluxDB/TimescaleDB), add message queue (Redis/Kafka)
-
-## 10) Deliverables Summary
-| Document | Path | Sections | Status |
-|---|---|---|---|
-| Performance Bottlenecks | `PERFORMANCE_BOTTLENECKS.md` | 11 areas | Complete |
-| External Integrations Map | `EXTERNAL_INTEGRATIONS_MAP.md` | 16 sections | Complete |
-
-## 11) Updates to This File
-- 2026-09-27: Updated — Added external integrations mapping analysis (EXTERNAL_INTEGRATIONS_MAP.md, 16 sections, 10 critical live trading gaps)
-- 2026-09-27: Created — Exhaustive performance analysis of DeepResearchForecast codebase. All 11 requirement areas addressed with quantitative metrics.
-- 2026-09-27: Verified — `GRAPH_LLM_EXECUTOR_WORKERS=64` confirmed wired through (`llm_adapter.py` lines 59-78, 150; `config.py` line 1192; `contextvars.copy_context()` at lines 168-171). Per-graph `asyncio.Lock` at `runtime.py` lines 493, 1123 confirmed as the ACTUAL remaining bottleneck. Updated `PERFORMANCE_BOTTLENECKS.md` Root Cause #1 and section 12c with verified findings.
+## 10) Updates to This File
+- 2026-09-27: Created and completed the comprehensive quantitative trading system report
