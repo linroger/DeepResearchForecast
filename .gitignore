@@ -62,6 +62,8 @@ logs/
 /logs/
 .remember/
 *.jsonl
+# ADR 0003: committed simulation-record fixtures stay trackable without -f
+!backend/tests/fixtures/**/*.jsonl
 .learnings/
 
 # 本地临时产物（截图/PDF 抓取等）
