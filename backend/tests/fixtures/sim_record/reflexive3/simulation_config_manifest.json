@@ -1,0 +1,27 @@
+{
+ "schema_version": "simulation-config-manifest/v1",
+ "simulation_id": "sim_3ec25e64209e",
+ "simulation_config_file": "simulation_config.json",
+ "simulation_config_sha256": "10d4ddcaa8b1ee433e996eb5ec7802dc5bac410491f42c5f4491d53d49d7e833",
+ "simulation_config_canonical_sha256": "15b4e14fda6395fffa8db379556afdcdf8e3d2bf264edfdabd75d71617ce032f",
+ "bindings": {
+  "actor_cast_manifest": {
+   "file": "actor_cast_manifest.json",
+   "sha256": "2786745dde1ce0c45b3dc2bb587e9bf597ee61d9042b7747e197d8bcc99c9c33"
+  },
+  "actor_context_manifest": {
+   "file": "actor_context_manifest.json",
+   "sha256": "e68bc25a934bfc3dfa2babd2f206c51f28a402249b53b658544716b85faf0aff"
+  },
+  "actor_role_manifests": {
+   "reddit": {
+    "file": "reddit_profiles_roles.json",
+    "sha256": "58279a47671c4b5b42ff559bed52a657199b219d3c9a2d496858134dcca7588c"
+   },
+   "twitter": {
+    "file": "twitter_profiles_roles.json",
+    "sha256": "464dcd9b7abd5399397078ae9ffe76a9c6b13188e4396e023ceed94955bfa08b"
+   }
+  }
+ }
+}
