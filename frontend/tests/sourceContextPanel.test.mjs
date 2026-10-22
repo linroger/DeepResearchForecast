@@ -277,8 +277,8 @@ test('production templates use the same literal shared component and existing tr
     assert.match(source, /defineAsyncComponent\(\(\) => import\('\.\/SourceContextPanel\.vue'\)\)/)
     assert.equal(count(source, '<SourceContextPanel '), 1)
   }
-  assert.match(dossier, /:context="dossier.news_market_context"/)
-  assert.match(report, /:context="meta.news_market_context"/)
+  assert.match(dossier, /:context="displayDossier.news_market_context"/)
+  assert.match(report, /:context="displayContext"/)
   assert.match(report, /const res = await getReport\(reportId\)[\s\S]*?meta.value = data \|\| \{\}/)
   assert.doesNotMatch(readFileSync(panelUrl, 'utf8'), /v-html|fetch\(|getReport|setInterval/)
 })

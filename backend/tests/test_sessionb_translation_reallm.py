@@ -1,24 +1,10 @@
-"""SESSION-B: REAL-LLM (MiniMax) Mandarin translation must pass the variant audit.
+"""Scripted real-world drift cases against the model-led default translator.
 
-These tests reproduce the exact failure signature seen on a completed report
-(report_54f0a34a90b6): a MiniMax-class model that drifts numbers, leaves residual
-English lines, and would otherwise trip the final editorial lint, producing the three
-hard-audit failures:
-
-  1. "translation numeric-token multiset differs from primary"
-  2. "translation would still be rewritten by final editorial lint"
-  3. "translation contains N target-language contamination lines"
-
-The root cause was that the on-demand / auto translation's CONTAMINATION-REPAIR pass
-(`_translate_impurity_segments`) re-translated residual prose WITHOUT placeholder-
-protecting the numbers/citations inside it, so the model was free to drop, introduce,
-or CJK-ize a figure.  The fix routes that pass through the same byte-exact token
-protection used by the structure-preserving translator, adds a per-line numeric
-fail-closed guard, and lints the variant to the audit's exact body-view fixed point
-BEFORE auditing.
-
-No network / real LLM: a scripted MiniMax-drift fake speaks every translation protocol
-(whole-unit, slot-batch, single-fragment, impurity-JSON) and deliberately drifts.
+No real provider is called. Whole readable sections, parser checks, separate
+fixture-known semantic review and one bounded repair exercise the native research
+translation entry point. Introduced numbers remain unpublishable; no skeleton,
+filter ladder or lint rewrite is the default. Direct contamination/protection
+helper tests are retained explicitly as historical compatibility controls.
 """
 
 import json
@@ -31,7 +17,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services import report_lint as _rl  # noqa: E402
-from app.services.report_agent import ReportAgent, _REFS_HEADINGS  # noqa: E402
+from app.services.report_agent import ReportAgent  # noqa: E402
+from model_translation_fakes import model_protocol, preserve_carriers  # noqa: E402
 
 
 # --------------------------------------------------------------------------------------
@@ -191,47 +178,70 @@ _ECHO = [
 ]
 
 
-def _run_auto_sequence(worker, source_md, *, spine=None):
-    """Replicate the on-demand / auto post-translation sequence exactly:
-    per-H2 free-form translation (with skeleton fallback) -> contamination repair ->
-    lint-before-audit fixed point -> isolated variant audit."""
-    chunks = ReportAgent._split_markdown_h2_sections(source_md)
-    tgt_name = "简体中文（Simplified Chinese）"
-    translated = []
-    for ch in chunks:
-        first = ch.split("\n", 1)[0].strip()
-        if first in _REFS_HEADINGS:
-            translated.append(worker._localize_translation_references(ch, "zh"))
-        else:
-            translated.append(worker._translate_section(ch, tgt_name))
-    translated_md = "\n\n".join(translated).strip() + "\n"
-    translated_md = worker._repair_variant_contamination(translated_md, True, tgt_name).strip() + "\n"
-    translated_md = worker._lint_variant_to_audit_fixed_point(translated_md, "Chinese", spine)
-    audit, _cp = worker._audit_translation_variant(
-        "report_test", source_md, translated_md, "en", "zh", {}, enforce_citations=False
-    )
-    return audit, translated_md
+def _raw_zh(value):
+    return preserve_carriers(value, lambda text: _zhify(text.replace("## References", "## 参考来源")))
 
 
-def test_reallm_drift_variant_passes_audit():
-    """(a) A realistic MiniMax-drift model (drops a heading level & placeholder on the
-    whole-unit call, CJK-izes numbers, leaves an English line) is fully repaired: the
-    guards restore numeric parity, clear contamination, and the post-lint audit passes."""
-    stub = MiniMaxDriftStub(echo_english=_ECHO)
-    worker = _worker(stub)
-    audit, final_md = _run_auto_sequence(worker, SOURCE_MD)
+class _RawDriftStub:
+    """Drop structure/echo prose once, or persistently invent a numeric claim.
 
-    assert audit["number_parity"]["passed"], (
-        "numeric multiset drifted: "
-        f"source-variant={_missing(audit)} variant-source={_extra(audit)}"
-    )
-    assert audit["section_parity"]["passed"], "heading-level sequence drifted"
-    assert audit["table_parity"]["passed"], "table row/column shape drifted"
-    contamination = (audit["language_lint"].get("language_contamination") or {}).get("lines", 0)
-    assert contamination == 0, f"{contamination} residual English lines remained"
-    assert not audit["language_lint"].get("changed"), "final lint would still rewrite the variant"
-    assert audit["hard_passed"], f"variant audit failed: {audit['issues']}"
-    assert audit["issues"] == []
+    The review oracle is the separate known faithful renderer, never the corrupt
+    generation function. Thus each deliberate defect receives a false verdict.
+    """
+
+    model = "raw-scripted-drift"
+    provider = "offline"
+
+    def __init__(self, *, introduce_number=False):
+        self.calls = []
+        self.introduce_number = introduce_number
+
+    def chat(self, messages=None, **_kwargs):
+        payload = json.loads(messages[-1]["content"])
+        self.calls.append(payload)
+        assert "⟦" not in messages[-1]["content"]
+
+        def generate(source):
+            target = _raw_zh(source)
+            if self.introduce_number:
+                return target.rstrip() + "（约 0.4）" if "Annual additions" in source else target
+            if not payload.get("repair"):
+                if "Annual additions" in source:
+                    return re.sub(r"(?m)^#{1,6}[^\n]*(?:\n|$)", "", target, count=1)
+                for residual in _ECHO:
+                    if residual in source:
+                        target = target.replace(_raw_zh(residual), residual)
+            return target
+
+        response = model_protocol(messages, generate, expected_fn=_raw_zh)
+        assert response is not None, "native default used an obsolete translation protocol"
+        return response
+
+    def chat_json(self, messages=None, **kwargs):
+        return json.loads(self.chat(messages, **kwargs))
+
+
+def _run_default(worker, source_md):
+    # Exercise the real default instead of replicating an obsolete auto sequence.
+    return worker.translate_research_markdown(source_md, label="research::sessionb-drift")
+
+
+def test_scripted_drift_is_repaired_once_by_native_model_review():
+    stub = _RawDriftStub()
+    result = _run_default(_worker(stub), SOURCE_MD)
+    audit, final_md = result["audit"], result["translated_md"]
+
+    assert result["available"] and audit["hard_passed"], audit["issues"]
+    assert audit["fact_fidelity"]["passed"] and audit["section_parity"]["passed"]
+    assert final_md == _raw_zh(SOURCE_MD).strip() + "\n"
+    assert ReportAgent._translation_table_signature(final_md) == ReportAgent._translation_table_signature(SOURCE_MD)
+    assert ReportAgent._translation_number_multiset(final_md) == ReportAgent._translation_number_multiset(SOURCE_MD)
+    assert _ECHO[0] not in final_md
+    repairs = [payload for payload in stub.calls if payload.get("repair")]
+    assert len(repairs) == 1
+    assert len(repairs[0]["entries"]) == 2  # dropped heading + echoed Regional prose
+    assert all("# Grid Storage Outlook" not in source for source in repairs[0]["entries"].values())
+    assert any("pairs" in payload for payload in stub.calls)
 
 
 def test_impurity_batch_echo_escalates_to_guarded_single_fragment():
@@ -253,41 +263,40 @@ def test_impurity_batch_echo_escalates_to_guarded_single_fragment():
     assert any(kind == "single_fragment" for kind, _tier in stub.calls)
 
 
-def test_reallm_introduced_number_never_corrupts_numeric_multiset():
-    """The numeric invariant is fail-closed: even a pathological model that INSISTS on
-    adding a bare decimal to every repaired segment can never corrupt the numeric
-    multiset — the guard rejects the drifted candidate, so numbers stay byte-identical."""
-    stub = MiniMaxDriftStub(introduce_number=True, echo_english=_ECHO)
-    worker = _worker(stub)
-    audit, _final = _run_auto_sequence(worker, SOURCE_MD)
-    # Numbers must NEVER drift, regardless of whether contamination could be cleared.
-    assert audit["number_parity"]["passed"], (
-        "a model-introduced number corrupted the multiset: "
-        f"source-variant={_missing(audit)} variant-source={_extra(audit)}"
-    )
-    assert "translation numeric-token multiset differs from primary" not in audit["issues"]
+def test_default_introduced_number_is_rejected_after_one_semantic_repair():
+    stub = _RawDriftStub(introduce_number=True)
+    result = _run_default(_worker(stub), SOURCE_MD)
+    audit = result["audit"]
+
+    assert result["available"] is False and audit["hard_passed"] is False
+    assert audit["fact_fidelity"]["passed"] is False
+    assert audit["model_translation"]["complete"] is False
+    assert any("semantic review rejected" in issue for details in audit["model_translation"]["issues"].values()
+               for issue in details)
+    repairs = [payload for payload in stub.calls if payload.get("repair")]
+    assert len(repairs) == 1 and len(repairs[0]["entries"]) == 1
+    # The rejected candidate is not promoted as an accepted section or receipt.
+    baseline = next(row for row in audit["model_translation"]["sections"] if "Annual additions" in row["source"])
+    assert baseline["receipt"] is None
+    assert "约 0.4" not in result["translated_md"]
 
 
-def test_auto_path_routes_through_structure_preserving_protection():
-    """(b) The auto / on-demand path provably routes through the structure-preserving
-    translator: a drifting whole-unit candidate is rejected and the skeleton slot-batch
-    protocol (which protects numbers/citations by construction) is invoked."""
-    stub = MiniMaxDriftStub(echo_english=_ECHO)
-    worker = _worker(stub)
+def test_default_sends_raw_sections_without_legacy_protection_or_rewrite(monkeypatch):
+    stub = _RawDriftStub()
 
-    called = {"skeleton": 0, "protect": 0}
-    real_skeleton = worker._translate_from_source_skeleton
-    real_protect = worker._protect_translation_tokens.__func__
+    def obsolete(*_args, **_kwargs):
+        raise AssertionError("native default entered legacy skeleton/protection/lint")
+    for name in ("_translate_section", "_translate_from_source_skeleton", "_protect_translation_tokens",
+                 "_repair_variant_contamination", "_lint_variant_to_audit_fixed_point"):
+        monkeypatch.setattr(ReportAgent, name, obsolete)
 
-    def spy_skeleton(markdown, name):
-        called["skeleton"] += 1
-        return real_skeleton(markdown, name)
-
-    worker._translate_from_source_skeleton = spy_skeleton
-    worker._translate_section(SOURCE_MD.split("## Part 1", 1)[1], "简体中文（Simplified Chinese）")
-
-    assert called["skeleton"] >= 1, "whole-unit drift did not fall back to the skeleton translator"
-    assert stub.skeleton_batches >= 1, "structure-preserving slot-batch protocol was never called"
+    result = _run_default(_worker(stub), SOURCE_MD)
+    assert result["available"] and result["audit"]["fact_fidelity"]["passed"]
+    raw_entries = [text for payload in stub.calls if "entries" in payload for text in payload["entries"].values()]
+    assert any("US$200-400/MWh" in text and "36-160 hours" in text for text in raw_entries)
+    assert any(_ECHO[0] in text for text in raw_entries)
+    assert all("⟦" not in text for text in raw_entries)
+    assert len([payload for payload in stub.calls if payload.get("repair")]) == 1
 
 
 def test_number_in_prose_and_table_cell_round_trip_byte_exact():
@@ -311,18 +320,6 @@ def test_number_in_prose_and_table_cell_round_trip_byte_exact():
     # And a pure round-trip (identity translation) reproduces the source bytes exactly.
     identity, _i2 = worker._restore_translation_tokens(protected, mapping)
     assert identity == prose_and_table
-
-
-def _missing(audit):
-    from collections import Counter
-    np = audit["number_parity"]
-    return dict(Counter(np["source"]) - Counter(np["variant"]))
-
-
-def _extra(audit):
-    from collections import Counter
-    np = audit["number_parity"]
-    return dict(Counter(np["variant"]) - Counter(np["source"]))
 
 
 if __name__ == "__main__":  # pragma: no cover

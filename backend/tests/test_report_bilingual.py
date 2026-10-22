@@ -30,6 +30,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from model_translation_fakes import model_protocol
+
 from app.config import Config  # noqa: E402
 from app.services.report_agent import (  # noqa: E402
     ReportAgent, ReportManager, Report, ReportStatus,
@@ -42,11 +44,12 @@ class _TransLLM:
 
     `translate=None` + `raises=True` simulates an LLM outage (every call raises)."""
 
-    def __init__(self, translate=None, raises=False, model="fake-translator"):
+    def __init__(self, translate=None, raises=False, model="fake-translator", review_translate=None):
         self.model = model
         self.provider = "fake"
         self.calls = []
         self._t = translate
+        self._review = review_translate
         self._raises = raises
 
     def chat(self, messages=None, temperature=0.7, max_tokens=4096, tier="strong", **kw):
@@ -54,6 +57,9 @@ class _TransLLM:
                            "temperature": temperature})
         if self._raises:
             raise RuntimeError("simulated LLM outage")
+        response = model_protocol(messages, self._t or (lambda text: text), expected_fn=self._review)
+        if response is not None:
+            return response
         user = (messages or [{}])[-1].get("content", "")
         user = ReportAgent._decode_translation_placeholders(user)
         return self._t(user) if self._t else user
@@ -400,7 +406,7 @@ def test_reference_chunk_is_localized_deterministically_without_touching_entries
     assert translated.split("\n", 1)[1] == source.split("\n", 1)[1]
 
 
-def test_bilingual_repairs_residual_table_prose_once_and_keeps_reference_namespace(
+def test_model_review_repairs_one_table_block_and_keeps_reference_namespace(
     reports_tmp, monkeypatch,
 ):
     rid = "report_residual_repair"
@@ -440,24 +446,27 @@ def test_bilingual_repairs_residual_table_prose_once_and_keeps_reference_namespa
 
     body_attempts = 0
 
+    def faithful(user: str) -> str:
+        return (user.replace("# Forecast", "# 预测")
+                .replace("## Binary Forecasts", "## 二元预测")
+                .replace("| ID | Statement | Probability |", "| ID | 陈述 | 概率 |")
+                .replace("Global electric vehicle market share exceeds 42% by 2030 [S1]",
+                         "全球电动汽车份额到 2030 年超过 42% [S1]")
+                .replace("## References", "## 参考来源"))
+
     def translate(user: str) -> str:
         nonlocal body_attempts
-        if user.startswith("# Forecast"):
-            return user.replace("# Forecast", "# 预测")
+        out = faithful(user)
         if user.startswith("## Binary Forecasts"):
             body_attempts += 1
-            out = user.replace("## Binary Forecasts", "## 二元预测")
-            out = out.replace("| ID | Statement | Probability |", "| ID | 陈述 | 概率 |")
-            if body_attempts > 1:
-                out = out.replace(
-                    "Global electric vehicle market share exceeds 42% by 2030 [S1]",
-                    "全球电动汽车份额到 2030 年超过 42% [S1]",
-                )
-            return out
-        raise AssertionError("References must not consume an LLM translation call")
+            if body_attempts == 1:
+                out = out.replace("全球电动汽车份额到 2030 年超过 42% [S1]",
+                    "Global electric vehicle market share exceeds 42% by 2030 [S1]")
+        return out
 
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 1)
-    agent = _bili_agent(_TransLLM(translate=translate))
+    ReportManager.save_report(report)
+    agent = _bili_agent(_TransLLM(translate=translate, review_translate=faithful))
     agent._generate_bilingual_report(rid, report)
 
     assert body_attempts == 2
@@ -480,6 +489,7 @@ def test_bilingual_preserves_structure_and_writes_zh(reports_tmp):
                     markdown_content=_EN_MD)
     agent = _bili_agent(_TransLLM(translate=_translate_outlook), output_language="English")
 
+    ReportManager.save_report(report)
     agent._generate_bilingual_report(rid, report)
 
     zh_path = os.path.join(reports_tmp, rid, "full_report.zh.md")
@@ -516,7 +526,7 @@ def test_bilingual_preserves_structure_and_writes_zh(reports_tmp):
     assert reloaded.translations and reloaded.translations[0]["lang"] == "zh"
 
 
-def test_parallel_translation_workers_inherit_run_telemetry_context(
+def test_model_translation_and_review_calls_inherit_run_telemetry_context(
     reports_tmp, monkeypatch
 ):
     from app.utils import telemetry
@@ -540,6 +550,7 @@ def test_parallel_translation_workers_inherit_run_telemetry_context(
         status=ReportStatus.COMPLETED,
         markdown_content=_EN_MD,
     )
+    ReportManager.save_report(report)
     llm = ContextLLM()
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4)
     previous = telemetry.get_run_context()
@@ -561,13 +572,15 @@ def test_parallel_translation_workers_inherit_run_telemetry_context(
     values = [value for value, _message in progress_updates]
     assert values == sorted(values)
     assert values[0] == 1 and values[-1] == 95
-    assert any("translated" in message for _value, message in progress_updates)
+    assert any("translating and reviewing" in message for _value, message in progress_updates)
+    assert any('"entries"' in call["messages"][-1]["content"] for call in llm.calls)
+    assert any('"pairs"' in call["messages"][-1]["content"] for call in llm.calls)
     runtime = ReportManager._load_translation_runtime_status(rid, "zh")
     assert runtime and runtime["status"] == "available" and runtime["progress"] == 100
 
 
 # ─────────────────────────── number-integrity flag ──────────────────────
-def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_variant(
+def test_model_review_rejects_changed_probability_without_rewriting_body(
     reports_tmp, monkeypatch,
 ):
     # Strict mode: with REPORT_TRANSLATION_RESIDUAL_LINES=0 any residual source-language
@@ -579,8 +592,9 @@ def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_varian
     report = Report(report_id=rid, simulation_id="s", graph_id="g",
                     simulation_requirement="req", status=ReportStatus.COMPLETED,
                     markdown_content=_EN_MD)
-    # Corrupt the numbers: drop the '%' on 42% (→ '42 percent') in prose + table.
-    llm = _TransLLM(translate=lambda u: _translate_outlook(u).replace("42%", "42 percent"))
+    # Change a real probability; an independent faithful fixture oracle rejects it.
+    llm = _TransLLM(translate=lambda u: _translate_outlook(u).replace("42%", "43%"),
+                    review_translate=_translate_outlook)
     agent = _bili_agent(llm)
 
     agent._generate_bilingual_report(rid, report)
@@ -591,14 +605,10 @@ def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_varian
     with open(audit_path, encoding="utf-8") as handle:
         audit = json.load(handle)
     assert audit["hard_passed"] is False
-    assert audit["number_parity"]["passed"] is True
-    contamination = audit["language_lint"]["language_contamination"]["lines"]
-    assert contamination >= 1
-    assert any(
-        issue.startswith("translation contains ")
-        and issue.endswith(" target-language contamination lines")
-        for issue in audit["issues"]
-    )
+    assert audit["fact_fidelity"]["passed"] is False
+    assert audit["model_translation"]["complete"] is False
+    assert any("semantic review rejected" in issue for details in audit["model_translation"]["issues"].values() for issue in details)
+    assert report.markdown_content == _EN_MD
 
 
 def test_translation_variant_audit_rejects_heading_table_and_language_drift():
@@ -713,6 +723,7 @@ def test_bilingual_chinese_source_produces_english(reports_tmp):
     agent = _bili_agent(_TransLLM(translate=_to_en),
                         output_language="Chinese")
 
+    ReportManager.save_report(report)
     agent._generate_bilingual_report(rid, report)
 
     en_path = os.path.join(reports_tmp, rid, "full_report.en.md")
@@ -1180,7 +1191,7 @@ def test_a_rejected_update_keeps_its_text_and_audit_for_diagnosis(reports_tmp):
     rid = "report_rejected_update"
     old_zh = _publish_old_variant(rid)
     result = ReportManager.generate_translation_variant(
-        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook_partially), force=True
+        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook_partially, review_translate=_translate_outlook), force=True
     )
     assert result["available"] is True and result["updated"] is False
     with open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8") as f:

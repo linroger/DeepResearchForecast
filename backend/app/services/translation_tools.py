@@ -1,31 +1,107 @@
-"""Shared translation primitives: content-filter compliance ladder + pair translation.
+"""Shared provider admission and model-led field translation adapters.
 
-2026-10-21: the bilingual report translator loses whole sections whenever the
-provider's content filter (GLM 1301) rejects China-trade / riot / security prose
-— section GENERATION has long had an L1/L2 compliance-retry ladder, but
-translation calls failed fast and kept the source text, failing the publication
-audit (report_c6555913731c: two identical failures 18 minutes apart). This
-module gives every translation surface (report chapters, graph overlays,
-simulation overlays) the same bounded ladder:
-
-  L0  plain call (existing prompt);
-  L1  one retry with a compliance-framed system prefix: neutral news-wire
-      translation posture, no editorializing — plus zero temperature;
-  L2  fragment retry: split the payload on blank lines / paragraphs, translate
-      each fragment alone (filters usually trip on combined context), rejoin.
-
-Numeric/citation preservation and failure accounting are the caller's
-responsibility (the report path keeps its protect/restore tokens; overlays are
-JSON-scoped). Bounded: at most 2 extra provider calls per unit beyond L0.
+The active pair producer sends raw readable entries to model_translation and
+persists its reviewed receipts. Token-era validators and chat_translate's
+content-filter ladder remain for explicit historical callers and controls; the
+active pair/cache path never invokes those spelling-based validators or ladder.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
+import threading
+from collections import deque
+from contextlib import contextmanager
+from functools import wraps
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("mirofish.translation")
+
+
+class _TranslationAdmission:
+    """One FIFO admission queue shared by all translation clients in this process."""
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.waiters = deque()
+        self.active = 0
+
+    @staticmethod
+    def limit():
+        try:
+            requested = int(os.environ.get("DRF_TRANSLATION_MAX_CONCURRENCY", "1"))
+        except (TypeError, ValueError):
+            requested = 1
+        return max(1, min(4, requested))
+
+    @contextmanager
+    def slot(self):
+        ticket = object()
+        with self.condition:
+            self.waiters.append(ticket)
+            try:
+                while self.waiters[0] is not ticket or self.active >= self.limit():
+                    self.condition.wait()
+                self.waiters.popleft()
+                self.active += 1
+                self.condition.notify_all()
+            except BaseException:
+                # An interrupted waiter must not prevent everyone behind it
+                # from acquiring a later slot.
+                self.waiters.remove(ticket)
+                self.condition.notify_all()
+                raise
+        try:
+            yield
+        finally:
+            with self.condition:
+                self.active -= 1
+                self.condition.notify_all()
+
+
+# A module reload must not create a second gate while older wrappers are active.
+if "_TRANSLATION_ADMISSION" not in globals():
+    _TRANSLATION_ADMISSION = _TranslationAdmission()
+
+
+class _TranslationClient:
+    __slots__ = ("_client",)
+    _drf_translation_client = "translation-client/v1"
+
+    def __init__(self, client):
+        object.__setattr__(self, "_client", client)
+
+    def __getattr__(self, name):
+        # Resolve the real attribute first. Missing chat/chat_json stays missing
+        # for callers that select protocols with hasattr(). Do not catch errors
+        # from a real method/property or turn them into a capability fallback.
+        attribute = getattr(self._client, name)
+        if name not in {"chat", "chat_json"} or not callable(attribute):
+            return attribute
+
+        @wraps(attribute)
+        def admitted(*args, **kwargs):
+            with _TRANSLATION_ADMISSION.slot():
+                return attribute(*args, **kwargs)
+        return admitted
+
+    def __setattr__(self, name, value):
+        setattr(self._client, name, value)
+
+
+def translation_client(llm):
+    """Idempotent attribute-preserving proxy for translation provider calls only.
+
+    chat/chat_json share a process-wide admission limit, default1, configured by
+    DRF_TRANSLATION_MAX_CONCURRENCY (clamped1..4). The slot covers the underlying
+    client call, including its retries, and always releases on failure. This is
+    not a cross-process/provider-account quota or a generic LLMClient change.
+    """
+    if getattr(type(llm), "_drf_translation_client", None) == "translation-client/v1":
+        return llm
+    return _TranslationClient(llm)
 
 _FILTER_RE = re.compile(
     r"1301|content.?filter|敏感内容|sensitive content|new_sensitive", re.I)
@@ -114,53 +190,186 @@ def chat_translate(
 
 
 _PAIR_SYSTEM = (
-    "You are a professional translator for a research system. Translate the "
-    "value of every JSON key into {language}. Return STRICT JSON only — the "
-    "exact same keys, same order, every value translated. RULES: keep proper "
-    "nouns, organization names, ticker/series identifiers, URLs, code and file "
-    "paths unchanged; copy every number, date, percentage and unit exactly "
-    "(digit-for-digit); keep snake_case identifiers unchanged; do not add or "
-    "drop keys. No preamble, no commentary."
+    "Translate every JSON value into {language}. Return strict JSON with exactly "
+    "the supplied keys and string values. Translate substantive prose, labels and "
+    "headings; conventional English proper names and technical terms may remain. "
+    "Copy every ⟦KEEP:...⟧ token exactly once in its original semantic position. "
+    "These tokens contain protected numbers, dates, quantities, units, citations, "
+    "URLs and machine identifiers; never change, drop or add one. No commentary."
 )
+
+# Protect whole quantity/date phrases: preserving digits alone allows a change
+# from million to billion. Existing report recognizers remain the authority for
+# those phrases; overlays deliberately retain their exact original spelling.
+from .translation_dates import DATE_PATTERN
+from .translation_quantities import QUANTITY_PATTERN
+from collections import Counter
+import json
+
+# Shared with long-form/localized-forecast factual admission. SI prefixes are
+# case-sensitive: mW and MW differ by nine orders of magnitude. Long forms
+# precede their prefixes; boundaries allow numeric attachment but not words/IDs.
+FACT_UNIT_PATTERN = (
+    r"(?<![A-Za-z_µμ])(?-i:(?:TWh|GWh|MWh|kWh|mWh|uWh|µWh|μWh|Wh|"
+    r"TW|GW|MW|kW|mW|uW|µW|μW|W))(?![A-Za-z0-9_µμ])"
+)
+
+_PROTECTED = re.compile(
+    r"`[^`\n]+`|https?://[^\s<>()]+|\[[Ss]\d+(?:-[A-Za-z])?\]"
+    r"|" + DATE_PATTERN + r"|" + QUANTITY_PATTERN
+    + r"|[-+−]?(?:\d+(?:\.\d+)?|\.\d+)[eE][-+−]?\d+"
+    r"|(?<![A-Za-z0-9_])(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+(?![A-Za-z0-9_])"
+    r"|(?<![A-Za-z0-9_])[A-Za-z]+_[A-Za-z0-9_]+"
+    r"|[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+|\.\d+)(?:\.\d+)?(?:[eE][-+−]?\d+)?"
+    r"(?:[ \u00a0]*[–—-][ \u00a0]*[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+|\.\d+)(?:\.\d+)?)?"
+    r"(?:\s*(?:" + FACT_UNIT_PATTERN
+    + r"|%|percent(?:age points)?|basis points|bps|USD|EUR|CNY|RMB|dollars|"
+    r"kg|tonnes|barrels|mb/d|bpd|million|billion|trillion))?"
+    r"|[$€£¥]|°[CF]|" + FACT_UNIT_PATTERN
+    + r"|\b(?:USD_per_contract|USD|EUR|CNY|RMB|mb/d|bpd|km/h|mph)\b",
+    re.I,
+)
+_KEEP = re.compile(r"⟦KEEP:[A-Z]+⟧")
+_CJK = re.compile(r"[\u3400-\u9fff]")
+
+
+def _suffix(index: int) -> str:
+    out = ""
+    while True:
+        index, digit = divmod(index, 26)
+        out = chr(65 + digit) + out
+        if not index:
+            return out
+        index -= 1
+
+
+def _protect_pair(text: str):
+    tokens = {}
+    def hide(match):
+        token = "⟦KEEP:" + _suffix(len(tokens)) + "⟧"
+        # Source-authored placeholders must never be interpreted as ours.
+        while token in text or token in tokens:
+            token = token[:-1] + "X⟧"
+        tokens[token] = match.group(0)
+        return token
+    return _PROTECTED.sub(hide, text), tokens
+
+
+def _technical(text: str) -> bool:
+    value = text.strip()
+    words = re.findall(r"[A-Za-z]+", value)
+    return (not words or bool(re.fullmatch(r"[A-Z0-9_./:+-]+", value))
+            or bool(re.fullmatch(r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+", value))
+            or (len(words) <= 4 and all(w[0].isupper() for w in words)
+                and not re.search(r"[.!?]", value)))
+
+
+def _substantive_mandarin(text: str) -> bool:
+    # A boilerplate label is not target-language coverage of an English body.
+    body = re.sub(r"^\s*(?:中文译文|中文翻译|翻译结果|译文|翻译|中文)\s*[:：]\s*", "", text)
+    if not _CJK.search(body) and not _technical(body):
+        return False
+    # Inspect separate ordinary clauses, including shorter sentences separated
+    # by periods. Names/acronyms and conventional short technical phrases remain
+    # allowed; a Mandarin prefix cannot hide multiple copied English sentences.
+    ordinary_words = 0
+    for match in re.finditer(r"[A-Za-z]+(?:[’'-][A-Za-z]+)*(?:[ \t,]+[A-Za-z]+(?:[’'-][A-Za-z]+)*)*", body):
+        clause = match.group(0)
+        words = re.findall(r"[A-Za-z]+", clause)
+        if _technical(clause):
+            continue
+        ordinary_words += len(words)
+        following = body[match.end():].lstrip(" \t")
+        if len(words) >= 5 or (len(words) >= 3 and following.startswith((".", "!", "?"))):
+            return False
+    return ordinary_words <= max(4, len(_CJK.findall(body)))
+
+
+def valid_pair_translation(source: str, target: str, language_name: str) -> bool:
+    """Legacy token-era validator; model-led cache reads use valid_receipt instead."""
+    if not isinstance(target, str) or not target.strip() or len(target) > max(200, len(source) * 5):
+        return False
+    if Counter(m.group(0) for m in _PROTECTED.finditer(source)) != Counter(
+            m.group(0) for m in _PROTECTED.finditer(target)):
+        return False
+    rest = _PROTECTED.sub(" ", target)
+    if "Chinese" in language_name or "中文" in language_name:
+        if not _substantive_mandarin(rest):
+            return False
+    elif "English" in language_name and len(_CJK.findall(rest)) > 3:
+        return False
+    return True
+
+
+def _restore_pair_tokens(protected: str, candidate: str, tokens: dict) -> str:
+    """Restore only separators proven between these exact source placeholders.
+
+    Q1 and 2027 may become adjacent KEEP tokens in a model response. A source
+    whitespace boundary prevents their restoration as the different ID Q12027.
+    Real source identifiers are one protected token and are never split here.
+    """
+    spans = list(_KEEP.finditer(protected))
+    for left, right in zip(spans, spans[1:]):
+        separator = protected[left.end():right.start()]
+        if separator and separator.isspace():
+            candidate = candidate.replace(left.group(0) + right.group(0),
+                                          left.group(0) + separator + right.group(0))
+    return _KEEP.sub(lambda match: tokens.get(match.group(0), match.group(0)), candidate)
+
+
+def _pair_target_language(language_name: str) -> str:
+    value = str(language_name or "").strip().lower()
+    if value == "zh" or "chinese" in value or "中文" in value:
+        return "zh"
+    if value == "en" or "english" in value:
+        return "en"
+    raise ValueError("unsupported translation language")
 
 
 def translate_pairs(
-    llm: Any,
-    pairs: List[Tuple[str, str]],
-    language_name: str,
-    *,
-    batch_size: int = 24,
-    max_tokens_per_pair: int = 600,
-    on_failure: Optional[Callable[[], None]] = None,
+    llm: Any, pairs: List[Tuple[str, str]], language_name: str, *,
+    batch_size: int = 18, max_tokens_per_pair: int = 600,
+    on_failure: Optional[Callable[[], None]] = None, max_calls: int = 48,
+    on_progress: Optional[Callable[[dict], None]] = None, context: str = "",
 ) -> Tuple[dict, int]:
-    """Translate ``(key, text)`` pairs → ``{key: translated}`` with the ladder.
+    """Adapt readable field entries to the shared model-led translator.
 
-    Short strings are batched; each batch runs L0→L1→L2. Keys with empty or
-    untranslatable results are omitted from the result (the overlay simply has
-    no entry, and the UI falls back to the source text). Returns
-    ``(mapping, max_ladder_level_used)``.
+    The return mapping is VerifiedTranslations, including its receipts, issues
+    and explicit client-call count. All translation/review/one-repair calls use
+    the same budget and shared provider admission. No numeric/date placeholders,
+    restoration or legacy token-multiset validator runs in this active path.
+
+    batch_size/max_tokens_per_pair and the tuple's zero ladder level remain for
+    caller compatibility; the core owns coherent bounded grouping/token limits.
     """
-    out: dict = {}
-    max_level = 0
-    for start in range(0, len(pairs), max(1, batch_size)):
-        batch = pairs[start:start + max(1, batch_size)]
-        payload = {k: t for k, t in batch}
-        sys_p = _PAIR_SYSTEM.format(language=language_name)
-        try:
-            import json as _json
-            text, level = chat_translate(
-                llm, sys_p, _json.dumps(payload, ensure_ascii=False),
-                max_tokens=max(256, max_tokens_per_pair * max(1, len(batch))),
-                on_failure=on_failure)
-            max_level = max(max_level, level)
-            if not text:
-                continue
-            parsed = _json.loads(text)
-            if isinstance(parsed, dict):
-                for k, v in parsed.items():
-                    if isinstance(v, str) and v.strip():
-                        out[str(k)] = v
-        except Exception as exc:  # noqa: BLE001 — JSON 解析失败：丢弃该批，保源头文本
-            logger.warning("批量翻译批次失败（保留原文）: %s", str(exc)[:120])
-            continue
-    return out, max_level
+    from .model_translation import translate_entries
+
+    provider = translation_client(llm)
+    if on_failure is not None:
+        class FailureAccountingClient:
+            # The delegated provider already owns admission. An idempotent wrap
+            # by another translation surface must not acquire a second slot.
+            _drf_translation_client = "translation-client/v1"
+
+            def __getattr__(self, name):
+                attribute = getattr(provider, name)
+                if name not in {"chat", "chat_json"} or not callable(attribute):
+                    return attribute
+
+                @wraps(attribute)
+                def invoke(*args, **kwargs):
+                    try:
+                        return attribute(*args, **kwargs)
+                    except Exception:
+                        try:
+                            on_failure()
+                        except Exception:
+                            pass  # Observability cannot hide the provider error.
+                        raise
+                return invoke
+        client = FailureAccountingClient()
+    else:
+        client = provider
+    translated = translate_entries(client, pairs, _pair_target_language(language_name),
+        context=context, max_calls=max_calls, on_progress=on_progress)
+    return translated, 0

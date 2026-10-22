@@ -103,6 +103,11 @@ def is_content_filter_error(exc: BaseException) -> bool:
     low = _message(exc).lower()
     if any(marker in low for marker in _CONTENT_FILTER_MARKERS):
         return True
+    # This shared circuit message covers quota/rate failures as well as moderation.
+    # It gives no evidence that content was rejected; do not send every paragraph
+    # through the content-filter retry ladder during a rate-limit cooldown.
+    if "422/429" in low and "熔断冷却" in low:
+        return False
     if " 422" in low or "code: 422" in low or error_status(exc) == 422:
         return True
     if error_code(exc).lower() in CONTENT_FILTER_CODES:

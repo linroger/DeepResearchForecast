@@ -1575,6 +1575,7 @@ Provider credentials are optional environment inputs, passed only to the relevan
 |---|---|---|
 | `REPORT_OUTPUT_LANGUAGE` | *(auto)* | Force the report language; otherwise it is detected from the question |
 | `REPORT_BILINGUAL` | `true` | Also produce the English ↔ Chinese variant |
+| `DRF_TRANSLATION_MAX_CONCURRENCY` | `1` | Shared FIFO provider-call limit for report, dossier and simulation translation within one backend process (clamped to1–4); does not coordinate quotas across separate backend workers |
 | `REPORT_PUBLISH_GATE` | `true` | Block publication on any audit issue |
 | `FORECAST_MARKET_ANCHORING` | `true` | Match binaries to resolution-equivalent Polymarket markets |
 | `REPORT_VISUALIZER` | `true` | Render charts |
@@ -1733,6 +1734,10 @@ flowchart LR
 | **Graph** | The knowledge graph as an interactive d3 force layout: search, a time slider over `valid_at`, a type legend, and a ring marking researched actors. Also node/edge details, a focus mode (≤ 400 nodes, click to expand) and "load full graph". |
 | **Simulation** | A Twitter/Reddit toggle, round and status tiles, persona cards, and the feed with nested replies. Refreshes every 10 s while the simulation runs. |
 | **Forecast** | Sections stream in as they finish. Once complete, the tab shows:<br/>• a table of contents;<br/>• a forecast dashboard: scenario probabilities, confidence, ensemble agreement and market divergence;<br/>• the **Binary forecasts** table: probability and interval, confidence, market anchor and Δ;<br/>• a chart gallery with PNG images and interactive versions;<br/>• a language toggle;<br/>• Markdown/PDF download and "copy Markdown". |
+
+The **中文** controls translate visible simulation prose, personas, replies and world-state details, and the dossier's structured cards as well as its report body. The forecast language view includes dashboard text, binary forecasts, title and display captions. Numbers, units, IDs, links and canonical evidence remain bound to the source; proper names and technical terms can remain English. Image/HTML charts retain their native technical labels. A translated report body can be available while structured cards are still translating; progress and partial coverage are shown separately. Retry resumes missing simulation strings, and report polling only reads status. Switching run, language, actor view or selected period discards stale responses.
+
+New translations send complete readable sections or display fields to the model, then use a separate fidelity review before accepting them. Dates and quantities can use faithful Mandarin notation, such as `$3.7 billion` → `37亿美元`; a changed numerical spelling alone does not reject a translation. Parsed Markdown checks preserve structure, code, links and citations, while typed forecast/data values are copied from canonical artifacts. One repair is allowed for a rejected entry; provider failures stop further acquisition in that operation. Accepted source-bound receipts are reused on reads without model calls. Model review can still miss a semantic error, so it does not replace the canonical forecast or evidence. Previously audited report bodies remain available under their historical audit and may be offered an optional engine update.
 
 **Controls:**
 - **Cancel** is shown while a run is going.

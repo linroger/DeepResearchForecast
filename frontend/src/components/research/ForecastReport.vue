@@ -104,7 +104,7 @@
               v-if="translationUpdateAction"
               class="translate-btn"
               type="button"
-              :disabled="translationBusy"
+              :disabled="translationBusy || structuredGenerating"
               :title="translationUpdateTitle"
               @click="generateTranslation(true)"
             >{{ translationUpdateLabel }}</button>
@@ -116,7 +116,7 @@
                 type="button"
                 class="lang-btn"
                 :class="{ active: activeLang === opt.key }"
-                :disabled="langLoading"
+                :disabled="translationBusy"
                 :aria-pressed="activeLang === opt.key"
                 @click="switchLang(opt.key)"
               >{{ opt.label }}</button>
@@ -170,6 +170,7 @@
           </ul>
         </details>
 
+        <p v-if="structuredTranslationNotice" class="translation-feedback structured-translation-note" role="status">{{ structuredTranslationNotice }}</p>
         <div ref="scrollEl" class="report-scroll">
           <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片 + 官方指标瓦片）。
                端点 404/409（旧报告 / 未启用结构化预测 / 无官方数据）→ 对应区块隐藏（degrade-safe）。 -->
@@ -193,7 +194,12 @@
                 <div class="dash-prob">{{ pct(s.probability) }}</div>
                 <div class="dash-bar" aria-hidden="true"><span :style="{ width: pct(s.probability) }"></span></div>
                 <div class="dash-name" :title="s.name">{{ s.name }}</div>
+                <div v-if="s.summary" class="dash-criteria">{{ s.summary }}</div>
                 <div v-if="s.resolution_criteria" class="dash-criteria" :title="s.resolution_criteria">{{ s.resolution_criteria }}</div>
+                <details v-if="Array.isArray(s.key_drivers) && s.key_drivers.length" class="scenario-drivers">
+                  <summary>{{ L('关键驱动因素', 'Key drivers') }}</summary>
+                  <ul><li v-for="(driver, driverIndex) in s.key_drivers" :key="driverIndex">{{ driver }}</li></ul>
+                </details>
               </article>
             </div>
             <div v-if="marketTiles.length" class="dash-market">
@@ -279,7 +285,7 @@
           <!-- LOOP-017：一等公民二元预测表（forecast.binary_forecasts，与仪表盘同源同门）。
                行模型在 utils/binaryForecasts.js（纯函数）；无二元预测 → 组件整体不渲染。 -->
           <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" />
-          <SourceContextPanel v-if="meta.news_market_context" :context="meta.news_market_context" />
+          <SourceContextPanel v-if="displayContext" :context="displayContext" :lang="viewLang" />
           <!-- VIZ-1：图表画廊（确定性生成的 PNG/SVG 图表 + 图注）。无工件时整体不渲染。 -->
           <section v-if="galleryCharts.length" class="chart-gallery">
             <div class="gallery-head">
@@ -376,7 +382,7 @@ import {
   officialSeriesIndex,
 } from '../../utils/officialData'
 import { saveTextFile } from '../../utils/saveTextFile'
-import { L } from '../../i18n'
+import { L as appL } from '../../i18n'
 
 const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPanel.vue'))
 
@@ -404,6 +410,10 @@ const officialByLang = ref({})
 const officialInFlight = new Set()
 // BILINGUAL：当前展示语种。null=原文（markdown_content）；否则为某翻译语种码（'en'|'zh'）。
 const activeLang = ref(null)
+function L(zh, en) { return activeLang.value === 'zh' ? zh : activeLang.value === 'en' ? (en ?? zh) : appL(zh, en) }
+const displayByLang = ref({})
+const forecastLocalizationByLang = ref({})
+const displayTranslationByLang = ref({})
 const langMdCache = ref({})       // 翻译成稿缓存 { lang: markdown }
 const langLoading = ref(false)    // 翻译版本拉取中
 const translationBusy = ref(false)
@@ -422,6 +432,11 @@ let loadVersion = 0
 let languageRequestVersion = 0
 let translationPollVersion = 0
 let translationPollTimer = null
+let structuredPollTimer = null
+let structuredPollVersion = 0
+let structuredPollAttempts = 0
+const MAX_STRUCTURED_POLLS = 30
+const structuredPollTimedOut = ref(false)
 // An "Update translation" run regenerates a variant that stays published until the
 // new one passes its audit: its task-bound progress must not overwrite the
 // published translation state (that would hide the language toggle mid-update).
@@ -443,10 +458,16 @@ async function load() {
   const version = ++loadVersion
   languageRequestVersion += 1
   stopTranslationPolling()
+  stopStructuredPolling()
+  structuredPollAttempts = 0
+  structuredPollTimedOut.value = false
   stopPolling()
   cancelExportRequest()
   activeLang.value = null
   langMdCache.value = {}
+  displayByLang.value = {}
+  forecastLocalizationByLang.value = {}
+  displayTranslationByLang.value = {}
   langLoading.value = false
   translationBusy.value = false
   translationUpdateRun = false
@@ -505,20 +526,32 @@ async function loadVizManifest(reportId = props.reportId, version = loadVersion)
 
 // FORECAST-DASH：拉取某展示语种的结构化预测。旧报告会返回 forecast:null；其余失败
 // （404/409/网络错误）→ null → 仪表盘整体隐藏，报告正文不受影响（degrade-safe）。
-async function loadForecast(reportId = props.reportId, version = loadVersion, lang = '') {
+async function loadForecast(reportId = props.reportId, version = loadVersion, lang = '', pollVersion = null) {
   const key = String(lang || '')
   const flight = `${version}:${reportId}:${key}`
   if (forecastInFlight.has(flight)) return
   forecastInFlight.add(flight)
   try {
     const res = await getForecast(reportId, key || undefined)
-    if (version !== loadVersion || reportId !== props.reportId) return
+    if (version !== loadVersion || reportId !== props.reportId
+        || (pollVersion !== null && (pollVersion !== structuredPollVersion || activeLang.value !== key))) return
     const data = (res && res.data) || {}
     const forecast = (data.forecast && typeof data.forecast === 'object') ? data.forecast : null
     forecastByLang.value = { ...forecastByLang.value, [key]: forecast }
+    forecastLocalizationByLang.value = { ...forecastLocalizationByLang.value, [key]: data.localization || null }
+    displayByLang.value = { ...displayByLang.value, [key]: data.display || null }
+    displayTranslationByLang.value = { ...displayTranslationByLang.value, [key]: data.structured_translation || data.translation_status || data.display?.structured_translation || data.display?.translation_status || null }
+    if (activeLang.value === key) {
+      if (displayTranslationByLang.value[key]?.status === 'generating') scheduleStructuredPoll(reportId, key)
+      else stopStructuredPolling()
+    }
   } catch (e) {
-    if (version === loadVersion && reportId === props.reportId) {
+    if (version === loadVersion && reportId === props.reportId
+        && (pollVersion === null || (pollVersion === structuredPollVersion && activeLang.value === key))) {
+      if (activeLang.value === key) stopStructuredPolling()
       forecastByLang.value = { ...forecastByLang.value, [key]: null }
+      forecastLocalizationByLang.value = { ...forecastLocalizationByLang.value, [key]: { localized: false, complete: false, error: e?.message || '' } }
+      displayTranslationByLang.value = { ...displayTranslationByLang.value, [key]: { status: 'failed', complete: false, issues: [e?.message || 'Unable to load structured translation'] } }
     }
   } finally {
     forecastInFlight.delete(flight)
@@ -662,7 +695,8 @@ const translationAction = computed(() => reportTranslationAction(meta.value))
 // that keeps disclosed source-language passages (`partial`, FILTER-SAFE) can be
 // regenerated in place when the backend allows it (`can_update`); the published one
 // stays until the new one passes the audit.
-const translationUpdateAction = computed(() => reportTranslationUpdateAction(meta.value))
+const translationUpdateAction = computed(() => reportTranslationUpdateAction(meta.value)
+  || (structuredTranslationPartial.value && activeLang.value && meta.value?.translation_status?.can_generate === true ? { targetLang: activeLang.value, reason: 'partial', partial: true, outdated: false } : null))
 const translationUpdateLabel = computed(() => reportTranslationUpdateLabel(
   translationUpdateAction.value, L, translationBusy.value,
 ))
@@ -714,15 +748,50 @@ const translationButtonLabel = computed(() => {
   return L(`生成 ${target}`, `Generate ${target}`)
 })
 
+function stopStructuredPolling() {
+  structuredPollVersion += 1
+  if (structuredPollTimer) clearTimeout(structuredPollTimer)
+  structuredPollTimer = null
+}
+
+function scheduleStructuredPoll(reportId, key) {
+  if (activeLang.value !== key || reportId !== props.reportId) return
+  if (structuredPollTimer) clearTimeout(structuredPollTimer)
+  structuredPollTimer = null
+  if (structuredPollAttempts >= MAX_STRUCTURED_POLLS) { structuredPollTimedOut.value = true; return }
+  const version = structuredPollVersion
+  const reportVersion = loadVersion
+  structuredPollTimer = setTimeout(() => {
+    structuredPollTimer = null
+    if (version !== structuredPollVersion || reportId !== props.reportId || activeLang.value !== key) return
+    structuredPollAttempts += 1
+    loadForecast(reportId, reportVersion, key, version)
+  }, 4000)
+}
+
+async function loadLanguageFields(reportId, key) {
+  const tasks = []
+  if (!(key in forecastByLang.value) || displayTranslationByLang.value[key]?.status === 'generating') tasks.push(loadForecast(reportId, loadVersion, key))
+  if (!(key in officialByLang.value)) tasks.push(loadOfficialData(reportId, loadVersion, key))
+  await Promise.all(tasks)
+}
+
 async function switchLang(key) {
-  if (key === activeLang.value) return
+  if (key === activeLang.value && !langLoading.value) return
   if (key != null && !langOptions.value.some(option => option.key === key)) return
   cancelExportRequest()
   const reportId = props.reportId
   const version = ++languageRequestVersion
+  stopStructuredPolling()
+  structuredPollAttempts = 0
+  structuredPollTimedOut.value = false
   translationError.value = ''
-  if (key == null) { activeLang.value = null; return }
-  if (langMdCache.value[key]) { activeLang.value = key; return }
+  if (key == null) { activeLang.value = null; langLoading.value = false; return }
+  if (langMdCache.value[key]) {
+    activeLang.value = key
+    await loadLanguageFields(reportId, key)
+    return
+  }
   langLoading.value = true
   try {
     const res = await getReportTranslationMd(reportId, key)
@@ -732,6 +801,9 @@ async function switchLang(key) {
     if (text) {
       langMdCache.value = { ...langMdCache.value, [key]: text }
       activeLang.value = key
+      await loadLanguageFields(reportId, key)
+    } else {
+      throw new Error(L('该语言版本为空或不可用', 'Language variant is empty or unavailable'))
     }
   } catch (e) {
     if (version === languageRequestVersion && reportId === props.reportId) {
@@ -853,22 +925,62 @@ async function pollTranslation(reportId, lang, taskId, version) {
 async function generateTranslation(force = false) {
   const action = force === true ? translationUpdateAction.value : translationAction.value
   const reportId = props.reportId
-  if (!action || !reportId || translationBusy.value) return
+  if (!action || !reportId || translationBusy.value || structuredGenerating.value) return
+  const targetLang = action.targetLang
+  stopStructuredPolling()
+  structuredPollAttempts = 0
+  structuredPollTimedOut.value = false
   stopTranslationPolling()
   translationUpdateRun = force === true
   const version = translationPollVersion
-  const target = langLabel(action.targetLang)
+  const reportVersion = loadVersion
+  const languageVersion = languageRequestVersion
+  const ownsRun = () => version === translationPollVersion
+    && reportVersion === loadVersion && reportId === props.reportId
+  const ownsDecision = () => ownsRun() && languageVersion === languageRequestVersion
+  const releaseStaleDecision = () => {
+    if (!ownsRun()) return
+    translationUpdateRun = false
+    translationBusy.value = false
+    translationMessage.value = ''
+  }
+  const target = langLabel(targetLang)
+  // Deduplicate clicks before the read-only metadata refresh, not after it.
   translationBusy.value = true
   translationError.value = ''
-  translationMessage.value = L(`正在启动${target}翻译…`, `Starting ${target} translation…`)
+  translationMessage.value = L(`正在核对${target}翻译状态…`, `Checking current ${target} translation status…`)
   try {
-    const res = await requestReportTranslation(reportId, action.targetLang, force === true)
-    if (version !== translationPollVersion || reportId !== props.reportId) return
+    // HMR/background completion can leave old partial flags next to freshly fetched
+    // Markdown. Only current report metadata may authorize a body regeneration.
+    const latest = await getReport(reportId)
+    if (!ownsDecision()) { releaseStaleDecision(); return }
+    const fresh = latest && latest.data
+    const state = fresh?.translation_status
+    if (fresh?.report_id !== reportId || state?.report_id !== reportId
+        || state?.target_lang !== targetLang) {
+      throw new Error(L('当前翻译状态与报告或语言不匹配，未启动翻译', 'Current translation state does not match this report or language; translation was not started'))
+    }
+    const published = normalizeReportTranslations(fresh).some(row => row.lang === targetLang)
+    const currentAction = reportTranslationAction(fresh)
+    if (!published && currentAction?.targetLang !== targetLang) {
+      throw new Error(L('当前报告未允许生成该译文，未启动翻译', 'The current report does not permit this translation; translation was not started'))
+    }
+    meta.value = fresh
+    const bodyUpdate = reportTranslationUpdateAction(fresh)
+    const bodyPartial = reportTranslationPartial(fresh, targetLang)
+    const requestForce = force === true && published
+      && Boolean(bodyUpdate || bodyPartial || state.outdated === true)
+    if (requestForce && state.can_generate !== true) {
+      throw new Error(L('当前报告未允许重新生成正文译文，未启动翻译', 'The current report does not permit body translation regeneration; translation was not started'))
+    }
+    translationMessage.value = L(`正在启动${target}翻译…`, `Starting ${target} translation…`)
+    const res = await requestReportTranslation(reportId, targetLang, requestForce)
+    if (!ownsDecision()) { releaseStaleDecision(); return }
     const data = (res && res.data) || {}
     const taskId = String(data.task_id || '').trim()
     const outcome = reportTranslationPollOutcome(data, taskId)
     if (outcome.available) {
-      await activateCompletedTranslation(reportId, action.targetLang)
+      await activateCompletedTranslation(reportId, targetLang)
       return
     }
     if (outcome.terminal) {
@@ -878,9 +990,9 @@ async function generateTranslation(force = false) {
     if (!taskId) throw new Error(L('后端未返回翻译任务','Translation task was not created'))
     updateTranslationState(data)
     translationMessage.value = data.message || L('正在生成并审计译文…','Generating and auditing the translation…')
-    await pollTranslation(reportId, action.targetLang, taskId, version)
+    await pollTranslation(reportId, targetLang, taskId, version)
   } catch (e) {
-    if (version !== translationPollVersion || reportId !== props.reportId) return
+    if (!ownsDecision()) { releaseStaleDecision(); return }
     stopTranslationPolling()
     translationUpdateRun = false
     translationBusy.value = false
@@ -959,8 +1071,10 @@ async function downloadArtifact(kind) {
 
 // ---------- VIZ-1：图表画廊（静态预览优先；Plotly HTML-only 也可直接打开）----------
 const galleryCharts = computed(() => {
+  const display = displayByLang.value[viewLang.value]
+  const manifest = Array.isArray(display?.viz_manifest) ? display.viz_manifest : vizManifest.value
   const fallbackOnly = filterVizGalleryByMarkdown(
-    normalizeVizGallery(vizManifest.value),
+    normalizeVizGallery(manifest),
     currentMd.value,
   )
   return fallbackOnly.map(item => ({
@@ -976,11 +1090,37 @@ const galleryCharts = computed(() => {
 })
 
 // ---------- FORECAST-DASH：结构化预测仪表盘 ----------
-// 当前语种的预测；其本地化副本加载中/不存在时回退为已加载的原始预测（绝不空白闪烁）。
+// Pending language-specific fields do not reuse another language. Server-declared
+// source fallbacks stay visible with a partial-translation notice and retry.
+const structuredGenerating = computed(() => Boolean(activeLang.value) && !structuredPollTimedOut.value
+  && displayTranslationByLang.value[viewLang.value]?.status === 'generating')
+const displayContext = computed(() => displayByLang.value[viewLang.value]?.news_market_context || meta.value.news_market_context || null)
+const structuredTranslationPartial = computed(() => {
+  if (!activeLang.value || activeLang.value === sourceLang.value) return false
+  const key = viewLang.value
+  if (!(key in forecastByLang.value)) return false
+  const info = forecastLocalizationByLang.value[key]
+  const forecast = forecastByLang.value[key]
+  const state = displayTranslationByLang.value[key]
+  return structuredPollTimedOut.value || (Boolean(forecast) && info?.complete !== true)
+    || Boolean(info?.error) || state?.partial === true || state?.complete === false
+    || (Boolean(meta.value.news_market_context) && !displayByLang.value[key]?.news_market_context)
+})
+const structuredTranslationNotice = computed(() => {
+  if (!activeLang.value || activeLang.value === sourceLang.value) return ''
+  if (structuredPollTimedOut.value) return L('结构化翻译等待超时，已停止自动查询。正文译文仍可使用；可点击重试翻译。', 'Structured translation polling timed out and stopped. The translated report remains usable; retry to finish.')
+  if (structuredGenerating.value) return L('正文译文可用，正在补全卡片与其他结构化内容…', 'The translated report is available; cards and other structured content are still being translated…')
+  if (!(viewLang.value in forecastByLang.value)) return L('正在读取结构化内容的译文…', 'Loading translated structured content…')
+  return structuredTranslationPartial.value
+    ? L('部分结构化内容尚未译出，仍按原文显示；数字、单位与来源保持不变。点击重试翻译可补全。', 'Some structured content remains in the source language; numbers, units and sources are unchanged. Retry translation to complete it.')
+    : ''
+})
+
 const fc = computed(() => {
   const cache = forecastByLang.value
   const own = cache[viewLang.value || '']
   if (own) return own
+  if (activeLang.value) return null
   return cache[sourceLang.value || ''] || cache[''] || null
 })
 
@@ -1059,9 +1199,10 @@ function divergencePP(m) {
 }
 
 // ---------- RPT-12：官方指标瓦片 + 数据锚点标签 ----------
-// 当前语种的官方数据；该语种尚未加载时回退为已加载的另一份（同一载体，仅标签语种不同）。
+// Official-data labels follow the active variant; no cross-language cache fallback.
 const officialPayload = computed(() => {
   const cache = officialByLang.value
+  if (activeLang.value) return cache[viewLang.value] || null
   return cache[viewLang.value || ''] || cache[sourceLang.value || ''] || cache[''] || null
 })
 // 官方数据展示语种：服务端返回的 lang（未指定时为报告语种），否则当前视图语种。
@@ -1165,6 +1306,15 @@ async function pollOnce(reportId = props.reportId, version = loadVersion) {
     const reportTerminal = s === 'completed' || s === 'failed'
     if (finalMd) {
       const firstFinalBody = !md.value
+      if (md.value && md.value !== finalMd) {
+        languageRequestVersion += 1
+        langMdCache.value = {}
+        forecastByLang.value = {}
+        officialByLang.value = {}
+        displayByLang.value = {}
+        forecastLocalizationByLang.value = {}
+        displayTranslationByLang.value = {}
+      }
       md.value = finalMd
       activeLang.value = null
       if (firstFinalBody) {
@@ -1216,6 +1366,8 @@ function renderPartial(mdText) {
 }
 
 const reportTitle = computed(() => {
+  const title = displayByLang.value[viewLang.value]?.title
+  if (typeof title === 'string' && title.trim()) return title
   const h1 = headings.value.find(h => h && Number(h.level) === 1)
   if (h1 && h1.text) return h1.text
   const first = headings.value[0]
@@ -1225,7 +1377,8 @@ const reportTitle = computed(() => {
 
 const statusLabel = computed(() => {
   const s = meta.value && meta.value.status
-  return s ? String(s) : ''
+  const labels = { completed: ['已完成', 'Completed'], failed: ['失败', 'Failed'], generating: ['生成中', 'Generating'], planning: ['规划中', 'Planning'], pending: ['等待中', 'Pending'], cancelled: ['已取消', 'Cancelled'] }
+  return labels[String(s || '').toLowerCase()] ? L(...labels[String(s).toLowerCase()]) : (s ? String(s) : '')
 })
 
 const statusClass = computed(() => {
@@ -1238,7 +1391,7 @@ const statusClass = computed(() => {
 
 // 部分章节生成失败时的占位章节标题（老报告无此字段，视为空数组）
 const failedSections = computed(() => {
-  const list = meta.value && meta.value.failed_sections
+  const list = displayByLang.value[viewLang.value]?.failed_sections || (meta.value && meta.value.failed_sections)
   if (!Array.isArray(list)) return []
   return list.filter(t => typeof t === 'string' && t)
 })
@@ -1292,7 +1445,7 @@ async function copyMarkdown() {
 }
 
 onMounted(load)
-watch(() => props.reportId, load)
+watch(() => props.reportId, load, { flush: 'sync' })
 // 切换语种（原文 ⇄ 译文）时按需拉取该语种的仪表盘文本；已缓存则不重复请求。
 watch(viewLang, lang => {
   const key = String(lang || '')
@@ -1301,7 +1454,12 @@ watch(viewLang, lang => {
   if (!(key in officialByLang.value)) loadOfficialData(props.reportId, loadVersion, key)
 })
 onBeforeUnmount(() => {
+  // Close initial GET admission too: cancelling timers alone cannot invalidate
+  // responses that have not scheduled their first structured poll yet.
+  loadVersion += 1
+  languageRequestVersion += 1
   stopTranslationPolling()
+  stopStructuredPolling()
   stopPolling()
   cancelExportRequest()
   if (copyTimer) clearTimeout(copyTimer)
@@ -1309,6 +1467,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.scenario-drivers { font-size: 12px; line-height: 1.6; margin-top: 8px; }
+.scenario-drivers ul { padding-left: 18px; }
+.structured-translation-note { padding: 10px 20px; border: 1px solid #d97706; background: #fff7ed; color: #92400e; }
 .forecast-report {
   --orange: #FF4500;
   --border: #E5E5E5;

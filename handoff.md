@@ -1,3 +1,5 @@
+> Current repair: [Mandarin translation handoff](docs/handoff/mandarin-translation-repair/handoff.md). User-approved model-led translation and its source-bound acceptance record.
+
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
 > Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.

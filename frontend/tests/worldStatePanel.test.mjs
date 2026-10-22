@@ -7,6 +7,7 @@ import { renderToString } from 'vue/server-renderer'
 import * as i18n from '../src/i18n.js'
 import * as worldState from '../src/utils/worldState.js'
 import { compileSfc } from './sfcHarness.mjs'
+import { overlay } from './simulationTranslationHarness.mjs'
 
 // Drives the real WorldStatePanel.vue (script setup + template) against a fake
 // GET /api/simulation/<id>/world-state: the period strip must select any committed
@@ -71,7 +72,7 @@ function mountPanel(t, first) {
   const panel = buildPanel({
     // the SSR run has no mounted instance: the panel loads on demand through state.load()
     vue: { ...vue, onMounted: () => {}, onUnmounted: () => {} },
-    '../../i18n': i18n,
+    '../../utils/overlayTranslation': overlay, '../../i18n': i18n,
     '../../api/simulation': { getWorldState: async (simId, rows) => { calls.push([simId, rows]); return { data: current } } },
     '../../utils/worldState': worldState
   })
@@ -193,7 +194,7 @@ test('the panel reads Chinese labels from the locale', async (t) => {
   assert.match(r.text, /1 项决策 · 1 有效/)
   assert.match(r.text, /本时段事实变化 \(1\)/)
   assert.match(r.html, /aria-label="选择已提交的时段"/)
-  assert.match(r.ticks[0], /aria-label="2026-01, 仲裁 applied, 1 项事实变化"/)
+  assert.match(r.ticks[0], /aria-label="2026-01, 仲裁 已应用, 1 项事实变化"/)
 })
 
 

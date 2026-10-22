@@ -449,9 +449,14 @@ def get_dossier(pipeline_id: str):
     except ValueError:
         return jsonify({"success": False, "error": "Research news context is invalid"}), 409
 
+    lang = (request.args.get("lang") or "").strip().lower()
+    if lang and lang not in ("en", "zh"):
+        return jsonify({"success": False, "error": "unsupported language"}), 400
+    display = _research_display(handoff, pipeline_id, lang) if lang else {}
     return jsonify({
         "success": True,
         "data": {
+            **display,
             "report": report,
             "news_market_context": news_market_context,
             "actors": _decode(actors_raw),
@@ -498,14 +503,8 @@ def _research_source_sha(src_path: str):
 
 
 def _write_research_status(status_path: str, payload: dict) -> None:
-    import json as _json
-    tmp = status_path + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as handle:
-            _json.dump(payload, handle, ensure_ascii=False)
-        os.replace(tmp, status_path)
-    except OSError as exc:
-        logger.warning(f"研究报告翻译状态写入失败（忽略）: {exc}")
+    from ..services.artifact_translation import _save_cache
+    _save_cache(status_path, payload)
 
 
 def _read_research_status(status_path: str):
@@ -518,73 +517,137 @@ def _read_research_status(status_path: str):
         return None
 
 
-def _run_research_translation(pipeline_id: str, lang: str) -> None:
-    """Background worker: structure-preserving translation of research_report.md.
+def _research_display_source(handoff):
+    """Read display inputs without touching their canonical bytes or seal."""
+    import json
+    fields = {"actors": "actors.json", "sources": "sources.json", "timeline": "timeline.json",
+              "quantitative": "quantitative.json", "contested": "contested.json",
+              "prediction_markets": "prediction_markets.json", "charts": "charts.json",
+              "datasets": "data/datasets.json"}
+    document = {}
+    for key, name in fields.items():
+        try:
+            with open(os.path.join(handoff, name), encoding="utf-8") as handle:
+                document[key] = json.load(handle)
+        except (OSError, ValueError):
+            document[key] = None
+    from ..services.news_market_context import load_context
+    document["news_market_context"] = load_context(handoff) or None
+    return document
 
-    Reuses the exact forecast translator (guaranteed heading/table/number/citation
-    parity, contamination repair, lint-before-audit) via ReportAgent.  Persists the
-    variant Markdown + audit sidecar only when the isolated audit hard-passes; a
-    failed translation records its issues and publishes nothing (fail-closed).
-    """
-    import json as _json
+
+def _research_display(handoff, pipeline_id, lang, *, generate=False, force=False):
+    from ..services.artifact_translation import display_document
+    result = display_document(handoff, "dossier", pipeline_id, lang,
+        _research_display_source(handoff), generate=generate, force=force)
+    return {"dossier": result["display"], "structured_translation": {
+        **result["structured_translation"], "complete": result["coverage"]["complete"],
+        "coverage": result["coverage"]}}
+
+
+def _research_variant(handoff, lang):
+    """Read a completed, byte-bound isolated translation; status alone is no seal."""
+    import json
+    src, variant, audit_path, status_path, _ = _research_report_paths(handoff, lang)
+    source_sha = _research_source_sha(src)
+    status = _read_research_status(status_path) or {"status": "unavailable"}
+    proof = status if status.get("status") == "available" else status.get("previous")
+    if not isinstance(proof, dict):
+        return status, None
+    if proof.get("source_sha256") != source_sha:
+        return {**status, "status": "stale", "available": False,
+                "issues": ["research source changed; retry current translation"]}, None
+    if (proof.get("schema_version") != 2 or proof.get("target_lang") != lang
+            or not source_sha or proof.get("markdown_sha256") != _research_source_sha(variant)
+            or proof.get("audit_sha256") != _research_source_sha(audit_path)):
+        return {**status, "status": "outdated" if status.get("status") == "available" else status.get("status")}, None
+    try:
+        with open(audit_path, encoding="utf-8") as handle:
+            audit = json.load(handle)
+        if audit.get("hard_passed") is not True:
+            return {**status, "status": "failed"}, None
+        with open(variant, encoding="utf-8", newline="") as handle:
+            markdown = handle.read()
+        from ..services.model_translation import ENGINE, valid_document_receipt
+        if (audit.get("translator_version") == ENGINE or "model_translation" in audit):
+            with open(src, encoding="utf-8", newline="") as handle:
+                current_source = handle.read()
+            if not valid_document_receipt(current_source, markdown, lang, audit.get("model_translation")):
+                return {**status, "status": "failed", "available": False,
+                        "issues": ["research translation review receipt is invalid; retry current translation"]}, None
+        return status, markdown
+    except (OSError, ValueError, TypeError):
+        return {**status, "status": "failed"}, None
+
+
+def _run_research_translation(pipeline_id: str, lang: str, force=False) -> None:
+    """Translate Markdown plus structured display; canonical artifacts stay sealed."""
+    import json
     from ..services.report_agent import ReportAgent
     from ..utils.llm_client import LLMClient
-
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
-    src_path, variant_path, audit_path, status_path, _pdf = _research_report_paths(
-        handoff, lang
-    )
+    src_path, variant_path, audit_path, status_path, _pdf = _research_report_paths(handoff, lang)
     source_sha = _research_source_sha(src_path)
+    status = _read_research_status(status_path) or {}
+    previous = status.get("previous")
     try:
-        with open(src_path, encoding="utf-8") as handle:
+        with open(src_path, encoding="utf-8", newline="") as handle:
             md = handle.read()
-        worker = ReportAgent.__new__(ReportAgent)
-        worker.llm = LLMClient()
-        worker.output_language = "English"
-        worker._forecast_spine = None
-        result = worker.translate_research_markdown(md, label=f"research::{pipeline_id}")
-        if result.get("tgt") and result["tgt"] != lang:
-            _write_research_status(status_path, {
-                "status": "failed", "available": False, "source_sha256": source_sha,
-                "issues": ["requested language is not this report's translation target"],
-            })
-            return
+        # Read the source once; recheck exact bytes before committing any variant.
+        import hashlib
+        source_sha = hashlib.sha256(md.encode("utf-8")).hexdigest()
+        previous_status, previous_md = _research_variant(handoff, lang)
+        if previous_md and not force:
+            with open(audit_path, encoding="utf-8") as handle:
+                previous_audit = json.load(handle)
+            proof = previous_status if previous_status.get("status") == "available" else previous_status.get("previous", {})
+            result = {"available": True, "translated_md": previous_md, "audit": previous_audit,
+                      "src": proof.get("source_lang"), "tgt": lang}
+        else:
+            worker = ReportAgent.__new__(ReportAgent)
+            worker.llm, worker.output_language, worker._forecast_spine = LLMClient(), "English", None
+            result = worker.translate_research_markdown(md, label=f"research::{pipeline_id}")
         audit = result.get("audit") or {}
-        if not result.get("available"):
-            tmp = audit_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as handle:
-                _json.dump(audit, handle, ensure_ascii=False)
-            os.replace(tmp, audit_path)
-            _write_research_status(status_path, {
-                "status": "failed", "available": False, "source_sha256": source_sha,
-                "issues": list(audit.get("issues") or result.get("issues") or [])[:12],
-            })
+        if result.get("tgt") and result["tgt"] != lang:
+            raise ValueError("requested language is not this report's translation target")
+        if not result.get("available") or audit.get("hard_passed") is not True:
+            _write_research_status(status_path, {"status": "failed", "available": False,
+                "source_sha256": source_sha, "target_lang": lang, "previous": previous,
+                "issues": list(audit.get("issues") or result.get("issues") or [])[:12]})
             return
-        for path, text in (
-            (audit_path, _json.dumps(audit, ensure_ascii=False)),
-            (variant_path, result["translated_md"]),
-        ):
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as handle:
-                handle.write(text)
-            os.replace(tmp, path)
-        # FILTER-SAFE: sections the provider content filter kept in the source language
-        # are disclosed beside the (still "available") status; the readers of this file
-        # key on "available", so the status value itself does not change.
+        display = _research_display(handoff, pipeline_id, lang, generate=True, force=force)
+        if _research_source_sha(src_path) != source_sha:
+            raise ValueError("source changed during translation; retry current research")
+        # Keep previous good files on a failed attempt. Status is written last and
+        # hashes both files, so readers reject a crash between the atomic replaces.
+        for path, content in ((audit_path, json.dumps(audit, ensure_ascii=False)),
+                              (variant_path, result["translated_md"])):
+            # Text needs its own atomic writer; no canonical file is overwritten.
+            import tempfile
+            fd, tmp = tempfile.mkstemp(prefix=".research-translation-", dir=handoff)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+                    handle.flush(); os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
         partial = audit.get("partial") if isinstance(audit.get("partial"), dict) else {}
-        verbatim_chunks = list(partial.get("verbatim_regions") or [])
+        verbatim = list(partial.get("verbatim_regions") or [])
+        structured = display["structured_translation"]
         _write_research_status(status_path, {
-            "status": "available", "available": True, "source_sha256": source_sha,
-            "target_lang": lang, "source_lang": result.get("src"), "issues": [],
-            "partial": bool(verbatim_chunks),
-            **({"verbatim_chunks": verbatim_chunks} if verbatim_chunks else {}),
+            "schema_version": 2, "status": "available", "available": True,
+            "source_sha256": source_sha, "target_lang": lang, "source_lang": result.get("src"),
+            "markdown_sha256": _research_source_sha(variant_path), "audit_sha256": _research_source_sha(audit_path),
+            "partial": bool(verbatim) or not structured["complete"], "verbatim_chunks": verbatim,
+            "structured_translation": structured, "issues": structured["issues"],
         })
-    except Exception as exc:  # noqa: BLE001 — worker must never crash the process
-        logger.error(f"研究报告翻译失败: {exc}", exc_info=True)
-        _write_research_status(status_path, {
-            "status": "failed", "available": False, "source_sha256": source_sha,
-            "issues": [f"translation worker error: {type(exc).__name__}"],
-        })
+    except Exception as exc:
+        logger.error("研究报告翻译失败: %s", type(exc).__name__)
+        _write_research_status(status_path, {"status": "failed", "available": False,
+            "source_sha256": source_sha, "target_lang": lang, "previous": previous,
+            "issues": ["translation worker error: " + type(exc).__name__]})
     finally:
         with _research_translation_lock:
             _research_translation_inflight.discard((pipeline_id, lang))
@@ -592,86 +655,69 @@ def _run_research_translation(pipeline_id: str, lang: str) -> None:
 
 @research_bp.route('/<pipeline_id>/dossier/translations/<lang>', methods=['POST'])
 def start_research_translation(pipeline_id: str, lang: str):
-    """Start (or deduplicate) a structure-preserving research-report translation."""
     import threading
     lang = (lang or "").strip().lower()
     if lang not in _RESEARCH_TRANSLATION_LANGS:
         return jsonify({"success": False, "error": "unsupported language"}), 400
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
-    src_path, variant_path, audit_path, status_path, _pdf = _research_report_paths(
-        handoff, lang
-    )
-    if not os.path.isdir(handoff) or not os.path.exists(src_path):
+    src_path, _, _, status_path, _ = _research_report_paths(handoff, lang)
+    if not os.path.isdir(handoff) or not os.path.isfile(src_path):
         return jsonify({"success": False, "error": "研究报告不存在"}), 404
     source_sha = _research_source_sha(src_path)
-    # Already available for the current source bytes → return without re-running.
-    status = _read_research_status(status_path)
-    if (status and status.get("status") == "available"
-            and status.get("source_sha256") == source_sha
-            and os.path.exists(variant_path)):
-        return jsonify({"success": True, "data": status}), 200
+    force = (request.args.get("force") or "").lower() in {"1", "true", "yes"}
+    status, markdown = _research_variant(handoff, lang)
+    display = _research_display(handoff, pipeline_id, lang)
+    if markdown and display["structured_translation"]["complete"] and not force:
+        return jsonify({"success": True, "data": {**status, **display, "available": True}}), 200
     with _research_translation_lock:
         if (pipeline_id, lang) in _research_translation_inflight:
-            return jsonify({"success": True, "data": {
-                "status": "generating", "available": False, "source_sha256": source_sha,
-            }}), 202
+            return jsonify({"success": True, "data": {"status": "generating", "available": False,
+                "source_sha256": source_sha, "target_lang": lang}}), 202
         _research_translation_inflight.add((pipeline_id, lang))
-    _write_research_status(status_path, {
-        "status": "generating", "available": False, "source_sha256": source_sha,
-        "owner": f"pid:{os.getpid()}",
-    })
-    # 2026-10-18 修复：线程不继承 contextvars → 计量落入 _global 桶（per-run 预算/
-    # 成本归集失真）。复制当前上下文再提交（telemetry.py 的警告点名了这一点）。
-    import contextvars as _cv
-    _ctx = _cv.copy_context()
-    threading.Thread(
-        target=_ctx.run, args=(_run_research_translation, pipeline_id, lang), daemon=True,
-    ).start()
-    return jsonify({"success": True, "data": {
-        "status": "generating", "available": False, "source_sha256": source_sha,
-    }}), 202
+    previous = (status if markdown and status.get("status") == "available" else status.get("previous"))
+    _write_research_status(status_path, {"status": "generating", "available": False,
+        "source_sha256": source_sha, "target_lang": lang, "previous": previous, "owner": f"pid:{os.getpid()}"})
+    import contextvars
+    ctx = contextvars.copy_context()
+    try:
+        threading.Thread(target=ctx.run, args=(_run_research_translation, pipeline_id, lang, force), daemon=True).start()
+    except Exception:
+        with _research_translation_lock:
+            _research_translation_inflight.discard((pipeline_id, lang))
+        _write_research_status(status_path, {"status": "failed", "previous": previous, "issues": ["translation worker could not start"]})
+        raise
+    return jsonify({"success": True, "data": {"status": "generating", "available": False,
+        "source_sha256": source_sha, "target_lang": lang}}), 202
 
 
 @research_bp.route('/<pipeline_id>/dossier/translations/<lang>', methods=['GET'])
 def get_research_translation(pipeline_id: str, lang: str):
-    """Return the research-report language variant Markdown + audit status."""
     lang = (lang or "").strip().lower()
     if lang not in _RESEARCH_TRANSLATION_LANGS:
         return jsonify({"success": False, "error": "unsupported language"}), 400
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
-    src_path, variant_path, audit_path, status_path, _pdf = _research_report_paths(
-        handoff, lang
-    )
     if not os.path.isdir(handoff):
         return jsonify({"success": False, "error": "管线不存在"}), 404
-    status = _read_research_status(status_path) or {"status": "unavailable", "available": False}
+    status, markdown = _research_variant(handoff, lang)
     if status.get("status") == "generating":
         from ..services.report_agent import ReportManager
-        if not ReportManager._translation_owner_alive(status.get("owner")):
-            # The worker died with its process (backend restart): report it so the
-            # UI offers a retry instead of waiting on a translation nobody runs.
-            status = {
-                **status,
-                "status": "interrupted",
-                "issues": ["previous translation attempt stopped before completion"],
-            }
-    source_sha = _research_source_sha(src_path)
-    report_md = None
-    if (status.get("status") == "available"
-            and status.get("source_sha256") == source_sha
-            and os.path.exists(variant_path)):
-        try:
-            with open(variant_path, encoding="utf-8") as handle:
-                report_md = handle.read()
-        except OSError:
-            report_md = None
+        with _research_translation_lock:
+            active_here = (pipeline_id, lang) in _research_translation_inflight
+        # Another worker process (or a reloaded module) may own this task. Keep
+        # its durable owner check, while the local registry covers new tasks.
+        alive = active_here or ReportManager._translation_owner_alive(status.get("owner"))
+        if not alive:
+            status = {**status, "status": "interrupted",
+                      "issues": ["previous translation attempt stopped before completion"]}
+    display = _research_display(handoff, pipeline_id, lang)
     return jsonify({"success": True, "data": {
-        "status": status.get("status"),
-        "available": bool(report_md),
-        "issues": list(status.get("issues") or []),
-        "source_lang": status.get("source_lang"),
-        "target_lang": lang,
-        "report": report_md,
+        "status": status.get("status"), "available": bool(markdown), "report": markdown,
+        "source_lang": status.get("source_lang"), "target_lang": lang,
+        "source_sha256": _research_source_sha(_research_report_paths(handoff, lang)[0]),
+        "partial": bool(status.get("partial")) or not display["structured_translation"]["complete"],
+        "verbatim_chunks": status.get("verbatim_chunks") or [],
+        "issues": list(status.get("issues") or []) + display["structured_translation"]["issues"],
+        **display,
     }})
 
 
@@ -692,11 +738,8 @@ def get_research_pdf(pipeline_id: str):
         handoff, lang or "zh"
     )
     if lang:
-        status = _read_research_status(status_path)
-        source_sha = _research_source_sha(src_path)
-        if not (status and status.get("status") == "available"
-                and status.get("source_sha256") == source_sha
-                and os.path.exists(variant_path)):
+        status, verified_markdown = _research_variant(handoff, lang)
+        if verified_markdown is None:
             return jsonify({
                 "success": False,
                 "error": "该语种译文尚未通过发布审计（fail-closed）",

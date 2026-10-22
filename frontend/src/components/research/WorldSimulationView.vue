@@ -5,9 +5,15 @@
         <h2>{{ L('世界模拟', 'World simulation') }} <span class="engine">world-v1</span></h2>
         <p class="caveat">{{ L('声明假设下的条件路径；不是经过校准的概率预测。', 'Conditional pathway under declared assumptions; not a calibrated probability forecast.') }}</p>
       </div>
+      <button type="button" :aria-pressed="translation.lang.value === 'zh'" @click="translation.toggle">{{ translation.lang.value === 'zh' ? '原文 / English' : '中文 · 翻译整个模拟' }}</button>
       <button type="button" :disabled="loading || !simulationId" @click="refreshLatest">{{ L('刷新至最新', 'Refresh latest') }}</button>
     </header>
 
+    <div v-if="translation.feedback.value" class="translation-note" role="status" aria-live="polite">
+      {{ translation.feedback.value }}
+      <button v-if="translation.retryable.value" type="button" @click="translation.retry" :disabled="translation.busy.value">{{ L('重试翻译', 'Retry translation') }}</button>
+      <details v-if="translation.issues.value.length"><summary>{{ L('翻译详情', 'Translation details') }}</summary><ul><li v-for="issue in translation.issues.value" :key="issue">{{ issue }}</li></ul></details>
+    </div>
     <div class="world-controls">
       <label>{{ L('可见范围', 'Visibility view') }}
         <select v-model="view">
@@ -71,11 +77,11 @@
                 <th scope="col">{{ L('单位', 'Unit') }}</th><th scope="col">{{ L('状态', 'Status') }}</th><th scope="col">{{ L('依据', 'Basis') }}</th>
               </tr></thead>
               <tbody><tr v-for="row in projection.sections[section.key]" :key="row.id">
-                <th scope="row">{{ row.label || row.name || row.id }}<small v-if="row.description">{{ row.description }}</small><small v-if="row.ownerId">{{ L('所有者', 'Owner') }}: {{ row.ownerId }}</small></th>
+                <th scope="row">{{ d(row.label || row.name || row.id) }}<small v-if="row.description">{{ d(row.description) }}</small><small v-if="row.ownerId">{{ L('所有者', 'Owner') }}: {{ row.ownerId }}</small></th>
                 <td class="value">{{ text(section.key === 'accounts' ? row.balance : row.value) }}
-                  <small v-if="section.key === 'accounts'">{{ L('已预留', 'Reserved') }}: {{ text(row.reserved) }} {{ text(row.unit) }}</small>
+                  <small v-if="section.key === 'accounts'">{{ L('已预留', 'Reserved') }}: {{ text(row.reserved) }} {{ text(row.unit, 'unit') }}</small>
                 </td>
-                <td>{{ ['rules', 'relations'].includes(section.key) ? L('不适用', 'Not applicable') : text(row.unit) }}</td><td>{{ statusLabel(row.valueStatus || row.status || (row.value == null && section.key !== 'accounts' ? 'unknown' : 'simulated')) }}</td>
+                <td>{{ ['rules', 'relations'].includes(section.key) ? L('不适用', 'Not applicable') : text(row.unit, 'unit') }}</td><td>{{ statusLabel(row.valueStatus || row.status || (row.value == null && section.key !== 'accounts' ? 'unknown' : 'simulated')) }}</td>
                 <td>{{ basisText(row) }}</td>
               </tr></tbody>
             </table>
@@ -87,7 +93,7 @@
           <article v-for="state in projection.privateStates" :key="state.actorId" class="record">
             <h4>{{ state.actorId }}</h4>
             <dl><template v-for="field in privateFields" :key="field.key">
-              <dt>{{ field.label }}</dt><dd><pre>{{ text(state[field.key]) }}</pre></dd>
+              <dt>{{ field.label }}</dt><dd><pre>{{ text(state[field.key], field.key) }}</pre></dd>
             </template></dl>
           </article>
           <p v-if="!projection.privateStates.length" class="empty">{{ L('此视图没有可见的私有状态。', 'No private state is visible in this view.') }}</p>
@@ -113,14 +119,14 @@
               <span v-else>{{ intent.interactionId }} · {{ L('此视图中不可见', 'not visible in this view') }}</span>
             </p>
             <ul v-if="intent.events.length"><li v-for="event in intent.events" :key="event.eventId">
-              <a :href="referenceHref(event.eventId)" @click.prevent="followReference(event.eventId)">{{ event.description || event.kind }} · {{ event.eventId }}</a>
+              <a :href="referenceHref(event.eventId)" @click.prevent="followReference(event.eventId)">{{ d(event.description || event.kind) }} · {{ event.eventId }}</a>
             </li></ul>
           </section>
         </article>
         <p v-if="view !== 'public' && !projection.decisions.length" class="empty">{{ L('所选回合与视图中没有可见决策。', 'No visible decisions for this round and view.') }}</p>
         <h3>{{ L('事件与后果', 'Events and consequences') }}</h3>
         <article v-for="event in projection.events" :id="recordId('event', event.eventId)" :key="event.eventId" class="record" tabindex="-1">
-          <h4>{{ event.description || event.kind }}</h4>
+          <h4>{{ d(event.description || event.kind) }}</h4>
           <p>{{ L('回合', 'Round') }} {{ event.round }} · {{ event.at }}<template v-if="event.actorId"> · {{ event.actorId }}</template></p>
           <p class="reference">{{ L('事件参考', 'Event reference') }}: {{ event.eventId }}</p>
           <p v-if="event.sourceIntentId">{{ L('来源行动', 'Source action') }}:
@@ -141,7 +147,7 @@
           <h4>{{ item.templateId || item.id }} · {{ statusLabel(item.status) }}</h4>
           <dl>
             <dt>{{ L('承诺参考', 'Commitment reference') }}</dt><dd>{{ item.id }}</dd>
-            <dt>{{ L('参与者', 'Participants') }}</dt><dd>{{ text(item.participantIds) }}</dd>
+            <dt>{{ L('参与者', 'Participants') }}</dt><dd>{{ text(item.participantIds, 'participantIds') }}</dd>
             <dt>{{ L('到期时间', 'Due time') }}</dt><dd>{{ text(item.dueAt) }}</dd>
             <dt>{{ L('转移义务', 'Transfers') }}</dt><dd><pre>{{ text(item.transfers) }}</pre></dd>
             <dt>{{ L('待生效变化', 'Scheduled effects') }}</dt><dd><pre>{{ text(item.effects) }}</pre></dd>
@@ -156,7 +162,7 @@
         <h3>{{ L('提议与互动', 'Offers and interactions') }}</h3>
         <article v-for="item in projection.interactions" :id="recordId('interaction', item.id)" :key="item.id" class="record" tabindex="-1">
           <h4>{{ item.templateId || item.id }} · {{ statusLabel(item.status) }}</h4>
-          <p>{{ item.proposerId }} → {{ text(item.recipientIds) }}</p>
+          <p>{{ item.proposerId }} → {{ text(item.recipientIds, 'recipientIds') }}</p>
           <p class="reference">{{ L('提议参考', 'Offer reference') }}: {{ item.id }}</p>
           <p>{{ L('送达时间', 'Delivery time') }}: {{ text(item.deliverAt) }} · {{ L('失效时间', 'Expiry time') }}: {{ text(item.expiresAt) }}</p>
           <p>{{ L('条款版本', 'Terms version') }}: {{ text(item.termsVersion) }}</p>
@@ -169,7 +175,7 @@
       <section v-show="activeTab === 'assumptions'" :id="panelId('assumptions')" role="tabpanel" :aria-labelledby="tabId('assumptions')" tabindex="0">
         <h3>{{ L('模型假设', 'Model assumptions') }}</h3>
         <article v-for="(assumption, index) in projection.assumptions" :key="assumption.assumptionId || index" class="record">
-          <h4>{{ assumption.label || assumption.assumptionId || L('假设', 'Assumption') + ' ' + (index + 1) }}</h4>
+          <h4>{{ d(assumption.label || assumption.assumptionId || L('假设', 'Assumption') + ' ' + (index + 1)) }}</h4>
           <p>{{ text(assumption.description ?? assumption.statement ?? assumption.text ?? assumption.value) }}</p>
           <p class="muted">{{ L('情景假设', 'Scenario assumption') }}</p>
         </article>
@@ -181,11 +187,12 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted, nextTick, useId } from 'vue'
-import { L } from '../../i18n'
+import { locale } from '../../i18n'
+import { useSimulationTranslation, simulationProse, simulationDisplayValue } from '../../utils/overlayTranslation'
 import { getWorldSimulation } from '../../api/simulation'
 import { createRequestGate, readWorldResponse, projectWorldResult, worldValue, worldErrorCode, WORLD_REQUEST_TIMEOUT_MS } from '../../utils/worldSimulationView'
 
-const props = defineProps({ simulationId: { type: String, default: '' }, generationId: { type: String, default: '' } })
+const props = defineProps({ simulationId: { type: String, default: '' }, generationId: { type: String, default: '' }, language: { type: String, default: '' } })
 const uid = useId()
 const view = ref('public')
 const actorDraft = ref('')
@@ -218,6 +225,31 @@ const privateFields = computed(() => [
   { key: 'beliefs', label: L('建模信念', 'Modeled beliefs') }, { key: 'plans', label: L('建模计划', 'Modeled plans') },
   { key: 'priorityChanges', label: L('优先级变化', 'Priority changes') }, { key: 'observedEvents', label: L('已观察事件参考', 'Observed event references') },
 ])
+// Collect only the already visibility-filtered projection. No trajectory, hidden
+// actor state, raw IDs, or undisplayed source files enter translation requests.
+const translation = useSimulationTranslation({
+  simulationId: () => result.value ? props.simulationId : '',
+  language: () => props.language || locale.value,
+  context: () => ({ engine: 'world-v1', platform: '', round: result.value?.round ?? null,
+    generation_id: result.value?.generationId || props.generationId || '', revision: result.value?.revision || '',
+    view: view.value, actor_id: view.value === 'actor' ? actorId.value : '' }),
+  texts: () => {
+    const p = projection.value
+    return [
+      ...Object.values(p.sections).flatMap(rows => rows.flatMap(row =>
+        [row.label, row.name, row.description, ...simulationProse(row.value)])),
+      ...p.privateStates.flatMap(state => ['beliefs', 'plans', 'priorityChanges'].flatMap(key => simulationProse(state[key], key))),
+      ...p.decisions.flatMap(decision => [decision.rationale, ...decision.intents.flatMap(intent =>
+        [...simulationProse(intent.parameters), intent.resolution?.explanation])]),
+      ...p.events.flatMap(event => [event.description, ...simulationProse(event.details)]),
+      ...p.commitments.flatMap(item => [...simulationProse(item.transfers), ...simulationProse(item.effects)]),
+      ...p.interactions.flatMap(item => simulationProse(item.terms)),
+      ...p.assumptions.flatMap(item => [item.label, ...simulationProse(item.description ?? item.statement ?? item.text ?? item.value)]),
+    ]
+  },
+})
+const L = translation.L
+const d = translation.display
 const errorMessage = computed(() => {
   if (errorCode.value === 'stale_revision') return L('已提交状态已变化。请选择“刷新至最新”读取新版本。', 'The committed state changed. Choose “Refresh latest” to read the new revision.')
   if (errorCode.value === 'unknown_actor') return L('未找到该参与者，请检查参与者标识。', 'Actor not found. Check the actor ID.')
@@ -225,7 +257,9 @@ const errorMessage = computed(() => {
   if (errorCode.value === 'missing_artifact' || errorCode.value === 'world_incomplete') return L('已提交的世界结果尚不可用，请稍后刷新。', 'Committed world results are not available yet. Refresh later.')
   return L('无法读取此视图。请检查所选参与者与回合，然后刷新重试。', 'Could not read this view. Check the selected actor and round, then refresh to retry.')
 })
-const text = value => worldValue(value, L('未知', 'Unknown'))
+const text = (value, key = '') => worldValue(
+  typeof value === 'boolean' && translation.lang.value === 'zh' ? (value ? '是' : '否')
+    : simulationDisplayValue(value, d, translation.lang.value, key), L('未知', 'Unknown'))
 function statusLabel(value) {
   const labels = {
     unknown: ['未知', 'Unknown'], contested: ['有争议', 'Contested'], specified: ['已指定', 'Specified'], simulated: ['模拟值', 'Simulated'],
@@ -336,10 +370,11 @@ watch(() => [props.simulationId, props.generationId, view.value, actorId.value, 
   }
   load()
 }, { immediate: true, flush: 'sync' })
-onUnmounted(() => requests.invalidate())
+onUnmounted(() => { requests.invalidate(); translation.cancel() })
 </script>
 
 <style scoped>
+.translation-note { padding: 10px; background: #fff7ed; font-size: 13px; }
 .world-view { color: #17211f; background: #fff; font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif; display: grid; gap: 18px; min-width: 0; }
 h2, h3, h4, h5, p { margin: 0; } h2 { font-size: 21px; } h3 { font-size: 17px; margin: 18px 0 12px; } h4 { font-size: 15px; } h5 { font-size: 14px; }
 .world-header, .world-controls, .actor-form { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }

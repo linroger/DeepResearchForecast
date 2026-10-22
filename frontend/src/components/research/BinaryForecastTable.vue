@@ -120,7 +120,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { binaryForecastRows } from '../../utils/binaryForecasts'
-import { L } from '../../i18n'
+import { L as appL } from '../../i18n'
 
 // 薄模板：全部行模型/格式化在 utils/binaryForecasts.js（纯函数，可单测）；
 // 组件只负责双语标签与 tooltip 的拼装。
@@ -129,9 +129,10 @@ import { L } from '../../i18n'
 const props = defineProps({
   forecast: { type: Object, default: null },
   officialSeries: { type: Object, default: null },
-  lang: { type: String, default: 'en' },
+  lang: { type: String, default: '' },
 })
 
+function L(zh, en) { return props.lang === 'zh' ? zh : props.lang === 'en' ? (en ?? zh) : appL(zh, en) }
 const open = ref(true)
 const rows = computed(() => binaryForecastRows(props.forecast, {
   officialSeries: props.officialSeries,

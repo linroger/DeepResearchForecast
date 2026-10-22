@@ -1,0 +1,140 @@
+{
+  "status": "Final offline closure green; independent review pending; live body complete, remaining projections being repaired",
+  "base_commit": "589d5d92adad404d18a0e306ee47b1e73e7b7946",
+  "backend": {
+    "passed": 386,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "mirror": "/private/tmp/drf-mandarin-final-closure-41l3rblo",
+    "receipt_sha256": "51c94505ac939735b6508c25f487b4329dfac79b18470b70330eb7f3bb104dd9",
+    "junit_sha256": "d20d337b704b4aac9e58fff0feb39e0f9b45b2b219fa5e24604b72316c8fee4a",
+    "parent": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 4,
+        "allowed:child_liveness": 4,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:external_read": 18
+      }
+    },
+    "children": [
+      {
+        "pid": "46194",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      },
+      {
+        "pid": "46195",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "46275",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      },
+      {
+        "pid": "46276",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      }
+    ],
+    "allow_scripts": [
+      "backend/tests/fixtures/orphan_owner.py",
+      "backend/tests/test_artifact_translation_restart.py"
+    ]
+  },
+  "frontend": {
+    "passed": 309,
+    "failed": 0,
+    "log": "/private/tmp/drf-mandarin-frontend-forecastrepair-all.log",
+    "build_log": "/private/tmp/drf-mandarin-frontend-closure-build.log",
+    "build_exit_code": 0
+  },
+  "code_hash_count": 553,
+  "current_code_delta": [],
+  "source_sha256": {
+    "backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c",
+    "backend/tests/test_artifact_translation_review_regressions.py": "e8b5db98ef5173b9a74e3ca01a88dafb39d0b552e5fd7a5382ab99e2f2ace0b4",
+    "backend/tests/test_artifact_translation_routes.py": "a4c0b8e18392e1007aa42ef13b042e6cc34081ae64cb9c077e78d3d99bc8f467",
+    "backend/tests/test_artifact_translation_services.py": "f5ed3cf24b096feb350c04bbe4c3347a10aa1b075c7eb5e57261fde9d8ec4bf1",
+    "backend/tests/test_artifact_translation_structured_job.py": "790ba98a0a8de32eb131ab753a125491082f2c28e92d0d2f1326293e33f4114a",
+    "backend/tests/test_mandarin_numeric_integrity.py": "a8d763df801222f3a7d94effd6a6a7e7d2da763eaf765a66b10f418778075398",
+    "backend/tests/test_translation_pairs_admission.py": "4326c6e0d7ffaafb3ac5b2bc72198c5c9ef59b5cf443bb64fdd12bb383b3d474",
+    "backend/tests/test_translation_pairs_integrity.py": "a000991f77d964f991481979d6aefbd7bee7ebdd9ddf2c5dc75eeafa4724b2f5",
+    "frontend/tests/reportMandarinConsumers.test.mjs": "b5ae6e43fe9629dc34209569b8cbb98be0e2aac34560c74c8d0b43c4c330dacc",
+    "frontend/tests/simulationMandarinTranslation.test.mjs": "a6b99da9bc71b83116a9488bc9c1e8e249eec908cf8e83b1f611152cead3307f",
+    "frontend/tests/simulationTranslationHarness.mjs": "d491fdd9fc375d9478f02d0c7ddd761815096e5b7d10f922183c272bdd884a78",
+    "backend/app/api/report.py": "3ab1ce237e1ccad4d094275a6b6b9492cd848c5853114d9047f1f1cd5105bca9",
+    "backend/app/api/research.py": "0ae4bb7564b7e90478e36b5cafa29e1437847832705eba159c55d138605c09b1",
+    "backend/app/api/simulation.py": "80e6376993f6aafd351aa7ad54f49526b28271fdedb01e25b99b1f2bc9bc8b8b",
+    "backend/app/services/artifact_translation.py": "ea0b09a5c15bb5478f8fd51232496bdb937c76bff3f63cc6aca34b510e08f049",
+    "backend/app/services/report_agent.py": "5f7fcc270101d638dc945afa8e2f21f515f4a5f457f6e785281780300a0b7f90",
+    "backend/app/services/translation_quantities.py": "e1e17c3fc0242323133067abf6e4890d2a0feab26da1a54a04eaf0bccb6ebc2e",
+    "backend/app/services/translation_tools.py": "af19cbd51f0d76793420e871d62f5d740a7f93c8b7c8f7ad84773dacd41b836c",
+    "backend/app/utils/llm_errors.py": "45ce1e33cf97bb21d73eb671278895c8b836155b910afb2adad5ea4c3604098a",
+    "backend/tests/test_translation_quantities.py": "83ac86b0d607e7fe0b3ea162b12eff2d74cab62fcafa2ad179d6216c4f34310e",
+    "backend/tests/test_translation_robustness.py": "c69e188c429d62518d3344d85d58b401f55f2d0a3e3afac1b6cca1887156f7df",
+    "frontend/src/api/research.js": "d9a61eb8fe385c2d163ec9e4eea9cb341cd850f5237478f29a6f6e0be960b1eb",
+    "frontend/src/api/translations.js": "437835b017c6bc59ede11e147369df102c3ed33ecd936a01e5466f5af7cd3e76",
+    "frontend/src/components/research/BinaryForecastTable.vue": "94b70c0a15e815d00c53dd2a2e60dc3e756945cb6c5ac6f2c287fe96fb4d9737",
+    "frontend/src/components/research/DossierViewer.vue": "2158b31c20a38a51eb8b560125ad1175f96569b1c3c616aa2c48e4895e1d566b",
+    "frontend/src/components/research/ForecastReport.vue": "2c2cda03e197c15f004cb1b5efd89fa0a4924660dd77e31358130eecaf14d7b2",
+    "frontend/src/components/research/SimulationView.vue": "6117bd1ff642871584cd2faadafd8c1af9288663bffea927d120ab67a5a5cc89",
+    "frontend/src/components/research/SourceContextPanel.vue": "013da5dd50ca955239aa7691f1c3c0ba637a63eb3fa6de7cb2719a4e473f0069",
+    "frontend/src/components/research/WorldSimulationView.vue": "c71b93472d36c2a707250b1212f6232c69dcfd25cfd1c1195680e97e5257c2e3",
+    "frontend/src/components/research/WorldStatePanel.vue": "3a47f292a01fa3eb6f0818f2e690181ea6f9b93d704f4405844c146da032d202",
+    "frontend/src/utils/overlayTranslation.js": "e7aed85267921fdb4a198b74e13b90fa38c15fa19141d459d044733eb21201b8",
+    "frontend/tests/dossierTranslationEnvelope.test.mjs": "1ff76ab7a525625cb10e1ae5453c80bf5fb688b37e548898902abd891a3114b3",
+    "frontend/tests/forecastReportPartialTranslation.test.mjs": "c72794ac14080513dafc4a4b9a7b11dcb49ab803cdd9d8924dcdf4ab117c2942",
+    "frontend/tests/sourceContextPanel.test.mjs": "834ab5c22e75e8d1e075a4fcc6a3e28fbb6572fffdaf5bfc917178d7b1328434",
+    "frontend/tests/world-simulation.test.mjs": "8f8df9641691d43b92a6b2dbc116aa431dcb13d8e35bc73fd363ed221f63e68b",
+    "frontend/tests/worldStatePanel.test.mjs": "fdb8a2255dc4f54150b32355a09beca76bcd341a97f8bb7859bd77b6c375ff68"
+  },
+  "live": {
+    "report_body": {
+      "report_id": "report_ba65f338f05a",
+      "task": "5420428b-6e1a-4e6d-b6ec-bd5220e6d0f1",
+      "status": "completed",
+      "partial": false,
+      "residual_source_lines": 0,
+      "markdown_sha256": "86c95583ae4cb11f1a0a66d995d8355bbabf0811f1858da59c44d0fb8fc84adf",
+      "hard_passed": true,
+      "source_markdown_sha256": "c441c9a98f6c9a6a41ab42ee0432a50fe26bfaf4f1f7ac91d793ebbf75fd4227"
+    },
+    "canonical_delta": [],
+    "structured": "Partial31/194 display entries and incompleteforecast; sourcebound sidecar-only repair pending current API activation",
+    "simulation": "Initial49/170 and33/87 under oldparallelattempt; sourcebound missing-only retry pending"
+  },
+  "limits": [
+    "CPython audit hooks, not OS sandbox",
+    "Offline providers scripted; live provider evidence separate",
+    "Two denied font commands and18 denied font-path reads remain explicit",
+    "Native chart image/HTML technical labels retained",
+    "World-v1 remains opt-in and is exercised in compiled consumer controls, not a new live run"
+  ]
+}

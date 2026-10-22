@@ -1,0 +1,31 @@
+# Repair Mandarin translation across reports and simulation
+
+The user requests a durable fix for recurring numeric-token translation failures and Mandarin coverage throughout Simulation and Research Report tabs. English proper names, identifiers and conventional technical phrases may remain when useful; substantive prose should be Mandarin. This is an explicitly requested repair of the existing feature.
+
+1. Reproduce current numeric/coverage failures from real saved diagnostics and current consumers. Preserve canonical reports, forecasts, simulation IDs, numbers, units, citations and immutable publication proof.
+2. Fix numeric transport/normalization and bounded fallback/repair at the producer. Do not make changed facts publishable by disabling parity. Validate genuine Mandarin prose while allowing appropriate English names/terms.
+3. Complete simulation and report UI coverage with disjoint backend/consumer ownership, identity-safe async language switching, content updates, cache invalidation and visible partial/failure status. Translate rendered prose, lists, labels and structured text while preserving machine identities and raw source data.
+4. Verify actual service/API/UI paths in fresh guarded mirrors and the browser. Include invalid-number, acceptable-English, stale-cache, restart, force retry and language/run race controls. Live translation, if needed, is bounded to the relevant saved artifacts after deterministic checks; no forecast run is started.
+5. Independently review, refresh the idle service safely when necessary, and commit/push the owned verified changes to main. Keep unrelated newskills/ material untouched.
+
+## Architecture assessment requested on 2026-10-22
+
+The user asks why the model does not translate the complete content while preserving formatting, and questions the brittle regex layer. The model already translates Markdown units, but date/quantity masking, restoration, exact token comparisons and repair ladders have accumulated too much coupled complexity. Observed problems include genuine token fusion, false rejection of equivalent localized quantities/dates, omitted UI inputs, stale retry metadata, and provider429/1301 errors. They require distinct treatment.
+
+The recommended future design is model-led translation of coherent full sections with shared terminology/context, a parsed document structure with stable block identities, unchanged typed facts/IDs/URLs copied from canonical data, a small read-only structural/factual validator, and bounded model repair of only the failing block. Small documents can use a single request; the214KB,20-section example should not require one all-or-nothing output. Simulation translation should cover the complete permitted visible projection, not rewrite application code or send unrendered private actor state. Exact token-bag equality is insufficient evidence of semantic fidelity. An independent semantic review can supplement mechanical checks but cannot replace immutable factual contracts.
+
+This is an architectural recommendation, not an implemented replacement or an approval record for a broad rewrite. The bounded stale-metadata repair remains in scope. Compare actual-source fidelity, structural coverage, false rejection, retry counts, latency and provider usage on the same regression corpus before replacing the current translation core.
+
+## Approved implementation: model-led translation
+
+The user's “go ahead and implement this” approves the architecture above. The coordinator owns a new model_translation.py core, ReportAgent migration and explicit Mistune dependency declaration. The artifact owner adapts pair/projection/cache production; a separate worker writes public consumer acceptance; the reviewer remains read-only apart from review.md. Peer embedder/ontology/news-context changes and the newskills directory are outside this scope. Current checkout is claude/sim-provenance-s0 at02de15d7; no peer commits will be bundled for delivery.
+
+1. Parse Markdown with installed Mistune3.3.4, including tables, footnotes and links. Translate coherent sections, split only at parsed block boundaries when necessary, with shared document outline/context.
+2. Send original readable text, never hidden dates/numbers or a regex rewrite template. Validate block structure, code/HTML carriers, link destinations and citation identities without rewriting the translation. Run a separate source/translation fidelity review covering numeric values, units/currencies, dates, conditions, negations and language completeness.
+3. Allow one focused model repair for an invalid section. Bind accepted review receipts to source/target hashes, language and engine version. Unresolved/provider failures remain explicit and never trigger recursive prose-slot repair or full-report retries.
+4. Copy canonical structured factual fields unchanged; translate only named prose fields. Persist receipts in new caches and localized forecasts, and revalidate hashes/contracts on reads without acquiring models. Existing audited report artifacts remain readable under their historical audit; new generation uses the new engine by default.
+5. Verify actual research/report/simulation APIs, persistence/restart, immutable source/publication proof, equivalent localized formats, deliberately changed facts, structure errors and bounded retries in fresh guarded mirrors. Run the full frontend tests/build, independent review and bounded live checks only after checking current saved-run owners. Commit/push the scoped result separately from peer work.
+
+## Final review corrections
+
+The first434-case candidate omitted three native boundaries. Canonical source-language script now requires review even for all-caps prose or a mixed-language prefix; English names can remain unchanged after review, rather than being certified by a lexical name heuristic. Relationship endpoint references are copied by their schema, while the scalar explanation shown by the dossier is selected for translation; structured basis/provenance objects remain canonical. The independent3-failure/8-control receipt and the owned red/green cases remain in the handoff. Replacement whole acceptance and unchanged independent-case replay are required before delivery.

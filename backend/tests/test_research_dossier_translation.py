@@ -13,6 +13,9 @@ withheld, deterministically:
 from __future__ import annotations
 
 import re
+import json
+
+from model_translation_fakes import model_protocol
 
 from app.services import report_lint
 from app.services.report_agent import ReportAgent
@@ -47,9 +50,8 @@ def _headings(markdown: str) -> list:
 class RealRoundsTranslator(GlmLikeTranslator):
     """Renders "rounds" as the real Chinese word, like GLM does (融资轮次)."""
 
-    def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
-        out = super().chat(messages, temperature, max_tokens, tier)
-        return out.replace(_glm_like("rounds"), "融资轮次")
+    def _render(self, value):
+        return super()._render(value).replace(_glm_like("rounds"), "融资轮次")
 
 
 def test_references_keep_their_place_when_a_visual_annex_follows_them():
@@ -60,8 +62,8 @@ def test_references_keep_their_place_when_a_visual_annex_follows_them():
     assert translated.index("## 参考来源") < translated.index("### ")
 
 
-def test_pre_fix_reference_placement_reproduces_the_heading_failure(monkeypatch):
-    """Guard the guard: re-appending References at the end fails the same dossier."""
+def test_model_led_default_avoids_legacy_reference_reattachment(monkeypatch):
+    """Parsed whole blocks retain References position without editorial reattachment."""
     monkeypatch.setattr(
         ReportAgent,
         "_reattach_translation_references",
@@ -70,10 +72,10 @@ def test_pre_fix_reference_placement_reproduces_the_heading_failure(monkeypatch)
         ),
     )
     result = _worker(GlmLikeTranslator()).translate_research_markdown(_DOSSIER)
-    assert result["available"] is False
-    assert "translation heading-level sequence differs from primary" in (
-        result["audit"]["issues"]
-    )
+    assert result["available"] is True, result["audit"]["issues"]
+    assert result["audit"]["fact_fidelity"]["passed"] is True
+    assert _headings(result["translated_md"]) == _headings(_DOSSIER)
+    assert result["translated_md"].index("## 参考来源") < result["translated_md"].index("### ")
 
 
 def test_reattach_appends_when_the_trailing_section_is_gone():
@@ -94,18 +96,18 @@ def test_a_funding_rounds_sentence_survives_the_chinese_translation():
     assert "[S70]" in result["translated_md"]
 
 
-def test_pre_fix_rounds_rule_reproduces_the_lost_sentence(monkeypatch):
-    """Guard the guard: the old bare-轮次 rule deletes the sentence and its facts."""
+def test_model_led_default_avoids_legacy_rounds_lint_rewrites(monkeypatch):
+    """The model-led publication audit does not run the old destructive prose lint."""
     patterns = [
         (name, re.compile(r"轮次") if name == "sim_mechanics_zh" else pattern)
         for name, pattern in report_lint.LEAKAGE_PATTERNS
     ]
     monkeypatch.setattr(report_lint, "LEAKAGE_PATTERNS", patterns)
     result = _worker(RealRoundsTranslator()).translate_research_markdown(_DOSSIER)
-    assert result["available"] is False
-    assert "translation citation-token multiset differs from primary" in (
-        result["audit"]["issues"]
-    )
+    assert result["available"] is True, result["audit"]["issues"]
+    assert "融资轮次" in result["translated_md"]
+    assert "2024–2026" in result["translated_md"] and "[S70]" in result["translated_md"]
+    assert result["audit"]["fact_fidelity"]["passed"] is True
 
 
 def test_chinese_lint_keeps_real_world_rounds_and_removes_simulation_rounds():
@@ -122,29 +124,27 @@ def test_chinese_lint_keeps_real_world_rounds_and_removes_simulation_rounds():
     assert not kept("智能体逐轮调整报价。")
 
 
-def test_dossier_sections_get_the_targeted_integrity_retry():
-    """The dossier path shares the report engine: a section that stays English gets
-    one retry carrying the INTEGRITY RETRY rules (it used to get a plain one)."""
-
+def test_dossier_sections_get_one_targeted_model_repair_after_rejected_source_echo():
+    """A rejected section gets one source-aware model repair, never a prose-slot cascade."""
     class RefusesUntilTold(GlmLikeTranslator):
         def __init__(self):
             super().__init__()
-            self.retry_prompts = []
+            self.repair_payloads = []
 
-        def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
-            system, user = messages[0]["content"], messages[-1]["content"]
-            if "INTEGRITY RETRY" in system:
-                self.retry_prompts.append(system)
-                return super().chat(messages, temperature, max_tokens, tier)
-            if "Venture" in user:
-                return user  # the whole-block call echoes English
-            return super().chat(messages, temperature, max_tokens, tier)
-
-        def chat_json(self, messages=None, temperature=0.0, max_tokens=4096, tier="fast", **_kw):
-            return {}  # purity repair declines, so only the integrity retry can fix it
+        def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **kw):
+            payload = json.loads(messages[-1]["content"])
+            if payload.get("repair"):
+                self.repair_payloads.append(payload)
+            def generate(source):
+                return source if "Venture" in source and not payload.get("repair") else self._render(source)
+            return model_protocol(messages, generate, expected_fn=self._render)
 
     llm = RefusesUntilTold()
     result = _worker(llm).translate_research_markdown(_DOSSIER)
-    assert llm.retry_prompts, "the English section never got an integrity retry"
+    assert len(llm.repair_payloads) == 1
+    retry = llm.repair_payloads[0]
+    assert len(retry["entries"]) == 1 and "Venture" in next(iter(retry["entries"].values()))
+    assert retry["issues"] and retry["previous"]
     assert result["available"] is True, result["audit"]["issues"]
     assert "Venture" not in result["translated_md"]
+    assert result["audit"]["model_translation"]["calls_used"] == 4

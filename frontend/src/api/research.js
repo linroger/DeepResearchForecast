@@ -188,8 +188,8 @@ export function editDossier(pipelineId, payload) {
  * @param {String} pipelineId
  * @param {String} lang - 'en' | 'zh'
  */
-export function requestResearchTranslation(pipelineId, lang) {
-  return service.post(`/api/research/${pipelineId}/dossier/translations/${lang}`)
+export function requestResearchTranslation(pipelineId, lang, force = false) {
+  return service.post(`/api/research/${pipelineId}/dossier/translations/${lang}${force ? '?force=1' : ''}`)
 }
 
 /**

@@ -7,6 +7,7 @@ import * as i18n from '../src/i18n.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
 import { compileSfc } from './sfcHarness.mjs'
+import { overlay } from './simulationTranslationHarness.mjs'
 
 const worldFile = new URL('../src/components/research/WorldSimulationView.vue', import.meta.url)
 const parentFile = new URL('../src/components/research/SimulationView.vue', import.meta.url)
@@ -68,7 +69,7 @@ function harness(t, { parent = false, api = {}, id = 'sim_A', generationId = '',
   const actual = Object.fromEntries(Object.entries({ ...defaults, ...api }).map(([key, fn]) => [key, (...args) => { calls.push({ key, args }); return fn(...args) }]))
   const imports = {
     vue: { ...vue, onUnmounted: fn => cleanups.push(fn), useId: () => 'world-test' },
-    '../../i18n': i18n, '../../api/simulation': actual, '../../utils/worldSimulationView': world,
+    '../../utils/overlayTranslation': overlay, '../../i18n': i18n, '../../api/simulation': actual, '../../utils/worldSimulationView': world,
     './WorldSimulationView.vue': { default: { props: ['simulationId', 'generationId'], template: '<div class="world-child" />' } },
     // the OASIS view's reflexive-world panel and per-period feed helpers (combined simulation tab)
     './WorldStatePanel.vue': { default: { props: ['simulationId', 'refreshToken', 'round'], emits: ['update:selectedRound'], template: '<div class="world-state-panel" />' } },

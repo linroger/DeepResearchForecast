@@ -103,6 +103,179 @@ def _report_publication_payload(report):
     return payload
 
 
+def _report_display(report, lang, *, generate=False, force=False):
+    """Localized display copy only; publication/forecast/source contracts are untouched."""
+    import json
+    from ..services.artifact_translation import display_document
+    directory = ReportManager._get_report_folder(report.report_id)
+    manifest = []
+    try:
+        with open(os.path.join(directory, "viz_manifest.json"), encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        if isinstance(manifest, dict):
+            manifest = manifest.get("items") or manifest.get("charts") or []
+    except (OSError, ValueError):
+        pass
+    # The display must obey the same chart-path admission as the normal API.
+    from pathlib import PurePosixPath
+    def chart_path(value):
+        if (not isinstance(value, str) or "\\" in value or "%" in value
+                or any(ord(char) < 32 or ord(char) == 127 for char in value)):
+            return None
+        path = PurePosixPath(value.strip().removeprefix("./"))
+        return path.as_posix() if (not path.is_absolute() and ".." not in path.parts
+            and len(path.parts) > 1 and path.parts[0] == "charts") else None
+    safe_manifest = []
+    for item in manifest if isinstance(manifest, list) else []:
+        if not isinstance(item, dict) or not chart_path(item.get("path")):
+            continue
+        item = {**item, "path": chart_path(item["path"])}
+        if "png_path" in item:
+            if chart_path(item["png_path"]):
+                item["png_path"] = chart_path(item["png_path"])
+            else:
+                item.pop("png_path")
+        safe_manifest.append(item)
+    outline = report.outline.to_dict() if report.outline else {}
+    heading = (report.markdown_content or "").split("\n", 1)[0].lstrip("# ")
+    document = {"title": outline.get("title") or heading,
+        "news_market_context": ReportManager.load_report_news_market_context(report.report_id),
+        "viz_manifest": safe_manifest, "failed_sections": list(report.failed_sections or [])}
+    result = display_document(directory, "report", report.report_id, lang, document,
+                              generate=generate, force=force)
+    state = {**result["structured_translation"], "complete": result["coverage"]["complete"],
+             "coverage": result["coverage"]}
+    with _report_display_lock:
+        if not generate and (report.report_id, lang) in _report_display_inflight:
+            state["status"] = "generating"
+            state["retryable"] = False
+    return {"display": {**result["display"], "translation_status": state},
+            "translation_status": state, "structured_translation": state}
+
+
+_report_display_inflight = set()
+_report_display_lock = threading.RLock()
+
+
+def _report_structured(report, lang, *, forecast_state=None):
+    """Read the combined forecast/display projection; this never acquires work."""
+    display = _report_display(report, lang)
+    view = display["translation_status"]
+    forecast, localization = (forecast_state if forecast_state is not None
+                              else ReportManager.load_localized_forecast(report.report_id, lang))
+    present = isinstance(forecast, dict)
+    fields = list(ReportAgent._forecast_text_fields(forecast)) if present else []
+    forecast_complete = not present or localization.get("complete") is True
+    unresolved = sum(ReportAgent._forecast_text_is_residual(text, lang) for _path, text in fields)
+    forecast_pending = max(1, unresolved) if present and not forecast_complete else 0
+    metadata = forecast.get("localization") if present else None
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source_sha = localization.get("source_forecast_sha256") or metadata.get("source_forecast_sha256")
+    complete = view["complete"] and forecast_complete
+    partial = bool(view.get("partial")) or not complete
+    with _report_display_lock:
+        active = (report.report_id, lang) in _report_display_inflight
+    issues = list(view.get("issues") or [])
+    if not forecast_complete:
+        issues.append("Forecast dashboard text remains untranslated or its localization proof is incomplete; retry structured translation.")
+    coverage = {
+        "translated": view["coverage"]["translated"] + max(0, len(fields) - forecast_pending),
+        "total": view["coverage"]["total"] + len(fields), "complete": complete,
+        "display": view["coverage"],
+        "forecast": {"translated": max(0, len(fields) - forecast_pending), "total": len(fields),
+                     "complete": forecast_complete},
+    }
+    state = {**view, "status": "generating" if active else "partial" if partial else "available",
+        "complete": complete, "partial": partial,
+        "pending": view["pending"] + forecast_pending, "retryable": partial and not active,
+        "coverage": coverage, "issues": issues, "display_complete": view["complete"],
+        "forecast": {**localization, "present": present, "complete": forecast_complete,
+                     "pending": forecast_pending, "source_forecast_sha256": source_sha},
+        "source_fingerprint": hashlib.sha256(
+            (view["source_fingerprint"] + ":" + str(source_sha or "absent")).encode("utf-8")).hexdigest()}
+    return {"display": {**display["display"], "translation_status": state, "structured_translation": state},
+            "translation_status": state, "structured_translation": state}
+
+
+def _repair_report_structured(report, lang, force=False, *, pre_registered=False):
+    """Repair optional reader projections under a separate source-owned lease.
+
+    No Markdown, audit, publication metadata or canonical forecast is generated
+    or rewritten here. The existing forecast producer/reader own source binding.
+    """
+    key = (report.report_id, lang)
+    with _report_display_lock:
+        owns_activity = key not in _report_display_inflight
+        if not owns_activity and not pre_registered:
+            return  # Join existing structured work; do not duplicate acquisition.
+        if owns_activity:
+            _report_display_inflight.add(key)
+    try:
+        from ..utils.llm_client import LLMClient
+        from ..utils.telemetry import LLMCache
+        directory = ReportManager._get_report_folder(report.report_id)
+        lock_path = os.path.join(directory, "structured_translation." + lang + ".lock")
+        with ReportManager._advisory_file_lock(lock_path), LLMCache.bypass():
+            if not ReportManager.is_publishable(report.report_id, lang):
+                return
+            forecast, localization = ReportManager.load_localized_forecast(report.report_id, lang)
+            if isinstance(forecast, dict) and localization.get("complete") is not True:
+                worker = ReportAgent.__new__(ReportAgent)
+                worker.llm = LLMClient()
+                worker.output_language = "Chinese" if lang == "zh" else "English"
+                worker.simulation_id, worker.graph_id = report.simulation_id, report.graph_id
+                worker._forecast_spine = forecast
+                worker._ensure_localized_forecast(report.report_id, lang)
+            # A concurrent source edit must not authorize more acquisition or be
+            # mistaken for this job's admitted generation.
+            if not ReportManager.is_publishable(report.report_id, lang):
+                return
+            _report_display(report, lang, generate=True, force=force)
+
+    finally:
+        if owns_activity:
+            with _report_display_lock:
+                _report_display_inflight.discard(key)
+
+
+def _start_report_display(report, lang, force=False):
+    """Repair both forecast and display strings for an already-audited body."""
+    key = (report.report_id, lang)
+    with _report_display_lock:
+        if key in _report_display_inflight:
+            return True
+        existing = _report_structured(report, lang)["structured_translation"]
+        if not force and existing["complete"] and not existing["partial"]:
+            return False
+        _report_display_inflight.add(key)
+    import contextvars
+    ctx = contextvars.copy_context()
+    def run():
+        try:
+            ctx.run(_repair_report_structured, report, lang, force=force, pre_registered=True)
+        except Exception as exc:
+            logger.warning("Structured translation repair failed report=%s lang=%s: %s",
+                           report.report_id, lang, type(exc).__name__)
+        finally:
+            with _report_display_lock:
+                _report_display_inflight.discard(key)
+    try:
+        _launch_translation_thread(run)
+    except Exception:
+        with _report_display_lock:
+            _report_display_inflight.discard(key)
+        raise
+    return True
+
+
+def _with_report_display_status(state, report, lang):
+    display = _report_structured(report, lang)
+    structured = display["structured_translation"]
+    return {**state, **display,
+            "partial": bool(state.get("partial")) or bool(structured.get("partial")) or not structured["complete"],
+            "issues": list(state.get("issues") or []) + structured["issues"]}
+
+
 def _publication_rejection(report_id: str, lang=None, publication=None):
     """Build the shared fail-closed response for customer-facing artifacts."""
     if publication is None:
@@ -690,6 +863,7 @@ def get_report_forecast(report_id: str):
         localization = {"requested_lang": None, "localized": False}
     else:
         forecast, localization = ReportManager.load_localized_forecast(report_id, lang)
+    display = _report_structured(report, lang, forecast_state=(forecast, localization)) if lang else {}
     return jsonify({
         "success": True,
         "data": {
@@ -698,6 +872,7 @@ def get_report_forecast(report_id: str):
             "forecast": forecast,
             "available": forecast is not None,
             "localization": localization,
+            **display,
         },
     })
 
@@ -992,7 +1167,13 @@ def generate_report_translation(report_id: str, lang: str):
         state = ReportManager.translation_status(report_id, lang, report=report)
         regenerate = bool(force and state.get("available"))
         if state.get("available") and not regenerate:
-            return jsonify({"success": True, "data": state})
+            _start_report_display(report, lang)
+            localized = _with_report_display_status(state, report, lang)
+            # Existing Markdown remains available; the separate structured status
+            # describes both forecast/display progress without relabeling its publication.
+            return jsonify({"success": True, "data": {**localized, **state,
+                "partial": localized["partial"],
+                "structured_translation": localized["structured_translation"]}}), 200
         active = _active_translation_task(report_id, lang)
         if active:
             return _in_progress_response(state, active)
@@ -1045,6 +1226,10 @@ def generate_report_translation(report_id: str, lang: str):
                 force=regenerate,
             )
             if result.get("available") and result.get("updated", True):
+                # The persisted isolated audit, not a stale/mocked result flag,
+                # admits additional display acquisition for this language.
+                if ReportManager.is_publishable(report_id, lang):
+                    _repair_report_structured(report, lang, force=regenerate)
                 # A partial translation (sections the provider content filter kept in
                 # the source language) is published and disclosed, not a failure.
                 verified = result.get("translation")
@@ -1128,7 +1313,8 @@ def get_report_translation_status(report_id: str, lang: str):
             "success": False,
             "error": f"报告不存在: {report_id}",
         }), 404
-    state = ReportManager.translation_status(report_id, lang, report=report)
+    state = _with_report_display_status(
+        ReportManager.translation_status(report_id, lang, report=report), report, lang)
     task_id = (request.args.get("task_id") or "").strip()
     task = TaskManager().get_task(task_id) if task_id else None
     if task is not None:

@@ -45,7 +45,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
 _SP = r"[  ]"
-_NUM = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_NUM = r"[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _EN_PREFIX = r"(?:US\$|\$|€|£|¥|(?:USD|EUR|GBP|CNY|RMB|JPY)(?=[  ]?\d))"
 _EN_RANGE_PREFIX = r"(?:US\$|\$|€|£|¥)"
 _EN_SCALE_WORD = r"(?i:million|billion|trillion|bn|mn|tn)"
@@ -72,7 +72,7 @@ _NOT_AFTER_YEAR = r"(?<!(?<![\d.,])(?:19|20)\d{2})"
 QUANTITY_PATTERN = (
     r"(?P<qty>(?-i:"
     # English: "$3.7 billion", "USD 150 billion", "150–165 million", "$125M", "5bn"
-    rf"(?:(?<![A-Za-z0-9_])(?P<qa_p>{_EN_PREFIX}){_SP}?|(?<![A-Za-z0-9_.,]))"
+    rf"(?:(?<![A-Za-z0-9_])(?P<qa_sign>[-+−])?(?P<qa_p>{_EN_PREFIX}){_SP}?|(?<![A-Za-z0-9_.,]))"
     rf"(?P<qa_n1>{_NUM})"
     rf"(?:{_NOT_AFTER_YEAR}(?:{_SP}*[–—-]{_SP}*|{_SP}+to{_SP}+)"
     rf"{_EN_RANGE_PREFIX}?(?P<qa_n2>{_NUM}))?"
@@ -84,14 +84,14 @@ QUANTITY_PATTERN = (
     # English alternative above (its scale word must not be followed by a letter),
     # so the form is a separate branch the engine reaches only after that one fails:
     # every match the English alternative made before is unchanged.
-    rf"|(?:(?<![A-Za-z0-9_])(?P<qf_p>{_FRED_PREFIX}){_SP}?|(?<![A-Za-z0-9_.,]))"
+    rf"|(?:(?<![A-Za-z0-9_])(?P<qf_sign>[-+−])?(?P<qf_p>{_FRED_PREFIX}){_SP}?|(?<![A-Za-z0-9_.,]))"
     rf"(?P<qf_n1>{_NUM})"
     rf"(?:{_NOT_AFTER_YEAR}(?:{_SP}*[–—-]{_SP}*|{_SP}+to{_SP}+)"
     rf"{_FRED_PREFIX}?(?P<qf_n2>{_NUM}))?"
     rf"{_SP}+(?P<qf_s>{_FRED_SCALE_WORD}){_SP}+(?i:of){_SP}+"
     rf"(?P<qf_c>{_FRED_CURRENCY_WORD})(?![A-Za-z])"
     # Chinese: "37亿美元", "$37亿", "1.5–1.65亿美元", "8,200亿", "40万"
-    rf"|(?:(?P<qz_p>{_ZH_PREFIX})[ ]?|(?<![\d.,]))"
+    rf"|(?:(?P<qz_sign>[-+−])?(?P<qz_p>{_ZH_PREFIX})[ ]?|(?<![\d.,]))"
     rf"(?P<qz_n1>{_NUM})"
     rf"(?:{_NOT_AFTER_YEAR}[ ]*(?:[–—~～-]|至|到)[ ]*(?P<qz_n2>{_NUM}))?"
     rf"[ ]*(?P<qz_s>{_ZH_SCALE_WORD})"
@@ -144,7 +144,7 @@ class Quantity(NamedTuple):
 
 def _decimal(text: str) -> Optional[Decimal]:
     try:
-        return Decimal(text.replace(",", ""))
+        return Decimal(text.replace(",", "").replace("−", "-"))
     except (InvalidOperation, AttributeError):
         return None
 
@@ -192,12 +192,19 @@ def interpret_quantity_match(match: "re.Match[str]") -> Optional[Quantity]:
     if exponent is None:
         return None
     values = []
+    prefix_sign = next((match.group(key) for key in ("qa_sign", "qf_sign", "qz_sign")
+                        if match.group(key)), None)
     for number in numbers:
         if number is None:
             continue
         value = _decimal(number)
         if value is None:
             return None
+        if not values and prefix_sign:
+            if number.startswith(("-", "+", "−")):
+                return None
+            if prefix_sign in ("-", "−"):
+                value = -value
         values.append(value * (Decimal(10) ** exponent))
     start, end = match.span("qty")
     return Quantity(start, end, tuple(values), currency, lang)
@@ -214,13 +221,13 @@ def _plain(value: Decimal) -> str:
 def _grouped(value: Decimal) -> str:
     """Plain decimal with thousands separators ("400,000", "12,345.6")."""
     integer, _dot, fraction = _plain(value).partition(".")
-    grouped = f"{int(integer):,}"
+    grouped = "-0" if integer == "-0" else f"{int(integer):,}"
     return grouped + (f".{fraction}" if fraction else "")
 
 
 def _unit(value: Decimal, units: Tuple[Tuple[int, str], ...]) -> Tuple[int, str]:
     for exponent, name in units:
-        if value >= Decimal(10) ** exponent:
+        if abs(value) >= Decimal(10) ** exponent:
             return exponent, name
     return 0, ""
 
@@ -261,19 +268,54 @@ def quantity_facts(quantity: Quantity) -> List[str]:
     """Language-neutral facts of an amount: ``qty:<value>`` from one million up,
     else the grouped numeral an English rendering carries as a plain number."""
     return [
-        f"qty:{_plain(value)}" if value >= _ONE_MILLION else _grouped(value)
+        f"qty:{_plain(value)}" if abs(value) >= _ONE_MILLION else _grouped(value).lstrip("+-")
         for value in quantity.values
     ]
 
 
 def find_quantities(text: str) -> List[Quantity]:
-    """Return every recognized amount in ``text``, left to right."""
+    """Return amounts, including the mixed-unit ranges our renderer emits.
+
+    "-200–-50 million" renders as "-2亿–-5000万". A currency suffix at
+    the end of that range applies to both endpoints. Only adjacent, explicit
+    range connectors join amounts; conflicting explicit currencies stay separate.
+    """
+    source = text or ""
     found: List[Quantity] = []
-    for match in QUANTITY_RE.finditer(text or ""):
+    for match in QUANTITY_RE.finditer(source):
         quantity = interpret_quantity_match(match)
         if quantity is not None:
             found.append(quantity)
-    return found
+    plain_tail = re.compile(
+        rf"[–—-][ ]*(?P<p>{_EN_PREFIX}|{_ZH_PREFIX})?[ ]*(?P<n>{_NUM})"
+        rf"(?:[ ]*(?P<c>{_EN_CURRENCY_WORD}|{_ZH_CURRENCY_WORD}))?"
+        r"(?![\dA-Za-z_,%])(?!\.\d)(?![ ]*[A-Za-z%])"
+    )
+    ranges: List[Quantity] = []
+    index = 0
+    while index < len(found):
+        current = found[index]
+        following = found[index + 1] if index + 1 < len(found) else None
+        if (following is not None and len(current.values) == len(following.values) == 1
+                and re.fullmatch(r"[ ]*[–—-][ ]*", source[current.end:following.start])
+                and (not current.currency or not following.currency
+                     or current.currency == following.currency)):
+            current = current._replace(end=following.end, values=current.values + following.values,
+                                       currency=current.currency or following.currency)
+            index += 1
+        elif len(current.values) == 1:
+            # A small endpoint has no magnitude in the native rendering:
+            # "$1.5 million–$500" / "150万–500美元".
+            tail = plain_tail.match(source, current.end)
+            if tail is not None and (following is None or tail.end() <= following.start):
+                value = _decimal(tail.group("n"))
+                currency = _normalize_currency(tail.group("p")) or _normalize_currency(tail.group("c"))
+                if value is not None and (not currency or not current.currency or currency == current.currency):
+                    current = current._replace(end=tail.end(), values=current.values + (value,),
+                                               currency=current.currency or currency)
+        ranges.append(current)
+        index += 1
+    return ranges
 
 
 def mask_quantities(text: str) -> Tuple[str, List[str]]:

@@ -1,22 +1,11 @@
-"""SESSION-B: structure-preserving bilingual translation + research-report path + shared PDF.
+"""Model-led default structure/research/PDF coverage and historical helper controls.
 
-These tests prove the invariants are STRUCTURAL (guaranteed by construction), not
-audited-after-the-fact:
-
-  * a whole-unit translator that WOULD drop a heading / mangle a table / inject a
-    stray number is overridden by the structural skeleton translator, so the output
-    keeps the exact heading-level sequence, table row/column shape and numeric
-    multiset of the source;
-  * immutable tokens (numbers, [S#] citations, URLs, inline code, fences) survive
-    byte-for-byte through the slot-based translator;
-  * residual source-language lines are re-translated (contamination repair);
-  * the same final editorial lint is applied to the translation BEFORE the audit, so
-    "would still be rewritten by final editorial lint" is structurally impossible;
-  * the research-report translator reuses the same primitives and passes its audit;
-  * the research-report PDF reuses the SAME shared LaTeX template function as the
-    forecast-report PDF.
-
-No LLM / network: a scripted fake speaks the slot-batch JSON protocol.
+Default generation sends readable Markdown to a model, reviews source/target
+meaning separately, and publishes only a source-bound parsed-structure receipt.
+It does not reconstruct a skeleton or rewrite the result with editorial lint.
+Direct calls to old slot/protection/contamination helpers below intentionally
+remain historical compatibility tests. The PDF tests retain their native shared
+renderer and rich-document failure boundaries; no live model or renderer runs.
 """
 
 import json
@@ -29,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import Config  # noqa: E402
+from model_translation_fakes import model_protocol, preserve_carriers  # noqa: E402
 from app.services.report_agent import ReportAgent, ReportManager, Report, ReportStatus  # noqa: E402
 
 
@@ -104,6 +94,30 @@ class _HeadingDropperStub:
         kept = [ln for i, ln in enumerate(lines) if not (ln.startswith("#") and i > 0)]
         text = "\n".join(kept)
         return _zhify(text) + "\n\n额外 999 文字"
+
+
+def _raw_zh(value):
+    return preserve_carriers(value, lambda text: _zhify(text.replace("## References", "## 参考来源")))
+
+
+class _ModelStub:
+    """Faithful whole-entry fixture plus independent expected-result review."""
+
+    model = "readable-structure-stub"
+    provider = "offline"
+
+    def __init__(self):
+        self.calls = []
+
+    def chat(self, messages=None, **_kwargs):
+        self.calls.append(json.loads(messages[-1]["content"]))
+        assert "⟦" not in messages[-1]["content"]
+        response = model_protocol(messages, _raw_zh, expected_fn=_raw_zh)
+        assert response is not None, "default used an obsolete slot protocol"
+        return response
+
+    def chat_json(self, messages=None, **kwargs):
+        return json.loads(self.chat(messages, **kwargs))
 
 
 def _agent(llm, output_language="English"):
@@ -199,15 +213,15 @@ def test_contamination_repair_retranslates_residual_source_lines():
     assert detect_language_contamination(repaired, "Chinese")["lines"] == 0
 
 
-def test_lint_before_audit_makes_would_be_rewritten_structurally_impossible(
+def test_default_keeps_reviewed_output_exact_without_editorial_rewrite(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path))
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 1)
     rid = "report_lint_before_audit"
     ReportManager._ensure_report_folder(rid)
-    # Citation-free source so this test isolates the structure + lint-before-audit
-    # invariants (citation-namespace binding is covered by the forecast bilingual suite).
+    # Citation-free source isolates parser structure and the no-rewrite contract.
+    # Citation namespace binding is covered by the report publication suites.
     source_no_cite = (
         "# Deployment Forecast 2030\n\n"
         "> A concise outlook with GR00T and X3 named systems.\n\n"
@@ -227,25 +241,33 @@ def test_lint_before_audit_makes_would_be_rewritten_structurally_impossible(
         simulation_requirement="req", status=ReportStatus.COMPLETED,
         markdown_content=source_no_cite,
     )
-    agent = _agent(_SlotStub())
+    ReportManager.save_report(report)
+    stub = _ModelStub()
+    agent = _agent(stub)
+
+    def obsolete(*_args, **_kwargs):
+        raise AssertionError("default generation entered legacy protection or editorial rewrite")
+    for name in ("_translate_from_source_skeleton", "_protect_translation_tokens",
+                 "_repair_variant_contamination", "_lint_variant_to_audit_fixed_point"):
+        monkeypatch.setattr(ReportAgent, name, obsolete)
     agent._generate_bilingual_report(rid, report)
 
     audit_path = ReportManager._get_report_final_audit_path(rid, "zh")
     audit = json.loads(open(audit_path, encoding="utf-8").read())
-    # Structure/number/table parity hold and the lint-before-audit guarantees the
-    # audit's own lint re-run is byte-stable, so the rewrite issue never appears.
+    out = open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8").read()
     assert audit["section_parity"]["passed"] is True
-    assert audit["table_parity"]["passed"] is True
-    assert audit["number_parity"]["passed"] is True
-    assert audit["language_lint"]["changed"] is False
-    assert "translation would still be rewritten by final editorial lint" not in \
-        audit.get("issues", [])
-    assert audit["language_lint"]["language_contamination"]["lines"] == 0
-    assert audit["hard_passed"] is True
-    assert os.path.exists(ReportManager._get_report_translation_path(rid, "zh"))
+    assert audit["fact_fidelity"]["passed"] is True
+    assert audit["model_translation"]["complete"] is True
+    assert audit["read_only"] is True and audit["hard_passed"] is True
+    assert out == _raw_zh(source_no_cite).strip() + "\n"
+    assert ReportAgent._translation_table_signature(out) == ReportAgent._translation_table_signature(source_no_cite)
+    assert ReportAgent._translation_fence_signature(out) == ReportAgent._translation_fence_signature(source_no_cite)
+    assert ReportAgent._translation_number_multiset(out) == ReportAgent._translation_number_multiset(source_no_cite)
+    assert any("pairs" in payload for payload in stub.calls)
+    assert open(ReportManager._get_report_markdown_path(rid), encoding="utf-8").read() == source_no_cite
 
 
-def test_research_report_translation_reuses_structural_translator_and_passes_audit():
+def test_research_default_readable_sections_preserve_references_and_pass_review():
     md = (
         "## Executive Summary\n\n"
         "The 2030 base case is 42% [S1]; the plateau path is 21% [S2] with 150,000 units.\n\n"
@@ -260,22 +282,23 @@ def test_research_report_translation_reuses_structural_translator_and_passes_aud
         "2. [S2] Omdia 2026 — omdia.com — "
         "[https://omdia.com/y](https://omdia.com/y)\n"
     )
-    agent = _agent(_SlotStub())
-    result = agent.translate_research_markdown(md, label="research::test")
+    stub = _ModelStub()
+    result = _agent(stub).translate_research_markdown(md, label="research::test")
 
-    assert result["available"] is True
+    assert result["available"] is True, result
     assert result["src"] == "en" and result["tgt"] == "zh"
     audit = result["audit"]
-    assert audit["hard_passed"] is True
-    assert audit["section_parity"]["passed"] is True
-    assert audit["table_parity"]["passed"] is True
-    assert audit["number_parity"]["passed"] is True
-    # Marker multiset preserved and every [S#] survives byte-for-byte.
-    assert audit["citation_parity"]["source_markers"] == audit["citation_parity"]["variant_markers"]
+    assert audit["hard_passed"] and audit["section_parity"]["passed"]
+    assert audit["fact_fidelity"]["passed"] and audit["citation_parity"]["passed"]
     variant = result["translated_md"]
+    assert variant == _raw_zh(md).strip() + "\n"
     assert variant.count("[S1]") == md.count("[S1]")
-    assert "## 参考来源" in variant  # References heading localized deterministically
-    assert "https://www.iea.org/x" in variant
+    assert variant.count("[S2]") == md.count("[S2]")
+    assert "## 参考来源" in variant
+    assert "https://www.iea.org/x" in variant and "https://omdia.com/y" in variant
+    assert ReportAgent._translation_table_signature(variant) == ReportAgent._translation_table_signature(md)
+    assert ReportAgent._translation_number_multiset(variant) == ReportAgent._translation_number_multiset(md)
+    assert all("entries" in payload or "pairs" in payload for payload in stub.calls)
 
 
 def test_research_report_translation_skips_non_en_zh_source():

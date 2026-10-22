@@ -7355,7 +7355,7 @@ class ReportAgent:
             if not isinstance(candidate, str) or not candidate.strip():
                 return None
             restored, issues = self._restore_translation_tokens(
-                candidate.strip(), seg_map, fold_formatting=True
+                candidate.strip(), seg_map, fold_formatting=True, separate_numbers=True
             )
             restored = restored.strip()
             if not restored or restored == segment or issues:
@@ -7746,6 +7746,12 @@ class ReportAgent:
         r"(?<![A-Za-z0-9_])(?!\d+(?:st|nd|rd|th)(?![A-Za-z0-9]))(?!\d{4}s(?![A-Za-z0-9]))"
         r"(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+(?![A-Za-z0-9_])"
     )
+    _FORECAST_FACT_ATOMS_RE = re.compile(
+        r"(?<![A-Za-z0-9_])(?:[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+"
+        r"|USD_per_contract|USD|EUR|GBP|CNY|RMB|JPY|MW|GW|TW|kWh|MWh|GWh|TWh|kg"
+        r"|km/h|mph|mb/d|bpd|tonnes|barrels|dollars|percentage points|percent|basis points|bps)"
+        r"(?![A-Za-z0-9_])|[$€£¥]|°[CF]"
+    )
     _TRANSLATION_INLINE_PROTECTED_WITH_DATES_RE = re.compile(
         r"<!--.*?-->"
         r"|`[^`\n]+`"
@@ -7781,7 +7787,7 @@ class ReportAgent:
 
     @classmethod
     def _protect_translation_tokens(
-        cls, markdown: str, date_target: Optional[str] = None
+        cls, markdown: str, date_target: Optional[str] = None, *, fact_atoms: bool = False,
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """Hide immutable bytes from the model and return their exact mapping.
 
@@ -7870,10 +7876,51 @@ class ReportAgent:
                 + raw[expression.end - offset:]
             )
 
-        protected = cls._TRANSLATION_INLINE_PROTECTED_WITH_DATES_RE.sub(
+        inline_re = cls._TRANSLATION_INLINE_PROTECTED_WITH_DATES_RE
+        if fact_atoms:
+            from .translation_tools import FACT_UNIT_PATTERN
+
+            inline_re = re.compile(inline_re.pattern + "|" + FACT_UNIT_PATTERN
+                                   + "|" + cls._FORECAST_FACT_ATOMS_RE.pattern,
+                                   inline_re.flags)
+        protected = inline_re.sub(
             _inline_with_dates, protected
         )
         return protected, mapping
+
+    @classmethod
+    def _forecast_text_facts_preserved(cls, source: str, target: str) -> bool:
+        """Admit equivalent localized dates/amounts, retaining units, IDs and links."""
+        from collections import Counter
+
+        def atoms(text: str) -> "Counter[Any]":
+            from .translation_tools import _PROTECTED
+
+            exact = Counter()
+            def hide(match):
+                exact[match.group(0)] += 1
+                return " "
+            masked = re.sub(r"`[^`\n]+`|https?://[^\s<>()]+", hide, text)
+            masked, _dates = _tdates.mask_dates(masked)
+            quantities = Counter()
+            pieces, cursor = [], 0
+            for quantity in _tq.find_quantities(masked):
+                pieces.append(masked[cursor:quantity.start])
+                if all(abs(value) < 1000000 for value in quantity.values):
+                    # Small amounts render as plain numerals in English; compare
+                    # their signed native tokens to the same ordinary rendering.
+                    pieces.append(_tq.render_quantity(quantity, "en"))
+                else:
+                    quantities[(tuple(quantity.values), quantity.currency)] += 1
+                    pieces.append(" ")
+                cursor = quantity.end
+            pieces.append(masked[cursor:])
+            return exact + quantities + Counter(re.sub(r"\s+", "", m.group(0))
+                                                for m in _PROTECTED.finditer("".join(pieces)))
+
+        return (cls._translation_fact_multiset(source) == cls._translation_fact_multiset(target)
+                and cls._translation_marker_multiset(source) == cls._translation_marker_multiset(target)
+                and atoms(source) == atoms(target))
 
     @classmethod
     def _decode_translation_placeholders(cls, text: str) -> str:
@@ -8324,7 +8371,7 @@ class ReportAgent:
         if not slots:
             # No translatable prose (pure tables of numbers / fences) — restore
             # tokens and return the structurally-identical source unchanged.
-            restored, _issues = self._restore_translation_tokens(protected, mapping)
+            restored, _issues = self._restore_translation_tokens(protected, mapping, separate_numbers=True)
             return restored
         filter_safe = self._translation_filter_safe_active()
         if filter_safe:
@@ -8333,7 +8380,7 @@ class ReportAgent:
                 target_language_name,
                 extra_rules=extra_rules,
                 chunk_index=chunk_index,
-                restore=lambda text: self._restore_translation_tokens(text, mapping)[0],
+                restore=lambda text: self._restore_translation_tokens(text, mapping, separate_numbers=True)[0],
             )
         else:
             resolved = self._resolve_prose_slots(slots, target_language_name)
@@ -8344,7 +8391,7 @@ class ReportAgent:
 
         reassembled = self._STRUCT_SLOT_RE.sub(_fill, template)
         restored, _issues = self._restore_translation_tokens(
-            reassembled, mapping, **({"separate_numbers": True} if filter_safe else {})
+            reassembled, mapping, separate_numbers=True
         )
         return restored
 
@@ -8658,6 +8705,78 @@ class ReportAgent:
         )
         return {"hard": hard, "residual": residual}
 
+    def _audit_model_translation_variant(
+        self, report_id, source_md, variant_md, source_lang, target_lang,
+        primary_citations, proof, *, enforce_citations=True,
+    ):
+        """Read-only publication check for reviewed, final model output.
+
+        Numerical equivalence is a semantic review verdict, not lexical token
+        parity. Canonical structured forecast facts remain separately sealed.
+        Historical variants continue through their existing audit contract.
+        """
+        from .model_translation import ENGINE, valid_document_receipt, structure_issues
+        from .forecast_extractor import _norm_citation_tag, validate_citation_markers
+
+        issues = structure_issues(source_md, variant_md)
+        reviewed = valid_document_receipt(source_md, variant_md, target_lang, proof)
+        if not reviewed:
+            issues.append("translation has no complete source-bound semantic review")
+            if isinstance(proof, dict):
+                issues.extend(f"{key}: {', '.join(str(item) for item in details)}"
+                              for key, details in (proof.get("issues") or {}).items())
+        primary_citations = primary_citations if isinstance(primary_citations, dict) else {}
+        rows = primary_citations.get("markers") or []
+        by_tag = {_norm_citation_tag(str(row.get("tag"))): row for row in rows
+                  if isinstance(row, dict) and row.get("tag")}
+        source_body, source_refs, _ = self._translation_reference_parts(source_md)
+        body, refs, heading = self._translation_reference_parts(variant_md)
+        marker_audit = validate_citation_markers(body, by_tag)
+        order = list(marker_audit.get("order") or [])
+        source_markers = self._translation_marker_multiset(source_body)
+        target_markers = self._translation_marker_multiset(body)
+        if source_markers != target_markers:
+            issues.append("translation body citation identities or counts changed")
+        if source_refs and (not refs or heading not in _REFS_HEADINGS):
+            issues.append("translation is missing the canonical References appendix")
+        if enforce_citations:
+            if source_markers and not by_tag:
+                issues.append("primary citations.json is missing for a cited translation")
+            if marker_audit.get("dangling"):
+                issues.append("translation contains dangling citation identities")
+            if any(f"[{tag}]" not in refs or str((by_tag.get(tag) or {}).get("url") or "") not in refs
+                   for tag in order):
+                issues.append("translation References misses cited identities or source URLs")
+            if any(row.get("url_valid") is not True or not _citation_url_ok(str(row.get("url") or ""))
+                   for row in by_tag.values()):
+                issues.append("primary citation map contains invalid source URLs")
+        source_sha = hashlib.sha256(source_md.encode("utf-8")).hexdigest()
+        target_sha = hashlib.sha256(variant_md.encode("utf-8")).hexdigest()
+        citations = {"schema_version": 2, "report_id": report_id, "grammar": "[S<n>]",
+            "language": target_lang, "source_language": source_lang,
+            "source_artifact": "citations.json", "source_markdown_sha256": source_sha,
+            "markdown_sha256": target_sha, "heading": heading,
+            "markers": [{**by_tag[tag], "display": i, "count": int(target_markers.get(tag, 0))}
+                        for i, tag in enumerate(order, 1) if tag in by_tag],
+            "unresolved": [{"tag": tag} for tag in marker_audit.get("dangling") or []]}
+        audit = {"schema_version": 3,
+            "policy_version": int(getattr(Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3)),
+            "report_id": report_id, "language": target_lang, "source_language": source_lang,
+            "audited_at": datetime.now(timezone.utc).isoformat(), "read_only": True,
+            "markdown_chars": len(variant_md), "source_markdown_sha256": source_sha,
+            "markdown_sha256": target_sha, "translator_version": ENGINE,
+            "model_translation": proof, "fact_fidelity": {"passed": reviewed,
+                "method": "separate model review of source and translation",
+                "limitation": "model review can err; canonical typed facts are copied separately"},
+            "section_parity": {"passed": not structure_issues(source_md, variant_md)},
+            "citation_parity": {"passed": not any("citation" in issue or "References" in issue for issue in issues)},
+            "residual_source_lines": {"count": 0, "method": "semantic language review"},
+            "warnings": [], "issues": issues, "hard_passed": not issues}
+        world = ReportManager.load_world_result(report_id)
+        if world:
+            audit["world_result_ref"] = citations["world_result_ref"] = world["reference"]
+        return audit, citations
+
     def _audit_translation_variant(
         self,
         report_id: str,
@@ -8669,6 +8788,7 @@ class ReportAgent:
         *,
         enforce_citations: bool = True,
         verbatim_regions: Optional[List[Dict[str, Any]]] = None,
+        model_proof: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Audit a language variant and build its isolated citation artifact.
 
@@ -8683,6 +8803,10 @@ class ReportAgent:
         not contamination, and the audit then carries a ``partial`` block.  Number,
         citation and structure parity stay hard gates for every line.
         """
+        if model_proof is not None:
+            return self._audit_model_translation_variant(
+                report_id, source_md, variant_md, source_lang, target_lang,
+                primary_citations, model_proof, enforce_citations=enforce_citations)
         from . import report_lint as _rl
         from .forecast_extractor import _norm_citation_tag, validate_citation_markers
 
@@ -9070,7 +9194,7 @@ class ReportAgent:
             if inner.strip():
                 out = inner.rstrip()
         restored, placeholder_issues = self._restore_translation_tokens(
-            out, protected_mapping, **({"separate_numbers": True} if filter_safe else {})
+            out, protected_mapping, separate_numbers=True
         )
         # Structure is a hard invariant, not a hope: if the whole-unit candidate
         # dropped/duplicated an immutable token, or drifted on heading levels, table
@@ -9440,6 +9564,87 @@ class ReportAgent:
         out.append(text[position:])
         return "".join(out)
 
+    @classmethod
+    def _repair_translation_numeric_boundaries(
+        cls, source: str, candidate: str,
+    ) -> Tuple[str, List[Dict[str, str]]]:
+        """Recover source-proven identifier boundaries and legacy date ranges.
+
+        Q1 + 2027 and Oct27 + 89.24 must not become Q12027 or Oct2789.24.
+        No numeric value changes. Ambiguous identifiers already present in the source,
+        code, URLs and citations are never split. Every edit must reduce the
+        full document's fact delta; remaining differences still fail final QA.
+        """
+        from collections import Counter
+
+        expected = Counter(cls._translation_fact_multiset(source))
+
+        def distance(text: str) -> int:
+            actual = Counter(cls._translation_fact_multiset(text))
+            return sum((expected - actual).values()) + sum((actual - expected).values())
+
+        current = candidate
+        remaining = distance(current)
+        if not remaining:
+            return current, []
+        source_prose = cls._TRANSLATION_FENCE_RE.sub("\n", source)
+        atoms = list(cls._TRANSLATION_INLINE_PROTECTED_WITH_DATES_RE.finditer(source_prose))
+        pairs = []
+        for left, right in zip(atoms, atoms[1:]):
+            a, b = left.group(0), right.group(0)
+            gap = source_prose[left.end():right.start()]
+            if (gap and gap.isspace() and "\n" not in gap
+                    and re.fullmatch(cls._TRANSLATION_ALNUM_IDENTIFIER, a)
+                    and cls._NUMBER_INTEGRITY_RE.fullmatch(b)
+                    and a + b not in source and (a, b) not in pairs):
+                pairs.append((a, b))
+        protected_re = re.compile(
+            cls._TRANSLATION_FENCE_RE.pattern + r"|<!--.*?-->|`[^`\n]+`"
+            r"|(?<=\]\()[^)\s]+(?=\))|https?://[^\s<>()]+"
+            r"|[\[【]\s*S\d+(?:-[A-Za-z])?\s*[\]】]",
+            re.MULTILINE | re.DOTALL,
+        )
+        repairs: List[Dict[str, str]] = []
+        replacements = [
+            (re.compile(r"(?<![A-Za-z0-9_])" + re.escape(a + b) + r"(?![0-9.])"),
+             a + " " + b, {"identifier": a, "number": b})
+            for a, b in pairs[:64]
+        ]
+        # Older renderers protected only the last day of an English range:
+        # "10–11 October 2026" became "10–2026年10月11日". All date values
+        # remain present. Restore only this exact source-backed legacy form;
+        # arbitrary missing/changed days, months or years remain hard failures.
+        for expression in _tdates.find_dates(source_prose):
+            if expression.lang != "en" or expression.end_day is None:
+                continue
+            end = _tdates.render_date(expression._replace(day=expression.end_day, end_day=None), "zh")
+            malformed = str(expression.day) + "–" + end
+            if malformed in source or any(row[1] == _tdates.render_date(expression, "zh")
+                                          for row in replacements):
+                continue
+            pattern = re.compile(r"(?<![0-9])" + str(expression.day)
+                                 + r"[ ]*(?:[–—-]|日[ ]*至)[ ]*" + re.escape(end))
+            replacements.append((pattern, _tdates.render_date(expression, "zh"),
+                                 {"date_range": source_prose[expression.start:expression.end],
+                                  "restored": _tdates.render_date(expression, "zh")}))
+        for pattern, replacement, detail in replacements:
+            position = 0
+            while len(repairs) < 32:
+                protected = [(m.start(), m.end()) for m in protected_re.finditer(current)]
+                match = next((m for m in pattern.finditer(current, position)
+                              if not any(a <= m.start() < b for a, b in protected)), None)
+                if match is None:
+                    break
+                proposed = current[:match.start()] + replacement + current[match.end():]
+                improved = distance(proposed)
+                position = match.start() + len(replacement)
+                if improved < remaining:
+                    current, remaining = proposed, improved
+                    repairs.append(detail.copy())
+                if not remaining:
+                    return current, repairs
+        return current, repairs
+
     def _translate_unit_after_content_filter(
         self,
         markdown: str,
@@ -9495,7 +9700,7 @@ class ReportAgent:
     # months: "September 2025" → "2025年"), whole-line residual repair.
     # 2026-09-29.2: amounts as atomic tokens + value-aware parity (older Chinese
     # variants wrote "$3.7 billion" as "3.7亿美元", ten times too small).
-    _TRANSLATOR_VERSION = "2026-09-29.2"
+    _TRANSLATOR_VERSION = "model-translation/v1"
 
     # Last-resort prompts for a line that survived the segment rounds; two wordings
     # so the second attempt is a genuinely different request.
@@ -9639,133 +9844,58 @@ class ReportAgent:
 
     @staticmethod
     def _forecast_text_is_foreign(text: str, target_code: str) -> bool:
-        """True when a forecast string is not (mainly) in the target language."""
-        cjk = len(re.findall(r"[\u4e00-\u9fff]", text or ""))
-        if target_code == "en":
-            return cjk > 0
-        latin = len(re.findall(r"[A-Za-z]", text or ""))
-        return latin > 0 and cjk * 2 < latin
+        """Conservative script selection; capitalization cannot certify language.
+
+        English names/units inside a Mandarin view may be correct, but a model
+        review must admit them rather than a lexical proper-name exception.
+        """
+        return bool(re.search(r"[\u4e00-\u9fff]" if target_code == "en" else r"[A-Za-z]", text or ""))
 
     @classmethod
     def _forecast_text_is_residual(cls, text: str, target_code: str) -> bool:
-        """Stricter check for completeness: foreign prose, not just a proper noun."""
-        if not cls._forecast_text_is_foreign(text, target_code):
-            return False
-        if target_code == "en":
-            return True
-        return bool(re.search(r"(?<![A-Za-z])[a-z]{4,}", text or ""))
+        return cls._forecast_text_is_foreign(text, target_code)
 
     def _localize_forecast(
         self, forecast: Dict[str, Any], target_code: str
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Translate a forecast's reader-facing strings into ``target_code``.
-
-        Each string goes through the same token protection as the report body
-        (numbers, citations, dates) and the same keyed-slot translator, so a
-        localized string can never change a number, citation or date.  Strings
-        already in the target language are left untouched.  Returns the localized
-        copy plus a summary (translated / unresolved field paths).
-        """
+        """Translate readable fields; copy all typed facts from the sealed source."""
         import copy
-        from concurrent.futures import ThreadPoolExecutor
+        from .model_translation import ENGINE, translate_entries
+        from .translation_tools import translation_client
 
-        target_name = (
-            "简体中文（Simplified Chinese）" if target_code == "zh"
-            else "professional analyst-grade English"
-        )
         localized = copy.deepcopy(forecast)
-        pending = [
-            (path, text) for path, text in self._forecast_text_fields(forecast)
-            if self._forecast_text_is_foreign(text, target_code)
-        ]
-        protected: List[Tuple[Tuple[Any, ...], str, str, List[Tuple[str, str]]]] = []
-        for path, text in pending:
-            hidden, mapping = self._protect_translation_tokens(text, date_target=target_code)
-            protected.append((path, text, hidden, mapping))
-
-        group_size = 16
-        groups = [
-            protected[start:start + group_size]
-            for start in range(0, len(protected), group_size)
-        ]
-
-        def _resolve(group: List[Tuple[Tuple[Any, ...], str, str, List[Tuple[str, str]]]]
-                     ) -> Dict[str, str]:
-            slots = {
-                self._translation_placeholder_suffix(index): hidden
-                for index, (_path, _text, hidden, _mapping) in enumerate(group)
-            }
-            return self._resolve_prose_slots(slots, target_name)
-
-        try:
-            workers = max(1, int(getattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4) or 4))
-        except (TypeError, ValueError):
-            workers = 4
-        results: List[Dict[str, str]] = [{} for _ in groups]
-        if groups:
-            parent_context = contextvars.copy_context()
-            with ThreadPoolExecutor(max_workers=min(workers, len(groups))) as pool:
-                futures = {
-                    pool.submit(parent_context.copy().run, _resolve, group): index
-                    for index, group in enumerate(groups)
-                }
-                for future, index in futures.items():
-                    try:
-                        results[index] = future.result()
-                    except Exception as exc:  # noqa: BLE001 — one group never sinks the rest
-                        logger.warning("预测本地化：字段组翻译失败（保留原文）: %s", exc)
-
-        translated_paths: List[str] = []
-        unresolved: List[str] = []
-        name_map: Dict[str, str] = {}
-        for group, resolved in zip(groups, results, strict=True):
-            for index, (path, text, _hidden, mapping) in enumerate(group):
-                label = ".".join(str(step) for step in path)
-                candidate = resolved.get(self._translation_placeholder_suffix(index))
-                restored = None
-                if isinstance(candidate, str) and candidate.strip():
-                    value, issues = self._restore_translation_tokens(candidate, mapping)
-                    value = value.strip()
-                    if (not issues
-                            and self._translation_fact_multiset(value)
-                            == self._translation_fact_multiset(text)
-                            and self._translation_marker_multiset(value)
-                            == self._translation_marker_multiset(text)):
-                        restored = value
-                if restored is None:
-                    if self._forecast_text_is_residual(text, target_code):
-                        unresolved.append(label)
-                    continue
-                self._set_forecast_path(localized, path, restored)
-                translated_paths.append(label)
-                if len(path) == 3 and path[0] == "scenarios" and path[2] == "name":
-                    name_map[text] = restored
-
-        # Scenario names are also referenced by value; keep those references joined.
-        if name_map:
-            for binary in localized.get("binary_forecasts") or []:
-                membership = binary.get("scenario_membership") if isinstance(binary, dict) else None
-                if isinstance(membership, dict) and isinstance(
-                    membership.get("yes_scenarios"), list
-                ):
-                    membership["yes_scenarios"] = [
-                        name_map.get(name, name) if isinstance(name, str) else name
-                        for name in membership["yes_scenarios"]
-                    ]
-            premortem = localized.get("premortem")
-            if isinstance(premortem, dict):
-                for key in ("underweighted_scenario", "overconfident_scenario"):
-                    value = premortem.get(key)
-                    if isinstance(value, str) and value in name_map:
-                        premortem[key] = name_map[value]
-
-        summary = {
-            "fields_total": len(pending),
-            "fields_translated": len(translated_paths),
-            "unresolved": unresolved[:50],
-            "complete": not unresolved,
-        }
-        return localized, summary
+        fields = self._forecast_text_fields(forecast)
+        # Once a variant is needed, review every human field together, including
+        # proper names and mixed-language text. A CJK prefix is not a proof of
+        # completeness. Pure canonical target-language forecasts need no variant.
+        pending = fields
+        labels = {"/".join(str(step) for step in path): (path, text) for path, text in pending}
+        context = "forecast display fields"
+        result = translate_entries(translation_client(self.llm),
+            [(key, text) for key, (_path, text) in labels.items()], target_code, context=context)
+        names = {}
+        for key, value in result.items():
+            path, text = labels[key]
+            self._set_forecast_path(localized, path, value)
+            if len(path) == 3 and path[0] == "scenarios" and path[2] == "name":
+                names[text] = value
+        # Joined display names may change; scenario IDs/probabilities may not.
+        for binary in localized.get("binary_forecasts") or []:
+            membership = binary.get("scenario_membership") if isinstance(binary, dict) else None
+            if isinstance(membership, dict) and isinstance(membership.get("yes_scenarios"), list):
+                membership["yes_scenarios"] = [names.get(name, name)
+                    if isinstance(name, str) else name for name in membership["yes_scenarios"]]
+        premortem = localized.get("premortem")
+        if isinstance(premortem, dict):
+            for key in ("underweighted_scenario", "overconfident_scenario"):
+                name = premortem.get(key)
+                if isinstance(name, str):
+                    premortem[key] = names.get(name, name)
+        unresolved = [key for key in labels if key not in result]
+        return localized, {"engine": ENGINE, "context": context, "receipts": result.receipts,
+            "fields_total": len(pending), "fields_translated": len(result),
+            "unresolved": unresolved, "complete": not unresolved,
+            "issues": result.issues, "calls_used": result.calls_used}
 
     def _ensure_localized_forecast(
         self,
@@ -9794,18 +9924,19 @@ class ReportAgent:
             return None
         existing, _info = ReportManager.load_localized_forecast(report_id, lang)
         existing_meta = (existing or {}).get("localization") if isinstance(existing, dict) else None
-        if isinstance(existing_meta, dict) and existing_meta.get("complete") is True \
+        if _info.get("complete") is True and isinstance(existing_meta, dict) and existing_meta.get("complete") is True \
                 and existing_meta.get("source_forecast_sha256") == forecast_sha:
             return existing_meta
         if progress is not None:
             progress(97, "localizing forecast dashboard")
-        localized, summary = self._localize_forecast(forecast, lang)
+        with self._translation_transport(), LLMCache.bypass():
+            localized, summary = self._localize_forecast(forecast, lang)
         try:
             model_name = getattr(self.llm, "model", None) or getattr(Config, "LLM_MODEL_NAME", "")
         except Exception:  # noqa: BLE001
             model_name = getattr(Config, "LLM_MODEL_NAME", "")
         localized["localization"] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "lang": lang,
             "source_forecast_sha256": forecast_sha,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -10126,7 +10257,7 @@ class ReportAgent:
         attempt leaves the published variant and its audit untouched.
         """
         world = ReportManager.load_world_result(report_id)
-        with LLMCache.bypass(), llm_call_timeout(
+        with self._translation_transport(), LLMCache.bypass(), llm_call_timeout(
             getattr(Config, "REPORT_TRANSLATION_CALL_TIMEOUT_S", 240)
         ):
             dashboards = self._start_dashboard_localization(report_id, report)
@@ -10149,6 +10280,18 @@ class ReportAgent:
             require(ReportManager.load_world_result(report_id) == world,
                     "result_binding_mismatch", "World reference changed during translation")
 
+    @contextmanager
+    def _translation_transport(self):
+        """Share provider admission with simulation and structured translations."""
+        from .translation_tools import translation_client
+
+        original = getattr(self, "llm", None)
+        self.llm = translation_client(original) if original is not None else None
+        try:
+            yield
+        finally:
+            self.llm = original
+
     def _start_dashboard_localization(
         self, report_id: str, report: "Report"
     ) -> Optional[threading.Thread]:
@@ -10162,8 +10305,8 @@ class ReportAgent:
         task completes; failures only log (the dashboard falls back to the original).
         """
         llm = getattr(self, "llm", None)
-        if not getattr(Config, "REPORT_BILINGUAL", True) or llm is None \
-                or not hasattr(llm, "chat"):
+        if not getattr(Config, "REPORT_BILINGUAL", True) or llm is None or not any(
+                callable(getattr(llm, method, None)) for method in ("chat", "chat_json")):
             return None
         source_code, target_code, _target_name = self._detect_translation_target(
             report.markdown_content or ""
@@ -10191,18 +10334,15 @@ class ReportAgent:
         *,
         keep_existing_on_failure: bool = False,
     ) -> None:
-        """BILINGUAL：在报告最终化/可视化/纯度处理之后，自动生成成稿的另一语种版本。
+        """Translate readable sections and review them before isolated publication.
 
-        流水：① 复用 detect_output_language 判定成稿语言（英⇄中，其它脚本跳过）；② 按 H2 边界
-        切块，用小 ThreadPoolExecutor（REPORT_TRANSLATION_CONCURRENCY）并发逐章翻译；③ 逐章引用
-        记号对账重译；④ 对整篇做标题/表格/数字/引用/语言五重硬审计；⑤ 仅审计通过才原子落
-        full_report.{lang}.md + citations.{lang}.json + final_audit.{lang}.json；⑥ 用最终字节
-        刷新 report.translations。失败译文不发布，且删除任何同语种旧成稿/PDF，防止陈旧译文
-        伪装成本次运行产物。主报告永不被修改。"""
+        The final model output is never rewritten by legacy numeric transport,
+        contamination repair or editorial lint. The canonical source is immutable.
+        """
         if not getattr(Config, "REPORT_BILINGUAL", True):
             return
         llm = getattr(self, "llm", None)
-        if llm is None or not hasattr(llm, "chat"):
+        if llm is None or not any(callable(getattr(llm, method, None)) for method in ("chat", "chat_json")):
             return
         md = report.markdown_content or ""
         if not md.strip():
@@ -10214,7 +10354,7 @@ class ReportAgent:
 
         source_sha = hashlib.sha256(md.encode("utf-8")).hexdigest()
         self._translation_call_failures = 0
-        self._reset_translation_filter_safe_state(md)
+        self._translation_verbatim_regions = []
 
         def _progress(percent: int, message: str) -> None:
             bounded = max(1, min(99, int(percent)))
@@ -10234,22 +10374,16 @@ class ReportAgent:
 
         _progress(1, "translation initialized")
 
-        world = ReportManager.load_world_result(report_id)
-        translation_md = (_world_prose(md, render_world_pathway(world["result"], chinese=src_code == "zh"))
-                          if world else md)
-        chunks = self._split_markdown_h2_sections(translation_md)
+        from .model_translation import split_document, translate_document
+        chunks = split_document(md)
         if not chunks:
             return
-        translated, citation_drift = self._translate_chunks_with_integrity(
-            chunks, str(tgt_code), tgt_name, label=report_id, progress=_progress,
-        )
-
-        # 逐章 strip 后以空行拼接，保证 H2 章节间有标准 markdown 空行分隔（各段已含自身标题）。
-        translated_md = "\n\n".join(translated).strip() + "\n"
-        # Chart images keep the builder's English title as alt text, which pandoc
-        # prints as the figure caption; a Chinese variant gets the Chinese titles.
-        from .report_visualizer import localize_chart_alt_text
-        translated_md = localize_chart_alt_text(translated_md, str(tgt_code))
+        def model_progress(result):
+            _progress(min(89, 5 + int(80 * len(result) / max(1, len(chunks)))),
+                      "translating and reviewing complete sections")
+        translated_md, model_proof = translate_document(
+            self.llm, md, str(tgt_code), on_progress=model_progress)
+        citation_drift = []
         folder = ReportManager._get_report_folder(report_id)
         out_path = ReportManager._get_report_translation_path(report_id, tgt_code)
         pdf_path = ReportManager._get_report_pdf_path(report_id, tgt_code)
@@ -10290,32 +10424,6 @@ class ReportAgent:
             logger.info(f"双语报告：译文为空或与原文实质相同，跳过落盘: {report_id}")
             return
 
-        # CONTAMINATION：有界重译任何残留源语言行，随后落地为审计前的最终字节。结构无损翻译已保证
-        # 骨架，此处只补足纯度；仍污染者由下方只读终审 fail-closed 拒绝。
-        target_is_cjk = str(tgt_code) == "zh"
-        _progress(91, "repairing residual source-language lines")
-        translated_md = self._repair_variant_contamination(
-            translated_md, target_is_cjk, tgt_name
-        ).strip() + "\n"
-
-        # LINT-BEFORE-AUDIT：对译文正文运行与主报告完全相同的确定性终审 lint，并迭代到审计所见
-        # 正文视图的不动点（changed=False）。lint 幂等，但「lint 正文 + 拼回 References」会被审计
-        # 重新拆分，单趟不必然等于审计逐字节 lint 的视图；迭代到不动点使 "would still be rewritten"
-        # 结构性不可能触发；若 lint 破坏了与源文的结构一致，审计仍会 fail-closed（不发布坏译文）。
-        lint_lang = "Chinese" if target_is_cjk else "English"
-        lint_spine = (
-            self._forecast_spine
-            if isinstance(getattr(self, "_forecast_spine", None), dict)
-            else None
-        )
-        translated_md = self._lint_variant_to_audit_fixed_point(
-            translated_md, lint_lang, lint_spine
-        )
-
-        if world:
-            translated_md = _insert_world_appendix(
-                translated_md, render_world_pathway(world["result"], chinese=target_is_cjk))
-
         primary_citations: Dict[str, Any] = {}
         try:
             with open(ReportManager._get_report_citations_path(report_id), encoding="utf-8") as handle:
@@ -10333,7 +10441,7 @@ class ReportAgent:
             str(src_code),
             str(tgt_code),
             primary_citations,
-            verbatim_regions=getattr(self, "_translation_verbatim_regions", None),
+            model_proof=model_proof,
         )
         if citation_drift:
             audit.setdefault("issues", []).append(
@@ -10375,6 +10483,12 @@ class ReportAgent:
                 "双语报告硬审计未通过，译文不发布: %s %s issues=%s",
                 report_id, tgt_code, (audit.get("issues") or [])[:8],
             )
+            return
+
+        current_source = ReportManager._sha256_file(ReportManager._get_report_markdown_path(report_id))
+        if current_source != source_sha:
+            ReportManager._set_translation_runtime_status(report_id, str(tgt_code), "failed",
+                source_markdown_sha256=source_sha, issues=["primary source changed during translation"])
             return
 
         # Publish barrier: citation map + audit land before Markdown.  Readers can
@@ -10467,7 +10581,7 @@ class ReportAgent:
     ) -> Dict[str, Any]:
         """Translate a research dossier with fresh model samples (see
         ``_generate_bilingual_report`` for why translation bypasses the cache)."""
-        with LLMCache.bypass(), llm_call_timeout(
+        with self._translation_transport(), LLMCache.bypass(), llm_call_timeout(
             getattr(Config, "REPORT_TRANSLATION_CALL_TIMEOUT_S", 240)
         ):
             try:
@@ -10478,103 +10592,22 @@ class ReportAgent:
                 self._translation_filter_safe = False
 
     def _translate_research_markdown_uncached(
-        self,
-        md: str,
-        *,
-        label: str = "research_report",
+        self, md: str, *, label: str = "research_report",
         primary_citations: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Structure-preserving translation of an arbitrary research-report markdown.
-
-        Reuses the exact same fail-closed primitives as the forecast bilingual path —
-        structural skeleton translation (guaranteed heading/table/number/citation
-        parity), bounded contamination repair, and lint-before-audit — then runs the
-        same isolated variant audit.  Performs no filesystem IO; the caller persists
-        the returned bytes only when ``audit['hard_passed']`` is True.  Returns a dict
-        with ``available``/``src``/``tgt``/``translated_md``/``audit``/``citations``.
-        """
-        from . import report_lint as _rl
-
+        """Translate the actual dossier, then audit its final unchanged bytes."""
+        from .model_translation import translate_document
         md = md or ""
-        src_code, tgt_code, tgt_name = self._detect_translation_target(md)
+        src_code, tgt_code, _ = self._detect_translation_target(md)
         if not tgt_code:
             return {"available": False, "reason": "source language is not English/Chinese"}
-        self._translation_call_failures = 0
-        # The published forecast report is already a final-lint fixed point at publish
-        # time, but a free-standing research dossier is not.  Normalize the source to
-        # that same fixed point first so structural parity is measured against a stable
-        # baseline (empty sections / internal telemetry strip identically on both sides
-        # instead of only on the freshly linted translation, which would spuriously
-        # differ in heading count).  The primary research_report.md is never mutated.
-        source_lint_lang = "Chinese" if str(src_code) == "zh" else "English"
-        baseline_md, _baseline_rep = _rl.lint_report(
-            md, source_lint_lang, mode="final", spine=None
-        )
-        if baseline_md.strip():
-            md = baseline_md
-        chunks = self._split_markdown_h2_sections(md)
-        if not chunks:
-            return {"available": False, "reason": "empty document"}
-        self._reset_translation_filter_safe_state(md)
-
-        # Same engine as the forecast report: concurrent sections plus targeted
-        # integrity retries (a dossier used to get one plain sequential retry, so a
-        # dropped sentence in one dense section failed the whole translation).
-        translated, _citation_drift = self._translate_chunks_with_integrity(
-            chunks, str(tgt_code), tgt_name, label=label,
-        )
-        translated_md = "\n\n".join(translated).strip() + "\n"
-
-        def _collapse(text: str) -> str:
-            return re.sub(r"\s+", " ", text or "").strip()
-        if not translated_md.strip() or _collapse(translated_md) == _collapse(md):
-            return {
-                "available": False,
-                "reason": "translation was empty or materially identical to source",
-                "issues": [
-                    issue for issue in (
-                        self._translation_failure_issue(),
-                        "translation was empty or materially identical to source",
-                    ) if issue
-                ],
-                "src": src_code,
-                "tgt": tgt_code,
-            }
-
-        target_is_cjk = str(tgt_code) == "zh"
-        translated_md = self._repair_variant_contamination(
-            translated_md, target_is_cjk, tgt_name
-        ).strip() + "\n"
-
-        # LINT-BEFORE-AUDIT (research path): iterate to the audit's body-view fixed point
-        # so "would still be rewritten by final editorial lint" is structurally impossible.
-        lint_lang = "Chinese" if target_is_cjk else "English"
-        translated_md = self._lint_variant_to_audit_fixed_point(
-            translated_md, lint_lang, None
-        )
-
-        audit, citations_payload = self._audit_translation_variant(
-            label,
-            md,
-            translated_md,
-            str(src_code),
-            str(tgt_code),
-            primary_citations if isinstance(primary_citations, dict) else {},
-            enforce_citations=bool(primary_citations),
-            verbatim_regions=getattr(self, "_translation_verbatim_regions", None),
-        )
-        if not audit.get("hard_passed"):
-            failure_issue = self._translation_failure_issue()
-            if failure_issue:
-                audit.setdefault("issues", []).insert(0, failure_issue)
-        return {
-            "available": bool(audit.get("hard_passed")),
-            "src": src_code,
-            "tgt": tgt_code,
-            "translated_md": translated_md,
-            "audit": audit,
-            "citations": citations_payload,
-        }
+        translated_md, proof = translate_document(self.llm, md, str(tgt_code))
+        audit, citations = self._audit_translation_variant(
+            label, md, translated_md, str(src_code), str(tgt_code), primary_citations,
+            enforce_citations=bool(primary_citations), model_proof=proof)
+        return {"available": bool(audit["hard_passed"]), "src": src_code, "tgt": tgt_code,
+                "translated_md": translated_md, "audit": audit, "citations": citations,
+                "issues": list(audit.get("issues") or [])}
 
     def _finalize_citations(self, report_id: str, report: "Report") -> None:
         """WAVE10 引用最终化：把正文 [S12] 记号解析为文末「References/参考来源」附录 +
@@ -15346,6 +15379,55 @@ class ReportManager:
         """reports/{id}/forecast.<lang>.json — the dashboard strings in ``lang``."""
         return os.path.join(cls._get_report_folder(report_id), f"forecast.{lang}.json")
 
+    @staticmethod
+    def _localized_forecast_payload_valid(source: Dict[str, Any], variant: Dict[str, Any]) -> bool:
+        """Allow display prose and joined labels to change, never forecast facts/IDs."""
+        import copy
+
+        try:
+            expected, actual = copy.deepcopy(source), copy.deepcopy(variant)
+            expected.pop("localization", None)
+            actual.pop("localization", None)
+            metadata = variant.get("localization") or {}
+            from .model_translation import ENGINE, valid_receipt
+            model_engine = metadata.get("engine") == ENGINE
+            if (metadata.get("schema_version") == 2 or "engine" in metadata or "receipts" in metadata) and not model_engine:
+                return False
+            names: Dict[str, str] = {}
+            for path, text in ReportAgent._forecast_text_fields(source):
+                value: Any = actual
+                for step in path:
+                    value = value[step]
+                if not isinstance(value, str):
+                    return False
+                if model_engine:
+                    label = "/".join(str(step) for step in path)
+                    receipt = (metadata.get("receipts") or {}).get(label)
+                    if value != text and not valid_receipt(text, value, metadata.get("lang"), receipt,
+                                                          context="forecast display fields"):
+                        return False
+                    if label in (metadata.get("receipts") or {}) and not valid_receipt(
+                            text, value, metadata.get("lang"), receipt, context="forecast display fields"):
+                        return False
+                elif not ReportAgent._forecast_text_facts_preserved(text, value):
+                    return False
+                ReportAgent._set_forecast_path(expected, path, value)
+                if len(path) == 3 and path[0] == "scenarios" and path[2] == "name":
+                    names[text] = value
+            for row in expected.get("binary_forecasts") or []:
+                membership = row.get("scenario_membership") if isinstance(row, dict) else None
+                if isinstance(membership, dict) and isinstance(membership.get("yes_scenarios"), list):
+                    membership["yes_scenarios"] = [names.get(name, name) for name in membership["yes_scenarios"]]
+            premortem = expected.get("premortem")
+            if isinstance(premortem, dict):
+                for key in ("underweighted_scenario", "overconfident_scenario"):
+                    if isinstance(premortem.get(key), str):
+                        premortem[key] = names.get(premortem[key], premortem[key])
+            return json.dumps(expected, sort_keys=True, ensure_ascii=False, allow_nan=False) == json.dumps(
+                actual, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+            return False
+
     @classmethod
     def load_localized_forecast(
         cls, report_id: str, lang: Optional[str]
@@ -15360,6 +15442,12 @@ class ReportManager:
         info: Dict[str, Any] = {"requested_lang": lang, "localized": False}
         if forecast is None or lang not in cls._TRANSLATION_LANGS:
             return forecast, info
+        # `localized` still identifies a variant file. A canonical forecast that
+        # already meets the requested language is complete without a model call.
+        already_target = not any(ReportAgent._forecast_text_is_residual(text, str(lang))
+                                 for _path, text in ReportAgent._forecast_text_fields(forecast))
+        info.update({"complete": already_target, "already_target": already_target,
+                     "source_forecast_sha256": forecast_sha})
         try:
             with open(
                 cls._get_report_localized_forecast_path(report_id, str(lang)),
@@ -15370,11 +15458,29 @@ class ReportManager:
             return forecast, info
         meta = localized.get("localization") if isinstance(localized, dict) else None
         if (isinstance(meta, dict) and meta.get("lang") == lang
-                and meta.get("source_forecast_sha256") == forecast_sha):
-            info.update({
+                and meta.get("source_forecast_sha256") == forecast_sha
+                and cls._localized_forecast_payload_valid(forecast, localized)):
+            from .model_translation import ENGINE, valid_receipt
+            reviewed_complete = meta.get("engine") == ENGINE
+            if reviewed_complete:
+                for path, text in ReportAgent._forecast_text_fields(forecast):
+                    value = localized
+                    for step in path:
+                        value = value[step]
+                    label = "/".join(str(step) for step in path)
+                    if not valid_receipt(text, value, str(lang), (meta.get("receipts") or {}).get(label),
+                                         context="forecast display fields"):
+                        reviewed_complete = False
+                        break
+            info = {
+                "requested_lang": lang,
                 "localized": True,
-                "complete": meta.get("complete") is True,
-            })
+                "complete": meta.get("complete") is True and (
+                    (reviewed_complete and not meta.get("unresolved"))
+                    or (not meta.get("engine") and not any(
+                        ReportAgent._forecast_text_is_residual(text, str(lang))
+                        for _path, text in ReportAgent._forecast_text_fields(localized)))),
+            }
             return localized, info
         return forecast, info
 
@@ -15963,6 +16069,15 @@ class ReportManager:
                 result["reasons"].append(
                     "language audit source fingerprint does not match primary"
                 )
+            if audit.get("translator_version") == ReportAgent._TRANSLATOR_VERSION or "model_translation" in audit:
+                from .model_translation import valid_document_receipt
+                try:
+                    with open(cls._get_report_markdown_path(report_id), encoding="utf-8") as source_file:
+                        current_source = source_file.read()
+                    if not valid_document_receipt(current_source, markdown, lang, audit.get("model_translation")):
+                        result["reasons"].append("language semantic review is missing or differs from current bytes")
+                except (OSError, ValueError, TypeError):
+                    result["reasons"].append("language semantic review source unavailable")
             citations_path = cls._get_report_citations_path(report_id, lang)
             try:
                 with open(citations_path, encoding="utf-8") as handle:

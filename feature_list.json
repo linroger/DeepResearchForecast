@@ -298,5 +298,18 @@
       "Exercise stale/tampered generations, old handoffs, disabled behavior, multi-track merges and scenario reuse without provider refetch or actor/world-state privilege expansion."
     ],
     "passes": true
+  },
+  {
+    "id": "fix_full_mandarin_translation",
+    "category": "cross-stage-ui",
+    "description": "Simulation, research dossier and forecast views translate visible prose and structured content predominantly into Mandarin while preserving source-bound facts and reliable retry behavior.",
+    "steps": [
+      "Reproduce the actual saved numeric-token failure, prevent identifier/year fusion and malformed date ranges, and reject changed factual units, signs, currencies, IDs, code and links.",
+      "Translate current and historical simulation projections, personas, feed/replies and structured world content without exposing unrendered private state or dropping long-page tails.",
+      "Translate dossier body/cards/datasets and forecast dashboard/binaries/title/captions, retaining explicit partial and pending states, cancellation and source/run/language identity.",
+      "Exercise persistence, restart, tamper/publication/SDK controls, large-page progress, shared provider admission and structured-only retry without regenerating accepted Markdown.",
+      "Verify frozen service/API and actual SFC consumers, independent red-to-green review and bounded local browser/provider behavior; document remaining limitations and deliver reviewed code."
+    ],
+    "passes": true
   }
 ]

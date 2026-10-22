@@ -1,0 +1,40 @@
+{
+  "report_id": "report_ba65f338f05a",
+  "simulation_id": "sim_3ec25e64209e",
+  "canonical_sha256": "c441c9a98f6c9a6a41ab42ee0432a50fe26bfaf4f1f7ac91d793ebbf75fd4227",
+  "rejected_sha256": "e9bb070f3c1723c50fa0891cba651c50658301b13c769f005f76a9ee6dab462b",
+  "observed_issues": [
+    "translation numeric-token multiset differs from primary"
+  ],
+  "numeric_diff": {
+    "2025": {
+      "source": 42,
+      "variant": 41
+    },
+    "2026": {
+      "source": 120,
+      "variant": 117
+    },
+    "2027": {
+      "source": 157,
+      "variant": 152
+    },
+    "24": {
+      "source": 3,
+      "variant": 4
+    },
+    "89.24": {
+      "source": 3,
+      "variant": 2
+    }
+  },
+  "observed_fusion_examples": [
+    "H12025",
+    "H12026",
+    "Q42026",
+    "Q12027",
+    "Oct2789.24"
+  ],
+  "scope": "Read-only original saved diagnostic; no source or published audit modified.",
+  "followup": "Prevent placeholder fusion on all translation paths; permit only source-proven whitespace boundary recovery and retain strict final fact audit."
+}

@@ -3239,23 +3239,28 @@ def get_world_result(simulation_id: str):
         return jsonify({"success": False, "error": str(exc)}), 400
 
 
-# ───────────────────── 2026-10-21: simulation translation overlay ─────────────────────
-
+# Display-only translation requests are bound to the exact visible text inventory.
 @simulation_bp.route('/<sim_id>/translations/<lang>', methods=['POST'])
 def generate_simulation_translation(sim_id: str, lang: str):
-    """Translate the simulation panel's text (question, scenario names, variable
-    names/rationales/latest causes, per-round digests) into <lang>. Sha-keyed cache
-    under the sim dir; compliance ladder degrades content-filter hits per fragment."""
     lang = (lang or '').strip().lower()
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
         from ..services.artifact_translation import start_translation
-        result = start_translation("simulation", sim_id, lang, force=bool(request.args.get('force')))
-        return jsonify({"success": True, "data": result}), 202
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"模拟翻译失败: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise ValueError("translation body must be an object")
+        force = (request.args.get('force') or '').lower() in {'1', 'true', 'yes'}
+        result = start_translation("simulation", sim_id, lang, force=force,
+            texts=body.get("texts"), context=body.get("context"))
+        return jsonify({"success": True, "data": result}), (202 if result["status"] == "generating" else 200)
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("模拟翻译失败: %s", type(exc).__name__)
+        return jsonify({"success": False, "error": "translation request failed"}), 500
 
 
 @simulation_bp.route('/<sim_id>/translations/<lang>', methods=['GET'])
@@ -3264,8 +3269,16 @@ def get_simulation_translation(sim_id: str, lang: str):
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
+        import json
         from ..services.artifact_translation import translation_status
-        result = translation_status("simulation", sim_id, lang)
+        context = json.loads(request.args['context']) if 'context' in request.args else None
+        result = translation_status("simulation", sim_id, lang,
+            request_digest=request.args.get("request_digest"), context=context)
         return jsonify({"success": True, "data": result})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"success": False, "error": str(e)}), 500
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("模拟翻译读取失败: %s", type(exc).__name__)
+        return jsonify({"success": False, "error": "translation status unavailable"}), 500
