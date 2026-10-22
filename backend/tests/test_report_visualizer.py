@@ -768,7 +768,10 @@ def test_build_all_includes_html_when_plotly(tmp_path):
     hints = {e["placement_hint"] for e in htmls}
     assert {"scenarios", "binary_forecasts", "timeline"} <= hints
     assert "actors" not in hints  # 关系结构图默认不入报告
-    assert "simulation" not in hints
+    # ADR 0003 / S0.2: charts drawn from simulation artifacts carry the
+    # ``simulation`` hint, and nothing else does.
+    sim_ids = {e["id"] for e in htmls if e["placement_hint"] == "simulation"}
+    assert sim_ids == {"worldstate_trajectory"}
     for e in htmls:
         assert e["path"].startswith("charts/") and e["path"].endswith(".html")
         _assert_offline_html(str(tmp_path / e["path"]))
