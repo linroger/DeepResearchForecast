@@ -6835,7 +6835,9 @@ class ReportAgent:
         text = md or ""
 
         # ── Tier-1：确定性改写 ──
-        text, info["labels_rewritten"] = _rl.rewrite_sim_labels(text, lang)
+        # ADR 0003: legacy simulation labels are counted, never relabelled; the
+        # paragraphs they sit in reach Tier-2/3 below and are removed.
+        info["legacy_labels_flagged"] = _rl.count_legacy_sim_labels(text)
         text, info["edge_dumps_rewritten"], info["dangling_edge_intros"] = (
             _rl.rewrite_edge_dumps(text, lang))
         text, info["tool_tokens_stripped"] = _rl.strip_tool_tokens(text)

@@ -46,16 +46,21 @@ def test_lint_dangling_edge_intro_stripped():
     assert "According to" not in out
 
 
-def test_lint_legacy_sim_labels_rewritten_en_and_zh():
+def test_lint_legacy_sim_labels_counted_and_removed_not_relabelled():
+    # ADR 0003: a legacy simulation-agent label marks a simulated statement.
+    # It is counted and the sentence is removed; it is never rewritten into
+    # "Evidence-based assessment — X:" / 「证据分析——「X」：」.
     md = (
         "> Simulation Agent「Hyperscalers」Deduction/Reasoning: \"capex holds through 2027\"\n\n"
         "> 模拟代理人「台积电」推演：先进制程供不应求。\n"
     )
-    out, n = rl.rewrite_sim_labels(md, "English")
-    assert n == 2
+    assert rl.count_legacy_sim_labels(md) == 2
+    out, rep = rl.lint_report(md, "English", mode="final")
+    assert rep["legacy_sim_labels"] == 2
     assert "Simulation Agent" not in out and "模拟代理人" not in out
-    assert "Evidence-based assessment — Hyperscalers:" in out
-    assert "证据分析——「台积电」：" in out
+    assert "Evidence-based assessment" not in out and "证据分析" not in out
+    assert "capex holds through 2027" not in out and "先进制程供不应求" not in out
+    assert rep["leakage_flags"] == 0
 
 
 def test_lint_dangling_attribution_line_removed():
@@ -242,7 +247,10 @@ def test_final_lint_repairs_legacy_sentence_joins_without_touching_initialisms()
     assert rep["sentence_spaces_repaired"] == 1
 
 
-def test_final_lint_rewrites_real_legacy_chinese_simulation_forms():
+def test_final_lint_removes_real_legacy_chinese_simulation_forms():
+    # ADR 0003: every sentence whose claim rests on the simulation is removed
+    # whole; only the sourced real-world sentence survives. Nothing is
+    # relabelled as 证据分析 / 现有证据 / 研究证据.
     md = (
         "需求增长了12%[S1]。"
         "仿真以清晰的细节捕捉到了产能爬坡至每月14万片[S2]。"
@@ -254,15 +262,17 @@ def test_final_lint_rewrites_real_legacy_chinese_simulation_forms():
 
     out, rep = rl.lint_report(md, "Chinese", mode="final")
 
-    for residue in ("仿真", "仿真Agent", "模拟证据", "模拟数据"):
+    assert out == "需求增长了12%[S1]。"
+    for residue in ("仿真", "模拟", "证据分析", "现有证据", "研究证据"):
         assert residue not in out
-    for evidence in ("12%", "14万片", "2028年", "50%", "[S4]", "[S6]"):
-        assert evidence in out
-    assert "证据分析——「SK Hynix」：" in out
+    assert rep["simulation_mechanics"]["sentences_removed"] == 5
+    assert rep["legacy_sim_labels"] == 1
     assert rep["leakage_flags"] == 0
 
 
-def test_final_lint_rewrites_role_qualified_legacy_agent_labels():
+def test_final_lint_removes_role_qualified_legacy_agent_labels():
+    # ADR 0003: role-qualified legacy labels are counted; the simulated
+    # statements they introduce are removed, not relabelled as 证据分析.
     md = (
         "仿真Agent「China」（作为产业政策制定者）演绎/推理："
         "前沿逻辑制程份额将在2030年前增长[S1]。"
@@ -275,10 +285,9 @@ def test_final_lint_rewrites_role_qualified_legacy_agent_labels():
     out, rep = rl.lint_report(md, "Chinese", mode="final")
 
     assert "仿真Agent" not in out and "演绎/推理" not in out
-    assert "证据分析——「China」（作为产业政策制定者）：" in out
-    assert "证据分析——「China」（中方视角）：" in out
-    assert "「Intel Foundry」的证据分析则更为直接：" in out
-    assert "2030年" in out and "[S1]" in out and "[S2]" in out and "[S3]" in out
+    assert "证据分析" not in out
+    assert "[S1]" not in out and "[S2]" not in out and "[S3]" not in out
+    assert out.strip() == ""
     assert rep["legacy_sim_labels"] == 3 and rep["leakage_flags"] == 0
 
 
@@ -317,7 +326,9 @@ def test_final_lint_preserves_agentic_ai_subject_matter():
     assert rep["simulation_mechanics"]["sentences_removed"] == 0
 
 
-def test_final_lint_reframes_outcomes_and_removes_simulation_mechanics():
+def test_final_lint_removes_simulation_claims_and_mechanics():
+    # ADR 0003: "the simulation suggests 62%" is a simulated claim and is
+    # removed whole; it is no longer reframed as "the evidence indicates".
     md = (
         "# Simulation Dynamics\n\n"
         "The simulation suggests a 62% chance of approval by 2028 [S2].\n\n"
@@ -327,11 +338,11 @@ def test_final_lint_reframes_outcomes_and_removes_simulation_mechanics():
     )
     out, rep = rl.lint_report(md, "English", mode="final")
     assert "Forecast Drivers and Outcome Pathways" in out
-    assert "The evidence indicates a 62% chance" in out
-    assert "[S2]" in out
+    assert "evidence indicates" not in out.lower()
+    assert "62%" not in out and "[S2]" not in out
     assert "Round 3" not in out and "CREATE_POST" not in out and "54 actions" not in out
     assert out.count("|") == md.count("|")
-    assert rep["simulation_mechanics"]["sentences_removed"] >= 1
+    assert rep["simulation_mechanics"]["sentences_removed"] >= 2
     assert rep["simulation_mechanics"]["table_cells_redacted"] >= 1
     assert rep["leakage_flags"] == 0
     assert rep["outcome_focus_ok"] is True
@@ -371,12 +382,15 @@ def test_final_lint_removes_internal_telemetry_but_keeps_following_visuals():
     assert rep["internal_telemetry_appendices"] == 1
 
 
-def test_final_lint_reframes_faction_cluster_method_language():
-    out, _ = rl.lint_report(
+def test_final_lint_removes_faction_cluster_method_language():
+    # ADR 0003: a sentence resting on the faction/cluster clustering is
+    # simulation content; it is removed, not reframed as "cross-actor evidence".
+    out, rep = rl.lint_report(
         "The faction/cluster analysis shows a tightly coupled semiconductor coalition.",
         "English", mode="final")
-    assert "faction/cluster analysis" not in out.lower()
-    assert "cross-actor evidence" in out.lower()
+    assert out.strip() == ""
+    assert "cross-actor evidence" not in out.lower()
+    assert rep["simulation_mechanics"]["sentences_removed"] == 1
 
 
 def test_final_lint_removes_internal_graph_process_prose_and_relation_dumps():
@@ -400,7 +414,11 @@ def test_final_lint_removes_internal_graph_process_prose_and_relation_dumps():
 
     out, rep = rl.lint_report(md, "English", mode="final")
 
-    assert "China Outcome Analysis" in out
+    # ADR 0003: the sub-simulation heading is a mechanics heading and gets the
+    # outcome-first title; it is not rebranded "China Outcome Analysis", and the
+    # sentence resting on the sub-simulation is removed rather than reframed.
+    assert "China Outcome Analysis" not in out
+    assert "Forecast Drivers and Outcome Pathways" in out
     assert "sub-simulation" not in out.lower()
     assert "research graph" not in out.lower()
     assert "CAUSES" not in out and "PARTNERS_WITH" not in out
@@ -465,7 +483,10 @@ def test_lint_report_end_to_end_fence_aware():
     assert "A --[SUPPLIES]--> B" in out          # 围栏内原样保留
     assert "(According to：BIS" not in out
     assert "[citation:" not in out
-    assert "Evidence-based assessment — X:" in out
+    # ADR 0003: the legacy label is counted and its quote removed, never
+    # relabelled as an evidence-based assessment.
+    assert "Simulation Agent" not in out and "Evidence-based assessment" not in out
+    assert '"kept"' not in out
     assert rep["edge_dumps"] == 1 and rep["citation_residue"] == 1
     assert rep["legacy_sim_labels"] == 1
 

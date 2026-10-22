@@ -91,9 +91,15 @@ def test_real_run_simulated_world_and_possessive_heading_are_reframed():
     assert "simulated world" not in out.lower()
     assert "simulation's" not in out.lower()
     assert "322 active agents" not in out
-    assert "the cross-actor evidence treats" in out
-    assert "the actor-power evidence" in out.lower()
-    assert "The report defines 10 binary forecasts as" in out
+    # ADR 0003: sentences resting on the simulated world are removed whole,
+    # never relabelled as "cross-actor evidence" / "actor-power evidence".
+    assert "evidence treats" not in out and "actor-power" not in out.lower()
+    assert "The report defines" not in out
+    assert "Modern Mercantilism" not in out  # that clause lived in a simulated-world sentence
+    # Both sentences under the leaky heading were simulated-world claims, so the
+    # section emptied and the heading went with it: nothing is left to relabel.
+    assert out.strip() == ""
+    assert rep["simulation_mechanics"]["sentences_removed"] == 2
     assert rep["leakage_flags"] == 0
     assert rep["outcome_focus_ok"] is True
 
@@ -137,5 +143,8 @@ def test_real_run_named_proxy_and_simulated_evidence_are_reframed():
     assert "NVIDIA agent" not in out
     assert "simulated data" not in out and "simulated evidence" not in out
     assert "rounds" not in out and "clusters of agents" not in out
-    assert "available evidence" in out
+    # ADR 0003: no relabelling as "available evidence" / "NVIDIA's public position".
+    assert "available evidence" not in out and "public position" not in out
+    assert "That sentence is the modal claim." in out
+    assert rep["simulation_mechanics"]["sentences_removed"] == 3
     assert rep["leakage_flags"] == 0
