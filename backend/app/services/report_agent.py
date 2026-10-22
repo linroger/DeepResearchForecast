@@ -979,7 +979,7 @@ SECTION_SYSTEM_PROMPT_TEMPLATE = """\
 绝不是可引用的事实或报告叙事对象。报告的主语永远是现实世界的行为者与结果：揭示在
 设定条件下未来最可能发生什么、为什么，各类行为者（企业、监管方、人群等）将如何反应
 和行动，以及值得关注的未来趋势、风险和机会。❌ 不要写成对现状的泛泛分析，也不要叙述
-内部推演过程——读者不应看到任何内部方法学机制。
+内部推演过程——模拟产出与方法学机制一律不得写入正文。
 【硬性禁令】章节标题与正文不得出现以下方法学词汇：
 模拟、Agent/智能体、轮次、动作次数、发帖/评论/点赞/关注、共识形成、派系聚类、
 因果图、图谱、simulation、agents、rounds、action counts、harness、agent clusters、
@@ -987,8 +987,9 @@ simulated environment、world-state outputs、simulation-derived
 
 【证据归属与反捏造纪律（最高优先级）】
 1. 所有事实内容必须来自工具检索到的研究材料，禁止使用你自己的知识来编写报告内容
-2. 内部计算、角色输出和情景分析一律综合为作者的预测推理；不得引用、署名、拟人化，
-   不得出现「专家小组」「scenario panel」「模型中的某机构认为」等方法学归因；
+2. 内部计算与模拟角色输出不得写入正文：不得引用、署名、拟人化，也不得转写为作者的
+   分析立场或「情景分析」；不得出现「专家小组」「scenario panel」「模型中的某机构认为」等方法学归因；
+   现实世界的判断只能来自研究材料并带 [S#]；
    ❌ 严禁『模拟代理人』『Simulation Agent』『Deduction/Reasoning』式直接引语，
    严禁把内部观点伪装成真实人物、采访、分析师或媒体的话
 3. 真实世界的事实、数据和外部观点只能来自研究材料，并在**具体支持的句子或表格行末**
@@ -4250,9 +4251,9 @@ class ReportAgent:
             "非观察证据）】\n"
             "使用规则：以下产出可用于机制分析（权力集中度、联盟结构、脆弱节点、议程设置力"
             "的假设生成），但：\n"
-            "✅ 正文引用其任何判断时必须显式标注来源为内部情景推演（如「内部情景推演显示…」），"
-            "不得表述为观察到的现实世界事实；\n"
-            "✅ 现实世界的定量声明只能来自研究材料并带 [S#] 引用；\n"
+            "❌ 本材料不得写入正文：不得引用，不得转写为「情景分析」「分析立场」「专家视角」或"
+            "观察到的现实世界事实；\n"
+            "✅ 现实世界的定量声明与判断只能来自研究材料并带 [S#] 引用；\n"
             "❌ 严禁依据本材料给出、调整或佐证任何结果概率数字——概率由预测骨架独立裁定，"
             "本材料不进入概率生成路径（forecast_effect=diagnostic_only）；\n"
             "❌ 严禁在正文引用动作次数、轮次、动作类型、发帖/点赞/评论等机制细节。"
@@ -6825,12 +6826,13 @@ class ReportAgent:
         """WAVE9 模拟泄漏修复：报告必须是关于现实世界的预测，推演机制绝不能成为叙述对象。
 
         三级流水（全部有界、degrade-safe）：
-          Tier-1 确定性改写：旧模拟标签 → 专家小组转述规范；原始边转储 → 自然语言关系；
-                 [simulation_outcomes] 等工具记号删除；平台行为引文（发帖/点赞）删除；
-                 泄漏章节标题（模拟/Agent/Simulation…）确定性改名。
-          Tier-2 每个仍命中泄漏模式的散文段落做**一次**有界 LLM 重写（至多
-                 REPORT_SIMLEAK_MAX_LLM_PARAGRAPHS 段）；重写必须保留原段全部数字 token
-                 逐字节不变，否则弃用重写。
+          Tier-1 确定性改写：旧模拟标签只计数（它们是泄漏模式，由 Tier-3 删除所在句）；
+                 原始边转储 → 自然语言关系；[simulation_outcomes] 等工具记号删除；
+                 平台行为引文（发帖/点赞）删除；泄漏章节标题（模拟/Agent/Simulation…）确定性改名。
+          Tier-2 每个仍命中泄漏模式的散文段落做**一次**有界 LLM 编辑（至多
+                 REPORT_SIMLEAK_MAX_LLM_PARAGRAPHS 段）：删除模拟来源的句子或仅保留其已带 [S#]
+                 的主张；非泄漏句的数字逐字节保留、泄漏句要么整句消失要么数字全留、不得新增数字、
+                 段落不得变长（ADR 0003），否则弃用重写。
           Tier-3 重写后重扫，仍命中的句子直接删除（与引文接地修复同样的诚实动作）。
 
         返回 (新 markdown, 统计 dict)。无 LLM（离线/测试）时跳过 Tier-2，直接句子级删除。"""
@@ -6990,11 +6992,12 @@ class ReportAgent:
 
     def _check_binary_sim_sensitivity(self, report_id: str,
                                       forecast: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """XRUN-1(c): 廉价的跨报告同一性门。同一图谱、不同 simulation_id 的上一份报告若
-        产出了逐项 |Δ|≤0.01 的相同二元概率向量，说明 Part-1 概率是研究先验的确定性复读、
-        模拟阶段贡献为零（74dc vs aa77 逐字节相同即为实锤）。命中返回 quality 记录字典，
-        否则 None。只读比对、任何失败返回 None（观测性，绝不影响主流程）。
-        注：在 XRUN-1(b) 的信号注入生效前，本门可能对既有报告合法命中。"""
+        """Observational cross-report identity check (origin XRUN-1(c)).  Same graph,
+        different simulation_id, binary probabilities identical to |Δ|≤0.01 → records a
+        quality note.  Under ADR 0003 / diagnostic_only this identity is the INTENDED
+        outcome (the simulation never moves probabilities), so the note is telemetry,
+        not a defect flag; it stays for the fixture-only legacy_prompt policy.  Read-only;
+        any failure returns None."""
         probs = [b.get("probability") for b in (forecast.get("binary_forecasts") or [])
                  if isinstance(b, dict)]
         if len(probs) < 5:  # 向量太短时同一性没有区分力
@@ -11114,6 +11117,8 @@ class ReportAgent:
         if dangling:
             issues.append(f"最终 Markdown 含 {len(dangling)} 个悬空引用记号")
         lint = audit.get("lint") or {}
+        if lint.get("legacy_sim_labels"):
+            issues.append(f"最终 Markdown 含 {lint['legacy_sim_labels']} 处旧版模拟代理人标签")
         if lint.get("leakage_flags"):
             issues.append(
                 f"最终 Markdown 含 {lint['leakage_flags']} 处内部流程/模拟机制泄漏"
@@ -11610,8 +11615,9 @@ class ReportAgent:
         "scenarios": ("scenario", "情景", "情境", "剧本", "路径"),
         "binary_forecasts": ("forecast", "probability", "market", "prediction",
                              "预测", "概率", "市场", "赔率"),
-        "simulation": ("simulation", "trajectory", "model", "outcome", "world",
-                       "模拟", "推演", "轨迹", "世界态", "结果分布", "建模"),
+        # ADR 0003: simulated charts file only under headings that name the simulation
+        # itself; generic words (trajectory/model/outcome/world) matched evidence sections.
+        "simulation": ("simulation", "模拟", "推演", "世界态", "结果分布"),
         "comparison": ("comparison", "baseline", "counterfactual", "contrast",
                        "对比", "基线", "反事实", "对照", "情景差"),
         "calibration": ("calibration", "reliability", "校准", "可靠", "信度"),
@@ -12877,8 +12883,8 @@ class ReportAgent:
         "insight_forge": "深度洞察分析，自动分解问题并多维度检索事实和关系",
         "panorama_search": "广角全景搜索，了解事件全貌、时间线和演变过程",
         "quick_search": "快速验证某个具体信息点",
-        "interview_agents": "内部专家视角素材：情景推演小组各角色的第一人称观点（须转写为分析视角后使用，禁止呈现为真实采访）",
-        "simulation_outcomes": "推演量化信号（内部方法学材料，须转写为现实世界结论后使用，正文不得引用动作/轮次数字）",
+        "interview_agents": "模拟角色的第一人称发言（模拟产物，不得写入正文；仅供你理解机制与压力测试假设）",
+        "simulation_outcomes": "推演量化信号（模拟产物，不得写入正文，不得转写为现实世界结论；正文不得引用动作/轮次数字）",
         "coalition_map": "派系/联盟结构（对相同对象互动的 Agent 聚类，确定性）",
         "opinion_shift": "单个 Agent 的逐轮行为轨迹（立场/参与度演变）",
         "trace_cascade": "图谱多跳传导/级联追踪（哪个节点一动就翻盘）",
@@ -14673,8 +14679,9 @@ class ReportAgent:
                             pass
                     section_content = SECTION_FAILURE_PLACEHOLDER
 
-                # EXECPLAN2 I-3-4: 若为情景对比章节且开关开启，把确定性结构化对比表
-                # 前置到本章正文，使 LLM 围绕权威差值叙述（不复算/不反转方向）。
+                # EXECPLAN2 I-3-4 / ADR 0003: 若为情景对比章节且开关开启，把确定性对比表
+                # 前置到本章正文，使 LLM 围绕模拟份额差值叙述并标注其情景模拟来源
+                # （不复算/不反转方向，不据此给出或调整概率）。
                 if (
                     self.base_simulation_id
                     and getattr(Config, "REPORT_COMPARISON_TABLE", False)

@@ -98,10 +98,13 @@ OUTCOME_SHARES_HEADER_LEGACY_ZH: Final = "预测结果分布 P(outcome)"
 
 # ── Honest quotation labels ──────────────────────────────────────────────────
 # A blockquote carrying one of these words is recognised as simulation output
-# by the quote-grounding audit (it is not a fabricated *real* quotation).  It is
-# still simulation content and is removed from report prose by the leakage
-# lint; the label only decides which defect it is counted as.  Panel/viewpoint
-# wording is deliberately absent (see module docstring).
+# by the quote-grounding audit (it is not a fabricated *real* quotation), so the
+# audit counts it as simulated rather than as an ungrounded real quote.  Until
+# slice S3 fences the bridge section, such a quote is NOT removed by the
+# leakage lint (情景模拟 / "scenario simulation" are not leakage patterns, by
+# design, so the what-if label survives); S3 makes any simulation vocabulary
+# outside the fence a hard issue.  Panel/viewpoint wording is deliberately
+# absent (see module docstring).
 SIM_QUOTE_LABELS: Final = (
     "模拟", "simulation", "代理人", "推演", "sim-agent", "simulated agent",
     SIM_LABEL_EN, SIM_LABEL_ZH,
@@ -109,14 +112,33 @@ SIM_QUOTE_LABELS: Final = (
 
 # ── Executive brief disclosure line ──────────────────────────────────────────
 # ``{health}`` is run_summary's simulation_health; ``{detail}`` is the organic
-# action count fragment (may be empty).
-BRIEF_SIM_LINE_EN: Final = (
-    "scenario simulation ran ({health}{detail}); informed mechanism analysis only, "
-    "never probabilities (policy: diagnostic_only)"
-)
-BRIEF_SIM_LINE_ZH: Final = (
-    "情景模拟已运行（{health}{detail}）；仅用于机制分析，从不进入概率（策略：diagnostic_only）"
-)
+# action count fragment (may be empty); ``{role}`` is the policy sentence chosen
+# by ``brief_sim_role`` from the run's pinned SIMULATION_FORECAST_EFFECT.  The
+# line never asserts a policy it did not read.
+BRIEF_SIM_LINE_EN: Final = "scenario simulation ran ({health}{detail}); {role}"
+BRIEF_SIM_LINE_ZH: Final = "情景模拟已运行（{health}{detail}）；{role}"
+BRIEF_SIM_ROLE_EN: Final = {
+    "diagnostic_only": "informed mechanism analysis only, never probabilities (policy: diagnostic_only)",
+    "no_update": "its output was withheld from this report (policy: no_update)",
+    "legacy_prompt": "fixture-only policy legacy_prompt: simulation signals entered probability extraction",
+    "unknown": "its forecast policy is not recorded for this run",
+}
+BRIEF_SIM_ROLE_ZH: Final = {
+    "diagnostic_only": "仅用于机制分析，从不进入概率（策略：diagnostic_only）",
+    "no_update": "其产出未进入本报告（策略：no_update）",
+    "legacy_prompt": "fixture 专用策略 legacy_prompt：模拟信号进入了二元概率抽取",
+    "unknown": "本次运行未记录其预测策略",
+}
+
+
+def brief_sim_role(policy: object, lang: str = "en") -> str:
+    """The brief's policy sentence for a pinned SIMULATION_FORECAST_EFFECT value;
+    anything unrecognised (including None) is reported as not recorded."""
+    table = BRIEF_SIM_ROLE_ZH if str(lang or "").lower().startswith("zh") else BRIEF_SIM_ROLE_EN
+    key = str(policy or "").strip().lower()
+    if key == "validated_update":  # config collapses it to diagnostic_only
+        key = "diagnostic_only"
+    return table.get(key, table["unknown"])
 
 
 def outcome_shares_header_re() -> "re.Pattern[str]":

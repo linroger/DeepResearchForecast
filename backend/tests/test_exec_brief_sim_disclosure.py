@@ -10,7 +10,8 @@ from app.services import exec_brief as eb
 from app.services import sim_provenance as sp
 
 
-def _report_dir_with_health(tmp_path, health: str = "ok", organic: int | None = 412):
+def _report_dir_with_health(tmp_path, health: str = "ok", organic: int | None = 412,
+                            policy: str | None = "diagnostic_only"):
     upload = tmp_path / "uploads"
     report_dir = upload / "reports" / "report_t7"
     report_dir.mkdir(parents=True)
@@ -18,16 +19,18 @@ def _report_dir_with_health(tmp_path, health: str = "ok", organic: int | None = 
         json.dumps({"totals": {"run_id": "pipe_t7"}}), encoding="utf-8")
     pipe = upload / "pipelines" / "pipe_t7"
     pipe.mkdir(parents=True)
-    (pipe / "pipeline_state.json").write_text(json.dumps({"options": {"pipeline_health": {
-        "status": "ok",
-        "stages": {"run": {"health": health, "organic_actions": organic}},
-    }}}), encoding="utf-8")
+    options = {"pipeline_health": {"status": "ok",
+                                   "stages": {"run": {"health": health, "organic_actions": organic}}}}
+    if policy is not None:
+        options["safety_policy_v1"] = {"simulation_forecast_effect": policy}
+    (pipe / "pipeline_state.json").write_text(json.dumps({"options": options}), encoding="utf-8")
     return str(report_dir)
 
 
 def test_honesty_note_discloses_simulation_role_en(tmp_path):
     note = eb._build_honesty_note(None, _report_dir_with_health(tmp_path), eb._LABELS["en"])
-    expected = sp.BRIEF_SIM_LINE_EN.format(health="ok", detail=", 412 organic actions")
+    expected = sp.BRIEF_SIM_LINE_EN.format(health="ok", detail=", 412 organic actions",
+                                           role=sp.brief_sim_role("diagnostic_only", "en"))
     assert expected in note
     assert "never probabilities" in note and "diagnostic_only" in note
     assert "simulation run ok" not in note  # the old bare health fragment is gone
@@ -35,15 +38,29 @@ def test_honesty_note_discloses_simulation_role_en(tmp_path):
 
 def test_honesty_note_discloses_simulation_role_zh(tmp_path):
     note = eb._build_honesty_note(None, _report_dir_with_health(tmp_path, "hollow", 0), eb._LABELS["zh"])
-    expected = sp.BRIEF_SIM_LINE_ZH.format(health="hollow", detail="，0 条有机行为")
+    expected = sp.BRIEF_SIM_LINE_ZH.format(health="hollow", detail="，0 条有机行为",
+                                           role=sp.brief_sim_role("diagnostic_only", "zh"))
     assert expected in note
     assert "从不进入概率" in note
+
+
+def test_honesty_note_follows_the_pinned_policy(tmp_path):
+    # The brief never asserts a policy it did not read (S0 review).
+    note = eb._build_honesty_note(None, _report_dir_with_health(tmp_path, policy="no_update"), eb._LABELS["en"])
+    assert "withheld from this report (policy: no_update)" in note and "never probabilities" not in note
+    note = eb._build_honesty_note(None, _report_dir_with_health(tmp_path.joinpath("b"), policy="legacy_prompt"),
+                                  eb._LABELS["en"])
+    assert "legacy_prompt" in note and "entered probability extraction" in note
+    note = eb._build_honesty_note(None, _report_dir_with_health(tmp_path.joinpath("c"), policy=None),
+                                  eb._LABELS["en"])
+    assert "not recorded" in note and "diagnostic_only" not in note
 
 
 def test_honesty_note_omits_detail_when_no_organic_count(tmp_path):
     report_dir = _report_dir_with_health(tmp_path, "ok", organic=None)
     note = eb._build_honesty_note(None, report_dir, eb._LABELS["en"])
-    assert sp.BRIEF_SIM_LINE_EN.format(health="ok", detail="") in note
+    assert sp.BRIEF_SIM_LINE_EN.format(health="ok", detail="",
+                                       role=sp.brief_sim_role("diagnostic_only")) in note
 
 
 def _write_manifest(report_dir, entries, schema_v2=True):

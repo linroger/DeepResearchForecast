@@ -353,9 +353,11 @@ def test_signal_pack_suppressed_under_no_update(monkeypatch):
 
 
 def test_signal_pack_header_requires_provenance_and_forbids_probability(monkeypatch):
-    """1D red test: the pack header must require explicit simulation provenance
-    and forbid probability authorship — the old header instructed transcribing
-    simulation output into unlabeled real-world judgments."""
+    """1D red test, updated by ADR 0003: the pack header must label the material as
+    an elicited model projection, forbid probability authorship, and forbid the
+    material from entering the body at all. The WP1 wording ("must attribute to
+    内部情景推演") is gone too: attribution in the body is exactly what the lint
+    used to rewrite into evidence wording."""
     import inspect
 
     from app.services import report_agent as ra
@@ -363,9 +365,10 @@ def test_signal_pack_header_requires_provenance_and_forbids_probability(monkeypa
     src = inspect.getsource(ra.ReportAgent._build_signal_pack)
     assert "elicited model projection" in src
     assert "严禁依据本材料给出、调整或佐证任何结果概率数字" in src
-    assert "显式标注来源为内部情景推演" in src
-    # the laundering instruction is gone
+    assert "本材料不得写入正文" in src
+    # neither laundering instruction survives
     assert "绝不进入正文表述" not in src
+    assert "显式标注来源为内部情景推演" not in src
 
 
 # ================================================== 1E golden-ledger isolation

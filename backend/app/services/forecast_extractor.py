@@ -4455,7 +4455,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     RPT-6: ``themes``（可选）取代硬编码的 mercantilism|ai|intersection 契约；未给出时
     提示词改用主题无关措辞、主题串自由。RPT-4（FORECAST_BINARY_CONTRARIAN，默认开）：
     要求近半数陈述以「证据支持概率 <0.5」的反共识方向表述，首轮 spread 过低/全部 >0.5
-    时追加一次有界低概率重述补足。XRUN-1(b)（FORECAST_SIM_SENSITIVITY，默认开）：
+    时追加一次有界低概率重述补足。FORECAST_SIM_SENSITIVITY（默认关，ADR 0003；仅在 fixture 专用的 legacy_prompt 策略下生效）：
     注入模拟量化信号包并要求每个概率说明其相对 base_rate_anchor 的位移与来源。
     预测市场（PREDICTION_MARKETS_ENABLED，默认开）：``market_pack``（渲染好的市场表）
     注入提示词要求对照市场隐含概率；``markets``（规整化快照）用于回填/校验 market_anchor。
@@ -4487,7 +4487,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                       or "diagnostic_only").strip().lower()
     pinned = [q for q in (pinned_questions or []) if isinstance(q, dict) and q.get("golden_id")]
     sim_sensitive = (_sim_effect == "legacy_prompt"
-                     and bool(_cfg("FORECAST_SIM_SENSITIVITY", True))
+                     and bool(_cfg("FORECAST_SIM_SENSITIVITY", False))
                      and bool((signal_pack or "").strip()))
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))

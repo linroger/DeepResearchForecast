@@ -74,11 +74,16 @@ def test_quote_labels_carry_no_laundering_wording():
 
 
 def test_banner_and_brief_line_deny_evidence_and_probability_status():
-    for text in (sp.SIM_BANNER_EN.lower(), sp.BRIEF_SIM_LINE_EN.lower()):
+    for text in (sp.SIM_BANNER_EN.lower(), sp.brief_sim_role("diagnostic_only").lower()):
         assert ("not " in text or "never " in text) and "probabilit" in text
     assert "非观察事实" in sp.SIM_BANNER_ZH and "非校准概率" in sp.SIM_BANNER_ZH
-    assert "{health}" in sp.BRIEF_SIM_LINE_EN and "{health}" in sp.BRIEF_SIM_LINE_ZH
-    assert "{detail}" in sp.BRIEF_SIM_LINE_EN and "{detail}" in sp.BRIEF_SIM_LINE_ZH
+    for tpl in (sp.BRIEF_SIM_LINE_EN, sp.BRIEF_SIM_LINE_ZH):
+        assert "{health}" in tpl and "{detail}" in tpl and "{role}" in tpl
+    # The policy sentence follows the pinned policy; unknown is reported, never assumed.
+    assert "no_update" in sp.brief_sim_role("no_update") and "legacy_prompt" in sp.brief_sim_role("legacy_prompt")
+    assert sp.brief_sim_role(None) == sp.BRIEF_SIM_ROLE_EN["unknown"]
+    assert sp.brief_sim_role("validated_update") == sp.BRIEF_SIM_ROLE_EN["diagnostic_only"]
+    assert set(sp.BRIEF_SIM_ROLE_EN) == set(sp.BRIEF_SIM_ROLE_ZH)
     assert sp.BRIDGE_START.startswith("<!--") and sp.BRIDGE_END.startswith("<!--")
     assert sp.OUTCOME_SHARES_HEADER_ZH != sp.OUTCOME_SHARES_HEADER_LEGACY_ZH
 
@@ -165,8 +170,10 @@ def test_every_reader_facing_string_survives_the_final_lint():
         sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH,
         sp.WHATIF_TABLE_TITLE_ZH, sp.WHATIF_TABLE_NOTE_ZH.lstrip("> "),
         sp.BRIDGE_TITLE_EN, sp.BRIDGE_TITLE_ZH, sp.SIM_BANNER_EN, sp.SIM_BANNER_ZH,
-        sp.BRIEF_SIM_LINE_EN.format(health="ok", detail=""), sp.BRIEF_SIM_LINE_ZH.format(health="ok", detail=""),
-    ]
+    ] + [sp.BRIEF_SIM_LINE_EN.format(health="ok", detail="", role=sp.brief_sim_role(k, "en"))
+         for k in sp.BRIEF_SIM_ROLE_EN] + [
+        sp.BRIEF_SIM_LINE_ZH.format(health="ok", detail="", role=sp.brief_sim_role(k, "zh"))
+        for k in sp.BRIEF_SIM_ROLE_ZH]
     for text in strings:
         assert rl.leakage_hits(text) == [], text
         for lang in ("English", "Chinese"):
