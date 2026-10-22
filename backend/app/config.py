@@ -652,7 +652,9 @@ class Config:
     REPORT_FILTER_SAFE_LADDER = os.environ.get('REPORT_FILTER_SAFE_LADDER', 'true').strip().lower() == 'true'
     REPORT_CRITIQUE_BEFORE_PROSE = os.environ.get('REPORT_CRITIQUE_BEFORE_PROSE', 'true').strip().lower() == 'true'
     FORECAST_BINARY_CONTRARIAN = os.environ.get('FORECAST_BINARY_CONTRARIAN', 'true').strip().lower() == 'true'
-    FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'true').strip().lower() == 'true'
+    # ADR 0003: off by default. Even when on, the simulation signal pack reaches
+    # binary extraction only under the fixture-only legacy_prompt policy.
+    FORECAST_SIM_SENSITIVITY = os.environ.get('FORECAST_SIM_SENSITIVITY', 'false').strip().lower() == 'true'
     FORECAST_BINARY_THEMES = os.environ.get('FORECAST_BINARY_THEMES', '').strip()  # 空=由 brief/主题自适应
     FORECAST_HORIZON_CHECK = os.environ.get('FORECAST_HORIZON_CHECK', 'true').strip().lower() == 'true'  # RQ-6 需求↔二元预测结算年份一致性标记
     # ITEM 12：多模型二元预测集成。逗号分隔的（副）提供方名清单（如 'openai,deepseek,glm'）；

@@ -1,0 +1,12 @@
+{
+  "initial_snapshot": "/private/tmp/drf-scheduled-merge-20261023-0500-ftont6e2/inventory.json",
+  "checked_files": 70,
+  "shared_file_drift": [],
+  "refs_before_publication": {
+    "main": "0a23a1c3ba08bf21ed9dfa2b0d1b101a3942d392",
+    "legacy/main": "0a23a1c3ba08bf21ed9dfa2b0d1b101a3942d392",
+    "claude/sim-provenance-s0": "aad41e905895cb2f234ece67f579fc1c6f69a4be",
+    "claude/sim-provenance-impl": "579c1acf591b6af9713e3f53b2e524c113a254f5"
+  },
+  "method": "Read-only content rehash; no checkout/reset/stash/add/source edits in shared peer worktrees"
+}

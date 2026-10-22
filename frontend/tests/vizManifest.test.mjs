@@ -115,9 +115,11 @@ test('rejects traversal, encoded traversal, absolute, and backslash paths', () =
 test('localizes builder chart captions only for the Chinese view', () => {
   assert.equal(localizeChartCaption('Scenario Probabilities', 'zh'), '情景概率')
   assert.equal(localizeChartCaption('Event Timeline ', 'zh'), '事件时间线')
+  // Simulated charts carry "Simulated" in the title (ADR 0003); the caption table
+  // mirrors backend CHART_TITLES_ZH exactly (test_report_zh_presentation.py).
   assert.equal(
-    localizeChartCaption('Market-Implied P(yes) History vs Model', 'zh'),
-    '市场隐含 P(是) 历史与模型对比',
+    localizeChartCaption('Simulated outcome-share trajectory', 'zh'),
+    '模拟结果份额轨迹',
   )
   assert.equal(localizeChartCaption('Scenario Probabilities', 'en'), 'Scenario Probabilities')
   assert.equal(localizeChartCaption('Scenario Probabilities', ''), 'Scenario Probabilities')

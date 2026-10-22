@@ -268,7 +268,10 @@ def test_kaleido_missing_attaches_static_timeline_and_actor_pngs(tmp_path, monke
 
 
 @pytest.mark.skipif(not rv.MATPLOTLIB_AVAILABLE, reason="matplotlib not installed")
-def test_worldstate_visual_is_outcome_first_and_placed_with_scenarios(tmp_path, monkeypatch):
+def test_worldstate_visual_is_titled_simulated_and_placed_with_simulation(tmp_path, monkeypatch):
+    # ADR 0003 / S0.2: a chart drawn from simulation artifacts is never titled
+    # "Forecast" and never files under the evidence-based scenario slot.
+    from app.services import sim_provenance as sp
     monkeypatch.setattr(rv, "PLOTLY_AVAILABLE", False)
     items = ReportVisualizer().build_all(
         "loop006-outcome-first",
@@ -279,8 +282,9 @@ def test_worldstate_visual_is_outcome_first_and_placed_with_scenarios(tmp_path, 
         ]}},
     )
     item = {entry["id"]: entry for entry in items}["worldstate_trajectory"]
-    assert item["title"] == "Forecast Outcome-Share Trajectory"
-    assert item["placement_hint"] == "scenarios"
+    assert item["title"] == sp.CHART_OUTCOME_SHARES_EN
+    assert item["title"].lower().startswith("simulated")
+    assert item["placement_hint"] == sp.CHART_PLACEMENT_HINT == "simulation"
 
 
 @pytest.mark.skipif(not rv.PLOTLY_AVAILABLE, reason="plotly not installed")

@@ -21,6 +21,16 @@ import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from . import sim_provenance as _sp
+except ImportError:  # loaded standalone from its file path (tests/test_kaleido_exit.py probe)
+    import importlib.util as _ilu
+    import os as _os
+    _spec = _ilu.spec_from_file_location(
+        "sim_provenance", _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "sim_provenance.py"))
+    _sp = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_sp)
+
 logger = logging.getLogger(__name__)
 
 
@@ -1184,7 +1194,7 @@ _BINARY_MARKET_RULE = (
 # 渲染器改头时此表须同步。
 _SIM_SIGNAL_TAXONOMY: List[Tuple[str, re.Pattern, re.Pattern]] = [
     ("world-state outcome shares",
-     re.compile(r"【预测结果分布\s*P\(outcome\)"),
+     _sp.outcome_shares_header_re(),
      re.compile(r"world[\s_-]*state|outcome\s*shares?|P\(outcome\)|世界态|结果分布|结果份额", re.I)),
     ("salience tiers",
      re.compile(r"议程设置力分层"),
@@ -1263,7 +1273,10 @@ def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> 
 # **实际注入提示词**的世界态块（report_agent._world_state_block 渲染，块标记逐字节同源）里
 # 抽出收敛结果份额与趋稳判定，供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
 # 份额来自渲染文本（整数百分比），故做一次归一并标注为先验（非精确观测），degrade-safe。
-_WS_OUTCOME_HEADER_RE = re.compile(r"【预测结果分布\s*P\(outcome\)")
+# ADR 0003 (S0.6): header regex built from sim_provenance so the renderer
+# (report_agent._world_state_block) and this reader cannot drift apart again;
+# the pre-2026-10 wording is accepted for legacy_prompt fixtures only.
+_WS_OUTCOME_HEADER_RE = _sp.outcome_shares_header_re()
 _WS_OUTCOME_SHARE_RE = re.compile(
     r"^·\s*(?P<name>.+?)\s*[:：]\s*(?P<pct>\d{1,3}(?:\.\d+)?)\s*%\s*$")
 # 世界态块内**份额行之后**的其它小节起始（碰到即停止份额收集，避免把日历航点/诊断行混入）。
@@ -1275,7 +1288,7 @@ def world_state_outcome_from_signal_pack(
 ) -> Optional[Dict[str, Any]]:
     """从 signal_pack 的世界态结果分布块解析决策通道的收敛 P(outcome) 份额（纯离线、确定性）。
 
-    识别 ``【预测结果分布 P(outcome)…】`` 块及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
+    识别 ``【推演结果分布 P(outcome)…】`` 块（及旧版 ``【预测结果分布`` fixture 措辞）及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
     返回 ``{"scenario_shares": {name: frac}, "converged": bool|None,
     "source": "world-state outcome shares"}``；块缺失/无份额行 → ``None``（调用方视同 sim
     无收敛结果，degrade-safe）。``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
@@ -4442,7 +4455,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     RPT-6: ``themes``（可选）取代硬编码的 mercantilism|ai|intersection 契约；未给出时
     提示词改用主题无关措辞、主题串自由。RPT-4（FORECAST_BINARY_CONTRARIAN，默认开）：
     要求近半数陈述以「证据支持概率 <0.5」的反共识方向表述，首轮 spread 过低/全部 >0.5
-    时追加一次有界低概率重述补足。XRUN-1(b)（FORECAST_SIM_SENSITIVITY，默认开）：
+    时追加一次有界低概率重述补足。FORECAST_SIM_SENSITIVITY（默认关，ADR 0003；仅在 fixture 专用的 legacy_prompt 策略下生效）：
     注入模拟量化信号包并要求每个概率说明其相对 base_rate_anchor 的位移与来源。
     预测市场（PREDICTION_MARKETS_ENABLED，默认开）：``market_pack``（渲染好的市场表）
     注入提示词要求对照市场隐含概率；``markets``（规整化快照）用于回填/校验 market_anchor。
@@ -4474,7 +4487,7 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                       or "diagnostic_only").strip().lower()
     pinned = [q for q in (pinned_questions or []) if isinstance(q, dict) and q.get("golden_id")]
     sim_sensitive = (_sim_effect == "legacy_prompt"
-                     and bool(_cfg("FORECAST_SIM_SENSITIVITY", True))
+                     and bool(_cfg("FORECAST_SIM_SENSITIVITY", False))
                      and bool((signal_pack or "").strip()))
     market_aware = (bool(_cfg("PREDICTION_MARKETS_ENABLED", True))
                     and bool((market_pack or "").strip()))

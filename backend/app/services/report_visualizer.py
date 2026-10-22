@@ -59,6 +59,16 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
+try:
+    from . import sim_provenance as _sp
+except ImportError:  # loaded standalone from its file path (tests/test_kaleido_exit.py probe)
+    import importlib.util as _ilu
+    import os as _os
+    _spec = _ilu.spec_from_file_location(
+        "sim_provenance", _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "sim_provenance.py"))
+    _sp = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_sp)
+
 logger = logging.getLogger(__name__)
 
 # Chinese titles for the fixed English manifest titles the builders below emit.
@@ -80,8 +90,8 @@ CHART_TITLES_ZH: Dict[str, str] = {
     "Regional Comparison by Metric Family": "按指标族划分的地区比较",
     "Comparable Forecast Benchmarks": "可比预测基准",
     "Forecast Revisions Across Published Vintages": "历次发布版本的预测修订",
-    "Forecast Outcome-Share Trajectory": "预测结果份额轨迹",
-    "Simulated World Variables (indexed, seed = 100)": "推演世界变量（指数化，种子值 = 100）",
+    _sp.CHART_OUTCOME_SHARES_EN: _sp.CHART_OUTCOME_SHARES_ZH,
+    _sp.CHART_WORLD_VARIABLES_EN: _sp.CHART_WORLD_VARIABLES_ZH,
     "Baseline vs Scenario": "基线与情景对比",
     "Calibration Curve": "校准曲线",
 }
@@ -2322,7 +2332,7 @@ class ReportVisualizer:
             else:
                 ax.set_xlabel("Forecast update step", fontsize=10)
             ax.set_ylabel("Outcome share", fontsize=10)
-            ax.set_title("Forecast Outcome-Share Trajectory", fontsize=12, fontweight="bold")
+            ax.set_title(_sp.CHART_OUTCOME_SHARES_EN, fontsize=12, fontweight="bold")
             ax.set_xlim(min(xs), max(xs))
             ax.set_ylim(0, max(1.0, max(sum(col) for col in zip(*series)) if series else 1.0))
             ax.legend(loc="upper left", fontsize=8, ncol=1, framealpha=0.85,
@@ -3163,7 +3173,7 @@ class ReportVisualizer:
                     text=s["hover"], hovertemplate="%{x}: %{text}<extra>"
                                                    + _html_text(s["name"], max_len=40) + "</extra>",
                 ))
-            _apply_layout(fig, "Simulated World Variables (indexed, seed = 100)", height=460)
+            _apply_layout(fig, _sp.CHART_WORLD_VARIABLES_EN, height=460)
             # categorical x in run order: the as-of seed first, then the periods — independent of
             # which series (a research seed or a variable the arbiter added later) is drawn first
             fig.update_layout(xaxis_title="Simulated period", yaxis_title="Index (seed value = 100)",
@@ -3230,7 +3240,7 @@ class ReportVisualizer:
                     hovertemplate=hover_x + ": %{y:.2f}<extra>"
                                   + _html_text(nm, max_len=40) + "</extra>",
                 ))
-            _apply_layout(fig, "Forecast Outcome-Share Trajectory", height=460)
+            _apply_layout(fig, _sp.CHART_OUTCOME_SHARES_EN, height=460)
             fig.update_layout(xaxis_title=x_title, yaxis_title="Outcome share")
             return self._save_pair(fig, charts_dir, "worldstate_trajectory",
                                    "worldstate_trajectory")
@@ -5166,14 +5176,16 @@ class ReportVisualizer:
                 "reason": "proxy_evidence_weight_not_reader_facing",
             })
             wst = artifacts.get("world_state_trajectory")
+            # Simulated charts carry "Simulated" in the title and the ``simulation``
+            # placement hint (ADR 0003): never the evidence-based scenario slot.
             _attempt("worldstate_trajectory", "world_state_trajectory",
-                     "Forecast Outcome-Share Trajectory", "scenarios",
+                     _sp.CHART_OUTCOME_SHARES_EN, _sp.CHART_PLACEMENT_HINT,
                      bool(wst),
                      lambda: self.build_worldstate_area_html(wst, charts_dir))
             # REFLEXIVE WORLD: simulated world variables indexed to their seed value.
             wsm = artifacts.get("world_state")
             _attempt("world_variables", "world_state",
-                     "Simulated World Variables (indexed, seed = 100)", "scenarios",
+                     _sp.CHART_WORLD_VARIABLES_EN, _sp.CHART_PLACEMENT_HINT,
                      isinstance(wsm, dict) and bool((wsm.get("world") or {}).get("variables")),
                      lambda: self.build_world_variables_html(wsm, charts_dir))
 
@@ -5359,7 +5371,7 @@ class ReportVisualizer:
                           graph_priors=(artifacts.get("graph_priors")
                                         or artifacts.get("graph_priors_structural"))))
         _fallback("worldstate_trajectory", "world_state_trajectory",
-                  "Forecast Outcome-Share Trajectory", "scenarios",
+                  _sp.CHART_OUTCOME_SHARES_EN, _sp.CHART_PLACEMENT_HINT,
                   lambda: self.build_worldstate_area(
                       artifacts.get("world_state_trajectory"), charts_dir))
 

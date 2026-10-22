@@ -11,8 +11,8 @@
   * 原始图谱边转储「（依据：A --[REL]--> B）」→ 自然语言关系括注；孤悬的
     「(According to：」「（依据：」→ 删除；
   * 旧版模拟标签「模拟代理人「X」推演：」/「Simulation Agent「X」Deduction/Reasoning:」
-    → 新专家小组转述规范（情景推演专家视角——「X」： / Analytical perspective — X
-    (scenario panel):）；
+    → 只计数（count_legacy_sim_labels），不再转写；它们是泄漏模式，最终 scrub 删除所在句
+    （ADR 0003：模拟产出绝不改写为「证据分析」或「专家视角」）；
   * 引文被删后孤悬的归因行（以 :/： 结尾、后接标题/普通段落）→ 删除（research 模式带引用的行保留）；
   * [simulation_outcomes] 等原始工具名引用记号 → 删除；
   * 流水线 pass 叙述（[Pass 2 working notes] 等括注）→ 删除（带引用/S<n> 的括注不删）；
@@ -74,7 +74,7 @@ _TOOL_TOKEN_RE = re.compile(
     r"[\[【]\s*(?:simulation_outcomes|coalition_map|scenario_diff|opinion_shift|"
     r"insight_forge|panorama_search|interview_agents|trace_cascade|faction_brief)\s*[\]】]")
 
-# 旧版模拟标签（末尾冒号捕获——引导引文的标签保留冒号，句中内联用法改成从句式转述）
+# 旧版模拟标签（仅用于计数与泄漏识别；ADR 0003 之后不再转写为「证据分析」）
 _SIM_LABEL_EN_RE = re.compile(
     r"(?:模拟)?Simulation Agent\s*[「『\"']?([^」』\"'\n:：]{1,60}?)[」』\"']?\s*"
     r"(?:Deduction(?:\s*/\s*Reasoning)?|Reasoning|推演)((?:\s*[:：])?)", re.I)
@@ -154,9 +154,9 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     # EN
     ("generation_failure_placeholder", re.compile(
         r"Chapter generation failed|章节生成失败|模型反复未能产出合格文本", re.I)),
-    ("simulation_agent_label", re.compile(r"\bSimulation Agent\b")),
+    ("simulation_agent_label", re.compile(r"(?:模拟)?Simulation Agent", re.I)),
     ("deduction_reasoning", re.compile(r"Deduction\s*/\s*Reasoning")),
-    ("the_simulation", re.compile(r"\bthe simulation(?:['’]s)?\b", re.I)),
+    ("the_simulation", re.compile(r"\b(?:the|this|our|a) simulation(?:['’]s)?\b", re.I)),
     ("simulated_world", re.compile(r"\b(?:the|this|a) simulated world\b", re.I)),
     ("internal_harness_narration", re.compile(
         r"\b(?:the\s+)?harness(?:['’]s)?\b|\bagent clusters?\b|"
@@ -200,7 +200,30 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
         r"\bsimulated (?:data|evidence|world)\b", re.I)),
     ("named_proxy_agent", re.compile(
         r"\b(?:NVIDIA|AMD|Intel|TSMC|ASML|OpenAI|Anthropic|Google|Meta|"
-        r"Microsoft|Amazon|Trump|Xi)\s+agent\b", re.I)),
+        r"Microsoft|Amazon|Trump|Xi)\s+agent\b|\bthe hyperscaler agent\b", re.I)),
+    # ADR 0003 (S0.4): phrases the final scrub used to *relabel* as evidence,
+    # forecast or stakeholder analysis.  They are simulation mechanics; the
+    # sentence is removed instead.
+    ("n_agent_compound", re.compile(
+        r"\b\d+-agent (?:faction|bloc|cluster|coalition|mega-coalition|network|convergence)s?\b", re.I)),
+    ("coalition_cluster_label", re.compile(
+        r"\bCoalition\s+\d{1,2}\b(?=[^.\n]{0,80}\b(?:clusters?|factions?|agents?|blocs?)\b)"
+        r"|\b(?:clusters?|factions?|agents?|blocs?)\b[^.\n]{0,80}\bCoalition\s+\d{1,2}\b", re.I)),
+    ("sub_simulation", re.compile(r"\bsub-simulation\b", re.I)),
+    ("faction_clustering", re.compile(
+        r"\bagents? cluster(?:s|ed|ing)? into (?:a single|one) faction\b"
+        r"|\bcluster(?:s|ed|ing)? into (?:a single|one) faction\b(?=[^.\n]{0,60}\bagents?\b)"
+        r"|\bfaction\s*/\s*cluster analysis\b|\bshared interaction targets\b", re.I)),
+    ("simulation_dynamics", re.compile(
+        r"\bsimulation dynamics\b|(?<![\w-])(?<!AI )agent dynamics\b"
+        r"|\b(?:the|this|our) (?:multi-agent|agent-based|agentic) simulation"
+        r"(?!\s+(?:software|market|tools?|vendors?|platforms?|industry|companies|segment|sector))\b", re.I)),
+    ("agent_for", re.compile(r"\b(?:has|have|had) an agent for\b", re.I)),
+    # Labels that dressed simulated speech as an expert view (ADR 0003 removed them
+    # from the quote whitelist; the lint removes the sentences they introduce).
+    ("laundering_labels", re.compile(
+        r"情景推演专家视角|(?:模拟|推演)[^。！？\n]{0,20}专家小组|专家小组[^。！？\n]{0,20}(?:模拟|推演)"
+        r"|\bscenario panel\b|\banalytical perspective\s*[—:–-]", re.I)),
     ("action_type_tokens", re.compile(
         r"\b(?:CREATE_POST|CREATE_COMMENT|LIKE_POST|LIKE_COMMENT|REPOST|QUOTE_POST|UNFOLLOW)\b")),
     ("agent_mechanics_en", re.compile(
@@ -225,6 +248,17 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     # ZH
     ("sim_agent_zh", re.compile(
         r"模拟代理人|模拟推演|模拟世界|本次模拟|模拟中|模拟的")),
+    ("legacy_sim_label_zh", re.compile(
+        r"仿真\s*Agent|(?:Agent|」|』)\s*(?:（[^）\n]{0,80}）)?\s*演绎\s*/\s*推理|模拟\s*Deduction")),
+    # ADR 0003 (S0.4): Chinese forms the scrub used to relabel as 现有证据 /
+    # 研究证据 / 预测情景.  Domain terms (工业仿真软件, 碰撞仿真, 模拟芯片) stay
+    # untouched: every alternative needs a methodology word next to 模拟/仿真.
+    ("sim_evidence_zh", re.compile(
+        r"(?:本次|该次|上述)模拟数据|模拟数据(?:显示|表明|揭示|说明)|模拟证据|模拟图谱"
+        r"|仿真图(?![像形片纸表])|仿真以(?![及外来前后上下])"
+        r"|模拟动力学|模拟动态(?!范围)|智能体动力学"
+        r"|(?:本次|该次|上述)模拟(?:显示|表明|揭示|说明)|模拟(?:结果|推演)(?:显示|表明|揭示|说明)"
+        r"|基于(?:本次|该次|上述)模拟|基于模拟(?:结果|推演)|模拟情景中")),
     # 轮次/逐轮 are also real-world words (融资轮次 funding rounds, 谈判轮次): like
     # the English round_n / across-rounds patterns, only a numbered round, "across
     # rounds", or a sentence that ties rounds to the simulation is mechanics.
@@ -356,53 +390,27 @@ def rewrite_edge_dumps(md: str, lang: str = "English") -> Tuple[str, int, int]:
     return "\n".join(lines), converted, dangling
 
 
-def rewrite_sim_labels(md: str, lang: str = "English") -> Tuple[str, int]:
-    """旧版模拟代理人标签 → 新专家小组转述规范。EN/ZH 标签各自映射到对应语言的新规范。
+def count_legacy_sim_labels(md: str) -> int:
+    """Count legacy simulation-agent labels (``Simulation Agent「X」Deduction``,
+    ``模拟代理人「X」推演``, ``仿真Agent「X」演绎/推理``…).
 
-    标签带冒号（引导引文）→ 新标签保留冒号；句中内联用法（无冒号）→ 从句式转述，
-    不生造「…(scenario panel):pushes back」型粘连。"""
+    ADR 0003: these labels mark a *simulated* statement.  They used to be
+    rewritten into "Evidence-based assessment — X:" / 「证据分析——「X」：」, which
+    presented simulation output as evidence (CODEX_FOGLAMP §4.15 laundering).
+    Nothing rewrites them any more: the leakage lint recognises them and the
+    final scrub removes the sentence.  This counter only reports how many were
+    present so the lint report and the repair telemetry stay informative.
+    Fenced blocks are skipped."""
     n = 0
-
-    def _en_repl(m: re.Match) -> str:
-        name = m.group(1).strip()
-        if m.group(2):
-            return f"Evidence-based assessment — {name}:"
-        return f"the evidence-based assessment for {name}"
-
-    def _zh_repl(m: re.Match) -> str:
-        name = m.group(1).strip()
-        if m.group(2):
-            return f"证据分析——「{name}」："
-        return f"关于「{name}」的证据分析"
-
-    def _zh_alt_repl(m: re.Match) -> str:
-        name = m.group("name").strip()
-        role = str(m.group("role") or "").strip()
-        subject = f"「{name}」{role}"
-        if m.group("colon"):
-            return f"证据分析——{subject}："
-        return f"关于{subject}的证据分析"
-
-    def _zh_statement_repl(m: re.Match) -> str:
-        name = m.group("name").strip()
-        role = str(m.group("role") or "").strip()
-        return f"「{name}」{role}的证据分析"
-
     lines = (md or "").split("\n")
     mask = _fence_mask(lines)
     for i, ln in enumerate(lines):
         if mask[i]:
             continue
-        new_ln, k1 = _SIM_LABEL_EN_RE.subn(_en_repl, ln)
-        new_ln, k2 = _SIM_LABEL_ZH_RE.subn(_zh_repl, new_ln)
-        new_ln, k3 = _SIM_LABEL_ZH_ALT_RE.subn(_zh_alt_repl, new_ln)
-        new_ln, k4 = _SIM_LABEL_ZH_STATEMENT_RE.subn(_zh_statement_repl, new_ln)
-        new_ln, k5 = _SIM_LABEL_GARBLE_RE.subn("证据分析", new_ln)
-        if k1 or k2 or k3 or k4 or k5:
-            lines[i] = new_ln
-            n += k1 + k2 + k3 + k4 + k5
-    return "\n".join(lines), n
-
+        for pat in (_SIM_LABEL_EN_RE, _SIM_LABEL_ZH_RE, _SIM_LABEL_ZH_ALT_RE,
+                    _SIM_LABEL_ZH_STATEMENT_RE, _SIM_LABEL_GARBLE_RE):
+            n += len(pat.findall(ln))
+    return n
 
 def strip_tool_tokens(md: str) -> Tuple[str, int]:
     """删除 [simulation_outcomes] 等原始工具名引用记号。"""
@@ -911,28 +919,15 @@ def strip_leakage_sentences(text: str, max_scan: int = 400) -> Tuple[str, int]:
     return "".join(x for x in kept if x.strip()).strip(), removed
 
 
+# ADR 0003 (S0.4): this table only neutralises *graph/edge/dossier* vocabulary
+# that the knowledge graph (a projection of the research evidence) leaks into
+# prose.  It no longer contains any rewrite whose source names the simulation,
+# simulated agents, factions or clusters: those sentences are simulation
+# content and are removed by ``_still_leaks`` below instead of being relabelled
+# as evidence, forecast or stakeholder analysis.  Test: T3
+# (tests/test_report_lint_provenance.py) guards this invariant.
 _SIMULATION_OUTCOME_REWRITES: List[Tuple[re.Pattern, str]] = [
-    (re.compile(
-        r"\bthe simulated world we constructed,\s*populated by\s*"
-        r"\d[\d,]*\s+active agents?\s+and\s+\d[\d,]*\s+relationships,\s*treats\b",
-        re.I,
-    ), "the cross-actor evidence treats"),
-    (re.compile(
-        r"\bin the simulated world,\s*(\d+)\s+binary forecasts are laid out as\b",
-        re.I,
-    ), r"The report defines \1 binary forecasts as"),
-    (re.compile(r"\b(?:the|this) simulation(?:['’]s)?\s+power map\b", re.I),
-     "the actor-power evidence"),
-    (re.compile(r"\b(?:the|this) simulated world\b", re.I),
-     "the forecast evidence base"),
-    (re.compile(r"\b(?:the\s+)?\d+-agent (?:bloc|faction|mega-coalition)\b", re.I),
-     "the cross-camp coalition"),
-    (re.compile(r"\bCoalition\s+1\b", re.I), "the cross-camp coalition"),
-    (re.compile(r"\bagent graph\b", re.I), "stakeholder network"),
-    (re.compile(r"\bfaction map\b", re.I), "stakeholder alignment map"),
     (re.compile(r"\bcausal neighborhood\b", re.I), "policy-leverage profile"),
-    (re.compile(r"\bthe\s+\d+-actor faction graph\b", re.I),
-     "the real-world actor relationship network"),
     (re.compile(r"\bTrump['’]s 11-edge graph\b", re.I),
      "Trump's concentrated policy-leverage structure"),
     (re.compile(r"\bTrump 11-edge policy-leverage profile\b", re.I),
@@ -942,13 +937,6 @@ _SIMULATION_OUTCOME_REWRITES: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bXi-Centered Subgraph\b", re.I),
      "China's Constraint Network"),
     (re.compile(r"\bChina subgraph\b", re.I), "China evidence"),
-    (re.compile(r"\bChina Sub-Simulation\b", re.I), "China Outcome Analysis"),
-    (re.compile(r"\bsub-simulation\b", re.I), "scenario analysis"),
-    (re.compile(r"\b16-agent convergence\b", re.I), "cross-actor alignment"),
-    (re.compile(r"\b(\d+)-agent coalition\b", re.I), r"\1-actor coalition"),
-    (re.compile(r"\bshared interaction targets\b", re.I), "shared dependencies"),
-    (re.compile(r"\bcluster into a single faction\b", re.I),
-     "align within a single coalition"),
     (re.compile(r"\beach node needs the others\b", re.I),
      "each participant depends on the others"),
     (re.compile(r"\bevery member is a node\b", re.I),
@@ -959,10 +947,6 @@ _SIMULATION_OUTCOME_REWRITES: List[Tuple[re.Pattern, str]] = [
         r"\bthe causal graph has no node where ([^.!?]{1,80}) can intervene\b",
         re.I,
     ), r"the current policy structure gives \1 no direct institutional channel to intervene"),
-    (re.compile(
-        r"\bno bloc has an agent for ([^.!?]{1,100}) in the forecast graph\b",
-        re.I,
-    ), r"no bloc gives \1 meaningful institutional representation"),
     (re.compile(r"\bThat is not a bug\.\s*That is the forecast\.\s*", re.I),
      "That omission is itself consequential for the forecast. "),
     (re.compile(r"\bMarkets Know More Than the Graph\b", re.I),
@@ -970,7 +954,6 @@ _SIMULATION_OUTCOME_REWRITES: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bthe research graph\b", re.I), "the underlying evidence"),
     (re.compile(r"\bthe causal graph\b", re.I), "the causal evidence"),
     (re.compile(r"\bthe forecast graph\b", re.I), "the forecast framework"),
-    (re.compile(r"\bthe simulation graph\b", re.I), "the analytical framework"),
     (re.compile(r"\bthe graph\b", re.I), "the evidence"),
     (re.compile(r"\bremaining ([^.!?\n]{0,50}) edges tell\b", re.I),
      r"remaining \1 dependencies clarify"),
@@ -987,45 +970,11 @@ _SIMULATION_OUTCOME_REWRITES: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bthe dossier\b", re.I), "the evidence base"),
     (re.compile(r"\bDossier\b"), "Forecast"),
     (re.compile(r"\bthe predictive skeleton\b", re.I), "the forecast framework"),
-    (re.compile(r"\bthe power map\b", re.I), "the actor-power structure"),
-    (re.compile(r"\bthe hyperscaler agent\b", re.I), "the hyperscaler evidence"),
     (re.compile(r"`ENABLES` signal", re.I), "enabling signal"),
     (re.compile(
         r",?\s*restated dozens of times across rounds and across clusters of agents,?",
         re.I,
     ), ""),
-    (re.compile(r"\bthe\s+NVIDIA\s+agent\s+reads\b", re.I),
-     "NVIDIA's public position indicates"),
-    (re.compile(r"\bthe simulated data shows\b", re.I), "the available evidence shows"),
-    (re.compile(r"\bthe simulated evidence is\b", re.I), "the available evidence indicates"),
-    (re.compile(r"\bsimulation dynamics\b", re.I), "forecast drivers and outcome pathways"),
-    (re.compile(r"\bagent dynamics\b", re.I), "stakeholder dynamics"),
-    (re.compile(r"\b(?:multi-agent|agent-based|agentic) simulation\b", re.I), "forecast model"),
-    (re.compile(
-        r"\b(?:the|this) simulation(?:'s)?\s+"
-        r"(?:shows?|showed|suggests?|suggested|indicates?|indicated|finds?|found|"
-        r"reveals?|revealed|surfaced|produced)\b",
-        re.I,
-    ), "the evidence indicates"),
-    (re.compile(r"\bbased on (?:the|this) simulation\b", re.I),
-     "based on the available evidence"),
-    (re.compile(r"\bin (?:the|this) simulation\b", re.I), "in the forecast"),
-    (re.compile(r"\b(?:the\s+)?faction\s*/\s*cluster analysis shows\b", re.I),
-     "The cross-actor evidence indicates"),
-    (re.compile(r"模拟动力学|模拟动态|智能体动力学"), "预测驱动因素与结果路径"),
-    (re.compile(r"模拟数据集(?:中)?"), "研究证据中"),
-    (re.compile(r"模拟数据(?:中)?"), "研究证据"),
-    (re.compile(r"模拟证据"), "现有证据"),
-    (re.compile(r"模拟图谱"), "证据图谱"),
-    (re.compile(r"模拟框架"), "分析框架"),
-    (re.compile(r"仿真图"), "证据图谱"),
-    # Legacy report prose used this exact internal-method construction. Keep
-    # domain terms such as "工业仿真软件" and "碰撞仿真" untouched.
-    (re.compile(r"仿真以"), "证据分析以"),
-    (re.compile(r"(?:本次|该次|上述)?模拟(?:结果|推演)?(?:显示|表明|揭示|说明)"),
-     "现有证据表明"),
-    (re.compile(r"基于(?:本次|该次)?模拟(?:结果|推演)?"), "基于现有证据"),
-    (re.compile(r"模拟情景中|模拟世界中|本次模拟中"), "预测情景中"),
 ]
 
 
@@ -1431,11 +1380,12 @@ def repair_malformed_report_prose(md: str) -> Tuple[str, int]:
 def scrub_simulation_mechanics(md: str, lang: str = "English") -> Tuple[str, Dict[str, int]]:
     """Remove internal simulation mechanics while retaining forecast outcomes.
 
-    Safe phrases such as "the simulation suggests 62%" are reframed around the
-    evidence and keep their numbers/citations. Residual mechanics sentences
-    (rounds, action counts, platform behavior, agent-network telemetry) are
-    removed. Markdown fences are untouched; tables keep their structure and
-    redact only offending cells.
+    Graph/edge/dossier vocabulary is neutralised in place.  Any sentence whose
+    claim rests on the simulation ("the simulation suggests 62%", 模拟结果显示…,
+    legacy agent labels, action counts, platform behaviour, agent-network
+    telemetry) is removed whole — never relabelled as evidence (ADR 0003).
+    Markdown fences are untouched; tables keep their structure and redact only
+    offending cells.
     """
     info = {"rewritten": 0, "sentences_removed": 0, "table_cells_redacted": 0}
     lines = (md or "").split("\n")
@@ -1642,7 +1592,9 @@ def lint_report(md: str, lang: str, mode: str = "final",
     rep["citation_residue"] = _adopt("citation_residue", strip_citation_residue(text))[0]
     rep["edge_dumps"], rep["dangling_edge_intros"] = _adopt(
         "edge_dumps", rewrite_edge_dumps(text, lang))
-    rep["legacy_sim_labels"] = _adopt("legacy_sim_labels", rewrite_sim_labels(text, lang))[0]
+    # ADR 0003: legacy simulation labels are counted, never relabelled; the
+    # final scrub removes the sentences they introduce.
+    rep["legacy_sim_labels"] = count_legacy_sim_labels(text)
     rep["tool_tokens"] = _adopt("tool_tokens", strip_tool_tokens(text))[0]
     if mode == "final":
         text, rep["generation_failure_placeholders"] = strip_generation_failure_placeholders(text)

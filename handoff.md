@@ -1,4 +1,8 @@
+> Reconciliation: [scheduled translation/S0 integration](docs/handoff/translation-provenance-reconciliation/handoff.md). This combines published model-led translation with the explicitly named S0 branch; later implementation work is separate.
+
 > Current repair: [Mandarin translation handoff](docs/handoff/mandarin-translation-repair/handoff.md). User-approved model-led translation and its source-bound acceptance record.
+
+> Simulation/report boundary — ADR 0003: [ADR](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), [S0 design](docs/handoff/simulation-after-action-record/design.md), [topic handoff](docs/handoff/simulation-after-action-record/handoff.md). S0 contains constants, simulated chart titles, brief disclosure, leakage removal, attribution rules, header alignment, default-off sensitivity and what-if labels. Later S1–S4 changes on the separate implementation branch are outside this named-branch merge.
 
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
