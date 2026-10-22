@@ -37,6 +37,11 @@
           <span class="icon-refresh" :class="{ 'spinning': loading }">↻</span>
           <span class="btn-text">{{ L('刷新', 'Refresh') }}</span>
         </button>
+        <button class="tool-btn" :class="{ active: overlayLang === 'zh' }" @click="toggleOverlayLang"
+                :disabled="overlayBusy || !graphData?.graph_id"
+                :title="L('切换中文翻译（节点摘要/边事实）', 'Toggle Chinese translation (node summaries / edge facts)')">
+          <span class="btn-text">{{ overlayBusy ? '…' : '中' }}</span>
+        </button>
         <button class="tool-btn" @click="$emit('toggle-maximize')" :title="L('最大化/还原', 'Maximize / restore')">
           <span class="icon-maximize">⛶</span>
         </button>
@@ -139,7 +144,7 @@
             <!-- Summary -->
             <div class="detail-section" v-if="selectedItem.data.summary">
               <div class="section-title">{{ L('摘要', 'Summary') }}:</div>
-              <div class="summary-text">{{ selectedItem.data.summary }}</div>
+              <div class="summary-text">{{ displayText(`node:${selectedItem.data.uuid}:summary`, selectedItem.data.summary) }}</div>
             </div>
 
             <!-- Labels -->
@@ -191,7 +196,7 @@
                     </div>
                     <div class="detail-row" v-if="loop.fact">
                       <span class="detail-label">{{ L('事实', 'Fact') }}:</span>
-                      <span class="detail-value fact-text">{{ loop.fact }}</span>
+                      <span class="detail-value fact-text">{{ displayText(`edge:${loop.uuid}:fact`, loop.fact) }}</span>
                     </div>
                     <div class="detail-row" v-if="loop.fact_type">
                       <span class="detail-label">{{ L('类型', 'Type') }}:</span>
@@ -232,7 +237,7 @@
               </div>
               <div class="detail-row" v-if="selectedItem.data.fact">
                 <span class="detail-label">{{ L('事实', 'Fact') }}:</span>
-                <span class="detail-value fact-text">{{ selectedItem.data.fact }}</span>
+                <span class="detail-value fact-text">{{ displayText(`edge:${selectedItem.data.uuid}:fact`, selectedItem.data.fact) }}</span>
               </div>
 
               <!-- Episodes -->
@@ -315,6 +320,7 @@ import {
   graphPayloadRevision,
 } from '../utils/graphPayload'
 import { assignTypeColors, nodeRadius } from '../utils/graphStyle'
+import { ensureOverlay, graphOverlayFetcher } from '../utils/overlayTranslation'
 
 // ===== KG 渲染性能参数 =====
 // 聚焦模式阈值：节点数超过该值时默认只渲染 Top-K 子图（可用 VITE_GRAPH_UI_MAX_NODES 覆盖）
@@ -335,6 +341,29 @@ const props = defineProps({
   // T5.3: 研究确认的 actor 名列表；匹配到的节点加「研究种子」环 + 图例
   seedActors: { type: Array, default: () => [] }
 })
+
+// 2026-10-21: 中文翻译 overlay（节点摘要/边事实）。切换按钮触发；生成中显示 …；
+// 任何失败静默回退源文本。
+const overlayLang = ref(null)
+const overlayBusy = ref(false)
+const overlayMap = ref({})
+async function toggleOverlayLang() {
+  if (overlayBusy.value) return
+  if (overlayLang.value === 'zh') { overlayLang.value = null; return }
+  overlayBusy.value = true
+  overlayLang.value = 'zh'
+  try {
+    const gid = props.graphData?.graph_id
+    if (gid) {
+      const result = await ensureOverlay(graphOverlayFetcher(gid), 'zh')
+      overlayMap.value = (result && result.overlay) || {}
+    }
+  } finally { overlayBusy.value = false }
+}
+function displayText(key, sourceText) {
+  if (overlayLang.value !== 'zh') return sourceText
+  return overlayMap.value[key] || sourceText
+}
 
 // T5.3: 归一化（NFKC + lowercase + trim）的种子名集合，用于节点匹配
 const seedActorSet = computed(() => {

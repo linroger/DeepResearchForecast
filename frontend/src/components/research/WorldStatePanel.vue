@@ -29,13 +29,16 @@
           {{ L('回应上期', 'responsive moves') }} {{ Math.round(vm.behaviour.responsiveShare * 100) }}%
         </span>
         <span class="ws-badge st-note">{{ L('推演投影，非观察证据', 'model projection, not evidence') }}</span>
+        <button class="ws-lang-btn" :class="{ active: overlayLang === 'zh' }" @click="toggleOverlayLang"
+                :disabled="overlayBusy" :title="L('切换中文翻译', 'Toggle Chinese translation')">
+          {{ overlayBusy ? '…' : '中' }}</button>
       </div>
     </div>
 
     <div class="ws-error" v-if="error"><span class="err-dot">●</span><span>{{ error }}</span></div>
 
     <div class="ws-headline mono" v-if="vm.headlineSummary">{{ vm.headlineSummary }}</div>
-    <p class="ws-narrative" v-if="vm.narrative">{{ vm.narrative }}</p>
+    <p class="ws-narrative" v-if="vm.narrative">{{ displayText(digestKey, vm.narrative) }}</p>
     <p class="ws-narrative empty" v-else-if="!loading && hasWorld">{{ L('本时段无仲裁叙事', 'No arbiter narrative for this period') }}</p>
     <ul class="ws-problems" v-if="vm.arbiterProblems.length">
       <li v-for="(p, i) in vm.arbiterProblems" :key="'ap' + i">
@@ -49,7 +52,7 @@
         <div class="ws-card-head">{{ L('关键事实', 'Key facts') }} ({{ vm.variables.length }})</div>
         <ul class="ws-list">
           <li v-for="v in vm.variables.slice(0, 12)" :key="v.id" class="ws-var">
-            <span class="ws-var-name">{{ v.name }}</span>
+            <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
             <span class="ws-var-value mono">{{ v.display }}</span>
             <span class="ws-var-delta mono" v-if="v.deltaDisplay" :class="'dir-' + (v.delta ? v.delta.direction : 'flat')">
               {{ v.deltaDisplay }}
@@ -65,12 +68,12 @@
         </div>
         <ul class="ws-list">
           <li v-for="v in vm.variablesChanged.slice(0, 12)" :key="'vc' + v.id" class="ws-var">
-            <span class="ws-var-name">{{ v.name }}</span>
+            <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
             <span class="ws-var-delta mono" :class="'dir-' + v.direction">{{ v.display }}</span>
           </li>
           <li v-for="v in vm.variablesAdded.slice(0, 8)" :key="'va' + v.id" class="ws-var">
             <span class="ws-kind mono">{{ L('新增', 'new') }}</span>
-            <span class="ws-var-name">{{ v.name }}</span>
+            <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
             <span class="ws-var-value mono">{{ v.display }}</span>
           </li>
           <li v-if="!vm.variablesChanged.length && !vm.variablesAdded.length" class="ws-empty">
@@ -146,7 +149,7 @@
 
     <details class="ws-digest" v-if="vm.digest" :open="!vm.narrative">
       <summary>{{ L('本时段推送给智能体的摘要', 'Digest shown to the agents this period') }}</summary>
-      <pre class="ws-digest-text">{{ vm.digest }}</pre>
+      <pre class="ws-digest-text">{{ displayText(digestKey, vm.digest) }}</pre>
     </details>
 
     <div class="ws-timeline" role="group" :aria-label="L('选择已提交的时段', 'Select a committed period')" v-if="vm.history.length > 1">
@@ -192,6 +195,34 @@ const error = ref('')
 // null = follow the latest committed round; a round number pins that past period across live refreshes
 const selectedRound = ref(null)
 let timer = null
+
+// 2026-10-21: 中文翻译 overlay（问题/变量名/仲裁叙事/摘要）。生成走后台 + 轮询；
+// 任何失败静默回退源文本。digestKey 跟随当前选择的轮次。
+const overlayLang = ref(null)
+const overlayBusy = ref(false)
+const overlayMap = ref({})
+const digestKey = computed(() => (selectedRound.value ? `digest:${selectedRound.value}` : 'digest:latest'))
+async function toggleOverlayLang() {
+  if (overlayBusy.value) return
+  if (overlayLang.value === 'zh') { overlayLang.value = null; return }
+  overlayBusy.value = true
+  overlayLang.value = 'zh'
+  try {
+    if (props.simulationId) {
+      const { ensureOverlay, simulationOverlayFetcher } = await import('../../utils/overlayTranslation')
+      const result = await ensureOverlay(simulationOverlayFetcher(props.simulationId), 'zh')
+      overlayMap.value = (result && result.overlay) || {}
+    }
+  } finally { overlayBusy.value = false }
+}
+function tvar(varId, sourceName) {
+  if (overlayLang.value !== 'zh') return sourceName
+  return overlayMap.value[`var:${varId}:name`] || sourceName
+}
+function displayText(key, sourceText) {
+  if (overlayLang.value !== 'zh') return sourceText
+  return overlayMap.value[key] || sourceText
+}
 
 const vm = computed(() => summarizeWorldState(raw.value, selectedRound.value))
 const hasWorld = computed(() => !!(raw.value && raw.value.committed_round))
@@ -363,4 +394,11 @@ onUnmounted(stopPolling)
 .ws-tick.selected.st-failed, .ws-tick.selected.st-invalid { background: #b91c1c; border-color: #b91c1c; }
 .diamond.sm { font-size: 11px; opacity: 0.7; }
 .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+
+<style scoped>
+.ws-lang-btn { margin-left: auto; border: 1px solid var(--color-neu, #9aa5b1); background: transparent;
+  color: inherit; border-radius: 6px; padding: 1px 8px; font-size: 12px; cursor: pointer; }
+.ws-lang-btn.active { background: var(--color-accent, #3b6fb0); color: #fff; border-color: transparent; }
+.ws-lang-btn:disabled { opacity: 0.5; cursor: wait; }
 </style>
