@@ -11,8 +11,8 @@
   * 原始图谱边转储「（依据：A --[REL]--> B）」→ 自然语言关系括注；孤悬的
     「(According to：」「（依据：」→ 删除；
   * 旧版模拟标签「模拟代理人「X」推演：」/「Simulation Agent「X」Deduction/Reasoning:」
-    → 新专家小组转述规范（情景推演专家视角——「X」： / Analytical perspective — X
-    (scenario panel):）；
+    → 只计数（count_legacy_sim_labels），不再转写；它们是泄漏模式，最终 scrub 删除所在句
+    （ADR 0003：模拟产出绝不改写为「证据分析」或「专家视角」）；
   * 引文被删后孤悬的归因行（以 :/： 结尾、后接标题/普通段落）→ 删除（research 模式带引用的行保留）；
   * [simulation_outcomes] 等原始工具名引用记号 → 删除；
   * 流水线 pass 叙述（[Pass 2 working notes] 等括注）→ 删除（带引用/S<n> 的括注不删）；
@@ -154,9 +154,9 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     # EN
     ("generation_failure_placeholder", re.compile(
         r"Chapter generation failed|章节生成失败|模型反复未能产出合格文本", re.I)),
-    ("simulation_agent_label", re.compile(r"\bSimulation Agent\b")),
+    ("simulation_agent_label", re.compile(r"(?:模拟)?Simulation Agent", re.I)),
     ("deduction_reasoning", re.compile(r"Deduction\s*/\s*Reasoning")),
-    ("the_simulation", re.compile(r"\bthe simulation(?:['’]s)?\b", re.I)),
+    ("the_simulation", re.compile(r"\b(?:the|this|our|a) simulation(?:['’]s)?\b", re.I)),
     ("simulated_world", re.compile(r"\b(?:the|this|a) simulated world\b", re.I)),
     ("internal_harness_narration", re.compile(
         r"\b(?:the\s+)?harness(?:['’]s)?\b|\bagent clusters?\b|"
@@ -200,19 +200,30 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
         r"\bsimulated (?:data|evidence|world)\b", re.I)),
     ("named_proxy_agent", re.compile(
         r"\b(?:NVIDIA|AMD|Intel|TSMC|ASML|OpenAI|Anthropic|Google|Meta|"
-        r"Microsoft|Amazon|Trump|Xi|hyperscaler)\s+agent\b", re.I)),
+        r"Microsoft|Amazon|Trump|Xi)\s+agent\b|\bthe hyperscaler agent\b", re.I)),
     # ADR 0003 (S0.4): phrases the final scrub used to *relabel* as evidence,
     # forecast or stakeholder analysis.  They are simulation mechanics; the
     # sentence is removed instead.
-    ("n_agent_compound", re.compile(r"\b\d+-agent\b", re.I)),
-    ("coalition_cluster_label", re.compile(r"\bCoalition\s+\d{1,2}\b")),
+    ("n_agent_compound", re.compile(
+        r"\b\d+-agent (?:faction|bloc|cluster|coalition|mega-coalition|network|convergence)s?\b", re.I)),
+    ("coalition_cluster_label", re.compile(
+        r"\bCoalition\s+\d{1,2}\b(?=[^.\n]{0,80}\b(?:clusters?|factions?|agents?|blocs?)\b)"
+        r"|\b(?:clusters?|factions?|agents?|blocs?)\b[^.\n]{0,80}\bCoalition\s+\d{1,2}\b", re.I)),
     ("sub_simulation", re.compile(r"\bsub-simulation\b", re.I)),
     ("faction_clustering", re.compile(
-        r"\bcluster(?:s|ed|ing)? into (?:a single|one) faction\b"
+        r"\bagents? cluster(?:s|ed|ing)? into (?:a single|one) faction\b"
+        r"|\bcluster(?:s|ed|ing)? into (?:a single|one) faction\b(?=[^.\n]{0,60}\bagents?\b)"
         r"|\bfaction\s*/\s*cluster analysis\b|\bshared interaction targets\b", re.I)),
     ("simulation_dynamics", re.compile(
-        r"\bsimulation dynamics\b|\b(?<!AI )(?<!AI-)agent dynamics\b"
-        r"|\b(?:multi-agent|agent-based|agentic) simulation\b", re.I)),
+        r"\bsimulation dynamics\b|(?<![\w-])(?<!AI )agent dynamics\b"
+        r"|\b(?:the|this|our) (?:multi-agent|agent-based|agentic) simulation"
+        r"(?!\s+(?:software|market|tools?|vendors?|platforms?|industry|companies|segment|sector))\b", re.I)),
+    ("agent_for", re.compile(r"\b(?:has|have|had) an agent for\b", re.I)),
+    # Labels that dressed simulated speech as an expert view (ADR 0003 removed them
+    # from the quote whitelist; the lint removes the sentences they introduce).
+    ("laundering_labels", re.compile(
+        r"情景推演专家视角|(?:模拟|推演)[^。！？\n]{0,20}专家小组|专家小组[^。！？\n]{0,20}(?:模拟|推演)"
+        r"|\bscenario panel\b|\banalytical perspective\s*[—:–-]", re.I)),
     ("action_type_tokens", re.compile(
         r"\b(?:CREATE_POST|CREATE_COMMENT|LIKE_POST|LIKE_COMMENT|REPOST|QUOTE_POST|UNFOLLOW)\b")),
     ("agent_mechanics_en", re.compile(
@@ -237,16 +248,17 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     # ZH
     ("sim_agent_zh", re.compile(
         r"模拟代理人|模拟推演|模拟世界|本次模拟|模拟中|模拟的")),
-    ("legacy_sim_label_zh", re.compile(r"仿真\s*Agent|演绎\s*/\s*推理|模拟\s*Deduction")),
+    ("legacy_sim_label_zh", re.compile(
+        r"仿真\s*Agent|(?:Agent|」|』)\s*(?:（[^）\n]{0,80}）)?\s*演绎\s*/\s*推理|模拟\s*Deduction")),
     # ADR 0003 (S0.4): Chinese forms the scrub used to relabel as 现有证据 /
     # 研究证据 / 预测情景.  Domain terms (工业仿真软件, 碰撞仿真, 模拟芯片) stay
     # untouched: every alternative needs a methodology word next to 模拟/仿真.
     ("sim_evidence_zh", re.compile(
-        r"模拟数据|模拟证据|模拟图谱|模拟框架|仿真图(?![像形片纸])|仿真以"
-        r"|模拟动力学|模拟动态|智能体动力学"
-        r"|(?:本次|该次|上述)?模拟(?:结果|推演)(?:显示|表明|揭示|说明)"
-        r"|(?:本次|该次|上述)模拟(?:显示|表明|揭示|说明)|模拟(?:表明|揭示|说明)"
-        r"|基于(?:本次|该次)?模拟(?:结果|推演)?|模拟情景中")),
+        r"(?:本次|该次|上述)模拟数据|模拟数据(?:显示|表明|揭示|说明)|模拟证据|模拟图谱"
+        r"|仿真图(?![像形片纸表])|仿真以(?![及外来前后上下])"
+        r"|模拟动力学|模拟动态(?!范围)|智能体动力学"
+        r"|(?:本次|该次|上述)模拟(?:显示|表明|揭示|说明)|模拟(?:结果|推演)(?:显示|表明|揭示|说明)"
+        r"|基于(?:本次|该次|上述)模拟|基于模拟(?:结果|推演)|模拟情景中")),
     # 轮次/逐轮 are also real-world words (融资轮次 funding rounds, 谈判轮次): like
     # the English round_n / across-rounds patterns, only a numbered round, "across
     # rounds", or a sentence that ties rounds to the simulation is mechanics.

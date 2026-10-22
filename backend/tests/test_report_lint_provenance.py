@@ -55,9 +55,17 @@ def test_chinese_simulation_claim_is_removed_not_relabelled():
 def test_read_only_scan_flags_the_same_claims():
     for text in ("The simulation shows demand grows.", "Based on the simulation, X holds.",
                  "The simulated world treats Y as central.", "模拟结果显示需求增长。",
-                 "基于模拟，限制仍在。", "仿真Agent「X」演绎/推理：Z。", "模拟证据表明 W。",
+                 "基于模拟推演，限制仍在。", "仿真Agent「X」演绎/推理：Z。", "模拟证据表明 W。",
                  "The 16-agent faction spans four camps.", "The hyperscaler agent reads this as bounded.",
-                 "An agent-based simulation of the market suggests Z."):
+                 "Our agent-based simulation of the market suggests Z.",
+                 # review (S0): determiner variants, label variants, laundering labels, 'agent for'
+                 "This simulation shows a 62% chance.", "Based on this simulation, X holds.",
+                 "Our simulation's power map puts TSMC first.", "In this simulation Y dominates.",
+                 "simulation agent「X」deduction: Z", "模拟Simulation Agent「X」Deduction: Z",
+                 "情景推演专家视角——「X」：Z", "Analytical perspective — X (scenario panel): Z",
+                 "No bloc has an agent for the ministry in the forecast graph.",
+                 "Coalition 1 is the only cohesive cluster of agents.",
+                 "上述模拟显示需求放缓。", "本次模拟数据显示产能过剩。"):
         assert rl.leakage_hits(text), text
 
 
@@ -67,7 +75,20 @@ def test_domain_terms_are_not_mechanics():
                  "模拟芯片市场在2027年恢复增长[S3]。",
                  "模拟显示器出货量持续下滑[S4]。",
                  "AI agent dynamics in enterprise software will change procurement [S5].",
-                 "Regulators formed a coalition of 12 agencies [S6]."):
+                 "Regulators formed a coalition of 12 agencies [S6].",
+                 # review (S0): real-world prose the first pattern cut deleted
+                 "碰撞仿真以及数字孪生工具的采购预算在2027年翻倍[S7]。",
+                 "基于模拟芯片的电源管理方案占比升至35%[S8]。",
+                 "合成与模拟数据训练将在2028年占训练数据的40%[S9]。",
+                 "蒙特卡洛模拟表明违约概率低于5%[S10]。",
+                 "模拟动态范围达到120dB的传感器开始量产[S11]。",
+                 "仿真图表显示热应力集中在封装边缘[S12]。",
+                 "Principal-agent dynamics inside the ministry delay procurement [S13].",
+                 "The agent-based simulation software market reaches $4bn by 2030 [S14].",
+                 "A 12-agent task force was created by the regulator [S15].",
+                 "Coalition 21 won 52 seats in the chamber [S16].",
+                 "From an analytical perspective the tariff cut is irreversible [S17].",
+                 "Hyperscaler agent platforms will handle 30% of support tickets by 2028 [S18]."):
         out, rep = rl.lint_report(text, "Chinese" if re.search(r"[一-鿿]", text) else "English",
                                   mode="final")
         assert rep["simulation_mechanics"]["sentences_removed"] == 0, text
@@ -78,12 +99,13 @@ def test_legacy_agent_labels_are_counted_and_their_sentences_removed():
     md = ("> Simulation Agent「Hyperscalers」Deduction/Reasoning: \"capex holds through 2027\"\n\n"
           "> 模拟代理人「台积电」推演：先进制程供不应求。\n\n"
           "仿真Agent「China」（中方视角）演绎/推理：出口管制仍将持续[S2]。\n\n"
+          "模拟simulation agent「Intel」deduction: fabs stay full.\n\n"
           "Real-world prose with a source stays [S1].\n")
-    assert rl.count_legacy_sim_labels(md) == 3
+    assert rl.count_legacy_sim_labels(md) == 4
     out, rep = rl.lint_report(md, "English", mode="final")
-    assert rep["legacy_sim_labels"] == 3
-    for residue in ("Simulation Agent", "模拟代理人", "仿真Agent", "演绎/推理",
-                    "capex holds", "先进制程供不应求", "出口管制仍将持续"):
+    assert rep["legacy_sim_labels"] == 4
+    for residue in ("Simulation Agent", "simulation agent", "模拟代理人", "仿真Agent", "演绎/推理",
+                    "capex holds", "先进制程供不应求", "出口管制仍将持续", "fabs stay full"):
         assert residue not in out, residue
     assert "Real-world prose with a source stays [S1]." in out
     _assert_no_evidence_wording(out)
@@ -106,3 +128,11 @@ def test_no_rewrite_relabels_simulation_sources_as_evidence():
 
 def test_rewrite_sim_labels_no_longer_exists():
     assert not hasattr(rl, "rewrite_sim_labels")
+
+
+def test_graph_vocabulary_rewrite_cannot_launder_an_agent_sentence():
+    md = "No bloc has an agent for the finance ministry in the forecast graph. Tariffs stay at 10% [S2]."
+    out, rep = rl.lint_report(md, "English", mode="final")
+    assert "agent for" not in out and "forecast framework" not in out
+    assert "Tariffs stay at 10% [S2]." in out
+    assert rep["simulation_mechanics"]["sentences_removed"] == 1
