@@ -3119,10 +3119,18 @@ class ReportAgent:
     # ── ADR 0003 (S3): scenario-simulation bridge wiring ─────────────────────
     def _sim_bridge_active(self) -> bool:
         """The bridge is rendered on the default engine under diagnostic_only only: world-v1
-        bindings keep their pathway appendix (design D4); no_update and legacy_prompt get none."""
+        bindings keep their pathway appendix (design D4); no_update and legacy_prompt get none.
+
+        Degrade-safe: an agent without a resolvable policy (a backfill or translation
+        worker built without its constructor, or a simulation whose sealed state cannot be
+        read) renders no bridge rather than failing chart placement or the audit."""
         if getattr(self, "_world_binding", None):
             return False
-        return self._simulation_forecast_effect() == "diagnostic_only"
+        try:
+            return self._simulation_forecast_effect() == "diagnostic_only"
+        except Exception as exc:  # noqa: BLE001 — policy lookup failure must not break the report
+            logger.debug(f"sim bridge inactive: policy unresolved ({exc})")
+            return False
 
     def _sim_dir(self, report_id: Optional[str] = None) -> str:
         """``uploads/simulations/<sim_id>`` for this report, "" for a missing or unsafe id.
