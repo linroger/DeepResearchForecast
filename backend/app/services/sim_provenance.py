@@ -24,6 +24,7 @@ Rules for editing this module:
 """
 from __future__ import annotations
 
+import re
 from typing import Final
 
 # ── Record identity ──────────────────────────────────────────────────────────
@@ -98,6 +99,14 @@ BRIEF_SIM_LINE_EN: Final = (
 BRIEF_SIM_LINE_ZH: Final = (
     "情景模拟已运行（{health}{detail}）；仅用于机制分析，从不进入概率（策略：diagnostic_only）"
 )
+
+
+def outcome_shares_header_re() -> "re.Pattern[str]":
+    """Regex matching the scenario-share block header the report renders
+    (``【推演结果分布 P(outcome)``), plus the pre-2026-10 wording kept only so
+    legacy_prompt fixtures still parse.  Shared by ``forecast_extractor``."""
+    stems = sorted({h.split(" P(")[0] for h in (OUTCOME_SHARES_HEADER_ZH, OUTCOME_SHARES_HEADER_LEGACY_ZH)})
+    return re.compile("【(?:" + "|".join(re.escape(x) for x in stems) + r")\s*P\(outcome\)")
 
 
 def chart_title(chart_id: str, lang: str = "en") -> str:

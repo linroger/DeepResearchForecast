@@ -4284,7 +4284,7 @@ class ReportAgent:
         anchor_note = "仅供机制分析，不得据此调整概率"
         if self._simulation_forecast_effect() == "legacy_prompt":
             anchor_note = "经基准分布锚点有界进入预测骨架，偏离须证据说明"
-        lines = ["【推演结果分布 P(outcome)（elicited model projection——模型引出的推演投影，"
+        lines = [f"【{_sp.OUTCOME_SHARES_HEADER_ZH}（elicited model projection——模型引出的推演投影，"
                  f"非观察证据；{anchor_note}）】"]
         _validity = str((data or {}).get("validity") or "").strip().lower()
         if _validity and _validity != "valid":

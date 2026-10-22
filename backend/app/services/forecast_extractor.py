@@ -21,6 +21,8 @@ import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
+from . import sim_provenance as _sp
+
 logger = logging.getLogger(__name__)
 
 
@@ -1184,7 +1186,7 @@ _BINARY_MARKET_RULE = (
 # 渲染器改头时此表须同步。
 _SIM_SIGNAL_TAXONOMY: List[Tuple[str, re.Pattern, re.Pattern]] = [
     ("world-state outcome shares",
-     re.compile(r"【预测结果分布\s*P\(outcome\)"),
+     _sp.outcome_shares_header_re(),
      re.compile(r"world[\s_-]*state|outcome\s*shares?|P\(outcome\)|世界态|结果分布|结果份额", re.I)),
     ("salience tiers",
      re.compile(r"议程设置力分层"),
@@ -1263,7 +1265,10 @@ def _enforce_source_provenance(binaries: List[Dict[str, Any]], allowed: set) -> 
 # **实际注入提示词**的世界态块（report_agent._world_state_block 渲染，块标记逐字节同源）里
 # 抽出收敛结果份额与趋稳判定，供 reconcile_forecast_contract 记成 forecast.sim_adjustment。
 # 份额来自渲染文本（整数百分比），故做一次归一并标注为先验（非精确观测），degrade-safe。
-_WS_OUTCOME_HEADER_RE = re.compile(r"【预测结果分布\s*P\(outcome\)")
+# ADR 0003 (S0.6): header regex built from sim_provenance so the renderer
+# (report_agent._world_state_block) and this reader cannot drift apart again;
+# the pre-2026-10 wording is accepted for legacy_prompt fixtures only.
+_WS_OUTCOME_HEADER_RE = _sp.outcome_shares_header_re()
 _WS_OUTCOME_SHARE_RE = re.compile(
     r"^·\s*(?P<name>.+?)\s*[:：]\s*(?P<pct>\d{1,3}(?:\.\d+)?)\s*%\s*$")
 # 世界态块内**份额行之后**的其它小节起始（碰到即停止份额收集，避免把日历航点/诊断行混入）。
@@ -1275,7 +1280,7 @@ def world_state_outcome_from_signal_pack(
 ) -> Optional[Dict[str, Any]]:
     """从 signal_pack 的世界态结果分布块解析决策通道的收敛 P(outcome) 份额（纯离线、确定性）。
 
-    识别 ``【预测结果分布 P(outcome)…】`` 块及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
+    识别 ``【推演结果分布 P(outcome)…】`` 块（及旧版 ``【预测结果分布`` fixture 措辞）及其下的 ``· <情景名>: <NN>%`` 份额行，归一后
     返回 ``{"scenario_shares": {name: frac}, "converged": bool|None,
     "source": "world-state outcome shares"}``；块缺失/无份额行 → ``None``（调用方视同 sim
     无收敛结果，degrade-safe）。``converged`` 由块内「已趋稳/尚未趋稳」文案判定（无 → None）。
