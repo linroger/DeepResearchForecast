@@ -1,5 +1,5 @@
 {
-  "status": "Accepted combined S0/translation candidate; publication pending",
+  "status": "Accepted and delivered S0/translation merge to remote main",
   "checked_at": "2026-10-22T21:14:08.670177+00:00",
   "main_parent": "0a23a1c3ba08bf21ed9dfa2b0d1b101a3942d392",
   "s0_parent": "aad41e905895cb2f234ece67f579fc1c6f69a4be",
@@ -910,5 +910,8 @@
     "path": "docs/handoff/translation-provenance-reconciliation/review.md",
     "sha256": "caebca26e246d1a13ee880ca1541c07f9d0b4d46b072994a644215c58a4179c1",
     "scope": "Named S0 only; both parent producer/consumer contracts and753 source bindings inspected"
-  }
+  },
+  "merge_commit": "bff0127b575c1b9a88a57cccd546c2d8c063acf3",
+  "remote_main_source_verified": true,
+  "shared_peer_file_drift_after_publication": []
 }

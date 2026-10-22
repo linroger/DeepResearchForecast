@@ -1,0 +1,31 @@
+{
+  "status": "Scheduled S0/translation reconciliation completed and verified on remote main",
+  "checked_at": "2026-10-22T21:17:56.357814+00:00",
+  "scheduled_for": "2026-10-23T05:00:00+08:00",
+  "triggered_at": "2026-10-22T21:00:03.835Z",
+  "merge_commit": "bff0127b575c1b9a88a57cccd546c2d8c063acf3",
+  "translation_parent": "0a23a1c3ba08bf21ed9dfa2b0d1b101a3942d392",
+  "s0_parent": "aad41e905895cb2f234ece67f579fc1c6f69a4be",
+  "remote": "legacy",
+  "remote_url": "https://github.com/linroger/DeepResearchForecast.git",
+  "branch": "codex/translation-sim-provenance-20261023",
+  "remote_main_source_verified": true,
+  "backend_passed": 694,
+  "frontend_passed": 318,
+  "build_seconds": 1.74,
+  "source_entries": 753,
+  "current_code_delta": [],
+  "guarded_children": 6,
+  "independent_review": "Source/gate ACCEPT; process attribution closed",
+  "textual_conflict": "handoff.md; retained both topic pointers",
+  "separate_impl_untouched": "579c1acf591b6af9713e3f53b2e524c113a254f5",
+  "shared_peer_files_checked": 70,
+  "shared_peer_file_drift": [],
+  "live_provider_service_pipeline_operations": false,
+  "limits": [
+    "Named S0 only, not the separate S1\u2013S4 implementation branch.",
+    "One environmental glyph warning and denied font/browser-helper attempts remain explicit.",
+    "No new model semantic-quality or live forecast claim."
+  ],
+  "closing_documentation_only": true
+}

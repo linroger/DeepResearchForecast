@@ -1,8 +1,8 @@
 # Scheduled translation/provenance reconciliation
 
 **Last updated (UTC):** 2026-10-22T21:04:31.540245+00:00
-**Status:** In progress
-**Current focus:** Isolated merge of committed S0 into published translation main.
+**Status:** Complete
+**Current focus:** Delivered to remote main; preserve the recorded S0-only scope and acceptance evidence.
 
 ## 1. Request and scope
 
@@ -28,7 +28,7 @@ PLANS.md records the approved execution. Readiness first, isolated merge second,
 - [x] Distinguish stale shared handoff from newer committed ADR.
 - [x] Resolve isolated merge; retained both root pointers.
 - [x] Current-byte backend694/frontend318/build1.74s and independent source/gate review accepted.
-- [ ] Commit, push, merge main and verify remote.
+- [x] Commit, push integration branch, fast-forward main and verify remote source SHA.
 
 ## 5. Findings and decisions
 
@@ -40,7 +40,7 @@ Initial readiness hold was provisional while the contradictory handoff was check
 
 ## 7. Scenario-focused verification
 
-Pending isolated merge and actual combined consumer checks. No historical passing receipt is assigned to the combined tree.
+Combined37-suite694 backend tests pass,318 frontend tests pass and build1.74s succeeds. Source/gate review ACCEPT; all753 source entries match the tested mirror and delivered application bytes; six actual children completed cleanly. The one glyph warning and denied probe/render attempts remain explicit in verification.json and issues.md.
 
 ## 8. Evidence
 
@@ -48,7 +48,7 @@ Initial inventory: /private/tmp/drf-scheduled-merge-20261023-0500-ftont6e2/inven
 
 ## 9. Remaining work
 
-Complete isolated merge, bounded current-source acceptance/review and Git publication. No service/provider/saved-data work is authorized by this scheduled integration.
+No required item remains for the explicitly named S0 integration. The separate claude/sim-provenance-impl branch and its S1–S4/live ADR acceptance remain outside this completed merge. No provider calls, service operations or saved-run mutations were performed.
 
 ## 10. Updates
 
@@ -60,3 +60,5 @@ Complete isolated merge, bounded current-source acceptance/review and Git public
 - Guard attribution: parent reports two denied font commands,18 font-path reads and one denied Choreographer browser-helper launch. The matching extra attempt reproduced in a lightweight observer run of the same694 cases; observer logs stack names/lines and always delegates to original denial. A heavy all-call profiler changed deadline timing (693P/1F); original acceptance remains the unprofiled694 and the lighter observer again passes694. No guard or test assertion was weakened.
 
 - 2026-10-22T21:16:23.681877+00:00: Independent source and gate review ACCEPT. All18 translation-only production files match main, all8 S0-only production files match incoming S0, all65 translation/localization methods in ReportAgent match main ASTs, and all11 changed primary/provenance methods match S0. Denied process attribution closed by the lighter observer; its35 denied reads are diagnostic counters separate from the acceptance run18font reads. Ready to publish verified merge.
+
+- 2026-10-22T21:17:56.357814+00:00: Delivered merge bff0127b575c1b9a88a57cccd546c2d8c063acf3 (parents translation0a23a1c3 and S0aad41e90) to integration branch and remote legacy/main, exact source SHA verified by ls-remote. All753 tested code entries still match and all70 inventoried shared files remain unchanged. Closing documentation follows without source changes.
