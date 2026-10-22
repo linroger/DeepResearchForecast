@@ -52,3 +52,11 @@ test('the run stage label is written as one L() call pinned to SIM_LABEL_* (T9 r
   const source = readFileSync(new URL('../src/components/research/StageTimeline.vue', import.meta.url), 'utf8')
   assert.ok(source.includes(`L('${LABEL_ZH}', '${TITLE_EN}')`), 'run stage label drifted from SIM_LABEL_*')
 })
+
+
+test('ResearchView names the run stage and the Simulation tab the way the timeline does (S2 review)', () => {
+  const view = readFileSync(new URL('../src/views/ResearchView.vue', import.meta.url), 'utf8')
+  assert.ok(view.includes(`run: L('${LABEL_ZH}', '${TITLE_EN}')`), 'ResearchView stage label drifted from SIM_LABEL_*')
+  assert.ok(view.includes(`label: L('${LABEL_ZH}', '${TITLE_EN}')`), 'Simulation tab label drifted from SIM_LABEL_*')
+  assert.doesNotMatch(view, /群体模拟/)
+})

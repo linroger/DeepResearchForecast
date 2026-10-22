@@ -344,9 +344,17 @@ async function loadRecord(simId, request) {
     if (next) recordRetries = 0
   } catch {
     if (!request.isCurrent()) return
-    clearRecord()
+    // Transport failure: keep a record that is already shown; when nothing is shown yet,
+    // mark the attempt so the bounded retry below re-asks (as it does after a 404).
+    if (!record.value) recordStatus.value = 'error'
   }
   announceRecord()
+}
+
+// The record is re-asked only while nothing is shown and the last answer was 404 or a
+// transport failure (409 = gate failed: final).
+function recordRetryPending() {
+  return !record.value && (recordStatus.value === 404 || recordStatus.value === 'error') && recordRetries < RECORD_RETRY_MAX
 }
 
 // ===== Defensive helpers =====
@@ -708,9 +716,14 @@ async function loadAll() {
     worldGenerationId.value = response.data.world_generation_id || ''
     engine.value = savedEngine
     if (savedEngine === WORLD_ENGINE) {
-      // ADR 0003: the record applies to both engines; a 404/409 leaves the world view as is
+      // ADR 0003: the record applies to both engines; a 404/409 leaves the world view as is.
+      // Stage 5 writes the record shortly after completion, so a 404 is re-asked a bounded
+      // number of times here as well (the live layout below does the same).
       await loadRecord(simId, request)
-      if (request.isCurrent()) loading.value = false
+      if (request.isCurrent()) {
+        loading.value = false
+        scheduleAutoRefresh()
+      }
       return
     }
   } catch {
@@ -838,7 +851,7 @@ function scheduleAutoRefresh() {
     return
   }
   // ADR 0003: the record lands shortly after completion; re-ask for it a bounded number of times
-  if (!record.value && recordStatus.value === 404 && recordRetries < RECORD_RETRY_MAX) {
+  if (recordRetryPending()) {
     recordRetries += 1
     refreshTimer = setTimeout(loadAll, RECORD_RETRY_MS)
   }

@@ -208,24 +208,6 @@ export const fetchRecord = async (simulationId, options = {}) => {
   }
 }
 
-/**
- * GET /api/simulation/<id>/record.md?lang=zh|en → { markdown, status, publicationStatus }.
- * The body is text/markdown (passed through the response interceptor as a string);
- * 404/409 resolve to a null markdown with the status, as fetchRecord does.
- */
-export const fetchRecordMarkdown = async (simulationId, lang, options = {}) => {
-  const params = lang ? { lang } : undefined
-  try {
-    const res = await service.get(`/api/simulation/${encodeURIComponent(simulationId)}/record.md`, { ...options, params, responseType: 'text' })
-    const markdown = typeof res === 'string' ? res : (res && typeof res.data === 'string' ? res.data : '')
-    return { markdown: markdown || null, status: 200, publicationStatus: markdown ? 'passed' : 'invalid' }
-  } catch (error) {
-    const unavailable = recordUnavailable(error)
-    if (!unavailable) throw error
-    return { markdown: null, ...unavailable }
-  }
-}
-
 export const getSimulationTimeline = (simulationId, startRound = 0, endRound = null) => {
   const params = { start_round: startRound }
   if (endRound !== null) {

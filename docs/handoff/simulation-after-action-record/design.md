@@ -371,4 +371,18 @@ Recorded here so §3–§6 can stay the target design. Commits are on `claude/si
 | §6 T3/T7/T9 | As named | T3 `test_report_lint_provenance.py`; T7 `test_report_visualizer_titles.py` + `test_exec_brief_sim_disclosure.py`; T9 `test_sim_provenance_constants.py`; plus `test_outcome_header_alignment.py`, `test_simleak_tier2_guard.py`, `test_simulation_record_contract.py` | — |
 | Final audit | — | `_final_audit_integrity_issues` also treats a non-zero `legacy_sim_labels` count as a hard issue | Belt and braces beside the leakage patterns |
 
+### Deltas — slice S2 as implemented (2026-10-23, branch `worktree-wf_92affb56-682-2`, merged into `claude/sim-provenance-impl`)
+
+| Area | Design said | S2 did | Why |
+|---|---|---|---|
+| §3.6 Dashboard | Record view "above the live World State panel and feed" | A **Record | Live** toggle: the Record view is the default after completion and the live layout is one click away | Stacking a long record above the live feed buried the feed; the toggle keeps both whole |
+| §3.6 Dashboard | — | New `SimulationRecordView.vue` + pure helpers `utils/simRecord.js`; `utils/markdown.js` gains a generic marked-block splitter used for the bridge box | Keeps the view model testable without a DOM |
+| §3.6 Dashboard | Period strip | The first committed period opens by default (an after-action record reads chronologically); WorldStatePanel keeps opening on the latest round | Different reading modes |
+| §3.6 Dashboard | — | Bounded post-completion retry: a 404 on a completed run re-asks for the record at most 4 × 15 s; 409 and transport failures are not retried | Stage 5 writes the record seconds after the runner reports completion |
+| §3.6 Dashboard | `ResearchView.vue` not in S2's file list | 9-line wiring: `@open-simulation-record` → Simulation tab, `@record-state` → "record ready" badge | The parent had no event or route for tab switching |
+| §5 S2.2 | Badge strings | Already delivered by S0 (pinned to `sim_provenance` by T9); S2 made no change | — |
+| §5 S2.4 | `fetchRecord(id)` | `fetchRecord(id)` accepts a bare record or a `{success, data}` envelope and returns `{record, status, publicationStatus}` for 404/409 | S1's route did not exist when S2 was written |
+| §3.6 footnote | "probabilities from research evidence only (policy: …)" | Policy read from the report payload's `forecast_effect`, then `forecast.simulation_bridge.forecast_effect`, then `forecast.forecast_effect`; the S2 review found the fallback asserted `diagnostic_only` when nothing was read — fixed on the integration branch to "policy not recorded for this run" (mirrors `brief_sim_role`) | The footnote must not assert a policy it did not read |
+| Fixtures | — | `frontend/tests/fixtures/sim/*.json` compiled from the live run `sim_3ec25e64209e` through the contract's public-field allowlist, trimmed to three rounds; a synthetic fixture covers K>1 paths, red lines, shocks and a mechanical-only round | Realistic shapes for T12 |
+
 Verification at the S0 tip (clean worktree): 7,707 passed, 9 failed, 19 errors, 1,668 skipped; every failure reproduces at the base commit except one Kaleido probe that the standalone-import fix resolved. Adversarial review (3 lenses, 25 confirmed findings, 2 refuted): the blocker and all majors are fixed in the follow-up commits listed in handoff.md.

@@ -374,6 +374,19 @@ test('a record that failed its gate (409) is not shown and not retried; a transp
   assert.equal(broken.state.record.value, null)
   assert.equal(broken.state.error.value, '')
   assert.equal(count((await broken.render()).html, 'class="world-state-panel"'), 1)
+  // a transport failure with nothing shown yet re-arms the same bounded retry as a 404 (S2 review)
+  assert.deepEqual(broken.timers, [15000])
+  // ... and a transport failure never drops a record that is already shown
+  let serveRecord = true
+  const flaky = mountSimulationView(t, { api: { fetchRecord: async () => {
+    if (serveRecord) return { record: RECORD_EN, status: 200, publicationStatus: 'passed' }
+    throw new Error('network down')
+  } } })
+  await settle()
+  assert.ok(flaky.state.record.value)
+  serveRecord = false
+  await flaky.state.loadAll()
+  assert.ok(flaky.state.record.value, 'a shown record survives a transport failure')
   // a record with the wrong shape is ignored
   const odd = mountSimulationView(t, { api: { fetchRecord: async () => ({ record: { schema: 'other' }, status: 200 }) } })
   await settle()
@@ -446,4 +459,23 @@ test('the Chinese interface words the toggle, the caveat and the record labels i
   assert.match(r.html, />记录<\/button>/)
   assert.match(r.html, />实时视图<\/button>/)
   assert.ok(r.html.includes('aria-label="视图选择"'))
+})
+
+
+test('world-v1 runs re-ask for a missing record the same bounded number of times (S2 review)', async t => {
+  const h = mountSimulationView(t, { api: {
+    getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: 'world-v1' } }),
+    fetchRecord: async () => ({ record: null, status: 404, publicationStatus: 'absent' }),
+  } })
+  await settle()
+  assert.equal(h.state.record.value, null)
+  assert.deepEqual(h.timers, [15000])
+  for (let i = 0; i < 4; i++) await h.state.loadAll()
+  assert.deepEqual(h.timers, [15000, 15000, 15000, 15000])
+  assert.equal(h.calls.filter(key => key === 'fetchRecord').length, 5)
+})
+
+test('the record acceptance literals are the backend constants', () => {
+  assert.equal(simRecord.RECORD_SCHEMA, pyConst('RECORD_SCHEMA'))
+  assert.equal(simRecord.RECORD_CLASS, pyConst('RECORD_CLASS'))
 })

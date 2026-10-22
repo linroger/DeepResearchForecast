@@ -484,7 +484,7 @@ function pollFingerprint() {
 function stageLabel(name) {
   return {
     research: L('深度研究', 'Research'), ontology: L('本体生成', 'Ontology'), graph: L('知识图谱', 'Graph'),
-    prepare: L('环境搭建', 'Prepare'), run: L('群体模拟', 'Simulate'), report: L('预测报告', 'Forecast')
+    prepare: L('环境搭建', 'Prepare'), run: L('情景模拟', 'Scenario simulation'), report: L('预测报告', 'Forecast')
   }[name] || name
 }
 
@@ -507,7 +507,7 @@ const tabs = computed(() => {
     { key: 'log', label: L('实时日志', 'Live log'), enabled: true },
     { key: 'dossier', label: L('研究档案', 'Dossier'), enabled: !!researchDone, badge: actorCount || '' },
     { key: 'graph', label: L('知识图谱', 'Graph'), enabled: !!graphId.value },
-    { key: 'sim', label: L('群体模拟', 'Simulation'), enabled: !!simulationId.value, badge: simRecordReady.value ? L('记录就绪', 'record ready') : '' },
+    { key: 'sim', label: L('情景模拟', 'Scenario simulation'), enabled: !!simulationId.value, badge: simRecordReady.value ? L('记录就绪', 'record ready') : '' },
     { key: 'report', label: L('预测报告', 'Forecast'), enabled: !!reportId.value }
   ]
 })

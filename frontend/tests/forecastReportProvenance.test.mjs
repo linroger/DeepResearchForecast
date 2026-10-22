@@ -169,9 +169,14 @@ test('the binary table carries the research-only footnote with the policy from t
   let r = await render({ forecast, extra: { forecast_effect: 'diagnostic_only' } })
   assert.equal(count(r.html, 'class="bft-foot"'), 1)
   assert.match(text(r.html), /Probabilities come from research evidence only \(policy: diagnostic_only\)/)
-  // absent field → the production policy by name
+  // absent field → the footnote says the policy is not recorded; it never assumes one (S2 review)
   r = await render({ forecast })
-  assert.match(text(r.html), /Probabilities come from research evidence only \(policy: diagnostic_only\)/)
+  assert.match(text(r.html), /The forecast policy is not recorded for this run/)
+  assert.doesNotMatch(text(r.html), /research evidence only/)
+  // the fixture-only policy that let simulation signals into extraction says so
+  r = await render({ forecast, extra: { forecast_effect: 'legacy_prompt' } })
+  assert.match(text(r.html), /legacy_prompt: simulation signals entered probability extraction/)
+  assert.doesNotMatch(text(r.html), /research evidence only/)
   // another policy, and the forecast.json simulation_bridge carrier (design §3.3) as the fallback source
   r = await render({ forecast, extra: { forecast_effect: 'no_update' } })
   assert.match(text(r.html), /\(policy: no_update\)/)
@@ -206,4 +211,18 @@ test('splitMarkedBlock finds the first fenced block and refuses a missing or inv
   assert.equal(markdown.splitMarkedBlock('x', '', '<!-- e -->'), null)
   // the real markers are comments the renderer already drops, so a bridge-less render is unchanged
   assert.equal(markdown.renderMarkdown(`${BRIDGE_START}\n\nText\n\n${BRIDGE_END}`), '<p>Text</p>')
+})
+
+
+test('an unclosed code fence before the bridge never leaks the slot token; the labelled box still renders once (S2 review)', async () => {
+  const md = [
+    '# Title', '', 'Intro with a citation [S1].', '', '```', 'an unclosed fence', '',
+    BRIDGE_START, `## ${BRIDGE_TITLE_EN}`, '', SIM_BANNER_EN, '', BRIDGE_END, '',
+    '## References', '', '1. [S1] Source one. https://example.com/one',
+  ].join('\n')
+  const { html } = await render({ markdownContent: md })
+  assert.equal(count(html, 'SIMBRIDGESLOT'), 0)
+  assert.equal(count(html, 'class="sim-bridge"'), 1)
+  assert.equal(count(html, 'sim-bridge:start'), 0)
+  assert.ok(text(html).includes(SIM_BANNER_EN))
 })

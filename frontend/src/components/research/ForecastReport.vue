@@ -665,7 +665,11 @@ const renderedHtml = computed(() => {
       + '</div><div class="sim-bridge-body">' + renderMarkdown(split.inner, renderOpts.value) + '</div></section>'
     const slot = `<p>${SIM_BRIDGE_SLOT}</p>`
     // function replacer: the bridge body may contain `$` (amounts) that String.replace would treat as patterns
-    return main.includes(slot) ? main.replace(slot, () => box) : main + '\n' + box
+    if (main.includes(slot)) return main.replace(slot, () => box)
+    // The slot did not render as its own paragraph (an unclosed fence before the bridge, for
+    // example): render the document without the slot so the token never reaches the reader,
+    // and keep the labelled box at the end.
+    return renderMarkdown(`${split.before}\n\n${split.after}`, renderOpts.value) + '\n' + box
   } catch (e) {
     return ''
   }

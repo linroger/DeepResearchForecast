@@ -144,10 +144,20 @@ const rows = computed(() => binaryForecastRows(props.forecast, {
 const hasDataAnchors = computed(() => rows.value.some(row => row.dataAnchor))
 
 // ADR 0003 (design §3.6): the fixed footnote under the table names the policy under which the
-// scenario simulation ran; the probabilities themselves come from research evidence only.
+// scenario simulation ran. It mirrors sim_provenance.brief_sim_role: the research-only claim is
+// made only for a policy that was actually read and keeps the simulation out of probabilities;
+// an unread policy is reported as not recorded, never assumed.
+const RESEARCH_ONLY_POLICIES = ['diagnostic_only', 'no_update', 'validated_update']
 const probabilityFootnote = computed(() => {
-  const policy = String(props.forecastEffect || '').trim() || 'diagnostic_only'
-  return L(`概率仅来自研究证据（策略：${policy}）`, `Probabilities come from research evidence only (policy: ${policy})`)
+  const policy = String(props.forecastEffect || '').trim().toLowerCase()
+  if (!policy) return L('本次运行未记录概率策略', 'The forecast policy is not recorded for this run')
+  if (RESEARCH_ONLY_POLICIES.includes(policy)) {
+    return L(`概率仅来自研究证据（策略：${policy}）`, `Probabilities come from research evidence only (policy: ${policy})`)
+  }
+  if (policy === 'legacy_prompt') {
+    return L('fixture 专用策略 legacy_prompt：模拟信号进入了二元概率抽取', 'Fixture-only policy legacy_prompt: simulation signals entered probability extraction')
+  }
+  return L(`概率策略：${policy}`, `Forecast policy: ${policy}`)
 })
 
 // 命题列：截断展示，原生 title 露出全文（附 anchor-and-adjust 理由，若有）。
