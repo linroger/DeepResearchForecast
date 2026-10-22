@@ -30,6 +30,14 @@ This distinction is mandatory: a dossier floor on every pass multiplies latency 
 5. Check convergence after every evidence-bearing call. Continue only for a named unresolved KIQ with a credible next upgrade.
 6. Before final synthesis, verify the synthesis gate and load the final-dossier reference.
 
+## News and cross-platform context
+
+When exposed, use `news_search` to discover dated publisher articles and then `web_fetch` selected original URLs before factual or numeric claims. A NewsAPI snippet is discovery, not a fetched page. Keep publisher, URL, language, publication time and retrieval time; repeated outlets may share one origin. The opening prefetch is already captured: reuse its evidence before spending another query.
+
+`social_search`, when enabled, returns attributed discussion and opinion. `market_compare` returns source-aware topic candidates from additional venues. Preserve provider/native identity, quote basis, units, rules and horizon; similar titles do not establish equivalent contracts or executable arbitrage. These records are context only: never convert tone to event probability or participation counts to trading volume, and never treat them as automatic forecast anchors or settlement evidence.
+
+Read availability status before interpreting an empty list: unavailable, forbidden, rate-limited, partial, disabled and verified empty differ. Do not retry a failed provider repeatedly. Once the research generation is sealed, use stored captures and citations; do not acquire replacement evidence on resume. If these tools are absent, continue with the existing web/data tools.
+
 ## Evidence discipline
 
 - **S1**: original/authoritative material — official statistics, filings, laws, court records, peer-reviewed papers, transcripts, primary datasets, direct first-party statements. Preferred for load-bearing facts.

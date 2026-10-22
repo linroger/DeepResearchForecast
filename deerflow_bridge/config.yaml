@@ -827,6 +827,20 @@ tools:
     group: web
     use: market_tools:prediction_market_search_tool
 
+  # Attributed topic context. Runtime registration also upgrades preserved user
+  # configs in memory; the shared enablement flags govern actual availability.
+  # NEWS_CONTEXT_ENABLED is the master switch. NEWSAPI_ENABLED and
+  # MARKET_INTELLIGENCE_ENABLED default on; REDDIT_SIGNALS_ENABLED defaults off.
+  - name: news_search
+    group: web
+    use: news_tools:news_search_tool
+  - name: social_search
+    group: web
+    use: news_tools:social_search_tool
+  - name: market_compare
+    group: web
+    use: news_tools:market_compare_tool
+
   - name: data_search
     group: web
     use: data_tools:data_search_tool
@@ -1201,6 +1215,12 @@ subagents:
 
         TOOLING: This is WEB research. Work via `web_search` and `web_fetch`; when the assigned
         focus has a forecastable outcome, use `prediction_market_search` for calibration.
+        When enabled, use `news_search`, `social_search`, and `market_compare` for
+        attributed topic context. Article snippets are discovery only: fetch the
+        publisher page with `web_fetch` before factual or numeric claims. Social
+        posts and cross-platform candidates are context, with no automatic
+        probability, equivalence, anchoring, or resolution claim. Keep provider,
+        publication/quote time, retrieval time, source URL, and access limitations.
         When available, use `data_search` and `data_get` for official observations; preserve
         exact units, periods, dataset URLs and provisional citations. Search metadata is
         discovery only; keep publisher projections labelled separately from observations.
@@ -1232,6 +1252,9 @@ subagents:
         - web_search
         - web_fetch
         - prediction_market_search
+        - news_search
+        - social_search
+        - market_compare
         - data_search
         - data_get
         - read_file

@@ -1168,6 +1168,16 @@ class _RunState:
         with self._lock:
             self._writer(self.path, json.dumps(self._data, ensure_ascii=False, indent=2))
 
+    def bind_context(self, context: Mapping[str, Any]) -> None:
+        """Persist the immutable capture proof before any synthesis/QA consumer."""
+        proof = {"generation_id": context.get("generation_id"), "sha256": context.get("sha256")}
+        with self._lock:
+            previous = self._data.get("news_market_context_binding")
+            if previous and previous != proof:
+                raise _EngineFailure("news_context_evidence_corrupt: sealed research binding changed")
+            self._data["news_market_context_binding"] = proof
+            self.save()
+
     def phase(self, name: str) -> dict:
         with self._lock:
             return dict(self._data["phases"].get(name) or {})
@@ -1243,6 +1253,35 @@ def _open_work_dir(out_dir: Path, identity: Mapping[str, Any],
                 and isinstance(data.get("phases"), dict) and isinstance(data.get("kiqs"), dict)):
             return work, _RunState(work / STATE_FILENAME, data, writer), True
         target = _unique_stale_path(out_dir)
+        context = out_dir / "news_market_context.json"
+        binding = data.get("news_market_context_binding") if isinstance(data, dict) else None
+        previous_sources = _read_json(work / "sources_ledger.json")
+        context_seen = (isinstance(previous_sources, list)
+                        and any(isinstance(row, dict) and row.get("context_id") for row in previous_sources))
+        if context.exists() or context.is_symlink() or binding or context_seen:
+            # Only a genuine input change with a valid previous owner permits
+            # retirement. Corruption, missing proof and same-run resume stay errors.
+            previous_identity = data.get("identity") if isinstance(data, dict) else None
+            valid_owner = (isinstance(previous_identity, dict) and previous_identity != dict(identity)
+                           and isinstance(data.get("phases"), dict) and isinstance(data.get("kiqs"), dict)
+                           and isinstance(binding, dict)
+                           and isinstance(binding.get("generation_id"), str)
+                           and re.fullmatch(r"[a-f0-9]{64}", str(binding.get("sha256") or "")))
+            if not valid_owner:
+                raise _EngineFailure("news_context_evidence_corrupt: previous capture has no valid changed-run binding")
+            try:
+                # Stage the exact capture alongside its old state before the
+                # directory rename. The provider alone owns store locking and
+                # retirement of the matching process-cached root registration.
+                api = rg._context_api()
+                previous = api.load_context(out_dir)
+                if (previous.get("generation_id") != binding["generation_id"]
+                        or previous.get("sha256") != binding["sha256"]):
+                    raise ValueError("previous context binding changed")
+                api.archive_context(out_dir, work, expected_generation_id=binding["generation_id"],
+                                    expected_sha256=binding["sha256"])
+            except Exception as exc:
+                raise _EngineFailure(f"news_context_evidence_corrupt: archive failed ({type(exc).__name__})") from None
         work.rename(target)
         reporter.write("warn", f"v3: previous work dir belongs to another run identity or is "
                                f"unreadable; archived it to {target.name}")
@@ -3946,7 +3985,7 @@ class KiqAgent:
         slots = 0
         for index, call in enumerate(calls):
             name = call.get("name")
-            if call.get("error") or name not in ("web_search", "web_fetch", "data_search", "data_get"):
+            if call.get("error") or name not in ("web_search", "web_fetch", "data_search", "data_get", *rg.CONTEXT_TOOL_METHODS):
                 runnable.append(index)  # answered with a short error by _call_tool
                 continue
             slots += 1
@@ -4019,7 +4058,7 @@ class KiqAgent:
         its URL, or its ``S<n>`` marker — with the same or a near-same focus
         (:func:`_repeats_read`); otherwise ``call`` is recorded."""
         args = call.get("args") or {}
-        if call.get("name") in ("data_search", "data_get"):
+        if call.get("name") in ("data_search", "data_get", *rg.CONTEXT_TOOL_METHODS):
             key = (str(call["name"]), json.dumps(args, sort_keys=True))
             if key in queued:
                 return True
@@ -4070,7 +4109,8 @@ class KiqAgent:
 
     def _data_tools(self) -> bool:
         """The official-data tools are bound on this agent's calls."""
-        return getattr(self, "agent_tools", None) is rg.AGENT_TOOLS_WITH_DATA_SCHEMA
+        return any(row.get("function", {}).get("name") == "data_get"
+                   for row in getattr(self, "agent_tools", ()) or ())
 
     def _call_tool(self, call: Mapping[str, Any]) -> str:
         tools = self.engine.tools
@@ -4084,6 +4124,13 @@ class KiqAgent:
                         "or web_fetch with a url (and optionally a focus).")
             args = call.get("args") or {}
             name = call.get("name")
+            if name in rg.CONTEXT_TOOL_METHODS:
+                allowed = {row.get("function", {}).get("name") for row in self.agent_tools}
+                if name not in allowed or not callable(getattr(tools, "context_query", None)):
+                    return "UNKNOWN_TOOL: this context tool is disabled for this run."
+                deadline = rg.Deadline(max(0.0, self.deadline.remaining() - self.grace),
+                                       self.deadline._clock, label="KIQ context")
+                return tools.context_query(name, args.get("query"), agent_id=self.kiq.id, deadline=deadline)
             if name == "data_search" and callable(getattr(tools, "data_search", None)):
                 deadline = rg.Deadline(max(0.0, self.deadline.remaining() - self.grace),
                                        self.deadline._clock, label="KIQ data")
@@ -4710,6 +4757,7 @@ class _Engine:
             max_datasets=rg.dataset_cap(self.preset.depth, env),
             per_agent_overrides={
                 "planner": (SCOUT_QUERIES_MAX, 0),
+                "context-prefetch": (3, 2),
                 "seeder": (SEED_QUERIES_PER_KIQ * (self.preset.max_kiqs + self.preset.gap_rounds
                                                    * self.preset.followups_per_round), 0),
             })
@@ -4757,6 +4805,153 @@ class _Engine:
         self.qa: dict = {}
         self.final_report = ""
         self._synth_context_cache: str | None = None
+        self.context_names: tuple[str, ...] = ()
+        self.context_snapshot: dict = {}
+        self._context_prefetched = False
+        self._configure_context()
+        self.agent_tools = rg.agent_tools_schema(self.data_enabled, self.context_names)
+        if callable(getattr(self.tools, "context_query", None)):
+            self.tools.context_query = self._watch_tool(self.tools.context_query, "context_query")
+
+    def _configure_context(self) -> None:
+        """Bind the trusted run directory once; a resumed attempt never reacquires."""
+        names = rg.context_tool_names(self.env)
+        parent_digest = str(self.env.get("NEWS_CONTEXT_QUESTION_SHA256") or "").strip()
+        if parent_digest and not re.fullmatch(r"[a-f0-9]{64}", parent_digest):
+            raise _EngineFailure("news_context_evidence_corrupt: invalid parent question identity")
+        expected_question = parent_digest or _sha256(" ".join(self.question.split()))
+        path = self.out_dir / "news_market_context.json"
+        binding = self.state.snapshot().get("news_market_context_binding")
+        # Missing old/off artifacts are compatible; a prior context consumer
+        # must retain its captured proof even if the feature switch later changes.
+        if self.resumed and not path.exists():
+            qa = _read_json(self.work / "qa.json") or {}
+            if binding or any(row.get("context_id") for row in self.ledger.rows()) or qa.get("news_market_context_sha256"):
+                raise _EngineFailure("news_context_evidence_corrupt: captured generation is missing")
+            return
+        if not names:
+            # The feature-off path performs no provider/client work or writes.
+            # Existing proof remains subject to downstream artifact validation.
+            return
+        try:
+            api = rg._context_api()
+            sealed = bool(binding) or any(self.state.is_done(phase) for phase in ("synthesize", "qa", "finalize"))
+            self.context_snapshot = api.load_context(self.out_dir, require_sealed=sealed)
+            if binding and binding != {"generation_id": self.context_snapshot.get("generation_id"),
+                                       "sha256": self.context_snapshot.get("sha256")}:
+                raise ValueError("sealed research binding changed")
+            old_plan = _read_json(self.work / "plan.json") or {}
+            as_of = str(old_plan.get("as_of") or _utc_date())
+            client = getattr(self.tools, "context_client", None)
+            if client is None:
+                client = api.get_context_client(self.out_dir, question=self.question,
+                                                language="zh" if self.language == CHINESE else "en", as_of=as_of)
+                self.tools.context_client = client
+            self.context_names = names
+            identity = self.context_snapshot or client.snapshot()
+            if identity:
+                # Validate before acquisition as well as replay. The parent digest
+                # is trusted orchestration state; direct CLI uses its actual question.
+                if identity.get("question_sha256") != expected_question:
+                    raise ValueError("context identity changed")
+                if identity.get("as_of") != as_of:
+                    raise ValueError("context cutoff changed")
+            for item in self.context_snapshot.get("items", []):
+                self.ledger.register_context(item, by="context-prefetch")
+            if self.resumed:
+                self._context_prefetched = True
+                self.tools.freeze_context()
+                if self.context_snapshot and not self.context_snapshot.get("sealed"):
+                    self._seal_context()
+            self.meta["news_market_context"] = {"status": "stored_only" if self.resumed else "enabled"}
+        except ImportError:
+            if path.exists():
+                raise _EngineFailure("news_context_evidence_corrupt: captured generation cannot be validated") from None
+            # An undeployed optional module is unavailable, not an empty search.
+            self.meta["news_market_context"] = {"status": "unavailable"}
+        except Exception as exc:
+            raise _EngineFailure(f"news_context_evidence_corrupt: {type(exc).__name__}") from None
+
+    def _context_heading(self) -> str:
+        return "新闻与市场背景" if self.language == CHINESE else "News and market context"
+
+    def _context_text(self) -> str:
+        client = getattr(self.tools, "context_client", None)
+        context = getattr(self, "context_snapshot", {}) or (client.snapshot() if client is not None else {})
+        if not context or not (context.get("items") or context.get("queries") or context.get("providers")):
+            return ""
+        # The renderer validates the immutable envelope digest. Citation aliases
+        # are a separate projection, never mutations of the capture presented to it.
+        text = rg._context_api().render_context(
+            context, lang="zh" if self.language == CHINESE else "en", max_items=12)
+        refs = []
+        for item in context["items"][:12]:
+            row = self.ledger.find(item.get("url"))
+            if not row:
+                continue
+            label = ("captured contextual contract; publisher fetch does not replace the stored quote"
+                     if item.get("kind") in ("market_quote", "community_forecast") else
+                     "publisher page fetched" if row.get("fetched") else
+                     "discovery only; fetch before factual claims")
+            refs.append(f"[S{row['sid']}] {row['title']} — {row.get('kind')}; {label}")
+            details = rg.context_evidence_text(item)
+            if details:
+                refs.append(details)
+        return text + ("\n" + "\n".join(dict.fromkeys(refs)) if refs else "")
+
+    def phase_context(self) -> None:
+        """One bounded topic prefetch before planning and KIQ fan-out."""
+        if not self.context_names or self._context_prefetched:
+            return
+        self._context_prefetched = True
+        query = _short_query_base(self.question, self.language)[:rg.MAX_QUERY_CHARS]
+        try:
+            seconds = float(self.env.get("NEWS_CONTEXT_DEADLINE_SECONDS", "10"))
+            seconds = min(10.0, max(0.0, seconds)) if math.isfinite(seconds) else 10.0
+        except (TypeError, ValueError):
+            seconds = 10.0
+        deadline = self.deadline.child(seconds, label="topic context")
+        for name in (name for name in self.context_names if name == "news_search"):
+            if self.cancelled or deadline.expired():
+                break
+            self.tools.context_query(name, query, agent_id="context-prefetch", deadline=deadline)
+        client = getattr(self.tools, "context_client", None)
+        if client is not None:
+            self.context_snapshot = client.snapshot()
+        # Selected publisher pages always go through the existing fetch owner.
+        articles = [item for item in self.context_snapshot.get("items", [])
+                    if item.get("kind") == "news_snippet"][:2]
+        for item in articles:
+            if self.cancelled or deadline.expired():
+                break
+            self.tools.fetch(item.get("url"), focus=self.question, agent_id="context-prefetch",
+                             kiq_text=self.question)
+        self.ledger.flush()
+
+    def _seal_context(self) -> None:
+        client = getattr(self.tools, "context_client", None)
+        if client is None:
+            return
+        # Captures retain original URLs, never positional citation authority.
+        # Final source refs are derived by canonical URL after QA reorders sources.
+        self.context_snapshot = client.seal()
+        if self.context_snapshot:
+            self.state.bind_context(self.context_snapshot)
+        self.tools.freeze_context()
+        self.meta["news_market_context"] = {
+            "status": "sealed", "generation_id": self.context_snapshot.get("generation_id"),
+            "sha256": self.context_snapshot.get("sha256")}
+
+    def _check_context_reuse(self) -> None:
+        if not getattr(self, "context_snapshot", {}):
+            return
+        current = rg._context_api().load_context(self.out_dir, require_sealed=True)
+        if not current or current.get("sha256") != self.context_snapshot.get("sha256"):
+            raise _EngineFailure("news_context_evidence_corrupt: pinned context changed")
+        if self.state.is_done("qa"):
+            qa = _read_json(self.work / "qa.json") or {}
+            if qa.get("news_market_context_sha256") != current.get("sha256"):
+                raise _EngineFailure("news_context_evidence_corrupt: QA context binding changed")
 
     def _configure_data(self) -> None:
         """Capability discovery is lazy.  A resumed attempt keeps the run's data
@@ -4949,6 +5144,9 @@ class _Engine:
         sets a flag, so a signal handler may call it."""
         self.cancelled = True
         self._freeze_data()
+        freeze = getattr(self.tools, "freeze_context", None)
+        if callable(freeze):
+            freeze()
 
     def _watch_tool(self, tool: Callable[..., str], kind: str) -> Callable[..., str]:
         """``tool`` (a ResearchTools search/fetch) answering
@@ -4958,7 +5156,7 @@ class _Engine:
         def watched(*args: Any, **kwargs: Any) -> str:
             if self.cancelled:
                 return CANCELLED_TOOL_TEXT
-            if kind.startswith("data_") and "deadline" not in kwargs:
+            if (kind.startswith("data_") or kind == "context_query") and "deadline" not in kwargs:
                 kwargs["deadline"] = self.deadline
             text = tool(*args, **kwargs)
             if kind == "search" and text == rg.MSG_SEARCH_UNAVAILABLE:
@@ -5105,12 +5303,14 @@ class _Engine:
     def execute(self) -> int:
         self.announce()
         try:
+            self.phase_context()
             self.phase_plan()
             self.replan_after_outage()
             self.phase_data()
             self.load_followups()
             self.phase_gather()
             self.phase_gap()
+            self._seal_context()
             self.phase_synthesize()
             self.phase_qa()
             return self.phase_finalize()
@@ -5638,6 +5838,9 @@ class _Engine:
             queries = [_short_query_base(self.question, self.language)]
         digest = self._scout(queries)
         shared = [pre_brief, self.delimit(LABEL_SCOUT, digest)]
+        context = self._context_text()
+        if context:
+            shared.append(self.delimit("NEWS AND MARKET CONTEXT", context))
         task = _render(_T_PLAN, min_kiqs=min(4, self.preset.max_kiqs), max_kiqs=self.preset.max_kiqs,
                        min_sections=self.preset.sections_min, max_sections=self.preset.sections_max,
                        language=self.language, actor_cap=self.actor_prompt_cap)
@@ -5965,6 +6168,9 @@ class _Engine:
             rows = [row for row in (self.ledger.get(sid) for sid in sids) if row]
             rows.sort(key=lambda row: (tier_rank.get(row.get("tier"), 3), sids.index(row["sid"])))
             seeds[kid] = rows[:SEED_ROWS_PER_KIQ]
+            context_rows = [row for row in self.ledger.rows() if row.get("context_id")]
+            seeds[kid] += [row for row in context_rows[:4]
+                           if row["sid"] not in {entry["sid"] for entry in seeds[kid]}]
             present = {row["sid"] for row in seeds[kid]}
             seeds[kid] += [row for sid in self.data_index.get(kid, []) if sid not in present
                            for row in [self.ledger.get(sid)] if row]
@@ -5988,6 +6194,11 @@ class _Engine:
             seeds=seeds or "(no seed results; start with web_search)",
             max_searches=self.preset.searches_per_kiq, max_fetches=self.preset.fetches_per_kiq,
             max_steps=self.preset.agent_max_steps, language=self.language)
+        context = self._context_text()
+        if context:
+            task += "\n" + self.delimit("NEWS AND MARKET CONTEXT", context)
+            task += ("\nUse news_search/social_search/market_compare only when exposed. Publisher snippets "
+                     "require web_fetch before factual claims; opinions and market quotes stay context only.")
         if getattr(self, "data_enabled", False):
             task += self._kiq_data_text(kiq)
         if getattr(self, "skill_library", None) is not None:
@@ -6339,6 +6550,9 @@ class _Engine:
             records = [self.records[k.id] for k in self.kiqs if k.id in self.records]
             raw, dropped = build_digest(records, self.ledger.get, self.preset.digest_cap, self.language)
             raw, lost = self._with_official_data(raw)
+            context = self._context_text()
+            if context:
+                raw += "\n\n" + context
             dropped += lost
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
@@ -6775,7 +6989,11 @@ class _Engine:
         if getattr(self, "skill_library", None) is not None:
             task += self._writer_skill_text(scenario=False, summary=True)
         try:
-            result = self._write_call(rg.build_messages(ENGINE_CORE, [self.brief, leads_block], task),
+            shared = [self.brief, leads_block]
+            context = self._context_text()
+            if context:
+                shared.append(self.delimit("NEWS AND MARKET CONTEXT", context))
+            result = self._write_call(rg.build_messages(ENGINE_CORE, shared, task),
                                       label="synth:exec", deadline=deadline)
             body = split_writer_output(result.text, [heading]).get(heading, "").strip()
             if result.truncated:
@@ -6799,6 +7017,7 @@ class _Engine:
     # =================================================================== qa
     def phase_qa(self) -> None:
         self._check_data_reuse()
+        self._check_context_reuse()
         if self.state.is_done("qa"):
             qa = _read_json(self.work / "qa.json")
             report = _read_text(self.work / "qa_report.md")
@@ -6875,6 +7094,9 @@ class _Engine:
             repaired.append({"check": "scenario_weights_consistent",
                              "action": "probabilities of scenarios outside the frame removed", "rows": extra_rows})
         self._embed_data_exhibits(sections)
+        context = self._context_text()
+        if context:
+            sections.append({"title": self._context_heading(), "body": context, "is_context": True})
         report = render_report(self.question, self.language, exec_body, sections, frame)
         if not scenarios_match_frame(parse_report_scenarios(report), frame):
             exec_body, changed = neutralize_scenario_markup(exec_body)
@@ -6906,6 +7128,12 @@ class _Engine:
               "critique_issues": issues, "truncated_sections": trimmed, "dropped_sections": dropped,
               "citation_order": order, "report_chars": len(final), "report_sha256": _sha256(final),
               "created_at": _iso_now()}
+        if self.context_snapshot:
+            qa["news_market_context_sha256"] = self.context_snapshot.get("sha256")
+            qa["news_market_context_citations"] = {
+                rg.canonical_url(row["url"]): f"S{index}"
+                for index, sid in enumerate(order, 1) for row in [self.ledger.get(sid)]
+                if row and row.get("context_id")}
         if self._data_rows():
             paths = {"data/datasets.json"}
             manifest = _read_json(self.out_dir / "data" / "datasets.json") or {}
@@ -7325,6 +7553,8 @@ class _Engine:
         if self._data_rows():
             after = getattr(self, "_data_baseline_after", None)
             expected.insert(expected.index(after) + 1 if after in expected else len(expected), self._data_heading())
+        if self._context_text():
+            expected.append(self._context_heading())
         expected.append("References")
         headings = [t for t, _ in sections]
         short = [t for t, b in body_sections if len(b.strip()) < SECTION_MIN_CHARS and t != self._data_heading()]
@@ -7420,6 +7650,7 @@ class _Engine:
 
     def phase_finalize(self) -> int:
         self._check_data_reuse()
+        self._check_context_reuse()
         self.log("stage", "research:v3:finalize start")
         self._require_model_output()
         with self.phase("finalize") as deadline:
@@ -7491,6 +7722,17 @@ class _Engine:
                 "source_origin": "fetched" if fetched else "cited",
                 "reachable": True if fetched else None,
             }
+            if row.get("context_id"):
+                for name in ("context_id", "provider", "kind", "published_at", "retrieved_at", "fetched_at",
+                             "publisher", "native_id", "language", "eligibility",
+                             "context_metadata", "context_evidence_sha256"):
+                    if name in row:
+                        entry[name] = row[name]
+                entry["date"] = row.get("published_at")
+                if not fetched:
+                    entry["source_origin"] = ("context_quote" if row.get("kind") in
+                                              ("market_quote", "community_forecast") else "context_snippet")
+                    entry["excerpt"] = row.get("snippet", "")
             if fetched:
                 entry["content_sha256"] = row.get("content_sha256")
                 text = self.tools.page_text(sid)
