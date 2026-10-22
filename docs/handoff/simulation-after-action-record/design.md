@@ -1,6 +1,6 @@
 # Simulation After-Action Record and Forecast-Report Bridge — Design
 
-**Status:** Proposed design, 2026-10-22. Nothing in this document is implemented.
+**Status:** Proposed design, 2026-10-22. Slice S0 (S0.1–S0.8, T3/T7/T9 and the review fixes) is implemented on `claude/sim-provenance-s0`; S1–S4 are in progress. §10 records what S0 actually did where it differs from §3–§6.
 **Decision record:** [ADR 0003](../../adr/0003-simulation-after-action-record-and-report-bridge.md).
 **Continuity:** [handoff.md](handoff.md) in this folder.
 
@@ -345,3 +345,30 @@ Acceptance for marking ADR 0003 Accepted: T1–T16 green in the plain suite, one
 - Realism improvements to the arbiter, the kernel or actor decisions.
 - The backtest ablation run that would justify `validated_update` (owned by the backtest program).
 - Interview tooling for the arbiter or kernel (no post-run query channel exists beyond OASIS agents).
+
+
+---
+
+## 10. Deltas — slice S0 as implemented (2026-10-22/23)
+
+Recorded here so §3–§6 can stay the target design. Commits are on `claude/sim-provenance-s0`.
+
+| Area | Design said | S0 did | Why |
+|---|---|---|---|
+| §3.1–§3.3 | Record, gate and bridge | Not in S0. The shape contract `simulation_record_contract.py` (schema, loaders, `is_published`) was committed first as the shared anchor for S1 and S3 | Lets S1 and S3 proceed in parallel against one contract |
+| §3.4 item 3 | Delete evidence-target rewrites; legacy labels become hard leakage issues | Done; plus the first pattern cut over-matched real-world prose and was re-anchored after review (N-agent compounds need a faction noun, 'agent dynamics' excludes hyphen compounds, Chinese forms need a methodology word). `the_simulation` covers this/our/a; `Simulation Agent` is case- and 模拟-prefix-insensitive; laundering labels (情景推演专家视角, scenario panel, 'Analytical perspective —') and 'has an agent for' are leakage patterns | Review found both false positives and missed determiner variants; probe over 15 demo reports: 37 newly flagged sentences, all simulation content in pre-policy reports, 0 in clean reports |
+| §3.4 item 4 | Section-aware lint (fence) | Not in S0; S3 owns it. Consequence recorded: the canonical label 情景模拟 / "scenario simulation" is deliberately NOT a leakage pattern yet, so the what-if label survives, and a quote labelled with it is exempt from grounding deletion but not removed | Without a fence, flagging the canonical label would delete the only honest label S0 can place |
+| §3.4 item 5 | Tier-2 prompt says delete-or-cite | Done; the numeric guard changed from "every input number survives" to all-or-nothing per leaking sentence (a surviving simulated sentence must have carried [S#] and keep every number; non-leaking numbers survive byte-identically; no new numbers; no growth beyond whitespace). A review blocker (the guard referenced the lint module under an unbound alias; the swallowed NameError dropped the whole repair pass on live runs) is fixed with stub-LLM tests | A delete-oriented rewrite can never pass "every number survives" |
+| §3.4 item 5 | Pack header and prompts unified | The pack header's "must attribute to 内部情景推演" bullet is replaced by "must not enter the body"; the section system prompt, interview-tool description and tool hints say the same; `PLAN_SYSTEM_PROMPT` and the Part 2 prompt lose the 'scenario analysis' relabel | Review found four conventions still coexisting after the first S0.5 |
+| §3.4 item 7 | Remove `interview_agents` from the default-engine tool list | Deferred to S3; S0 only rewrote its description and hint to forbid body use | Tool removal interacts with the writer tool set S3 rebuilds |
+| §3.5 | One constants module | Done, plus `WHATIF_TABLE_*` labels, `BRIEF_SIM_ROLE_*` and `outcome_shares_header_re()`. The world-variables chart became "Simulated state variables": its old title matched the `simulated world` pattern, so its image line had been deleted from every published report | Found by the T9 lint-survival test added after review |
+| §3.6 brief | "ran (health, N periods); informed mechanism analysis only, not probabilities; see Simulation Record" | Health plus organic-action count, and the policy sentence is looked up from the run's pinned `safety_policy_v1.simulation_forecast_effect` (diagnostic_only / no_update / legacy_prompt / not recorded); the record link arrives with S1/S3 | The brief must not assert a policy it did not read |
+| §3.6 exec brief chart | Exclude hint `simulation` | Done, and `_find_scenario_chart` now reads the WAVE9 schema-v2 manifest it previously ignored | Its exclusion guard was dead code otherwise |
+| §5 S0.2 | Placement hint `simulation` | Done; the hint's keyword list was narrowed to simulation words only (trajectory/model/outcome/world matched evidence sections) | Until S3's bridge exists the chart falls to the Visual Annex more often, which is the honest default |
+| §5 S0.6 | Align marker or delete reconciliation | Aligned via the shared regex; the legacy `【预测结果分布` wording is accepted for fixtures only | Keeps `legacy_prompt` fixtures parsing |
+| §5 S0.7 | Default off, comment removed | Done; the extractor's own fallback default and docstring, and `.env.example`, follow | Second default lived in the extractor |
+| §5 S0.8 | Relabel the what-if table | Done via constants; first wording (模拟推演产物) was itself a leakage pattern and would have been deleted, leaving an unlabelled table | Caught by review; T9 now lints every reader-facing string |
+| §6 T3/T7/T9 | As named | T3 `test_report_lint_provenance.py`; T7 `test_report_visualizer_titles.py` + `test_exec_brief_sim_disclosure.py`; T9 `test_sim_provenance_constants.py`; plus `test_outcome_header_alignment.py`, `test_simleak_tier2_guard.py`, `test_simulation_record_contract.py` | — |
+| Final audit | — | `_final_audit_integrity_issues` also treats a non-zero `legacy_sim_labels` count as a hard issue | Belt and braces beside the leakage patterns |
+
+Verification at the S0 tip (clean worktree): 7,707 passed, 9 failed, 19 errors, 1,668 skipped; every failure reproduces at the base commit except one Kaleido probe that the standalone-import fix resolved. Adversarial review (3 lenses, 25 confirmed findings, 2 refuted): the blocker and all majors are fixed in the follow-up commits listed in handoff.md.
