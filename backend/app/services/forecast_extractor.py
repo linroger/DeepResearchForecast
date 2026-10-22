@@ -21,7 +21,15 @@ import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import sim_provenance as _sp
+try:
+    from . import sim_provenance as _sp
+except ImportError:  # loaded standalone from its file path (tests/test_kaleido_exit.py probe)
+    import importlib.util as _ilu
+    import os as _os
+    _spec = _ilu.spec_from_file_location(
+        "sim_provenance", _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "sim_provenance.py"))
+    _sp = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_sp)
 
 logger = logging.getLogger(__name__)
 

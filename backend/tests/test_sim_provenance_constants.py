@@ -142,3 +142,14 @@ def test_lint_has_no_relabel_as_evidence_rewrites():
         for bad in ("the evidence indicates", "available evidence", "forecast evidence base",
                     "evidence-based", "public position", "现有证据", "研究证据", "证据分析"):
             assert bad not in low, replacement
+
+
+def test_visualizer_and_extractor_still_load_standalone_from_their_file_paths():
+    """report_visualizer and forecast_extractor are loaded by path (no package) in
+    tests/test_kaleido_exit.py; the constants import must survive that."""
+    import importlib.util
+    for name in ("report_visualizer.py", "forecast_extractor.py"):
+        spec = importlib.util.spec_from_file_location(f"standalone_{name[:-3]}", BACKEND / name)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert module._sp.CHART_OUTCOME_SHARES_EN == sp.CHART_OUTCOME_SHARES_EN
