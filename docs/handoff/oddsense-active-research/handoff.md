@@ -2,7 +2,7 @@
 
 **Last updated (UTC):** 2026-10-22T08:41:08Z
 **Status:** Complete — reconciled source is accepted, active and merged/pushed to main. Current delivery is recorded in ../oddsense-main-reconciliation/delivery.json.
-**Current focus:** Preserve the verified main-based source commit while the concurrent primary merge is coordinated and reconciled.
+**Current focus:** Source delivery is complete. The current reconciliation handoff records the running tools and the separate live NewsAPI connectivity limit.
 
 ## 1. Request and context
 
@@ -35,7 +35,7 @@ The approved plan is in `PLANS.md`. It ordered source reconciliation and guarded
 - [x] Independently review all shared merges, renderer and readiness contract; bounded review closed with no blocker.
 - [x] Synchronize deployed bridge modules/skills; restart only the verified idle backend and preserve frontend.
 - [x] Capture one bounded live request and document its network timeout honestly.
-- [ ] Deliver the new main-based source/doc commit and verify remote identity.
+- [x] Deliver the new main-based source/doc commits and verify remote main identity; see the reconciliation delivery record.
 
 ## 5. Findings, decisions and assumptions
 
@@ -68,7 +68,7 @@ The live backend serves the new SourceContextPanel module and returns the read-o
 
 ## 9. Remaining work and next-session prompt
 
-Main delivery is the last repository step for this session. Live NewsAPI reachability is an explicit external/environment item. Do not launch a paid forecast simply to retest it, retry unchanged credentials repeatedly, weaken publication guards or overwrite primary's unrelated dirty work.
+Main source delivery is complete. Live NewsAPI reachability remains an explicit external/environment item. Do not launch a paid forecast simply to retest it, retry unchanged credentials repeatedly, weaken publication guards or overwrite primary's unrelated dirty work.
 
 Next-session prompt: “Read this handoff and `issues.md`, verify the currently running backend/source identities, and address OS-ACT-2 with a credential-free connection diagnostic first. After outbound access is repaired, run one bounded native NewsAPI compatibility check with the existing privately configured credential and record the actual response. Keep provider compatibility separate from the already passing controlled deep-research and publication acceptance. Do not resume saved forecasts or change peer work.”
 

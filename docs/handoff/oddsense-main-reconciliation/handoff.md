@@ -41,15 +41,15 @@ The previous activation record's preserved HEAD/index statement applies to the p
 
 ## 7. Scenario-focused tests
 
-Pending final resolved-source freeze. Reuse the unchanged guarded runners and actual workflow consumers; do not import application modules against the live checkout for tests.
+Completed on frozen private mirrors: actual research gathering, source ledger/QA, parent binding, report publication, API/download/export, replay/tamper, forecast feedback and world consumers. The narrow guard liveness revision and all separate evidence scopes are recorded below. No tests imported the live checkout.
 
 ## 8. Verification summary
 
-Historical controls: primary796/backend187/frontend/build and main readiness46 passed. Current conflicted source has not passed acceptance yet. No current all-green claim.
+Current bounded acceptance is complete: 5,339 broad passes, 73 affected matcher passes and 261 frontend passes with a successful build. Exact skips, expected failures and exclusions remain visible. Earlier 796/187/readiness46 and red phases are historical records, not substituted proof.
 
 ## 9. Remaining work and next steps
 
-Finish disjoint resolutions, inspect all auto-merged interfaces, then run fresh guarded gates. Preserve source availability limitations and avoid any paid model/saved run. Do not push before the current source passes.
+No implementation or merge-conflict work remains. Source delivery is verified on main and the closing records follow it. The separate NewsAPI connectivity issue remains open; native/live/model quality coverage is bounded as documented. Unrelated newskills/ input files remain preserved.
 
 ## 10. Updates
 
