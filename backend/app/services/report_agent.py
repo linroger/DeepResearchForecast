@@ -28,6 +28,7 @@ from ..config import Config
 from ..utils.atomic import write_text_atomic, write_json_atomic
 from ..utils.llm_client import LLMClient, llm_call_timeout
 from . import report_filter_safe as _filter_safe
+from . import news_market_context as _news_context
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -2208,6 +2209,7 @@ class ReportAgent:
         graph_priors_structural: Optional[Dict[str, Any]] = None,
         scenario_spine: Optional[List[Dict[str, Any]]] = None,
         official_data: Optional[Dict[str, Any]] = None,
+        news_market_context: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化Report Agent
@@ -2236,6 +2238,12 @@ class ReportAgent:
             scenario_spine: 主跑情景脊柱 [{name, resolution_criteria}]（W9-5 多种子集成对齐）——
                 钉进骨架推导，让种子对同一组命名情景打分（概率自由，新情景可追加）。
         """
+        # Freeze the bounded envelope before constructing any clients or prompts.
+        # Returning a fresh copy from the property also prevents caller mutation.
+        _context = _news_context._validated_copy(news_market_context)
+        self._news_context_sha256 = (_context or {}).get("sha256")
+        self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
+            sort_keys=True, separators=(",", ":"), allow_nan=False) if _context else None)
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
@@ -2303,6 +2311,8 @@ class ReportAgent:
         # 引用最终化 / 悬空修复 / 解析度审计解析同一套编号（单一事实源）。
         self._sources_index, self._citation_index = self._build_sources_index()
         self._data_pack = self._build_data_pack()
+        self._news_context_block = _news_context.render_context(
+            self.news_market_context, lang="zh" if self.output_language == "Chinese" else "en")
         # EXECPLAN2 I-3-2: 模拟量化信号包（确定性接地下限），懒构建一次后缓存；
         # 关闭 REPORT_SIGNAL_PACK 时始终为空串，_prepend_research_background 自动跳过（行为不变）。
         self._signal_pack = ""
@@ -2354,6 +2364,17 @@ class ReportAgent:
         # EXECPLAN2 I-5-4: 当前章节的工具调用计数器（_execute_tool 单一汇聚点累加），
         # 用于 per-section 遥测；未开遥测时该计数依旧无害地维护，开销可忽略。
         self._section_tool_calls = 0
+
+        # 2026-10-21（ISSUES LOG-16）：并发章节线程各自持有一份 contextvars 拷贝
+        # （RPT-9 的 parent_context.copy().run 提交），context-local 计数器天然按
+        # 「当前章节的 worker 上下文」隔离计数——并发模式的 per-section tool_calls
+        # 从此可归因（此前 I-6-3 直接跳过 → telemetry.json 恒为 tool_calls:0/sections:[]）。
+        # 并发章节 worker（_gen_body）按 idx 存 {tool_calls, duration_s}；串行记账循环
+        # 在 _precomputed 分支消费后清除。token/成本不做逐章归因（meter 共享、并发交
+        # 叉无法拆分）——遥测条目只声明 tool_calls/duration，诚实缺省。
+        # （per-section 工具计数见类属性 _SECTION_TOOL_CTX——__new__ 构造的测试 agent
+        # 不经 __init__ 也能用。）
+        self._concurrent_section_tools: Dict[int, Dict[str, Any]] = {}
         # FILTER-SAFE：走过内容合规写作模式的章节 → 阶梯层级（并发章节线程共享，写入加锁）。
         self._filter_safe_sections: Dict[str, int] = {}
 
@@ -3569,6 +3590,83 @@ class ReportAgent:
                 tags.add(tag)
         return next(iter(tags)) if len(tags) == 1 else ""
 
+    @property
+    def news_market_context(self) -> Optional[Dict[str, Any]]:
+        """A detached copy of the constructor's immutable sealed capture."""
+        frozen = getattr(self, "_news_market_context_json", None)
+        return json.loads(frozen) if frozen else None
+
+    def _news_context_canonical_line(self, line: str) -> bool:
+        """Exact validated source-table metadata, never an authored numeric claim."""
+        line = line.strip()
+        block = getattr(self, "_news_context_block", "")
+        begin, end = self._news_context_markers()
+        return bool(line and (line in {begin, end} or (
+            line.startswith("|") and line in {row.strip() for row in block.splitlines()})))
+
+    def _news_context_markers(self) -> Tuple[str, str]:
+        digest = getattr(self, "_news_context_sha256", None)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            return "", ""
+        prefix = "<!-- drf-news-market-context:" + digest
+        return prefix + ":start -->", prefix + ":end -->"
+
+    def _audit_context_metadata_lint(self, markdown: str, lint: Dict[str, Any], lang: str) -> None:
+        """Audit authored cells normally; exact sealed key/value rows are metadata.
+
+        Their completeness is checked against the validated carrier and canonical
+        block in the final audit. A long settlement-rule field is not a truncated
+        authored sentence. Changed/forged rows do not match and receive no waiver.
+        """
+        if not getattr(self, "_news_context_block", ""):
+            return
+        from . import report_lint as _rl
+        prose = "\n".join("" if (self._news_context_canonical_line(line)
+                                      or self._official_canonical_line(line)) else line
+                          for line in markdown.splitlines())
+        lint["table_cell_truncations"] = _rl.detect_table_cell_truncation(prose)
+        lint["language_contamination"] = _rl.detect_language_contamination(prose, lang)
+
+    def _append_news_market_context(self, report_id: str, report: "Report") -> None:
+        """Insert stored context before citation finalization and publication seal."""
+        block = getattr(self, "_news_context_block", "")
+        if not block:
+            return
+        begin, end = self._news_context_markers()
+        if not begin:
+            raise ValueError("News context metadata has no sealed identity")
+        markdown = (report.markdown_content or "").rstrip() + "\n\n" + begin + "\n" + block.rstrip() + "\n" + end + "\n"
+        report.markdown_content = markdown
+        self._news_context_attached = True
+        write_text_atomic(ReportManager._get_report_markdown_path(report_id), markdown)
+
+    def _restore_news_market_context(self, report_id: str, report: "Report") -> None:
+        """Restore only the machine-owned, validated metadata before final audit.
+
+        Editorial/citation passes may rewrite a dated title or metadata table
+        before numeric grounding recognizes its exact canonical lines. Its
+        authority is the detached sealed carrier, never a model-written heading
+        or an arbitrary Markdown exemption. A missing/ambiguous owned section
+        fails closed; no repair occurs after the read-only publication audit.
+        """
+        block = getattr(self, "_news_context_block", "").strip()
+        if not block or not getattr(self, "_news_context_attached", False):
+            return
+        context = _news_context._validated_copy(self.news_market_context)
+        stored = ReportManager.load_report_news_market_context(report_id)
+        if not context or stored != context:
+            raise ValueError("News context changed before report stabilization")
+        markdown = report.markdown_content or ""
+        begin, end_marker = self._news_context_markers()
+        starts = list(re.finditer(r"(?m)^" + re.escape(begin) + r"[ \t]*$", markdown))
+        ends = list(re.finditer(r"(?m)^" + re.escape(end_marker) + r"[ \t]*$", markdown))
+        if not begin or len(starts) != 1 or len(ends) != 1 or ends[0].start() <= starts[0].end():
+            raise ValueError("News context metadata section is missing or ambiguous")
+        restored = markdown[:starts[0].end()] + "\n" + block + "\n" + markdown[ends[0].start():]
+        if restored != markdown:
+            report.markdown_content = restored
+            write_text_atomic(ReportManager._get_report_markdown_path(report_id), restored)
+
     def _prepend_research_background(self, prompt: str, section_title: str = "") -> str:
         """T4.1: 把背景档案 + 来源索引钉到提示词最前；二者皆空时原样返回（回退冷图路径）。
 
@@ -3594,6 +3692,7 @@ class ReportAgent:
             self._forecast_spine_block, self._signal_pack,
             getattr(self, "_market_pack", ""),
             getattr(self, "_data_pack", ""),
+            getattr(self, "_news_context_block", ""),
             getattr(self, "_charts_block", ""),
         ) if p]
         # W9-8: 章节定向证据块——标题命中关键词时追加争议表 / 时间线（块为空时自动跳过）。
@@ -3831,10 +3930,12 @@ class ReportAgent:
         shares = ((data or {}).get("outcome") or {}).get("shares") or {}
         if not isinstance(shares, dict) or not shares:
             return ""
-        # Foglamp WP1 (1D, I-11)：WorldState 是 elicited model projection（模型引出的推演
-        # 投影），不是权威/硬模拟证据；标签随块携带，且带上 1C 的有效性裁定（若有）。
+        # Foglamp WP1 (1D, I-11) + SIM-RECONCILE：WorldState 是 elicited model projection
+        # （模型引出的推演投影），不是权威/硬模拟证据——但它作为**有界先验**进入预测骨架
+        # （基准分布锚点：band=概率带约束，advisory=机制先验），偏离须研究证据说明，
+        # 大分歧自动加宽区间/降信心。标签随块携带，且带上 1C 的有效性裁定（若有）。
         lines = ["【推演结果分布 P(outcome)（elicited model projection——模型引出的推演投影，"
-                 "非观察证据；仅供机制分析，不得据此调整概率）】"]
+                 "非观察证据；经基准分布锚点有界进入预测骨架，偏离须证据说明）】"]
         _validity = str((data or {}).get("validity") or "").strip().lower()
         if _validity and _validity != "valid":
             lines.append(f"⚠️ 有效性裁定：{_validity}（决策通道存在失败/沉默轮，"
@@ -4065,6 +4166,15 @@ class ReportAgent:
                         # PM-3：handoff-PLUS-refresh——研究期快照拉进来后对其做一次实时重报价，
                         # 保留 price_at_research 并算 Δ；重报价未生效时用研究期价并置 _markets_stale。
                         return self._requote_snapshot(rows[:max_n])
+                    # PM-NET（pipe_a19a0d5a4d39 复盘）：空快照若因研究期断网（transport_failure），
+                    # 显式留痕后照旧转现抓兜底——「无市场锚点」的原因必须可区分。
+                    _st = payload.get("status") if isinstance(payload, dict) and isinstance(
+                        payload.get("status"), dict) else {}
+                    if str(_st.get("empty_reason") or "") == "transport_failure":
+                        logger.warning(
+                            "研究期预测市场快照为空：研究时段 Polymarket 目录不可达"
+                            f"（{_st.get('transport_error_classes') or payload.get('reason') or 'transport_failure'}）；"
+                            "转报告期现抓兜底")
                 break  # 找到对应管线即停（无论有无市场文件），转现抓兜底
         except Exception as e:  # noqa: BLE001 — handoff 读取失败转现抓兜底
             logger.debug(f"读取 handoff prediction_markets.json 失败（转现抓兜底）: {e}")
@@ -4309,6 +4419,59 @@ class ReportAgent:
     # ──────────────────────────────────────────────────────────────
     # NEXTSTEPS P0-1 / P2-1 / P2-3: forecast spine + finalization + publish gate
     # ──────────────────────────────────────────────────────────────
+    def _simulation_anchor_inputs(self) -> Dict[str, Any]:
+        """SIM-RECONCILE: assemble the spine's simulation anchor inputs.
+
+        Reads the sim's ``world_state_trajectory.json`` outcome shares (decision-channel
+        elicited P(outcome)) plus the temporal span from ``simulation_config.json``.
+        Returns ``{}`` when there is no usable distribution; else
+        ``{shares, sim_horizon, as_of, span_days, mode, coverage}``.  ``mode``:
+        ``band`` when the sim's calendar horizon validly covers the question
+        (span ≥ SIM_HORIZON_MIN_DAYS) — shares then band-constrain scenario
+        probabilities; ``advisory`` for legacy short windows (a 9-day sliver must
+        not band-constrain a multi-year forecast — path prior only, research stays
+        authoritative for the terminal distribution).
+        """
+        sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
+                               str(self.simulation_id or ""))
+        traj_path = os.path.join(sim_dir, "world_state_trajectory.json")
+        try:
+            with open(traj_path, "r", encoding="utf-8") as f:
+                traj = json.load(f)
+        except Exception:  # noqa: BLE001 — 无轨迹（未开决策通道/旧运行）→ 无锚点
+            return {}
+        if not isinstance(traj, dict):
+            return {}
+        validity = str(traj.get("validity") or "valid").strip().lower()
+        if validity and validity != "valid":
+            return {}
+        shares = ((traj.get("outcome") or {}).get("shares")) if isinstance(traj.get("outcome"), dict) else None
+        rows = {str(k): float(v) for k, v in (shares or {}).items()
+                if isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0}
+        if not rows:
+            return {}
+        as_of = horizon = ""
+        try:
+            with open(os.path.join(sim_dir, "simulation_config.json"), "r", encoding="utf-8") as f:
+                tc = (json.load(f) or {}).get("temporal_config") or {}
+            as_of = str(tc.get("as_of_date") or "")
+            horizon = str(tc.get("horizon_date") or traj.get("horizon_date") or "")
+        except Exception:  # noqa: BLE001 — 期限缺失 → advisory（覆盖未知）
+            horizon = str(traj.get("horizon_date") or "")
+        span_days = 0
+        try:
+            from ..utils.dates import parse_as_of as _pao
+            d0, d1 = _pao(as_of), _pao(horizon)
+            if d0 is not None and d1 is not None:
+                span_days = max(0, (d1.date() - d0.date()).days)
+        except Exception:  # noqa: BLE001
+            span_days = 0
+        min_days = int(getattr(Config, "SIM_HORIZON_MIN_DAYS", 60) or 60)
+        mode = "band" if (horizon and span_days >= min_days) else "advisory"
+        return {"shares": rows, "sim_horizon": horizon, "as_of": as_of,
+                "span_days": span_days, "mode": mode,
+                "coverage": 1.0 if mode == "band" else 0.0}
+
     def _derive_and_pin_forecast_spine(self, report_id: str) -> None:
         """NEXTSTEPS P0-1: derive the structured forecast spine BEFORE section prose,
         persist forecast.json early, and pin a compact spine block into every section
@@ -4366,6 +4529,14 @@ class ReportAgent:
             if spine_facts:
                 spine_facts = self._build_data_pack(budget=self._spine_facts_budget())
                 official_kwargs["official_data"] = self.official_data
+            # SIM-RECONCILE：模拟结果分布作为骨架的有界先验（band=完整覆盖→概率带
+            # 约束；advisory=短窗遗留→机制先验）。模拟由此可审计地影响最终概率，
+            # 同时保持客观：偏离须给研究证据，大分歧自动加宽区间/降信心（R2-CAL-18）。
+            sim_anchor: Dict[str, Any] = {}
+            try:
+                sim_anchor = self._simulation_anchor_inputs()
+            except Exception as _ae:  # noqa: BLE001 — 锚点缺位按旧行为（无模拟影响）
+                logger.debug(f"simulation anchor inputs unavailable（忽略）: {_ae}")
             spine = _fe.derive_forecast_spine(
                 self.llm,
                 central_question=self.simulation_requirement or "",
@@ -4376,11 +4547,46 @@ class ReportAgent:
                 market_block=market_pack,
                 quantitative_facts=spine_facts,
                 language=getattr(self, "output_language", None) or "",
+                base_distribution=(sim_anchor.get("shares") or None),
+                anchor_mode=str(sim_anchor.get("mode") or "band"),
+                anchor_meta={k: sim_anchor.get(k) for k in
+                             ("sim_horizon", "as_of", "span_days", "mode", "coverage")},
                 **official_kwargs,
             )
             if not spine or not spine.get("scenarios"):
                 logger.info("预测骨架推导未产出情景，跳过（回退为成稿后抽取）")
                 return
+            # SIM-RECONCILE 判定日单一权威：模拟日历期限有效覆盖问题（band 模式）时，
+            # 骨架判定日=模拟判定日（模拟与报告天然同期，份额带约束才站得住）；
+            # 模型另选期限会被覆写并留痕。advisory（短窗遗留）保留模型期限，
+            # 只记录覆盖缺口（模拟前缀 vs 报告全期）。
+            if sim_anchor.get("mode") == "band" and sim_anchor.get("sim_horizon"):
+                forced_hz = str(sim_anchor["sim_horizon"])
+                model_hz = str(spine.get("horizon") or "").strip()
+                if model_hz and model_hz[:10] != forced_hz[:10]:
+                    spine["horizon_divergence"] = {
+                        "model_horizon": model_hz, "forced_horizon": forced_hz,
+                        "note": "判定日以模拟 temporal_config 为单一权威（模拟与报告同期）"}
+                    logger.info(f"预测骨架判定日对齐模拟期限: {model_hz} → {forced_hz}")
+                spine["horizon"] = forced_hz
+            elif sim_anchor.get("mode") == "advisory" and sim_anchor.get("span_days"):
+                try:
+                    from ..utils.dates import parse_as_of as _pao
+                    d0 = _pao(sim_anchor.get("as_of"))
+                    d1 = _pao(str(spine.get("horizon") or ""))
+                    if d0 is not None and d1 is not None:
+                        total = max(1, (d1.date() - d0.date()).days)
+                        cov = min(1.0, float(sim_anchor["span_days"]) / float(total))
+                        spine.setdefault("simulation_anchor", {})["coverage"] = round(cov, 3)
+                        if cov < 0.8:
+                            spine.setdefault("horizon_divergence", {})["coverage_gap"] = {
+                                "sim_horizon": sim_anchor.get("sim_horizon"),
+                                "report_horizon": spine.get("horizon"),
+                                "coverage": round(cov, 3),
+                                "note": "模拟仅覆盖预测期前段（遗留短窗运行）",
+                            }
+                except Exception:  # noqa: BLE001 — 覆盖率核算失败不影响骨架
+                    pass
             # RPT-3（REPORT_CRITIQUE_BEFORE_PROSE，默认开）：红队自校准 + 事前验尸挪到
             # 叙事之前——此前批判发生在全部正文写完之后，正文（连章节标题里的百分比）
             # 捍卫的是 4 情景 39/23/19/19，而 forecast.json 交付的是批判后的 5 情景
@@ -5047,7 +5253,7 @@ class ReportAgent:
                 if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS
             )
             body = "\n".join(line for line in body.splitlines()
-                             if not self._official_canonical_line(line))
+                             if not (self._official_canonical_line(line) or self._news_context_canonical_line(line)))
             return _audit_grounding(
                 body,
                 index_map=self._citation_index_or_fallback(),
@@ -5182,6 +5388,7 @@ class ReportAgent:
                 or stripped.startswith("#")
                 or not _number_re.search(stripped)
                 or self._official_canonical_line(line)
+                or self._news_context_canonical_line(line)
             ):
                 if not stripped or (stripped and not table_cells):
                     active_table_headers = []
@@ -5874,6 +6081,7 @@ class ReportAgent:
         self, md: str, index_map: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         from .forecast_extractor import (
+            _NUMBER_RE as _number_re,
             is_markdown_table_delimiter,
             is_markdown_table_header,
             markdown_fence_transition,
@@ -5886,6 +6094,14 @@ class ReportAgent:
         unverifiable = 0
         checked = 0
         tag_counts: Dict[str, int] = {}
+        # SESSIONB-2.1：数字行上的记号被 _repair_overused_citations 视为「钉住」——
+        # 摘掉会被定量接地回填原样补回（振荡）。2026-10-18 德国跑（Reuters 单一
+        # 联盟线闻承载 27 处数字论断、0 处非数字行）证明：钉住数本身超 cap 时，
+        # 集中度终审否决的是一份结构性无法修复的成稿（6 轮不动点全烧完仍 abort）。
+        # 与修复的钉守纪律对齐：集中度硬否决只数非数字行；数字行的集中度降级为
+        # advisory（overused_pinned），不再一票否决。防滥用：非数字行的 monoculture
+        # 照旧被拦。
+        pinned_counts: Dict[str, int] = {}
         fence_state = None
         table_headers: List[str] = []
         lines = str(md or "").split("\n")
@@ -5907,6 +6123,11 @@ class ReportAgent:
                 continue
             if not cells:
                 table_headers = []
+            # 与 _repair_overused_citations 同源：先摘记号再判数字行（记号编号不
+            # 能把纯文字行误判成数字行）。
+            numeric_line = bool(
+                _number_re.search(marker_re.sub(" ", line))
+            )
             for match in marker_re.finditer(line):
                 source = imap.get(match.group(1).upper())
                 if not isinstance(source, dict):
@@ -5928,7 +6149,10 @@ class ReportAgent:
                 # source; like References it stays out of the concentration count
                 # (_repair_overused_citations applies the same exemption).
                 if supported is not True:
-                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                    if numeric_line:
+                        pinned_counts[tag] = pinned_counts.get(tag, 0) + 1
+                    else:
+                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
                 if supported is None:
                     supported = self._report_citation_support(semantic_claim, source)
                 if supported is None:
@@ -5947,6 +6171,11 @@ class ReportAgent:
             for tag, count in sorted(tag_counts.items())
             if count > max_per_source
         ]
+        overused_pinned = [
+            {"tag": tag, "count": count, "limit": max_per_source}
+            for tag, count in sorted(pinned_counts.items())
+            if count > max_per_source
+        ]
         unverifiable_ratio = round(unverifiable / checked, 3) if checked else 0.0
         return {
             "checked": checked,
@@ -5956,6 +6185,7 @@ class ReportAgent:
             "examples": unsupported[:8],
             "max_per_source": max_per_source,
             "overused_sources": overused,
+            "overused_pinned_advisory": overused_pinned,
             "passed": not unsupported and not overused,
         }
 
@@ -6149,6 +6379,12 @@ class ReportAgent:
 
     # 任意 [S…] 记号（位置式 [S1]、分层 [S1-a]、或占位符 [S?]/[S#]）——引用回填判定「本行是否已带记号」。
     _ANY_S_TAG_RE = re.compile(r"[\[【]\s*S[\d?#]", re.I)
+    # LOG-16（2026-10-21）: per-section 工具计数的 context-local 存储。定义在类级：
+    # __new__ 构造的测试 agent 不经 __init__ 也能用；ContextVar 的值天然按上下文隔离
+    # （每个并发章节 worker 持有自己的拷贝，互不串扰）。
+    _SECTION_TOOL_CTX: contextvars.ContextVar = contextvars.ContextVar(
+        "report_section_tool_calls", default=0)
+
     _FULL_S_TAG_RE = re.compile(
         r"[\[【]\s*S\d+(?:-[A-Za-z])?\s*[\]】]",
         re.I,
@@ -7993,11 +8229,12 @@ class ReportAgent:
             spine=(self._forecast_spine if isinstance(
                 getattr(self, "_forecast_spine", None), dict) else None),
         )
-        if getattr(self, "official_data", None):
-            # Canonical official metadata (either language's form) keeps
-            # publisher names and units verbatim, as in the primary audit.
+        if getattr(self, "official_data", None) or getattr(self, "_news_context_block", ""):
+            # Both exact carrier-backed metadata families retain original source
+            # names/units/rules. Authored or changed rows still undergo detection.
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
-                "\n".join("" if self._official_canonical_line(line) else line
+                "\n".join("" if (self._official_canonical_line(line)
+                                      or self._news_context_canonical_line(line)) else line
                           for line in variant_body.split("\n")), target_name)
 
         marker_audit = validate_citation_markers(variant_body, primary_by_tag)
@@ -8018,12 +8255,36 @@ class ReportAgent:
         ]
 
         issues: List[str] = []
+        warnings: List[str] = []
         if heading_source != heading_variant:
             issues.append("translation heading-level sequence differs from primary")
         if table_source != table_variant:
             issues.append("translation table row/column structure differs from primary")
+        _number_parity_issue = "translation numeric-token multiset differs from primary"
+        _number_diff_detail: Dict[str, Dict[str, int]] = {}
         if number_source != number_variant:
-            issues.append("translation numeric-token multiset differs from primary")
+            # LOG-15（2026-10-21）：按相对损伤分级。修补梯队（chunk 外科手术）已尽力；
+            # 仍差 ≤ max(2, 0.5%) 个数字 token 的整份译文不再整体否决（USD/JPY 事故：
+            # 184KB 译文因单个缺失 "2026" 被毁），降级为记录在案的 warning + 差异明细。
+            _number_diff_detail = {
+                str(t): {"source": number_source.get(t, 0), "variant": number_variant.get(t, 0)}
+                for t in set(number_source) | set(number_variant)
+                if number_source.get(t, 0) != number_variant.get(t, 0)
+            }
+            _total_delta = sum(abs(v["source"] - v["variant"]) for v in _number_diff_detail.values())
+            _total_tokens = sum(number_source.values())
+            _tolerance = max(
+                2, int(float(getattr(
+                    Config, "REPORT_TRANSLATION_NUMERIC_TOLERANCE_RATIO", 0.005) or 0.005)
+                    * max(1, _total_tokens)))
+            if _total_delta > _tolerance:
+                issues.append(_number_parity_issue)
+            else:
+                warnings.append(
+                    f"translation numeric multiset differs by {_total_delta} token(s) "
+                    f"(within tolerance {_tolerance} of {_total_tokens}): "
+                    f"{dict(list(_number_diff_detail.items())[:6])}"
+                )
         if fences_source != fences_variant:
             issues.append("translation fenced blocks differ from primary bytes")
         if source_markers != variant_markers:
@@ -8071,7 +8332,6 @@ class ReportAgent:
         # tolerance the variant is rejected as before.  Numbers, citations and
         # structure stay hard gates regardless.
         residual_tolerance = self._translation_residual_tolerance(variant_body)
-        warnings: List[str] = []
         if contamination > residual_tolerance:
             issues.append(
                 f"translation contains {contamination} target-language contamination lines"
@@ -8137,6 +8397,13 @@ class ReportAgent:
                 "passed": number_source == number_variant,
                 "source": number_source,
                 "variant": number_variant,
+                # LOG-15: 差异明细与分级判定（passed 保持严格语义；grade=hard 才会出现在
+                # issues 里阻断发布，grade=tolerated 仅记 warning）。
+                "diff": _number_diff_detail,
+                "grade": (
+                    "exact" if number_source == number_variant
+                    else ("tolerated" if _number_parity_issue not in issues else "hard")
+                ),
             },
             "fenced_block_parity": {
                 "passed": fences_source == fences_variant,
@@ -8246,15 +8513,17 @@ class ReportAgent:
             sys_prompt += "\n" + extra_rules
         # 输出预算：中文比英文更紧凑，英译中略膨胀；给宽裕上限（有界，防单章截断）。
         est = max(2048, min(16384, len(protected_md) // 2 + 1024))
-        try:
-            out = self.llm.chat(
-                messages=[{"role": "system", "content": sys_prompt},
-                          {"role": "user", "content": protected_md}],
-                temperature=0.1, max_tokens=est, tier="strong",
-            )
-        except Exception as _te:  # noqa: BLE001 — 单章翻译失败保留原文，不牵连整篇
-            self._note_translation_call_failure()
-            logger.warning(f"双语报告：章节翻译调用失败，保留原文: {_te}")
+        # 2026-10-21（LOG-14 修复）：翻译走内容合规阶梯（L0 原样 → L1 合规措辞 → L2
+        # 分片重译）。此前 1301 内容审查直接失败保留原文，EU-China 跑两次整篇被否。
+        from .translation_tools import chat_translate
+        out, ladder = chat_translate(
+            self.llm, sys_prompt, protected_md,
+            max_tokens=est,
+            on_failure=self._note_translation_call_failure,
+            fragment_join="\n\n",
+        )
+        if not out:
+            logger.warning("双语报告：章节翻译阶梯全部失败，保留原文")
             return markdown
         out = (out or "").strip()
         if not out:
@@ -8937,6 +9206,46 @@ class ReportAgent:
             if i not in outcomes:
                 continue
             cur, quality = outcomes[i]
+            # LOG-15（2026-10-21）：增量式数字修补——仅差 1-2 个数字 token 的章节做一次
+            # 外科手术式重译（枚举精确的缺失/多余 token），修复则替换。USD/JPY 跑：整份
+            # 184KB 译文因 chunk16 少一个 "2026"（137→136）被整体否决，全部重买 ~$1.60。
+            if quality["hard"] == ["numeric tokens"]:
+                try:
+                    _src_ms = self._translation_fact_multiset(ch)
+                    _dst_ms = self._translation_fact_multiset(cur)
+                    _missing = {t: _src_ms[t] - _dst_ms.get(t, 0)
+                                for t in _src_ms if _src_ms[t] > _dst_ms.get(t, 0)}
+                    _extra = {t: _dst_ms[t] - _src_ms.get(t, 0)
+                              for t in _dst_ms if _dst_ms[t] > _src_ms.get(t, 0)}
+                    _delta = sum(_missing.values()) + sum(_extra.values())
+                except Exception:  # noqa: BLE001
+                    _missing = _extra = {}
+                    _delta = 99
+                if 0 < _delta <= 2:
+                    _fmt = lambda d: ", ".join(f"{t}×{n}" for t, n in sorted(d.items())) or "none"
+                    try:
+                        _surgical = self._translate_section(
+                            ch, tgt_name,
+                            extra_rules=(
+                                "7. NUMERIC SURGICAL REPAIR — your prior translation of this "
+                                f"section dropped or duplicated numeric token(s). Missing from "
+                                f"your output: {_fmt(_missing)}. Extra in your output: {_fmt(_extra)}. "
+                                "Restore/remove exactly those occurrences at the semantically "
+                                "correct places; change absolutely nothing else. Output the full "
+                                "corrected section."
+                            ),
+                        )
+                    except Exception as _se:  # noqa: BLE001 — 单次有界修补，失败保留原译
+                        logger.warning(f"双语报告：数字外科修补调用失败（保留原译）: {_se}")
+                        _surgical = ""
+                    if _surgical and self._translation_fact_multiset(_surgical) == _src_ms:
+                        logger.info(
+                            "双语报告：chunk %s 数字修补成功（delta=%d: missing=%s extra=%s）",
+                            i, _delta, _fmt(_missing), _fmt(_extra),
+                        )
+                        cur = _surgical
+                        quality = self._translation_chunk_quality(ch, cur, tgt_code)
+                        outcomes[i] = (cur, quality)
             translated[i] = cur
             if "citation tokens" in quality["hard"]:
                 src_ms = self._translation_marker_multiset(ch)
@@ -9208,6 +9517,7 @@ class ReportAgent:
                 "failed",
                 source_markdown_sha256=source_sha,
                 progress=100,
+                message="translation failed publication audit",
                 issues=list(audit.get("issues") or [])[:12],
             )
             logger.error(
@@ -9235,6 +9545,7 @@ class ReportAgent:
                 "failed",
                 source_markdown_sha256=source_sha,
                 progress=100,
+                message="translation artifact persistence failed",
                 issues=list(audit.get("issues") or [])[:12],
             )
             logger.error("双语报告工件落盘失败，已清理译文: %s", exc)
@@ -9525,6 +9836,7 @@ class ReportAgent:
 
     def _finalize_citations_for_publish(self, report_id: str, report: "Report") -> None:
         """Finalize citations; fail hard only when body markers would otherwise be dead."""
+        self._restore_news_market_context(report_id, report)
         body = "\n".join(
             chunk for chunk in self._split_markdown_h2_sections(
                 report.markdown_content or ""
@@ -9540,6 +9852,7 @@ class ReportAgent:
                     "正文含引用记号但引用最终化失败，拒绝发布：" f"{exc}"
                 ) from exc
             logger.warning(f"引用最终化失败（正文无引用记号，降级继续）: {exc}")
+        self._restore_news_market_context(report_id, report)
 
     def _stabilize_publish_markdown(
         self,
@@ -9837,6 +10150,9 @@ class ReportAgent:
         confidence demotion cannot repair them and publication must stop.
         """
         issues: List[str] = []
+        context = audit.get("news_market_context") or {}
+        if context and (context.get("valid") is not True or context.get("markdown_present") is not True):
+            issues.append("news context artifact or audited Markdown differs from consumed generation")
         if (audit.get("official_chart_captions") or {}).get("passed") is False:
             issues.append("官方数据图表来源标注缺失或不匹配")
         failed_sections = list(audit.get("failed_sections") or [])
@@ -10047,7 +10363,7 @@ class ReportAgent:
         # unit label as an uncited empirical claim. Marker/semantic audits below
         # still inspect the full body and the same exact attribution validator.
         claim_body = "\n".join(line for line in body.splitlines()
-                               if not self._official_canonical_line(line))
+                               if not (self._official_canonical_line(line) or self._news_context_canonical_line(line)))
         citation_audit = _acg(
             claim_body,
             index_map=index_map,
@@ -10106,12 +10422,14 @@ class ReportAgent:
             mode="final",
             spine=forecast if isinstance(forecast, dict) else None,
         )
+        self._audit_context_metadata_lint(md, lint_audit, lang)
         if getattr(self, "official_data", None):
             # MISSED-1: canonical official metadata (exhibit attribution and
             # Key official indicators rows) is validated against the carrier
             # above and keeps publisher names/units verbatim in any language.
             lint_audit["language_contamination"] = _rl.detect_language_contamination(
-                "\n".join("" if self._official_canonical_line(line) else line
+                "\n".join("" if (self._official_canonical_line(line)
+                                      or self._news_context_canonical_line(line)) else line
                           for line in md.split("\n")), lang)
 
         audit: Dict[str, Any] = {
@@ -10148,6 +10466,23 @@ class ReportAgent:
             # ``changed`` means a deterministic final lint would still rewrite the
             # published bytes; the candidate rewrite is intentionally discarded.
             "lint": lint_audit,
+        }
+        # Context remains a distinct, immutable research artifact. Seal it with
+        # the report bundle so API readers cannot substitute a valid but different
+        # capture after the Markdown audit.
+        consumed_context = self.news_market_context
+        try:
+            stored_context = ReportManager.load_report_news_market_context(report_id)
+            context_valid = stored_context == consumed_context
+        except ValueError:
+            stored_context, context_valid = None, False
+        context_block = getattr(self, "_news_context_block", "").strip()
+        audit["news_market_context"] = {
+            "present": consumed_context is not None or stored_context is not None,
+            "valid": context_valid,
+            "sha256": (consumed_context or {}).get("sha256"),
+            "generation_id": (consumed_context or {}).get("generation_id"),
+            "markdown_present": not consumed_context or bool(context_block and context_block in md),
         }
         audit["hard_issues"] = self._final_audit_integrity_issues(audit)
         audit["hard_passed"] = not audit["hard_issues"]
@@ -10644,20 +10979,13 @@ class ReportAgent:
             tl = self.timeline_events  # GATE-W9：handoff 定位失败时回退构造期钉入的 timeline（W9-8 直通）
         if tl:
             arts["timeline"] = tl
-        # PM-6 修复：把研究 handoff 目录钉进工件，供 ReportVisualizer._load_price_history 定位
-        # handoff/market_price_history.json（bridge 在研究期落盘的 {market_id:[{t,p}]}）。此前
-        # _collect_viz_artifacts 从不提供 handoff_dir/market_price_history，且无人把该文件拷进
-        # reports/{id}/，故 PM-6 市场价格历史折线族一直拿不到数据、整族静默跳过（永不出图）。
-        # 缺失/失败即不设该键（degrade-safe，价格历史图仍自动跳过，行为不变）。
-        hd = self._locate_handoff_dir()
-        if hd:
-            arts["handoff_dir"] = hd
         return arts
 
     def _locate_handoff_dir(self) -> Optional[str]:
         """best-effort 定位本报告对应管线的研究 handoff 目录（按 simulation_id 匹配，与
-        _locate_timeline 同模式）。供 PM-6 市场价格历史折线定位 handoff/market_price_history.json。
-        找不到/任何失败 → None（degrade-safe）。延迟导入避免与 pipeline_orchestrator 的循环依赖。"""
+        _locate_timeline 同模式）。找不到/任何失败 → None（degrade-safe）。延迟导入避免
+        与 pipeline_orchestrator 的循环依赖。（market_price_history 图族已整体下线，
+        本方法保留给测试桩与潜在的未来 handoff 工件定位。）"""
         try:
             from .pipeline_orchestrator import PipelineManager
             for entry in PipelineManager.list_pipelines():
@@ -11446,7 +11774,15 @@ class ReportAgent:
                     continue
                 tool_calls.append(call_data)
             except json.JSONDecodeError:
-                pass
+                # 2026-10-18 修复：畸形 tool_call JSON（实测多为漏掉外层右花括号）此前
+                # 被静默吞掉——模型以为调用已发出、循环把同一查询重发 3 次，且残留的
+                # <tool_call> 文本被误判为「输出污染」触发纠正重试（诊断错了方向）。
+                # 记一条可见告警，让排障不再需要翻 agent_log 原文。
+                logger.warning(
+                    "ReACT tool_call JSON 解析失败（模型输出畸形 JSON，本次调用将被忽略；"
+                    "若频繁出现请在循环层加纠正性 Observation）: %s",
+                    match.group(1)[:120].replace("\n", " "),
+                )
 
         if tool_calls:
             return tool_calls
@@ -11782,6 +12118,8 @@ class ReportAgent:
             return None
 
         def _gen_body(idx: int, section: ReportSection):
+            _t0 = time.monotonic()
+            self._SECTION_TOOL_CTX.set(0)  # LOG-16: context-local，worker 间互不串扰
             try:
                 return idx, self._generate_section_with_retry(
                     section=section, outline=outline, previous_sections=[brief],
@@ -11789,6 +12127,17 @@ class ReportAgent:
             except Exception as e:  # noqa: BLE001 — per-section isolation
                 logger.error(f"并发章节生成异常（降级占位符）: {section.title} -> {e}")
                 return idx, SECTION_FAILURE_PLACEHOLDER
+            finally:
+                try:
+                    _stash = getattr(self, "_concurrent_section_tools", None)
+                    if _stash is None:
+                        _stash = self._concurrent_section_tools = {}
+                    _stash[idx] = {
+                        "tool_calls": int(self._SECTION_TOOL_CTX.get()),
+                        "duration_s": round(time.monotonic() - _t0, 2),
+                    }
+                except Exception:  # noqa: BLE001
+                    pass
 
         if body:
             # RPT-9: ThreadPoolExecutor worker 线程不继承 ContextVar，_current_report_id
@@ -12425,6 +12774,7 @@ class ReportAgent:
                 for c in calls:
                     tool_calls_count += 1
                     self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                    self._SECTION_TOOL_CTX.set(self._SECTION_TOOL_CTX.get() + 1)  # LOG-16: 并发章节按上下文归因
                     try:
                         result = self._execute_tool(c["name"], c["arguments"], report_context=section.title)
                     except Exception as te:  # noqa: BLE001
@@ -12702,26 +13052,48 @@ class ReportAgent:
 
             # ── 情况1：LLM 输出了 Final Answer ──
             if has_final_answer:
-                # 工具调用次数不足，拒绝并要求继续调工具
-                if tool_calls_count < min_tool_calls:
-                    _candidate = response.split("Final Answer:")[-1].strip()
-                    if not _looks_contaminated(_candidate):
-                        draft_answer = _candidate  # FILTER-SAFE：留作内容审查时的兜底草稿
-                    messages.append({"role": "assistant", "content": response})
-                    unused_tools = all_tools - used_tools
-                    unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
-                    messages.append({
-                        "role": "user",
-                        "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
-                            tool_calls_count=tool_calls_count,
-                            min_tool_calls=min_tool_calls,
-                            unused_hint=unused_hint,
-                        ),
-                    })
-                    continue
-
                 # 正常结束
                 final_answer = response.split("Final Answer:")[-1].strip()
+                # 工具调用次数不足，拒绝并要求继续调工具。
+                if tool_calls_count < min_tool_calls:
+                    _grounded_early = False
+                    if not _looks_contaminated(final_answer):
+                        draft_answer = final_answer  # FILTER-SAFE：留作内容审查时的兜底草稿
+                        # LOG-17（2026-10-21）：预注入卷宗已能直接支撑的章节会在第 1-2 轮
+                        # 就给出完整、带引用的 Final Answer（AI-datacenter 跑：8/12 章被
+                        # 工具下限强制整章重写，~18% 的阶段输出白烧）。下限的本意是防
+                        # 「无证据偷懒作答」——一条干净、长度达标且携带 ≥3 个 [S#] 引用
+                        # 标记的早期答案不是偷懒，而是卷宗接地充足的直接证据。放行；否则
+                        # 照旧强制继续调工具。
+                        try:
+                            _n_cited = len(self._FULL_S_TAG_RE.findall(final_answer))
+                            _min_cited = int(getattr(
+                                Config, "REPORT_EARLY_FA_MIN_CITATIONS", 3) or 3)
+                            _min_chars = int(getattr(
+                                Config, "REPORT_EARLY_FA_MIN_CHARS", 2000) or 2000)
+                        except Exception:  # noqa: BLE001
+                            _n_cited, _min_cited, _min_chars = 0, 3, 2000
+                        _grounded_early = (
+                            _n_cited >= _min_cited and len(final_answer) >= _min_chars)
+                        if _grounded_early:
+                            logger.info(
+                                f"章节 {section.title} 的早期 Final Answer 已带 {_n_cited} 个引用"
+                                f"标记（{len(final_answer)} 字符 ≥ {_min_chars}），视为卷宗充分"
+                                f"接地，放行（工具调用 {tool_calls_count}/{min_tool_calls}）"
+                            )
+                    if not _grounded_early:
+                        messages.append({"role": "assistant", "content": response})
+                        unused_tools = all_tools - used_tools
+                        unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
+                        messages.append({
+                            "role": "user",
+                            "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
+                                tool_calls_count=tool_calls_count,
+                                min_tool_calls=min_tool_calls,
+                                unused_hint=unused_hint,
+                            ),
+                        })
+                        continue
 
                 # 即使带了 "Final Answer:"，正文仍可能被污染（claude-cli 偶尔在前缀后泄漏系统提示）。
                 # 检测到污染则纠正重试，绝不直接采纳。
@@ -12812,6 +13184,7 @@ class ReportAgent:
                 tool_calls_count += 1
                 used_tools.add(call['name'])
                 self._section_tool_calls += 1  # EXECPLAN2 I-5-4: per-section 工具调用计数
+                self._SECTION_TOOL_CTX.set(self._SECTION_TOOL_CTX.get() + 1)  # LOG-16: 并发章节按上下文归因
 
                 # 构建未使用工具提示
                 unused_tools = all_tools - used_tools
@@ -13047,6 +13420,8 @@ class ReportAgent:
         try:
             # 初始化：创建报告文件夹并保存初始状态
             ReportManager._ensure_report_folder(report_id)
+            if self.news_market_context:
+                ReportManager.save_news_market_context(report_id, self.news_market_context)
             # RPT-12 (fix contract §1.7): keep the exact stored carrier with the report.
             if getattr(self, "official_data", None):
                 self._persist_official_data(report_id)
@@ -13211,6 +13586,21 @@ class ReportAgent:
                     if _precomputed is not None:
                         # I-6-3: content already produced concurrently; bookkeeping stays serial/in-order.
                         section_content = _precomputed.get(i, SECTION_FAILURE_PLACEHOLDER)
+                        # LOG-16（2026-10-21）：并发章节的最小遥测（tool_calls/duration 来自
+                        # worker 的 context-local 计数）；token/成本不做逐章归因（共享 meter
+                        # 并发交叉不可拆）——修复 telemetry.json 恒为 sections:[]/tool_calls:0。
+                        if _telemetry_on:
+                            _cst = getattr(self, "_concurrent_section_tools", {}).pop(i, None)
+                            if _cst is not None:
+                                try:
+                                    section_rollup.append({
+                                        "section_title": section.title,
+                                        "section_index": section_num,
+                                        "tool_calls": int(_cst.get("tool_calls", 0) or 0),
+                                        "duration_s": float(_cst.get("duration_s", 0.0) or 0.0),
+                                    })
+                                except Exception:  # noqa: BLE001
+                                    pass
                     else:
                         # I-6-3: brief context mode swaps full prior-section text for the compact brief.
                         # RPT-2: 经退避重试包装，瞬时故障不再直接落占位符。
@@ -13420,6 +13810,10 @@ class ReportAgent:
                         self._apply_language_purity(report_id, report)
                     except Exception as _lp_err:  # noqa: BLE001
                         logger.warning(f"语言纯度扫描失败（忽略，保留原文）: {_lp_err}")
+
+            # Persisted contextual evidence is part of the audited Markdown,
+            # including when structured forecasts are disabled.
+            self._append_news_market_context(report_id, report)
 
             # WAVE9：确定性编辑纪律 lint——所有修复/注入/纯度处理之后、双语翻译之前跑一遍
             # report_lint.lint_report（引用残留/边转储/旧模拟标签/孤悬归因行/重复句…），
@@ -13794,6 +14188,42 @@ class ReportManager:
     def _get_report_markdown_path(cls, report_id: str) -> str:
         """获取完整报告Markdown文件路径"""
         return os.path.join(cls._get_report_folder(report_id), "full_report.md")
+
+    NEWS_MARKET_CONTEXT_FILENAME = "news_market_context.json"
+
+    @classmethod
+    def save_news_market_context(cls, report_id: str, context: Dict[str, Any]) -> None:
+        """Keep the exact sealed envelope and its original digest (no wrapper)."""
+        copied = _news_context._validated_copy(context)
+        if not copied:
+            raise ValueError("Cannot persist an empty news context envelope")
+        folder = cls._ensure_report_folder(report_id)
+        if os.path.lexists(os.path.join(folder, cls.NEWS_MARKET_CONTEXT_FILENAME)):
+            if _news_context.load_context(folder) != copied:
+                raise ValueError("Report already consumes another news context generation")
+            return
+        # Atomic create-only publication, matching the consumed-generation
+        # binding owner: parallel retries cannot replace one another's capture.
+        import tempfile
+        raw = json.dumps(copied, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":"), allow_nan=False).encode("utf-8")
+        descriptor, temporary = tempfile.mkstemp(prefix=".news-context-", dir=folder)
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temporary, os.path.join(folder, cls.NEWS_MARKET_CONTEXT_FILENAME))
+            except FileExistsError:
+                if _news_context.load_context(folder) != copied:
+                    raise ValueError("Report already consumes another news context generation") from None
+        finally:
+            os.unlink(temporary)
+
+    @classmethod
+    def load_report_news_market_context(cls, report_id: str) -> Optional[Dict[str, Any]]:
+        return _news_context.load_context(cls._get_report_folder(report_id)) or None
 
     OFFICIAL_DATA_FILENAME = "official_data.json"
 
@@ -14416,6 +14846,21 @@ class ReportManager:
             result["reasons"].append("final audit contains hard issues")
         if audit.get("markdown_sha256") != markdown_sha:
             result["reasons"].append("final audit fingerprint does not match Markdown")
+        if not lang:
+            context_entry = audit.get("news_market_context") or {}
+            try:
+                context = cls.load_report_news_market_context(report_id)
+                if context is not None:
+                    if (context_entry.get("present") is not True
+                            or context_entry.get("valid") is not True
+                            or context_entry.get("markdown_present") is not True
+                            or context_entry.get("sha256") != context.get("sha256")
+                            or context_entry.get("generation_id") != context.get("generation_id")):
+                        result["reasons"].append("news context differs from final audit generation")
+                elif context_entry.get("present"):
+                    result["reasons"].append("news context artifact is missing")
+            except ValueError:
+                result["reasons"].append("news context artifact is invalid")
         gate = audit.get("publish_gate") or {}
         if gate.get("enabled") and gate.get("passed") is not True:
             result["reasons"].append("professional publication gate did not pass")
@@ -14941,6 +15386,15 @@ class ReportManager:
                 if fcntl is not None:
                     try:
                         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                    # 2026-10-18 修复：释放时顺带删除锁文件。此前 <path>.lock 以 "a+b"
+                    # 创建后永不 unlink，报告目录累积了 11+ 个 0 字节残锁（每次尝试
+                    # 泄一个）。持有 flock 期间 unlink 是 POSIX 安全的：并发等待者锁的
+                    # 是旧 inode、最多造成一次无害的 advisory 竞态，持久层状态文件 +
+                    # 内存 TaskManager 去重仍然兜底。
+                    try:
+                        os.unlink(lock_path)
                     except OSError:
                         pass
 
@@ -16282,7 +16736,9 @@ class ReportManager:
         for rid in index.get(simulation_id, []):
             meta = cls._read_report_meta(rid)
             if meta and meta.get('simulation_id') == simulation_id:
-                candidates.append((meta.get('created_at', ''), rid))
+                # 2026-10-18：优先返回 completed 尝试（同 sim 常有多份失败/僵尸尝试取证目录）
+                ok = str(meta.get('status', '')).lower() == 'completed'
+                candidates.append(((ok, meta.get('created_at', '')), rid))
         if candidates:
             best_rid = max(candidates, key=lambda x: x[0])[1]
             report = cls.get_report(best_rid)
@@ -16299,7 +16755,11 @@ class ReportManager:
             if os.path.isdir(item_path):
                 report = cls.get_report(item)
                 if report and report.simulation_id == simulation_id:
-                    matches.append(report)
+                    # 2026-10-18：completed 优先；全是非交付态时仍返回最新者（保底）
+                    if str(getattr(report.status, 'value', report.status)).lower() == 'completed':
+                        matches.insert(0, report)
+                    else:
+                        matches.append(report)
             # 兼容旧格式：JSON文件
             elif item.endswith('.json'):
                 report_id = item[:-5]
@@ -16330,11 +16790,26 @@ class ReportManager:
                     logger.warning(f"清理同 simulation 旧报告失败（忽略）: {report.report_id}: {e}")
         return deleted
 
+    @staticmethod
+    def _status_is_failed(status: Any) -> bool:
+        """Enum 兼容的非交付态判定（ReportStatus 的 str() 不是裸值）。
+
+        2026-10-18 二次收紧：不仅 failed——worker 静默死亡/断路器烧毁的尝试会永久
+        停在 planning/generating（无人终态化，见 ISSUES LOG-22），同样不是交付物。
+        默认列表只出 completed。"""
+        value = str(getattr(status, "value", status)).lower()
+        return value != "completed"
+
     @classmethod
-    def list_reports(cls, simulation_id: Optional[str] = None, limit: int = 50) -> List[Report]:
-        """列出报告"""
+    def list_reports(cls, simulation_id: Optional[str] = None, limit: int = 50,
+                     include_failed: bool = False) -> List[Report]:
+        """列出报告。
+
+        2026-10-18 修复：默认排除 status=failed 的尝试（发布门否决/断路器烧毁的中间
+        产物）。管线一次成功交付常伴随多个失败尝试目录（取证保留、不删除），但它们
+        此前与正式交付物混在列表里一起推给前端。include_failed=True 供运维/调试取全量。"""
         cls._ensure_reports_dir()
-        
+
         reports = []
         for item in os.listdir(cls.REPORTS_DIR):
             if item == cls._SIM_INDEX_FILENAME:  # EXECPLAN2 F-7-3: 跳过索引文件，避免误当报告解析
@@ -16344,6 +16819,8 @@ class ReportManager:
             if os.path.isdir(item_path):
                 report = cls.get_report(item)
                 if report:
+                    if not include_failed and ReportManager._status_is_failed(report.status):
+                        continue
                     if simulation_id is None or report.simulation_id == simulation_id:
                         reports.append(report)
             # 兼容旧格式：JSON文件
@@ -16351,6 +16828,8 @@ class ReportManager:
                 report_id = item[:-5]
                 report = cls.get_report(report_id)
                 if report:
+                    if not include_failed and ReportManager._status_is_failed(report.status):
+                        continue
                     if simulation_id is None or report.simulation_id == simulation_id:
                         reports.append(report)
         

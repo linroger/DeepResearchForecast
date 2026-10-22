@@ -694,3 +694,34 @@ def test_compact_retrieval_query_derivation(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_COMPACT_RETRIEVAL_QUERY", False, raising=False)
     a2 = _bare_agent(simulation_requirement=long_req)
     assert a2._compact_retrieval_query() == long_req
+
+
+# ---- 2026-10-18: pinned numeric-line concentration is advisory, not veto ----
+# Germany run pipe_1c1255cee2e4: one Reuters wire story legitimately carried 27
+# numeric claims (0 non-numeric); _repair_overused_citations pins numeric-line
+# markers (stripping them oscillates with the grounding backfill), so the
+# concentration veto condemned an unfixable report (6-pass abort). The audit now
+# counts only non-numeric occurrences toward the veto and reports pins as
+# overused_pinned_advisory.
+
+def test_semantic_citation_overuse_pinned_numeric_lines_advisory():
+    ra = ReportAgent.__new__(ReportAgent)
+    idx = {"S1": {"title": "wire story", "url": "https://example.com/wire",
+                  "tier": "S2", "domain": "example.com"}}
+    pinned_body = "\n".join(
+        f"Support stands at {i * 3} percent for the coalition [S1]."
+        for i in range(4, 30)
+    )
+    a = ra._audit_semantic_citations(pinned_body, idx)
+    assert a["overused_sources"] == []
+    assert a["overused_pinned_advisory"] and a["overused_pinned_advisory"][0]["tag"] == "S1"
+    assert a["overused_pinned_advisory"][0]["count"] == 26
+
+    loose_body = "\n".join(
+        "The coalition weathered another difficult week in office [S1]."
+        for _ in range(26)
+    )
+    b = ra._audit_semantic_citations(loose_body, idx)
+    assert b["overused_sources"] and b["overused_sources"][0]["tag"] == "S1"
+    assert b["overused_sources"][0]["count"] == 26
+    assert b["overused_pinned_advisory"] == []

@@ -77,6 +77,10 @@ _V3_COMMIT_RE = re.compile(
     r"\b(?:commit(?:s|ted)? to|pledg(?:e|es|ed)|promis(?:e|es|ed)|vow(?:s|ed)?|plan(?:s|ned)? to|"
     r"intend(?:s|ed)? to|announc(?:e|es|ed)|agree(?:s|d)? to|will|shall|scheduled|set to|aims? to|"
     r"seeks? to|propos(?:e|es|ed))\b|承诺|计划|宣布将|将于|推进|推动", re.IGNORECASE)
+_V3_LEADING_COMMIT_RE = re.compile(
+    r"^\s*?(?:agree[sd]?|pledge[sd]?|committed|promis(?:es|ed)|vow(?:s|ed)?|plan(?:s|ned)?|"
+    r"seek(?:s|ing)?|aim(?:s|ing)?|propos(?:es|ed)?|announce[sd]?|confirm[sd]?|accept[sd]?)\b",
+    re.IGNORECASE)
 _V3_HEDGE_RE = re.compile(
     r"\b(?:possibl[ey]|perhaps|maybe|might|could|potentially|likely|probably|unclear|uncertain|"
     r"speculat\w*|expected to|reportedly)\b|\bmay\s+(?!\d)|可能|或将|或许|也许|大概|预计|据称", re.IGNORECASE)
@@ -91,14 +95,15 @@ _V3_RED_LINE_RE = re.compile(
 # type verbs (keep, preserve, maintain, protect, comply, ...) are deliberately absent: holding a
 # position is already an option of every agency class.
 _V3_ACTION_VERBS = frozenset("""
-acquire adopt advance announce appeal apply approve arrange audit ban block boost broker build buy cancel
-cap certify challenge close codify commit complete conclude constrain convert create curb cut defeat deliver
-deploy detain develop diversify divest ease enact end enforce enter escalate establish exit expand extend
+acquire adopt advance announce appeal apply approve arrange audit ban block blockade boost broker build buy
+cancel capture cap certify challenge close codify commit complete conclude constrain convert create curb cut
+degrade defeat deliver deploy detain develop disrupt diversify divest ease enact end enforce enter escalate
+establish exit expand extend
 file finalise finalize form freeze fund halt implement impose increase introduce invest issue join launch
 legislate license lift limit list lobby lower negotiate obtain open overturn pass phase prolong publish
 purchase pursue raise ratify rebuild reduce reform reimpose reinstate relocate remove renew reopen repeal
 replace resolve restore restrict resume retaliate revoke roll scale secure sell set settle sign stop strip
-submit suspend tighten unlock unwind upgrade verify win withdraw
+strike submit suspend target tighten unlock unwind upgrade verify win withdraw
 推进 推动 实施 签署 落实 延长 扩大 建立 启动 完成 达成 争取 收紧 放宽 取消 恢复 加强 实现 出台 制定 发布 加征 削减
 """.split())
 
@@ -257,6 +262,21 @@ def derive_v3_plans(actor: Optional[Dict[str, Any]], limit: int = MAX_PLANS) -> 
     for clause in _v3_clauses(actor.get("memory")):
         if _v3_plan_like(clause, require_commitment=True) and not _V3_REVEALED_RE.search(clause):
             out.append(clause)
+    # 2026-10-21（pipe_0827b81a9998）：研究档常把唯一的前瞻承诺藏在 stance /
+    # stated_vs_revealed 里且措辞带对冲（"agreed 'in principle' to talks"）。此前对冲
+    # 一律不升级 → 20 个 actor 里 10 个 actor_without_plans、选项菜单退化成类属模板。
+    # 折中：显式承诺动词（agree/commit/plan to/scheduled…）命中的对冲条款**原样**升级
+    # （对冲词保留在文本里，读者可见「有保留的承诺」），绝不改写、绝不发明。
+    if not out:
+        # 句首承诺动词也算显式承诺（"Agreed 'in principle' to talks"——动词与 to 之间
+        # 隔着限定语，_V3_COMMIT_RE 的连续短语匹配不到，但句首形式同样是承诺措辞）。
+        for clause in _v3_clauses(actor.get("stance")) + _v3_stated_clauses(actor):
+            if ((_V3_COMMIT_RE.search(clause) or _V3_LEADING_COMMIT_RE.match(clause))
+                    and not _v3_red_line_worded(clause)
+                    and not _V3_REVEALED_RE.search(clause) and len(clause) > 12):
+                out.append(clause)
+                if len(out) >= limit:
+                    break
     return _dedupe(out, limit)
 
 

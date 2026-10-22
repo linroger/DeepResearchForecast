@@ -20,6 +20,7 @@ Covers the design's required test bullets:
 
 import hashlib
 import json
+from pathlib import Path
 import os
 import re
 import shutil
@@ -1312,3 +1313,72 @@ def test_api_pdf_internal_error_does_not_leak_traceback(
     assert payload["code"] == "pdf_internal_error"
     assert "traceback" not in payload
     assert "private renderer detail" not in json.dumps(payload)
+
+
+# ---- 2026-10-18: failed report attempts are excluded from listings by default ----
+# One successful delivery routinely leaves multiple failed-attempt folders (gate
+# aborts / breaker burn); they previously shipped to the frontend as deliverables.
+
+def test_list_reports_excludes_failed_attempts_by_default(reports_tmp):
+    def _mk(rid, status):
+        d = Path(ReportManager.REPORTS_DIR) / rid
+        d.mkdir()
+        (d / "meta.json").write_text(json.dumps({
+            "report_id": rid, "simulation_id": "sim_list_failed",
+            "graph_id": "graph_list_failed", "simulation_requirement": "list test",
+            "status": status, "created_at": f"2026-10-18T0{rid[-1]}:00:00+00:00",
+        }), encoding="utf-8")
+
+    _mk("report_list_failed_1", "failed")
+    _mk("report_list_zombie_1", "planning")  # worker died silently, never terminalized
+    _mk("report_list_failed_2", "completed")
+    listed = ReportManager.list_reports(simulation_id="sim_list_failed")
+    assert [r.report_id for r in listed] == ["report_list_failed_2"]
+    all_reports = ReportManager.list_reports(
+        simulation_id="sim_list_failed", include_failed=True)
+    assert {r.report_id for r in all_reports} == {
+        "report_list_failed_1", "report_list_zombie_1", "report_list_failed_2"}
+
+
+# ---- 2026-10-21 (LOG-15): numeric-token veto graded by relative damage ----
+# USD/JPY run: a complete 184KB translation was rejected because ONE "2026"
+# token went 137→136. Small deltas (≤ max(2, 0.5%)) now record as warnings
+# with diff detail; larger deltas remain a hard issue.
+
+def _numeric_audit_pair(source: str, variant: str):
+    agent = _bili_agent(_TransLLM(translate=_translate_outlook))
+    agent._forecast_spine = None
+    return agent._audit_translation_variant(
+        "report_numeric_grade", source, variant, "en", "zh", {})
+
+
+def test_single_token_numeric_drift_is_tolerated_not_hard():
+    # 400 numeric tokens; variant drops exactly one "2026" → delta 1 ≤ max(2, 2).
+    src_lines = ["# Forecast\n", "\n"]
+    var_lines = ["# 预测\n", "\n"]
+    for i in range(200):
+        src_lines.append(f"Scenario {i}: growth of 12 percent and the year 2026 [S1].\n")
+        dropped = (i == 7)
+        var_lines.append(
+            f"情景 {i}：增长 12 个百分点，年份 {'2027' if dropped else '2026'} [S1]。\n"
+        )
+    audit, _c = _numeric_audit_pair("".join(src_lines), "".join(var_lines))
+    np = audit["number_parity"]
+    assert np["passed"] is False            # factual: multisets differ
+    assert np["grade"] == "tolerated"       # graded: within tolerance
+    assert np["diff"] and "2026" in np["diff"]
+    assert not any("numeric-token multiset differs" in i for i in audit["issues"])
+    assert any("numeric multiset differs by 2 token" in w for w in audit.get("warnings", []))
+
+
+def test_large_numeric_drift_remains_hard():
+    src_lines = ["# Forecast\n", "\n"]
+    var_lines = ["# 预测\n", "\n"]
+    for i in range(200):
+        src_lines.append(f"Scenario {i}: growth of 12 percent and the year 2026 [S1].\n")
+        # variant changes BOTH numbers on every line → hundreds of drifted tokens
+        var_lines.append(f"情景 {i}：增长 34 个百分点，年份 2031 [S1]。\n")
+    audit, _c = _numeric_audit_pair("".join(src_lines), "".join(var_lines))
+    assert audit["number_parity"]["grade"] == "hard"
+    assert any("numeric-token multiset differs" in i for i in audit["issues"])
+    assert audit["hard_passed"] is False

@@ -346,3 +346,66 @@ def test_disabled_knob_is_legacy_behavior(
     upd = po.PipelineOrchestrator()._make_stage_updater(state, po.STAGE_ONTOLOGY)
     upd(5, "旋钮关闭：不注册熔断器，永不抬升 ProviderOutageHalt")
     assert state.stages[po.STAGE_ONTOLOGY].progress == 5
+
+
+# ---- 2026-10-18: resume resets the PROCESS-scoped provider breakers ----
+# Observed on pipe_fd2799f3ad41: after a 422/429 cascade, a fresh resume attempt
+# fast-failed at its first LLM call because the llm_client process-level cooldown
+# kept feeding synthetic circuit_breaker failures into the fresh run breaker.
+
+def test_reset_provider_circuit_breakers_clears_cooldowns_and_fallback_cache():
+    from app.utils import llm_client as lc
+    import time as _time
+    with lc._CB_LOCK:
+        lc._CB_STATE["glm"] = {
+            "consec": 5.0, "consec429": 5.0,
+            "tripped_until": _time.monotonic() + 9999.0,
+        }
+    lc._FB_AUTH_UNAVAILABLE_UNTIL[("fb", "k")] = _time.monotonic() + 9999.0
+    try:
+        assert lc._cb_tripped("glm") is True
+        lc.reset_provider_circuit_breakers("glm")
+        assert lc._cb_tripped("glm") is False
+        assert lc._FB_AUTH_UNAVAILABLE_UNTIL == {}
+        # Re-arm and clear-all path
+        lc._CB_STATE["glm"] = {"consec": 5.0, "tripped_until": _time.monotonic() + 9999.0}
+        lc.reset_provider_circuit_breakers()
+        assert lc._CB_STATE == {}
+    finally:
+        with lc._CB_LOCK:
+            lc._CB_STATE.clear()
+            lc._FB_AUTH_UNAVAILABLE_UNTIL.clear()
+
+
+# ---- 2026-10-18: orphan reclaimer honors owner liveness over heartbeat residue ----
+# A killed backend leaves heartbeats "fresh" for the 120s window; the reclaimer
+# withheld recycling and resume refused ("管线仍在运行") until manual cancel.
+
+def test_orphan_is_dead_when_owner_pid_dead_even_with_fresh_heartbeat(monkeypatch):
+    import subprocess, time as _time
+    from app.services.pipeline_orchestrator import PipelineOrchestrator, PipelineManager
+    # a genuinely dead pid: spawn and reap a short-lived child
+    child = subprocess.Popen(["/bin/sleep", "0"])
+    child.wait()
+    now = _time.strftime("%Y-%m-%dT%H:%M:%S+00:00", _time.gmtime())
+    state = {
+        "pipeline_id": "pipe_orphan_liveness_test", "status": "running",
+        "owner_pid": child.pid, "owner_boot_id": "some-other-boot",
+        "heartbeat_at": now, "updated_at": now,
+    }
+    monkeypatch.setattr(
+        PipelineManager, "load", classmethod(lambda cls, pid: dict(state)),
+    )
+    # dead owner + fresh heartbeat → dead (heartbeat is just residue)
+    assert PipelineOrchestrator._orphan_is_dead("pipe_orphan_liveness_test", stale_s=120.0) is True
+
+    # live owner + fresh heartbeat stays alive (multi-worker safe)
+    live = subprocess.Popen(["/bin/sleep", "30"])
+    try:
+        state["owner_pid"] = live.pid
+        monkeypatch.setattr(
+            PipelineManager, "load", classmethod(lambda cls, pid: dict(state)),
+        )
+        assert PipelineOrchestrator._orphan_is_dead("pipe_orphan_liveness_test", stale_s=120.0) is False
+    finally:
+        live.kill(); live.wait()

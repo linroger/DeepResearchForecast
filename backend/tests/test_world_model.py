@@ -204,8 +204,11 @@ def test_apply_arbiter_update_clamps_and_records():
         "action_resolutions": [{"actor": "Alpha Systems", "outcome": "partial", "rationale": "financing open"}],
     })
     cap = world.variables["regional_capacity"]
-    assert cap.value == 180.0                                       # 120 → clamped to +50%
-    assert cap.history[-1]["cause"] == "Aurora announced" and cap.history[-1]["source"] == "arbiter"
+    # 2026-10-22 三层阻尼：1000 → 步长钳 180 → 回归 κ=0.15 → 171 → 漂移上限
+    # 120×1.35=162（sim_3ec25e64209e 复盘后单层步长钳不足以约束复合漂移）
+    assert cap.value == 162.0
+    assert cap.history[-1]["cause"].startswith("Aurora announced") and "damped" in cap.history[-1]["cause"]
+    assert cap.history[-1]["source"] == "arbiter"
     assert world.variables["permit_status"].value == "under review"
     assert [c["id"] for c in summary["variables_changed"]] == ["regional_capacity", "permit_status"]
     assert summary["variables_added"][0]["id"] == "union_strike_risk"
@@ -219,7 +222,8 @@ def test_apply_arbiter_update_clamps_and_records():
 
 def test_apply_arbiter_update_no_clamp_when_ratio_disabled():
     seed = _seed()
-    seed["settings"] = {"max_change_ratio": None}
+    # 2026-10-22：阻尼拆成三个独立旋钮（步长/回归/漂移），全部关闭才完全不钳。
+    seed["settings"] = {"max_change_ratio": None, "reversion_kappa": 0, "max_drift_ratio": None}
     world = WorldModel.from_seed(seed, _agent_configs())
     world.start_round(1, None)
     world.apply_arbiter_update(1, {"variable_changes": [{"variable_id": "regional_capacity", "new_value": 1000}]})
@@ -287,7 +291,7 @@ def test_diff_reports_changed_added_and_relationship_moves():
         "relationship_changes": [{"source": "Alpha Systems", "target": "Beta Union", "direction": "closer"}],
     })
     diff = world.diff(before)
-    assert diff["variables_changed"][0]["id"] == "regional_capacity" and diff["variables_changed"][0]["to"] == 150.0
+    assert diff["variables_changed"][0]["id"] == "regional_capacity" and diff["variables_changed"][0]["to"] == 145.5  # 150 经 κ=0.15 回归锚点 120
     assert diff["variables_added"][0]["name"] == "Permit filings"
     assert diff["relationships_changed"][0]["direction"] == "closer"
 
@@ -306,7 +310,7 @@ def test_public_brief_shows_facts_moves_consequences_and_no_scenario_shares():
     world.commit_round(1)
     brief = world.render_public_brief(upto_round=1, previous=before)
     assert brief.startswith("# WORLD STATE — as of 2026-09-30 (after 2026-Q3)")
-    assert "## Key facts" in brief and "Regional capacity: 150 MW (was 120 MW last period)" in brief
+    assert "## Key facts" in brief and "Regional capacity: 145.5 MW (was 120 MW last period)" in brief
     assert "## Moves last period" in brief and 'Alpha Systems: Commit capital — "We commit to Aurora now."' in brief
     assert "## Consequences and events" in brief and "Permit hearing held" in brief
     assert "## Pending and announced" in brief and "Break ground" in brief

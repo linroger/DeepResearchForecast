@@ -37,7 +37,7 @@ decisions/轨迹行带 period_end，输出 schema v3。``round_dates=None`` → 
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from app.utils.concurrency import ContextThreadPoolExecutor  # LOG-16: run 上下文随任务传播
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -526,7 +526,7 @@ def _fan_out_elicit(tasks: Dict[Any, Tuple[List[Dict[str, Any]], Dict[str, Any]]
             _, decs = _run(key)
             results[key] = decs
         return results
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="decision-elicit") as ex:
+    with ContextThreadPoolExecutor(max_workers=workers, thread_name_prefix="decision-elicit") as ex:
         for key, decs in ex.map(_run, list(tasks.keys())):
             results[key] = decs
     return results

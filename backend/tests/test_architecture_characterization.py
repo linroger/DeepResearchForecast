@@ -189,15 +189,16 @@ def test_wp_12_prevents_fork_seed_shared_mutation():
 # ─────────────── 7. structured_spine_omissions (owner: WP6) ───────────────────
 def test_characterizes_structured_spine_omissions(monkeypatch):
     """derive_forecast_spine supports base_distribution and quantitative_facts.
-    The production caller never passes base_distribution — that structured input
-    is silently absent from probability generation. Since the official-data
-    integration it does pass quantitative_facts: the stored official-data pack
-    (empty when no official data is bound, so the spine prompt is unchanged)."""
+    SIM-RECONCILE (2026-10-22) 起，生产调用方真正传入 base_distribution（模拟份额
+    有界锚点，band/advisory 双模式）——「结构化输入从未进入概率生成」的特征已反转。
+    quantitative_facts 仍照旧传入：存储的官方数据包（无官方数据绑定时为空，
+    骨架提示词不变）。"""
     sig = inspect.signature(fe.derive_forecast_spine)
     assert "base_distribution" in sig.parameters
     assert "quantitative_facts" in sig.parameters
     call_src = _src(ra.ReportAgent._derive_and_pin_forecast_spine)
-    assert "base_distribution=" not in call_src
+    assert 'base_distribution=(sim_anchor.get("shares") or None)' in call_src
+    assert "anchor_mode=" in call_src
     assert "quantitative_facts=" in call_src
 
     seen = []
@@ -226,7 +227,9 @@ def test_characterizes_structured_spine_omissions(monkeypatch):
             sources=[{"title": "Unemployment Rate",
                       "url": "https://fred.stlouisfed.org/series/UNRATE"}])
         agent._derive_and_pin_forecast_spine("fixture_report")
-    assert len(seen) == 2 and all("base_distribution" not in call for call in seen)
+    # SIM-RECONCILE：base_distribution 恒传（无模拟轨迹的 fixture → None，锚点自抑制）
+    assert len(seen) == 2 and all(call.get("base_distribution") is None for call in seen)
+    assert all(call.get("anchor_mode") == "band" for call in seen)
     with_data, without_data = (call["quantitative_facts"] for call in seen)
     assert "4.25" in with_data and "[S1]" in with_data  # stored value + its source marker
     assert without_data == ""
@@ -242,12 +245,14 @@ def test_wp_6_prevents_structured_spine_omissions():
 
 # ─────────── 8. dormant_typed_worldstate_anchor (owner: WP6) ──────────────────
 def test_characterizes_dormant_typed_worldstate_anchor():
-    """REPORT_SPINE_ANCHOR_WORLDSTATE defaults on, yet the typed anchor is
-    dormant (production passes no base_distribution). WP1 additionally gated
-    the implicit signal-pack path to legacy_prompt only."""
+    """SIM-RECONCILE (2026-10-22)：REPORT_SPINE_ANCHOR_WORLDSTATE 默认开且生产路径
+    真正传入 base_distribution——模拟份额经 band（完整覆盖→概率带约束）/ advisory
+    （短窗遗留→机制先验）两种锚定模式有界进入骨架；旧「锚点休眠」特征经用户决策
+    反转。WP1 的 legacy_prompt 门仍在（原始信号包不进概率路径；有界锚点是独立通道）。"""
     assert bool(getattr(Config, "REPORT_SPINE_ANCHOR_WORLDSTATE", False)) is True
     call_src = _src(ra.ReportAgent._derive_and_pin_forecast_spine)
-    assert "base_distribution=" not in call_src            # anchor stays dormant
+    assert 'base_distribution=(sim_anchor.get("shares") or None)' in call_src  # 锚点已接线
+    assert "anchor_mode=" in call_src and "_simulation_anchor_inputs" in call_src
     assert "legacy_prompt" in call_src                     # WP1 gate present
 
 

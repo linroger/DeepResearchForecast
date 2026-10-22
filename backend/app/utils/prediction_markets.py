@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -32,10 +33,15 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-POLYMARKET_BASE_URL = "https://gamma-api.polymarket.com"
+# PM-NET（pipe_a19a0d5a4d39 复盘）：直连 gamma-api 在部分网络下被 SNI 级阻断
+#（TCP 可连、TLS 悬挂）。默认官方端点不变；需要时经
+# PREDICTION_MARKETS_API_BASE / PREDICTION_MARKETS_CLOB_BASE 指向本地代理/镜像路由。
+POLYMARKET_BASE_URL = os.environ.get(
+    "PREDICTION_MARKETS_API_BASE", "https://gamma-api.polymarket.com").rstrip("/")
 # CLOB 官方公开端点（keyless）：某个 CLOB token 的历史价格序列，用于给锚点市场画时间线。
 # 与 Gamma（gamma-api）不同宿主——重报价走 Gamma /markets，历史价走 clob /prices-history。
-CLOB_BASE_URL = "https://clob.polymarket.com"
+CLOB_BASE_URL = os.environ.get(
+    "PREDICTION_MARKETS_CLOB_BASE", "https://clob.polymarket.com").rstrip("/")
 
 # 可重试的瞬时错误状态码（限流/网关抖动）；4xx 参数错误不重试。
 _TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})

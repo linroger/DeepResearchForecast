@@ -824,11 +824,18 @@ def test_canonical_official_lines_do_not_count_toward_the_per_source_cap(env, mo
     for heading in ra._REFS_HEADINGS:
         body = body.split("\n" + heading + "\n")[0]
     assert body.count("[S1]") > 20  # 12 watch rows, the indicator row, 2 captions and 7 prose claims
-    # Reliance on one source in prose is still capped: 14 more cited notes push prose alone past 20.
+    # Reliance on one source in prose is still capped.  SESSIONB-2.1 (2026-10-18)：
+    # 数字行（含上面 7 条存储值陈述）计入 pinned advisory、不进硬否决——集中度否决
+    # 只数非数字行，故需 21 条纯文字引用笔记才能独立越限。
     notes = [f"Labour demand cools in the {word} sector [S1]." for word in (
         "retail", "housing", "energy", "health", "transport", "finance", "education", "mining",
-        "software", "leisure", "farming", "media", "defence", "utilities")]
+        "software", "leisure", "farming", "media", "defence", "utilities", "construction",
+        "hospitality", "telecom", "pharma", "automotive", "shipping", "textile")]
     flooded = body + "\n\n" + "\n\n".join(notes) + "\n"
-    assert agent._audit_semantic_citations(flooded)["overused_sources"] == [{"tag": "S1", "count": 21, "limit": 20}]
+    assert agent._audit_semantic_citations(flooded)["overused_sources"] == [{"tag": "S1", "count": 22, "limit": 20}]  # 21 笔记 + 正文 1 条既有纯文字引用
     capped, stripped = agent._repair_overused_citations(flooded)
-    assert stripped == 1 and all(line in capped.split("\n") for line in watch)
+    # SESSIONB-2.1：按首现顺序保留 (cap − 钉住数) 个非数字记号、剥离其后富余；
+    # 数字行/官方行钉住不动。22 计数越限 → 至少剥 2，且修复后复审通过。
+    assert stripped >= 2 and all(line in capped.split("\n") for line in watch)
+    assert all(sentence in capped for sentence in extra)
+    assert agent._audit_semantic_citations(capped)["overused_sources"] == []

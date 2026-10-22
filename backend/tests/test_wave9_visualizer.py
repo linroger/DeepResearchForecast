@@ -148,11 +148,6 @@ WORLD_STATE = {
 }
 
 
-def _price_history(market_id="HBM-27", n=5):
-    t0 = 1_750_000_000
-    return {market_id: [{"t": t0 + i * 86400, "p": 0.4 + 0.02 * i} for i in range(n)]}
-
-
 def _full_artifacts():
     return {
         "forecast": json.loads(json.dumps(FORECAST)),
@@ -164,7 +159,6 @@ def _full_artifacts():
         "contested": json.loads(json.dumps(CONTESTED)),
         "graph_priors": json.loads(json.dumps(GRAPH_PRIORS)),
         "world_state_trajectory": json.loads(json.dumps(WORLD_STATE)),
-        "market_price_history": _price_history(),
     }
 
 
@@ -189,7 +183,7 @@ def test_build_all_full_artifacts_produces_8_plus_charts(tmp_path):
     expected = {"scenario_probabilities", "binary_forecast_dotplot", "model_vs_market",
                 "timeline_lanes",
                 "quantitative_claims", "forecast_revisions",
-                "worldstate_trajectory", "market_price_history_1"}
+                "worldstate_trajectory"}
     assert expected <= ids
     # actor_network 已随关系结构/方法论图降为 opt-in（默认不占报告槽位）。
     assert {"actor_network", "actor_influence_salience", "driver_tornado",
@@ -219,7 +213,7 @@ def test_build_all_skipped_reasons_no_silent_skips(tmp_path):
     for builder in ("timeline_lanes",
                     "metric_trajectories", "technology_shares", "regional_comparison",
                     "quantitative_claims", "forecast_revisions",
-                    "worldstate_trajectory", "market_price_history"):
+                    "worldstate_trajectory"):
         assert reasons.get(builder) == "no_input", f"{builder} 应记 no_input"
     assert reasons["actor_influence_salience"] == "internal_proxy_not_reader_facing"
     assert reasons["driver_tornado"] == "proxy_not_sensitivity_analysis"
@@ -261,7 +255,7 @@ def test_build_all_kaleido_off_attaches_matplotlib_png(tmp_path):
     items = viz.build_all("w9_mplpng", str(tmp_path), _full_artifacts())
     by_id = {e["id"]: e for e in items}
     for item_id in ("scenario_probabilities", "model_vs_market",
-                    "worldstate_trajectory", "market_price_history_1"):
+                    "worldstate_trajectory"):
         e = by_id[item_id]
         assert e["type"] == "html"
         assert e.get("png_path", "").endswith(".png"), f"{item_id} 缺 matplotlib 回退 PNG"

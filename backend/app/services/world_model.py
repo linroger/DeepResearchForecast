@@ -29,6 +29,7 @@ Kernel invariants (design §2.3):
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import math
 import re
@@ -56,7 +57,8 @@ PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concessi
 RESPONSE_PREFIXES = ("accept:", "reject:", "counter:", "defer:")
 INTERACTION_TTL_PERIODS = 2          # an unanswered offer lapses after this many periods
 INTERACTION_MAX_DEFERRALS = 2        # a deferral moves the deadline one period, at most this often
-INTERACTION_TERMS_MAX_CHARS = 300
+# 2026-10-21: 300→2400（UI 不裁剪要求；offer 条款在 Consequences 面板整段展示）
+INTERACTION_TERMS_MAX_CHARS = 2400
 INTERACTION_LIMIT = 200
 COMMITMENT_STATUSES = ("pending", "due", "fulfilled", "lapsed", "withdrawn")
 
@@ -64,6 +66,16 @@ DEFAULT_CAPACITY_PER_ROUND = 2
 HISTORY_LIMIT = 48
 EVENT_LIMIT = 400
 DEFAULT_MAX_CHANGE_RATIO = 0.5
+# 2026-10-22（sim_3ec25e64209e 复盘）：仅每轮 0.5 的步长钳制挡不住「预期驱动」的
+# 单调漂移——无人机发射强度 9 个日轮 -38%（每日"会谈前适度降温"无限复合），且
+# pending effect 落地路径完全绕过钳制（单轮 -46%）。两道追加防线（均可经
+# settings.reversion_kappa / settings.max_drift_ratio 关闭或调参）：
+#   reversion_kappa — 软均值回归：仲裁/效应的目标值向最近研究锚点收缩 κ 比例，
+#                     预期性小步漂移被持续回拉，真实多轮事件仍可走远（默认 0.15）。
+#   max_drift_ratio — 硬漂移上限：全模拟期相对研究锚点的累计偏移 ≤35%，超限截断
+#                     并把 damped 标记写进 history cause（默认 0.35）。
+DEFAULT_REVERSION_KAPPA = 0.15
+DEFAULT_MAX_DRIFT_RATIO = 0.35
 PUBLIC_BRIEF_MAX_CHARS = 2400
 PRIVATE_BRIEF_MAX_CHARS = 900
 
@@ -80,6 +92,84 @@ _SCALE_WORDS = (
 _CURRENCY_PREFIX = re.compile(r"^(?:us\$|usd|eur|gbp|cny|rmb|jpy|hk\$|a\$|c\$|[$€£¥￥]|美元|人民币|元)\s*",
                               re.IGNORECASE)
 _NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
+
+# 2026-10-22（sim_3ec25e64209e 复盘）：理由/描述里明示「判定日晚于本期」的变更
+# （如 r3 效应 "Trilateral talks begin ~Nov 10–17" 在 10-25 当轮生效，把无人机
+# 强度单轮打到 -46%）不再当轮生效，转 pending effect 按时间线到期（见
+# apply_arbiter_update / 未来日期门槛）。
+_MONTHS_EN = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+_MON_D = re.compile(r"\b(" + "|".join(_MONTHS_EN) + r")[a-z]*\.?\s+(\d{1,2})"
+                    r"(?:\s*[-–~—]\s*(\d{1,2}))?(?:,?\s+(\d{4}))?\b", re.IGNORECASE)
+_D_MON = re.compile(r"\b(\d{1,2})\s+(" + "|".join(_MONTHS_EN) + r")[a-z]*\.?"
+                    r"(?:,?\s+(\d{4}))?\b", re.IGNORECASE)
+_ISO_D = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
+
+
+def _iter_dates_in_text(text: Any, default_year: Optional[int] = None):
+    """Yield the calendar dates explicitly written in ``text`` (best effort).
+
+    Handles ``YYYY-MM-DD``, ``Nov 10`` / ``November 10–17, 2026`` and ``10 Nov 2026``.
+    Year-less matches borrow the year of the surrounding context (the text's own
+    explicit year, else ``default_year`` — the referenced period's).  Unparseable →
+    yields nothing.
+    """
+    s = str(text or "")
+    if not s:
+        return
+    explicit_year = None
+    m = re.search(r"\b(20\d{2})\b", s)
+    if m:
+        explicit_year = int(m.group(1))
+    ctx_year = explicit_year or default_year
+    for m in _ISO_D.finditer(s):
+        try:
+            yield _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            continue
+    for m in _MON_D.finditer(s):
+        mon = _MONTHS_EN.get(m.group(1).lower()[:3])
+        year = int(m.group(4)) if m.group(4) else ctx_year
+        if mon and year:
+            try:
+                yield _dt.date(year, mon, int(m.group(2)))
+            except ValueError:
+                continue
+    for m in _D_MON.finditer(s):
+        mon = _MONTHS_EN.get(m.group(2).lower()[:3])
+        year = int(m.group(3)) if m.group(3) else ctx_year
+        if mon and year:
+            try:
+                yield _dt.date(year, mon, int(m.group(1)))
+            except ValueError:
+                continue
+
+
+def _earliest_future_date(text: Any, period_end: Any, slack_days: int = 2):
+    """Earliest date written in ``text`` that falls after ``period_end + slack``.
+
+    Year-less dates that land far in the past are rolled forward one year (a
+    "Nov 10" cited during an October 2026 period means the upcoming Nov 10).
+    No period end / no parsable future date → None.
+    """
+    pe = None
+    try:
+        from ..utils.dates import parse_as_of as _pao
+        parsed = _pao(period_end)
+        pe = parsed.date() if parsed is not None else None
+    except Exception:  # noqa: BLE001 — 解析失败视为无门槛（旧行为）
+        return None
+    if pe is None:
+        return None
+    best = None
+    for d in _iter_dates_in_text(text, default_year=pe.year):
+        if (d - pe).days < -150:
+            d = d.replace(year=d.year + 1)
+        if (d - pe).days > slack_days and (best is None or d < best):
+            best = d
+    return best
 
 
 # ---------------------------------------------------------------------------
@@ -282,26 +372,71 @@ class StateVariable:
             return _text(value, 160)
         return _text(value, 160)
 
+    def research_anchor(self) -> Optional[float]:
+        """最近一次研究来源（seed/research）的数值锚点；无则回退当前值，仍非数值 → None。
+
+        软回归与硬漂移上限都以它为参照：模拟中的变量水平是对观察值的建模投影，
+        不该在无再锚定（新的研究更新）时无限偏离观察事实。
+        """
+        if self.kind != "numeric":
+            return None
+        for h in reversed(self.history or []):
+            if str((h or {}).get("source") or "") in ("seed", "research"):
+                v = (h or {}).get("value")
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                    return float(v)
+        v = self.value
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+            return float(v)
+        return None
+
     def set_value(self, value: Any, *, round_num: int, source: str, cause: str,
-                  max_change_ratio: Optional[float] = None) -> bool:
+                  max_change_ratio: Optional[float] = None,
+                  reversion_kappa: Optional[float] = None,
+                  max_drift_ratio: Optional[float] = None) -> bool:
         """Apply a change with provenance; numeric changes may be clamped.
 
-        Returns True when the stored value actually changed.
+        Beyond the per-round ``max_change_ratio`` cap, arbiter/effect callers may pass
+        ``reversion_kappa`` (soft pull toward the research anchor) and ``max_drift_ratio``
+        (hard cumulative drift bound vs. the anchor); the seed path passes neither, so
+        research-sourced updates stay untouched.  Damping, when it fires, is recorded in
+        the history cause as ``[damped: …]``.  Returns True when the stored value changed.
         """
         new = self._coerce(value)
         if self.kind != "numeric":
             self.unit = ""  # a numeric fact that became text keeps no unit
-        if self.kind == "numeric" and isinstance(new, (int, float)) and max_change_ratio:
-            cur = float(self.value) if isinstance(self.value, (int, float)) else 0.0
-            cap = abs(cur) * float(max_change_ratio) if cur != 0 else None
-            if cap is not None and abs(float(new) - cur) > cap:
-                new = cur + math.copysign(cap, float(new) - cur)
+        damped: List[str] = []
+        if self.kind == "numeric" and isinstance(new, (int, float)):
+            cur = float(self.value) if isinstance(self.value, (int, float)) else None
+            anchor = self.research_anchor()
+            if cur is not None and max_change_ratio:
+                cap = abs(cur) * float(max_change_ratio) if cur != 0 else None
+                if cap is not None and abs(float(new) - cur) > cap:
+                    new = cur + math.copysign(cap, float(new) - cur)
+                    damped.append(f"step≤{float(max_change_ratio):.0%}/轮")
+            if anchor is not None and math.isfinite(anchor):
+                if reversion_kappa and float(reversion_kappa) > 0:
+                    k = min(0.9, float(reversion_kappa))
+                    pulled = float(new) + k * (anchor - float(new))
+                    if abs(pulled - float(new)) > 1e-9:
+                        new = pulled
+                        damped.append(f"回归锚点κ={k:g}")
+                if max_drift_ratio and float(max_drift_ratio) > 0 and anchor != 0:
+                    r = float(max_drift_ratio)
+                    lo, hi = sorted((anchor * (1.0 - r), anchor * (1.0 + r)))
+                    if not lo <= float(new) <= hi:
+                        new = lo if float(new) < lo else hi
+                        damped.append(f"累计漂移≤{r:.0%}")
         if new == self.value:
             return False
         self.value = new
         self.provenance = source if source in PROVENANCES else self.provenance
+        cause_text = _text(cause, 200)
+        if damped:
+            note = f" [damped: {'; '.join(damped)}]"
+            cause_text = _text(cause_text, 200 - len(note)) + note
         self.history.append({"round": int(round_num), "value": new,
-                             "cause": _text(cause, 200), "source": source})
+                             "cause": cause_text, "source": source})
         if len(self.history) > HISTORY_LIMIT:
             self.history = self.history[-HISTORY_LIMIT:]
         return True
@@ -892,12 +1027,12 @@ class WorldModel:
             except (TypeError, ValueError):
                 lag = 0
             actor.capacity_used = min(actor.capacity_per_round, actor.capacity_used + cost)
-            description = _text(option.get("label"), 160) or option_id
+            description = _text(option.get("label"), 400) or option_id
             if target_names:
                 description += " → " + ", ".join(target_names[:4])
             actor.last_action = {
                 "round": int(round_num), "option_id": option_id, "kind": kind,
-                "label": _text(option.get("label"), 160), "targets": target_names,
+                "label": _text(option.get("label"), 400), "targets": target_names,
                 "magnitude": round(magnitude, 3), "status": status, "resolution": None,
                 "reversibility": _text(option.get("reversibility"), 24),
             }
@@ -1136,27 +1271,76 @@ class WorldModel:
             actors=[bname], targets=[oname], source="interaction", option_id=inter.option_id,
             period_label=str((self.period or {}).get("label") or "")))
 
+    def _numeric_damping(self) -> Dict[str, Optional[float]]:
+        """Arbiter/effect 通道的数值阻尼参数（settings 可覆盖/关闭，None=关闭）。"""
+        out: Dict[str, Optional[float]] = {}
+        for key, default in (("max_change_ratio", DEFAULT_MAX_CHANGE_RATIO),
+                             ("reversion_kappa", DEFAULT_REVERSION_KAPPA),
+                             ("max_drift_ratio", DEFAULT_MAX_DRIFT_RATIO)):
+            raw = self.settings.get(key, default)
+            try:
+                out[key] = float(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                out[key] = default
+        return out
+
+    def _periods_until(self, target_date) -> int:
+        """从当前期到 ``target_date`` 的期数（按 period 长度估算，日粒度兜底）。"""
+        period = self.period if isinstance(self.period, dict) else {}
+        pe = period.get("period_end") or period.get("label") or ""
+        ps = period.get("period_start") or pe
+        length_days = 1
+        try:
+            from ..utils.dates import parse_as_of as _pao
+            d1, d2 = _pao(ps), _pao(pe)
+            if d1 is not None and d2 is not None:
+                length_days = max(1, (d2.date() - d1.date()).days or 1)
+            if d2 is not None:
+                gap = (target_date - d2.date()).days
+                return max(1, math.ceil(max(0, gap) / length_days))
+        except Exception:  # noqa: BLE001 — 估算失败按 1 期/天兜底
+            pass
+        try:
+            gap = (target_date - _dt.date.today()).days
+            return max(1, math.ceil(max(0, gap) / 1))
+        except Exception:  # noqa: BLE001
+            return 1
+
     def apply_arbiter_update(self, round_num: int, update: Dict[str, Any]) -> Dict[str, Any]:
         """Apply a *validated* arbiter update (see ``world_update.validate_arbiter_update``).
 
         Returns a summary ``{variables_changed, variables_added, events, relationships_changed,
-        effects_added, resolutions}`` for the round record.
+        effects_added, resolutions, deferred_changes}`` for the round record.
         """
         summary = {"variables_changed": [], "variables_added": [], "events": 0,
-                   "relationships_changed": [], "effects_added": 0, "resolutions": 0}
+                   "relationships_changed": [], "effects_added": 0, "resolutions": 0,
+                   "deferred_changes": []}
         if not isinstance(update, dict):
             return summary
-        ratio = self.settings.get("max_change_ratio", DEFAULT_MAX_CHANGE_RATIO)
-        try:
-            ratio = float(ratio) if ratio is not None else None
-        except (TypeError, ValueError):
-            ratio = DEFAULT_MAX_CHANGE_RATIO
+        damping = self._numeric_damping()
+        ratio = damping["max_change_ratio"]
         label = str((self.period or {}).get("label") or "")
         for ch in update.get("variable_changes") or []:
             if not isinstance(ch, dict):
                 continue
             var = self.variables.get(str(ch.get("variable_id") or ""))
             if var is None:
+                continue
+            rationale = _text(ch.get("rationale"), 200) or "arbiter"
+            # 未来日期门槛：理由明示判定日晚于本期 → 不当轮生效，按时间线转 pending。
+            pe = str((self.period or {}).get("period_end") or label or "")
+            future_dt = _earliest_future_date(rationale, pe) if pe else None
+            if future_dt is not None:
+                value = ch.get("new_value") if ch.get("new_value") is not None else ch.get("delta")
+                due = round_num + self._periods_until(future_dt)
+                self.pending_effects.append(PendingEffect(
+                    self._next_effect_id(round_num), due_round=due, description=rationale,
+                    variable_id=var.id,
+                    op="add" if ch.get("delta") is not None and ch.get("new_value") is None else "set",
+                    value=value, probability=1.0, source="arbiter", created_round=round_num))
+                summary["deferred_changes"].append(
+                    {"id": var.id, "name": var.name, "value": value,
+                     "cites_date": future_dt.isoformat(), "due_round": due})
                 continue
             before = var.value
             if ch.get("new_value") is not None:
@@ -1168,8 +1352,9 @@ class WorldModel:
                     continue
             else:
                 continue
-            if var.set_value(target, round_num=round_num, source="arbiter",
-                             cause=ch.get("rationale") or "arbiter", max_change_ratio=ratio):
+            if var.set_value(target, round_num=round_num, source="arbiter", cause=rationale,
+                             max_change_ratio=ratio, reversion_kappa=damping["reversion_kappa"],
+                             max_drift_ratio=damping["max_drift_ratio"]):
                 summary["variables_changed"].append({"id": var.id, "name": var.name, "from": before,
                                                      "to": var.value, "unit": var.unit})
         for nv in update.get("new_variables") or []:
@@ -1201,7 +1386,10 @@ class WorldModel:
             if a is None or b is None or a == b:
                 continue
             direction = _text(rc.get("direction"), 16).casefold()
-            delta = {"closer": 0.15, "farther": -0.15, "further": -0.15, "break": -0.35, "ally": 0.25}.get(direction)
+            # 2026-10-21：flat/stable/unchanged → 0.0（显式"关系不变"裁决：极性不动，但
+            # last_changed_round 与 rationale 更新，裁决理由进入事件流——不再是校验丢弃）。
+            delta = {"closer": 0.15, "farther": -0.15, "further": -0.15, "break": -0.35,
+                     "ally": 0.25, "flat": 0.0, "stable": 0.0, "unchanged": 0.0}.get(direction)
             if delta is None:
                 continue
             rel = self._ensure_relationship(a, b, kind="ALLY_OF" if delta > 0 else "OPPOSES",
@@ -1216,6 +1404,12 @@ class WorldModel:
                 due = round_num + max(1, int(fx.get("due_periods", 1) or 1))
             except (TypeError, ValueError):
                 due = round_num + 1
+            # 未来日期门槛（对称 variable_changes 分支）：描述明示的落地日按时间线
+            # 折算到期轮，取其与 due_periods 的较晚者——绝不早于文字所指的日期生效。
+            fx_pe = str((self.period or {}).get("period_end") or label or "")
+            fx_future = _earliest_future_date(fx.get("description"), fx_pe) if fx_pe else None
+            if fx_future is not None:
+                due = max(due, round_num + self._periods_until(fx_future))
             vid = fx.get("variable_id")
             if vid is not None and str(vid) not in self.variables:
                 vid = None
@@ -1275,9 +1469,13 @@ class WorldModel:
                         target = None
                 else:
                     target = None
-                if target is not None and var.set_value(target, round_num=round_num, source="effect",
-                                                        cause=fx.description):
-                    var_ids.append(var.id)
+                if target is not None:
+                    damping = self._numeric_damping()
+                    if var.set_value(target, round_num=round_num, source="effect",
+                                     cause=fx.description, max_change_ratio=damping["max_change_ratio"],
+                                     reversion_kappa=damping["reversion_kappa"],
+                                     max_drift_ratio=damping["max_drift_ratio"]):
+                        var_ids.append(var.id)
             self._add_event(WorldEvent(round_num, "consequence", desc, targets=fx.targets,
                                        source=fx.source or "effect", variable_ids=var_ids,
                                        period_label=label))

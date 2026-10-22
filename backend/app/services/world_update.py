@@ -46,7 +46,8 @@ MAX_RELATIONSHIP_CHANGES = 8
 MAX_PENDING_EFFECTS = 6
 MAX_RESOLUTIONS = 24
 NARRATIVE_MAX_CHARS = 700
-DIGEST_MAX_CHARS = 1100
+# 2026-10-21: 1100→12000（digest 在面板整段展示，不再截断；仍保留病理上限）
+DIGEST_MAX_CHARS = 12000
 ARBITER_ERROR_SNIPPET_CHARS = 200
 
 
@@ -177,7 +178,7 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '"rationale": "..."}] — at most 3, only when a move creates a new fact the world must now track.',
         '- "events": [{"description": "...", "kind": "emergent|consequence|resolution", "actors": ["<cast name>"], '
         '"targets": ["<cast name>"]}] — market, counterpart, public or institutional reactions (≤6).',
-        '- "relationship_changes": [{"source": "<cast name>", "target": "<cast name>", "direction": "closer|farther", '
+        '- "relationship_changes": [{"source": "<cast name>", "target": "<cast name>", "direction": "closer|farther|flat", '
         '"rationale": "..."}].',
         '- "pending_effects": [{"description": "...", "due_periods": 1-12, "variable_id": "<id or null>", '
         '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later.',
@@ -200,6 +201,20 @@ def _num(value: Any) -> Optional[float]:
         return out if math.isfinite(out) else None
     except (TypeError, ValueError):
         return None
+
+
+# 2026-10-22: 布尔变量的确定性词表（裁决短语 → 布尔）。保守集合：明确决断措辞才归类；
+# "pending/unresolved/stalled/not yet" 归 False（判定日语义 = 届时未成立）。
+_BOOL_TRUE_WORDS = {
+    "true", "yes", "是", "agreed", "agree", "deal", "deal reached", "reached",
+    "confirmed", "confirmed.", "signed", "in force", "done", "approved",
+    "agreed in principle", "yes - agreed", "yes, agreed",
+}
+_BOOL_FALSE_WORDS = {
+    "false", "no", "否", "not agreed", "no agreement", "not reached", "rejected",
+    "unsigned", "off", "stalled", "pending", "unresolved", "no deal", "not yet",
+    "not yet agreed", "pending agenda confirmation", "no", "broken", "collapsed",
+}
 
 
 def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str] = ()) -> Tuple[Dict[str, Any], List[str]]:
@@ -247,10 +262,13 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             elif var.kind == "boolean":
                 val = ch.get("new_value")
                 if not isinstance(val, bool):
-                    low = _text(val, 16).casefold()
-                    if low in ("true", "yes", "是"):
+                    low = _text(val, 40).casefold().strip(" .!?。，")
+                    # 2026-10-22（pipe_0827b81a9998 round7）：仲裁常用短语而非裸布尔
+                    # （"agreed"、"pending agenda confirmation"）→ 扩充词表确定性归类；
+                    # 词表外的自由文本仍照旧拒绝（那是 categorical 语义，强转会歪曲事实）。
+                    if low in _BOOL_TRUE_WORDS:
                         val = True
-                    elif low in ("false", "no", "否"):
+                    elif low in _BOOL_FALSE_WORDS:
                         val = False
                     else:
                         problems.append(f"non-boolean change for '{var.id}'")
@@ -324,7 +342,10 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             if a is None or b is None or a == b:
                 problems.append("relationship change with unknown or identical actors")
                 continue
-            if direction not in ("closer", "farther", "further", "break", "ally"):
+            # 2026-10-21：flat/stable/unchanged 是合法语义（同提示词的 PRESSURE_WORDS
+            # 早在六行之外就背书了 flat）——此前被当 unknown 丢弃，裁决理由文本随之丢失。
+            if direction not in ("closer", "farther", "further", "break", "ally",
+                                 "flat", "stable", "unchanged"):
                 problems.append(f"unknown relationship direction '{direction}'")
                 continue
             update["relationship_changes"].append({"source": world.actor_name(a), "target": world.actor_name(b),
@@ -428,7 +449,7 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
     """Agent-facing WHAT CHANGED LAST PERIOD text (no scenario shares, I-1)."""
     lines: List[str] = []
     if narrative:
-        lines.append(_text(narrative, 360))
+        lines.append(_text(narrative, 4000))
     rows = _decision_rows(decisions)
     moves = [d for d in rows if d.get("status") == "ok" and (d.get("option") or {}).get("id") != "hold_position"]
     if moves:
@@ -436,7 +457,7 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
         for d in moves[:8]:
             opt = d.get("option") or {}
             tgt = f" (→ {', '.join(d.get('targets') or [])})" if d.get("targets") else ""
-            stmt = f': "{_text(d.get("public_statement"), 140)}"' if d.get("public_statement") else ""
+            stmt = f': "{_text(d.get("public_statement"), 2400)}"' if d.get("public_statement") else ""
             lines.append(f"- {d.get('actor_name')}: {opt.get('label')}{tgt}{stmt}")
     holders = [d.get("actor_name") for d in rows if d.get("status") == "ok"
                and (d.get("option") or {}).get("id") == "hold_position"]

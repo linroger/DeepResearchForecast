@@ -74,6 +74,65 @@ def test_validate_resolution_criteria_sharpness():
     assert FE.validate_resolution_criteria("")["sharp"] is False
 
 
+def test_validate_resolution_criteria_political_events():
+    """Political/legal event criteria resolve on official markers (ballot lists,
+    promulgation, rating actions, primaries) — as objectively decidable as a
+    threshold. Regression: the 2026-10-16 FR budget-crisis run failed the publish
+    gate 8/14 because these stems were missing from _RC_METRIC_RE."""
+    assert FE.validate_resolution_criteria(
+        "Marine Le Pen is on the ballot for the first round of the presidential "
+        "election on 18 April 2027. Resolves YES if she appears among officially "
+        "validated candidates (source: Conseil constitutionnel published list)"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Moody's downgrades France's long-term rating below Aa3 at or following "
+        "its 23 October 2026 scheduled review (source: Moody's publication)"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The 2027 loi de finances is promulgated by 28 February 2027 "
+        "(source: Journal officiel / Legifrance)"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The 2026 United Left primary for the 2027 presidential election is "
+        "officially canceled before a nominee is selected"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "No 2027 finance law promulgated by 30 April 2027 and taxes continue "
+        "under a special law enacted for that purpose"
+    )["sharp"] is True
+    # Vague political prose still fails: no date, no verifiable marker.
+    assert FE.validate_resolution_criteria(
+        "The political situation may deteriorate further"
+    )["sharp"] is False
+
+
+def test_validate_resolution_criteria_political_and_gbp_markers():
+    """Second regression set from the 2026-10-16 Burnham run (7/17 sharp → gate
+    fail): office-holding on a date, comparators, £ thresholds, legal
+    commencement and operational milestones must all count as metric signals."""
+    assert FE.validate_resolution_criteria(
+        "Andy Burnham is Prime Minister of the United Kingdom on polling day of "
+        "the general election due by 28 August 2029"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Greater Manchester records fewer than 14,400 net additional homes in 2027-28"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Greater Manchester real GDP growth exceeds UK real GDP growth in 2027"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The capital settlement is formally reprofiled downward from the "
+        "£373.423m profiled for 2029-30"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The prospective fiscal provisions of the Act are commenced by "
+        "regulation before 1 April 2028"
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Sentiment around the devolution agenda could improve"
+    )["sharp"] is False
+
+
 def test_quality_vague_criteria_gated(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_REQUIRE_SHARP_CRITERIA", True, raising=False)
     out = FE._assemble_forecast({"scenarios": [
@@ -325,3 +384,83 @@ def test_recalibration_param_thin_data_is_identity(tmp_path):
     LG.append_forecast(_fc([("A", 0.6), ("B", 0.4)]), report_id="r1", d=d)
     out = LG.recalibration_param(d=d)
     assert out["slope"] == 1.0 and out["fitted"] is False and "enabled" in out
+
+
+# ---- 2026-10-18: midband relaxation for honestly-balanced domains (OPEC+ fix) ----
+# A set with real spread (std>=0.15) and >=3 conviction calls is not a lazy hedge
+# wall even when half its probabilities sit in 0.40-0.60; only weak-spread sets
+# keep the strict 0.40 cap. Regression: pipe_fd2799f3ad41 had 7/14 midband,
+# std=0.19, conviction=6 and was blocked at the 95% publish gate.
+
+def _midband_rows(probs):
+    return [{"statement": f"Forecast number {i} resolves by 2027 at over {i}%.",
+             "probability": p, "resolution_criteria": "指数 超过 10% 于 2027年前 (WTO)",
+             "theme": "policy", "horizon_year": 2027, "criteria_sharp": True}
+            for i, p in enumerate(probs, 1)]
+
+
+def test_binary_quality_midband_relaxed_when_spread_and_conviction_strong():
+    # 7/14 in 0.40-0.60 (share 0.50) BUT std~0.19, conviction=6 → passes now.
+    probs = [0.60, 0.40, 0.12, 0.30, 0.55, 0.06, 0.60, 0.30, 0.15, 0.55, 0.60, 0.40, 0.25, 0.65]
+    out = FE._binary_quality(_midband_rows(probs), min_count=10)
+    assert out["passed"] is True, out["issues"]
+    assert out["midband_share"] == 0.5
+
+
+def test_binary_quality_midband_strict_when_spread_weak():
+    # Same midband share but std<0.15 (no real spread) → still under-committed.
+    probs = [0.55, 0.45, 0.50, 0.42, 0.58, 0.48, 0.52, 0.55, 0.45, 0.50, 0.42, 0.58, 0.48, 0.52]
+    out = FE._binary_quality(_midband_rows(probs), min_count=10)
+    assert out["passed"] is False
+    assert any("under-committed" in i for i in out["issues"])
+
+
+def test_binary_quality_midband_strict_when_conviction_missing():
+    # Spread comes only from two committed tails; conviction<3 keeps the strict cap.
+    probs = [0.05, 0.95, 0.50, 0.45, 0.55, 0.48, 0.52, 0.50, 0.42, 0.58, 0.47, 0.53, 0.44, 0.56]
+    out = FE._binary_quality(_midband_rows(probs), min_count=10)
+    assert out["passed"] is False
+    assert any("under-committed" in i for i in out["issues"])
+
+
+def test_validate_resolution_criteria_continental_parliamentary_markers():
+    """Third regression set from the 2026-10-18 Germany run (pipe_1c1255cee2e4,
+    4/13 sharp → publish-gate abort at 95%): continental-parliamentary official
+    registers — Chancellor listings, cabinet composition, Bundestag election
+    dates, EDP procedures, roll-call votes, two-thirds majorities, reform bills.
+    All resolve on official pages; all scored metric=0 before the extension."""
+    assert FE.validate_resolution_criteria(
+        "bundesregierung.de lists Friedrich Merz as Federal Chancellor on 2027-12-31."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "On 2027-12-31 the federal cabinet listed at bundesregierung.de includes "
+        "ministers from CDU/CSU and SPD only, and no federal election has been held "
+        "after 23 Feb 2025."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The Federal Returning Officer announces a Bundestag election date in "
+        "calendar year 2027, i.e. before the scheduled 2029 regular election."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The Council/Commission EDP overview page (economy-finance.ec.europa.eu) "
+        "lists an excessive deficit procedure as opened against Germany, dated "
+        "on or before 2027-12-31."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "By 2027-12-31, either an SPD or CDU/CSU withdrawal from cabinet is "
+        "reported by Reuters/AP, or the cabinet no longer comprises CDU/CSU and "
+        "SPD members only."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "A Bundestag roll-call vote before 2027-12-31 amending Grundgesetz "
+        "Articles 109 and/or 115 passes with at least a two-thirds majority."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "The Bundestag's printed-matters database (bundestag.de, BT-Drs. of the "
+        "21st electoral term) shows a government pension reform bill introduced "
+        "by 2026-12-31."
+    )["sharp"] is True
+    # Vague continental prose still fails (no date/number at all).
+    assert FE.validate_resolution_criteria(
+        "The coalition could become unstable at some point"
+    )["sharp"] is False

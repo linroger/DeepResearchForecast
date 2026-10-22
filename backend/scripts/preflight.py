@@ -137,6 +137,7 @@ def environment_report(
             )
 
     exit_code = _exit_code_for(checks)
+    from app.services.news_market_context import research_tool_status
     return {
         "provider": getattr(Config, "LLM_PROVIDER", None),
         "deerflow_model": df_model,
@@ -149,6 +150,7 @@ def environment_report(
         "ready": exit_code != 1,
         "exit_code": exit_code,
         "checks": checks,
+        "research_context": research_tool_status(),
     }
 
 

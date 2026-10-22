@@ -6812,6 +6812,19 @@ async def main():
     )
     _SIM_LLM_TELEMETRY_SINK["config"] = config  # DEFECT-3: 落盘时解析 provider/model
     wait_for_commands = not args.no_wait
+
+    # LOG-16（2026-10-21）：钉定 LLM 计量的 run 上下文。决策通道 / in-band 世界演化
+    # 走 LLMClient 直连 → LLMMeter.record 查 _current_run；此前本子进程从未设置，
+    # 单活跃 run 回退也因注册表为空而失效 → 数百次调用落 '_global' 桶（警告 20/100/
+    # 500 次，per-run 预算/成本归集失真）。在事件循环起点设置一次：asyncio 任务与
+    # asyncio.to_thread 均复制创建时上下文，全链路继承。
+    try:
+        from app.utils.telemetry import set_run_context as _set_sim_run_ctx
+        _sim_run_id = str(config.get("simulation_id") or "") or None
+        if _sim_run_id:
+            _set_sim_run_ctx(_sim_run_id, stage="run")
+    except Exception:  # noqa: BLE001 — 计量上下文失败绝不影响模拟
+        pass
     
     # 初始化日志配置（禁用 OASIS 日志，清理旧文件）
     init_logging_for_simulation(simulation_dir)

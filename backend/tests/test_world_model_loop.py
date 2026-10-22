@@ -162,7 +162,7 @@ def test_world_model_round_loop_is_reflexive(tmp_path, monkeypatch):
     r2 = [n for n in notes if "round 2/3" in n]
     assert r2
     assert "# WORLD STATE — as of 2026-09-30 (after 2026-Q3)" in r2[0]
-    assert "- Tariff rate: 25% (was 10% last period)" in r2[0]
+    assert "- Tariff rate: 13.5% (was 10% last period)" in r2[0]  # 25→钳15→回归14.25→漂移上限13.5
     assert "## Moves last period" in r2[0] and 'Actor0: Impose or raise a tariff' in r2[0]
     assert "Tariff raised to 25% on imports (round 1)." in r2[0]
     assert "Importers protest the tariff" in r2[0]
@@ -178,7 +178,7 @@ def test_world_model_round_loop_is_reflexive(tmp_path, monkeypatch):
 
     # ---- the round-2 decision prompt sees the changed world and the actor's own outcome ----
     d2 = [c for c in decisions if c["actor"] == "Actor0" and c["round"] == 2][0]["content"]
-    assert "- Tariff rate: 25% (was 10% last period)" in d2
+    assert "- Tariff rate: 13.5% (was 10% last period)" in d2
     assert "# YOUR SITUATION — Actor0" in d2 and "outcome so far: success" in d2
     assert "Publish the tariff schedule" in d2 and "(DUE NOW)" in d2
     assert "Relationships that moved last period: Actor2 (neutral)" in d2   # a proposal is not yet an alliance
@@ -187,11 +187,11 @@ def test_world_model_round_loop_is_reflexive(tmp_path, monkeypatch):
     # ---- artifacts ----
     state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
     assert state["committed_round"] == 3 and state["summary"]["rounds_committed"] == 3
-    assert state["world"]["variables"][0]["value"] == 25.0
+    assert state["world"]["variables"][0]["value"] == 13.5  # 25 经三层阻尼
     assert state["world"]["variables"][0]["history"][-1]["source"] == "arbiter"
     history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
     assert [h["round"] for h in history] == [1, 2, 3]
-    assert history[0]["arbiter_status"] == "applied" and history[0]["diff"]["variables_changed"][0]["to"] == 25.0
+    assert history[0]["arbiter_status"] == "applied" and history[0]["diff"]["variables_changed"][0]["to"] == 13.5
     assert history[0]["scenario_round_status"] == "committed" and history[0]["shares"]["A"] > 0.6
     assert history[0]["period_label"] == "2026-Q3"
     actions_rows = _read_jsonl(os.path.join(sim_dir, "world_actions.jsonl"))
@@ -296,7 +296,7 @@ def test_two_platforms_share_decisions_and_respect_barrier(tmp_path, monkeypatch
     history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
     assert [h["round"] for h in history] == [1, 2, 3]
     state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
-    assert state["committed_round"] == 3 and state["world"]["variables"][0]["value"] == 25.0
+    assert state["committed_round"] == 3 and state["world"]["variables"][0]["value"] == 13.5  # 25 经三层阻尼
     assert os.path.exists(os.path.join(sim_dir, "world_state_trajectory.json"))
 
 

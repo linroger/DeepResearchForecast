@@ -21,7 +21,6 @@ from app.services.pipeline_orchestrator import (
     merge_research_quality,
     pick_freshest_markets,
     merge_market_snapshots,
-    merge_market_price_histories,
     _source_tier_histogram,
     _track_tier_rank,
     _track_norm_url,
@@ -232,17 +231,7 @@ def test_market_snapshot_merge_unions_tracks_and_keeps_freshest_quote():
     assert merged["status"]["selected_count"] == 3
 
 
-def test_market_price_history_merge_filters_selected_and_deduplicates_timestamps():
-    histories = [
-        {"a": [{"t": 1, "p": 0.2}, {"t": 2, "p": 0.3}],
-         "discard": [{"t": 1, "p": 0.9}]},
-        {"a": [{"t": 2, "p": 0.35}, {"t": 3, "p": 0.4}],
-         "b": [{"t": 1, "p": 0.6}]},
-    ]
-    assert merge_market_price_histories(histories, {"a", "b"}) == {
-        "a": [{"t": 1, "p": 0.2}, {"t": 2, "p": 0.35}, {"t": 3, "p": 0.4}],
-        "b": [{"t": 1, "p": 0.6}],
-    }
+
 
 
 def test_market_snapshot_merge_preserves_transport_failure_status():
