@@ -160,28 +160,77 @@ def test_visualizer_and_extractor_still_load_standalone_from_their_file_paths():
         assert module._sp.CHART_OUTCOME_SHARES_EN == sp.CHART_OUTCOME_SHARES_EN
 
 
+# Strings that may stand in report prose outside the bridge (chart alt text is placed in
+# the body under no_update / legacy placements).
+UNFENCED_STRINGS = (
+    sp.CHART_OUTCOME_SHARES_EN, sp.CHART_OUTCOME_SHARES_ZH,
+    sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH,
+    sp.SIM_BANNER_EN, sp.SIM_BANNER_ZH,
+)
+# Strings that live only inside the fenced bridge section (design §3.3; S3 moved the what-if
+# table there).  They carry the canonical label, which is a hard leakage pattern outside
+# the fence, so they are checked fenced.
+BRIDGE_ONLY_STRINGS = (
+    sp.BRIDGE_TITLE_EN, sp.BRIDGE_TITLE_ZH,
+    sp.WHATIF_TABLE_TITLE_ZH, sp.WHATIF_TABLE_NOTE_ZH.lstrip("> "),
+)
+# The executive-brief disclosure names the simulation on purpose; exec_brief renders it
+# into the brief only (never through lint_report), so it is a hit by construction.
+BRIEF_LINES = tuple(
+    sp.BRIEF_SIM_LINE_EN.format(health="ok", detail="", role=sp.brief_sim_role(k, "en"))
+    for k in sp.BRIEF_SIM_ROLE_EN
+) + tuple(
+    sp.BRIEF_SIM_LINE_ZH.format(health="ok", detail="", role=sp.brief_sim_role(k, "zh"))
+    for k in sp.BRIEF_SIM_ROLE_ZH
+)
+
+
+def _fenced(text: str) -> str:
+    return sp.BRIDGE_START + "\n" + text + "\n" + sp.BRIDGE_END
+
+
 def test_every_reader_facing_string_survives_the_final_lint():
     """A provenance label the lint deletes is worse than none: the content stays
-    and the label goes.  Every string this module hands to report prose or to a
-    chart caption must produce no leakage hit and must come through
-    lint_report(mode='final') byte-identical."""
-    strings = [
-        sp.CHART_OUTCOME_SHARES_EN, sp.CHART_OUTCOME_SHARES_ZH,
-        sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH,
-        sp.WHATIF_TABLE_TITLE_ZH, sp.WHATIF_TABLE_NOTE_ZH.lstrip("> "),
-        sp.BRIDGE_TITLE_EN, sp.BRIDGE_TITLE_ZH, sp.SIM_BANNER_EN, sp.SIM_BANNER_ZH,
-    ] + [sp.BRIEF_SIM_LINE_EN.format(health="ok", detail="", role=sp.brief_sim_role(k, "en"))
-         for k in sp.BRIEF_SIM_ROLE_EN] + [
-        sp.BRIEF_SIM_LINE_ZH.format(health="ok", detail="", role=sp.brief_sim_role(k, "zh"))
-        for k in sp.BRIEF_SIM_ROLE_ZH]
-    for text in strings:
+    and the label goes.  Strings that may appear in the body must produce no leakage
+    hit and come through lint_report(mode='final') byte-identical; strings that live
+    only inside the bridge must do so inside the marker pair (ADR 0003 S3 — the fence
+    mask is the single mechanism that exempts them)."""
+    for text in UNFENCED_STRINGS:
         assert rl.leakage_hits(text) == [], text
         for lang in ("English", "Chinese"):
             out, rep = rl.lint_report(text, lang, mode="final")
             assert out == text, (lang, text, out)
             assert rep["simulation_mechanics"]["sentences_removed"] == 0
+    for text in BRIDGE_ONLY_STRINGS + BRIEF_LINES:
+        fenced = _fenced(text)
+        assert rl.leakage_hits(fenced) == [], text
+        for lang in ("English", "Chinese"):
+            out, rep = rl.lint_report(fenced, lang, mode="final")
+            assert out == fenced, (lang, text, out)
+            assert rep["simulation_mechanics"]["sentences_removed"] == 0
+            assert rep["leakage_flags"] == 0
     for alt in (sp.CHART_OUTCOME_SHARES_EN, sp.CHART_OUTCOME_SHARES_ZH,
                 sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH):
         line = f"![{alt}](charts/x.png)"
         out, _rep = rl.lint_report(line, "English", mode="final")
         assert out == line, line
+
+
+def test_canonical_label_is_a_hard_leakage_hit_outside_the_fence():
+    """S3 (design §3.4.4): outside the markers the canonical label and its forms are hard
+    leakage patterns — the sentence is removed, never relabelled.  The bridge-only strings
+    and the brief line therefore must never be pasted into report prose."""
+    for text in ("情景模拟显示 X 将上升。", "内部情景推演表明 Y。", "情景推演显示 Z。",
+                 "The scenario simulation shows X.", "Our internal scenario simulation found Y.",
+                 sp.BRIDGE_TITLE_EN, sp.BRIDGE_TITLE_ZH, sp.WHATIF_TABLE_TITLE_ZH,
+                 *BRIEF_LINES):
+        hits = rl.leakage_hits(text)
+        assert "canonical_sim_label" in hits, text
+    # outside the fence the label sentence goes, inside it stays — same document, same lint
+    body = "Observed exports rose 4% [S1]. The scenario simulation shows exports falling."
+    out, rep = rl.lint_report(body, "English", mode="final")
+    assert out == "Observed exports rose 4% [S1]."
+    assert rep["simulation_mechanics"]["sentences_removed"] == 1
+    fenced = body.split(". ", 1)[0] + ".\n\n" + _fenced("The scenario simulation shows exports falling.")
+    out, rep = rl.lint_report(fenced, "English", mode="final")
+    assert out == fenced and rep["leakage_flags"] == 0
