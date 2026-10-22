@@ -10177,6 +10177,9 @@ class PipelineOrchestrator:
                 SimulationRunner.write_run_summary(sim_id)
             except Exception:  # noqa: BLE001
                 pass
+            # ADR 0003 (S1.3): the seed run's after-action record, right after its run_summary
+            # (not registered as a pipeline artifact: the ensemble seed is not the pipeline's run).
+            self._publish_simulation_record(state, sim_id, regenerate=True, register=False)
         rid = f"report_{uuid.uuid4().hex[:12]}"
         if self._simulation_engine(state) == "world-v1":
             row = state.options["world_seed_runs"][str(seed)]
@@ -10903,6 +10906,11 @@ class PipelineOrchestrator:
             if sim_id:
                 specs.append(("run_summary",
                               os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id, "run_summary.json")))
+                # ADR 0003 (S1.3): the after-action record beside run_summary (optional: the
+                # completion boundary registers it only when the file exists).  world-v1 returned
+                # its strict spec set above; there _publish_simulation_record registers the record.
+                specs.append(("simulation_record",
+                              os.path.join(SimulationRunner.RUN_STATE_DIR, sim_id, "simulation_record.json")))
         elif stage == STAGE_REPORT:
             # 报告章节逐节落盘（section_NN.md）；运行中可作临时产物深链（见 _discover_partial_artifacts）。
             if state.report_id and bool(getattr(Config, "PIPELINE_VIZ_ARTIFACTS", True)):
@@ -11569,7 +11577,69 @@ class PipelineOrchestrator:
             if entry is not None:
                 manifest["run_summary"] = entry
                 PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+        # ADR 0003 (S1.3): the Simulation After-Action Record follows run_summary on this
+        # path too (new run and reuse alike); a reused run keeps its audited record bytes.
+        self._publish_simulation_record(
+            state, simulation_id, regenerate=bool(regenerate or not summary_exists))
         return True
+
+    def _publish_simulation_record(
+        self,
+        state: PipelineState,
+        simulation_id: str,
+        *,
+        regenerate: bool,
+        register: bool = True,
+    ) -> bool:
+        """ADR 0003 (design §3.1, S1.3): compile, write and audit the Simulation After-Action
+        Record (``simulation_record.json`` / ``.md`` / ``.zh.md`` + ``simulation_record_audit.json``)
+        from the simulation's own artifacts, immediately after ``run_summary``.
+
+        Degrades safely by contract: the record is a ``simulated`` record class and never a
+        stage or publication gate, so any failure here is logged at warning and the RUN
+        stage continues without it.  ``regenerate=False`` keeps an existing audited record
+        (reused runs keep their bytes); ``register`` adds the ``simulation_record`` artifact
+        pointer and manifest entry beside ``run_summary``.
+        """
+        if not bool(getattr(Config, "SIM_RECORD_ENABLED", True)):
+            return False
+        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
+        try:
+            from . import simulation_record_contract as _rc
+            from .simulation_record import build_record, write_record
+            from .simulation_record_gate import audit_record
+            paths = _rc.record_paths(sim_dir)
+            reuse = (not regenerate and _rc.load_record(sim_dir) is not None
+                     and _rc.load_audit(sim_dir) is not None)
+            if not reuse:
+                engine = str(state.options.get("simulation_engine") or "")
+                record = build_record(
+                    sim_dir,
+                    language=state.options.get("research_language"),
+                    engine_hint="world-v1" if engine == "world-v1" else None,
+                )
+                write_record(sim_dir, record)
+                audit = audit_record(sim_dir, record)
+                logger.info(
+                    "[%s] simulation record written (%s, %s period(s), gate %s, %d hard issue(s))",
+                    state.pipeline_id, record.get("engine"), record.get("rounds_committed"),
+                    audit.get("publication_status"), len(audit.get("hard_issues") or []),
+                )
+            if not os.path.isfile(paths["json"]):
+                return False
+            if register:
+                state.artifacts["simulation_record"] = paths["json"]
+                PipelineManager.save(state)
+                if bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
+                    manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+                    entry = _manifest_entry_for("simulation_record", paths["json"], STAGE_RUN)
+                    if entry is not None:
+                        manifest["simulation_record"] = entry
+                        PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+            return True
+        except Exception as e:  # noqa: BLE001 — the record never fails the stage (ADR 0003)
+            logger.warning("[%s] simulation record skipped: %s", state.pipeline_id, e)
+            return False
 
     # -- 内部：运行中临时产物深链 (I-4-6) ----------------------------------
 

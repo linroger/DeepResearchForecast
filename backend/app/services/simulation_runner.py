@@ -1398,6 +1398,12 @@ class SimulationRunner:
         "world_actions.jsonl",
         "world_digest.jsonl",
         "world_paths.json",              # WORLD PATHS (SIM_WORLD_PATHS > 1): the sibling paths' state
+        # SIMULATION AFTER-ACTION RECORD (ADR 0003): the record, both renderings and its gate audit
+        # are per-run; a stale passed audit would publish a stale record for the new run.
+        "simulation_record.json",
+        "simulation_record.md",
+        "simulation_record.zh.md",
+        "simulation_record_audit.json",
         "emergent_metrics.json",
         "twitter_emergent_metrics.json",
         "reddit_emergent_metrics.json",
