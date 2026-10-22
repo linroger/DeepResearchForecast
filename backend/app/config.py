@@ -393,9 +393,11 @@ class Config:
     # $26.28 的内部成本表追加进了 full_report.md（客户交付物）；置 true 恢复旧的「附录进
     # full_report.md」行为（telemetry.md 两种取值下都会写；run 遥测仍落 telemetry.json / state.options）。
     REPORT_TELEMETRY_APPENDIX = os.environ.get('REPORT_TELEMETRY_APPENDIX', 'False').strip().lower() == 'true'
-    # REPORT-3：默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
-    # 钉进每章作可引用的数字底座，提升引用覆盖、减少探索式工具调用。
-    REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'True').strip().lower() == 'true'  # I-3-2 每章注入定量信号包
+    # REPORT-3 曾默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
+    # 钉进每章作可引用的数字底座。ADR 0003 (S3, design §3.4.1)：默认关。模拟产出是 simulated 记录类，
+    # 只经确定性桥接区进入报告；即使打开，_build_signal_pack 在 diagnostic_only / no_update 下也返回
+    # 空串，仅 fixture 专用的 legacy_prompt 策略还会构建信号包。
+    REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'False').strip().lower() == 'true'  # I-3-2 每章注入定量信号包（ADR 0003 默认关）
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
     # 模拟 + 命中「对比/反事实」章节时注入，缺基线时自动 no-op（degrade-safe）。
     REPORT_COMPARISON_TABLE = os.environ.get('REPORT_COMPARISON_TABLE', 'True').strip().lower() == 'true'  # I-3-4 基线-情景对比表

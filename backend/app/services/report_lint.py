@@ -6,7 +6,9 @@
 
     cleaned_md, lint_report = lint_report(md, lang, mode="final", spine=spine)
 
-修复类别（确定性，围栏代码块内一律跳过）：
+修复类别（确定性，围栏代码块内一律跳过；ADR 0003 (S3)：报告的情景模拟桥接区
+``<!-- sim-bridge:start -->``…``<!-- sim-bridge:end -->`` 按同一遮蔽表跳过，桥接区外的
+情景模拟词汇是硬泄漏）：
   * [citation:...](url) 残留 → 删除；
   * 原始图谱边转储「（依据：A --[REL]--> B）」→ 自然语言关系括注；孤悬的
     「(According to：」「（依据：」→ 删除；
@@ -36,15 +38,35 @@ from collections import Counter
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from . import sim_provenance as _sp
+
 # ──────────────────────────────────────────────────────────────
 # 基础：围栏感知的行遍历
 # ──────────────────────────────────────────────────────────────
 
 def _fence_mask(lines: List[str]) -> List[bool]:
-    """返回与 lines 等长的布尔表：True = 该行处于（或本身是）围栏代码块。"""
+    """返回与 lines 等长的布尔表：True = 该行处于（或本身是）围栏代码块。
+
+    ADR 0003 (S3, design §3.4.4)：报告的情景模拟桥接区 ``<!-- sim-bridge:start -->`` …
+    ``<!-- sim-bridge:end -->`` 与代码围栏同等对待——两条标记行与其间每一行都被遮蔽。
+    桥接区由确定性渲染器产出、终审按字节核对，任何 lint 改写都会使其与渲染器不一致；
+    桥接区内也不参与泄漏扫描（情景模拟词汇在桥接区内是诚实标注，在桥接区外是硬泄漏）。
+    这张遮蔽表是唯一机制：所有逐行规则都读它，不另设桥接区特判。
+    """
     mask: List[bool] = []
     in_fence = False
+    in_bridge = False
     for ln in lines:
+        stripped = ln.strip()
+        if in_bridge:
+            mask.append(True)
+            if stripped == _sp.BRIDGE_END:
+                in_bridge = False
+            continue
+        if stripped == _sp.BRIDGE_START and not in_fence:
+            mask.append(True)
+            in_bridge = True
+            continue
         s = ln.lstrip()
         if s.startswith("```") or s.startswith("~~~"):
             mask.append(True)          # 围栏标记行本身也不参与改写
@@ -52,6 +74,47 @@ def _fence_mask(lines: List[str]) -> List[bool]:
             continue
         mask.append(in_fence)
     return mask
+
+
+def _visible_text(text: str) -> str:
+    """The lines of ``text`` outside code fences and outside the bridge, joined by newlines."""
+    lines = (text or "").split("\n")
+    mask = _fence_mask(lines)
+    return "\n".join(line for index, line in enumerate(lines) if not mask[index])
+
+
+def _apply_outside_mask(text: str, fn) -> Tuple[str, int]:
+    """Run a whole-text rewrite ``fn(text) -> (text, count)`` on the unmasked runs only.
+
+    The parenthetical/trace strippers below scan across lines, so they cannot take the
+    mask row by row; splitting the document into runs of unmasked lines keeps fenced
+    blocks and the bridge byte-identical while every other line is rewritten as before.
+    A document without fences or a bridge is handed to ``fn`` whole (identical behaviour).
+    """
+    lines = (text or "").split("\n")
+    mask = _fence_mask(lines)
+    if not any(mask):
+        return fn(text or "")
+    out: List[str] = []
+    total = 0
+    run: List[str] = []
+
+    def _flush() -> None:
+        nonlocal total
+        if run:
+            rewritten, count = fn("\n".join(run))
+            total += int(count or 0)
+            out.extend(rewritten.split("\n"))
+            run.clear()
+
+    for line, masked in zip(lines, mask):
+        if masked:
+            _flush()
+            out.append(line)
+        else:
+            run.append(line)
+    _flush()
+    return "\n".join(out), total
 
 
 # ──────────────────────────────────────────────────────────────
@@ -224,6 +287,13 @@ LEAKAGE_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("laundering_labels", re.compile(
         r"情景推演专家视角|(?:模拟|推演)[^。！？\n]{0,20}专家小组|专家小组[^。！？\n]{0,20}(?:模拟|推演)"
         r"|\bscenario panel\b|\banalytical perspective\s*[—:–-]", re.I)),
+    # ADR 0003 (S3, design §3.4.4): the canonical label itself (sim_provenance.SIM_LABEL_*)
+    # and its forms — 情景模拟, 情景推演, (内部)?情景推演(显示|表明), "scenario simulation",
+    # "internal scenario simulation".  Inside the fenced bridge section it is the honest
+    # attribution (the fence mask skips it); anywhere else in the body it marks simulation
+    # content the writer was told to keep out, so the sentence is removed, never relabelled.
+    ("canonical_sim_label", re.compile(
+        r"情景模拟|情景推演|\bscenario simulation\b", re.I)),
     ("action_type_tokens", re.compile(
         r"\b(?:CREATE_POST|CREATE_COMMENT|LIKE_POST|LIKE_COMMENT|REPOST|QUOTE_POST|UNFOLLOW)\b")),
     ("agent_mechanics_en", re.compile(
@@ -864,7 +934,9 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]]) -> Li
     if not isinstance(spine, dict):
         return []
     issues: List[str] = []
-    text = md or ""
+    # Fenced blocks and the simulation bridge (which lists simulated shares beside the
+    # report's probabilities on purpose) are not prose claims about the spine.
+    text = _visible_text(md or "")
     for s in (spine.get("scenarios") or []):
         if not isinstance(s, dict):
             continue
@@ -893,11 +965,7 @@ def check_scenario_probabilities(md: str, spine: Optional[Dict[str, Any]]) -> Li
 def leakage_hits(text: str) -> List[str]:
     """返回命中的 Tier-2 泄漏模式名列表（含重复命中，供计数）。"""
     hits: List[str] = []
-    lines = (text or "").split("\n")
-    mask = _fence_mask(lines)
-    visible = "\n".join(
-        line for index, line in enumerate(lines) if not mask[index]
-    )
+    visible = _visible_text(text or "")
     for name, pat in LEAKAGE_PATTERNS:
         hits.extend(name for _ in pat.finditer(visible))
     return hits
@@ -1280,15 +1348,11 @@ def strip_empty_sections(md: str) -> Tuple[str, int]:
     total_removed = 0
     for _pass in range(3):
         lines = text.split("\n")
+        mask = _fence_mask(lines)
         headings: List[Tuple[int, int]] = []
-        in_fence = False
         for index, line in enumerate(lines):
-            stripped = line.lstrip()
-            if stripped.startswith(("```", "~~~")):
-                in_fence = not in_fence
-                continue
-            if in_fence:
-                continue
+            if mask[index]:
+                continue  # fenced code and the simulation bridge are content, not section boundaries
             match = re.match(r"^(#{2,6})\s+\S", line)
             if match:
                 headings.append((index, len(match.group(1))))
@@ -1301,13 +1365,11 @@ def strip_empty_sections(md: str) -> Tuple[str, int]:
                     break
             body = lines[start + 1:end]
             substantive = False
-            body_fence = False
-            for line in body:
+            for offset, line in enumerate(body, start + 1):
+                if mask[offset]:
+                    substantive = True  # a fenced block or the bridge is reader content
+                    break
                 stripped = line.strip()
-                if stripped.startswith(("```", "~~~")):
-                    body_fence = not body_fence
-                    substantive = True
-                    continue
                 if not stripped or stripped.startswith("<!--"):
                     continue
                 if re.match(r"^#{2,6}\s+", stripped):
@@ -1599,8 +1661,9 @@ def lint_report(md: str, lang: str, mode: str = "final",
     if mode == "final":
         text, rep["generation_failure_placeholders"] = strip_generation_failure_placeholders(text)
         text, rep["internal_telemetry_appendices"] = strip_internal_telemetry_appendices(text)
-        text, rep["internal_basis_traces"] = strip_internal_basis_traces(text)
-        text, rep["internal_graph_parentheticals"] = strip_internal_graph_parentheticals(text)
+        text, rep["internal_basis_traces"] = _apply_outside_mask(text, strip_internal_basis_traces)
+        text, rep["internal_graph_parentheticals"] = _apply_outside_mask(
+            text, strip_internal_graph_parentheticals)
         text, rep["internal_relation_bullets"] = strip_internal_relation_bullet_blocks(text)
         text, rep["standalone_citation_lines"] = strip_standalone_citation_lines(text)
         text, rep["corrupted_mixed_punctuation_lines"] = (
