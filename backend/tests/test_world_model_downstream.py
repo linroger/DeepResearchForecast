@@ -333,7 +333,8 @@ def test_world_variables_chart_indexes_numeric_histories(tmp_path):
     rel = viz.build_world_variables_html(_world_state_payload(), charts)
     assert rel is not None
     html = open(os.path.join(str(tmp_path), rel), encoding="utf-8").read()
-    assert "Simulated World Variables" in html and "Tariff rate" in html
+    from app.services import sim_provenance as _sp
+    assert _sp.CHART_WORLD_VARIABLES_EN in html and "Tariff rate" in html
     assert "2026-Q3" in html and "250" in html                                 # 25/10 → index 250
     assert "Permit" not in html                                                 # categorical variables are not charted
     assert viz.build_world_variables_html({"world": {"variables": []}}, charts) is None

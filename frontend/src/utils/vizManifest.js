@@ -147,7 +147,7 @@ const ZH_CHART_CAPTIONS = Object.freeze({
   'Comparable Forecast Benchmarks': '可比预测基准',
   'Forecast Revisions Across Published Vintages': '历次发布版本的预测修订',
   'Simulated outcome-share trajectory': '模拟结果份额轨迹',
-  'Simulated World Variables (indexed, seed = 100)': '推演世界变量（指数化，种子值 = 100）',
+  'Simulated state variables (indexed, seed = 100)': '模拟状态变量（指数化，种子值 = 100）',
   'Baseline vs Scenario': '基线与情景对比',
   'Calibration Curve': '校准曲线',
   'Official Indicators': '官方指标',

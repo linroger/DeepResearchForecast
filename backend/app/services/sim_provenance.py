@@ -67,10 +67,28 @@ BRIDGE_END: Final = "<!-- sim-bridge:end -->"
 CHART_PLACEMENT_HINT: Final = "simulation"
 CHART_OUTCOME_SHARES_EN: Final = "Simulated outcome-share trajectory"
 CHART_OUTCOME_SHARES_ZH: Final = "模拟结果份额轨迹"
-CHART_WORLD_VARIABLES_EN: Final = "Simulated World Variables (indexed, seed = 100)"
-CHART_WORLD_VARIABLES_ZH: Final = "推演世界变量（指数化，种子值 = 100）"
+# "Simulated World …" matched the lint's `simulated (data|evidence|world)` pattern, so the
+# chart's image line was deleted from published reports; "state variables" is both
+# accurate and lint-safe.  Every string in this module must pass
+# report_lint.leakage_hits (tests/test_sim_provenance_constants.py).
+CHART_WORLD_VARIABLES_EN: Final = "Simulated state variables (indexed, seed = 100)"
+CHART_WORLD_VARIABLES_ZH: Final = "模拟状态变量（指数化，种子值 = 100）"
 SIMULATED_CHART_IDS: Final = frozenset({"worldstate_trajectory", "world_variables"})
 SIMULATED_CHART_TITLES_EN: Final = frozenset({CHART_OUTCOME_SHARES_EN, CHART_WORLD_VARIABLES_EN})
+
+# ── What-if (baseline vs scenario) comparison table ──────────────────────────
+# Built from two simulations' outcome shares.  Labelled as simulation output
+# and worded so the final lint keeps it (情景模拟 is the canonical label; 模拟推演 /
+# 模拟的 are leakage patterns).  Slice S3 moves the table into the bridge.
+WHATIF_TABLE_TITLE_ZH: Final = "**基线 vs 情景：情景模拟结果份额对比（确定性聚合；情景模拟产物，非观察证据）**"
+WHATIF_TABLE_NOTE_ZH: Final = (
+    "> 上表为两次情景模拟运行的确定性聚合，属情景模拟产物而非观察证据；正文解读须标注其来源为情景模拟，"
+    "不得据此给出或调整概率，勿自行复算或反转方向。"
+)
+WHATIF_PROMPT_LABEL_ZH: Final = (
+    "【基线 vs 情景：情景模拟结果份额对比（情景模拟产物，非证据；对比章节须据此撰写并标注来源为情景模拟，"
+    "不得据此给出概率）】"
+)
 
 # ── Scenario-share block header (report_agent renders, forecast_extractor parses) ──
 OUTCOME_SHARES_HEADER_ZH: Final = "推演结果分布 P(outcome)"

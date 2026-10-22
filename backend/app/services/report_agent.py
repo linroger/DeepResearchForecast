@@ -7046,7 +7046,8 @@ class ReportAgent:
 
     # RPT-5: 系统确定性注入的对比表注释 blockquote（_render_comparison_table 固定输出），
     # 永远不可能命中研究材料，必须豁免。
-    _TABLE_NOTE_TEXT = "上表为确定性聚合结果，正文请围绕这些权威差值展开解读，勿自行复算或反转方向。"
+    # Rendered by _render_comparison_table; the quote audit exempts this system note.
+    _TABLE_NOTE_TEXT = _sp.WHATIF_TABLE_NOTE_ZH.lstrip("> ")
     _S_CITATION_RE = re.compile(r"[\[【]\s*S\d+\s*[\]】]", re.I)
     # ADR 0003: labels that honestly mark a quotation as simulation output, from
     # sim_provenance. Panel/viewpoint wording ("scenario panel", "analytical
@@ -12403,7 +12404,7 @@ class ReportAgent:
         scen_label = (diff_dict.get("scenario_label") or "").strip()
         scen_col = f"情景（{scen_label}）" if scen_label else "情景"
         lines = [
-            "**基线 vs 情景 模拟结果份额对比（确定性聚合；模拟推演产物，非观察证据）**",
+            _sp.WHATIF_TABLE_TITLE_ZH,
             "",
             f"| 维度 | 基线 | {_esc(scen_col)} | Δ | 判定 |",
             "| --- | --- | --- | --- | --- |",
@@ -12414,8 +12415,7 @@ class ReportAgent:
                 f"{_esc(d.get('scenario'))} | {_esc(d.get('delta'))} | {_esc(d.get('verdict'))} |"
             )
         lines.append("")
-        lines.append("> 上表为两次模拟的确定性聚合，属模拟推演产物而非观察证据；正文解读须标注其模拟来源，"
-                     "不得据此给出或调整概率，勿自行复算或反转方向。")
+        lines.append(_sp.WHATIF_TABLE_NOTE_ZH)
         return "\n".join(lines)
 
     # ──────────────────────────────────────────────────────────────
@@ -12982,8 +12982,7 @@ class ReportAgent:
             try:
                 diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff_text:
-                    user_prompt += ("\n\n【基线 vs 情景 模拟结果份额对比（模拟推演产物，非证据；对比章节须据此撰写"
-                                    "并标注模拟来源，不得据此给出概率）】\n" + diff_text[:2500])
+                    user_prompt += "\n\n" + _sp.WHATIF_PROMPT_LABEL_ZH + "\n" + diff_text[:2500]
             except Exception as e:
                 logger.warning(f"plan_outline scenario_diff 扫描失败（忽略）: {e}")
             user_prompt += (

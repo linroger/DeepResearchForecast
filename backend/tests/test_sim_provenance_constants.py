@@ -153,3 +153,28 @@ def test_visualizer_and_extractor_still_load_standalone_from_their_file_paths():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         assert module._sp.CHART_OUTCOME_SHARES_EN == sp.CHART_OUTCOME_SHARES_EN
+
+
+def test_every_reader_facing_string_survives_the_final_lint():
+    """A provenance label the lint deletes is worse than none: the content stays
+    and the label goes.  Every string this module hands to report prose or to a
+    chart caption must produce no leakage hit and must come through
+    lint_report(mode='final') byte-identical."""
+    strings = [
+        sp.CHART_OUTCOME_SHARES_EN, sp.CHART_OUTCOME_SHARES_ZH,
+        sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH,
+        sp.WHATIF_TABLE_TITLE_ZH, sp.WHATIF_TABLE_NOTE_ZH.lstrip("> "),
+        sp.BRIDGE_TITLE_EN, sp.BRIDGE_TITLE_ZH, sp.SIM_BANNER_EN, sp.SIM_BANNER_ZH,
+        sp.BRIEF_SIM_LINE_EN.format(health="ok", detail=""), sp.BRIEF_SIM_LINE_ZH.format(health="ok", detail=""),
+    ]
+    for text in strings:
+        assert rl.leakage_hits(text) == [], text
+        for lang in ("English", "Chinese"):
+            out, rep = rl.lint_report(text, lang, mode="final")
+            assert out == text, (lang, text, out)
+            assert rep["simulation_mechanics"]["sentences_removed"] == 0
+    for alt in (sp.CHART_OUTCOME_SHARES_EN, sp.CHART_OUTCOME_SHARES_ZH,
+                sp.CHART_WORLD_VARIABLES_EN, sp.CHART_WORLD_VARIABLES_ZH):
+        line = f"![{alt}](charts/x.png)"
+        out, _rep = rl.lint_report(line, "English", mode="final")
+        assert out == line, line
