@@ -1,3 +1,5 @@
+> Simulation/report boundary (proposed 2026-10-22, not implemented): [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md) and the [after-action record design + handoff](docs/handoff/simulation-after-action-record/design.md). Separate gated simulation record, one fenced deterministic bridge section in the report, lint flipped from relabelling to provenance, RW-11 isolation test extended to the default engine.
+
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
 > Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.
