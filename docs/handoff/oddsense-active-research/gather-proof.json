@@ -1,0 +1,238 @@
+{
+  "schema": "oddsense-installed-gather-proof/v1",
+  "status": "passed",
+  "checked_at": "2026-10-22T08:38:23.320078+00:00",
+  "mode": "extraction-only assertions over corrected 796-case guarded artifacts; no test or engine rerun",
+  "primary": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "guarded_mirror": "/private/tmp/drf-oddsense-active-final-6x_2v01i/repo",
+  "guarded_execution": {
+    "tests": 796,
+    "failed": 0,
+    "skipped": 0,
+    "shutdown_complete": true,
+    "identity_preserved": true,
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "allowed:guarded_child": 26,
+      "blocked:process:subprocess.Popen": 2
+    },
+    "boundary": "CPython audit hooks; not an OS sandbox"
+  },
+  "selectors_passed": {
+    "backend/tests/test_news_research.py::test_real_engine_context_tools_to_fetched_publisher_to_cited_report": 1,
+    "backend/tests/test_news_research.py::test_market_contract_reaches_real_gateway_kiq_synthesis_and_source_projection": 1,
+    "backend/tests/test_news_research.py::test_legacy_preserved_config_trusted_registration_allowlist_and_off": 1,
+    "backend/tests/test_news_research.py::test_legacy_real_stream_prefetch_fetch_and_pre_qa_cited_context": 1,
+    "backend/tests/test_oddsense_workflow.py::test_scripted_engine_to_published_report_api_and_export": 1,
+    "backend/tests/test_news_context_reports.py::test_real_report_sequence_seals_context_and_api_markdown_export": 2
+  },
+  "prefetch_excluded_from_gather": [
+    {
+      "tool": "news_search",
+      "agent_id": "context-prefetch"
+    }
+  ],
+  "gather_phase_attribution": "KIQ IDs corroborated by persisted phase state, engine source and gather logs",
+  "gather_window": {
+    "started_at": "2026-10-22T08:32:54.388192+00:00",
+    "status": "done",
+    "detail": "2 KIQs",
+    "finished_at": "2026-10-22T08:32:54.446519+00:00"
+  },
+  "gather_tool_messages": [
+    {
+      "phase": "GATHER",
+      "kiq": "K1",
+      "tool": "news_search",
+      "message": "CONTEXT news_search: ok; snippets/opinions/quotes are context only.",
+      "output_sha256": "2018f5b223db19a8f05d0bdb7d658bbf44d4bd30e889aa92006c3b08b2c220ce",
+      "sources": [
+        {
+          "tool_ref": "S1",
+          "final_ref": "S2",
+          "url": "https://publisher.example/news/capacity-1"
+        },
+        {
+          "tool_ref": "S2",
+          "final_ref": "S3",
+          "url": "https://publisher.example/news/capacity-2"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K1",
+      "tool": "market_compare",
+      "message": "CONTEXT market_compare: partial; snippets/opinions/quotes are context only.",
+      "output_sha256": "c27408f7eefc46be8c75658c04174af57d67c2c5bee6de073ea27a0c22f820c3",
+      "sources": [
+        {
+          "tool_ref": "S3",
+          "final_ref": "S1",
+          "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K2",
+      "tool": "news_search",
+      "message": "CONTEXT news_search: ok; snippets/opinions/quotes are context only.",
+      "output_sha256": "2018f5b223db19a8f05d0bdb7d658bbf44d4bd30e889aa92006c3b08b2c220ce",
+      "sources": [
+        {
+          "tool_ref": "S1",
+          "final_ref": "S2",
+          "url": "https://publisher.example/news/capacity-1"
+        },
+        {
+          "tool_ref": "S2",
+          "final_ref": "S3",
+          "url": "https://publisher.example/news/capacity-2"
+        }
+      ]
+    },
+    {
+      "phase": "GATHER",
+      "kiq": "K2",
+      "tool": "market_compare",
+      "message": "CONTEXT market_compare: partial; snippets/opinions/quotes are context only.",
+      "output_sha256": "c27408f7eefc46be8c75658c04174af57d67c2c5bee6de073ea27a0c22f820c3",
+      "sources": [
+        {
+          "tool_ref": "S3",
+          "final_ref": "S1",
+          "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW"
+        }
+      ]
+    }
+  ],
+  "agent_turns_consuming_tool_messages": 4,
+  "source_citation_consumption": [
+    {
+      "ref": "S1",
+      "provider": "kalshi",
+      "kind": "market_quote",
+      "url": "https://external-api.kalshi.com/trade-api/v2/markets/CAPACITY-27-GROW",
+      "content_sha256": "2fe24427c6f60d2b35f83f9c587b4633fd01f0a7009977e1d1d9ed7aacc80ca5"
+    },
+    {
+      "ref": "S2",
+      "provider": "newsapi",
+      "kind": "news_snippet",
+      "url": "https://publisher.example/news/capacity-1",
+      "content_sha256": "c57ce33c8e33ea71877ec2bc5d3a778fa8158b70d049671e51514293e7dea4a1"
+    },
+    {
+      "ref": "S3",
+      "provider": "newsapi",
+      "kind": "news_snippet",
+      "url": "https://publisher.example/news/capacity-2",
+      "content_sha256": "c57ce33c8e33ea71877ec2bc5d3a778fa8158b70d049671e51514293e7dea4a1"
+    }
+  ],
+  "section_writer_consumption": [
+    {
+      "call": 1,
+      "supplied_quote_context_sha256": "825e195fd5014febc92c3a76b7caca78302119135f93e1343181e1d04ccddbfc",
+      "required_fields_preserved": [
+        "yes_bid",
+        "yes_ask",
+        "last_price",
+        "price_unit",
+        "quote_basis",
+        "probability_basis",
+        "quote_at",
+        "rules_primary",
+        "rules_secondary"
+      ]
+    },
+    {
+      "call": 2,
+      "supplied_quote_context_sha256": "825e195fd5014febc92c3a76b7caca78302119135f93e1343181e1d04ccddbfc",
+      "required_fields_preserved": [
+        "yes_bid",
+        "yes_ask",
+        "last_price",
+        "price_unit",
+        "quote_basis",
+        "probability_basis",
+        "quote_at",
+        "rules_primary",
+        "rules_secondary"
+      ]
+    }
+  ],
+  "capture_sha256": "10ac86cf8e7fac7770887795315165d32943aad738f8a1436e40e51fa3aa2dc0",
+  "research_digest_sha256": "83035e0cc8d88fea2732267f964e4254226f19ba6bbb6f79cfb336fd5da76527",
+  "research_markdown_sha256": "24e597f955e7cdc3ef54f3bb464b23251fd584d3d4c35cf03f2d664ff0ed689f",
+  "published_markdown": {
+    "path": "/private/tmp/drf-oddsense-active-final-6x_2v01i/evidence-registered/pytest-tmp/test_scripted_engine_to_publis0/reports/report_oddsense/full_report.md",
+    "sha256": "36e37a6f10ddb23a8eb19ca0dc98c4972ff70b2252381f5f25713adc4b45fcfd"
+  },
+  "consumer_status": {
+    "/api/research/pipe_oddsense/dossier": 200,
+    "/api/report/report_oddsense": 200,
+    "download": 200
+  },
+  "replay_no_new_calls": true,
+  "tamper_http_status": 409,
+  "installed_primary_matches_all_recorded_sources": true,
+  "source_sha256": {
+    "backend/app/api/report.py": "e19198d0aa483e50c6707e0feb12288b5c8687e87e6276e6478b4246e397ff0c",
+    "backend/app/api/research.py": "3ea56c403371bd12d7a57b91a6890113062ca1de5957c7212368ae348334c49b",
+    "backend/app/config.py": "3cc536afc42bbc67205bda780e17d65e7b829dd62d11409815badb2a24977b9a",
+    "backend/app/services/forecast_extractor.py": "2929637e673f50aa46a65e90229bc112b11e6c45567b10d78608a4f21b5b6095",
+    "backend/app/services/news_market_context.py": "8d5f3e7885ab46e94a91abbd56152733ea38271d0633e14ce67427f6701f4038",
+    "backend/app/services/official_data.py": "43498ff019b2dac0f5b3cb0ee6a680579dcfe4805116f4214f29e45a764e6963",
+    "backend/app/services/pipeline_orchestrator.py": "123233a6bc1b053858a2b497c80ced8166b5565a59faa211ee8f89a22aa4b210",
+    "backend/app/services/report_agent.py": "0bd18338dfe0a45aa2fd8b5ed205d31bb88307f68c44c4e228ebb6c2b9a5724d",
+    "backend/app/services/report_lint.py": "4d6e5ae17354b6ba21a7f5f8a0767d42794289877d3413c38838b59311bddd83",
+    "backend/app/services/simulation_manager.py": "f0ba8c46f915dc204e5975133eeb51d8a07525829d8ceec5c36e765d0f4f0f59",
+    "backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "backend/scripts/export_demo_site_data.py": "1d8d334cbf72a96940399f041472a7a094b3f2be426442e783a905a5cd47602b",
+    "backend/scripts/main_offline_pytest.py": "53a2cd4105edc92c2241b20974d25cf8f7775858bb294d5dcc9632289007faaa",
+    "backend/tests/test_market_intelligence.py": "405a8e0af174c56a131c88fdca99fb4e37f7dd2ad5cc141e3a45ec97bb17a93e",
+    "backend/tests/test_news_context_pipeline.py": "3dc2d555414e25d41054beb2b5c18a41d68a27c9584dd002b38ab800f00931a8",
+    "backend/tests/test_news_context_reports.py": "3b2b49bc4396fd6a94db736a4275c3c417697bbd1e97009d9c7e4ace42949aff",
+    "backend/tests/test_news_report_metadata.py": "0f71333fdf23064fe3dba2d4efbc946deaee2ae1489aa1763d8122655cc8dec6",
+    "backend/tests/test_news_research.py": "7fbaa25a3ac3f3a7ebb1ad05dd0a0a342a228c84bba77e9fd639515e40533b2d",
+    "backend/tests/test_news_signals.py": "a8433512d64d5b40630b4d11130f67c83509bbfcec04c9ada45ebbbd451949c0",
+    "backend/tests/test_oddsense_workflow.py": "5d9799ca0efa09a386bf7255fa51840a28024dfa5a036042b87f6fdbf839891c",
+    "backend/tests/test_research_context_status.py": "80009e0ca141a249f5d7a37f21f8004a3617f4e857282cdbd8014d4cb3b753bd",
+    "backend/tests/test_research_engine_v3.py": "3a47699a7677f4a5f33c987ee3112aa79d6765df5a87af8369d23f3da81c3d87",
+    "backend/tests/test_research_gateway.py": "a2e10cce43cb0297b969fde7dd988336f6c19cbc0f9b8a31087a1d1e19bb4424",
+    "deerflow_bridge/deerflow_research.py": "9ec11300abdc184b34443c6c4556c9321bc4f7e8cc5f10d03030ac336092447b",
+    "deerflow_bridge/linear_research.py": "d34299e79d751848052c25ab999782cb94068a98d82d0daead97444052b68cd1",
+    "deerflow_bridge/market_intelligence.py": "1017766daf27b35533f03d3089b00713a5e72130c1945e00d251c0be50f7b67f",
+    "deerflow_bridge/news_signals.py": "58390a6286e4366cf478c9fdb21536a2fff87821f70c1c6a8045fd399e4c5b70",
+    "deerflow_bridge/news_tools.py": "a0ee232160113bd88c7418637cb7bd50db40951edcad5c2e4e38e78af6af592c",
+    "deerflow_bridge/research_budget.py": "bf698af519aefd686994fddc7224e47775157597de3a77b691e267cd8c7ba636",
+    "deerflow_bridge/research_gateway.py": "f99839713cd2d50bed1580acaa843cc049ed7fe187219372b253e4b9e13b2003"
+  },
+  "input_receipt_sha256": {
+    "completed.json": "261225616df64234acbfa73eca2b106fdcb9064e17367a319f82f14aad6eaab8",
+    "oddsense-workflow.json": "57e432e939bf45bb22d586ece3fe63ebf3d907b2771f2531d212dea02866a9ac",
+    "junit.xml": "821efd77abdef258a741c081a0101b3b1ecfe4f5a41744d04885c5679af19c28"
+  },
+  "probe_sha256": "a88e23ee2459af234ce85abebb357d65876a6ab43ddc07e2739303525e35e99c",
+  "limits": [
+    "The corrected 796-case guarded execution is reused; this probe reruns no tests or application code.",
+    "External responses are scripted; no live provider/model or paid pipeline proof.",
+    "Native legacy delegation is not live; its configuration/stream fixture is scripted.",
+    "Persisted KIQ findings are REPORTED (verified=0); fetched pages and hashes are separately checked.",
+    "Tool selection is scripted and does not predict choices made by a live model.",
+    "Inline hashes cover 30 workflow/guard source paths; the full 390-file Python inventory is a separate companion.",
+    "No claim about running-service activation, credential validity or browser rendering.",
+    "This extractor is stdlib-only; the original execution used unchanged CPython audit hooks, not an OS sandbox."
+  ],
+  "full_installed_python_source_snapshot": {
+    "path": "/private/tmp/drf-oddsense-active-gather-proof-source-sha256.json",
+    "sha256": "f74be15f23bb27ee316e2ad3a57a3101a0a4d2d1289c6c1938d43512d398bf47",
+    "python_files": 390,
+    "matches_primary": true
+  },
+  "output_path": "/private/tmp/drf-oddsense-active-gather-proof.json"
+}

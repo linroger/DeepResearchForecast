@@ -1,0 +1,45 @@
+{
+  "checked_at": "2026-10-22T08:44:50.581245+00:00",
+  "branch": "main",
+  "head": "da1d3c4dbb581f15aaba43da776608708c5cd356",
+  "unmerged_paths": [
+    "backend/app/api/report.py",
+    "backend/app/api/simulation.py",
+    "backend/app/services/forecast_extractor.py",
+    "backend/app/services/news_market_context.py",
+    "backend/app/services/official_data.py",
+    "backend/app/services/pipeline_orchestrator.py",
+    "backend/app/services/report_agent.py",
+    "backend/app/services/simulation_config_generator.py",
+    "backend/app/services/world_model.py",
+    "backend/tests/test_news_context_pipeline.py",
+    "backend/tests/test_news_context_reports.py",
+    "backend/tests/test_news_research.py",
+    "backend/tests/test_oddsense_workflow.py",
+    "deerflow_bridge/deerflow_research.py",
+    "deerflow_bridge/linear_research.py",
+    "deerflow_bridge/research_gateway.py",
+    "feature_list.json",
+    "handoff.md",
+    "setup.sh"
+  ],
+  "reflog": [
+    "da1d3c4d HEAD@{2026-10-22T16:43:15+08:00} checkout: moving from claude-reflexive-world-state-model to main",
+    "149b947b HEAD@{2026-10-22T16:42:33+08:00} commit: docs: prune stale demo/architecture artifacts; record QA registries",
+    "a22fbe96 HEAD@{2026-10-22T16:42:26+08:00} commit: feat(ui): wider report layout, translation overlays, repost attribution",
+    "b45d82da HEAD@{2026-10-22T16:42:26+08:00} commit: fix(markets): date-anchored Polymarket queries, hang attribution, proxy routing",
+    "c0211239 HEAD@{2026-10-22T16:42:13+08:00} commit: feat(sim): sim-anchored forecast spine, realism-damped world dynamics, translation ladder",
+    "495000ea HEAD@{2026-10-18T20:26:38+08:00} commit: docs: record Oddsense study delivery status",
+    "5a601b58 HEAD@{2026-10-18T20:25:57+08:00} commit: docs: study Oddsense integration and delivery plan",
+    "dcff7684 HEAD@{2026-10-18T02:06:50+08:00} commit: fix(report): stop the pre-flight probe failing on GLM reasoning tokens"
+  ],
+  "git_operation_markers": {
+    "MERGE_HEAD": true,
+    "CHERRY_PICK_HEAD": false,
+    "REBASE_HEAD": false,
+    "index.lock": false
+  },
+  "stash_reflog": [
+    "stash@{0} WIP on wp/FU-5: 9ecb057 fix(report): label expired-but-open markets in the market cross-check [FU-5]"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schema": "oddsense-active-deployment/v1",
+  "checked_at": "2026-10-22T08:37:14.767137+00:00",
+  "idle_before_restart": true,
+  "old_backend_pid": 31979,
+  "backend_pid": 14810,
+  "frontend_restarted": false,
+  "saved_pipeline_started": false,
+  "model_calls": 0,
+  "local_provider_config_preserved": true,
+  "runtime_parity": {
+    "deerflow_research.py": true,
+    "market_tools.py": true,
+    "search_tools.py": true,
+    "cached_fetch.py": true,
+    "research_budget.py": true,
+    "linear_research.py": true,
+    "research_gateway.py": true,
+    "data_mcp.py": true,
+    "data_catalog.py": true,
+    "data_sources.py": true,
+    "data_tools.py": true,
+    "research_skills.py": true,
+    "news_signals.py": true,
+    "news_tools.py": true,
+    "market_intelligence.py": true
+  },
+  "runtime_changed": [
+    "deerflow_research.py",
+    "linear_research.py",
+    "research_gateway.py",
+    "news_signals.py",
+    "news_tools.py",
+    "market_intelligence.py"
+  ],
+  "skill_manifest_hash": "88326d2fdcd4296ad4ad146f7ec4e7b9d21a766d2610e7dfff9decbb2db83b9e",
+  "health": "ok",
+  "research_context": {
+    "availability_checked": false,
+    "enabled": true,
+    "integration": "oddsense",
+    "markets": {
+      "enabled": true,
+      "max_requests": 4
+    },
+    "newsapi": {
+      "credential_configured": true,
+      "enabled": true,
+      "max_requests": 2
+    },
+    "research_engine": "v3",
+    "scope": "default_live_research",
+    "social": {
+      "enabled": false
+    },
+    "tools": [
+      "news_search",
+      "market_compare"
+    ]
+  }
+}
