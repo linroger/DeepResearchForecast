@@ -31,6 +31,7 @@ from ..utils.llm_client import LLMClient, llm_call_timeout
 from . import backtest_mode as _backtest
 from . import report_filter_safe as _filter_safe
 from . import news_market_context as _news_context
+from . import sim_provenance as _sp
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -839,7 +840,7 @@ TOOL_DESC_QUICK_SEARCH = """\
 TOOL_DESC_INTERVIEW_AGENTS = """\
 【内部专家视角素材 - 情景推演小组问询（双平台）】
 调用OASIS推演环境的问询API，获取内部情景推演小组中各代表性角色的第一人称观点。
-这是内部结构化推演（类似桌面演练/Delphi）的产出，只能作为**分析素材**使用。
+这是内部情景模拟的产出（simulated）：不是证据，不进入报告正文。
 
 功能流程：
 1. 自动读取人设文件，了解推演小组的角色构成
@@ -849,12 +850,12 @@ TOOL_DESC_INTERVIEW_AGENTS = """\
 5. 整合所有回答，提供多视角分析
 
 【使用场景】
-- 需要多方立场与利益视角来压力测试某个判断
-- 需要为论证补充一个可归因的分析视角
+- 需要多方立场与利益视角来压力测试某个判断（仅供你自己的机制理解）
 
 【使用规则 - 必须遵守】
-- 返回内容须**转写**为专家小组式的分析视角后使用（如「> 情景推演专家视角——「<机构>」：…」），
-  绝不能呈现为真实采访、真实人物原话或「采访实录」
+- 返回内容是模拟角色的发言，不得写入报告正文：不得作为引文，不得转写为「专家视角」
+  「分析立场」或任何归因观点，更不得呈现为真实采访、真实人物原话或「采访实录」
+- 正文的判断须另以研究来源 [S#] 支撑
 - 不得在正文描述问询/推演过程本身
 
 【返回内容】
@@ -871,8 +872,10 @@ PLAN_SYSTEM_PROMPT = """\
 关键驱动、判定/证伪标准——报告的主语永远是现实世界的行为者与结果。
 
 【方法定位】
-多智能体情景推演是本所的一种内部结构化专家推演方法（类似桌面演练/Delphi）。它的产出
-只能作为**证据输入**，绝不能成为报告的叙述对象。读者不应从报告中察觉任何内部方法学机制。
+多智能体情景推演是本所的一种内部结构化情景演练。它的产出是**模拟记录**（simulated：
+非观察证据、非概率输入），不得作为任何现实世界判断或概率的依据，也不得在正文中以
+「分析立场」「专家视角」「情景分析」或「证据」的名义转述。正文的每一项判断都须以研究
+来源 [S#] 支撑。
 
 【你的任务】
 规划一份「未来预测报告」的大纲，回答：
@@ -885,9 +888,10 @@ PLAN_SYSTEM_PROMPT = """\
   共识形成、派系聚类、因果图、图谱、simulation、agents、rounds、action counts
 - ❌ 不得为内部推演方法本身设立章节（如「Agent 行为分析」「模拟证据」一类标题一律禁止）
 
-【证据转写规则】
-- 推演中某角色的观点须转写为：『在本所情景推演中，代表<机构>视角的分析立场认为…』
-- 行为统计只能转写为现实世界结论（如『定价权集中于TSMC与NVIDIA』），严禁给出动作/轮次数字
+【推演材料使用规则】
+- 推演中角色的观点与行为统计一律不得写入正文：既不得作为引文，也不得转写为分析立场、
+  专家视角或现实世界结论
+- 推演材料仅供你在规划时理解机制与压力测试假设；现实世界的判断只能来自研究材料并带 [S#] 引用
 
 【报告定位】
 - ✅ 这是一份专业预测报告，揭示"如果这样，未来会怎样"
@@ -924,10 +928,10 @@ PLAN_USER_PROMPT_TEMPLATE = """\
 - 实体类型分布: {entity_types}
 - 参与推演的角色数量: {total_entities}
 
-【情景推演产出的部分未来事实样本（证据输入）】
+【情景推演产出的部分未来事实样本（模拟记录，非证据：仅供理解机制，不得据此下判断或写入正文）】
 {related_facts_json}
 
-请以首席分析师的立场审视以上证据：
+请以首席分析师的立场审视以上材料：
 1. 在设定条件下，未来最可能呈现出什么样的状态？各情景概率如何？
 2. 哪些现实世界的行为者与驱动机制决定了这些结果？
 3. 证据揭示了哪些值得关注的未来趋势与风险？
@@ -5881,7 +5885,7 @@ class ReportAgent:
         精确删除/去引号。返回 (新 markdown, 删除的引文行数)。
 
         WAVE9 修复两个系统性缺陷：
-          (a) 推演标签常写在引文**上一行**的归因行里（'情景推演专家视角——「X」：' + 下一行
+          (a) 推演标签常写在引文**上一行**的归因行里（'情景模拟——「X」：' + 下一行
               blockquote）——此前只查 '>' 行本身，导致合法标注的引文被误删；
           (b) 整段 blockquote 被删后，紧邻其上的『X 表示：』归因行会孤悬（上一份报告残留
               ~12 处空引子）——现同步删除该引子行。"""
@@ -6913,15 +6917,20 @@ class ReportAgent:
     def _simleak_rewrite_paragraph(self, para: str, lang: str) -> Optional[str]:
         """对单个泄漏段落做一次有界 LLM 重写；数字 token 逐字节校验失败/输出异常 → None。"""
         nums = self._NUM_TOKEN_RE.findall(para)
+        # ADR 0003: simulation-derived claims are deleted or re-grounded in a [S#]
+        # citation — never relabelled as analysis, a panel view or evidence.
         sys_prompt = (
             f"You are the chief editor of an institutional forecast written in {lang}. "
-            "Rewrite the paragraph as forecast prose about the REAL WORLD. Keep every number, "
-            "probability, [S#] citation tag and quotation byte-identical. Replace "
-            "simulation-mechanics references (simulation, agents, rounds, action counts, "
-            "posting/liking/commenting, consensus formation, factions, causal graph, "
-            "模拟/智能体/轮次/动作/派系/因果图) with 'our scenario analysis indicates' or an "
-            "attributed analytical viewpoint; remove action counts, round numbers and platform "
-            "mechanics entirely. Output ONLY the rewritten paragraph — no preamble, no fences."
+            "Edit the paragraph so that it rests only on cited real-world evidence. DELETE every "
+            "sentence whose claim comes from the simulation (simulation, simulated world, agents, "
+            "rounds, action counts, posting/liking/commenting, consensus formation, factions, "
+            "clusters, causal graph, 模拟/仿真/智能体/轮次/动作/派系/因果图), unless that same "
+            "sentence already carries a [S#] citation for the claim — then keep the cited claim and "
+            "remove only the simulation reference. NEVER relabel simulation content as 'scenario "
+            "analysis', 'our analysis', an expert or panel view, an attributed viewpoint, or "
+            "evidence. Keep every surviving number, probability, [S#] tag and quotation "
+            "byte-identical and introduce no new numbers. Output ONLY the edited paragraph — no "
+            "preamble, no fences."
         )
         try:
             out = self.llm.chat(
@@ -6933,12 +6942,21 @@ class ReportAgent:
             logger.warning(f"泄漏段落重写调用失败（退回句子删除）: {_e}")
             return None
         out = (out or "").strip()
-        if not out or len(out) > max(600, len(para) * 3):
-            return None
-        # 数字逐字节校验：原段每个数字 token 必须原样出现在重写里（防概率/数据漂移）。
-        for tok in nums:
+        if not out or len(out) > len(para) + 80:
+            return None  # deletion-oriented edit: the paragraph may only shrink
+        # Numeric integrity (ADR 0003): a number in a sentence that did not leak must
+        # survive byte-identical (no drift by omission); a number that only lived in
+        # a deleted simulation sentence may vanish; no number may be invented.
+        kept_nums = [tok for sent in _rl._split_sentences(para)
+                     if not _rl.leakage_hits(sent)
+                     for tok in self._NUM_TOKEN_RE.findall(sent)]
+        for tok in kept_nums:
             if tok not in out:
                 logger.warning(f"泄漏段落重写丢失数字 token「{tok}」，弃用重写")
+                return None
+        for tok in self._NUM_TOKEN_RE.findall(out):
+            if tok not in nums:
+                logger.warning(f"泄漏段落重写引入新数字 token「{tok}」，弃用重写")
                 return None
         return out
 
@@ -7028,13 +7046,13 @@ class ReportAgent:
     # 永远不可能命中研究材料，必须豁免。
     _TABLE_NOTE_TEXT = "上表为确定性聚合结果，正文请围绕这些权威差值展开解读，勿自行复算或反转方向。"
     _S_CITATION_RE = re.compile(r"[\[【]\s*S\d+\s*[\]】]", re.I)
-    # WAVE9：诚实标注为内部推演的引文标签白名单（引文接地审计/修复共用）。旧标签
-    # （模拟/代理人）与新专家小组转述规范（scenario panel / 情景推演专家视角 /
-    # analytical perspective）必须同批收录——否则按新规范转写的引文会被当作未接地删除。
-    _SIM_QUOTE_LABELS = (
-        "模拟", "simulation", "代理人", "推演", "sim-agent", "simulated agent",
-        "scenario panel", "analytical perspective", "情景推演专家视角",
-    )
+    # ADR 0003: labels that honestly mark a quotation as simulation output, from
+    # sim_provenance. Panel/viewpoint wording ("scenario panel", "analytical
+    # perspective", 情景推演专家视角) is gone: it presented simulated speech as an
+    # expert view. Such quotes are simulation content and are removed from report
+    # prose by the leakage lint; the label only decides which defect the
+    # grounding audit counts them as (simulated, not a fabricated real quote).
+    _SIM_QUOTE_LABELS = _sp.SIM_QUOTE_LABELS
 
     @staticmethod
     def _norm_quote_text(text: str) -> str:
@@ -7089,7 +7107,7 @@ class ReportAgent:
                       + (getattr(self, "_background_block", "") or "")
                       + "\n" + (getattr(self, "situation_brief", "") or ""))
         ground = self._quote_ground_material() if v2 else ground_raw.lower()
-        sim_labels = self._SIM_QUOTE_LABELS  # WAVE9：含新专家小组转述标签（scenario panel 等）
+        sim_labels = self._SIM_QUOTE_LABELS  # ADR 0003: sim_provenance.SIM_QUOTE_LABELS
         _summary_n = self._norm_quote_text(getattr(self, "_outline_summary", "") or "")
         _table_note_n = self._norm_quote_text(self._TABLE_NOTE_TEXT)
         ungrounded: List[str] = []
@@ -11686,8 +11704,9 @@ class ReportAgent:
             "them. Use short paragraphs and at most '###' sub-headings; do NOT emit a '## Part 2' "
             "top-level heading (the system adds it); no placeholders or meta commentary. "
             "NEVER mention the simulation, agents, rounds, action counts, factions, causal graphs, "
-            "or this report's own drafting process; attribute analytical viewpoints to our "
-            "scenario analysis instead — the subject is always the real world.\n\n"
+            "or this report's own drafting process, and never restate a simulation-derived claim "
+            "under another label ('scenario analysis', 'our analysis', an expert or panel view) — "
+            "the subject is always the real world and every claim rests on the cited research.\n\n"
             + "\n\n".join(parts)
         )
         text = self.llm.chat(
