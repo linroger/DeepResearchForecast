@@ -12,6 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from app.services import exec_brief as eb
+from app.services import report_lint as rl
+from app.services import report_visualizer as rv
 from app.services import sim_provenance as sp
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -91,3 +94,44 @@ def test_dashboard_badge_and_caveat_match_the_constants():
         r"L\(\s*'" + re.escape(sp.SIM_CAVEAT_ZH) + r"'\s*,\s*'" + re.escape(sp.SIM_CAVEAT_EN) + r"'\s*\)")
     assert badge_call.search(panel), "WorldStatePanel badge drifted from sim_provenance"
     assert caveat_call.search(world), "WorldSimulationView caveat drifted from sim_provenance"
+
+
+# ── Consumers (S0.2–S0.5): no literal copies, no laundering labels ───────────
+
+BACKEND = REPO_ROOT / "backend" / "app" / "services"
+
+
+def test_visualizer_and_brief_take_their_strings_from_the_constants():
+    assert rv.CHART_TITLES_ZH[sp.CHART_OUTCOME_SHARES_EN] == sp.CHART_OUTCOME_SHARES_ZH
+    assert rv.CHART_TITLES_ZH[sp.CHART_WORLD_VARIABLES_EN] == sp.CHART_WORLD_VARIABLES_ZH
+    assert eb._LABELS["en"]["sim_line"] == sp.BRIEF_SIM_LINE_EN
+    assert eb._LABELS["zh"]["sim_line"] == sp.BRIEF_SIM_LINE_ZH
+    for name in ("report_visualizer.py", "exec_brief.py"):
+        src = (BACKEND / name).read_text(encoding="utf-8")
+        assert "Forecast Outcome-Share Trajectory" not in src, name
+        assert "预测结果份额轨迹" not in src, name
+        assert "simulation run" not in src, name
+
+
+def test_report_agent_quote_labels_are_the_constants():
+    from app.services.report_agent import ReportAgent
+    assert tuple(ReportAgent._SIM_QUOTE_LABELS) == tuple(sp.SIM_QUOTE_LABELS)
+    src = (BACKEND / "report_agent.py").read_text(encoding="utf-8")
+    # The laundering *instructions* are gone (the system prompt may still name
+    # "scenario panel" inside its ban list, which is the opposite of an instruction).
+    for bad in ("our scenario analysis indicates", "attribute analytical viewpoints to our",
+                "情景推演专家视角——", '"scenario panel", "analytical perspective"',
+                "转写为专家小组式的分析视角", "只能作为**证据输入**"):
+        assert bad not in src, bad
+    assert "【预测结果分布" not in src  # the shares header comes from the constant
+
+
+def test_lint_has_no_relabel_as_evidence_rewrites():
+    assert not hasattr(rl, "rewrite_sim_labels")
+    for _pattern, replacement in rl._SIMULATION_OUTCOME_REWRITES:
+        low = str(replacement).lower()
+        # "the evidence base" for the research *dossier* is legitimate (the dossier is
+        # evidence); the forbidden targets are the ones that dressed simulation output.
+        for bad in ("the evidence indicates", "available evidence", "forecast evidence base",
+                    "evidence-based", "public position", "现有证据", "研究证据", "证据分析"):
+            assert bad not in low, replacement
