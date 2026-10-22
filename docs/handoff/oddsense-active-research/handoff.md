@@ -1,7 +1,7 @@
 # Handoff — Oddsense active research integration
 
 **Last updated (UTC):** 2026-10-22T08:41:08Z
-**Status:** Current reconciled source has passed frozen acceptance and is activated; final main delivery pending.
+**Status:** Complete — reconciled source is accepted, active and merged/pushed to main. Current delivery is recorded in ../oddsense-main-reconciliation/delivery.json.
 **Current focus:** Preserve the verified main-based source commit while the concurrent primary merge is coordinated and reconciled.
 
 ## 1. Request and context
@@ -109,3 +109,5 @@ A fresh comparison after the external operation found 22 of the 39 original froz
 The user subsequently replied “reconcile the changes and merge to main here.” The merge hold was lifted by that explicit ownership decision. The coordinator and disjoint workers resolved the conflicting sources, preserved main contracts and incoming features, and began a fresh636-source/151-module acceptance. The earlier hold remains a historical incident, not a current approval request. Current progress is in ../oddsense-main-reconciliation/handoff.md.
 
 Current closure: see ../oddsense-main-reconciliation/handoff.md. The later approved reconciliation supersedes the earlier merge hold.
+
+2026-10-22T09:56:31.619829+00:00: Later approved main reconciliation and source delivery are complete. The historical merge hold is closed. See the current reconciliation handoff for the 637-file broad proof, separate new-test addendum and remaining live NewsAPI connectivity limit.

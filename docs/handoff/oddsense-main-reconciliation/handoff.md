@@ -1,8 +1,8 @@
 # Handoff — main reconciliation
 
-**Last updated (UTC):** 2026-10-22T08:52Z
-**Status:** Independent acceptance and local activation complete; main commit/push in progress.
-**Current focus:** Close the independent final review, commit the reconciled merge and push main.
+**Last updated (UTC):** 2026-10-22T09:56:31.619829+00:00
+**Status:** Complete for the requested implementation, reconciliation and source delivery. Live NewsAPI connectivity remains an explicit external limit.
+**Current focus:** No implementation work remains in this scope; track the separate NewsAPI availability issue without launching paid or saved runs.
 
 ## 1. Request and context
 
@@ -26,10 +26,10 @@ PLANS.md records the approved continuation. Coordinator owns pipeline and featur
 
 - [x] Snapshot merge parents, index and all16 remaining conflicts/stages at /private/tmp/drf-oddsense-merge-reconcile-7vv6z8es.
 - [x] Resolve coordinator pipeline/feature-list conflict markers while retaining main contracts and incoming market-history removal.
-- [ ] Integrate all workers and inspect semantic auto-merges.
-- [ ] Freeze and verify the exact combined source.
-- [ ] Independent review and safe idle deployment refresh.
-- [ ] Commit/push main and verify clean owned state.
+- [x] Integrate all workers and inspect semantic auto-merges; exact original contracts and incoming changes are retained.
+- [x] Freeze and verify the exact combined source; broad and affected receipts are linked below.
+- [x] Independent review Accepted and safe idle deployment refresh completed.
+- [x] Commit and merge source, push main and verify remote identity. Tracked source is clean; unrelated untracked newskills/ is preserved.
 
 ## 5. Findings and decisions
 
@@ -77,4 +77,11 @@ At 09:37:48 UTC the verified idle backend was refreshed and now runs as PID 5350
 
 The original bounded live NewsAPI request timed out. A credential-free connection observation at 09:31:47 UTC also timed out before authentication, with zero HTTP requests and no credential sent. Live NewsAPI availability and credential validity remain unverified. The workflow records source unavailability explicitly; no unchanged-key retry loop was introduced.
 
-Independent final review is Accepted, with no open source, guard-policy or regression-retention finding. Its raw private record is preserved and the repository copy only normalizes trailing blank lines. Main commit/push is the remaining closing action.
+Independent final review is Accepted, with no open source, guard-policy or regression-retention finding. Its raw private record is preserved and the repository copy only normalizes trailing blank lines. Source was merged and verified on remote main at `1f473e96`; `delivery.json` records the two merge parents, evidence and active runtime.
+
+
+### Delivery closure
+
+2026-10-22T09:56:31.619829+00:00: Main source merge `5e5e000d` retains both the current main contracts and the incoming feature history. Merge `1f473e96` also integrates the already reviewed readiness branch. Remote main was verified at that source commit; the closing documentation adds no application changes. All 638 current Python hashes remain accounted for by the broad gate plus its test-only addendum. Unrelated newskills/ material remains outside the added paths.
+
+Next-session prompt: Read this record and issues.md. The integration is delivered and enabled for new research. Investigate the NewsAPI connection limit with credential-free diagnostics first; after working outbound access is established, perform one bounded provider compatibility check using the existing private configuration. Keep live retrieval separate from the accepted controlled end-to-end proof and do not resume saved forecasts or spend model tokens without the corresponding request.

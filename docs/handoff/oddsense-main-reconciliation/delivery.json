@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-10-22T09:56:31.619829+00:00",
+  "status": "Source committed, main merges completed and source commit verified on remote main",
+  "source_commit": "1f473e9608bad045cb93dcaaaaec1812c59d6807",
+  "feature_merge_commit": "5e5e000d",
+  "readiness_delivery_merge_commit": "1f473e9608bad045cb93dcaaaaec1812c59d6807",
+  "remote": "legacy",
+  "remote_url": "https://github.com/linroger/DeepResearchForecast.git",
+  "remote_main_source_verified": true,
+  "primary_branch": "main",
+  "unmerged_paths": [],
+  "full_frozen_python_files": 637,
+  "whole_gate": {
+    "passed": 5339,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "expected_failures": 11,
+    "deselected": 22
+  },
+  "new_test_addendum": {
+    "file": "backend/tests/test_oddsense_matcher_regression.py",
+    "new_cases": 3,
+    "affected_gate_passed": 73,
+    "final_source_files": 638,
+    "original637unchanged": true
+  },
+  "frontend": {
+    "unit_passed": 261,
+    "build": "passed",
+    "bound_source_paths": 45
+  },
+  "independent_review": "Accepted; no open scoped source/guard/regression finding",
+  "active_backend_pid": 53508,
+  "health_http": 200,
+  "source_tools": [
+    "news_search",
+    "market_compare"
+  ],
+  "newsapi_credential_configured": true,
+  "live_newsapi": "Native request timed out; credential-free followup also timed out before authentication. Availability and credential validity unverified.",
+  "provider_model_boundary": "External responses and tool choice are scripted in end-to-end acceptance; no paid forecast launched.",
+  "unrelated_untracked_preserved": [
+    "newskills/"
+  ],
+  "closing_note": "Closing documentation follows this source delivery; no application bytes change."
+}
