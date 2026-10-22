@@ -6,6 +6,7 @@ import { renderToString } from 'vue/server-renderer'
 import * as i18n from '../src/i18n.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
+import * as simRecord from '../src/utils/simRecord.js'
 import { compileSfc } from './sfcHarness.mjs'
 
 const worldFile = new URL('../src/components/research/WorldSimulationView.vue', import.meta.url)
@@ -64,6 +65,8 @@ function harness(t, { parent = false, api = {}, id = 'sim_A', generationId = '',
     getAgentStats: async () => ({ success: true, data: { total_posts: 1 } }),
     getRunStatus: async () => ({ success: true, data: { simulation_engine: 'oasis-legacy', runner_status: 'completed', current_round: 2, total_rounds: 2 } }),
     getFeedRounds: async () => ({ success: true, data: { rounds: [] } }),
+    // ADR 0003: no gate-passed after-action record exists for these runs (today's layout)
+    fetchRecord: async () => ({ record: null, status: 404, publicationStatus: 'absent' }),
   }
   const actual = Object.fromEntries(Object.entries({ ...defaults, ...api }).map(([key, fn]) => [key, (...args) => { calls.push({ key, args }); return fn(...args) }]))
   const imports = {
@@ -73,6 +76,9 @@ function harness(t, { parent = false, api = {}, id = 'sim_A', generationId = '',
     // the OASIS view's reflexive-world panel and per-period feed helpers (combined simulation tab)
     './WorldStatePanel.vue': { default: { props: ['simulationId', 'refreshToken', 'round'], emits: ['update:selectedRound'], template: '<div class="world-state-panel" />' } },
     '../../utils/feedRounds': feedRounds,
+    // ADR 0003: the after-action record view (exercised in simulationRecordView.test.mjs)
+    './SimulationRecordView.vue': { default: { props: ['record'], template: '<div class="sim-record-view" />' } },
+    '../../utils/simRecord': simRecord,
   }
   const component = (parent ? buildParent : buildWorld)(imports)
   const props = vue.reactive({ simulationId: id, generationId })
@@ -333,7 +339,8 @@ test('parent uses saved engine, preserves legacy feed, and makes no social calls
   const h = harness(t, { parent: true })
   await settle()
   assert.equal(h.state.engine.value, 'world-v1')
-  assert.deepEqual(h.calls.map(call => call.key), ['getSimulation'])
+  // the saved pin, then one request for the gate-passed record (ADR 0003); still no social calls
+  assert.deepEqual(h.calls.map(call => call.key), ['getSimulation', 'fetchRecord'])
   assert.match(await h.render(), /class="world-child"/)
   const legacy = harness(t, { parent: true, api: { getSimulation: async id => ({ success: true, data: { simulation_id: id } }) } })
   await settle()
@@ -384,7 +391,7 @@ for (const stale of ['success', 'envelope', 'reject']) {
     assert.equal(h.state.engine.value, 'world-v1')
     assert.equal(h.state.worldGenerationId.value, 'gen_latest')
     assert.equal(h.state.error.value, '')
-    assert.ok(h.calls.every(call => call.key === 'getSimulation'))
+    assert.ok(h.calls.every(call => ['getSimulation', 'fetchRecord'].includes(call.key)))
   })
 }
 
