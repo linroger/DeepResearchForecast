@@ -817,7 +817,8 @@ def edit_dossier(pipeline_id: str):
 
 
 # T6.3: 各阶段产物深链。artifacts 映射在 pipeline_state.json 里维护（_record_stage_artifacts）：
-# dossier/timeline/sources/ontology/communities/initial_posts/personas/run_summary。
+# dossier/timeline/sources/ontology/communities/initial_posts/personas/run_summary/simulation_record
+# （ADR 0003：模拟事后记录 simulation_record.json，与 run_summary 同在 RUN 阶段登记）。
 @research_bp.route('/<pipeline_id>/artifact/<name>', methods=['GET'])
 def get_artifact(pipeline_id: str, name: str):
     """T6.3: 返回某阶段产物（JSON 解析后内容；csv/未知按纯文本）。"""

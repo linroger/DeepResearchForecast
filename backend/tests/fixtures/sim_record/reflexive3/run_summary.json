@@ -1,0 +1,389 @@
+{
+ "simulation_id": "sim_3ec25e64209e",
+ "agent_count": 18,
+ "total_actions": 729,
+ "organic_action_count": 629,
+ "seed_action_count": 100,
+ "rounds_executed": 3,
+ "simulated_hours": 9.0,
+ "rounds_with_organic_actions": 9,
+ "total_rounds": 3,
+ "truncated": false,
+ "simulation_health": "ok",
+ "top_agents": [
+  {
+   "agent_id": 6,
+   "agent_name": "Volodymyr Zelenskyy",
+   "total_actions": 61,
+   "twitter_actions": 30,
+   "reddit_actions": 31,
+   "action_types": {
+    "LIKE_POST": 15,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 20,
+    "LIKE_COMMENT": 2,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939333",
+   "last_action_time": "2026-10-22T13:27:06.617485"
+  },
+  {
+   "agent_id": 2,
+   "agent_name": "Government of Russia",
+   "total_actions": 61,
+   "twitter_actions": 31,
+   "reddit_actions": 30,
+   "action_types": {
+    "CREATE_COMMENT": 18,
+    "LIKE_POST": 16,
+    "CREATE_POST": 20,
+    "LIKE_COMMENT": 1,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939536",
+   "last_action_time": "2026-10-22T13:27:06.617338"
+  },
+  {
+   "agent_id": 5,
+   "agent_name": "Vladimir Putin",
+   "total_actions": 60,
+   "twitter_actions": 30,
+   "reddit_actions": 30,
+   "action_types": {
+    "LIKE_POST": 16,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 20,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939277",
+   "last_action_time": "2026-10-22T13:27:06.617631"
+  },
+  {
+   "agent_id": 8,
+   "agent_name": "European Union",
+   "total_actions": 59,
+   "twitter_actions": 28,
+   "reddit_actions": 31,
+   "action_types": {
+    "LIKE_COMMENT": 3,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 20,
+    "LIKE_POST": 12,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939423",
+   "last_action_time": "2026-10-22T13:27:06.616787"
+  },
+  {
+   "agent_id": 3,
+   "agent_name": "Government of Ukraine",
+   "total_actions": 58,
+   "twitter_actions": 30,
+   "reddit_actions": 28,
+   "action_types": {
+    "CREATE_COMMENT": 18,
+    "LIKE_POST": 15,
+    "CREATE_POST": 18,
+    "LIKE_COMMENT": 1,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:34.046026",
+   "last_action_time": "2026-10-22T13:27:06.617301"
+  },
+  {
+   "agent_id": 4,
+   "agent_name": "Donald Trump",
+   "total_actions": 58,
+   "twitter_actions": 28,
+   "reddit_actions": 30,
+   "action_types": {
+    "LIKE_POST": 12,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 20,
+    "LIKE_COMMENT": 2,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939226",
+   "last_action_time": "2026-10-22T13:27:06.617257"
+  },
+  {
+   "agent_id": 7,
+   "agent_name": "Mojtaba Khamenei",
+   "total_actions": 57,
+   "twitter_actions": 28,
+   "reddit_actions": 29,
+   "action_types": {
+    "LIKE_POST": 15,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 18,
+    "LIKE_COMMENT": 2,
+    "FOLLOW": 4
+   },
+   "first_action_time": "2026-10-22T13:09:34.046211",
+   "last_action_time": "2026-10-22T13:27:06.617150"
+  },
+  {
+   "agent_id": 0,
+   "agent_name": "Government of Iran",
+   "total_actions": 56,
+   "twitter_actions": 27,
+   "reddit_actions": 29,
+   "action_types": {
+    "LIKE_POST": 9,
+    "CREATE_COMMENT": 18,
+    "CREATE_POST": 22,
+    "LIKE_COMMENT": 1,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939379",
+   "last_action_time": "2026-10-22T13:27:06.617774"
+  },
+  {
+   "agent_id": 1,
+   "agent_name": "US Government",
+   "total_actions": 56,
+   "twitter_actions": 27,
+   "reddit_actions": 29,
+   "action_types": {
+    "LIKE_COMMENT": 1,
+    "CREATE_COMMENT": 18,
+    "LIKE_POST": 11,
+    "CREATE_POST": 20,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:32.939574",
+   "last_action_time": "2026-10-22T13:27:06.617553"
+  },
+  {
+   "agent_id": 13,
+   "agent_name": "Steve Witkoff",
+   "total_actions": 39,
+   "twitter_actions": 22,
+   "reddit_actions": 17,
+   "action_types": {
+    "LIKE_POST": 9,
+    "CREATE_COMMENT": 11,
+    "CREATE_POST": 11,
+    "LIKE_COMMENT": 1,
+    "REPOST": 1,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:34.046475",
+   "last_action_time": "2026-10-22T13:22:50.219290"
+  },
+  {
+   "agent_id": 10,
+   "agent_name": "IRGC",
+   "total_actions": 33,
+   "twitter_actions": 16,
+   "reddit_actions": 17,
+   "action_types": {
+    "LIKE_POST": 8,
+    "CREATE_COMMENT": 9,
+    "CREATE_POST": 8,
+    "QUOTE_POST": 1,
+    "LIKE_COMMENT": 1,
+    "FOLLOW": 6
+   },
+   "first_action_time": "2026-10-22T13:09:34.046335",
+   "last_action_time": "2026-10-22T13:27:06.617703"
+  },
+  {
+   "agent_id": 11,
+   "agent_name": "Benjamin Netanyahu",
+   "total_actions": 33,
+   "twitter_actions": 17,
+   "reddit_actions": 16,
+   "action_types": {
+    "LIKE_POST": 6,
+    "CREATE_COMMENT": 10,
+    "CREATE_POST": 12,
+    "QUOTE_POST": 1,
+    "FOLLOW": 4
+   },
+   "first_action_time": "2026-10-22T13:09:32.939499",
+   "last_action_time": "2026-10-22T13:27:06.617413"
+  },
+  {
+   "agent_id": 9,
+   "agent_name": "Government of Israel",
+   "total_actions": 25,
+   "twitter_actions": 11,
+   "reddit_actions": 14,
+   "action_types": {
+    "LIKE_POST": 5,
+    "CREATE_COMMENT": 6,
+    "CREATE_POST": 10,
+    "FOLLOW": 4
+   },
+   "first_action_time": "2026-10-22T13:09:34.046294",
+   "last_action_time": "2026-10-22T13:27:06.617842"
+  },
+  {
+   "agent_id": 17,
+   "agent_name": "Pezeshkian",
+   "total_actions": 25,
+   "twitter_actions": 11,
+   "reddit_actions": 14,
+   "action_types": {
+    "LIKE_POST": 6,
+    "CREATE_COMMENT": 8,
+    "CREATE_POST": 11
+   },
+   "first_action_time": "2026-10-22T13:10:00.133431",
+   "last_action_time": "2026-10-22T13:24:58.701038"
+  },
+  {
+   "agent_id": 12,
+   "agent_name": "IAEA",
+   "total_actions": 15,
+   "twitter_actions": 7,
+   "reddit_actions": 8,
+   "action_types": {
+    "LIKE_POST": 4,
+    "CREATE_COMMENT": 6,
+    "LIKE_COMMENT": 1,
+    "CREATE_POST": 2,
+    "FOLLOW": 2
+   },
+   "first_action_time": "2026-10-22T13:09:34.046426",
+   "last_action_time": "2026-10-22T13:22:50.218441"
+  }
+ ],
+ "action_volume_by_round": [
+  {
+   "round_num": 0,
+   "total_actions": 100,
+   "active_agents_count": 17,
+   "action_types": {
+    "FOLLOW": 82,
+    "CREATE_POST": 18
+   }
+  },
+  {
+   "round_num": 1,
+   "total_actions": 68,
+   "active_agents_count": 13,
+   "action_types": {
+    "LIKE_POST": 21,
+    "CREATE_COMMENT": 22,
+    "CREATE_POST": 25
+   }
+  },
+  {
+   "round_num": 2,
+   "total_actions": 67,
+   "active_agents_count": 13,
+   "action_types": {
+    "CREATE_COMMENT": 23,
+    "LIKE_POST": 17,
+    "LIKE_COMMENT": 2,
+    "REPOST": 1,
+    "CREATE_POST": 24
+   }
+  },
+  {
+   "round_num": 3,
+   "total_actions": 68,
+   "active_agents_count": 14,
+   "action_types": {
+    "LIKE_POST": 15,
+    "CREATE_COMMENT": 26,
+    "LIKE_COMMENT": 2,
+    "CREATE_POST": 25
+   }
+  }
+ ],
+ "top_posts": [
+  {
+   "round_num": 1,
+   "agent_id": 1,
+   "agent_name": "US Government",
+   "platform": "twitter",
+   "content": "The United States confirms that trilateral talks with Russia and Ukraine will restart on or after November 10, as agreed in principle on October 21. Our 28-point framework remains the basis for discussion: staged sanctions relief in exchange for a durable ceasefire and verified i"
+  },
+  {
+   "round_num": 1,
+   "agent_id": 5,
+   "agent_name": "Vladimir Putin",
+   "platform": "twitter",
+   "content": "Russia confirms its readiness to begin technical-level talks with the United States and Ukraine after November 10, as agreed in principle at Konstantin Palace. We act from a position of results, not deadlines: the special military operation will conclude only on terms that guaran"
+  },
+  {
+   "round_num": 1,
+   "agent_id": 2,
+   "agent_name": "Government of Russia",
+   "platform": "twitter",
+   "content": "The Government of the Russian Federation confirms, following the meeting between President Putin and Special Envoy Witkoff at Konstantinovsky Palace on 21 October, that Russia agrees 'in principle' to the resumption of trilateral technical-level talks with the United States and U"
+  }
+ ],
+ "temporal_mode": "calendar",
+ "calendar_unit": "day",
+ "total_periods": 3,
+ "simulated_span_days": 9,
+ "horizon_date": "2026-10-31",
+ "horizon_source": "anchored_period",
+ "horizon_defaulted": false,
+ "coverage_end": "2026-10-25",
+ "llm_health": {
+  "platforms": {
+   "twitter": {
+    "llm_calls": 111,
+    "llm_errors": 0,
+    "error_rate": 0.0,
+    "degraded": false
+   },
+   "reddit": {
+    "llm_calls": 119,
+    "llm_errors": 0,
+    "error_rate": 0.0,
+    "degraded": false
+   }
+  },
+  "threshold": 0.5,
+  "updated_at": "2026-10-22T13:27:39.148909"
+ },
+ "agent_dynamics": {
+  "twitter": {
+   "rounds_observed": 9,
+   "rounds_with_received_signal": 9,
+   "active": true
+  },
+  "reddit": {
+   "rounds_observed": 9,
+   "rounds_with_received_signal": 9,
+   "active": true
+  }
+ },
+ "world_model": {
+  "schema_version": "world-model-summary/v1",
+  "rounds_committed": 3,
+  "variables": 43,
+  "actors": 18,
+  "relationships": 41,
+  "events": 59,
+  "pending_effects": 0,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "decision_actors_max": 24,
+  "offers": {
+   "opened": 5,
+   "open": 3,
+   "accepted": 0,
+   "rejected": 0,
+   "countered": 2,
+   "lapsed": 0,
+   "breached": 0
+  },
+  "seed_gaps": 10,
+  "behaviour": {
+   "rounds_scored": 0,
+   "moves": 0,
+   "responsive_moves": 0,
+   "responsive_share": null,
+   "offers_answered": 0
+  },
+  "headline": "2026-10-25: 12 decisions · 2 facts changed · 4 events · arbiter=applied · All three delegations are now confirmed for the 10 November trilateral talks, but positions hardened in parallel: the EU announced the 18th…",
+  "committed_round": 3
+ }
+}

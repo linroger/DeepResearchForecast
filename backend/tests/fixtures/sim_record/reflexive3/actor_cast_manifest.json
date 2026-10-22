@@ -1,0 +1,207 @@
+{
+ "schema_version": "actor-cast/v1",
+ "dossier_sha256": "11399d06a76db9fad9b19f155b679f500c6b5bfbb46cda92d6ec428893758e49",
+ "dossier_actor_count": 20,
+ "eligible_actor_count": 18,
+ "decisions": [
+  {
+   "actor_id": "actor_a4d275749a7590d6",
+   "actor_name": "Vladimir Putin",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "1bb78e8f-a1b7-4ef1-9fcd-973e62ad214f"
+  },
+  {
+   "actor_id": "actor_8940e380214a9c82",
+   "actor_name": "Volodymyr Zelenskyy",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "50a2cd7e-0a7f-4f47-a2f0-322b59b46c79"
+  },
+  {
+   "actor_id": "actor_ce4e7763c97f24e1",
+   "actor_name": "Donald Trump",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "36e5a467-9cc4-4a1d-9ddb-e00f2b7f7fd3"
+  },
+  {
+   "actor_id": "actor_463f6861eb24fb2d",
+   "actor_name": "Steve Witkoff",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "9901b77f-fff3-4601-b7ce-1e661b55739d"
+  },
+  {
+   "actor_id": "actor_f45062c4f84b0795",
+   "actor_name": "Mojtaba Khamenei",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "60d9a643-649e-447a-aac8-1fcd90423d44"
+  },
+  {
+   "actor_id": "actor_93a3a2590694f53f",
+   "actor_name": "Benjamin Netanyahu",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "cf1717e5-aeae-47d0-a715-0a06658193a0"
+  },
+  {
+   "actor_id": "actor_4e9c7e81d4258c28",
+   "actor_name": "Government of Russia",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "59a394c2-264a-47c0-8fdb-fe3c0f8ddfe3"
+  },
+  {
+   "actor_id": "actor_0734b93e96d52320",
+   "actor_name": "Government of Ukraine",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "ec4cd8d4-1851-4e45-b17e-368e424990d1"
+  },
+  {
+   "actor_id": "actor_f1c64ab1b9c4fa8d",
+   "actor_name": "US Government",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "03158fe7-66b2-4cfd-949f-be19f5f32ac4"
+  },
+  {
+   "actor_id": "actor_d2f5c3918a0366a3",
+   "actor_name": "Government of Israel",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "88498412-aa98-4c57-a2da-3a3b99fe9f46"
+  },
+  {
+   "actor_id": "actor_89fae41f81750c89",
+   "actor_name": "Government of Iran",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "abc4571e-9492-4a01-9826-4f076be4892e"
+  },
+  {
+   "actor_id": "actor_7cfcb1d89d3fcfc6",
+   "actor_name": "European Union",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "14cc79e4-6a45-4f20-96e8-6ed002420178"
+  },
+  {
+   "actor_id": "actor_5cae49b1fea5b5b9",
+   "actor_name": "NATO",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "5c4cb298-c563-4d03-b805-318799a9c406"
+  },
+  {
+   "actor_id": "actor_670cc9300ca36c53",
+   "actor_name": "Government of China",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "5d533c7a-6752-4ce5-8eef-0273bbe76b50"
+  },
+  {
+   "actor_id": "actor_5f574d333d1bc2af",
+   "actor_name": "IAEA",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "554a1dcc-77b7-4e16-bad7-10eb5014f27e"
+  },
+  {
+   "actor_id": "actor_796eebf70bdd2148",
+   "actor_name": "Gulf states (Saudi Arabia, UAE, Qatar)",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "36e34efb-866e-440a-9741-7f1d70a45be7"
+  },
+  {
+   "actor_id": "actor_23b9b483bce87614",
+   "actor_name": "IRGC",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "1160ba52-b232-4d32-9fb8-2b8aa505569e"
+  },
+  {
+   "actor_id": "actor_44479c310c0a6ec0",
+   "actor_name": "European Central Bank",
+   "eligible": false,
+   "synthetic_entity": false,
+   "status": "context_only",
+   "reason": "dossier classification is not an active simulation actor"
+  },
+  {
+   "actor_id": "actor_36df2def1a9f7662",
+   "actor_name": "OPEC+",
+   "eligible": false,
+   "synthetic_entity": false,
+   "status": "context_only",
+   "reason": "dossier classification is not an active simulation actor"
+  },
+  {
+   "actor_id": "actor_1fdd51589cc5c1f0",
+   "actor_name": "Pezeshkian government",
+   "eligible": true,
+   "synthetic_entity": false,
+   "status": "selected",
+   "reason": "matched existing graph entity",
+   "entity_uuid": "036ae243-48dd-4024-9331-2f4b702a2549"
+  }
+ ],
+ "selected_actor_count": 18,
+ "selected_actor_names": [
+  "Benjamin Netanyahu",
+  "Donald Trump",
+  "European Union",
+  "Government of China",
+  "Government of Iran",
+  "Government of Israel",
+  "Government of Russia",
+  "Government of Ukraine",
+  "Gulf states (Saudi Arabia, UAE, Qatar)",
+  "IAEA",
+  "IRGC",
+  "Mojtaba Khamenei",
+  "NATO",
+  "Pezeshkian government",
+  "Steve Witkoff",
+  "US Government",
+  "Vladimir Putin",
+  "Volodymyr Zelenskyy"
+ ]
+}

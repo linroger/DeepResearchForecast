@@ -1246,6 +1246,17 @@ class Config:
     # the arbiter temperature of paths 1..K-1 (path 0, the agents' own, stays at 0.3; capped at 1.0).
     SIM_WORLD_PATHS = os.environ.get('SIM_WORLD_PATHS', '1').strip() or '1'
     SIM_WORLD_PATH_TEMPERATURE = os.environ.get('SIM_WORLD_PATH_TEMPERATURE', '0.7').strip() or '0.7'
+    # —— Simulation After-Action Record (ADR 0003; docs/handoff/simulation-after-action-record/design.md §3.1) ——
+    # Stage 5 finalization compiles simulation_record.json / .md / .zh.md from the simulation's own artifacts
+    # (never the dossier, sources, spine or markets) and audits it with the deterministic gate
+    # (simulation_record_audit.json). The record is a 'simulated' record class: never evidence, never a
+    # probability input; an unaudited or failed record is not served. false → no record is written; the RUN
+    # stage and report publication are unaffected either way.
+    SIM_RECORD_ENABLED = os.environ.get('SIM_RECORD_ENABLED', 'true').strip().lower() == 'true'
+    # One bounded LLM call writes the record's overall synthesis from the deterministic skeleton only; on any
+    # provider error or new gate hard issue it is dropped, the skeleton is kept and the reason recorded.
+    # false → deterministic skeleton only, zero LLM calls.
+    SIM_RECORD_SYNTHESIS = os.environ.get('SIM_RECORD_SYNTHESIS', 'true').strip().lower() == 'true'
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
 
     # —— OASIS 并发上限（每轮在飞 LLM 请求数）单一真源（EXECPLAN2 I-8-4）——

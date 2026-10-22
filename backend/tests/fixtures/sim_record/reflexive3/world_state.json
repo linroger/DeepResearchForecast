@@ -1,0 +1,3382 @@
+{
+ "schema_version": "world-state-file/v1",
+ "simulation_id": "sim_3ec25e64209e",
+ "committed_round": 3,
+ "brief": "",
+ "digest": "",
+ "headline": "2026-10-25: 12 decisions · 2 facts changed · 4 events · arbiter=applied · All three delegations are now confirmed for the 10 November trilateral talks, but positions hardened in parallel: the EU announced the 18th…",
+ "summary": {
+  "schema_version": "world-model-summary/v1",
+  "rounds_committed": 3,
+  "variables": 43,
+  "actors": 18,
+  "relationships": 41,
+  "events": 59,
+  "pending_effects": 0,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "decision_actors_max": 24,
+  "offers": {
+   "opened": 5,
+   "open": 3,
+   "accepted": 0,
+   "rejected": 0,
+   "countered": 2,
+   "lapsed": 0,
+   "breached": 0
+  },
+  "seed_gaps": 10,
+  "behaviour": {
+   "rounds_scored": 0,
+   "moves": 0,
+   "responsive_moves": 0,
+   "responsive_share": null,
+   "offers_answered": 0
+  }
+ },
+ "world": {
+  "schema_version": "world-model-state/v1",
+  "question": "Produce a comprehensive, evidence-based, forward-looking assessment of the Russia–Ukraine war and the conflict involving Iran, forecasting the most probable timelines, pathways, and conditions for ceasefires, peace negotiations, diplomatic settlements, and sustainable conflict resolution. Begin by establishing the latest verified military, political, diplomatic, and strategic developments in each…",
+  "as_of_date": "2026-10-22",
+  "horizon_date": "2026-10-31",
+  "scenarios": [
+   "Stalemate with fragile talks",
+   "Ukraine ceasefire, Iran holds",
+   "Dual de-escalation",
+   "Renewed escalation in Ukraine",
+   "Iran war reignition",
+   "Widened regional war"
+  ],
+  "settings": {
+   "arbiter_enabled": true,
+   "max_change_ratio": 0.5,
+   "barrier_timeout_s": 1800.0
+  },
+  "round": 3,
+  "committed_round": 3,
+  "period": {
+   "round": 2,
+   "period_start": "2026-10-25",
+   "period_end": "2026-10-25",
+   "label": "2026-10-25"
+  },
+  "scenario_shares": {
+   "Stalemate with fragile talks": 0.50629,
+   "Ukraine ceasefire, Iran holds": 0.24223,
+   "Dual de-escalation": 0.086012,
+   "Renewed escalation in Ukraine": 0.04123,
+   "Iran war reignition": 0.107058,
+   "Widened regional war": 0.017179
+  },
+  "period_labels": {
+   "1": "2026-10-23",
+   "2": "2026-10-24",
+   "3": "2026-10-25"
+  },
+  "variables": [
+   {
+    "id": "territorial_control",
+    "name": "Territorial control",
+    "value": 45196.0,
+    "unit": "square miles",
+    "kind": "numeric",
+    "as_of": "2026-10-21",
+    "provenance": "research",
+    "rationale": "Territory held by Russia; Russia Matters",
+    "history": [
+     {
+      "round": 0,
+      "value": 45196.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "russian_casualties_recent",
+    "name": "Russian casualties, recent",
+    "value": 40000.0,
+    "unit": "persons",
+    "kind": "numeric",
+    "as_of": "2026-10-20",
+    "provenance": "research",
+    "rationale": "Russian killed and wounded; ISW/CTP",
+    "history": [
+     {
+      "round": 0,
+      "value": 40000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "net_territorial_change",
+    "name": "Net territorial change",
+    "value": 122.0,
+    "unit": "sq km",
+    "kind": "numeric",
+    "as_of": "2026-10-19",
+    "provenance": "research",
+    "rationale": "Net Russian loss, 1 Sep–16 Oct 2026; ISW/CTP",
+    "history": [
+     {
+      "round": 0,
+      "value": 122.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "net_territorial_gain_12_months",
+    "name": "Net territorial gain, 12 months",
+    "value": 753.0,
+    "unit": "sq mi",
+    "kind": "numeric",
+    "as_of": "2026-10-19",
+    "provenance": "research",
+    "rationale": "Russian net gain 19 Oct 2025–19 Oct 2026; DeepState via Russia Matters",
+    "history": [
+     {
+      "round": 0,
+      "value": 753.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "drone_launch_tempo",
+    "name": "Drone launch tempo",
+    "value": 320.0,
+    "unit": "count",
+    "kind": "numeric",
+    "as_of": "2026-10-18",
+    "provenance": "arbiter",
+    "rationale": "Russian launches in one day-night cycle; ISW/CTP",
+    "history": [
+     {
+      "round": 0,
+      "value": 337.0,
+      "cause": "seed",
+      "source": "research"
+     },
+     {
+      "round": 1,
+      "value": 319.0,
+      "cause": "Slight dip as Russia avoids overt escalation ahead of Nov 10 talks, but strikes continue.",
+      "source": "arbiter"
+     },
+     {
+      "round": 3,
+      "value": 180.0,
+      "cause": "Trilateral talks begin ~Nov 10–17; first confidence-building step likely an energy/humanitarian ceasefire.",
+      "source": "effect"
+     },
+     {
+      "round": 3,
+      "value": 310.0,
+      "cause": "Russian energy-strike tempo continues; sustained energy ceasefire unlikely before talks conclude.",
+      "source": "effect"
+     },
+     {
+      "round": 3,
+      "value": 320.0,
+      "cause": "Slight uptick as Russia maintains pressure ahead of 10 Nov talks while preserving its Kyiv pause.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "russian_mod_drone_claim",
+    "name": "Russian MoD drone claim",
+    "value": 1015.0,
+    "unit": "count",
+    "kind": "numeric",
+    "as_of": "2026-10-18",
+    "provenance": "research",
+    "rationale": "Russian claim of Ukrainian drones downed; Russian MoD",
+    "history": [
+     {
+      "round": 0,
+      "value": 1015.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "brent_crude_monthly_average",
+    "name": "Brent crude monthly average",
+    "value": 102.0181,
+    "unit": "U.S. dollars per barrel",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "arbiter",
+    "rationale": "Brent monthly average (+50.894% y/y; 67.6091 a year earlier); IMF",
+    "history": [
+     {
+      "round": 0,
+      "value": 102.0181,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "brent_ice_futures",
+    "name": "Brent ICE futures",
+    "value": 24.8,
+    "unit": "U.S. dollars per barrel",
+    "kind": "numeric",
+    "as_of": "2026-10-21",
+    "provenance": "arbiter",
+    "rationale": "ICE Brent futures settlements, roughly $20 backwardation; ICE",
+    "history": [
+     {
+      "round": 0,
+      "value": 26.0,
+      "cause": "seed",
+      "source": "research"
+     },
+     {
+      "round": 2,
+      "value": 24.8,
+      "cause": "Oil price softens as US-Iran sequenced-relief discussion raises expectations blockade relief measures could be tested; marginal move only since preconditions remain unmet.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "ttf_natural_gas",
+    "name": "TTF natural gas",
+    "value": 83.9,
+    "unit": "EUR/MWh",
+    "kind": "numeric",
+    "as_of": "2026-10-21",
+    "provenance": "arbiter",
+    "rationale": "TTF front price; Trading Economics",
+    "history": [
+     {
+      "round": 0,
+      "value": 86.93,
+      "cause": "seed",
+      "source": "research"
+     },
+     {
+      "round": 1,
+      "value": 85.43,
+      "cause": "Marginal easing on ceasefire-talks headlines; TTF still elevated given energy strikes and winter.",
+      "source": "arbiter"
+     },
+     {
+      "round": 2,
+      "value": 83.9,
+      "cause": "Confirmed talks scheduling and no new large energy strikes this week ease prompt gas ~2% despite continued drone tempo.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "ttf_cme_nov26_futures",
+    "name": "TTF CME Nov26 futures",
+    "value": 88.30000000000001,
+    "unit": "EUR/MWh",
+    "kind": "numeric",
+    "as_of": "2026-10-21",
+    "provenance": "arbiter",
+    "rationale": "CME Nov26 TTF futures; CME",
+    "history": [
+     {
+      "round": 0,
+      "value": 88.595,
+      "cause": "seed",
+      "source": "research"
+     },
+     {
+      "round": 2,
+      "value": 86.9,
+      "cause": "Front-month futures drift slightly lower on de-escalation expectations ahead of 10 November talks.",
+      "source": "arbiter"
+     },
+     {
+      "round": 3,
+      "value": 88.30000000000001,
+      "cause": "Continued energy strikes plus winter demand keep upward pressure; ceasefire only promised at talks.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "uranium_monthly_average",
+    "name": "Uranium monthly average",
+    "value": 72.4744,
+    "unit": "U.S. dollars per pound",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Uranium monthly average; IMF",
+    "history": [
+     {
+      "round": 0,
+      "value": 72.4744,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "us_policy_rate",
+    "name": "US policy rate",
+    "value": 3.875,
+    "unit": "percent per year",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Central bank policy rate, month-end, raised from 3.625% through August; BIS",
+    "history": [
+     {
+      "round": 0,
+      "value": 3.875,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "euro_area_policy_rate",
+    "name": "Euro area policy rate",
+    "value": 2.5,
+    "unit": "percent per year",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "ECB deposit rate, month-end; raised twice in 2026; BIS",
+    "history": [
+     {
+      "round": 0,
+      "value": 2.5,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "military_expenditure",
+    "name": "Military expenditure",
+    "value": 7.501,
+    "unit": "percent of GDP",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Military expenditure share of GDP; World Bank WDI",
+    "history": [
+     {
+      "round": 0,
+      "value": 7.501,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "russian_federal_budget_9m_2026",
+    "name": "Russian federal budget 9M 2026",
+    "value": 29639000000000.0,
+    "unit": "trillion roubles / perc…",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Federal budget outturn January–September 2026; Russian Ministry of Finance",
+    "history": [
+     {
+      "round": 0,
+      "value": 29639000000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "russian_oil_and_gas_revenues",
+    "name": "Russian oil-and-gas revenues",
+    "value": 5471000000000.0,
+    "unit": "trillion roubles",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Base oil-and-gas revenues 9M 2026; Interfax via Trading Economics",
+    "history": [
+     {
+      "round": 0,
+      "value": 5471000000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "russian_october_oil_and_gas_revenue",
+    "name": "Russian October oil-and-gas revenue",
+    "value": 1000000000000.0,
+    "unit": "trillion roubles",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "October 2026 oil-and-gas revenue; Reuters",
+    "history": [
+     {
+      "round": 0,
+      "value": 1000000000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "total_2026_russian_budget_spending",
+    "name": "Total 2026 Russian budget spending",
+    "value": 48600000000000.0,
+    "unit": "trillion roubles",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Total 2026 budget spending; Reuters",
+    "history": [
+     {
+      "round": 0,
+      "value": 48600000000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "ukraine_external_aid",
+    "name": "Ukraine external aid",
+    "value": 30100000000.0,
+    "unit": "euros",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "H1 2026 external aid commitments; Report citing aid tracker",
+    "history": [
+     {
+      "round": 0,
+      "value": 30100000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "cumulative_ukraine_aid_allocations",
+    "name": "Cumulative Ukraine aid allocations",
+    "value": 115000000000.0,
+    "unit": "euros",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Allocations January 2022–August 2026; Germany's €100bn headline includes only €41.7bn actual bilateral aid; CFR counts $195bn US spending through 31 March 2026; Aid tracker / CFR",
+    "history": [
+     {
+      "round": 0,
+      "value": 115000000000.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "ukraine_defence_spending_growth",
+    "name": "Ukraine defence spending growth",
+    "value": 34.0,
+    "unit": "percent",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "January–August 2026 defence spending; Ukrainian budget data",
+    "history": [
+     {
+      "round": 0,
+      "value": 34.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "iran_inflation",
+    "name": "Iran inflation",
+    "value": 73.6,
+    "unit": "percent",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Annual consumer inflation; Statistical Centre of Iran",
+    "history": [
+     {
+      "round": 0,
+      "value": 73.6,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "iran_verified_heu_baseline",
+    "name": "Iran verified HEU baseline",
+    "value": 440.9,
+    "unit": "kilograms",
+    "kind": "numeric",
+    "as_of": "2026-10-22",
+    "provenance": "research",
+    "rationale": "Last verified stockpile before June 2025 attacks; Grossi later estimated 'a bit more than 200 kg' remains at Isfahan and Natanz; IAEA / ISIS",
+    "history": [
+     {
+      "round": 0,
+      "value": 440.9,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "eu_sanctions_listings",
+    "name": "EU sanctions listings",
+    "value": 1600.0,
+    "unit": "count",
+    "kind": "numeric",
+    "as_of": "2026-10-12",
+    "provenance": "effect",
+    "rationale": "Largest-ever EU sanctions package; European Union",
+    "history": [
+     {
+      "round": 0,
+      "value": 1600.0,
+      "cause": "seed",
+      "source": "research"
+     }
+    ]
+   },
+   {
+    "id": "trilateral_talks_scheduled",
+    "name": "trilateral_talks_scheduled",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-23",
+    "provenance": "arbiter",
+    "rationale": "US–Russia–Ukraine technical talks confirmed in principle for on/after 2026-11-10.",
+    "history": [
+     {
+      "round": 1,
+      "value": true,
+      "cause": "US–Russia–Ukraine technical talks confirmed in principle for on/after 2026-11-10.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "iran_relief_preconditions_pending",
+    "name": "iran_relief_preconditions_pending",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-23",
+    "provenance": "arbiter",
+    "rationale": "Iran demands blockade end, sanctions relief, asset release before any negotiation; unresolved.",
+    "history": [
+     {
+      "round": 1,
+      "value": true,
+      "cause": "Iran demands blockade end, sanctions relief, asset release before any negotiation; unresolved.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "trilateral_talks_participation_confirmed",
+    "name": "trilateral_talks_participation_confirmed",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-24",
+    "provenance": "arbiter",
+    "rationale": "All three parties have now publicly confirmed attendance at 10 November technical-level talks — a new durable fact.",
+    "history": [
+     {
+      "round": 2,
+      "value": true,
+      "cause": "All three parties have now publicly confirmed attendance at 10 November technical-level talks — a new durable fact.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "iran_parallel_talks_offer_open",
+    "name": "iran_parallel_talks_offer_open",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-24",
+    "provenance": "arbiter",
+    "rationale": "Pezeshkian's parallel-talks offer [i2_5] is a live, unaccepted diplomatic channel between Washington and Tehran.",
+    "history": [
+     {
+      "round": 2,
+      "value": true,
+      "cause": "Pezeshkian's parallel-talks offer [i2_5] is a live, unaccepted diplomatic channel between Washington and Tehran.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "sanctions_relief_sequencing_dispute",
+    "name": "sanctions_relief_sequencing_dispute",
+    "value": "open",
+    "unit": "",
+    "kind": "categorical",
+    "as_of": "2026-10-24",
+    "provenance": "arbiter",
+    "rationale": "Russia and Ukraine have staked incompatible sequencing demands (relief-first vs guarantees-first) that will define the November talks.",
+    "history": [
+     {
+      "round": 2,
+      "value": "open",
+      "cause": "Russia and Ukraine have staked incompatible sequencing demands (relief-first vs guarantees-first) that will define the November talks.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "us_israel_strike_veto",
+    "name": "us_israel_strike_veto",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-25",
+    "provenance": "arbiter",
+    "rationale": "Trump explicitly ruled out any Israeli strike on Iran before the US midterms.",
+    "history": [
+     {
+      "round": 3,
+      "value": true,
+      "cause": "Trump explicitly ruled out any Israeli strike on Iran before the US midterms.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "trilateral_talks_agenda_agreed",
+    "name": "trilateral_talks_agenda_agreed",
+    "value": false,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-25",
+    "provenance": "arbiter",
+    "rationale": "Participation confirmed but sequencing agenda (freeze-first vs relief-first) still contested.",
+    "history": [
+     {
+      "round": 3,
+      "value": false,
+      "cause": "Participation confirmed but sequencing agenda (freeze-first vs relief-first) still contested.",
+      "source": "arbiter"
+     }
+    ]
+   },
+   {
+    "id": "israel_us_no_war_understanding",
+    "name": "israel_us_no_war_understanding",
+    "value": "expired",
+    "unit": "",
+    "kind": "text",
+    "as_of": "2026-10-26",
+    "provenance": "effect",
+    "rationale": "Trump-Netanyahu call produced an explicit but informal Israeli commitment not to strike Iran before 3 November.",
+    "history": []
+   },
+   {
+    "id": "witkoff_freeze_framework_draft",
+    "name": "witkoff_freeze_framework_draft",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-26",
+    "provenance": "arbiter",
+    "rationale": "Draft monitored line-of-contact freeze framework now exists and is being finalized with both delegations — a new concrete artifact.",
+    "history": []
+   },
+   {
+    "id": "iran_us_parallel_talks_accepted",
+    "name": "iran_us_parallel_talks_accepted",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-27",
+    "provenance": "arbiter",
+    "rationale": "US formally accepted Pezeshkian's parallel technical-talks offer on enrichment transparency, to begin within 14 days.",
+    "history": []
+   },
+   {
+    "id": "kyiv_strike_pause_holds",
+    "name": "kyiv_strike_pause_holds",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-27",
+    "provenance": "arbiter",
+    "rationale": "Putin publicly reaffirms the pause on strikes against Kyiv pending talks — a new observable commitment to track.",
+    "history": []
+   },
+   {
+    "id": "ukraine_security_guarantee_agenda_demand",
+    "name": "ukraine_security_guarantee_agenda_demand",
+    "value": "answered, content contested",
+    "unit": "",
+    "kind": "text",
+    "as_of": "2026-10-28",
+    "provenance": "effect",
+    "rationale": "Zelenskyy's written demand that security guarantees be agenda item tied to any freeze creates a tracked deadline.",
+    "history": []
+   },
+   {
+    "id": "us_diesel_fertilizer_relief_implemented",
+    "name": "us_diesel_fertilizer_relief_implemented",
+    "value": false,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-28",
+    "provenance": "arbiter",
+    "rationale": "US publicly reaffirmed staged relief but after earlier breach, implementation is not yet verified.",
+    "history": []
+   },
+   {
+    "id": "iran_us_talks_precondition_stalemate",
+    "name": "iran_us_talks_precondition_stalemate",
+    "value": false,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-29",
+    "provenance": "arbiter",
+    "rationale": "Iran demands relief-first; Trump demands full HEU surrender first — sequencing impasse now explicit and tracked.",
+    "history": []
+   },
+   {
+    "id": "israel_deal_red_line_declared",
+    "name": "israel_deal_red_line_declared",
+    "value": "no enrichment capability preserved",
+    "unit": "",
+    "kind": "text",
+    "as_of": "2026-10-29",
+    "provenance": "arbiter",
+    "rationale": "Israel publicly commits to opposing any enrichment-preserving arrangement, a new constraint on US-Iran diplomacy.",
+    "history": []
+   },
+   {
+    "id": "us_iran_parallel_talks_agreement_active",
+    "name": "us_iran_parallel_talks_agreement_active",
+    "value": true,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-30",
+    "provenance": "arbiter",
+    "rationale": "US acceptance of Pezeshkian's offer [i6_8] creates a binding two-sided framework with first mutual steps due within 30 days of talks opening.",
+    "history": []
+   },
+   {
+    "id": "iran_vienne_technical_talks_date",
+    "name": "iran_vienne_technical_talks_date",
+    "value": "2026-11-03",
+    "unit": "",
+    "kind": "text",
+    "as_of": "2026-10-30",
+    "provenance": "arbiter",
+    "rationale": "Pezeshkian committed IAEA sequencing delegation to Vienna by 3 Nov 2026.",
+    "history": []
+   },
+   {
+    "id": "us_written_security_guarantee_delivered",
+    "name": "us_written_security_guarantee_delivered",
+    "value": false,
+    "unit": "",
+    "kind": "boolean",
+    "as_of": "2026-10-31",
+    "provenance": "arbiter",
+    "rationale": "US/Witkoff obligations to Zelenskyy lapsed; whether a written guarantee text arrives before 10 November is now the pivotal trackable fact.",
+    "history": []
+   },
+   {
+    "id": "irgc_israel_enrichment_redline_friction",
+    "name": "irgc_israel_enrichment_redline_friction",
+    "value": "open",
+    "unit": "",
+    "kind": "categorical",
+    "as_of": "2026-10-31",
+    "provenance": "arbiter",
+    "rationale": "IRGC and Israel both publicly reject enrichment-retention arrangements, creating a two-front spoiler risk to the Vienna track.",
+    "history": []
+   }
+  ],
+  "actors": [
+   {
+    "agent_id": 0,
+    "name": "Government of Iran",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [
+     "Reopen Hormuz within seven days under Iranian control (standing offer)"
+    ],
+    "red_lines": [],
+    "goals": [
+     "Relief-first sequencing per lapsed MoU paragraphs",
+     "Preserve enrichment ('even a particle' will not exit, per Rezaei)",
+     "Reopen Hormuz within seven days under Iranian control (standing offer)"
+    ],
+    "incentives": {
+     "gains_if": "US accepts Hormuz-for-relief trade",
+     "loses_if": "Post-midterm strikes proceed"
+    },
+    "aliases": [],
+    "reputation": 0.42,
+    "commitments": [
+     {
+      "id": "c0_1_1",
+      "description": "Iran will reopen the Strait of Hormuz within seven days of verified US relief measures commencing",
+      "made_round": 1,
+      "due_round": 2,
+      "status": "fulfilled",
+      "source": "decision",
+      "fulfilled_round": 2
+     },
+     {
+      "id": "c0_2_2",
+      "description": "Standing Hormuz-for-relief offer remains open",
+      "made_round": 2,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c0_3_3",
+      "description": "Maintain Hormuz-for-relief offer open through 2026-10-31",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 1,
+    "name": "US Government",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "neutral",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Ukraine settlement with economic normalization",
+     "Iranian enrichment reduction and stockpile return"
+    ],
+    "incentives": {
+     "gains_if": "Russian help on Iran traded for Ukraine terms",
+     "loses_if": "Both tracks stall through 2027"
+    },
+    "aliases": [],
+    "reputation": 0.17,
+    "commitments": [
+     {
+      "id": "c1_1_1",
+      "description": "Host the trilateral round on or after Nov 10 based on the 28-point plan",
+      "made_round": 1,
+      "due_round": 4,
+      "status": "lapsed",
+      "source": "decision"
+     },
+     {
+      "id": "c1_2_2",
+      "description": "Hold first US-Iran technical contact on sequencing within 14 days, blockade unchanged until verification benchmarks are met",
+      "made_round": 2,
+      "due_round": 6,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c1_3_3",
+      "description": "Honour the agreement with Government of Ukraine: Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes binding security guarantees for Ukraine into the plan as a m…",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "breached",
+      "source": "agreement:i2_3",
+      "counterparty": 3
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 2,
+    "name": "Government of Russia",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Sustain force generation under a still-fundable budget",
+     "Capture rest of Donetsk oblast",
+     "Economic normalization with US"
+    ],
+    "incentives": {
+     "gains_if": "Iran standoff keeps world oil elevated (cross-subsidy)",
+     "loses_if": "Dual de-escalation compresses Brent toward $84/bbl"
+    },
+    "aliases": [],
+    "reputation": 0.52,
+    "commitments": [
+     {
+      "id": "c2_1_1",
+      "description": "Participate in trilateral technical-level talks if they convene on or after 10 November 2026",
+      "made_round": 1,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 3,
+    "name": "Government of Ukraine",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [
+     "Freeze with security guarantees"
+    ],
+    "red_lines": [
+     "Legal refusal to recognize annexations"
+    ],
+    "goals": [
+     "Freeze with security guarantees",
+     "Maintain external financing",
+     "De jure restoration of territory (maximum)"
+    ],
+    "incentives": {
+     "gains_if": "EU loan disburses and ceasefire reduces burden from 39.561% of GDP",
+     "loses_if": "Aid declines further while fighting continues"
+    },
+    "aliases": [],
+    "reputation": 0.54,
+    "commitments": [
+     {
+      "id": "c3_1_1",
+      "description": "Participate in trilateral negotiator-level talks on or after 10 November 2026, conditional on security guarantees",
+      "made_round": 1,
+      "due_round": 4,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c3_3_2",
+      "description": "Participate in trilateral negotiator-level talks from 10 November 2026, conditional on security guarantees",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c3_3_3",
+      "description": "Honour the agreement with US Government: Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes binding security guarantees for Ukraine into the plan as a milestone…",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "pending",
+      "source": "agreement:i2_3",
+      "counterparty": 1
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 4,
+    "name": "Donald Trump",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "supportive",
+    "documented_plans": [
+     "States desire for deals and peace pledges",
+     "pledged no Iran attack before midterms 8 Oct 2026"
+    ],
+    "red_lines": [],
+    "goals": [
+     "Signed Ukraine deal plus economic normalization with Russia",
+     "'Meaningful' reduction in Iranian enrichment capacity",
+     "Return of 100% of the enriched-uranium stockpile to the US"
+    ],
+    "incentives": {
+     "gains_if": "Signed Ukraine ceasefire and Iran nuclear arrangement",
+     "loses_if": "Renewed major war or visible failure of mediation"
+    },
+    "aliases": [],
+    "reputation": 0.54,
+    "commitments": [
+     {
+      "id": "c4_1_1",
+      "description": "US will convene trilateral technical-level talks on or after 10 November 2026 under the 28-point plan",
+      "made_round": 1,
+      "due_round": 3,
+      "status": "fulfilled",
+      "source": "decision",
+      "fulfilled_round": 3
+     },
+     {
+      "id": "c4_3_2",
+      "description": "US will convene trilateral technical-level talks with Russia and Ukraine on or after 10 November 2026 under the 28-point plan",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 5,
+    "name": "Vladimir Putin",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "neutral",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Minimum: freeze on current lines with staged sanctions relief",
+     "Maximum: full Donbas and recognition of gains",
+     "Economic openings to Washington (diesel, fertilizer, joint projects)"
+    ],
+    "incentives": {
+     "gains_if": "Talks stall while Russian forces capture remaining Donetsk",
+     "loses_if": "Forced freeze before seizing rest of Donetsk"
+    },
+    "aliases": [],
+    "reputation": 0.5,
+    "commitments": [
+     {
+      "id": "c5_1_1",
+      "description": "Send delegation to trilateral technical talks starting on or after 2026-11-10",
+      "made_round": 1,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c5_2_2",
+      "description": "Send Russian delegation to trilateral technical talks starting on or after 2026-11-10",
+      "made_round": 2,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c5_3_3",
+      "description": "Send Russian delegation to trilateral technical-level talks starting on or after 2026-11-10",
+      "made_round": 3,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 6,
+    "name": "Volodymyr Zelenskyy",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [],
+    "red_lines": [
+     "Long refusal to cede new territory or recognize Russian control of Crimea"
+    ],
+    "goals": [
+     "Minimum: freeze along current lines with US/European security guarantees",
+     "Maximum: de jure restoration of territory",
+     "Negotiator-level talks no later than early November"
+    ],
+    "incentives": {
+     "gains_if": "US/European guarantees instrument signed alongside ceasefire",
+     "loses_if": "Freeze imposed without guarantees or with Starlink leverage maintained"
+    },
+    "aliases": [
+     "Zelensky"
+    ],
+    "reputation": 0.52,
+    "commitments": [
+     {
+      "id": "c6_1_1",
+      "description": "Ukraine ready to send negotiators to trilateral talks starting on or after 10 November 2026, contingent on guarantees being on the table",
+      "made_round": 1,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c6_2_2",
+      "description": "Ukraine ready to send negotiators to trilateral talks starting on or after 10 November 2026, contingent on guarantees being on the table",
+      "made_round": 2,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c6_3_3",
+      "description": "Send negotiators to trilateral talks on or after 10 November 2026, contingent on guarantees being on the agenda",
+      "made_round": 3,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 7,
+    "name": "Mojtaba Khamenei",
+    "agency_class": "regulator_agency",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [
+     "End the naval blockade, lift oil-export sanctions, release frozen assets, end hostilities"
+    ],
+    "red_lines": [],
+    "goals": [
+     "End the naval blockade, lift oil-export sanctions, release frozen assets, end hostilities",
+     "Preserve enrichment capability"
+    ],
+    "incentives": {
+     "gains_if": "Relief-first sequencing accepted while retaining enrichment",
+     "loses_if": "Post-midterm US–Israeli 'short but intensive' strike proceeds"
+    },
+    "aliases": [],
+    "reputation": 0.3,
+    "commitments": [
+     {
+      "id": "c7_1_1",
+      "description": "Advance your documented plan: End the naval blockade, lift oil-export sanctions, release frozen assets, end hostilities (announced)",
+      "made_round": 1,
+      "due_round": 2,
+      "status": "fulfilled",
+      "source": "option_lag",
+      "fulfilled_round": 2
+     },
+     {
+      "id": "c7_2_2",
+      "description": "Maintain relief-first precondition and enrichment red line in all channels",
+      "made_round": 2,
+      "due_round": 5,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c7_3_3",
+      "description": "Maintain relief-first precondition and enrichment red line in all channels",
+      "made_round": 3,
+      "due_round": 5,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 8,
+    "name": "European Union",
+    "agency_class": "central_bank",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Maximum pressure on Russia",
+     "Ukraine financing and reconstruction",
+     "European security architecture"
+    ],
+    "incentives": {
+     "gains_if": "Settlement includes verifiable Russian concessions",
+     "loses_if": "US bilateral normalization splits the coalition"
+    },
+    "aliases": [
+     "EU"
+    ],
+    "reputation": 0.64,
+    "commitments": [
+     {
+      "id": "c8_2_1",
+      "description": "Maintain the full sanctions regime (close to 4,600 listings) with no relief absent unanimous Council decision and verifiable Russian concessions",
+      "made_round": 2,
+      "due_round": 9,
+      "status": "pending",
+      "source": "decision"
+     },
+     {
+      "id": "c8_3_2",
+      "description": "Maintain the full sanctions regime (close to 4,600 listings) with no relief absent unanimous Council decision and verifiable Russian concessions",
+      "made_round": 3,
+      "due_round": 4,
+      "status": "pending",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 9,
+    "name": "Government of Israel",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [
+     "Publicly committed to preventing Iranian nuclear capability"
+    ],
+    "red_lines": [],
+    "goals": [
+     "Destroy Iranian nuclear program",
+     "Regime change"
+    ],
+    "incentives": {
+     "gains_if": "Strikes resume and program degraded further",
+     "loses_if": "Deal preserves enrichment"
+    },
+    "aliases": [],
+    "reputation": 0.45,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 10,
+    "name": "IRGC",
+    "agency_class": "firm",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Preserve enrichment and asymmetric leverage",
+     "Resist concessions"
+    ],
+    "incentives": {
+     "gains_if": "Standoff persists or strikes rally nationalism",
+     "loses_if": "Verified deal forces downblending and access"
+    },
+    "aliases": [
+     "Islamic Revolutionary Guard Corps"
+    ],
+    "reputation": 0.45,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 11,
+    "name": "Benjamin Netanyahu",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "opposing",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Destroy Iran's nuclear program",
+     "Regime change in Iran"
+    ],
+    "incentives": {
+     "gains_if": "Post-midterm strikes proceed",
+     "loses_if": "Deal leaves enrichment capability in place"
+    },
+    "aliases": [],
+    "reputation": 0.45,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 12,
+    "name": "IAEA",
+    "agency_class": "firm",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "observer",
+    "documented_plans": [
+     "Restore in-field verification at Isfahan and Natanz",
+     "Close the diversion-uncertainty gap"
+    ],
+    "red_lines": [],
+    "goals": [
+     "Restore in-field verification at Isfahan and Natanz",
+     "Close the diversion-uncertainty gap"
+    ],
+    "incentives": {
+     "gains_if": "Inspectors readmitted under a revived deal",
+     "loses_if": "Renewed strikes end any access prospect"
+    },
+    "aliases": [],
+    "reputation": 0.5,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 13,
+    "name": "Steve Witkoff",
+    "agency_class": "individual_leader",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "supportive",
+    "documented_plans": [
+     "Convert stated freeze formula into a monitored line-of-contact truce"
+    ],
+    "red_lines": [],
+    "goals": [
+     "Restart trilateral talks",
+     "Convert stated freeze formula into a monitored line-of-contact truce"
+    ],
+    "incentives": {
+     "gains_if": "Talks convene and produce text",
+     "loses_if": "Round collapses on Russian counter-demands"
+    },
+    "aliases": [],
+    "reputation": 0.43,
+    "commitments": [
+     {
+      "id": "c13_3_1",
+      "description": "Deliver a draft line-of-contact freeze framework for discussion at the trilateral round opening on/after Nov 10",
+      "made_round": 3,
+      "due_round": 7,
+      "status": "lapsed",
+      "source": "decision"
+     }
+    ],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 14,
+    "name": "NATO",
+    "agency_class": "international_org",
+    "archetype": "actor",
+    "capacity_per_round": 2,
+    "outcome_power": null,
+    "posture": "neutral",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Flank security",
+     "Credible deterrence"
+    ],
+    "incentives": {
+     "gains_if": "Deterrence holds without incidents",
+     "loses_if": "NATO-Russia kinetic incident occurs"
+    },
+    "aliases": [],
+    "reputation": 0.5,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 15,
+    "name": "Government of China",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "neutral",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Convening-power status",
+     "Leverage over Russia's economy",
+     "Regional stability on its terms"
+    ],
+    "incentives": {
+     "gains_if": "Mediation credit and de-escalation lowers import costs",
+     "loses_if": "Widened regional war spikes crude"
+    },
+    "aliases": [],
+    "reputation": 0.5,
+    "commitments": [],
+    "last_action": {
+     "round": 3,
+     "option_id": "hold_position",
+     "kind": "wait",
+     "label": "Hold position: wait, observe, keep current course",
+     "targets": [],
+     "magnitude": 0.0,
+     "status": "language_mismatch",
+     "resolution": null,
+     "reversibility": "reversible"
+    },
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 16,
+    "name": "Saudi Arabia",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "observer",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "Regional de-escalation without Iranian nuclear capability",
+     "Oil-market stability",
+     "Basing leverage with US"
+    ],
+    "incentives": {
+     "gains_if": "Dual de-escalation with verification",
+     "loses_if": "Widened regional war hits GCC territory"
+    },
+    "aliases": [
+     "GCC",
+     "Gulf states"
+    ],
+    "reputation": 0.5,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   },
+   {
+    "agent_id": 17,
+    "name": "Pezeshkian",
+    "agency_class": "sovereign_government",
+    "archetype": "actor",
+    "capacity_per_round": 3,
+    "outcome_power": null,
+    "posture": "supportive",
+    "documented_plans": [],
+    "red_lines": [],
+    "goals": [
+     "De-escalation and sanctions relief via MoU revival"
+    ],
+    "incentives": {
+     "gains_if": "Hormuz-for-relief trade accepted",
+     "loses_if": "Strikes resume and hardliners consolidate"
+    },
+    "aliases": [],
+    "reputation": 0.47,
+    "commitments": [],
+    "last_action": null,
+    "irreversible_option_ids": []
+   }
+  ],
+  "relationships": [
+   {
+    "source": 2,
+    "target": 3,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -1.0,
+    "strength": 1.0,
+    "basis": "Active war; Russia holds about 19% of Ukraine",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 3,
+      "from": -0.9,
+      "to": -1.0,
+      "cause": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, US Government, Europea…"
+     }
+    ]
+   },
+   {
+    "source": 5,
+    "target": 2,
+    "kind": "OWNS",
+    "valence": "directional",
+    "polarity": 0.9,
+    "strength": 1.0,
+    "basis": "Report identifies him as controlling Russia's war termination decision",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 6,
+    "target": 3,
+    "kind": "OWNS",
+    "valence": "directional",
+    "polarity": 0.9,
+    "strength": 1.0,
+    "basis": "His concessions define any settlement",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 4,
+    "target": 3,
+    "kind": "INFLUENCES",
+    "valence": "allied",
+    "polarity": 0.773,
+    "strength": 0.8304,
+    "basis": "Aid, intelligence sharing, satellite access and mediation; visibly pressing Kyiv to deal",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.2,
+      "to": 0.3275,
+      "cause": "Donald Trump strengthen Government of Ukraine"
+     },
+     {
+      "round": 1,
+      "from": 0.3275,
+      "to": 0.4295,
+      "cause": "Advance your documented plan: States desire for deals and peace pledges → Government of Ukraine, Government of Russia"
+     }
+    ]
+   },
+   {
+    "source": 13,
+    "target": 5,
+    "kind": "INFLUENCES",
+    "valence": "transactional",
+    "polarity": 0.3,
+    "strength": 0.6,
+    "basis": "21 Oct 2026 St Petersburg meeting secured talks agreement in principle",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 1,
+    "target": 0,
+    "kind": "SANCTIONS",
+    "valence": "adversarial",
+    "polarity": -0.4,
+    "strength": 0.8616,
+    "basis": "Blockade cut off oil-export revenues; auto/rail sanctions added 1 Oct 2026",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 2,
+      "from": -0.7,
+      "to": -0.61,
+      "cause": "Seek talks with Government of Iran over its move → Government of Iran"
+     },
+     {
+      "round": 3,
+      "from": -0.61,
+      "to": -0.73,
+      "cause": "Counter US Government's move (Seek talks with Government of Iran over its move → Government of Iran) → US Government"
+     }
+    ]
+   },
+   {
+    "source": 9,
+    "target": 0,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -1.0,
+    "strength": 1.0,
+    "basis": "2025 12-day campaign and 28 Feb 2026 strikes; post-midterm strike plans",
+    "last_changed_round": 2,
+    "history": [
+     {
+      "round": 2,
+      "from": -0.9,
+      "to": -1.0,
+      "cause": "Counter Government of Israel's move (Israel publicly opposes any deal preserving Iranian enrichment, warning of unil…) → Government of Israel"
+     }
+    ]
+   },
+   {
+    "source": 10,
+    "target": 0,
+    "kind": "INFLUENCES",
+    "valence": "directional",
+    "polarity": -0.3,
+    "strength": 0.6,
+    "basis": "Rezaei's stockpile veto; cable and shipping threats",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 10,
+    "target": 1,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -0.95,
+    "strength": 1.0,
+    "basis": "Threats against seven undersea cables and shipping if US renews attacks",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 8,
+    "target": 2,
+    "kind": "SANCTIONS",
+    "valence": "adversarial",
+    "polarity": -1.0,
+    "strength": 1.0,
+    "basis": "Record listings package",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 2,
+      "from": -0.8,
+      "to": -0.9275,
+      "cause": "Counter Government of Russia's move (Issue a public statement or warning → US Government, European Union, Government…) → Government of Russia"
+     },
+     {
+      "round": 3,
+      "from": -0.9275,
+      "to": -1.0,
+      "cause": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, Vladimir Putin"
+     },
+     {
+      "round": 3,
+      "from": -1.0,
+      "to": -1.0,
+      "cause": "Moscow condemned 18th package as politically motivated while talks proceed."
+     }
+    ]
+   },
+   {
+    "source": 8,
+    "target": 3,
+    "kind": "FUNDS",
+    "valence": "allied",
+    "polarity": 1.0,
+    "strength": 1.0,
+    "basis": "Support loan committed 1 Oct 2026 conditional on reforms",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.8,
+      "to": 0.9275,
+      "cause": "Government of Ukraine strengthen European Union"
+     },
+     {
+      "round": 2,
+      "from": 0.9275,
+      "to": 1.0,
+      "cause": "European Union strengthen Government of Ukraine"
+     },
+     {
+      "round": 3,
+      "from": 1.0,
+      "to": 1.0,
+      "cause": "Government of Ukraine strengthen European Union"
+     },
+     {
+      "round": 3,
+      "from": 1.0,
+      "to": 0.88,
+      "cause": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, US Government, Europea…"
+     },
+     {
+      "round": 3,
+      "from": 0.88,
+      "to": 1.0,
+      "cause": "European Union strengthen Government of Ukraine"
+     }
+    ]
+   },
+   {
+    "source": 4,
+    "target": 11,
+    "kind": "INFLUENCES",
+    "valence": "allied",
+    "polarity": 0.85,
+    "strength": 0.9684,
+    "basis": "Trump repeatedly canceled plans for return to major combat; no-attack pledge to 3 Nov",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.2,
+      "to": 0.32,
+      "cause": "Benjamin Netanyahu strengthen Donald Trump"
+     },
+     {
+      "round": 2,
+      "from": 0.32,
+      "to": 0.44,
+      "cause": "Donald Trump strengthen Benjamin Netanyahu"
+     },
+     {
+      "round": 2,
+      "from": 0.44,
+      "to": 0.56,
+      "cause": "Benjamin Netanyahu strengthen Donald Trump"
+     },
+     {
+      "round": 3,
+      "from": 0.56,
+      "to": 0.44,
+      "cause": "Counter Benjamin Netanyahu's move (Israeli officials brief US counterparts reiterating opposition to any enrichmen…) → Benjamin Netanyahu"
+     },
+     {
+      "round": 3,
+      "from": 0.44,
+      "to": 0.56,
+      "cause": "Benjamin Netanyahu strengthen Donald Trump"
+     },
+     {
+      "round": 3,
+      "from": 0.56,
+      "to": 0.41,
+      "cause": "Public veto of pre-midterm strike and 'nobody sabotages a deal' rebuke."
+     }
+    ]
+   },
+   {
+    "source": 1,
+    "target": 2,
+    "kind": "PARTNERS_WITH",
+    "valence": "allied",
+    "polarity": 0.7645,
+    "strength": 0.9093,
+    "basis": "Diesel-import ban lifted over congressional objections; Hubbard release; fertiliser offers",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.3,
+      "to": 0.402,
+      "cause": "Open or join negotiations with another actor → Government of Russia, Government of Ukraine"
+     },
+     {
+      "round": 1,
+      "from": 0.402,
+      "to": 0.552,
+      "cause": "Witkoff–Putin meeting and agreed-in-principle trilateral channel."
+     }
+    ]
+   },
+   {
+    "source": 15,
+    "target": 2,
+    "kind": "SUPPORTS",
+    "valence": "directional",
+    "polarity": 0.5,
+    "strength": 0.8,
+    "basis": "Leverage over Russia's economy; Trump–Putin–Xi summit discussed",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 12,
+    "target": 0,
+    "kind": "REGULATES",
+    "valence": "neutral",
+    "polarity": -0.2,
+    "strength": 0.5,
+    "basis": "No inspector access since June 2025; would verify downblending under any deal",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 14,
+    "target": 2,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -0.855,
+    "strength": 0.951,
+    "basis": "Romanian downing of two drones near Sulina 17 Oct 2026; flank deterrence",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 1,
+    "target": 3,
+    "kind": "ALLY_OF",
+    "valence": "allied",
+    "polarity": 0.484,
+    "strength": 0.8531,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.1275,
+      "cause": "US Government strengthen Government of Ukraine"
+     },
+     {
+      "round": 1,
+      "from": 0.1275,
+      "to": 0.2295,
+      "cause": "Open or join negotiations with another actor → Government of Russia, Government of Ukraine"
+     },
+     {
+      "round": 1,
+      "from": 0.2295,
+      "to": 0.3795,
+      "cause": "Kyiv aligns with US framework while demanding security guarantees."
+     },
+     {
+      "round": 3,
+      "from": 0.3795,
+      "to": 0.2595,
+      "cause": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, US Government, Europea…"
+     },
+     {
+      "round": 3,
+      "from": 0.2595,
+      "to": 0.472,
+      "cause": "US Government accepted Government of Ukraine's offer"
+     }
+    ]
+   },
+   {
+    "source": 4,
+    "target": 2,
+    "kind": "ALLY_OF",
+    "valence": "allied",
+    "polarity": 0.3495,
+    "strength": 0.4718,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.1275,
+      "cause": "Donald Trump strengthen Government of Russia"
+     },
+     {
+      "round": 1,
+      "from": 0.1275,
+      "to": 0.2295,
+      "cause": "Advance your documented plan: States desire for deals and peace pledges → Government of Ukraine, Government of Russia"
+     }
+    ]
+   },
+   {
+    "source": 0,
+    "target": 2,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.2325,
+    "strength": 0.3965,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.1275,
+      "cause": "Government of Iran strengthen Government of Russia"
+     }
+    ]
+   },
+   {
+    "source": 9,
+    "target": 16,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.2475,
+    "strength": 0.3994,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.12,
+      "cause": "Government of Israel strengthen Saudi Arabia"
+     }
+    ]
+   },
+   {
+    "source": 9,
+    "target": 1,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": -0.21,
+    "strength": 0.4138,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 2,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.12,
+      "cause": "Government of Israel strengthen US Government"
+     },
+     {
+      "round": 1,
+      "from": 0.12,
+      "to": -0.03,
+      "cause": "Open criticism of US Iran diplomacy as appeasement ('Munich in modern dress')."
+     },
+     {
+      "round": 2,
+      "from": -0.03,
+      "to": -0.18,
+      "cause": "Netanyahu's 'Munich-style' rhetoric against any enrichment-preserving deal clashes with US sequencing diplomacy."
+     }
+    ]
+   },
+   {
+    "source": 6,
+    "target": 8,
+    "kind": "ALLY_OF",
+    "valence": "allied",
+    "polarity": 0.9675,
+    "strength": 0.8858,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.12,
+      "cause": "Volodymyr Zelenskyy strengthen European Union"
+     },
+     {
+      "round": 2,
+      "from": 0.12,
+      "to": 0.24,
+      "cause": "Volodymyr Zelenskyy strengthen European Union"
+     },
+     {
+      "round": 3,
+      "from": 0.24,
+      "to": 0.36,
+      "cause": "Volodymyr Zelenskyy strengthen European Union"
+     }
+    ]
+   },
+   {
+    "source": 6,
+    "target": 14,
+    "kind": "ALLY_OF",
+    "valence": "allied",
+    "polarity": 0.48,
+    "strength": 0.5672,
+    "basis": "strengthen move in round 1",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": 0.12,
+      "cause": "Volodymyr Zelenskyy strengthen NATO"
+     },
+     {
+      "round": 2,
+      "from": 0.12,
+      "to": 0.24,
+      "cause": "Volodymyr Zelenskyy strengthen NATO"
+     },
+     {
+      "round": 3,
+      "from": 0.24,
+      "to": 0.36,
+      "cause": "Volodymyr Zelenskyy strengthen NATO"
+     }
+    ]
+   },
+   {
+    "source": 8,
+    "target": 1,
+    "kind": "OPPOSES",
+    "valence": "neutral",
+    "polarity": -0.15,
+    "strength": 0.3857,
+    "basis": "EU warns against premature sanctions relief embedded in the 28-point plan.",
+    "last_changed_round": 1,
+    "history": [
+     {
+      "round": 1,
+      "from": 0.0,
+      "to": -0.15,
+      "cause": "EU warns against premature sanctions relief embedded in the 28-point plan."
+     }
+    ]
+   },
+   {
+    "source": 4,
+    "target": 0,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -0.63,
+    "strength": 0.6761,
+    "basis": "Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval blockade, lift oil-export sanctions…) → Government of Iran, Mojtaba Khamenei",
+    "last_changed_round": 2,
+    "history": [
+     {
+      "round": 2,
+      "from": 0.0,
+      "to": -0.12,
+      "cause": "Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval blockade, lift oil-export sanctions…) → Government of Iran, Mojtaba Khamenei"
+     }
+    ]
+   },
+   {
+    "source": 4,
+    "target": 7,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -0.6,
+    "strength": 0.657,
+    "basis": "Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval blockade, lift oil-export sanctions…) → Government of Iran, Mojtaba Khamenei",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 2,
+      "from": 0.0,
+      "to": -0.12,
+      "cause": "Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval blockade, lift oil-export sanctions…) → Government of Iran, Mojtaba Khamenei"
+     },
+     {
+      "round": 3,
+      "from": -0.12,
+      "to": -0.225,
+      "cause": "Counter Donald Trump's move (Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval bl…) → Donald Trump"
+     }
+    ]
+   },
+   {
+    "source": 1,
+    "target": 17,
+    "kind": "ALLY_OF",
+    "valence": "allied",
+    "polarity": 0.671,
+    "strength": 0.6492,
+    "basis": "US engaged sequenced-relief discussion; Pezeshkian offered parallel talks — first substantive channel in weeks.",
+    "last_changed_round": 2,
+    "history": [
+     {
+      "round": 2,
+      "from": 0.0,
+      "to": 0.15,
+      "cause": "US engaged sequenced-relief discussion; Pezeshkian offered parallel talks — first substantive channel in weeks."
+     }
+    ]
+   },
+   {
+    "source": 7,
+    "target": 17,
+    "kind": "OPPOSES",
+    "valence": "neutral",
+    "polarity": -0.15,
+    "strength": 0.345,
+    "basis": "Khamenei's categorical 'not one particle' statement constrains Pezeshkian's parallel-talks flexibility.",
+    "last_changed_round": 2,
+    "history": [
+     {
+      "round": 2,
+      "from": 0.0,
+      "to": -0.15,
+      "cause": "Khamenei's categorical 'not one particle' statement constrains Pezeshkian's parallel-talks flexibility."
+     }
+    ]
+   },
+   {
+    "source": 4,
+    "target": 9,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.24,
+    "strength": 0.3972,
+    "basis": "strengthen move in round 3",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 3,
+      "from": 0.0,
+      "to": 0.12,
+      "cause": "Donald Trump strengthen Government of Israel"
+     }
+    ]
+   },
+   {
+    "source": 8,
+    "target": 5,
+    "kind": "OPPOSES",
+    "valence": "adversarial",
+    "polarity": -0.495,
+    "strength": 0.5744,
+    "basis": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, Vladimir Putin",
+    "last_changed_round": 3,
+    "history": [
+     {
+      "round": 3,
+      "from": 0.0,
+      "to": -0.12,
+      "cause": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, Vladimir Putin"
+     }
+    ]
+   },
+   {
+    "source": 3,
+    "target": 13,
+    "kind": "PARTNERS_WITH",
+    "valence": "allied",
+    "polarity": 0.753,
+    "strength": 0.8882,
+    "basis": "Seek talks with Steve Witkoff over its move → Steve Witkoff, US Government",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 6,
+    "target": 13,
+    "kind": "PARTNERS_WITH",
+    "valence": "neutral",
+    "polarity": 0.027,
+    "strength": 0.3918,
+    "basis": "Open or join negotiations with another actor → Steve Witkoff, US Government",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 6,
+    "target": 1,
+    "kind": "PARTNERS_WITH",
+    "valence": "neutral",
+    "polarity": 0.027,
+    "strength": 0.3918,
+    "basis": "Open or join negotiations with another actor → Steve Witkoff, US Government",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 17,
+    "target": 13,
+    "kind": "PARTNERS_WITH",
+    "valence": "neutral",
+    "polarity": 0.096,
+    "strength": 0.3288,
+    "basis": "Open or join negotiations with another actor → US Government, Steve Witkoff",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 7,
+    "target": 1,
+    "kind": "OPPOSES",
+    "valence": "neutral",
+    "polarity": -0.105,
+    "strength": 0.3315,
+    "basis": "Counter Donald Trump's move (Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval bl…) → Donald Trump, US Government",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 7,
+    "target": 10,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.2475,
+    "strength": 0.3994,
+    "basis": "strengthen move in round 7",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 17,
+    "target": 12,
+    "kind": "PARTNERS_WITH",
+    "valence": "neutral",
+    "polarity": 0.246,
+    "strength": 0.394,
+    "basis": "Seek talks with IAEA over its move → IAEA",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 2,
+    "target": 13,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.15,
+    "strength": 0.345,
+    "basis": "Russia endorses Witkoff framework as basis for discussion.",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 3,
+    "target": 5,
+    "kind": "OPPOSES",
+    "valence": "neutral",
+    "polarity": -0.12,
+    "strength": 0.336,
+    "basis": "Counter Vladimir Putin's move (Issue a public statement or warning → Government of Ukraine, US Government) → Vladimir Putin, US Government, Steve Witkoff",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 10,
+    "target": 17,
+    "kind": "OPPOSES",
+    "valence": "neutral",
+    "polarity": -0.15,
+    "strength": 0.345,
+    "basis": "Hardline public warning narrows the president's maneuvering space.",
+    "last_changed_round": 0,
+    "history": []
+   },
+   {
+    "source": 7,
+    "target": 0,
+    "kind": "ALLY_OF",
+    "valence": "neutral",
+    "polarity": 0.12,
+    "strength": 0.336,
+    "basis": "strengthen move in round 9",
+    "last_changed_round": 0,
+    "history": []
+   }
+  ],
+  "pending_effects": [],
+  "events": [
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Open or join negotiations with another actor → Government of Russia, Government of Ukraine",
+    "actors": [
+     "US Government"
+    ],
+    "targets": [
+     "Government of Russia",
+     "Government of Ukraine"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The United States confirms that trilateral talks with Russia and Ukraine will restart on or after November 10, as agreed in principle on October 21. Our 28-point framework remains the basis for discussion: staged sanctions relief in exchange for a durable ceasefire and verified implementation. President Trump is commi…",
+    "option_id": "open_talks",
+    "action_kind": "coalition",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "offer",
+    "description": "US Government made an offer to Government of Russia [i1_1]: US hosts trilateral talks on the 28-point plan from Nov 10; in exchange for a sustained ceasefire and Russian cooperation on Iran (enrichment rollback), the US offers staged sanctions relief and sanctions-easing sequenced to compliance milestones. (answer due…",
+    "actors": [
+     "US Government"
+    ],
+    "targets": [
+     "Government of Russia"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "option_id": "open_talks",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "offer",
+    "description": "US Government made an offer to Government of Ukraine [i1_2]: US hosts trilateral talks on the 28-point plan from Nov 10; in exchange for a sustained ceasefire and Russian cooperation on Iran (enrichment rollback), the US offers staged sanctions relief and sanctions-easing sequenced to compliance milestones. (answer du…",
+    "actors": [
+     "US Government"
+    ],
+    "targets": [
+     "Government of Ukraine"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "option_id": "open_talks",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Government of Ukraine",
+    "actors": [
+     "Vladimir Putin"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Ukraine"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Russia confirms its readiness to begin technical-level talks with the United States and Ukraine after November 10, as agreed in principle at Konstantin Palace. We act from a position of results, not deadlines: the special military operation will conclude only on terms that guarantee Russia's security and reflect the r…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, European Union, Government of Ukraine",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "US Government",
+     "European Union",
+     "Government of Ukraine"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Government of the Russian Federation confirms, following the meeting between President Putin and Special Envoy Witkoff at Konstantinovsky Palace on 21 October, that Russia agrees 'in principle' to the resumption of trilateral technical-level talks with the United States and Ukraine on or after 10 November. Russia…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Advance your documented plan: States desire for deals and peace pledges → Government of Ukraine, Government of Russia",
+    "actors": [
+     "Donald Trump"
+    ],
+    "targets": [
+     "Government of Ukraine",
+     "Government of Russia"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Huge progress with Witkoff in Norway and St. Petersburg! Putin has agreed IN PRINCIPLE to trilateral technical talks starting on or after November 10. President Hubbard is home. My 28-Point Plan will end this war — the bloodshed stops, the deal gets done. Nobody makes deals like me. It's going to be beautiful!",
+    "option_id": "plan_1",
+    "action_kind": "coalition",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Advance your documented plan: Reopen Hormuz within seven days under Iranian control (standing offer) → US Government",
+    "actors": [
+     "Government of Iran"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic of Iran reiterates its standing offer: upon verifiable commencement of relief — an end to the naval blockade, lifting of oil export sanctions, unfreezing of Iranian assets, and cessation of hostile acts — Iran will reopen the Strait of Hormuz to international shipping within seven days, under full…",
+    "option_id": "plan_1",
+    "action_kind": "policy",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → Government of Iran",
+    "actors": [
+     "Government of Israel"
+    ],
+    "targets": [
+     "Government of Iran"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Government of Israel reiterates: we will never allow the Iranian regime to acquire nuclear weapons. With IAEA verification suspended and 440.9 kg of uranium enriched to 60% outside any inspection regime, no agreement that preserves enrichment capability is acceptable. All options remain on the table; Israel's secu…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Advance your documented plan: Freeze with security guarantees → US Government, Government of Russia",
+    "actors": [
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Russia"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine confirms its readiness for negotiator-level talks with the United States and Russia no later than early November, in line with President Zelensky's statement of 21 October. We back ceasefire, energy-ceasefire and humanitarian initiatives now — but any freeze along current lines is the minimum, not the end, and…",
+    "option_id": "plan_1",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → Government of Russia, US Government",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "Government of Russia",
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The EU reaffirms its position: ahead of the trilateral talks due on or after 10 November, this is not the time to ease pressure on Moscow but to increase it. The 18th sanctions package (1,600 new listings adopted 12 October) remains fully in force, and we expect all partners to maintain sanctions integrity; the unilat…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Advance your documented plan: End the naval blockade, lift oil-export sanctions, release frozen assets, end hostilities → US Government, Donald Trump",
+    "actors": [
+     "Mojtaba Khamenei"
+    ],
+    "targets": [
+     "US Government",
+     "Donald Trump"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic of Iran reaffirms its position: the end of the naval blockade, the lifting of oil-export sanctions, the release of frozen assets, and the cessation of hostile actions must precede any negotiation. Enrichment is a sovereign right of the Iranian nation; not one gram of it will leave our soil. We hav…",
+    "option_id": "plan_1",
+    "action_kind": "policy",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Government of Russia, European Union",
+    "actors": [
+     "Volodymyr Zelenskyy"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Russia",
+     "European Union"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine confirms its readiness for negotiator-level talks no later than early November, building on the Oslo framework and the productive meeting with Ambassador Witkoff. But let the record be clear: after 76 Russian strikes on our energy infrastructure in one week following the collapsed 10 October energy ceasefire,…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → Donald Trump, Government of Iran",
+    "actors": [
+     "Benjamin Netanyahu"
+    ],
+    "targets": [
+     "Donald Trump",
+     "Government of Iran"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "While the world speaks of 'deals,' 440 kilograms of enriched uranium remain in Iran with no IAEA eyes on the ground. Every agreement that leaves enrichment capability intact is Munich in modern dress. Israel's position is unchanged: Iran will not have nuclear weapons. Period.",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Donald Trump",
+    "actors": [
+     "Pezeshkian"
+    ],
+    "targets": [
+     "US Government",
+     "Donald Trump"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamabad Memorandum remains the only agreed framework between Iran and the United States, and we remain ready to revive it without preconditions. I call on Washington to lift the naval blockade and restore the Treasury waivers for our crude exports as the MoU already committed, so that final-deal negotiations can…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "consequence",
+    "description": "Markets price modest de-escalation odds; Brent futures at $26 stay anchored to physical oversupply while TTF eases slightly on ceasefire headlines.",
+    "actors": [
+     "US Government",
+     "Government of Russia"
+    ],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "emergent",
+    "description": "Russia continues grinding offensive for leverage before talks, adding to territorial gains at high casualty cost.",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "Government of Ukraine"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "consequence",
+    "description": "EU resists early sanctions relief, signaling transatlantic friction over sequencing in the 28-point plan.",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Russia"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "emergent",
+    "description": "Iranian leadership repeats maximal preconditions; blockade continues and Hormuz stays effectively closed, deepening economic distress (inflation ~74%).",
+    "actors": [
+     "Mojtaba Khamenei",
+     "Pezeshkian"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "kind": "consequence",
+    "description": "Israel publicly opposes any deal preserving Iranian enrichment, warning of unilateral action if talks legitimize the status quo.",
+    "actors": [
+     "Government of Israel",
+     "Benjamin Netanyahu"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Iran"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-23"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Counter Government of Israel's move (Israel publicly opposes any deal preserving Iranian enrichment, warning of unil…) → Government of Israel",
+    "actors": [
+     "Government of Iran"
+    ],
+    "targets": [
+     "Government of Israel"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic of Iran categorically rejects the Zionist regime's threats against our peaceful nuclear program. Our enrichment is a national right and non-negotiable — not one particle will leave Iranian soil. We remind the aggressors that our standing offer to reopen the Strait of Hormuz within seven days of ve…",
+    "option_id": "respond_3_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Government of Ukraine, European Union",
+    "actors": [
+     "Vladimir Putin"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Ukraine",
+     "European Union"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Russia will send its delegation to the technical-level talks scheduled on or after November 10, as agreed at Konstantin Palace. At the same time, we note the European Union's October 12 decision to add nearly 1,600 new listings while others lift restrictions — those who choose escalation over dialogue should not expec…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Seek talks with Government of Iran over its move → Government of Iran",
+    "actors": [
+     "US Government"
+    ],
+    "targets": [
+     "Government of Iran"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The United States acknowledges Iran's standing offer on Hormuz. We are prepared to discuss sequenced relief — but only upon verifiable steps: IAEA access restored, enrichment reduced, and return of the 440.9 kg stockpile enriched to up to 60% U-235. Relief follows verification, not promises. The blockade remains in fo…",
+    "option_id": "respond_3_negotiate",
+    "action_kind": "coalition",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Counter US Government's offer [i1_2] with your own terms (state them in `terms`) → US Government",
+    "actors": [
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine confirms participation in trilateral negotiator-level talks on or after 10 November, as President Zelensky affirmed on 21 October. We accept the US offer of hosted talks, conditioned on binding security guarantees written into the 28-point plan as a compliance milestone, a monitored energy ceasefire — Russia h…",
+    "option_id": "counter:i1_2",
+    "action_kind": "coalition",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "offer",
+    "description": "Government of Ukraine countered US Government's offer [i1_2]",
+    "actors": [
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "statement": "Ukraine confirms participation in trilateral negotiator-level talks on or after 10 November, as President Zelensky affirmed on 21 October. We accept the US offer of hosted talks, conditioned on binding security guarantees written into the 28-point plan as a compliance milestone, a monitored energy ceasefire — Russia h…",
+    "option_id": "open_talks",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "offer",
+    "description": "Government of Ukraine made an counter-offer to US Government [i2_3]: Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes binding security guarantees for Ukraine into the plan as a milestone, (2) sequences any Russian sanctions relief strictly after a verified s…",
+    "actors": [
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "option_id": "open_talks",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Counter US Government's offer [i1_1] with your own terms (state them in `terms`) → US Government",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Government of the Russian Federation confirms participation in technical-level talks with the United States and Ukraine from 10 November on the 28-point plan. However, Russia's position on Iran's nuclear program is a matter of Russian-Iranian relations, not a bargaining chip; sanctions relief must be sequenced fro…",
+    "option_id": "counter:i1_1",
+    "action_kind": "coalition",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "offer",
+    "description": "Government of Russia countered US Government's offer [i1_1]",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "statement": "The Government of the Russian Federation confirms participation in technical-level talks with the United States and Ukraine from 10 November on the 28-point plan. However, Russia's position on Iran's nuclear program is a matter of Russian-Iranian relations, not a bargaining chip; sanctions relief must be sequenced fro…",
+    "option_id": "open_talks",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "offer",
+    "description": "Government of Russia made an counter-offer to US Government [i2_4]: Russia commits to attend trilateral talks from 10 Nov 2026. In exchange: (1) staged US sanctions relief begins at the opening of talks (e.g., diesel/fertilizer trade normalization already achieved extended further), not contingent on pre-agreed milest…",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "option_id": "open_talks",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, European Union, NATO",
+    "actors": [
+     "Volodymyr Zelenskyy"
+    ],
+    "targets": [
+     "US Government",
+     "European Union",
+     "NATO"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine confirms its negotiators are ready for trilateral technical talks on or after November 10 — but no ceasefire will hold without security guarantees signed at the same table. Russia fired on our energy infrastructure again; 319 drones in one night is not a partner for peace. Guarantees and ceasefire must be simu…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval blockade, lift oil-export sanctions…) → Government of Iran, Mojtaba Khamenei",
+    "actors": [
+     "Donald Trump"
+    ],
+    "targets": [
+     "Government of Iran",
+     "Mojtaba Khamenei"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Iran wants the blockade lifted? Easy — hand over 100% of your enriched uranium and meaningfully cut your enrichment capacity, then we talk about Hormuz and sanctions. No more seven-day games before my election. Many people are saying Iran is stalling on purpose — it won't work. Make the deal, it's going to be beautifu…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Advance your documented plan: End the naval blockade, lift oil-export sanctions, release frozen assets, end hostilities → US Government",
+    "actors": [
+     "Mojtaba Khamenei"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic's position remains unchanged: verifiable relief first — an end to the naval blockade, lifting of oil-export sanctions, release of frozen assets — before any negotiation. Enrichment on Iranian soil is a sovereign right and not a bargaining chip. Our patience is strategic, not unlimited.",
+    "option_id": "plan_1",
+    "action_kind": "policy",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Issue a public statement or warning → Donald Trump, Government of Iran",
+    "actors": [
+     "Benjamin Netanyahu"
+    ],
+    "targets": [
+     "Donald Trump",
+     "Government of Iran"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Israel's position is unchanged: Iran cannot be allowed to possess nuclear weapons — period. Any agreement that leaves enrichment capability, enriched material, or the underground sites at Isfahan and Natanz intact is Munich-style self-deception; 440.9 kg of enriched uranium remain beyond all verification while the IAE…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Counter Government of Russia's move (Issue a public statement or warning → US Government, European Union, Government…) → Government of Russia",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "Government of Russia"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The European Union takes note of Russia's stated readiness for technical talks after 10 November. We recall that our position remains unchanged: this is not the time to ease pressure on Moscow but to increase it. The 18th sanctions package of 12 October — close to 1,600 new listings, bringing the total to nearly 4,600…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "action",
+    "description": "Offer a concession or compromise → US Government",
+    "actors": [
+     "Pezeshkian"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Iran is prepared to discuss phased, verifiable measures on enrichment in parallel — not before — the restoration of the Islamabad Memorandum's relief provisions: an end to the naval blockade, Treasury waivers for crude exports, and banking/shipping channels. We ask only sequencing that lets both sides verify simultane…",
+    "option_id": "signal_concession",
+    "action_kind": "communication",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "offer",
+    "description": "Pezeshkian made an offer to US Government [i2_5]: Iran offers parallel technical talks on enrichment transparency (including IAEA access discussions) beginning simultaneously with US implementation of MoU relief steps (blockade end, crude export waivers) within 30 days; mutual verification milestones reviewed every 15…",
+    "actors": [
+     "Pezeshkian"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "option_id": "signal_concession",
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "consequence",
+    "description": "G7 and EU statements note the confirmed 10 November talks; EU signals the 18th sanctions package proceeds regardless of talks scheduling, damping market optimism about imminent relief.",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "Government of Russia"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "emergent",
+    "description": "IAEA quietly confirms to member states it has received no new access agreement from Iran but notes Tehran has not expanded enrichment beyond the verified 440.9 kg HEU baseline this period.",
+    "actors": [
+     "IAEA"
+    ],
+    "targets": [
+     "Government of Iran",
+     "US Government"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "consequence",
+    "description": "Energy markets trim risk premia modestly: TTF prompt and Brent futures edge lower on talks confirmation; analysts flag sequencing disputes as likely to stall progress past November.",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "kind": "consequence",
+    "description": "Israeli officials brief US counterparts reiterating opposition to any enrichment-preserving deal; friction with Washington's exploratory channel grows but remains rhetorical.",
+    "actors": [
+     "Benjamin Netanyahu",
+     "Government of Israel"
+    ],
+    "targets": [
+     "Donald Trump",
+     "US Government"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-24"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Accommodate or publicly answer European Union's move → European Union",
+    "actors": [
+     "Government of Russia"
+    ],
+    "targets": [
+     "European Union"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Government of the Russian Federation has taken note of the European Union's announcement that the 18th sanctions package will proceed regardless of the confirmed 10 November talks. Moscow regards this as a politically motivated step that contradicts the spirit of the emerging negotiating process. Russia remains co…",
+    "option_id": "respond_2_accommodate",
+    "action_kind": "communication",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Counter Benjamin Netanyahu's move (Israeli officials brief US counterparts reiterating opposition to any enrichmen…) → Benjamin Netanyahu",
+    "actors": [
+     "Donald Trump"
+    ],
+    "targets": [
+     "Benjamin Netanyahu"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Bibi, I love Israel, but NOBODY sabotages a deal when we're this close. We are 100% getting the enriched uranium back — all of it — through STRENGTH, not another endless war. Any strike before the midterms is OFF the table. Many people are saying we've never been closer to peace. It's going to be beautiful!",
+    "option_id": "respond_2_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Counter US Government's move (Seek talks with Government of Iran over its move → Government of Iran) → US Government",
+    "actors": [
+     "Government of Iran"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic takes note of Washington's stated readiness for sequenced relief. Our position is clear and consistent: relief precedes verification — an end to the naval blockade, lifting of oil-export sanctions, unfreezing of Iranian assets, and cessation of hostile actions, before any talks. Our standing offer…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, US Government, European Union",
+    "actors": [
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "Government of Russia",
+     "US Government",
+     "European Union"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine notes Russia's confirmation of technical-level talks from 10 November, but words must be matched by deeds: Russia has struck our energy grid every day since July — over 2,000 strikes. Ukraine joins the talks committed to an immediate ceasefire along current lines, conditioned on security guarantees, and will n…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Government of Ukraine, European Union",
+    "actors": [
+     "Vladimir Putin"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Ukraine",
+     "European Union"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Russia's delegation stands ready for the trilateral technical-level talks from November 10, as agreed. Our 5 September pause on strikes against Kyiv remains in force — this is proof of our seriousness. But patience is not infinite: if Kyiv or its European sponsors disrupt the process with new sanctions packages or pro…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Accept Government of Ukraine's offer [i2_3]: Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes… — b… → Government of Ukraine, Government of Russia",
+    "actors": [
+     "US Government"
+    ],
+    "targets": [
+     "Government of Ukraine",
+     "Government of Russia"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The United States welcomes Ukraine's confirmation and formally accepts its terms: the trilateral round on the 28-point plan will convene on 10 November, with US security commitments written into a signed framework. We likewise take note of Russia's confirmation of attendance. Sanctions relief remains strictly sequence…",
+    "option_id": "accept:i2_3",
+    "action_kind": "coalition",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "agreement",
+    "description": "Agreement [i2_3]: US Government accepted Government of Ukraine's offer — Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes binding security guarantees for Ukraine into the plan as a milestone, (2) sequences any Russian sanctions relief strictly after a verifi…",
+    "actors": [
+     "US Government",
+     "Government of Ukraine"
+    ],
+    "targets": [
+     "Government of Ukraine"
+    ],
+    "source": "interaction",
+    "variable_ids": [],
+    "statement": "The United States welcomes Ukraine's confirmation and formally accepts its terms: the trilateral round on the 28-point plan will convene on 10 November, with US security commitments written into a signed framework. We likewise take note of Russia's confirmation of attendance. Sanctions relief remains strictly sequence…",
+    "option_id": "open_talks",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Advance your documented plan: Convert stated freeze formula into a monitored line-of-contact truce → Government of Russia, Government of Ukraine",
+    "actors": [
+     "Steve Witkoff"
+    ],
+    "targets": [
+     "Government of Russia",
+     "Government of Ukraine"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "With both delegations now confirmed for talks on or after November 10, our focus shifts to sequencing: first a verified freeze of the line of contact, then a monitoring mechanism, then economic and security-guarantee chapters. Constructive discussions continue with all parties. Let's get the words on paper.",
+    "option_id": "plan_1",
+    "action_kind": "communication",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Counter Vladimir Putin's move (Issue a public statement or warning → US Government, Government of Ukraine, Eur…) → Government of Russia, Vladimir Putin",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "Government of Russia",
+     "Vladimir Putin"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The European Union takes note of Russia's confirmation of technical-level talks from 10 November. We recall that Russia attends while its forces continue attacks on Ukrainian cities and energy infrastructure. Any easing of the sanctions regime — now close to 4,600 listings — requires a unanimous Council decision and v…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, European Union, NATO, Government of Russia",
+    "actors": [
+     "Volodymyr Zelenskyy"
+    ],
+    "targets": [
+     "US Government",
+     "European Union",
+     "NATO",
+     "Government of Russia"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Ukraine's negotiators stand ready for the trilateral talks on or after 10 November. But we will not walk into another October 10: the energy ceasefire collapsed within hours and Russia launched 76 strikes on our energy infrastructure in the week that followed. Any ceasefire must be signed simultaneously with a binding…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Counter Donald Trump's move (Counter Mojtaba Khamenei's move (Advance your documented plan: End the naval bl…) → Donald Trump",
+    "actors": [
+     "Mojtaba Khamenei"
+    ],
+    "targets": [
+     "Donald Trump"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "The Islamic Republic has answered every channel with one consistent position: relief precedes verification. Restore oil exports, unfreeze assets, end the blockade — then IAEA matters may be discussed. We recall Islamabad's lesson: agreements signed with Washington were abandoned within weeks. We do not purchase promis…",
+    "option_id": "respond_1_counter",
+    "action_kind": "coercive",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Issue a public statement or warning → US Government, Government of Iran",
+    "actors": [
+     "Benjamin Netanyahu"
+    ],
+    "targets": [
+     "US Government",
+     "Government of Iran"
+    ],
+    "source": "decision",
+    "variable_ids": [],
+    "statement": "Israel's position is unchanged: any agreement that leaves a single centrifuge of enrichment capability in Iran is a second Munich. 200 kilograms of highly enriched uranium remain unaccounted for and the IAEA has been blind inside Iran since July 2025. We are grateful for American support, but those who do not learn fr…",
+    "option_id": "public_statement",
+    "action_kind": "communication",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "action",
+    "description": "Government of China makes no recorded move (language_mismatch)",
+    "actors": [
+     "Government of China"
+    ],
+    "targets": [],
+    "source": "decision",
+    "variable_ids": [],
+    "option_id": "hold_position",
+    "action_kind": "wait",
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "Trilateral talks begin ~Nov 10–17; first confidence-building step likely an energy/humanitarian ceasefire.",
+    "actors": [],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [
+     "drone_launch_tempo"
+    ],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "Did not materialise: Winter energy demand plus continued strikes pushes TTF back up.",
+    "actors": [],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "Russian energy-strike tempo continues; sustained energy ceasefire unlikely before talks conclude.",
+    "actors": [],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [
+     "drone_launch_tempo"
+    ],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "EU confirms 18th sanctions package will proceed regardless of talks; listings set to rise modestly.",
+    "actors": [
+     "European Union"
+    ],
+    "targets": [
+     "Government of Russia"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "emergent",
+    "description": "Energy markets price continued strike tempo; TTF Nov26 futures edge higher.",
+    "actors": [],
+    "targets": [],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "Netanyahu publicly rejects enrichment-tolerance framework, citing unaccounted-for HEU; open rift with Washington widens.",
+    "actors": [
+     "Benjamin Netanyahu"
+    ],
+    "targets": [
+     "US Government",
+     "Donald Trump"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "kind": "consequence",
+    "description": "IAEA remains without access in Iran; verification gap persists into talks window.",
+    "actors": [
+     "IAEA",
+     "Government of Iran"
+    ],
+    "targets": [
+     "US Government"
+    ],
+    "source": "arbiter",
+    "variable_ids": [],
+    "period_label": "2026-10-25"
+   }
+  ],
+  "effect_seq": 0,
+  "interactions": [
+   {
+    "id": "i1_1",
+    "kind": "proposal",
+    "proposer": 1,
+    "recipient": 2,
+    "option_id": "open_talks",
+    "terms": "US hosts trilateral talks on the 28-point plan from Nov 10; in exchange for a sustained ceasefire and Russian cooperation on Iran (enrichment rollback), the US offers staged sanctions relief and sanctions-easing sequenced to compliance milestones.",
+    "opened_round": 1,
+    "expires_round": 3,
+    "status": "countered",
+    "parent_id": "",
+    "resolved_round": 2,
+    "response": "The Government of the Russian Federation confirms participation in technical-level talks with the United States and Ukraine from 10 November on the 28-point plan. However, Russia's position on Iran's…",
+    "obligations": [],
+    "deferrals": 0
+   },
+   {
+    "id": "i1_2",
+    "kind": "proposal",
+    "proposer": 1,
+    "recipient": 3,
+    "option_id": "open_talks",
+    "terms": "US hosts trilateral talks on the 28-point plan from Nov 10; in exchange for a sustained ceasefire and Russian cooperation on Iran (enrichment rollback), the US offers staged sanctions relief and sanctions-easing sequenced to compliance milestones.",
+    "opened_round": 1,
+    "expires_round": 3,
+    "status": "countered",
+    "parent_id": "",
+    "resolved_round": 2,
+    "response": "Ukraine confirms participation in trilateral negotiator-level talks on or after 10 November, as President Zelensky affirmed on 21 October. We accept the US offer of hosted talks, conditioned on bindi…",
+    "obligations": [],
+    "deferrals": 0
+   },
+   {
+    "id": "i2_3",
+    "kind": "counter",
+    "proposer": 3,
+    "recipient": 1,
+    "option_id": "open_talks",
+    "terms": "Ukraine joins US-hosted trilateral talks from 10 November on the 28-point plan; in exchange the US (1) writes binding security guarantees for Ukraine into the plan as a milestone, (2) sequences any Russian sanctions relief strictly after a verified sustained ceasefire and energy ceasefire, and (3)…",
+    "opened_round": 2,
+    "expires_round": 4,
+    "status": "open",
+    "parent_id": "i1_2",
+    "resolved_round": null,
+    "response": "",
+    "obligations": [
+     "c3_3_3",
+     "c1_3_3"
+    ],
+    "deferrals": 0
+   },
+   {
+    "id": "i2_4",
+    "kind": "counter",
+    "proposer": 2,
+    "recipient": 1,
+    "option_id": "open_talks",
+    "terms": "Russia commits to attend trilateral talks from 10 Nov 2026. In exchange: (1) staged US sanctions relief begins at the opening of talks (e.g., diesel/fertilizer trade normalization already achieved extended further), not contingent on pre-agreed milestones; (2) Iran nuclear issues are decoupled from…",
+    "opened_round": 2,
+    "expires_round": 4,
+    "status": "open",
+    "parent_id": "i1_1",
+    "resolved_round": null,
+    "response": "",
+    "obligations": [
+     "c2_4_3",
+     "c1_4_4"
+    ],
+    "deferrals": 0
+   },
+   {
+    "id": "i2_5",
+    "kind": "proposal",
+    "proposer": 17,
+    "recipient": 1,
+    "option_id": "signal_concession",
+    "terms": "Iran offers parallel technical talks on enrichment transparency (including IAEA access discussions) beginning simultaneously with US implementation of MoU relief steps (blockade end, crude export waivers) within 30 days; mutual verification milestones reviewed every 15 days.",
+    "opened_round": 2,
+    "expires_round": 4,
+    "status": "open",
+    "parent_id": "",
+    "resolved_round": null,
+    "response": "",
+    "obligations": [],
+    "deferrals": 0
+   }
+  ],
+  "interaction_seq": 5,
+  "seed_gaps": [
+   {
+    "kind": "actor_without_plans",
+    "subject": "US Government",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Government of Russia",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Vladimir Putin",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "European Union",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "IRGC",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Benjamin Netanyahu",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "NATO",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Government of China",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Saudi Arabia",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   },
+   {
+    "kind": "actor_without_plans",
+    "subject": "Pezeshkian",
+    "note": "no documented plans or red lines; option menu is class-generic"
+   }
+  ]
+ }
+}
