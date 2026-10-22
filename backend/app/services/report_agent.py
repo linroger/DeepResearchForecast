@@ -6917,7 +6917,15 @@ class ReportAgent:
         return text, info
 
     def _simleak_rewrite_paragraph(self, para: str, lang: str) -> Optional[str]:
-        """对单个泄漏段落做一次有界 LLM 重写；数字 token 逐字节校验失败/输出异常 → None。"""
+        """One bounded LLM edit of a leaking paragraph (ADR 0003 Tier-2).
+
+        Returns the edited paragraph or None (the caller then deletes leaking
+        sentences deterministically).  Accepted only when: the paragraph did not
+        grow; every number in a non-leaking sentence survives byte-identically;
+        each leaking sentence is either gone entirely or, if any part of it
+        survives, it carried a [S#] citation and all of its numbers survive; and
+        no number appears that was not in the input."""
+        from . import report_lint as _rl  # local import, as everywhere else in this file
         nums = self._NUM_TOKEN_RE.findall(para)
         # ADR 0003: simulation-derived claims are deleted or re-grounded in a [S#]
         # citation — never relabelled as analysis, a panel view or evidence.
@@ -6944,18 +6952,36 @@ class ReportAgent:
             logger.warning(f"泄漏段落重写调用失败（退回句子删除）: {_e}")
             return None
         out = (out or "").strip()
-        if not out or len(out) > len(para) + 80:
-            return None  # deletion-oriented edit: the paragraph may only shrink
-        # Numeric integrity (ADR 0003): a number in a sentence that did not leak must
-        # survive byte-identical (no drift by omission); a number that only lived in
-        # a deleted simulation sentence may vanish; no number may be invented.
-        kept_nums = [tok for sent in _rl._split_sentences(para)
-                     if not _rl.leakage_hits(sent)
-                     for tok in self._NUM_TOKEN_RE.findall(sent)]
-        for tok in kept_nums:
-            if tok not in out:
-                logger.warning(f"泄漏段落重写丢失数字 token「{tok}」，弃用重写")
+        if not out or len(out) > len(para) + 8:
+            return None  # deletion-oriented edit: the paragraph may only shrink (whitespace slack)
+        sentences = _rl._split_sentences(para)
+        leaking = [sent for sent in sentences if _rl.leakage_hits(sent)]
+        # (a) Numbers in sentences that did not leak survive byte-identically (no drift by omission).
+        for sent in sentences:
+            if sent in leaking:
+                continue
+            for tok in self._NUM_TOKEN_RE.findall(sent):
+                if tok not in out:
+                    logger.warning(f"泄漏段落重写丢失数字 token「{tok}」，弃用重写")
+                    return None
+        # (b) All-or-nothing per leaking sentence: if any 12-character span of its
+        #     wording survives, it must have carried a [S#] citation and every one of
+        #     its numbers must survive; a kept-but-stripped claim is drift by omission.
+        out_norm = self._norm_quote_text(out)
+        for sent in leaking:
+            core = self._norm_quote_text(self._NUM_TOKEN_RE.sub(" ", self._S_CITATION_RE.sub(" ", sent)))
+            survived = any(core[i:i + 12] in out_norm
+                           for i in range(0, max(1, len(core) - 11), 4) if len(core[i:i + 12]) == 12)
+            if not survived:
+                continue
+            if not self._S_CITATION_RE.search(sent):
+                logger.warning("泄漏段落重写保留了无 [S#] 的模拟句，弃用重写")
                 return None
+            for tok in self._NUM_TOKEN_RE.findall(sent):
+                if tok not in out:
+                    logger.warning(f"泄漏段落重写保留模拟句但丢失其数字「{tok}」，弃用重写")
+                    return None
+        # (c) No invented numbers.
         for tok in self._NUM_TOKEN_RE.findall(out):
             if tok not in nums:
                 logger.warning(f"泄漏段落重写引入新数字 token「{tok}」，弃用重写")
