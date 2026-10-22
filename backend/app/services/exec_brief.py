@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import Config
 from ..utils.logger import get_logger
+from . import sim_provenance as _sp
 
 logger = get_logger('mirofish.services.exec_brief')
 
@@ -62,8 +63,9 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "quality_pass": "forecast quality gate passed",
         "quality_fail": "forecast quality gate not passed",
         "coverage": "citation coverage",
-        "sim_run": "simulation run",
+        "sim_line": _sp.BRIEF_SIM_LINE_EN,
         "organic": "organic actions",
+        "detail_sep": ", ",
         "gen_note": "Deterministically extracted from the full report — no model generation.",
         "indicators": "Key official indicators",
         "c_indicator": "Indicator",
@@ -100,8 +102,9 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "quality_pass": "预测质量门通过",
         "quality_fail": "预测质量门未通过",
         "coverage": "引用覆盖率",
-        "sim_run": "模拟运行",
+        "sim_line": _sp.BRIEF_SIM_LINE_ZH,
         "organic": "条有机行为",
+        "detail_sep": "，",
         "gen_note": "全部从成稿确定性抽取——无模型生成。",
         "indicators": "关键官方指标",
         "c_indicator": "指标",
@@ -360,9 +363,15 @@ def _find_scenario_chart(report_dir: str) -> Optional[Tuple[str, str]]:
     命中 'scenarios' 的条目，否则回退默认路径 charts/scenario_probabilities.png。返回
     (相对 report_dir 的路径, 图注) 或 None（图不存在时不引用）。"""
     manifest = _read_json(os.path.join(report_dir, "viz_manifest.json"))
-    if isinstance(manifest, list):
-        for item in manifest:
+    # WAVE9 schema v2 wraps the entries: {"schema_version": 2, "items": [...]}.
+    entries = manifest.get("items") if isinstance(manifest, dict) else manifest
+    if isinstance(entries, list):
+        for item in entries:
             if not isinstance(item, dict):
+                continue
+            # ADR 0003: a chart drawn from simulation artifacts is never the
+            # load-bearing chart, whatever hint an older manifest gave it.
+            if _sp.is_simulated_chart(item):
                 continue
             if item.get("type") == "png" and str(item.get("placement_hint") or "") == "scenarios":
                 rel = str(item.get("path") or "")
@@ -409,16 +418,17 @@ def _build_honesty_note(forecast: Optional[Dict[str, Any]], report_dir: str,
             parts.append(L["ph_failed"])
         elif status:
             parts.append(L["ph_degraded"])
-        # 模拟运行阶段健康 + 有机行为数
+        # Scenario-simulation disclosure (ADR 0003 / S0.3): health plus what the
+        # simulation was for — mechanism analysis only, never probabilities.
         run_stage = (ph.get("stages") or {}).get("run") if isinstance(ph.get("stages"), dict) else None
         if isinstance(run_stage, dict):
             rh = str(run_stage.get("health") or "").strip()
             organic = run_stage.get("organic_actions")
             if rh:
-                seg = f"{L['sim_run']} {rh}"
+                detail = ""
                 if isinstance(organic, (int, float)):
-                    seg += f" ({int(organic)} {L['organic']})"
-                parts.append(seg)
+                    detail = f"{L['detail_sep']}{int(organic)} {L['organic']}"
+                parts.append(L["sim_line"].format(health=rh, detail=detail))
 
     # forecast 质量门（forecast.json 内，永远在报告目录里）
     if isinstance(forecast, dict):
