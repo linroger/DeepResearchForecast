@@ -1,0 +1,188 @@
+{
+  "junit": {
+    "tests": 910,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "receipt_status": "completed",
+  "receipt_exit": 0,
+  "shutdown_complete": true,
+  "source_drift": [],
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:network:socket.__new__": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "quarantine:oasis_import_cwd": 1,
+    "blocked:external_read": 20,
+    "allowed:guarded_child": 6,
+    "allowed:child_liveness": 4
+  },
+  "children": {
+    "96294": {
+      "exit_code": 0,
+      "receipt": "process-96294.json"
+    },
+    "96387": {
+      "exit_code": 0,
+      "receipt": "process-96387.json"
+    },
+    "97156": {
+      "exit_code": 0,
+      "receipt": "process-97156.json"
+    },
+    "97341": {
+      "exit_code": 0,
+      "receipt": "process-97341.json"
+    },
+    "97342": {
+      "exit_code": 0,
+      "receipt": "process-97342.json"
+    },
+    "97478": {
+      "exit_code": 0,
+      "receipt": "process-97478.json"
+    }
+  },
+  "identity_preserved": true,
+  "files": {
+    "backend/app/utils/dates.py": {
+      "sha256": "2e0a5d6219e3b298431297a05c5d0a45e65cbbb263af91c2cda4a170b3e9bb4c",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/utils/dates.py",
+          "value": "2e0a5d6219e3b298431297a05c5d0a45e65cbbb263af91c2cda4a170b3e9bb4c"
+        }
+      ]
+    },
+    "backend/app/utils/sim_timeline.py": {
+      "sha256": "ebd4de3e36d12fb6c5c6f5f54552906d4d34523b511d0b6ab787f39daf22e20e",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/utils/sim_timeline.py",
+          "value": "ebd4de3e36d12fb6c5c6f5f54552906d4d34523b511d0b6ab787f39daf22e20e"
+        }
+      ]
+    },
+    "backend/app/services/simulation_config_generator.py": {
+      "sha256": "32a35fc76eabda8cbc3da2919c7b85d1b36bafba7dfb0bcb4b27e41c4ea3d177",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/services/simulation_config_generator.py",
+          "value": "32a35fc76eabda8cbc3da2919c7b85d1b36bafba7dfb0bcb4b27e41c4ea3d177"
+        }
+      ]
+    },
+    "backend/app/services/simulation_runner.py": {
+      "sha256": "9a534c630f272e408bc585c9eae70375350d9061fd649cdf5e4b317507f53364",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/services/simulation_runner.py",
+          "value": "9a534c630f272e408bc585c9eae70375350d9061fd649cdf5e4b317507f53364"
+        }
+      ]
+    },
+    "backend/app/services/agent_decision.py": {
+      "sha256": "16b59007e90d299c9ecfae76e89e0923853aed54ba54c8c62b9633eac1f54d31",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/services/agent_decision.py",
+          "value": "16b59007e90d299c9ecfae76e89e0923853aed54ba54c8c62b9633eac1f54d31"
+        }
+      ]
+    },
+    "backend/app/services/world_update.py": {
+      "sha256": "e2c941867abdc4f85fe711f7f76a8ea1d62931c461ee4fb5877a6708c1cb60f0",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/services/world_update.py",
+          "value": "e2c941867abdc4f85fe711f7f76a8ea1d62931c461ee4fb5877a6708c1cb60f0"
+        }
+      ]
+    },
+    "backend/app/services/model_translation.py": {
+      "sha256": "cc0f29441515bcd849751644e346fb08b70747a98ecfd3ab5d3ebfda74e82322",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/app/services/model_translation.py",
+          "value": "cc0f29441515bcd849751644e346fb08b70747a98ecfd3ab5d3ebfda74e82322"
+        }
+      ]
+    },
+    "backend/tests/test_run_forecast_horizon.py": {
+      "sha256": "b84f0d357ef0e1ffd548e04762ec29e175b0352765f9c659b5b3e6f4688a9b95",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/tests/test_run_forecast_horizon.py",
+          "value": "b84f0d357ef0e1ffd548e04762ec29e175b0352765f9c659b5b3e6f4688a9b95"
+        }
+      ]
+    },
+    "backend/tests/fixtures/forecast_horizon_prompts.json": {
+      "sha256": "9e9944dd4697692d2046dec208f46f77cc9b40015c7061123781d52c3a512cbe",
+      "matches_joint_mirror": true,
+      "manifest_entries": []
+    },
+    "backend/tests/test_run_orphan_inventory.py": {
+      "sha256": "e1af6d9c08ed8349963e67131a89cec58b3b5df9887639dbf973bdf3f62ff391",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/tests/test_run_orphan_inventory.py",
+          "value": "e1af6d9c08ed8349963e67131a89cec58b3b5df9887639dbf973bdf3f62ff391"
+        }
+      ]
+    },
+    "backend/tests/test_run_arbiter_contract.py": {
+      "sha256": "564cf6d948e27d596016c2c0e5eb6c37bd7d1a7ab584717edadf05c30d3cef5f",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/tests/test_run_arbiter_contract.py",
+          "value": "564cf6d948e27d596016c2c0e5eb6c37bd7d1a7ab584717edadf05c30d3cef5f"
+        }
+      ]
+    },
+    "backend/tests/test_run_translation_structure.py": {
+      "sha256": "bcd06fc01c6288a9aa032ee16ddbc17bbcfad9d5099ca062e6e0353429aee3ca",
+      "matches_joint_mirror": true,
+      "manifest_entries": [
+        {
+          "key": "backend/tests/test_run_translation_structure.py",
+          "value": "bcd06fc01c6288a9aa032ee16ddbc17bbcfad9d5099ca062e6e0353429aee3ca"
+        }
+      ]
+    }
+  },
+  "probe_results": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "probe_cases": [
+    {
+      "name": "test_primary_endpoint_survives_secondary_named_date",
+      "failed": false
+    },
+    {
+      "name": "test_explicit_default_sized_budget_is_still_a_cap",
+      "failed": false
+    }
+  ],
+  "temporal_still_matches_probe_snapshot": {
+    "backend/app/utils/dates.py": true,
+    "backend/app/utils/sim_timeline.py": true,
+    "backend/app/services/simulation_config_generator.py": true
+  }
+}
