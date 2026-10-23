@@ -312,5 +312,71 @@
       "Exercise browser record navigation plus relevant guarded backend/frontend scenarios and build on the delivered source; distinguish this proof from live model quality/calibration."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_research_preparation_context_v1",
+    "category": "cross-stage",
+    "description": "Research-grounded PREPARE preserves native quantitative baselines and actor-specific qualitative context in sealed actual persona, environment, native and default runtime consumers.",
+    "steps": [
+      "Prepare an exact admitted generation with official observations, targets, public and private actor claims.",
+      "Verify complete native units, periods, statuses and source identities reach actual intended consumers only.",
+      "Restart and verify matching artifacts; reject tampered or replacement inputs before dispatch."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_evidence_conditioned_assessment_v1",
+    "category": "cross-stage",
+    "description": "Research revises initial scenario assessments using bounded sourced post-gather evidence, preserving definitions, reasons and honest support states.",
+    "steps": [
+      "Gather source assertions and deduplicate evidence identity.",
+      "Run a bounded versioned assessment and retain initial/final frames with reasons.",
+      "Verify numeric occurrence alone is unassessed and probability spread is diagnostic."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_affordable_operative_world_v1",
+    "category": "cross-stage",
+    "description": "Fresh default worlds enforce affordable actions and typed operative agreement deadlines, with replay-complete accepted transitions.",
+    "steps": [
+      "Exercise costly actions, menu coverage, mutual consent and future deliveries.",
+      "Verify unaffordable actions have no effects and delivery dates do not become offer expiry.",
+      "Replay accepted deterministic and arbiter updates without model calls and reject drift."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_bounded_adaptive_branches_v1",
+    "category": "cross-stage",
+    "description": "Explicit config-pinned adaptive branches use branch-local observations, decisions, shares and durable bounded dispatch accounting.",
+    "steps": [
+      "Enable an explicit finite adaptive envelope and freeze initial personas.",
+      "Diverge branches and observe different subsequent scripted decisions and local discourse.",
+      "Restart without refunding reserved calls or substituting primary branch observations."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_simulation_investigation_questions_v1",
+    "category": "cross-stage",
+    "description": "Simulation diagnostics produce bounded hypothetical research questions without granting simulation evidence authority.",
+    "steps": [
+      "Finalize a simulation with surprising dynamics or gaps.",
+      "Verify capped deduplicated questions retain hypothetical status and input provenance.",
+      "Verify unchanged factual report/probability authority and explicit stopping reasons."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_forward_evaluation_enrollment_v1",
+    "category": "cross-stage",
+    "description": "Evaluation retains all enrolled questions and event families with explicit failed, unresolved and void dispositions and qualified controlled contrasts.",
+    "steps": [
+      "Enroll cases before outcomes and join accepted predictions/resolutions.",
+      "Verify every enrolled case contributes to counts or explicit unscored disposition.",
+      "Reject misleading probability-lift claims from diagnostic-only or unequal-cost comparisons."
+    ],
+    "passes": true
   }
 ]
