@@ -239,6 +239,14 @@ class LocalSentenceTransformerEmbedder(EmbedderClient):
                     from sentence_transformers import SentenceTransformer
 
                     self._model = SentenceTransformer(self.model_name)
+                    # FS-2: 并发图谱构建下 MPS 不稳定（线上案例：pipe_78903d599684 与
+                    # pipe_9f5353ac9955 同时进入 graph，2026-10-22 22:38 在
+                    # at::native::mps::copy_cast_kernel_mps 内 SIGSEGV，整个后端进程崩溃，
+                    # 两条流水线冻死）。允许用 GRAPHITI_EMBED_DEVICE 固定设备；缺省保持
+                    # sentence-transformers 的自动选择。cpu 对 MiniLM 该量级足够快。
+                    device = os.environ.get("GRAPHITI_EMBED_DEVICE", "").strip()
+                    if device:
+                        self._model = self._model.to(device)
         return self._model
 
     def _ensure_disk_cache(self) -> _DiskEmbedCache | None:
