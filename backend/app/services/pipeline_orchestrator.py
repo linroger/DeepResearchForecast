@@ -4463,6 +4463,30 @@ def _load_news_context(handoff_dir: str) -> Optional[dict[str, Any]]:
     return load_context(handoff_dir) or None
 
 
+def _validate_news_context_for_research_start(state: PipelineState,
+                                              handoff_dir: str) -> None:
+    """Keep acquisition checkpoints distinct from finalized research evidence."""
+    declared = _research_declares_news_context(state, handoff_dir)
+    stage = state.stages.get(STAGE_RESEARCH)
+    unfinished = bool(stage and stage.status in {
+        "pending", "running", "failed", "cancelled"})
+    final_evidence_present = any(os.path.lexists(os.path.join(handoff_dir, name))
+        for name in ("research_report.md", _RESEARCH_CONTRACT_FILENAME,
+                     "evidence_synthesis_manifest.json"))
+    checkpoint = os.path.lexists(os.path.join(handoff_dir, "news_market_context.json"))
+    if unfinished and checkpoint and not final_evidence_present:
+        # This loader still checks safe paths, schema and the complete digest.
+        # Only the producer may resume an unsealed capture; nothing is returned
+        # for reuse, synthesis, graph, simulation or report consumption here.
+        from .news_market_context import _bridge_api
+        context = _bridge_api().load_context(
+            os.path.realpath(handoff_dir), require_sealed=False)
+    else:
+        context = _load_news_context(handoff_dir)
+    if not context and declared:
+        raise ValueError("Declared news context capture is missing before research reuse")
+
+
 def _load_research_handoff(handoff_dir: str) -> dict[str, Any]:
     """Load a previously generated DeerFlow handoff, tolerating missing optional JSON.
 
@@ -13404,9 +13428,7 @@ class PipelineOrchestrator:
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
-            context_declared = _research_declares_news_context(state, handoff_dir)
-            if not _load_news_context(handoff_dir) and context_declared:
-                raise ValueError("Declared news context capture is missing before research reuse")
+            _validate_news_context_for_research_start(state, handoff_dir)
             report_path = os.path.join(handoff_dir, "research_report.md")
             _report_candidate = (
                 os.path.exists(report_path)
