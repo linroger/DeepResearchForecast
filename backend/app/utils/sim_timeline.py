@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional, Tuple
 
-from .dates import parse_as_of  # 同包相对导入，匹配代码库约定
+from .dates import ENGLISH_DATE_PATTERNS, parse_as_of
 
 # ---------------------------------------------------------------------------
 # 常量（spec §2.3 pinned）
@@ -165,6 +165,7 @@ def _cn_to_int(s: str) -> Optional[int]:
 _TIER1 = [
     re.compile(r"(?<!\d)20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}(?!\d)"),
     re.compile(r"(?<!\d)20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日"),
+    *ENGLISH_DATE_PATTERNS,
 ]
 
 # --- 第 2 层：anchored_period —— (正则, handler(match)->Optional[date]) ---
@@ -216,7 +217,7 @@ def _h_month_cjk(m: re.Match) -> Optional[date]:    # 2027年11月（(?!\d) 挡�
 
 
 _TIER2 = [
-    (re.compile(r"(?<![A-Za-z])(?:by\s+end\s+of|end\s+of|late)\s*(20\d{2})(?!\d)", re.IGNORECASE), _h_dec31),
+    (re.compile(r"(?<![A-Za-z])(?:by\s+end\s+of|end\s+of|(?:year[- ]?)?end[-–— ]|late)\s*(20\d{2})(?!\d)", re.IGNORECASE), _h_dec31),
     (re.compile(r"(?<!\d)(20\d{2})\s*年底"), _h_dec31),
     (re.compile(r"(?<![A-Za-z])mid[- ]?(20\d{2})(?!\d)", re.IGNORECASE), _h_jun30),
     (re.compile(r"(?<!\d)(20\d{2})\s*年中"), _h_jun30),
@@ -243,6 +244,24 @@ _TIER3 = re.compile(
 
 # --- 第 4 层：bare_year ---
 _TIER4 = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+
+
+def _opening_forecast_objective(text: str) -> str:
+    """Keep an opening forecast request ahead of baseline/secondary tasks.
+
+    A date in a later binary example is not the endpoint of the overall forecast.
+    Use explicit paragraph/task boundaries, not arbitrary punctuation (which
+    would split named dates, initials and decimals). Unlabelled text keeps the
+    existing tier fallback; this is not general natural-language intent parsing.
+    """
+    if not re.match(r"\s*(?:(?:please\s+)?(?:forecast|predict)\b|(?:请)?预测)", text, re.I):
+        return text
+    boundary = re.search(
+        r"\n\s*\n|(?<=[.!?])\s+(?=(?:deliver(?:ables)?|establish|research|include|also|"
+        r"for\s+example|baseline)\b)|(?<=[。！？])\s*(?=(?:例如|另外|另请|首先|然后|交付|基准))",
+        text, re.I,
+    )
+    return text[:boundary.start()] if boundary else text
 
 
 def _relative_target(as_of: date, n: int, unit_text: str) -> Optional[date]:
@@ -277,6 +296,11 @@ def extract_horizon(text: str, as_of: date) -> Optional[HorizonResult]:
             text = str(text)
         if not text.strip():
             return None
+        objective = _opening_forecast_objective(text)
+        if objective != text:
+            primary = extract_horizon(objective, as_of)
+            if primary is not None:
+                return primary
         as_of_d = _to_date(as_of)
         if as_of_d is None:
             return None
@@ -516,7 +540,8 @@ def round_for_date(d: date, round_dates: List[RoundPeriod]) -> Optional[int]:
 
 
 def build_timeline(as_of: date, horizon: HorizonResult, target_max: int,
-                   reference_max: int = 36, hard_max: int = 48) -> SimulationTimeline:
+                   reference_max: int = 36, hard_max: int = 48, *,
+                   strict_round_cap: bool = False) -> SimulationTimeline:
     """组装完整 SimulationTimeline。
 
     * span ≤ 0（horizon 不晚于 as_of 或不可解析）→ 换用 12 个月默认判定日，
@@ -539,17 +564,31 @@ def build_timeline(as_of: date, horizon: HorizonResult, target_max: int,
         warnings.append("horizon_defaulted_12_months")
     span_days = (h_date - as_of_d).days
 
-    unit, stride = select_calendar_unit(span_days, target_max, hard_max)
+    # The normal target is soft (short windows may be refined for useful detail).
+    # An explicit smaller round budget is a cap: refinement must not undo it.
+    capped = strict_round_cap or target_max < reference_max
+    selection_max = min(hard_max, max(1, target_max)) if capped else hard_max
+    unit, stride = select_calendar_unit(span_days, target_max, selection_max)
+    round_dates = build_round_periods(as_of_d, h_date, unit, stride)
+    if capped:
+        # Natural-grid boundaries can add a period beyond the nominal estimate.
+        # Coarsen the grid/stride until the actual count fits; never clip dates.
+        while len(round_dates) > max(1, target_max):
+            index = UNIT_ORDER.index(unit)
+            if index < len(UNIT_ORDER) - 1:
+                unit = UNIT_ORDER[index + 1]
+            else:
+                stride += 1
+            round_dates = build_round_periods(as_of_d, h_date, unit, stride)
     round_cap_coarsened: Optional[dict] = None
-    if target_max < reference_max:
-        ref_unit, _ref_stride = select_calendar_unit(span_days, reference_max, hard_max)
-        if ref_unit != unit:
+    if capped:
+        ref_unit, ref_stride = select_calendar_unit(span_days, reference_max, hard_max)
+        if (ref_unit, ref_stride) != (unit, stride):
             round_cap_coarsened = {"from_unit": ref_unit, "to_unit": unit, "cap": target_max}
             warnings.append("round_cap_coarsened")
     if stride > 1:
         warnings.append("horizon_capped_stride")
 
-    round_dates = build_round_periods(as_of_d, h_date, unit, stride)
     return SimulationTimeline(
         schema_version=1,
         mode="calendar",

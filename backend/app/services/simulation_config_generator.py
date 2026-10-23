@@ -1036,14 +1036,17 @@ class SimulationConfigGenerator:
             )
 
         target_max = int(getattr(Config, "SIM_CALENDAR_TARGET_MAX_ROUNDS", 36) or 36)
+        strict_round_cap = False
         try:
             if max_rounds is not None and int(max_rounds) > 0:
                 target_max = min(target_max, int(max_rounds))
+                strict_round_cap = True
         except (TypeError, ValueError):
             pass
         oasis_cap = int(getattr(Config, "OASIS_DEFAULT_MAX_ROUNDS", 0) or 0)
         if oasis_cap > 0:
             target_max = min(target_max, oasis_cap)
+            strict_round_cap = True
 
         timeline = sim_timeline.build_timeline(
             as_of,
@@ -1051,6 +1054,7 @@ class SimulationConfigGenerator:
             target_max=target_max,
             reference_max=int(getattr(Config, "SIM_CALENDAR_TARGET_MAX_ROUNDS", 36) or 36),
             hard_max=int(getattr(Config, "SIM_CALENDAR_HARD_MAX_ROUNDS", 48) or 48),
+            strict_round_cap=strict_round_cap,
         )
         if as_of_defaulted:
             timeline.warnings.append("as_of_defaulted")

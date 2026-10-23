@@ -23,6 +23,7 @@ Once every platform has delivered a round, the coordinator runs ONE world update
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -133,7 +134,9 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
     vars_sorted = sorted(world.variables.values(),
                          key=lambda v: (-(v.history[-1].get("round", 0) if v.history else 0), v.name))
     for v in vars_sorted[:max_variables]:
-        tail = f" [{v.kind}]" if v.kind != "numeric" else ""
+        # A numeric-sounding label can also describe a qualitative trend. Expose
+        # the registry type so the arbiter never has to infer it from the name.
+        tail = f" [{v.kind}]"
         path = _recent_path(v)
         lines.append(f"- {v.id}: {v.name} = {format_value(v.value, v.unit)}{tail}" + (f" (path: {path})" if path else ""))
     if not world.variables:
@@ -156,9 +159,31 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         moved += 1
     if not moved:
         lines.append("- (no actor made a consequential move; the world drifts on its own momentum)")
-    attempts = [(actor, actor.last_action) for actor in world.actors.values()
-                if actor.last_action and actor.last_action.get("round") == round_num
-                and actor.last_action.get("status") == "ok" and actor.last_action.get("commitment_id")]
+    bindings: List[Dict[str, Any]] = []
+    attempts = []
+    for actor in world.actors.values():
+        action = actor.last_action or {}
+        if (action.get("round") != round_num or action.get("status") != "ok"
+                or action.get("option_id") == "hold_position"):
+            continue
+        commitment_id = None
+        action_round = None
+        if str(action.get("option_id", "")).startswith(FULFILLMENT_PREFIX):
+            commitment_id = action.get("commitment_id")
+            if world.delivery_resolution_target(actor.agent_id, commitment_id, round_num, round_num) is None:
+                continue
+            action_round = round_num
+            attempts.append((actor, action))
+        bindings.append({"actor": actor.name, "agent_id": actor.agent_id, "option_id": action.get("option_id"),
+                         "commitment_id": commitment_id, "action_round": action_round})
+    lines.extend(["", "## Action resolution bindings",
+                  "Resolve exactly the registered moves listed below. Copy agent_id, commitment_id and action_round "
+                  "without inventing or inferring bindings. Do not resolve held, invalid or rejected moves, "
+                  "including rejected delivery attempts. For an ordinary move use commitment_id=null and "
+                  "action_round=null; an ordinary success never fulfils a promise. An empty string is not null."])
+    lines.extend("- " + json.dumps(binding, ensure_ascii=False) for binding in bindings)
+    if not bindings:
+        lines.append("- (none; return action_resolutions: [])")
     if attempts:
         lines.extend(["", "## Specific commitment delivery attempts (not yet fulfilled)",
                       "Assess whether this exact promise was actually delivered in this period. Unrelated actions, "
@@ -212,9 +237,13 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         "## Your task",
         "Resolve the period. Return ONLY JSON with these keys:",
         '- "narrative": 2-4 sentences on what actually changed and why (≤600 chars).',
-        '- "variable_changes": [{"variable_id": "<id from the list>", "new_value": <number or text> OR '
+        '- "variable_changes": [{"variable_id": "<id from the list>", "new_value": <value matching the listed kind> OR '
         '"delta": <number>, "caused_by": "<cast name>" | null, "rationale": "..."}] — only variables the '
-        "moves/events plausibly affect; small, defensible moves; leave the rest untouched. Name caused_by "
+        "moves/events plausibly affect; small, defensible moves; leave the rest untouched. For [numeric], "
+        "new_value or delta must be a finite JSON number in the listed unit, never prose, a direction, "
+        "a boolean or a number with unit text; omit the change if no defensible number can be given. "
+        "For [boolean], use true/false; for [categorical] or [text], use a string new_value. "
+        "delta is only for numeric variables. Name caused_by "
         "only when a mover's own move this period sets the new value (an announced tariff, rate, quota or "
         f"price it states): a stated figure takes effect in full{_clamp_rule(world)}.",
         '- "new_variables": [{"name": "...", "value": ..., "unit": "...", "kind": "numeric|categorical|boolean|text", '
@@ -224,10 +253,14 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '- "relationship_changes": [{"source": "<cast name>", "target": "<cast name>", "direction": "closer|farther|flat", '
         '"rationale": "..."}].',
         '- "pending_effects": [{"description": "...", "due_periods": 1-12, "variable_id": "<id or null>", '
-        '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later.',
-        '- "action_resolutions": [{"actor": "<cast name>", "outcome": "success|partial|blocked|pending|failed", '
-        '"rationale": "...", "commitment_id": "<exact id for delivery attempts, otherwise null>", '
-        '"action_round": <current round integer for delivery attempts>}] — exactly one per actor that moved.',
+        '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later; '
+        'the same variable kind and finite-number rules apply.',
+        '- "action_resolutions": [{"agent_id": <integer from resolution bindings>, '
+        '"outcome": "success|partial|blocked|pending|failed", "rationale": "...", '
+        '"commitment_id": <exact delivery id string or null from bindings>, '
+        '"action_round": <exact delivery round integer or null from bindings>}] — exactly one per listed '
+        'move, none for unlisted actors. Use the two nulls for ordinary moves. For a listed delivery '
+        'attempt copy its exact id and round and give concrete evidence of whether that promise was delivered.',
         '- "red_line_crossings": [{"actor": "<whose red line>", "by": "<cast name whose move crossed it>", '
         '"red_line": "<the red line as listed>", "rationale": "..."}] — only for a listed red line that a move '
         "this period clearly crossed; usually none.",

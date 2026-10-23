@@ -25,6 +25,7 @@ Pure except for the injected ``llm.chat_json`` call in ``elicit_decision``.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
@@ -526,6 +527,12 @@ def _render_options(options: List[Dict[str, Any]]) -> str:
             bits.append(o["reversibility"])
         if o.get("targets_actor"):
             bits.append("needs a target actor")
+        if o["id"].startswith(FULFILLMENT_PREFIX):
+            # Render the actual stored binding, including [] for self promises.
+            # The parser must keep rejecting recipients inferred from prose.
+            bits.append("targets=" + json.dumps(o.get("commitment_target_ids") or []))
+            if o.get("suggested_targets"):
+                bits.append("stored counterparty=" + json.dumps(o["suggested_targets"], ensure_ascii=False))
         if o.get("why"):
             bits.append(o["why"])
         lines.append("- " + " · ".join(bits))
@@ -570,7 +577,9 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         "offer binds nobody until the other side accepts it, and an accept answer adopts the offer's terms "
         "verbatim (leave terms null or restate them — an accept whose terms differ materially is recorded as a "
         "counter-offer, not an agreement); a fulfill:<commitment_id> option attempts delivery of that exact "
-        "stored promise. Choose its exact id, retain its counterparty, and describe what was actually delivered; "
+        "stored promise. Choose its exact id, copy that option's targets list of integer agent IDs exactly "
+        "(self promises use []; agreement promises list the stored counterparty ID), and describe what was actually delivered. "
+        "Do not add recipients inferred from the promise's wording; "
         "an unrelated action, another offer, an announcement or partial progress does not discharge it. "
         "The consequence arbiter must confirm delivery. commitment is what you bind yourself to and when "
         "(due_periods ≥ 1) or null; alliance_moves lists any alliance you propose/strengthen/break; "
@@ -580,7 +589,7 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
         f"{lang_rule}\n"
         "Return ONLY JSON:\n"
         '{"option_id": "<id or custom>", "custom_action": {"kind": "...", "label": "..."} | null, '
-        '"targets": ["<actor name>", ...], "magnitude": 0.0-1.0, '
+        '"targets": ["<actor name>" | <integer agent_id from fulfill targets>, ...], "magnitude": 0.0-1.0, '
         '"public_statement": "...", "private_rationale": "...", "terms": "<offer or counter-offer terms> | null", '
         '"commitment": {"description": "...", "due_periods": 1} | null, '
         '"alliance_moves": [{"target": "<actor name>", "move": "propose|strengthen|break|oppose"}], '

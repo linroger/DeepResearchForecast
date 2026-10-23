@@ -1650,6 +1650,9 @@ class SimulationRunner:
                 return
             for sim_id in os.listdir(cls.RUN_STATE_DIR):
                 try:
+                    directory = os.path.join(cls.RUN_STATE_DIR, sim_id)
+                    if os.path.islink(directory) or not os.path.isdir(directory):
+                        continue  # Finder metadata and ordinary files are not simulations.
                     if sim_id in cls._processes:
                         continue  # 本进程自己起的，不是孤儿
                     if cls.simulation_engine(sim_id) == "world-v1":

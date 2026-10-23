@@ -311,5 +311,17 @@
       "Verify frozen service/API and actual SFC consumers, independent red-to-green review and bounded local browser/provider behavior; document remaining limitations and deliver reviewed code."
     ],
     "passes": true
+  },
+  {
+    "id": "fix_run_horizon_arbiter_translation_contracts",
+    "category": "workflow-correctness",
+    "description": "Explicit forecast endpoints reach the simulation calendar and actor clocks; arbiter and model-led translation producers receive exact consumer contracts.",
+    "steps": [
+      "Replay the original gold and war end-2027 prompts through native timeline, persisted config, round loop, actor clocks and durable outputs.",
+      "Preserve numeric registry types and exact promise/action/recipient bindings through actor decisions, arbitration and next-round feedback.",
+      "Repair only failed whole translation sections using bounded parser differences while keeping semantic review and source-bound publication strict.",
+      "Skip non-simulation files during orphan inventory; preserve completed run artifacts and verify guarded native regressions and independent review."
+    ],
+    "passes": true
   }
 ]

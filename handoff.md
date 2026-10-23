@@ -1,3 +1,5 @@
+> Current run repair: [forecast horizon, arbiter and translation contracts](docs/handoff/run-horizon-arbiter-translation/handoff.md). Work is isolated from the shared application checkout; saved run artifacts remain historical.
+
 > Reconciliation: [scheduled translation/S0 integration](docs/handoff/translation-provenance-reconciliation/handoff.md). This combines published model-led translation with the explicitly named S0 branch; later implementation work is separate.
 
 > Current repair: [Mandarin translation handoff](docs/handoff/mandarin-translation-repair/handoff.md). User-approved model-led translation and its source-bound acceptance record.
