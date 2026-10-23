@@ -95,7 +95,7 @@ class _WorldLLM:
             if _WorldLLM.arbiter_error is not None:
                 raise _WorldLLM.arbiter_error()
             if _WorldLLM.arbiter_fail:
-                raise RuntimeError("arbiter provider down")
+                raise RuntimeError("arbiter provider down; raw payload fixture-loop-secret")
             moved = "Actor0: Impose or raise a tariff" in content
             return {
                 "narrative": "Tariff shock ripples through importers." if moved else "Quiet period.",
@@ -319,7 +319,9 @@ def test_arbiter_failure_round_commits_deterministically(tmp_path, monkeypatch):
     env = envs[0]
     history = _read_jsonl(os.path.join(sim_dir, "world_state_history.jsonl"))
     assert [h["arbiter_status"] for h in history] == ["failed"] * 3
-    assert history[0]["arbiter_problems"] == ["llm error: RuntimeError: arbiter provider down"]
+    assert [h["arbiter_problems"] for h in history] == [["llm error: RuntimeError"]] * 3
+    assert "fixture-loop-secret" not in json.dumps(history) and "raw payload" not in json.dumps(history)
+    assert len([call for call in _WorldLLM.calls if call["kind"] == "arbiter"]) == 3
     state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
     assert state["committed_round"] == 3
     assert state["world"]["variables"][0]["value"] == 10.0                 # no fabricated numeric effect
@@ -348,9 +350,9 @@ def test_arbiter_content_filter_rejection_is_recorded_precisely(tmp_path, monkey
     assert [h["arbiter_status"] for h in history] == ["failed"] * 3
     for row in history:
         [problem] = row["arbiter_problems"]
-        assert problem.startswith("llm error: BadRequestError (HTTP 400, provider code 1301, content filter): "
-                                  "Error code: 400 - {'contentFilter'")
-        assert "'code': '1301'" in problem and len(problem) <= 320
+        assert problem == "llm error: BadRequestError; HTTP 400; provider code 1301; content filter"
+    assert "contentFilter" not in json.dumps(history) and "Error code: 400" not in json.dumps(history)
+    assert len([call for call in _WorldLLM.calls if call["kind"] == "arbiter"]) == 3
     state = json.load(open(os.path.join(sim_dir, "world_state.json"), encoding="utf-8"))
     assert state["committed_round"] == 3 and state["world"]["variables"][0]["value"] == 10.0
     assert state["summary"]["arbiter_failed_rounds"] == 3

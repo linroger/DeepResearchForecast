@@ -2056,3 +2056,9 @@ The DeerFlow 2 canvas has its own generator in `docs/architecture/deerflow2/tldr
 ## License
 
 [AGPL-3.0](LICENSE)
+
+### Calendar forecast admission
+
+New researched calendar simulations resolve and verify a source-bound forecast task before graph/persona preparation. Preparation requires a valid baseline and a supported endpoint; an unresolved goal no longer silently becomes a one-year or hourly simulation. The sealed `forecast_task_v1` record binds the task, calendar, world clock and completed report trajectory. Previously prepared researched calendars need PREPARE again before a new execution; their stored history and published reports remain readable.
+
+For calendar runs, use `backend/scripts/run_parallel_simulation.py --config <path>` and optionally `--twitter-only` or `--reddit-only`. The older standalone hourly scripts reject task-bound calendars. Arbiter proposals are validated as a whole, get at most one content-correction opportunity, and otherwise commit deterministic effects with an explicit invalid status. Rejected attempts remain structured audit data. Primary report grounding edits parsed source spans and stops publication if a safe repair is impossible. See [the root-correction handoff](docs/handoff/root-workflow-contracts/handoff.md) for evidence and compatibility limits.

@@ -1289,6 +1289,8 @@ def load_config(
     config = json.loads(config_bytes.decode("utf-8"))
     if not isinstance(config, dict):
         raise ValueError("simulation config must be an object")
+    from app.services.forecast_task import validate_task_calendar
+    validate_task_calendar(config)
     return config
 
 
@@ -1305,6 +1307,12 @@ def validate_direct_child_config_seal(
             loaded = json.load(handle)
         if isinstance(loaded, dict):
             state = loaded
+    if "forecast_task_version" in state:
+        from app.services.forecast_task import VERSION, KEY, ForecastTaskError
+        if state["forecast_task_version"] != VERSION or state.get("config_generated") is not True:
+            raise ForecastTaskError("current forecast task preparation has not completed")
+        if KEY not in load_config(config_path):
+            raise ForecastTaskError("prepared forecast task cannot downgrade to an unmarked config")
     state_manifest_sha = str(
         state.get("simulation_config_manifest_sha256") or ""
     )
@@ -1336,11 +1344,18 @@ def validate_direct_child_config_seal(
         or state_manifest_sha
         or current_role_evidence
         or state.get("actor_context_count")
+        or state.get("forecast_task_version")
     )
     if current_role_evidence and not (state_manifest_sha and state_config_sha):
         raise ValueError(
             "current actor roles require state-bound simulation config fingerprints"
         )
+    if current_role_evidence:
+        from app.services.forecast_task import KEY, ForecastTaskError
+        task_config = load_config(config_path)
+        if (isinstance(task_config.get("temporal_config"), dict)
+                and task_config["temporal_config"].get("mode") == "calendar" and KEY not in task_config):
+            raise ForecastTaskError("researched calendar needs task-bound PREPARE before a new execution")
     if require and os.path.basename(config_path) != "simulation_config.json":
         raise ValueError("sealed child config must be simulation_config.json")
     from app.services.simulation_manager import validate_simulation_config_seal
@@ -3441,6 +3456,8 @@ class _InbandWorldEvolution:
             self._horizon_defaulted = self._seed.get("horizon_defaulted")
         self._as_of_date = str(self._tc.get("as_of_date") or self._seed.get("as_of_date") or "") or None
         row0: Dict[str, Any] = {"round": 0, **self._ws.outcome()}
+        self._forecast_task_sha = (config.get("forecast_task_v1") or {}).get("task_sha256")
+        self._forecast_config_sha = _config_hash(config)
         if self._as_of_date:
             row0["as_of"] = self._as_of_date  # spec §6: 第 0 行 as_of=as_of_date
         self._trajectory: List[Dict[str, Any]] = [row0]
@@ -3547,6 +3564,9 @@ class _InbandWorldEvolution:
                 "schema_version": 3,
                 "mode": "calendar",
             }
+            if self._forecast_task_sha:
+                result["forecast_task_sha256"] = self._forecast_task_sha
+                result["config_hash"] = self._forecast_config_sha
             if self._unit:
                 result["calendar_unit"] = self._unit
             for fk, fv in (("horizon_date", self._horizon_date),
@@ -3862,6 +3882,8 @@ class _ReflexiveWorldCoordinator:
         if self._horizon_defaulted is None:
             self._horizon_defaulted = self._seed.get("horizon_defaulted")
         self._as_of_date = str(self._tc.get("as_of_date") or self._seed.get("as_of_date") or "") or None
+        self._forecast_task_sha = (config.get("forecast_task_v1") or {}).get("task_sha256")
+        self._forecast_config_sha = _config_hash(config)
         self._ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
                     if self._scenarios else None)
         initial_outcome = self._ws.outcome() if self._ws is not None else {}
@@ -4489,6 +4511,9 @@ class _ReflexiveWorldCoordinator:
                 "mode": "calendar",
                 "world_model": self._world_summary(),
             }
+            if self._forecast_task_sha:
+                result["forecast_task_sha256"] = self._forecast_task_sha
+                result["config_hash"] = self._forecast_config_sha
             if self._unit:
                 result["calendar_unit"] = self._unit
             for fk, fv in (("horizon_date", self._horizon_date), ("horizon_source", self._horizon_source),
@@ -4676,6 +4701,7 @@ class _ReflexiveWorldCoordinator:
                 "behaviour": record.get("behaviour") if isinstance(record.get("behaviour"), dict) else {},
                 "arbiter_status": record.get("arbiter_status"),
                 "arbiter_problems": record.get("arbiter_problems") or [],
+                "arbiter_attempts": record.get("arbiter_attempts") or [],
                 "arbiter": record.get("arbiter") or {},
                 "narrative": record.get("narrative") or "",
                 "diff": record.get("diff") or {},
@@ -5068,9 +5094,8 @@ def _config_hash(config: Dict[str, Any]) -> str:
     配置若变更（agent/事件/时长/recsys 任一改动），旧 DB/世界与新意图不一致，必须放弃续跑、
     从头重跑（诚实降级）。任何异常返回 ""（视为无指纹 → 向后兼容旧检查点，不阻断续跑）。"""
     try:
-        import hashlib
-        blob = json.dumps(config, ensure_ascii=False, sort_keys=True, default=str)
-        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+        from app.services.forecast_task import execution_config_fingerprint
+        return execution_config_fingerprint(config)
     except Exception:  # noqa: BLE001 — 指纹计算失败退化为无指纹，绝不中断模拟
         return ""
 
@@ -6044,6 +6069,8 @@ async def run_twitter_simulation(
     Returns:
         PlatformSimulation: 包含env和agent_graph的结果对象
     """
+    from app.services.forecast_task import validate_task_calendar
+    validate_task_calendar(config)
     result = PlatformSimulation()
     
     def log_info(msg):
@@ -6624,6 +6651,8 @@ async def run_reddit_simulation(
     Returns:
         PlatformSimulation: 包含env和agent_graph的结果对象
     """
+    from app.services.forecast_task import validate_task_calendar
+    validate_task_calendar(config)
     result = PlatformSimulation()
     
     def log_info(msg):

@@ -721,7 +721,12 @@ class TwitterSimulationRunner:
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            config = json.load(f)
+        from app.services.forecast_task import KEY, ForecastTaskError, validate_task_calendar
+        validate_task_calendar(config)
+        if KEY in config:
+            raise ForecastTaskError("task-bound calendars require run_parallel_simulation.py --twitter-only")
+        return config
     
     def _get_profile_path(self) -> str:
         """获取Profile文件路径（OASIS Twitter使用CSV格式）"""

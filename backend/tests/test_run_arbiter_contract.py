@@ -8,6 +8,7 @@ validation, application, ledgers and next-actor prompt builders remain real.
 """
 
 import copy
+import hashlib
 import json
 import math
 import random
@@ -56,13 +57,29 @@ def _parse(world, aid, round_num, option_id, **fields):
     )
 
 
-def _advance(world, round_num, decisions=(), payload=None):
-    llm = FakeLLMClient(json_responses=[copy.deepcopy(payload or {})])
+def _advance(world, round_num, decisions=(), payload=None, *, llm=None):
+    if llm is None:
+        llm = FakeLLMClient(json_responses=[copy.deepcopy(payload or {})])
     record = run_world_round(
         world, round_num, {"label": f"period-{round_num}"}, decisions, (),
         llm=llm, rng=random.Random(29),
     )
     return record, llm.calls[0]["messages"][-1]["content"]
+
+
+def _assert_invalid_transaction(record, llm, payload, problem):
+    """Pin the full rejection path, call budget and structured hash receipts."""
+    assert record["arbiter_status"] == "invalid" and len(llm.calls) == 2
+    assert record["arbiter"] == {} and record["narrative"] == "" and record["scenario_pressure"] == {}
+    assert llm.calls[1]["temperature"] == 0.0
+    assert llm.calls[1]["messages"][0] == llm.calls[0]["messages"][0]
+    source_hash = hashlib.sha256(llm.calls[0]["messages"][0]["content"].encode()).hexdigest()
+    candidate_hash = hashlib.sha256(json.dumps(
+        payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    assert record["arbiter_attempts"] == [
+        {"attempt": index, "source_hash": source_hash, "candidate_hash": candidate_hash,
+         "status": "invalid", "problems": [problem]} for index in (1, 2)]
+    assert record["arbiter_problems"] == [problem]
 
 
 def _bindings(prompt):
@@ -102,10 +119,14 @@ def test_numeric_guidance_and_real_apply_reach_next_actor():
                                    float("inf"), "-Infinity", {"value": 4}, [4]])
 def test_invalid_numeric_values_keep_diagnostic_and_never_change_fact(field, value):
     world = _world()
-    record, _ = _advance(world, 3, payload={
+    payload = {
         "variable_changes": [{"variable_id": "recent_momentum", field: value}],
-    })
-    assert record["arbiter_problems"] == ["non-numeric change for numeric variable 'recent_momentum'"]
+    }
+    llm = FakeLLMClient(json_responses=[copy.deepcopy(payload), copy.deepcopy(payload)])
+    record, _ = _advance(world, 3, llm=llm)
+    _assert_invalid_transaction(record, llm, payload,
+                                f"$.variable_changes[0].{field}: expected number (numbers must be finite)")
+    assert world.committed_round == 3
     assert world.variables["recent_momentum"].value == 3.0
     assert world.variables["recent_momentum"].kind == "numeric"
     assert record["diff"]["variables_changed"] == []
@@ -183,31 +204,49 @@ def test_rejected_delivery_and_hold_are_excluded_from_resolution_bindings():
     hold = _parse(world, 1, 3, "hold_position")
     mover = _parse(world, 2, 3, "public_statement", public_statement="Our office published a notice.")
     assert invalid.status == "invalid" and invalid.problems == ["invalid commitment delivery binding"]
-    record, prompt = _advance(world, 3, [invalid, hold, mover])
+    payload = {}
+    llm = FakeLLMClient(json_responses=[{}, {}])
+    record, prompt = _advance(world, 3, [invalid, hold, mover], llm=llm)
     assert _bindings(prompt) == [{"actor": "Observer", "agent_id": 2, "option_id": "public_statement",
                                   "commitment_id": None, "action_round": None}]
     assert "Do not resolve held, invalid or rejected moves" in prompt
-    assert promise["status"] == "due" and record["arbiter"]["commitments_fulfilled"] == 0
+    _assert_invalid_transaction(record, llm, payload, "$: empty proposal")
+    assert promise["status"] == "due" and "fulfillment_evidence" not in promise
+    assert world.track_record(0)["kept"] == 0 and world.committed_round == 3
+    assert world.actors[2].last_action["resolution"] is None
+    assert record["diff"]["variables_changed"] == []
 
 
-@pytest.mark.parametrize("claim", [None, "", "owned"])
+@pytest.mark.parametrize("claim", [None, "", "owned", "forged", "wrong_round"])
 def test_unrelated_action_never_satisfies_promise_even_with_success(claim):
     world = _world()
     promise = _promise(world, False)
     world.start_round(3, {"label": "period-3"})
     unrelated = _parse(world, 0, 3, "public_statement", public_statement="Our office is closed for the holiday.")
-    row = {"actor": "Delegation", "outcome": "success", "commitment_id": promise["id"] if claim == "owned" else claim,
-           "action_round": 3, "rationale": "The holiday notice was published."}
-    record, prompt = _advance(world, 3, [unrelated], {"action_resolutions": [row]})
+    before_reputation = world.actors[0].reputation
+    before_outcomes = copy.deepcopy(world.actors[0].outcomes)
+    commitment_id = {None: None, "": "", "owned": promise["id"],
+                     "forged": "not-an-owned-promise", "wrong_round": None}[claim]
+    row = {"actor": "Delegation", "outcome": "success", "commitment_id": commitment_id,
+           "action_round": 3 if claim == "wrong_round" else None,
+           "rationale": "The holiday notice was published."}
+    payload = {"action_resolutions": [row]}
+    llm = FakeLLMClient(json_responses=[copy.deepcopy(payload), copy.deepcopy(payload)])
+    record, prompt = _advance(world, 3, [unrelated], llm=llm)
     assert _bindings(prompt)[0]["commitment_id"] is None
     assert promise["status"] == "due" and "fulfillment_evidence" not in promise
-    assert record["arbiter"]["commitments_fulfilled"] == 0
     assert world.track_record(0)["kept"] == 0
+    assert world.committed_round == 3 and record["diff"]["variables_changed"] == []
     if claim is not None:
-        assert record["arbiter_problems"] == ["unbound commitment delivery resolution"]
-        assert record["arbiter"]["resolutions"] == 0
+        _assert_invalid_transaction(record, llm, payload,
+                                    "$.action_resolutions[0]: not an exact current action binding")
+        assert world.actors[0].last_action["resolution"] is None
+        assert world.actors[0].reputation == before_reputation and world.actors[0].outcomes == before_outcomes
     else:
+        assert record["arbiter_status"] == "applied" and len(llm.calls) == 1
+        assert record["arbiter"]["commitments_fulfilled"] == 0
         assert record["arbiter_problems"] == [] and record["arbiter"]["resolutions"] == 1
+        assert world.actors[0].last_action["resolution"] == "success"
 
 
 @pytest.mark.parametrize("mutation", ["missing_id", "wrong_id", "wrong_round", "string_round",

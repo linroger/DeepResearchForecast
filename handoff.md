@@ -1,3 +1,5 @@
+> Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Native1387-case source acceptance is complete; local peer compatibility and activation are recorded there.
+
 > Current run repair: [forecast horizon, arbiter and translation contracts](docs/handoff/run-horizon-arbiter-translation/handoff.md). Work is isolated from the shared application checkout; saved run artifacts remain historical.
 
 > Reconciliation: [scheduled translation/S0 integration](docs/handoff/translation-provenance-reconciliation/handoff.md). This combines published model-led translation with the explicitly named S0 branch; later implementation work is separate.

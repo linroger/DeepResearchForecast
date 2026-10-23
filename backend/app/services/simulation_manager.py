@@ -26,6 +26,7 @@ from .actor_context import (
     build_actor_context_artifacts,
     context_binding_by_actor_id,
     validate_actor_context_artifacts,
+    validate_actor_context_inputs,
 )
 from ..utils.atomic import write_json_atomic
 
@@ -74,6 +75,8 @@ def build_simulation_config_seal(
     config = json.loads(config_bytes.decode("utf-8"))
     if not isinstance(config, dict):
         raise ValueError("simulation config must be an object")
+    from .forecast_task import validate_task_calendar
+    validate_task_calendar(config)
     config_simulation_id = str(config.get("simulation_id") or "")
     if config_simulation_id and config_simulation_id != str(simulation_id):
         raise ValueError("simulation config identity mismatch")
@@ -188,6 +191,8 @@ def validate_simulation_config_seal(
         "simulation_config_canonical_sha256"
     ):
         raise ValueError("simulation config canonical fingerprint mismatch")
+    from .forecast_task import validate_task_calendar
+    validate_task_calendar(config)
     config_simulation_id = str(config.get("simulation_id") or "")
     if config_simulation_id and config_simulation_id != str(
         manifest.get("simulation_id") or ""
@@ -657,6 +662,7 @@ class SimulationState:
     actor_context_actors_sha256: Optional[str] = None
     simulation_config_sha256: Optional[str] = None
     simulation_config_manifest_sha256: Optional[str] = None
+    forecast_task_version: Optional[str] = None
     
     # 配置生成信息
     config_generated: bool = False
@@ -708,6 +714,7 @@ class SimulationState:
             "simulation_config_manifest_sha256": (
                 self.simulation_config_manifest_sha256
             ),
+            **({"forecast_task_version": self.forecast_task_version} if self.forecast_task_version is not None else {}),
             "config_generated": self.config_generated,
             "config_reasoning": self.config_reasoning,
             "current_round": self.current_round,
@@ -743,6 +750,7 @@ class SimulationState:
             "simulation_config_manifest_sha256": (
                 self.simulation_config_manifest_sha256
             ),
+            **({"forecast_task_version": self.forecast_task_version} if self.forecast_task_version is not None else {}),
             "config_generated": self.config_generated,
             "error": self.error,
         }
@@ -804,6 +812,10 @@ class SimulationManager:
         
         with open(state_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        if "forecast_task_version" in data:
+            from .forecast_task import VERSION, ForecastTaskError
+            if data["forecast_task_version"] != VERSION:
+                raise ForecastTaskError("present forecast task version is unsupported")
 
         engine = validate_simulation_engine(data.get("simulation_engine", "oasis-legacy"))
         if engine != "world-v1" and (
@@ -844,6 +856,7 @@ class SimulationManager:
                 "simulation_config_manifest_sha256"
             ),
             config_generated=data.get("config_generated", False),
+            forecast_task_version=data.get("forecast_task_version"),
             config_reasoning=data.get("config_reasoning", ""),
             current_round=data.get("current_round", 0),
             twitter_status=data.get("twitter_status", "not_started"),
@@ -988,7 +1001,17 @@ class SimulationManager:
 
         try:
             state.status = SimulationStatus.PREPARING
+            state.config_generated = False
+            state.error = None
+            if str(getattr(Config, "SIM_TEMPORAL_MODE", "hours")).strip().lower() == "calendar":
+                from .forecast_task import VERSION
+                state.forecast_task_version = VERSION
             self._save_simulation_state(state)
+
+            if actors is not None:
+                validate_actor_context_inputs(actors, document_text)
+            config_generator = SimulationConfigGenerator()
+            admitted_task = config_generator.admit_forecast_task(simulation_requirement, actors, max_rounds)
             
             sim_dir = self._get_simulation_dir(simulation_id)
             
@@ -1235,8 +1258,6 @@ class SimulationManager:
                     total=3
                 )
             
-            config_generator = SimulationConfigGenerator()
-            
             if progress_callback:
                 progress_callback(
                     "generating_config", 30, 
@@ -1259,6 +1280,12 @@ class SimulationManager:
                 max_rounds=max_rounds,  # PREP-1: 定时事件按真实执行轮数窗排期
                 research_language=research_language,  # PREP-4: 英文调研→global_market 画像
             )
+            if admitted_task is not None and sim_params.forecast_task != admitted_task:
+                from .forecast_task import ForecastTaskError
+                raise ForecastTaskError("config producer omitted or replaced the admitted forecast task")
+            if state.forecast_task_version is not None and sim_params.forecast_task is None:
+                from .forecast_task import ForecastTaskError
+                raise ForecastTaskError("prepared forecast task cannot downgrade to an unmarked config")
             
             if progress_callback:
                 progress_callback(
@@ -1394,6 +1421,7 @@ class SimulationManager:
             import traceback
             logger.error(traceback.format_exc())
             state.status = SimulationStatus.FAILED
+            state.config_generated = False
             state.error = str(e)
             self._save_simulation_state(state)
             raise
@@ -1448,6 +1476,10 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if state is None:
             raise ValueError(f"模拟不存在: {simulation_id}")
+        if state.forecast_task_version is not None:
+            from .forecast_task import VERSION, ForecastTaskError
+            if state.forecast_task_version != VERSION or not state.config_generated:
+                raise ForecastTaskError("current forecast task preparation has not completed")
         if validate_simulation_engine(state.simulation_engine) == "world-v1":
             from .world_simulation.artifacts import load_inputs
             from .world_simulation.contracts import require
@@ -1543,6 +1575,13 @@ class SimulationManager:
             raise ValueError(
                 "current actor roles require state-bound simulation config fingerprints"
             )
+        if state.forecast_task_version is not None or current_actor_contract:
+            from .forecast_task import KEY, ForecastTaskError
+            with open(os.path.join(sim_dir, "simulation_config.json"), encoding="utf-8") as handle:
+                config = json.load(handle)
+                calendar = isinstance(config.get("temporal_config"), dict) and config["temporal_config"].get("mode") == "calendar"
+                if (state.forecast_task_version is not None or calendar) and KEY not in config:
+                    raise ForecastTaskError("prepared forecast task cannot downgrade to an unmarked config")
         return validate_simulation_config_seal(
             sim_dir,
             expected_manifest_sha256=manifest_sha,

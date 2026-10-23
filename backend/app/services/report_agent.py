@@ -2447,6 +2447,7 @@ class ReportAgent:
         # Admission precedes all model/tool construction. No optional constructor
         # keyword can bypass the persisted engine or its mandatory frozen result.
         self._world_binding = load_simulation_world(simulation_id)
+        self._bound_forecast_task_snapshot()
 
         # T4.1: 钉入研究档案。背景块 + 来源索引在构造时一次性渲染，规划与每个章节复用。
         self.situation_brief = situation_brief or ""
@@ -4490,11 +4491,51 @@ class ReportAgent:
         lines.append("注：世界变量由推演仲裁逐期更新并有界钳制，不是观察到的现实指标；现实世界的定量声明只能来自研究来源。")
         return "\n".join(lines)
 
+    def _bound_forecast_task_snapshot(self):
+        """Read and validate one config/trajectory snapshot before any consumer."""
+        from .forecast_task import (KEY, ForecastTaskError, validate_task_calendar, validate_task_trajectory,
+                                    execution_config_fingerprint)
+        pinned = getattr(self, "_forecast_task_snapshot_pin", None)
+        root = getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or ""
+        simulation_id = str(getattr(self, "simulation_id", "") or "")
+        path = os.path.join(root, simulation_id, "simulation_config.json")
+        if not root or not simulation_id or not os.path.isfile(path):
+            if pinned is not None:
+                raise ForecastTaskError("admitted report forecast task disappeared")
+            return None
+        with open(path, encoding="utf-8") as handle:
+            config = json.load(handle)
+        if not isinstance(config, dict):
+            raise ForecastTaskError("present report simulation config is not an object")
+        if KEY not in config:
+            if pinned is not None:
+                raise ForecastTaskError("admitted report forecast task marker disappeared")
+            return None
+        task = validate_task_calendar(config)
+        question = str(getattr(self, "simulation_requirement", "") or "")
+        if question and question != config["simulation_requirement"]:
+            raise ForecastTaskError("report question differs from admitted forecast task")
+        path = os.path.join(root, simulation_id, "world_state_trajectory.json")
+        trajectory = None
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as handle:
+                trajectory = json.load(handle)
+            validate_task_trajectory(config, trajectory)
+        identity = (execution_config_fingerprint(config),
+                    execution_config_fingerprint(trajectory) if trajectory is not None else None)
+        if pinned is not None and pinned != identity:
+            raise ForecastTaskError("report forecast task or trajectory changed after admission")
+        self._forecast_task_snapshot_pin = identity
+        return config, task, trajectory
+
     def _temporal_horizon_date(self) -> str:
         """日历模式的判定日 horizon_date（轨迹 v3 优先，其次 simulation_config 的
         temporal_config）；hours 模式/无产物 → ""（调用方回退旧行为，degrade-safe）。"""
         if getattr(self, "_world_binding", None):
             return self._world_binding["result"]["horizon"][:10]
+        bound = self._bound_forecast_task_snapshot()
+        if bound is not None:
+            return bound[1]["horizon_date"]
         try:
             sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
                                    str(self.simulation_id or ""))
@@ -4833,12 +4874,16 @@ class ReportAgent:
         not band-constrain a multi-year forecast — path prior only, research stays
         authoritative for the terminal distribution).
         """
+        bound = self._bound_forecast_task_snapshot()
         sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "",
                                str(self.simulation_id or ""))
         traj_path = os.path.join(sim_dir, "world_state_trajectory.json")
         try:
-            with open(traj_path, "r", encoding="utf-8") as f:
-                traj = json.load(f)
+            if bound is not None:
+                traj = bound[2]
+            else:
+                with open(traj_path, "r", encoding="utf-8") as f:
+                    traj = json.load(f)
         except Exception:  # noqa: BLE001 — 无轨迹（未开决策通道/旧运行）→ 无锚点
             return {}
         if not isinstance(traj, dict):
@@ -4853,8 +4898,11 @@ class ReportAgent:
             return {}
         as_of = horizon = ""
         try:
-            with open(os.path.join(sim_dir, "simulation_config.json"), "r", encoding="utf-8") as f:
-                tc = (json.load(f) or {}).get("temporal_config") or {}
+            if bound is not None:
+                tc = bound[0]["temporal_config"]
+            else:
+                with open(os.path.join(sim_dir, "simulation_config.json"), "r", encoding="utf-8") as f:
+                    tc = (json.load(f) or {}).get("temporal_config") or {}
             as_of = str(tc.get("as_of_date") or "")
             horizon = str(tc.get("horizon_date") or traj.get("horizon_date") or "")
         except Exception:  # noqa: BLE001 — 期限缺失 → advisory（覆盖未知）
@@ -5631,6 +5679,141 @@ class ReportAgent:
             return md, 0
         return "\n".join(out_lines), inserted
 
+    @staticmethod
+    def _grounding_inline_signature(tokens):
+        """Normalize parser text coalescing without discarding structural nodes."""
+        result = []
+        for token in tokens:
+            item = dict(token)
+            if item["type"] == "text" and not item.get("raw"):
+                continue
+            if "children" in item:
+                item["children"] = ReportAgent._grounding_inline_signature(item["children"])
+            if item["type"] == "text" and result and result[-1]["type"] == "text":
+                result[-1]["raw"] += item["raw"]
+            else:
+                result.append(item)
+        return result
+
+    @staticmethod
+    def _grounding_inline_units(surface: str, env: Dict[str, Any], parser=None) -> List[str]:
+        """Return lossless claim slices only at parsed inline-node boundaries.
+
+        A period inside emphasis, a code span, or a link is not an editing
+        boundary. Parsing both sides must reproduce the original inline tree;
+        otherwise the complete node stays atomic. This deliberately sacrifices
+        some deletion granularity rather than manufacturing closing delimiters.
+        """
+        normalized = ReportAgent._grounding_inline_signature
+        # With no parser, the surface is already rendered text: its literal
+        # delimiters must never be interpreted as fresh Markdown syntax.
+        whole = normalized(parser(surface, env)) if parser is not None else None
+        # HTML opening/closing tags are separate inline tokens. Treat their
+        # entire containing prose unit atomically, including text between tags.
+        if whole is not None and any(node["type"] == "inline_html" for node in whole):
+            return [surface]
+        cuts = [0]
+        boundaries = re.compile(
+            r"[.!?;。！？；](?:[*_~]+|[\"'”’)])*"
+            r"(?:\s*[\[【]S\d+(?:-[A-Za-z])?(?:,\s*S\d+(?:-[A-Za-z])?)*[\]】])*"
+            r"[.!?;。！？；]?(?:\s+(?=\S)|(?<=[。！？；])(?=\S)|\s*$)"
+        )
+        for match in boundaries.finditer(surface):
+            cut = match.end()
+            # A dotted name or abbreviation is never a sentence boundary merely
+            # because a space follows it. Include preceding words in the test.
+            prefix = surface[:match.start() + 1]
+            if re.search(r"(?:\b(?:[A-Za-z]\.)+|\b(?:Mr|Mrs|Ms|Dr|Prof|vs|etc|Fig|No|Dec|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov)\.)$", prefix, re.I):
+                continue
+            if parser is None or normalized(parser(surface[:cut], env) + parser(surface[cut:], env)) == whole:
+                cuts.append(cut)
+        cuts.append(len(surface))
+        return [surface[start:end] for start, end in zip(cuts, cuts[1:]) if end > start]
+
+    @staticmethod
+    def _grounding_flat_list_lines(raw, token, env, parser):
+        """Admit exact physical item spans only for a parsed flat one-line list.
+
+        The root parser owns the item count and inline trees. A source regex
+        merely locates candidates; continuation lines, nested blocks, code and
+        cross-line inline nodes cannot pass this correspondence check.
+        """
+        items = token.get("children") or []
+        lines = raw.splitlines(keepends=True)
+        content = [line for line in lines if line.strip()]
+        if not items or len(content) != len(items):
+            return None
+        for line, item in zip(content, items):
+            children = item.get("children") or []
+            if (item.get("type") != "list_item" or len(children) != 1
+                    or children[0].get("type") not in {"paragraph", "block_text"}):
+                return None
+            match = re.fullmatch(r" {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+([^\r\n]*)(?:\r\n|\r|\n)?", line)
+            if not match:
+                return None
+            actual = ReportAgent._grounding_inline_signature(parser(match.group(1).strip(), env))
+            expected = ReportAgent._grounding_inline_signature(children[0].get("children") or [])
+            if actual != expected:
+                return None
+        return lines
+
+    @staticmethod
+    def _grounding_markdown_blocks(text: str):
+        """Map parsed root blocks back to exact original source slices.
+
+        Use the translator's Markdown dialect and reference environment, but
+        never reconstruct Markdown from its rendered nodes.
+        The offset map retains CRLF bytes and an absent terminal newline.
+        """
+        import mistune
+        from .model_translation import _PLUGINS
+
+        class PositionState(mistune.BlockState):
+            def add_paragraph(self, value):
+                old = len(self.tokens)
+                super().add_paragraph(value)
+                if len(self.tokens) > old:
+                    self.tokens[-1]["_start"] = self.cursor
+
+        class PositionParser(mistune.BlockParser):
+            state_cls = PositionState
+
+            def parse_method(self, match, state):
+                start = state.cursor
+                existing = {id(token) for token in state.tokens}
+                end = super().parse_method(match, state)
+                if end:
+                    for token in state.tokens:
+                        if id(token) not in existing:
+                            # A list may parse its following HTML block before
+                            # inserting itself. That following owner already has
+                            # its own root offset; never give it the list's span.
+                            token.setdefault("_start", start)
+                            token.setdefault("_end", end)
+                return end
+
+        parser = mistune.Markdown(block=PositionParser(), plugins=[
+            mistune.plugins.import_plugin(name) for name in _PLUGINS
+        ])
+        tokens, state = parser.parse(text)
+        offsets = [0]
+        cursor = 0
+        while cursor < len(text):
+            cursor += 2 if text[cursor:cursor + 2] == "\r\n" else 1
+            offsets.append(cursor)
+        starts = [(token.get("_start"), token) for token in tokens]
+        starts = [(offsets[min(start, len(offsets) - 1)], token)
+                  for start, token in starts if isinstance(start, int)]
+        if any(left[0] >= right[0] for left, right in zip(starts, starts[1:])):
+            raise ValueError("Quantitative grounding cannot preserve parsed block ownership")
+        if starts and starts[0][0] != 0:
+            starts.insert(0, (0, {"type": "unmapped"}))
+        if not starts and text:
+            starts = [(0, {"type": "unmapped"})]
+        return [(token["type"], text[start:end], token)
+                for (start, token), (end, _) in zip(starts, starts[1:] + [(len(text), None)])
+                if end > start], state.env, parser.inline
+
     def _repair_final_quantitative_grounding(
         self, md: str
     ) -> Tuple[str, Dict[str, Any]]:
@@ -5651,8 +5834,9 @@ class ReportAgent:
           surviving as false precision; unverifiable fragments remain visible
           and keep the unchanged gate failed.
 
-        Non-numeric analysis is retained.  The following citation finalizer and
-        read-only audit remain authoritative.
+        Non-numeric units are retained; mixed inline nodes remain atomic.
+        An unsafe edit raises before publication. The following citation
+        finalizer and read-only audit remain authoritative.
         """
         from .forecast_extractor import (
             BINARY_FORECAST_END_MARKER,
@@ -5661,18 +5845,16 @@ class ReportAgent:
             _NUMBER_RE as _number_re,
             audit_citation_grounding as _audit_grounding,
             authored_forecast_markers_balanced as _authored_markers_balanced,
-            format_markdown_table_row as _format_table_row,
             is_authored_forecast_heading as _is_authored_heading,
             is_markdown_table_delimiter as _is_table_delimiter,
             is_markdown_table_header as _is_table_header,
             markdown_fence_transition as _fence_transition,
             markdown_table_claim_context as _table_claim_context,
             markdown_table_cells as _table_cells,
-            split_markdown_claim_units as _claim_units,
         )
 
         text = str(md or "")
-        index_map = self._citation_index_or_fallback()
+        blocks, markdown_env, inline_parser = self._grounding_markdown_blocks(text)
 
         def _audit_external_claims(value: str) -> Dict[str, Any]:
             body = "\n".join(
@@ -5695,19 +5877,9 @@ class ReportAgent:
         except (TypeError, ValueError):
             threshold = 0.5
         coverage = float(before.get("resolved_coverage", 1.0) or 0.0)
-        if coverage >= threshold:
-            return text, {
-                "applied": False,
-                "before": before,
-                "after": before,
-                "citations_added": 0,
-                "sentences_removed": 0,
-                "table_rows_removed": 0,
-                "table_cells_cleared": 0,
-                "unverifiable_claims_preserved": 0,
-                "market_claims_preserved": 0,
-                "passed": True,
-            }
+        # Coverage is an audit result, not permission to bypass structural
+        # claim validation: its legacy splitter can attach a following claim
+        # to a bold sentence, or count a citation literal inside code/HTML.
 
         out_lines: List[str] = []
         in_authored_block = False
@@ -5734,16 +5906,41 @@ class ReportAgent:
             nonlocal sentences_removed
             nonlocal unverifiable_claims_preserved
             nonlocal market_claims_preserved
-            fragments = _claim_units(surface)
+            fragments = self._grounding_inline_units(surface, markdown_env, inline_parser)
             if not fragments:
                 return surface, False
             kept: List[str] = []
             removed_numeric = False
             for fragment in fragments:
-                if not _number_re.search(fragment):
+                nodes = inline_parser(fragment, markdown_env)
+
+                def visible(items):
+                    return "".join(
+                        node.get("raw", "") if node["type"] == "text"
+                        else visible(node.get("children") or [])
+                        for node in items
+                        if node["type"] not in {"codespan", "inline_html", "image"}
+                        and not (node["type"] == "link" and
+                                 (node.get("attrs") or {}).get("url", "").startswith("http")
+                                 and "".join(child.get("raw", "") for child in node.get("children", []))
+                                 == (node.get("attrs") or {}).get("url"))
+                    )
+
+                if not _number_re.search(_source_citation_re.sub("", visible(nodes))):
                     kept.append(fragment)
                     continue
-                if _source_citation_re.search(fragment):
+                visible_text = visible(nodes)
+                if _source_citation_re.search(visible_text):
+                    # Atomic formatting or HTML is not a citation-scope
+                    # exemption. If a node joins separately auditable claims,
+                    # do not let a neighbor's citation authorize its numbers.
+                    visible_claims = self._grounding_inline_units(
+                        visible_text, markdown_env
+                    )
+                    if any(_number_re.search(_source_citation_re.sub("", claim))
+                           and not _source_citation_re.search(claim)
+                           for claim in visible_claims):
+                        raise ValueError("Quantitative grounding cannot preserve structure and independent citation scope")
                     kept.append(fragment)
                     continue
                 claim_for_support = " ".join(
@@ -5753,7 +5950,8 @@ class ReportAgent:
                     claim_for_support
                 )
                 if tag:
-                    kept.append(fragment.rstrip() + f" [{tag}]")
+                    trailing = fragment[len(fragment.rstrip()):]
+                    kept.append(fragment.rstrip() + f" [{tag}]" + trailing)
                     citations_added += 1
                 elif status == "market_supported":
                     # i7：市场语境 + 快照价精确命中 ⇒ 机器抓取的真价，保留原句、
@@ -5765,47 +5963,106 @@ class ReportAgent:
                     kept.append(fragment)
                     unverifiable_claims_preserved += 1
                 else:
+                    def carries_immutable(items):
+                        return any(node["type"] in {"codespan", "inline_html", "image"}
+                                   or carries_immutable(node.get("children") or [])
+                                   for node in items)
+                    if carries_immutable(nodes):
+                        raise ValueError("Quantitative grounding cannot remove an unsupported claim without losing code/HTML/image structure")
                     sentences_removed += 1
                     removed_numeric = True
-            return " ".join(kept), removed_numeric
+            repaired_surface = "".join(kept)
+            expected_nodes = [node for fragment in kept for node in inline_parser(fragment, markdown_env)]
+            if self._grounding_inline_signature(inline_parser(repaired_surface, markdown_env)) != self._grounding_inline_signature(expected_nodes):
+                raise ValueError("Quantitative grounding cannot preserve surviving inline structure")
+            return repaired_surface, removed_numeric
 
-        for line_index, line in enumerate(lines):
+        # Root blocks supply paragraph boundaries across physical lines. Opaque
+        # carriers are copied, not mistaken for prose by a per-line regex.
+        grouped_lines = []
+        def descendant_carrier(nodes):
+            return any(node["type"] in {"block_code", "block_html", "table"}
+                       or descendant_carrier(node.get("children") or []) for node in nodes)
+
+        for kind, raw, token in blocks:
+            if kind in {"block_code", "block_html", "blank_line", "unmapped"}:
+                grouped_lines.append((raw, True, kind, None))
+            elif kind == "heading":
+                grouped_lines.append((raw, False, kind, token))
+            elif kind == "paragraph":
+                grouped_lines.append((raw, False, kind, None))
+            elif kind == "list" and (item_lines := self._grounding_flat_list_lines(
+                raw, token, markdown_env, inline_parser
+            )) is not None:
+                # Each item is a separately parsed source unit, so one item
+                # can be removed without guessing offsets in a sibling node.
+                grouped_lines.extend((line, False, kind, None) for line in item_lines)
+            elif kind in {"list", "block_quote"} and (
+                len(raw.rstrip().splitlines()) > 1 or descendant_carrier(token.get("children") or [])
+            ):
+                # Nested container source offsets are local to their parser
+                # states. Do not guess offsets in the root source.
+                grouped_lines.append((raw, False, "container", None))
+            else:
+                grouped_lines.extend((line, False, kind, None) for line in raw.splitlines(keepends=True))
+
+        line_index = 0
+        for raw, opaque, kind, heading_token in grouped_lines:
+            line = raw.rstrip("\r\n")
+            ending = raw[len(line):]
             stripped = line.strip()
+            current_line_index = line_index
+            line_index += len(raw.splitlines())
+            if heading_token is not None:
+                if (heading_token.get("attrs") or {}).get("level") == 2:
+                    def heading_text(nodes):
+                        return "".join(node.get("raw", "") if node["type"] in {"text", "codespan"}
+                                       else heading_text(node.get("children") or []) for node in nodes)
+                    heading = "## " + heading_text(heading_token.get("children") or []).strip()
+                    if not in_authored_block:
+                        in_authored_section = _is_authored_heading(heading)
+                    in_references = heading in _REFS_HEADINGS
+                active_table_headers = []
+                out_lines.append(raw)
+                continue
+            if opaque and stripped not in {BINARY_FORECAST_START_MARKER, BINARY_FORECAST_END_MARKER}:
+                out_lines.append(raw)
+                continue
             was_in_fence = fence_state is not None
             fence_state, is_fence_line = _fence_transition(line, fence_state)
             if is_fence_line:
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if was_in_fence:
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if stripped == BINARY_FORECAST_START_MARKER:
                 in_authored_block = authored_markers_valid
                 in_authored_section = False
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if stripped == BINARY_FORECAST_END_MARKER:
                 in_authored_block = False
                 in_authored_section = False
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if stripped.startswith("## "):
                 if not in_authored_block:
                     in_authored_section = _is_authored_heading(stripped)
                 in_references = stripped in _REFS_HEADINGS
                 active_table_headers = []
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
 
-            table_cells = _table_cells(line)
-            table_header = _is_table_header(lines, line_index)
+            table_cells = _table_cells(line) if kind == "table" else []
+            table_header = _is_table_header(lines, current_line_index) if kind == "table" else False
             table_delimiter = _is_table_delimiter(line)
             if table_header:
                 active_table_headers = table_cells
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if table_delimiter:
-                out_lines.append(line)
+                out_lines.append(raw)
                 continue
             if (
                 in_authored_block
@@ -5819,12 +6076,35 @@ class ReportAgent:
             ):
                 if not stripped or (stripped and not table_cells):
                     active_table_headers = []
-                out_lines.append(line)
+                out_lines.append(raw)
+                continue
+
+            if kind == "container":
+                # An unsafe repair must prevent publication, rather than publish
+                # half a list/blockquote or silently exempt its numeric claims.
+                candidate, _ = _repair_fragments(line)
+                if candidate != line:
+                    raise ValueError("Quantitative grounding cannot safely edit this list/blockquote container")
+                out_lines.append(raw)
                 continue
 
             if table_cells:
-                repaired_cells: List[str] = []
-                for cell_index, cell in enumerate(table_cells):
+                # Keep original pipe, whitespace, escape and inline-code bytes.
+                separators = list(re.finditer(r"(?<!\\)\|", line))
+                left, right = len(line) - len(line.lstrip()), len(line.rstrip())
+                start = left + 1 if line[left:left + 1] == "|" else left
+                end = right - 1 if line[right - 1:right] == "|" else right
+                bounds = [start - 1] + [m.start() for m in separators if start <= m.start() < end] + [end]
+                spans = [(start + 1, end) for start, end in zip(bounds, bounds[1:])]
+                row_nodes = inline_parser(line, markdown_env)
+                def has_code_pipe(nodes):
+                    return any((node["type"] == "codespan" and "|" in node.get("raw", ""))
+                               or has_code_pipe(node.get("children") or []) for node in nodes)
+                if len(spans) != len(table_cells) or has_code_pipe(row_nodes):
+                    raise ValueError("Quantitative grounding cannot safely edit this table row")
+                edits = []
+                for cell_index, (start, end) in enumerate(spans):
+                    cell = line[start:end]
                     context = _table_claim_context(
                         active_table_headers,
                         table_cells,
@@ -5838,21 +6118,26 @@ class ReportAgent:
                     if removed_numeric and not repaired_cell.strip():
                         repaired_cell = "—"
                         table_cells_cleared += 1
-                    repaired_cells.append(repaired_cell)
-                out_lines.append(_format_table_row(line, repaired_cells))
+                    if repaired_cell != cell:
+                        leading = cell[:len(cell) - len(cell.lstrip())]
+                        trailing = cell[len(cell.rstrip()):]
+                        edits.append((start, end, leading + repaired_cell.strip() + trailing))
+                for start, end, replacement in reversed(edits):
+                    line = line[:start] + replacement + line[end:]
+                out_lines.append(line + ending)
                 continue
 
             active_table_headers = []
             prefix = ""
             body = line
-            list_match = re.match(r"^(\s*(?:[-*+] |\d+[.)] ))(.*)$", line)
+            list_match = re.match(r"^(\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])[ \t]+)?)(.*)$", line, re.S)
             if list_match:
                 prefix, body = list_match.group(1), list_match.group(2)
             repaired_body, _ = _repair_fragments(body)
             if repaired_body:
-                out_lines.append(prefix + repaired_body)
+                out_lines.append(prefix + repaired_body + ending)
 
-        repaired = "\n".join(out_lines)
+        repaired = "".join(out_lines)
         after = _audit_external_claims(repaired)
         after_coverage = float(after.get("resolved_coverage", 1.0) or 0.0)
         diagnostics = {
@@ -11315,6 +11600,7 @@ class ReportAgent:
     ) -> Dict[str, Any]:
         """Run the authoritative audit and convert execution failure into a hard stop."""
         try:
+            self._bound_forecast_task_snapshot()
             self._prepare_forecast_track_record(report_id, report)
             audit = self._audit_final_published_markdown(report_id, report)
             self._require_final_publish_audit(audit)

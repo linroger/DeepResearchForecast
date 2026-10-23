@@ -9,6 +9,7 @@ import os
 import socket
 import sys
 from copy import deepcopy
+from dataclasses import asdict
 
 import httpx
 import pytest
@@ -64,7 +65,15 @@ def _mock_actor_context_external_calls(monkeypatch):
     def unexpected_call(*_args, **_kwargs):
         raise AssertionError("actor context regression must not invoke LLM/network")
 
-    monkeypatch.setattr(LLMClient, "chat", unexpected_call)
+    def task_only(*args, **kwargs):
+        from tests.forecast_task_fakes import task_protocol
+        messages = kwargs.get("messages") or []
+        task = task_protocol(messages[-1]["content"]) if messages else None
+        if task is not None:
+            return json.dumps(task)
+        return unexpected_call(*args, **kwargs)
+
+    monkeypatch.setattr(LLMClient, "chat", task_only)
     monkeypatch.setattr(LLMClient, "chat_json", unexpected_call)
     monkeypatch.setattr(httpx.Client, "send", unexpected_call)
     monkeypatch.setattr(httpx.AsyncClient, "send", unexpected_call)
@@ -1153,11 +1162,17 @@ def _prepare_offline_simulation(tmp_path, monkeypatch) -> tuple[SimulationManage
             )
 
     def fake_generate_config(self, **kwargs):
+        # The actor-context fixture substitutes config synthesis only. Carry the
+        # real reviewed task admitted by the manager, rather than discarding it.
+        admitted = self._admitted_forecast
         return SimulationParameters(
             simulation_id=kwargs["simulation_id"],
             project_id=kwargs["project_id"],
             graph_id=kwargs["graph_id"],
             simulation_requirement=kwargs["simulation_requirement"],
+            as_of_date=admitted[1].as_of_date,
+            temporal_config=asdict(admitted[1]),
+            forecast_task=admitted[2],
             agent_configs=[
                 AgentActivityConfig(
                     agent_id=index,

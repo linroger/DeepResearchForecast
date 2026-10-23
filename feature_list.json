@@ -323,5 +323,17 @@
       "Skip non-simulation files during orphan inventory; preserve completed run artifacts and verify guarded native regressions and independent review."
     ],
     "passes": true
+  },
+  {
+    "id": "root_forecast_task_arbiter_and_grounding",
+    "category": "workflow-integrity",
+    "description": "Default forecast preparation pins a reviewed typed objective, arbitration validates transactions before mutation, and primary grounding preserves parsed source structure.",
+    "steps": [
+      "Extract and separately verify the original task endpoint once, seal its source/budget/clock identity, reject contradictory or stale preparation, and validate runtime/report consumers including restart.",
+      "Reject malformed arbiter proposals atomically; permit one correction and preserve deterministic-only failure, exact commitment ownership and typed durable audit attempts.",
+      "Reproduce primary Markdown corruption from valid writer output and repair only parser-confirmed source spans while retaining quantitative/citation/publication gates.",
+      "Verify native producer-to-publication/API/export controls, independent regressions, historical preservation, and safe local activation with peer work preserved."
+    ],
+    "passes": false
   }
 ]

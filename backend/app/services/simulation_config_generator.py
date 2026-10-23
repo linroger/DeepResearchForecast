@@ -15,9 +15,10 @@ import math
 import os
 import random
 import re
+from copy import deepcopy
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import date, datetime
 
 from ..config import Config
 from ..utils import sim_timeline
@@ -49,6 +50,7 @@ from .actor_context import (
     is_hard_public_relationship,
     normalize_evidence_gap_map,
 )
+from .forecast_task import bind_task, validate_task_calendar, ForecastTaskError, KEY as FORECAST_TASK_KEY, _sha as task_digest
 from .actor_role_prompt import (
     delimit_untrusted_research_text,
     sanitize_untrusted_dossier_text,
@@ -369,6 +371,7 @@ class SimulationParameters:
     # schema_version=1）。运行侧只按该块是否存在分派新旧路径；None → to_dict() 省略字段
     # （小时制 / SIM_TEMPORAL_MODE=hours 时配置 JSON 与今日逐字节一致）。
     temporal_config: Optional[Dict[str, Any]] = None
+    forecast_task: Optional[Dict[str, Any]] = None
 
     # 模拟内容的输出语言（English / Chinese）。运行脚本据此要求 agent 用该语言发帖与回应，
     # 世界简报用对应语言的标题。空串 → to_dict() 省略字段（旧配置逐字节不变）。
@@ -415,6 +418,9 @@ class SimulationParameters:
             data["output_language"] = self.output_language
         if self.world_model:
             data["world_model"] = self.world_model
+        if self.forecast_task is not None:
+            data[FORECAST_TASK_KEY] = self.forecast_task
+            validate_task_calendar(data)
         return data
     
     def to_json(self, indent: int = 2) -> str:
@@ -467,6 +473,113 @@ class SimulationConfigGenerator:
             model=self.model_name,
         )
     
+    @staticmethod
+    def _task_request(requirement, actors, max_rounds):
+        sources = actors if isinstance(actors, dict) else {}
+        return {"question": requirement, "as_of_date": str(sources.get("as_of_date") or ""),
+                "central_question": str(sources.get("central_question") or ""),
+                "declared_horizon": str(sources.get("forecast_horizon") or sources.get("horizon") or ""),
+                "max_rounds": max_rounds}
+
+    def _call_task_json(self, prompt, system_prompt):
+        """One task phase, strict decoding; never repair invented/truncated data."""
+        try:
+            content = self.llm.chat(messages=[{"role": "system", "content": system_prompt},
+                                              {"role": "user", "content": prompt}],
+                                    response_format={"type": "json_object"}, temperature=0.1, max_tokens=2048)
+        except Exception as exc:
+            raise ForecastTaskError(f"forecast task model unavailable ({type(exc).__name__})") from None
+        def unique(items):
+            result = {}
+            for key, value in items:
+                if key in result:
+                    raise ValueError("duplicate task field")
+                result[key] = value
+            return result
+        def invalid_constant(value):
+            raise ValueError("nonfinite task value")
+        try:
+            result = json.loads(content, object_pairs_hook=unique, parse_constant=invalid_constant)
+        except (ValueError, TypeError):
+            raise ForecastTaskError("forecast task phase returned invalid JSON") from None
+        if not isinstance(result, dict):
+            raise ForecastTaskError("forecast task phase must return an object")
+        return result
+
+    def admit_forecast_task(self, requirement, actors=None, max_rounds=None):
+        """Extract/review one task before graph/persona work; do not infer again."""
+        self._admitted_forecast = None
+        if str(getattr(Config, "SIM_TEMPORAL_MODE", "hours")).strip().lower() != "calendar":
+            self._admitted_forecast = None
+            return None
+        if max_rounds is not None and type(max_rounds) is not int:
+            raise ForecastTaskError("forecast round budget must be an integer")
+        request = self._task_request(requirement, actors, max_rounds)
+        try:
+            raw_baseline = request["as_of_date"]
+            try:
+                as_of = date.fromisoformat(raw_baseline) if raw_baseline else datetime.now().date()
+            except ValueError:
+                raise ForecastTaskError("task baseline must be a valid complete ISO date") from None
+            if raw_baseline and as_of.isoformat() != raw_baseline:
+                raise ForecastTaskError("task baseline must be a valid complete ISO date")
+            inputs = {"requirement": str(requirement or ""), "as_of_date": as_of.isoformat(),
+                      "central_question": request["central_question"], "declared_horizon": request["declared_horizon"],
+                      "baseline_defaulted": not bool(raw_baseline)}
+            if len(json.dumps(inputs, ensure_ascii=False)) > self.MAX_CONTEXT_LENGTH:
+                raise ForecastTaskError("forecast task exceeds bounded input size")
+            extraction_prompt = ("FORECAST TASK EXTRACTION\n" + json.dumps(inputs, ensure_ascii=False) + "\n\n"
+                'Return only JSON {"horizon_date":"YYYY-MM-DD","source_field":"requirement|central_question|declared_horizon",'
+                '"source_quote":"exact supporting input substring"}. Interpret the overall forecast objective, '
+                'not baseline/history dates or secondary binary milestones. The original requirement wins over '
+                'conflicting derived hints. If no endpoint is specified or inferable, use null for horizon_date. '
+                'Do not invent a default or rewrite the request. Dates must be complete ISO calendar dates.')
+            candidate = self._call_task_json(extraction_prompt, "Extract the forecast task as typed JSON.")
+            if not isinstance(candidate, dict) or set(candidate) != {"horizon_date", "source_field", "source_quote"}:
+                raise ForecastTaskError("forecast endpoint is unresolved; task extraction fields are invalid")
+            raw_date, source_field, quote = (candidate[key] for key in ("horizon_date", "source_field", "source_quote"))
+            if (not isinstance(raw_date, str) or source_field not in {"requirement", "central_question", "declared_horizon"}
+                    or not isinstance(quote, str) or not quote.strip() or quote not in inputs[source_field]):
+                raise ForecastTaskError("forecast endpoint is unresolved or lacks exact source evidence")
+            endpoint = date.fromisoformat(raw_date)
+            if endpoint.isoformat() != raw_date or not as_of < endpoint <= sim_timeline._add_months(as_of, 360):
+                raise ForecastTaskError("forecast endpoint is outside the valid task window")
+            review_prompt = ("FORECAST TASK REVIEW\n" + json.dumps({"inputs": inputs, "candidate": candidate}, ensure_ascii=False)
+                + '\n\nReturn only JSON {"faithful":true|false,"complete":true|false,"issues":[]}. '
+                'Independently check that this endpoint is the overall original forecast target, not the baseline, '
+                'an example or an intermediate milestone. A source quote must actually support the proposed date. '
+                'Reject conflicts with the original request, invented deadlines, or missing/ambiguous endpoints.')
+            verdict = self._call_task_json(review_prompt, "Review the proposed objective against the original task.")
+            if (not isinstance(verdict, dict) or set(verdict) != {"faithful", "complete", "issues"}
+                    or verdict.get("faithful") is not True or verdict.get("complete") is not True
+                    or verdict.get("issues") != []):
+                raise ForecastTaskError("forecast endpoint failed independent semantic review")
+            review = {**candidate, **verdict, "inputs_sha256": task_digest(inputs)}
+            target_max = int(getattr(Config, "SIM_CALENDAR_TARGET_MAX_ROUNDS", 36) or 36)
+            oasis_cap = int(getattr(Config, "OASIS_DEFAULT_MAX_ROUNDS", 0) or 0)
+            explicit_cap = (max_rounds is not None and max_rounds > 0) or oasis_cap > 0
+            if max_rounds is not None and max_rounds > 0:
+                target_max = min(target_max, max_rounds)
+            if oasis_cap > 0:
+                target_max = min(target_max, oasis_cap)
+            hard_limit = int(getattr(Config, "SIM_CALENDAR_HARD_MAX_ROUNDS", 48) or 48)
+            timeline = sim_timeline.build_timeline(
+                as_of, sim_timeline.HorizonResult(raw_date, "llm", quote, False, 0.7), target_max,
+                reference_max=int(getattr(Config, "SIM_CALENDAR_TARGET_MAX_ROUNDS", 36) or 36),
+                hard_max=hard_limit, strict_round_cap=explicit_cap)
+            if not raw_baseline:
+                timeline.warnings.append("as_of_defaulted")
+            task = bind_task(requirement, asdict(timeline), central_question=request["central_question"],
+                             declared_horizon=request["declared_horizon"],
+                             round_limit=min(hard_limit, timeline.target_max_rounds) if explicit_cap else hard_limit,
+                             semantic_review=review)
+        except ForecastTaskError:
+            raise
+        except Exception as exc:
+            raise ForecastTaskError(f"calendar preparation failed ({type(exc).__name__})") from exc
+        self._admitted_forecast = (request, deepcopy(timeline), deepcopy(task))
+        return deepcopy(task)
+
     def generate_config(
         self,
         simulation_id: str,
@@ -564,11 +677,16 @@ class SimulationConfigGenerator:
         # 是否存在分派新旧路径）。hours / 构建失败 → temporal_timeline=None，下方所有
         # 分支走旧小时制路径（字节不变，degrade-safe）。
         temporal_timeline = None
+        forecast_task = None
         if str(getattr(Config, "SIM_TEMPORAL_MODE", "hours") or "").strip().lower() == "calendar":
             try:
-                temporal_timeline = self._build_temporal_timeline(
-                    simulation_requirement, actors, context, max_rounds
-                )
+                admitted = getattr(self, "_admitted_forecast", None)
+                if admitted is None:
+                    self.admit_forecast_task(simulation_requirement, actors, max_rounds)
+                    admitted = self._admitted_forecast
+                if admitted[0] != self._task_request(simulation_requirement, actors, max_rounds):
+                    raise ForecastTaskError("forecast task inputs changed after admission")
+                temporal_timeline, forecast_task = deepcopy(admitted[1:])
                 logger.info(
                     f"日历时间线: {temporal_timeline.unit}×{temporal_timeline.n_rounds} 轮 "
                     f"({temporal_timeline.as_of_date} → {temporal_timeline.horizon_date}, "
@@ -578,9 +696,12 @@ class SimulationConfigGenerator:
                     f"日历时间线: {temporal_timeline.unit}×{temporal_timeline.n_rounds} 轮, "
                     f"判定日 {temporal_timeline.horizon_date}（{temporal_timeline.horizon_source}）"
                 )
+            except ForecastTaskError:
+                raise
             except Exception as e:
-                logger.warning(f"日历时间线构建失败（降级回小时制路径）: {e}")
-                temporal_timeline = None
+                raise ForecastTaskError(f"calendar preparation failed ({type(e).__name__})") from e
+        elif getattr(self, "_admitted_forecast", None) is not None:
+            raise ForecastTaskError("calendar mode changed after forecast task admission")
         self._temporal_timeline = temporal_timeline
 
         # ========== 步骤1: 生成时间配置 ==========
@@ -782,11 +903,15 @@ class SimulationConfigGenerator:
                     simulation_requirement, actors, all_agent_configs, actor_context_packs,
                     temporal_timeline, simulation_id,
                 )
+                if forecast_task is not None and not world_model_block:
+                    raise ForecastTaskError("requested world model was not produced for the admitted task")
                 if world_model_block:
                     from .world_model_seed import world_model_seed_summary
                     reasoning_parts.append(world_model_seed_summary(world_model_block))
                     logger.info(world_model_seed_summary(world_model_block))
             except Exception as e:
+                if forecast_task is not None:
+                    raise ForecastTaskError(f"world model preparation failed ({type(e).__name__})") from e
                 logger.warning(f"world model seed failed (legacy evolution path keeps running): {e}")
                 world_model_block = None
 
@@ -826,13 +951,15 @@ class SimulationConfigGenerator:
             event_config=event_config,
             twitter_config=twitter_config,
             reddit_config=reddit_config,
-            as_of_date=(str((actors or {}).get("as_of_date")) if isinstance(actors, dict) and actors.get("as_of_date") else None),
+            as_of_date=(temporal_timeline.as_of_date if temporal_timeline is not None else
+                        str(actors["as_of_date"]) if isinstance(actors, dict) and actors.get("as_of_date") else None),
             world_brief=world_brief,
             output_language=getattr(self, "_output_language", "") or "",
             world_model=world_model_block,
             # TEMPORAL spec §3: beyond_horizon_events/warnings 已在 _build_scheduled_events
             # 中回填到 timeline，此处一次性序列化（None → to_dict 省略字段）。
             temporal_config=(asdict(temporal_timeline) if temporal_timeline is not None else None),
+            forecast_task=forecast_task,
             llm_provider=self.provider,
             llm_model=self.model_name,
             llm_base_url=self.base_url,
@@ -841,6 +968,7 @@ class SimulationConfigGenerator:
         
         logger.info(f"模拟配置生成完成: {len(params.agent_configs)} 个Agent配置")
 
+        self._admitted_forecast = None
         return params
 
     # 每个 agent 从图谱邻边最多派生的关注数（防止稠密图把关注表撑爆）
@@ -1004,7 +1132,24 @@ class SimulationConfigGenerator:
         # 时域（SIM_HORIZON_MIN_DAYS，默认 60 天）即视为新闻窗伪命中，交给 LLM 兜底
         # 判断真实判定日。该跑因此把「两场战争何时结束」的多年级问题压成了 9 天日粒度。
         cq = str(actors.get("central_question", "") or "") if isinstance(actors, dict) else ""
+        dossier_horizon = str(actors.get("forecast_horizon") or actors.get("horizon") or "") if isinstance(actors, dict) else ""
+        # Endpoint interpretation sees task fields only, in full. Market dates,
+        # document events and context truncation cannot become task authority.
+        task_context = (f"USER FORECAST REQUEST:\n{simulation_requirement}\n\n"
+                        f"BASELINE DATE: {as_of.isoformat()}\n"
+                        f"DERIVED CENTRAL QUESTION:\n{cq}\n"
+                        f"DECLARED FORECAST HORIZON:\n{dossier_horizon}")
         horizon = sim_timeline.extract_horizon(simulation_requirement, as_of)
+        if horizon is not None and horizon.source == "anchored_period":
+            candidate_date = date.fromisoformat(horizon.horizon_date)
+            alternatives = [sim_timeline.extract_horizon(text, as_of) for text in (cq, dossier_horizon) if text]
+            if (candidate_date - as_of).days < 60 and any(
+                    alternative and alternative.horizon_date != horizon.horizon_date
+                    and (date.fromisoformat(alternative.horizon_date) - as_of).days >= 60
+                    for alternative in alternatives):
+                horizon = self._llm_extract_horizon(task_context, as_of)
+                if horizon is None:
+                    raise ForecastTaskError("conflicting baseline and forecast endpoint; explicit task horizon required")
         if horizon is None and cq:
             cq_horizon = sim_timeline.extract_horizon(cq, as_of)
             if cq_horizon is not None:
@@ -1025,11 +1170,10 @@ class SimulationConfigGenerator:
         if horizon is None and isinstance(actors, dict):
             # An explicit dossier endpoint survives the central-question news-window
             # filter and precedes any model/default replacement. User dates still win.
-            dossier_horizon = actors.get("forecast_horizon") or actors.get("horizon")
-            if isinstance(dossier_horizon, str):
+            if dossier_horizon:
                 horizon = sim_timeline.extract_horizon(dossier_horizon, as_of)
         if horizon is None:
-            horizon = self._llm_extract_horizon(context, as_of)
+            horizon = self._llm_extract_horizon(task_context, as_of)
         if horizon is None:
             horizon = sim_timeline.default_horizon(
                 as_of, int(getattr(Config, "SIM_HORIZON_DEFAULT_MONTHS", 12) or 12)
@@ -1067,17 +1211,20 @@ class SimulationConfigGenerator:
         且必须落在 (as_of, as_of+30年] 内，否则丢弃返回 None（继续降级到默认时域）。
         任何调用/解析异常 → None，绝不阻断配置生成。
         """
-        context_truncated = context[:self.TIME_CONFIG_CONTEXT_LENGTH]
+        if len(context) > self.MAX_CONTEXT_LENGTH:
+            raise ForecastTaskError("forecast task exceeds the endpoint resolver's bounded input size")
         prompt = f"""从以下预测问题与背景材料中找出「预测判定日」（问题所问的结果应在哪一天之前见分晓）。
 
-{context_truncated}
+{context}
 
 ## 任务
 只返回JSON（不要markdown）：
-{{"horizon_date": "YYYY-MM-DD"}}
+{{"horizon_date": "YYYY-MM-DD", "source_quote": "任务原文中明确支持该判定日的逐字片段"}}
 
 规则：
 - 优先取问题文本中明示的期限/日期；只给年份时取该年12月31日
+- 区分基准日、历史数据日期、次要二元预测的里程碑日期与整体预测判定日
+- source_quote 必须逐字来自任务字段，不能编造或引入背景事件日期
 - 材料中找不到任何期限线索时返回 {{"horizon_date": null}}
 - 不要编造：宁可返回 null 也不要猜一个没有依据的日期"""
         system_prompt = "你是预测问题分析专家。返回纯JSON格式。"
@@ -1086,15 +1233,21 @@ class SimulationConfigGenerator:
         except Exception as e:
             logger.warning(f"判定日LLM兜底失败: {e}")
             return None
-        parsed = parse_as_of((result or {}).get("horizon_date"))
-        if parsed is None:
+        if not isinstance(result, dict):
             return None
-        d = parsed.date()
+        raw_date, quote = result.get("horizon_date"), result.get("source_quote")
+        try:
+            d = date.fromisoformat(raw_date) if isinstance(raw_date, str) else None
+        except ValueError:
+            return None
+        if (d is None or d.isoformat() != raw_date or not isinstance(quote, str)
+                or not quote.strip() or quote not in context):
+            return None
         limit = sim_timeline._add_months(as_of, 360)  # as_of + 30 年（真日历加法）
         if not (as_of < d <= limit):
             logger.warning(f"判定日LLM兜底越界丢弃: {d.isoformat()} (as_of={as_of.isoformat()})")
             return None
-        return sim_timeline.HorizonResult(d.isoformat(), "llm", "", False, 0.7)
+        return sim_timeline.HorizonResult(d.isoformat(), "llm", quote, False, 0.7)
 
     def _build_scheduled_events(
         self,

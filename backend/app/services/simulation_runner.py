@@ -550,6 +550,22 @@ class SimulationRunner:
         
         if not os.path.exists(config_path):
             raise ValueError("模拟配置不存在，请先调用 /prepare 接口")
+        # Validate before log rotation, resume admission or process creation.
+        from .forecast_task import validate_task_calendar
+        with open(config_path, encoding="utf-8") as task_handle:
+            task_config = json.load(task_handle)
+        task_state_path = os.path.join(sim_dir, "state.json")
+        if os.path.isfile(task_state_path):
+            with open(task_state_path, encoding="utf-8") as task_handle:
+                task_state = json.load(task_handle)
+            if "forecast_task_version" in task_state:
+                from .forecast_task import VERSION, KEY, ForecastTaskError
+                if (task_state["forecast_task_version"] != VERSION or task_state.get("config_generated") is not True
+                        or KEY not in task_config):
+                    raise ForecastTaskError("current forecast task preparation has not completed")
+        validate_task_calendar(task_config)
+        calendar_execution = (isinstance(task_config.get("temporal_config"), dict)
+                              and task_config["temporal_config"].get("mode") == "calendar")
 
         # LOOP-011: a researched cast is executable only while the exact
         # profile/role manifests still match the prepared artifacts. This check
@@ -815,6 +831,11 @@ class SimulationRunner:
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             raise ValueError(f"角色提示词完整性校验失败: {exc}") from exc
 
+        if calendar_execution and current_v1_authority:
+            from .forecast_task import KEY, ForecastTaskError
+            if KEY not in task_config:
+                raise ForecastTaskError("researched calendar needs task-bound PREPARE before a new execution")
+
         # RUN-7: 断点续跑（默认关，SIM_RESUME=true 开启）。resume=None 时自动判定：
         # 仅当上次运行未 COMPLETED 且存在轮级检查点才续跑（COMPLETED 后的重跑视为要全新结果）。
         # 续跑时保留 actions.jsonl / 模拟 DB / 检查点，让子进程从上次完成的轮次继续。
@@ -829,7 +850,7 @@ class SimulationRunner:
             resume_requested = bool(resume)
         # 仅 parallel 脚本支持 --resume/检查点；单平台脚本（run_twitter/reddit_simulation.py）
         # 的 argparse 不认识该参数，传入会直接 exit(2)。
-        if resume_requested and platform != "parallel":
+        if resume_requested and platform != "parallel" and not calendar_execution:
             logger.info(f"[{simulation_id}] 单平台运行不支持续跑（{platform}）→ 全新运行")
             resume_requested = False
         resume_from_round = cls._resume_checkpoint_round(sim_dir) if resume_requested else None
@@ -943,6 +964,10 @@ class SimulationRunner:
             state.reddit_running = True
             state.twitter_enabled = True
             state.reddit_enabled = True
+        # One calendar engine for every platform selection. The old standalone
+        # scripts advance hours and must never reinterpret a task-bound calendar.
+        if calendar_mode:
+            script_name = "run_parallel_simulation.py"
         
         script_path = os.path.join(cls.SCRIPTS_DIR, script_name)
         
@@ -968,6 +993,8 @@ class SimulationRunner:
             ]
             if script_name == "run_parallel_simulation.py" and config_seal_manifest_sha:
                 cmd.extend(["--config-seal", config_seal_manifest_sha])
+            if calendar_mode and platform in {"twitter", "reddit"}:
+                cmd.append(f"--{platform}-only")
             
             # 如果指定了最大轮数，添加到命令行参数
             if max_rounds is not None and max_rounds > 0:

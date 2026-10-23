@@ -1304,6 +1304,17 @@ def _validate_actor_intelligence_contract(
     return dict(contract)
 
 
+def validate_actor_context_inputs(actors: Mapping[str, Any], report_text: str) -> None:
+    """Validate mandatory producer evidence before any paid preparation call."""
+    if not isinstance(actors, Mapping):
+        raise ValueError("actors dossier must be an object")
+    contract = _validate_actor_intelligence_contract(actors, report_text)
+    if contract is not None:
+        for actor in actors.get("actors") or []:
+            if isinstance(actor, Mapping):
+                _validate_intelligence_as_of(actor, actors.get("as_of_date"))
+
+
 def build_actor_context_pack(
     actors: Mapping[str, Any],
     actor: Mapping[str, Any],

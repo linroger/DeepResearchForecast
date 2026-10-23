@@ -45,6 +45,10 @@ def prepare_env(tmp_path, monkeypatch):
 
         def chat(self, messages, **_kwargs):
             calls.append(deepcopy(messages))
+            from tests.forecast_task_fakes import task_protocol
+            task = task_protocol(messages[-1]["content"])
+            if task is not None:
+                return json.dumps(task)
             # A response, not a substitute for a producer. Real retry/parser,
             # timeline fallback, event compiler and config builder still run.
             return json.dumps({
@@ -236,7 +240,7 @@ def test_prepare_rejects_invalid_inputs_before_generation(prepare_env, kind):
         dossier["actors"][1]["actor_id"] = dossier["actors"][0]["actor_id"]
     else:
         dossier["actors"][0]["intelligence"]["dimensions"]["current_actions"][0]["as_of_date"] = "2027-01-01"
-    with pytest.raises((ValueError, RuntimeError), match="fingerprint mismatch|missing from simulation cast|exceeds as-of cutoff"):
+    with pytest.raises((ValueError, RuntimeError), match="fingerprint mismatch|missing from simulation cast|duplicate actor identities|exceeds as-of cutoff"):
         _prepare(dossier)
     assert prepare_env == []
 
@@ -268,13 +272,17 @@ def test_direct_prepare_argument_omission_reaches_actual_generator_prompts(prepa
     manager = SimulationManager()
     question = "电网许可是否会推动项目投产？"
     created = manager.create_simulation("audit-direct", "audit-graph", enable_twitter=False, enable_reddit=True)
-    missing = manager.prepare_simulation(created.simulation_id, question, REPORT,
-                                         use_llm_for_profiles=False)
-    _, missing_config = _config(manager, missing)
+    from app.services.forecast_task import ForecastTaskError
+    # Missing task metadata now fails before sealing instead of inventing a
+    # one-year endpoint. Keep the real successful bound control below.
+    with pytest.raises(ForecastTaskError, match="unresolved"):
+        manager.prepare_simulation(created.simulation_id, question, REPORT,
+                                   use_llm_for_profiles=False)
+    missing = manager.get_simulation(created.simulation_id)
     omitted_calls = json.dumps(prepare_env, ensure_ascii=False)
     assert dossier["forecast_horizon"] not in omitted_calls
     assert missing.actor_context_count == missing.actor_role_count == 0
-    assert missing_config["output_language"] != "English"
+    assert missing.status == SimulationStatus.FAILED
 
     prepare_env.clear()
     bound = manager.prepare_simulation(created.simulation_id, question, REPORT,

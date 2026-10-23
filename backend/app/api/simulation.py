@@ -2147,7 +2147,74 @@ WORLD_STATE_MAX_BYTES = 8 * 1024 * 1024
 WORLD_STATE_MAX_HISTORY = 200
 WORLD_STATE_MAX_EVENTS = 40
 WORLD_STATE_MAX_PROBLEMS = 12      # arbiter problems kept per history row (the kernel records at most 12)
+WORLD_STATE_MAX_ARBITER_ATTEMPTS = 2
 WORLD_STATE_MAX_DIGEST = 20000     # 2026-10-21: digest 不截断（保留病理上限）
+
+
+def _safe_world_record_attempts(values, scenario_labels=()):
+    """Typed audit receipts only: no candidate bodies or arbitrary provider text.
+
+    Old histories have no attempts and remain readable as an empty list. A
+    transport failure has no candidate hash; returned candidates must have one.
+    Diagnostics retain bounded validator paths or safe error classifications.
+    """
+    if not isinstance(values, list):
+        return []
+
+    def valid_hash(value):
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value) is not None
+
+    error_pattern = (r"[A-Za-z_][A-Za-z0-9_]{0,79}(?:; HTTP [1-5][0-9]{2})?"
+                     r"(?:; provider code [0-9]{1,6})?"
+                     r"(?:; (?:content filter|quota/rate limit|authentication|bad request))?")
+    # Match complete producer diagnostics, never just a path prefix: a stored
+    # string such as '$.events[0]: Authorization: Bearer ...' is not a path error.
+    path_pattern = (
+        r"(?:\$|\$\.narrative|\$\.scenario_pressure|\$\."
+        r"(?:variable_changes|new_variables|events|relationship_changes|pending_effects|action_resolutions|red_line_crossings)"
+        r"(?:\[[0-9]{1,3}\](?:\.(?:variable_id|new_value|delta|caused_by|rationale|name|kind|value|unit|description|"
+        r"actors|targets|variable_ids|source|target|direction|due_periods|probability|agent_id|actor|outcome|"
+        r"commitment_id|action_round|by|red_line)(?:\[[0-9]{1,3}\])?)?)?)")
+    reason_pattern = (
+        r"(?:required|unknown fields|empty proposal|value outside current contract|requires exactly one value operation|"
+        r"invalid text length|outside allowed range|exceeds row cap [0-9]{1,3}|not an exact current action binding|"
+        r"variable identity already exists|no current registered move|semantic validation rejected proposal|"
+        r"malformed JSON object|expected (?:number|object|array|string|integer|boolean|null|"
+        r"\['(?:string|integer)', 'null'\]) \(numbers must be finite\))")
+    # Scenario names are dynamic source data, not candidate/provider text. Match
+    # their exact producer form, including the producer's 200-character bound.
+    scenario_problems = {
+        f"$.scenario_pressure.{label}: value outside current contract"[:200]
+        for label in scenario_labels if isinstance(label, str)
+    } if isinstance(scenario_labels, list) else set()
+    out = []
+    seen = set()
+    for value in values[:WORLD_STATE_MAX_ARBITER_ATTEMPTS]:
+        if not isinstance(value, dict):
+            continue
+        number, status = value.get("attempt"), value.get("status")
+        if (type(number) is not int or number not in (1, 2) or number in seen
+                or status not in ("valid", "invalid", "failed") or not valid_hash(value.get("source_hash"))):
+            continue
+        if (status != "failed" or "candidate_hash" in value) and not valid_hash(value.get("candidate_hash")):
+            continue
+        entry = {"attempt": number, "status": status, "source_hash": value["source_hash"]}
+        if "candidate_hash" in value:
+            entry["candidate_hash"] = value["candidate_hash"]
+        problems = value.get("problems")
+        entry["problems"] = []
+        if isinstance(problems, list) and status != "valid":
+            for problem in problems[:WORLD_STATE_MAX_PROBLEMS]:
+                if not isinstance(problem, str):
+                    continue
+                if ((status == "invalid" and (re.fullmatch(path_pattern + ": " + reason_pattern, problem)
+                        or problem in scenario_problems
+                        or re.fullmatch(r"validation error: [A-Za-z_][A-Za-z0-9_]{0,79}", problem)))
+                        or (status == "failed" and re.fullmatch(error_pattern, problem))):
+                    entry["problems"].append(problem[:200])
+        out.append(entry)
+        seen.add(number)
+    return out
 
 
 def _bounded_jsonl_rows(path: str):
@@ -2354,6 +2421,7 @@ def get_simulation_world_state(simulation_id: str):
                 "narrative": str(row.get("narrative") or "")[:8000],
                 "arbiter_status": row.get("arbiter_status"),
                 "arbiter_problems": [str(p)[:600] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
+                "arbiter_attempts": _safe_world_record_attempts(row.get("arbiter_attempts"), world.get("scenarios")),
                 "decisions": row.get("decisions"),
                 "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
                 "scenario_pressure": row.get("scenario_pressure") or {},

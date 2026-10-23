@@ -3,11 +3,13 @@
 Offline with the conftest FakeLLMClient.  Pins: variable ids in the arbiter prompt,
 unknown ids / actors filtered, numeric clamp through the kernel, arbiter failure
 leaves the round committed with the deterministic update, digest herding guard,
-provider failures recorded precisely (class, HTTP status, provider code, snippet,
-failover outcome), one fallback-provider retry through the real LLMClient, and
+provider failures recorded precisely without bodies (class, HTTP status, provider
+code and classification), exact fallback transports through the real LLMClient, and
 kind-name units ("yes boolean") never reaching a brief.
 """
 
+import copy
+import json
 import random
 
 from app.services import world_update as wu
@@ -177,16 +179,26 @@ def test_run_world_round_applies_arbiter_and_builds_digest():
     assert llm.calls and "Return ONLY JSON" in llm.calls[0]["messages"][0]["content"]
 
 
-def test_run_world_round_survives_arbiter_failure_and_disabled():
+def test_run_world_round_survives_arbiter_failure_and_disabled(caplog):
     class Boom:
+        calls = 0
+
         def chat_json(self, **kwargs):
-            raise RuntimeError("down")
+            self.calls += 1
+            raise RuntimeError("down; Authorization: Bearer fixture-provider-secret")
 
     world = _world()
     world.start_round(1, _PERIOD)
-    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=Boom(), rng=random.Random(0),
+    boom = Boom()
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=boom, rng=random.Random(0),
                                 scenarios=world.scenarios)
-    assert record["arbiter_status"] == "failed" and record["arbiter_problems"] == ["llm error: RuntimeError: down"]
+    assert record["arbiter_status"] == "failed" and record["arbiter_problems"] == ["llm error: RuntimeError"]
+    assert boom.calls == 1 and len(record["arbiter_attempts"]) == 1
+    assert record["arbiter_attempts"][0]["status"] == "failed"
+    assert record["arbiter_attempts"][0]["problems"] == ["RuntimeError"]
+    assert "candidate_hash" not in record["arbiter_attempts"][0]
+    assert "fixture-provider-secret" not in json.dumps(record) + caplog.text
+    assert "Authorization" not in json.dumps(record) + caplog.text
     assert world.committed_round == 1 and world.variables["regional_capacity"].value == 120.0
     assert record["decisions"]["total"] == 3 and "Alpha Systems" in record["digest"]
 
@@ -198,19 +210,26 @@ def test_run_world_round_survives_arbiter_failure_and_disabled():
 
     world3 = _world()
     world3.start_round(1, _PERIOD)
-    rec3 = wu.run_world_round(world3, 1, _PERIOD, _decisions(), [], llm=FakeLLMClient(json_responses=["garbage"]),
+    malformed = FakeLLMClient(json_responses=["garbage", "garbage"])
+    rec3 = wu.run_world_round(world3, 1, _PERIOD, _decisions(), [], llm=malformed,
                               rng=random.Random(0), scenarios=world3.scenarios)
     assert rec3["arbiter_status"] == "invalid" and world3.committed_round == 1
-
-    class BadPayload:
-        def chat_json(self, **kwargs):
-            return {"events": [{"description": "Bad", "variable_ids": 1}]}
+    assert len(malformed.calls) == 2 and rec3["arbiter"] == {}
+    assert [a["problems"] for a in rec3["arbiter_attempts"]] == [["$: malformed JSON object"]] * 2
+    assert world3.variables["regional_capacity"].value == 120.0
 
     world4 = _world()
     world4.start_round(1, _PERIOD)
-    rec4 = wu.run_world_round(world4, 1, _PERIOD, _decisions(), [], llm=BadPayload(), rng=random.Random(0),
+    bad = {"events": [{"description": "Bad", "variable_ids": 1}]}
+    bad_payload = FakeLLMClient(json_responses=[copy.deepcopy(bad), copy.deepcopy(bad)])
+    rec4 = wu.run_world_round(world4, 1, _PERIOD, _decisions(), [], llm=bad_payload, rng=random.Random(0),
                               scenarios=world4.scenarios)
-    assert rec4["arbiter_status"] == "applied"
+    assert rec4["arbiter_status"] == "invalid" and world4.committed_round == 1
+    assert len(bad_payload.calls) == 2 and rec4["arbiter"] == {}
+    assert [a["problems"] for a in rec4["arbiter_attempts"]] == [
+        ["$.events[0].variable_ids: expected array (numbers must be finite)"]] * 2
+    assert world4.variables["regional_capacity"].value == 120.0
+    assert not any(e.description == "Bad" for e in world4.events)
 
 
 def test_overdue_commitments_lapse_before_new_actions():
@@ -239,28 +258,38 @@ def test_dead_round_commits_with_no_decisions():
 # ---------------------------------------------------------------------------
 # provider failures: precise records and the fallback-provider retry
 # ---------------------------------------------------------------------------
-_FILTER_HEAD = "llm error: BadRequestError (HTTP 400, provider code 1301, content filter"
+_FILTER_FAILURE = "llm error: BadRequestError; HTTP 400; provider code 1301; content filter"
 
 
 class _Filtered:
     """Stand-in whose only answer is the live Zhipu content-filter rejection."""
 
+    calls = 0
+
     def chat_json(self, **kwargs):
-        raise content_filter_error()
+        self.calls += 1
+        error = content_filter_error()
+        error.body["synthetic_secret"] = "fixture-provider-secret"
+        raise error
 
 
 def test_arbiter_content_filter_failure_record_is_precise():
     """sim_d6ebcc77e22d recorded only ``llm error: BadRequestError`` for two content-filter
-    rejections; the record must name class, HTTP status, provider code and the message."""
+    rejections; retain exact safe classification while excluding raw error bodies."""
     world = _world()
     world.start_round(1, _PERIOD)
-    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=_Filtered(), rng=random.Random(0),
+    filtered = _Filtered()
+    record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=filtered, rng=random.Random(0),
                                 scenarios=world.scenarios)
     assert record["arbiter_status"] == "failed" and world.committed_round == 1
     [problem] = record["arbiter_problems"]
-    assert problem.startswith(_FILTER_HEAD + "): Error code: 400 - {'contentFilter'")
-    assert "'code': '1301'" in problem
-    assert len(problem) <= len(_FILTER_HEAD) + 2 + 2 + wu.ARBITER_ERROR_SNIPPET_CHARS
+    assert problem == _FILTER_FAILURE
+    assert filtered.calls == 1 and len(record["arbiter_attempts"]) == 1
+    assert record["arbiter_attempts"][0]["problems"] == [_FILTER_FAILURE.removeprefix("llm error: ")]
+    assert record["arbiter_attempts"][0]["status"] == "failed"
+    assert "candidate_hash" not in record["arbiter_attempts"][0]
+    assert "contentFilter" not in json.dumps(record) and "Error code: 400" not in json.dumps(record)
+    assert "fixture-provider-secret" not in json.dumps(record)
     assert world.variables["regional_capacity"].value == 120.0            # no fabricated numeric effect
     assert "arbiter=failed" in record["headline"]
 
@@ -291,9 +320,11 @@ def test_arbiter_records_fallback_outcome_when_both_providers_fail(scripted_fail
                                 scenarios=world.scenarios)
     assert record["arbiter_status"] == "failed" and world.committed_round == 1
     [problem] = record["arbiter_problems"]
-    assert problem.startswith(_FILTER_HEAD + "; fallback kimi: failed (BadRequestError (HTTP 400, provider code 1301, "
-                              "content filter): Error code: 400")
+    assert problem == _FILTER_FAILURE
     assert transports == [("glm", False), ("kimi", True)]                  # degrade-safe: no further attempts
+    assert len(record["arbiter_attempts"]) == 1 and record["arbiter_attempts"][0]["status"] == "failed"
+    assert "contentFilter" not in json.dumps(record) and "Error code: 400" not in json.dumps(record)
+    assert world.variables["regional_capacity"].value == 120.0
 
     unconfigured, transports2 = scripted_failover(content_filter_error(), fallback_provider=None)
     world2 = _world()
@@ -301,8 +332,11 @@ def test_arbiter_records_fallback_outcome_when_both_providers_fail(scripted_fail
     rec2 = wu.run_world_round(world2, 1, _PERIOD, _decisions(), [], llm=unconfigured, rng=random.Random(0),
                               scenarios=world2.scenarios)
     assert rec2["arbiter_status"] == "failed"
-    assert rec2["arbiter_problems"][0].startswith(_FILTER_HEAD + "; fallback: not configured (LLM_FALLBACK_PROVIDER unset)")
+    assert rec2["arbiter_problems"] == [_FILTER_FAILURE]
     assert transports2 == [("glm", False)]
+    assert len(rec2["arbiter_attempts"]) == 1 and rec2["arbiter_attempts"][0]["status"] == "failed"
+    assert "contentFilter" not in json.dumps(rec2) and "Error code: 400" not in json.dumps(rec2)
+    assert world2.committed_round == 1 and world2.variables["regional_capacity"].value == 120.0
 
 
 # ---------------------------------------------------------------------------
@@ -327,12 +361,22 @@ def test_validate_blanks_kind_named_units_on_new_variables():
 def test_briefs_never_print_a_kind_name_as_unit():
     world = _world()
     world.start_round(1, _PERIOD)
-    llm = FakeLLMClient(json_responses=[{"narrative": "Talks opened.", "new_variables": [
+    malformed = {"narrative": "Talks opened.", "new_variables": [
         {"name": "Truce talks opened", "value": True, "unit": "boolean", "kind": "boolean"},
-        {"name": "Deadline agreed", "value": "2027-03-10", "unit": "date", "kind": "date"}]}])
+        {"name": "Deadline agreed", "value": "2027-03-10", "unit": "date", "kind": "date"}]}
+    corrected = copy.deepcopy(malformed)
+    corrected["new_variables"][1].update(kind="text", unit="")
+    llm = FakeLLMClient(json_responses=[malformed, corrected])
     record = wu.run_world_round(world, 1, _PERIOD, _decisions(), [], llm=llm, rng=random.Random(0),
                                 scenarios=world.scenarios)
     assert record["arbiter_status"] == "applied"
+    assert len(llm.calls) == 2
+    assert [a["status"] for a in record["arbiter_attempts"]] == ["invalid", "valid"]
+    assert record["arbiter_attempts"][0]["problems"] == [
+        "$.new_variables[1].kind: value outside current contract"]
+    assert record["arbiter_attempts"][1]["problems"] == []
+    assert record["arbiter_problems"] == []
+    assert world.variables["deadline_agreed"].kind == "text"
     assert world.variables["truce_talks_opened"].unit == "" and world.variables["deadline_agreed"].unit == ""
     assert "- New: Truce talks opened = yes" in record["digest"]
     assert "- New: Deadline agreed = 2027-03-10" in record["digest"]
