@@ -1,8 +1,8 @@
 # Handoff.md — Simulation After-Action Record and Report Bridge
 
-**Last Updated (UTC):** 2026-10-23T05:05:20.577872+00:00
-**Status:** Implementation verified; source delivery in progress. Historical S0–S4 notes below are retained as history.
-**Current Focus:** Commit and reconcile the verified feature with the preserved Mandarin work; verify remote delivery and managed local readiness.
+**Last Updated (UTC):** 2026-10-23T05:18:43.944432+00:00
+**Status:** Complete for the requested implementation and validation. Historical S0–S4 notes below are retained as history.
+**Current Focus:** No coding work remains for this request. Separately requested fresh-provider operational acceptance is described in issues.md.
 
 The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 2119.
 
@@ -88,6 +88,8 @@ Not applicable yet; no change applied. The acceptance scenarios for the implemen
 
 ## 9) Remaining Work & Next Steps
 
+> The planning snapshot below is historical and superseded by the completion entries. No coding blocker remains; the separate fresh-provider acceptance item is tracked in [issues.md](issues.md).
+
 - **Blockers:** owner decisions D1–D6; ADR acceptance.
 - **Risks:** listed in design.md §8; the two that most affect ordering are the lint re-pin volume (S0.4) and thinner prose after S3.3 (D3).
 - **Next working interval:** implement S0.1–S0.3 (constants module, chart retitle, exec-brief line) with T7 and T9; then S0.4–S0.5 with T3 and the WAVE9 re-pin. Each change in its own commit.
@@ -139,3 +141,7 @@ Final delivery must preserve primary translation edits and staged news work. Com
 ### 2026-10-23T05:05:20.577872+00:00 — Final acceptance
 
 The feature branch passes 883 backend tests (2 explicit skips, 11 expected failures), 58 rechecked context tests after fixture corrections, and 321 frontend tests/build. The composed active-source candidate passes 981 backend tests (1 Git-history skip, 11 expected failures), 379 frontend tests/build, the model-receipt/bridge negative matrix and independent review. See [completion.md](completion.md), [verification.json](verification.json) and [issues.md](issues.md). Production hashes are frozen; the remaining action is source delivery and local readiness.
+
+### 2026-10-23T05:17:40.890476+00:00 — Delivered and verified locally
+
+Code commit `e04ac8f9` is installed in the primary checkout and pushed to `legacy/codex/simulation-report-boundary`. The configured origin is archived/read-only; the existing main-tracking remote was used without changing repository settings. All 581 composed source hashes and the original staged news patch match. Existing Mandarin changes remain uncommitted with the reviewed compatibility adapter. Active frontend production build passes; frontend and backend HTTP 200, no browser console errors. The monitored launcher (session 40648) keeps services alive after a detached invocation exited. Saved run input hashes remain unchanged. [completion.md](completion.md) and [verification.json](verification.json) are the final evidence summary.

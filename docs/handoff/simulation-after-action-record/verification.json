@@ -85,7 +85,25 @@
     "No predictive calibration or simulation-realism promotion is claimed.",
     "Original saved runs and accepted reports remain unchanged."
   ],
-  "delivery_status": "verified; commit and active-source reconciliation in progress",
+  "delivery_status": "complete",
   "feature_source_hashes": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/delivery-feature-source-hashes.json",
-  "combined_source_hashes": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/delivery-combined-source-hashes.json"
+  "combined_source_hashes": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/delivery-combined-source-hashes.json",
+  "delivery": {
+    "source_commit": "e04ac8f972ede18b8e046fa3b25281c03c50c527",
+    "remote": "legacy",
+    "repository": "https://github.com/linroger/DeepResearchForecast",
+    "branch": "codex/simulation-report-boundary",
+    "origin_limit": "DeepAgentForecast origin is archived/read-only (HTTP 403); existing main tracking remote legacy used successfully.",
+    "active_checkout": "/Users/rogerlin/Downloads/DeepResearchForecast",
+    "active_source_files_verified": 581,
+    "peer_translation_work_preserved": true,
+    "original_staged_news_patch_preserved": true,
+    "frontend_http": 200,
+    "backend_health": "ok",
+    "active_production_build": "passed",
+    "javascript_console_errors": 0,
+    "readiness_receipt": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/live-readiness.json",
+    "launcher_session": 40648,
+    "checked_at_utc": "2026-10-23T05:17:40.890476+00:00"
+  }
 }

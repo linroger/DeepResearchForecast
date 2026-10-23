@@ -1,6 +1,6 @@
 # Simulation/forecast boundary completion
 
-Status: implementation verified; source delivery in progress on `codex/simulation-report-boundary`, recovered from Claude integration commit `579c1acf`.
+Status: complete — implemented, independently reviewed, verified and delivered on `codex/simulation-report-boundary`, recovered from Claude integration commit `579c1acf`.
 
 ## Architectural decision
 
@@ -42,4 +42,6 @@ The compound suite intentionally blocks font discovery and unrelated subprocess 
 
 The newer, uncommitted Mandarin translator required a small compatibility adapter: its model receipts cover exactly the translated prose, while the deterministic bridge and full public document retain their own checks. The specific adjustments are recorded in translation-compatibility.patch. This patch is a review/continuity artifact for the already composed working tree, not an instruction to apply blindly to a checkout without that translator. The peer translation implementation itself is not included in the feature commit.
 
-See verification.json for exact receipts, source hashes, independent reviews and browser artifacts. Delivery results follow after the active checkout and managed services are reconciled.
+See verification.json for exact receipts, source hashes, independent reviews and browser artifacts. Delivery: source commit `e04ac8f9` is pushed to the existing `legacy` remote's `codex/simulation-report-boundary` branch at DeepResearchForecast. `origin` points to archived/read-only DeepAgentForecast and rejected the initial push; no repository setting was changed. The primary checkout now contains the tested composed source, verified against all 581 recorded source-file hashes. Its original staged news patch and separate translation work remain preserved and uncommitted; scoped compatibility adjustments are recorded in the patch artifact.
+
+The active production build passed. The local backend and frontend respond with HTTP 200, and the actual application opened without JavaScript console errors. The first detached launcher invocation exited after the tool completed; the standard monitored launcher remains running in session 40648 and sustained readiness checks. Saved input hashes remain unchanged. The old saved run's record endpoint intentionally returns 404 because verification replayed a copy rather than backfilling the original; new/finalized runs produce the record through the completed lifecycle paths.

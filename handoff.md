@@ -1,4 +1,4 @@
-> Simulation/report boundary: S0–S4 recovered from Claude and being completed on `codex/simulation-report-boundary`. See [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md).
+> Simulation/report boundary — complete and delivered: [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md). The verified feature is on `codex/simulation-report-boundary`; active source preserves the separate Mandarin work. Fresh-provider calibration/acceptance remains a separate exercise.
 
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
