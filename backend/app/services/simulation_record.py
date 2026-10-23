@@ -1791,10 +1791,18 @@ def write_record(sim_dir: str, record: Dict[str, Any]) -> Dict[str, str]:
     """Write ``simulation_record.json``, ``simulation_record.md`` (rendered in the record's
     language) and ``simulation_record.zh.md`` (always the Chinese rendering, so the API's
     ``lang=zh`` has one fixed file; identical to ``.md`` for a Chinese record).  Both
-    renderings are deterministic functions of the JSON; no translation call is made."""
+    renderings are deterministic functions of the JSON; no translation call is made.
+    Also write a separate, bounded hypothetical investigation queue. It never
+    enters the record schema, report bridge, evidence or probability inputs."""
+    from .simulation_diagnostics import ARTIFACT_FILE, build_discovery_questions
+
     paths = rc.record_paths(sim_dir)
     lang = "zh" if str(record.get("language") or "").startswith("zh") else "en"
+    discovery = build_discovery_questions(record)
     _atomic_write(paths["json"], record_json_bytes(record))
     _atomic_write(paths["md"], render_markdown(record, lang).encode("utf-8"))
     _atomic_write(paths["md_zh"], render_markdown(record, "zh").encode("utf-8"))
-    return {"json": paths["json"], "md": paths["md"], "md_zh": paths["md_zh"]}
+    discovery_path = os.path.join(sim_dir, ARTIFACT_FILE)
+    _atomic_write(discovery_path, rc.record_bytes(discovery))
+    return {"json": paths["json"], "md": paths["md"], "md_zh": paths["md_zh"],
+            "discovery_json": discovery_path}
