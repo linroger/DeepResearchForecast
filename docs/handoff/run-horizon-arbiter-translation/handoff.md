@@ -1,8 +1,8 @@
 # Handoff — run horizon, arbiter and translation corrections
 
-**Last Updated (UTC):** 2026-10-23T03:06:55.613632+00:00
-**Status:** Complete — verified source and local installation; Git delivery closing
-**Current Focus:** Commit, push and verify remote main for the accepted fixes.
+**Last Updated (UTC):** 2026-10-23T03:41:26.653321+00:00
+**Status:** Complete — merged source published and verified; local backend refreshed
+**Current Focus:** No remaining implementation work in this slice; preserve historical outputs until an explicit retry or new run.
 
 ## Request and context
 The user reports daily multiagent periods despite an end-2027 forecast request, numeric-variable arbiter rejection for recent_momentum, unbound commitment delivery resolution, and translation section structure failures. Relevant runs are pipe_78903d599684 / sim_a79deb6a2772 / report_0055b92550a6 (gold) and pipe_9f5353ac9955 / sim_e0fd51c9e193 / report_553a2cc08357 (Russia–Ukraine). Both pipeline records are completed. The existing shared checkout remains peer-owned and dirty; implementation starts from main b01cb764 in the clean delivery checkout.
@@ -72,3 +72,15 @@ Independent final review accepted the frozen source, closed both temporal P2s wi
 The old nine-day simulations remain historical evidence. A new simulation is required to generate end-2027 monthly/quarterly progression; changing labels on the old rounds would misstate what ran. Failed full-report translations were not regenerated. The updated repair passed the five-excerpt live sample; future retries still require semantic/source-bound publication and may legitimately fail provider or fidelity checks. No new forecast was launched.
 
 The source correction is complete within the acceptance scope. Read-only scenario limits, external rate-limit/filter/connectivity failures, skipped graph chunks and historical malformed source markup remain explicit in issues.md. Next-session prompt: read this handoff and verification.json, inspect current state before retrying a full saved translation or launching a new end-2027 simulation, preserve existing outputs, and distinguish fresh live results from the accepted offline/source proof.
+
+## Concurrent main reconciliation — verification reopened
+
+The repair source was committed as24823cda. During acceptance, another process advanced localmain with4peer fixes: fdea6ec5(newscontextrealpath), a5ea6d4a(ontologyfilterretry),26c4c88d(embedderdevice),22cca9d5(conflict/sanctionbinarysharpness). The attempted fast-forward correctly refused divergence; the coordinator's following push still sent that peer main tip before the repair merge. This was a delivery sequencing mistake, not evidence of integration. No reset/force push was used. An explicit ort merge now preserves both histories without conflicts, and a new45-suite gate includes ontology/calibration/Oddsense consumers alongside the original910scope. The old910receipt remains valid only for its original dependencies. Final remote delivery is pending the replacement gate and review.
+
+## 2026-10-23T03:41:26.653321+00:00 — final delivery and preserved active peer compatibility
+
+Source commit24823cda is reconciled with four concurrent peer fixes in mergefe6e6c83. The exact merge SHA was pushed non-forcibly to legacy/main and verified through gitls-remote. A unique delivery branch prevents localmainref movement from changing the selected publication SHA. The replacement1021-case gate and independent review apply to these merged bytes; the earlier910case proof is retained as historical evidence.
+
+The active checkout matches111of112backend application modules in the merged manifest. Its preserved peerReportAgent differs only in _repair_overused_citations and _reground_citation_tag. A separate guarded compatibility mirror carrying that actual peer file passes95/95translation/report cases with one clean restart child. The first compatibility attempt was94P/1guard-denied launch because the coordinator omitted the exact restart-script admission; the replacement admitted that single known script without weakening the guard. The peer file is neither overwritten nor silently committed.
+
+The local backend remains healthy onPID8436. Final309saved artifact hashes and69non-owned source/document hashes match their pre-install snapshots. No full forecast, saved simulation or full-report translation was regenerated. The two-call live GLM-5.3 five-excerpt proof remains separate. Delivery.json records source/ref identities; this closing documentation commit changes no tested app bytes.

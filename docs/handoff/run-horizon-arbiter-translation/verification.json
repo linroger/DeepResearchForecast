@@ -1,12 +1,12 @@
 {
-  "status": "accepted and installed; Git delivery closing",
+  "status": "complete: merged source published and verified; local backend healthy",
   "backend": {
-    "passed": 910,
+    "passed": 1021,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "deselected": 0,
-    "seconds": 60.63,
+    "seconds": 67.34,
     "suites": [
       "backend/tests/test_model_translation_core.py",
       "backend/tests/test_model_translation_workflow.py",
@@ -47,11 +47,16 @@
       "backend/tests/test_world_reflexivity.py",
       "backend/tests/test_world_model_loop.py",
       "backend/tests/test_run_orphan_inventory.py",
-      "backend/tests/test_world_lifecycle.py"
+      "backend/tests/test_world_lifecycle.py",
+      "backend/tests/test_ontology_actors_optimizations.py",
+      "backend/tests/test_ontology_refinements.py",
+      "backend/tests/test_audit_fixes_ontology.py",
+      "backend/tests/test_calibration_rigor.py",
+      "backend/tests/test_oddsense_workflow.py"
     ],
-    "mirror": "/private/tmp/drf-run-joint-ruu1r1h5",
-    "receipt_sha256": "a3b5fc182ed87cfdd69925ac5db73b26c459339a03703c662a5505500be6051e",
-    "junit_sha256": "f31a9664901740eb50dcd1b9011111542502fe1e7325b9e87e45e3775efb809d",
+    "mirror": "/private/tmp/drf-run-merged-cvy_5aui",
+    "receipt_sha256": "28e96b4355400ae9728c8bd14cf2fbd9b29d89f53ba74af63c42acf539f88f50",
+    "junit_sha256": "244b0cf1cfa7e42f69968e2b4ff58b266dd46f57b4088c51f1be1bd16bf8f561",
     "parent": {
       "status": "completed",
       "exit_code": 0,
@@ -72,8 +77,8 @@
     },
     "children": [
       {
-        "pid": "96294",
-        "receipt_sha256": "2e2c57245b9091753939d40a58d4f4aad560573bfc82b2b9af19b3ed758b5279",
+        "pid": "28937",
+        "receipt_sha256": "e49ac12d6b9552f80ce4754bf43ccd7308e6f450cbe3f802849fec39447e30eb",
         "status": "completed",
         "events": {
           "redirect:app.config": 1,
@@ -82,14 +87,14 @@
         }
       },
       {
-        "pid": "96387",
-        "receipt_sha256": "ddaea2dc01eb0b7a813a6113e68cdf482ba64d144cd4ecdfe2ca7bbbfa44a135",
+        "pid": "29028",
+        "receipt_sha256": "fb855e2d2de7ad1704ef0be46896dfd275c497f246a6c6860c8607b204cd1aa1",
         "status": "completed",
         "events": {}
       },
       {
-        "pid": "97156",
-        "receipt_sha256": "77a4cb66f0eadbbd02f41247e74edaafb9fb3861047fcbfb423d8fa6e68cedb4",
+        "pid": "29803",
+        "receipt_sha256": "f4006ce809875bfd697cad85d7be559cee311d0eba5242e27c545480dcc9c762",
         "status": "completed",
         "events": {
           "redirect:app.config": 1,
@@ -98,20 +103,20 @@
         }
       },
       {
-        "pid": "97341",
-        "receipt_sha256": "83e9bfd06a091cc80f78eb0fe76bce85d6df36891889172e8dc0e8cf264872b0",
+        "pid": "29988",
+        "receipt_sha256": "1e25db13b2bfee25ae5c5038e1cb3786e2d2f3a3ea321b362be05fea90a6816f",
         "status": "completed",
         "events": {}
       },
       {
-        "pid": "97342",
-        "receipt_sha256": "93710dfa865cf16445d390909980ce7ecd3c7868b3cac10dc5d41aa469bec246",
+        "pid": "29989",
+        "receipt_sha256": "75ad210aea4204e13a6a0201808818c22cc867acabc85e1f369d65e09b097f71",
         "status": "completed",
         "events": {}
       },
       {
-        "pid": "97478",
-        "receipt_sha256": "2dac1b18c9172f8e70b2b7eebb8846678d8e62574f81dee3cb0a501c936ddf67",
+        "pid": "30239",
+        "receipt_sha256": "a7edf13eab33dac0fd317b26318381c8ec1b793ea92017aa1a78effea0ea250f",
         "status": "completed",
         "events": {
           "redirect:app.config": 1,
@@ -123,10 +128,6 @@
   },
   "code_manifest_entries": 754,
   "code_manifest": {
-    "backend/tests/test_run_arbiter_contract.py": "564cf6d948e27d596016c2c0e5eb6c37bd7d1a7ab584717edadf05c30d3cef5f",
-    "backend/tests/test_run_forecast_horizon.py": "b84f0d357ef0e1ffd548e04762ec29e175b0352765f9c659b5b3e6f4688a9b95",
-    "backend/tests/test_run_orphan_inventory.py": "e1af6d9c08ed8349963e67131a89cec58b3b5df9887639dbf973bdf3f62ff391",
-    "backend/tests/test_run_translation_structure.py": "bcd06fc01c6288a9aa032ee16ddbc17bbcfad9d5099ca062e6e0353429aee3ca",
     "backend/app/__init__.py": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
     "backend/app/api/__init__.py": "ff26909731a3631ebd38ce71554972c1d3ec4cb3b96976229abad7b7d75ee76e",
     "backend/app/api/graph.py": "f91b929c57acff90ffa7b9fbdb59f085048a97f8dfb528a0959b28d3b56e8b5b",
@@ -156,7 +157,7 @@
     "backend/app/services/exec_brief.py": "25503385daed92e758eb9c5eef930263d80cea9f0a7b434e0389197223740b1a",
     "backend/app/services/feed_rounds.py": "d2514f70051cba4794ac5a51a00c13410b517a1609f2e8edf071d708b0fb6221",
     "backend/app/services/forecast_binary_resilience.py": "975f10aaa9702918abadba83ae6cb2228d2b5b2f868808d16f586ba7d775c124",
-    "backend/app/services/forecast_extractor.py": "d2ed18c86488eca3b1c95d16a77f425bb0a369d86cfbaf34597acd97b46a4dc3",
+    "backend/app/services/forecast_extractor.py": "19d7783e5e547e5dacd9db6f6881de0f31702182e7727b8b4f06ad10576d5b3d",
     "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
     "backend/app/services/forecast_ledger.py": "2576a04a669586c7ebe94550d5d5ef1a8754c51bf65b42809e068e7164c0edc5",
     "backend/app/services/forecast_track_record.py": "6cd977828939223b239cd83ebb72c39f05c6a76714ad9ada3f9be5b73d9610b1",
@@ -166,16 +167,16 @@
     "backend/app/services/graphiti_client/client.py": "77f2ee80c7480cdb6a438876ef3af38da05b9227e1b97a6b31bf6c70b1dd4d5c",
     "backend/app/services/graphiti_client/compat.py": "e095d3b204738790793bef6cadb04edb4f743326ec85e249b5057abc601a8aae",
     "backend/app/services/graphiti_client/cross_encoder.py": "a149143d94e046568ec1c1adc7be9c1a2d512152faba7e457eec24d46a80ea3c",
-    "backend/app/services/graphiti_client/embedder.py": "3c4151a9b0df333c7aa948ba60d437a4b7610aec9dcdf91a33399c431d4ed854",
+    "backend/app/services/graphiti_client/embedder.py": "ad4f9fa9145addd3e5c487e4b298f71773e9885ef0f4b32759bc11b8ef86aa03",
     "backend/app/services/graphiti_client/falkor_driver.py": "ace51006efddb7c42ff17d0681ba19610dcd9c2c5cf67c0dc15b6e143bf2b8e9",
     "backend/app/services/graphiti_client/llm_adapter.py": "4c330d71bc07e0a5a0df2c8c498afc3e84d6b5bf575694c6a4e1a35e82f919ce",
     "backend/app/services/graphiti_client/ontology.py": "84bfd85ae9c709743ee5e622277129e56f01dd48b4bd04615c3207b17a67c9e1",
     "backend/app/services/graphiti_client/runtime.py": "a9461c52de48efb0c8d49eb3068094c1db6c7334b58df95144c8c13834907028",
     "backend/app/services/model_translation.py": "cc0f29441515bcd849751644e346fb08b70747a98ecfd3ab5d3ebfda74e82322",
-    "backend/app/services/news_market_context.py": "8d5f3e7885ab46e94a91abbd56152733ea38271d0633e14ce67427f6701f4038",
+    "backend/app/services/news_market_context.py": "46566002710f9fe90cf07834261cf87c946585050a64f77daadbfbbaa69d8342",
     "backend/app/services/oasis_profile_generator.py": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
     "backend/app/services/official_data.py": "c5859983f9424660efe7fc8a6a56952736654824b76fc78a02296e7586de4c01",
-    "backend/app/services/ontology_generator.py": "e968e18f7f9bf4a9df4b3112271f0f254e5c7df0eeeaa1c8eb5271d5abd6181c",
+    "backend/app/services/ontology_generator.py": "bab00e8d4c3e2a271dd4369f27b2c82fc177683f61d2afec697d65c361f90983",
     "backend/app/services/pipeline_orchestrator.py": "24edb02a246fb6bd48c3e91c3e3493ef637787977e75a47f9178bf6f7747a0d3",
     "backend/app/services/report_agent.py": "5b992bf23e39d683a6ac8e0e266d6db3330e7de9f4ab310ca1dc567c474f5d0e",
     "backend/app/services/report_filter_safe.py": "e6822de3f01b90e8a20da93411552fbcb6c978c3a56c6414d37283441a3e0416",
@@ -324,7 +325,7 @@
     "backend/tests/test_bridge_search_and_cache.py": "a89e35b5be63a5a6b37895eee03158abbc7e5a9219b3aa3acd98d523b5051b2b",
     "backend/tests/test_calendar_event_bucketing.py": "ec6fc91878321a5b6c9d6757cfc615b8f970ebc71048d99745188f385d4d37c3",
     "backend/tests/test_calendar_round_loop.py": "ab9228c4c49eb79973d330acde698b5a7d144857a52085e6b8426d1f5c3a2249",
-    "backend/tests/test_calibration_rigor.py": "fe2f51d4b2eef9e7cf39e17130faa25e3784a22aa6f880253a86a32187dfe1bf",
+    "backend/tests/test_calibration_rigor.py": "a397b1df599431ff444fb29c9def9175acf48d7f9563db78c0336d8e52419974",
     "backend/tests/test_canonical_world_brief_denials.py": "ab822e27ca35fedae93665053f3c708367b609bcdb6f87786aa84b600ec9e1dc",
     "backend/tests/test_cast_reconcile.py": "d26e8cca1af2ceb0f47c225fc420fd93ba2ce15b66c989a41917d99e1625dae4",
     "backend/tests/test_chart_serve_inline.py": "7fcd8d0688c932d6d3e562fac97d9a54fbdfe8d6ce66a472bf5ab6e73fd73d8f",
@@ -490,6 +491,10 @@
     "backend/tests/test_research_spend_flush.py": "f9e5776fa5daada2179ecb07cfad988ffc4632c71c0a4f3552b78acba81cf935",
     "backend/tests/test_resolution_autorun.py": "ab630b8075cb0c4d40ed3ac7e086d1cb37bbda96d8300902fd23ab848ddbc412",
     "backend/tests/test_resolution_monitor.py": "6924482eacb5b4d099cd69091f84b280fddce09793d4e373fdbfc21ba156a19c",
+    "backend/tests/test_run_arbiter_contract.py": "564cf6d948e27d596016c2c0e5eb6c37bd7d1a7ab584717edadf05c30d3cef5f",
+    "backend/tests/test_run_forecast_horizon.py": "b84f0d357ef0e1ffd548e04762ec29e175b0352765f9c659b5b3e6f4688a9b95",
+    "backend/tests/test_run_orphan_inventory.py": "e1af6d9c08ed8349963e67131a89cec58b3b5df9887639dbf973bdf3f62ff391",
+    "backend/tests/test_run_translation_structure.py": "bcd06fc01c6288a9aa032ee16ddbc17bbcfad9d5099ca062e6e0353429aee3ca",
     "backend/tests/test_runtime_lifecycle_isolation.py": "170146537c62a986758831df62acf9f57509f5cd08239cf7091e6b0b2f317715",
     "backend/tests/test_runtime_skill_sync.py": "a37d912570a6bd9302869265eefda67dd49cd089f1a57b9e1140af41bbcbf8e8",
     "backend/tests/test_sdk_publication_barrier.py": "e1bdf6daa385cc418b33bc1ecd03bf11c3efcde1def9803ba38d1a6cd6b846ea",
@@ -1224,5 +1229,326 @@
     ],
     "saved_artifacts_count": 309,
     "saved_artifact_changes": []
-  }
+  },
+  "prior_gate_before_concurrent_merge": {
+    "passed": 910,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "seconds": 60.63,
+    "suites": [
+      "backend/tests/test_model_translation_core.py",
+      "backend/tests/test_model_translation_workflow.py",
+      "backend/tests/test_artifact_translation_model.py",
+      "backend/tests/test_artifact_translation_services.py",
+      "backend/tests/test_artifact_translation_routes.py",
+      "backend/tests/test_artifact_translation_review_regressions.py",
+      "backend/tests/test_artifact_translation_structured_job.py",
+      "backend/tests/test_artifact_translation_restart.py",
+      "backend/tests/test_translation_pairs_integrity.py",
+      "backend/tests/test_translation_pairs_admission.py",
+      "backend/tests/test_translation_ladder.py",
+      "backend/tests/test_report_bilingual.py",
+      "backend/tests/test_report_forecast_localization.py",
+      "backend/tests/test_research_dossier_translation.py",
+      "backend/tests/test_translation_dates.py",
+      "backend/tests/test_translation_quantities.py",
+      "backend/tests/test_translation_robustness.py",
+      "backend/tests/test_mandarin_numeric_integrity.py",
+      "backend/tests/test_llm_errors.py",
+      "backend/tests/test_forecast_feedback_sdk.py",
+      "backend/tests/test_report_bilingual_filter_safe.py",
+      "backend/tests/test_sessionb_translation_structure.py",
+      "backend/tests/test_sessionb_translation_reallm.py",
+      "backend/tests/test_run_translation_structure.py",
+      "backend/tests/test_run_forecast_horizon.py",
+      "backend/tests/test_sim_timeline.py",
+      "backend/tests/test_temporal_mode_contract.py",
+      "backend/tests/test_context_audit_prepare.py",
+      "backend/tests/test_calendar_event_bucketing.py",
+      "backend/tests/test_calendar_round_loop.py",
+      "backend/tests/test_utils_dates.py",
+      "backend/tests/test_run_arbiter_contract.py",
+      "backend/tests/test_world_commitment_fulfilment.py",
+      "backend/tests/test_agent_decision.py",
+      "backend/tests/test_world_update.py",
+      "backend/tests/test_world_track_records.py",
+      "backend/tests/test_world_reflexivity.py",
+      "backend/tests/test_world_model_loop.py",
+      "backend/tests/test_run_orphan_inventory.py",
+      "backend/tests/test_world_lifecycle.py"
+    ],
+    "mirror": "/private/tmp/drf-run-joint-ruu1r1h5",
+    "receipt_sha256": "a3b5fc182ed87cfdd69925ac5db73b26c459339a03703c662a5505500be6051e",
+    "junit_sha256": "f31a9664901740eb50dcd1b9011111542502fe1e7325b9e87e45e3775efb809d",
+    "parent": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "allowed:guarded_child": 6,
+        "allowed:child_liveness": 4
+      }
+    },
+    "children": [
+      {
+        "pid": "96294",
+        "receipt_sha256": "2e2c57245b9091753939d40a58d4f4aad560573bfc82b2b9af19b3ed758b5279",
+        "status": "completed",
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "96387",
+        "receipt_sha256": "ddaea2dc01eb0b7a813a6113e68cdf482ba64d144cd4ecdfe2ca7bbbfa44a135",
+        "status": "completed",
+        "events": {}
+      },
+      {
+        "pid": "97156",
+        "receipt_sha256": "77a4cb66f0eadbbd02f41247e74edaafb9fb3861047fcbfb423d8fa6e68cedb4",
+        "status": "completed",
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "97341",
+        "receipt_sha256": "83e9bfd06a091cc80f78eb0fe76bce85d6df36891889172e8dc0e8cf264872b0",
+        "status": "completed",
+        "events": {}
+      },
+      {
+        "pid": "97342",
+        "receipt_sha256": "93710dfa865cf16445d390909980ce7ecd3c7868b3cac10dc5d41aa469bec246",
+        "status": "completed",
+        "events": {}
+      },
+      {
+        "pid": "97478",
+        "receipt_sha256": "2dac1b18c9172f8e70b2b7eebb8846678d8e62574f81dee3cb0a501c936ddf67",
+        "status": "completed",
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      }
+    ]
+  },
+  "reviewed_integration_commit": "fe6e6c839e47d09f241a232a9ad3d292b9a3824e",
+  "merged_review": {
+    "merge-source-review.json": {
+      "merge_commit": "fe6e6c839e47d09f241a232a9ad3d292b9a3824e",
+      "merge_parents": [
+        "22cca9d58fd3c75ec35fdf6d12faac731242eaa0",
+        "24823cda313a81cb19e3af207a411cb74df77f8d"
+      ],
+      "files": {
+        "backend/app/utils/dates.py": {
+          "sha256": "2e0a5d6219e3b298431297a05c5d0a45e65cbbb263af91c2cda4a170b3e9bb4c",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/utils/sim_timeline.py": {
+          "sha256": "ebd4de3e36d12fb6c5c6f5f54552906d4d34523b511d0b6ab787f39daf22e20e",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/simulation_config_generator.py": {
+          "sha256": "32a35fc76eabda8cbc3da2919c7b85d1b36bafba7dfb0bcb4b27e41c4ea3d177",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/simulation_runner.py": {
+          "sha256": "9a534c630f272e408bc585c9eae70375350d9061fd649cdf5e4b317507f53364",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/agent_decision.py": {
+          "sha256": "16b59007e90d299c9ecfae76e89e0923853aed54ba54c8c62b9633eac1f54d31",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/world_update.py": {
+          "sha256": "e2c941867abdc4f85fe711f7f76a8ea1d62931c461ee4fb5877a6708c1cb60f0",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/model_translation.py": {
+          "sha256": "cc0f29441515bcd849751644e346fb08b70747a98ecfd3ab5d3ebfda74e82322",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/news_market_context.py": {
+          "sha256": "46566002710f9fe90cf07834261cf87c946585050a64f77daadbfbbaa69d8342",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/ontology_generator.py": {
+          "sha256": "bab00e8d4c3e2a271dd4369f27b2c82fc177683f61d2afec697d65c361f90983",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/graphiti_client/embedder.py": {
+          "sha256": "ad4f9fa9145addd3e5c487e4b298f71773e9885ef0f4b32759bc11b8ef86aa03",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/app/services/forecast_extractor.py": {
+          "sha256": "19d7783e5e547e5dacd9db6f6881de0f31702182e7727b8b4f06ad10576d5b3d",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        },
+        "backend/tests/test_calibration_rigor.py": {
+          "sha256": "a397b1df599431ff444fb29c9def9175acf48d7f9563db78c0336d8e52419974",
+          "matches_merged_manifest": true,
+          "matches_merged_snapshot": true
+        }
+      },
+      "unchanged_boundary_functions": {
+        "backend/app/services/forecast_extractor.py:official_question_mention": true,
+        "backend/app/services/forecast_extractor.py:validate_citation_markers": true,
+        "backend/app/services/forecast_extractor.py:_norm_citation_tag": true,
+        "backend/app/services/ontology_generator.py:_validate_and_process": true,
+        "backend/app/services/ontology_generator.py:_actor_type_histogram": true,
+        "backend/app/services/ontology_generator.py:_forecast_context": true,
+        "backend/app/services/news_market_context.py:_validated_copy": true
+      }
+    },
+    "merge-receipt-review.json": {
+      "junit": {
+        "tests": 1021,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "identity_preserved": true,
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1,
+          "blocked:network:socket.__new__": 1,
+          "blocked:process:subprocess.Popen": 4,
+          "quarantine:oasis_import_cwd": 1,
+          "blocked:external_read": 20,
+          "allowed:guarded_child": 6,
+          "allowed:child_liveness": 4
+        },
+        "allowed_scripts": {
+          "/private/tmp/drf-run-merged-cvy_5aui/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa",
+          "/private/tmp/drf-run-merged-cvy_5aui/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c",
+          "/private/tmp/drf-run-merged-cvy_5aui/repo/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+        }
+      },
+      "children": [
+        {
+          "pid": "28937",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        },
+        {
+          "pid": "29028",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        },
+        {
+          "pid": "29803",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        },
+        {
+          "pid": "29988",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        },
+        {
+          "pid": "29989",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        },
+        {
+          "pid": "30239",
+          "status": "completed",
+          "exit_code": 0,
+          "shutdown_complete": true,
+          "source_drift": [],
+          "identity_preserved": true
+        }
+      ],
+      "manifest_entries": 754,
+      "recomputed_drift": [],
+      "source_drift_file": []
+    }
+  },
+  "runtime_compatibility": {
+    "passed": 95,
+    "failed": 0,
+    "seconds": 8.0,
+    "metadata": {
+      "path": "/private/tmp/drf-run-active-compat-3h1h41py",
+      "active_report_agent_sha256": "6156cceae48cff65180c13e227ff822b1c88f64060765676cff676a133ce7005",
+      "method_differences": [
+        "_reground_citation_tag",
+        "_repair_overused_citations"
+      ],
+      "purpose": "runtime compatibility only; peer citation changes are excluded from the Git delivery"
+    },
+    "receipt_sha256": "f0bfbacfa6a597234b4a8e5615e752326caca144b0af24138afd758131af01ff",
+    "parent": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 1,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:external_read": 18
+      }
+    },
+    "prior_attempt": "94passed/1guard-denied child launch because the coordinator omitted exact child admission; guard unchanged; fresh accepted attempt admits only test_artifact_translation_restart.py",
+    "limitations": "Peer ReportAgent differs only in two citation regrounding methods and remains excluded from Git delivery; no full equivalence claim."
+  },
+  "remote_source_verified": "fe6e6c839e47d09f241a232a9ad3d292b9a3824e",
+  "final_saved_artifact_changes": [],
+  "final_peer_changes": []
 }

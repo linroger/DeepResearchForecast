@@ -1,0 +1,14 @@
+{
+  "source_commit": "24823cda313a81cb19e3af207a411cb74df77f8d",
+  "reviewed_integration_commit": "fe6e6c839e47d09f241a232a9ad3d292b9a3824e",
+  "remote": "https://github.com/linroger/DeepResearchForecast.git",
+  "verified_remote_main_source_commit": "fe6e6c839e47d09f241a232a9ad3d292b9a3824e",
+  "backend_cases": 1021,
+  "active_peer_report_compatibility_cases": 95,
+  "live_translation_calls": 2,
+  "live_translation_excerpts": 5,
+  "active_backend_pid": 8436,
+  "saved_artifacts_unchanged": 309,
+  "peer_files_unchanged": 69,
+  "documentation": "Closing documentation commit follows the verified source; final remote tip is verified separately in chat."
+}
