@@ -13294,12 +13294,15 @@ class ReportAgent:
                     pass
             prob_sum = round(sum(probs), 3)
             # GLM-run 2026-09-18: keep in lockstep with forecast_extractor's
-            # canonical residual-label list (_RESIDUAL_LABELS / line ~119) — the
+            # canonical residual-label list (_SCENARIO_RESIDUAL_TERMS) — the
             # extractor legitimately names the baseline "基准/基线/剩余", and an
             # audit list missing those synonyms failed a correct 4-scenario
             # MECE frame whose baseline was literally named "基准扩张".
-            _residual_keys = ("维持现状", "基准", "基线", "其它", "其他", "兜底",
-                              "剩余", "status", "other", "baseline", "residual")
+            # 2026-10-23: import the canonical tuple directly (the duplicated
+            # literal list had drifted once already); "Range-bound digestion"
+            # and similar finance phrasings of the modal no-change path now
+            # count as the residual/status-quo scenario.
+            from .forecast_extractor import _SCENARIO_RESIDUAL_TERMS as _residual_keys
             has_residual = any(
                 any(k in str(s.get("name", "")).lower() for k in _residual_keys)
                 for s in scenarios

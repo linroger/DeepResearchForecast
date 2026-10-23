@@ -1522,3 +1522,35 @@ def test_render_binary_block_shows_pm_spread_and_low_agreement():
     plain = {"binary_forecasts": [{"id": "F1", "statement": "X", "probability": 0.5,
                                    "resolution_criteria": "z", "theme": "t"}]}
     assert "±" not in render_binary_forecasts_block(plain, language="English")
+
+
+# 2026-10-23 bitcoin run regression: a coherent MECE set whose modal no-change
+# path was named "Range-bound digestion" failed the publish gate's residual
+# check. Finance-standard phrasings of "no material change" must match.
+def test_residual_scenario_terms_match_natural_english_status_quo_names():
+    from app.services.forecast_extractor import (
+        _SCENARIO_RESIDUAL_TERMS,
+        _is_residual_scenario_name,
+    )
+
+    for name in (
+        "Range-bound digestion",
+        "Sideways consolidation continues",
+        "Muddle-through continuation",
+        "Baseline: no change in policy",
+        "其它 / 维持现状",
+        "Status quo prevails",
+    ):
+        assert _is_residual_scenario_name(name), name
+
+    # non-residual scenario names must not match (avoids silently skipping the
+    # auto-appended residual for genuinely directional scenarios)
+    for name in (
+        "Institutional reflation",
+        "Liquidity shock / recession tail",
+        "Post-cycle bear (muted drawdown)",
+    ):
+        assert not _is_residual_scenario_name(name), name
+
+    for term in ("range-bound", "sideways", "consolidation", "continuation"):
+        assert term in _SCENARIO_RESIDUAL_TERMS

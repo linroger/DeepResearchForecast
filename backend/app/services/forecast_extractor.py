@@ -159,6 +159,12 @@ _SCENARIO_RESIDUAL_TERMS = (
     "status quo", "status-quo", "baseline", "residual",
     "other", "catch-all", "remainder", "everything else", "all else",
     "none of the above", "otherwise",
+    # 2026-10-23 bitcoin run: a coherent MECE set whose modal path was named
+    # "Range-bound digestion" failed the residual gate — finance-standard
+    # phrasings of "no material change" must read as residual/status-quo.
+    "range-bound", "range bound", "sideways", "consolidation",
+    "continuation", "muddle through", "muddle-through", "no change",
+    "unchanged", "more of the same",
     "维持现状", "基准", "基线", "其它", "其他", "兜底", "剩余",
 )
 
