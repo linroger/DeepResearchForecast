@@ -202,5 +202,17 @@
       "pipe_d50311277dff",
       "pipe_ce23ce895f60"
     ]
+  },
+  "delivery": {
+    "remote": "legacy",
+    "branch": "codex/research-grounded-prepare",
+    "non_forced_push": "succeeded",
+    "implementation_worktree_clean": true,
+    "primary_snapshot_drift": [],
+    "primary_staged_paths_preserved": [
+      "backend/app/services/news_market_context.py"
+    ],
+    "composed_worktree_status": "archived_recoverable",
+    "composed_worktree_identity": "/Users/rogerlin/.codex/worktrees/research-grounded-composed/DeepResearchForecast"
   }
 }
