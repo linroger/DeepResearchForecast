@@ -226,7 +226,11 @@ def test_official_statistics_join_the_canonical_brief_without_reopening_denials(
     without = gen._build_world_brief("Question", dossier, [], actor_context_packs=packs)
     assert ("ALLOWED_PUBLIC" in without) is public and "Official historical data" not in without
     if not public:
-        assert without == ""  # unchanged fail-closed result without official data
+        # The existing task-boundary contract retains the question/dates while
+        # sharing neither actor claims nor a previously supplied official snapshot.
+        assert "Question" in without and "2026-10-12" in without and "through 2027" in without
+        assert "DENIED_MARKER" not in without and "PRIVATE_MARKER" not in without
+        assert "Unemployment Rate" not in without and "Public, source-bound shared facts" not in without
 
 
 @pytest.mark.parametrize("english", [True, False])

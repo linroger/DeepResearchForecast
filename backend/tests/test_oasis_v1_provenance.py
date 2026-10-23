@@ -20,11 +20,12 @@ _BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
 
-from app.services.actor_role_prompt import build_actor_role_contract  # noqa: E402
+from app.services.actor_role_prompt import build_actor_role_contract, _build_legacy_actor_role_contract  # noqa: E402
 from app.services.oasis_profile_generator import (  # noqa: E402
     OasisProfileGenerator,
     canonical_reddit_system_message,
 )
+from app.services import actor_context as ac
 from app.services.zep_entity_reader import EntityNode  # noqa: E402
 from scripts.run_parallel_simulation import (  # noqa: E402
     _attest_canonical_reddit_system_messages,
@@ -81,6 +82,7 @@ def _actor() -> dict:
             "dimensions": {
                 "future_plans": [{
                     "claim": CANONICAL_PLAN,
+                    "visibility": "public",
                     "evidence_type": "actor_stated_claim",
                     "as_of_date": "2026-07-01",
                     "confidence": "high",
@@ -131,6 +133,29 @@ def _generator() -> OasisProfileGenerator:
     return generator
 
 
+
+def _seal(tmp_path, actor, generator):
+    dossier = _dossier(actor)
+    report = "# Grounded Boundary Corp\nGrounded Boundary Corp plans its permit response."
+    gaps = actor["intelligence"]["evidence_gaps"]
+    for dimension in ac.INTELLIGENCE_DIMENSIONS:
+        if not actor["intelligence"]["dimensions"].get(dimension):
+            gaps.setdefault(dimension, ["No sourced claim."])
+    dossier["actor_intelligence_contract"] = {
+        "schema_version": "actor-intelligence/v1", "generated_at": "2026-07-01",
+        "report_sha256": ac.text_sha256(report), "dossier_sha256": ac.text_sha256("dossier"),
+        "sources_sha256": ac.text_sha256("sources"),
+        "actor_ids_sha256": ac.canonical_json_sha256({actor["actor_id"]: 1}),
+        "actor_count": 1, "source_count": 2, "tier_1_2_actor_count": 1,
+        "dimensions": list(ac.INTELLIGENCE_DIMENSIONS), "coverage": {},
+    }
+    packs, manifest, sha = ac.build_actor_context_artifacts(str(tmp_path), dossier, [actor], report)
+    generator.actor_context_bindings = ac.context_binding_by_actor_id(manifest)
+    generator.actor_context_manifest_sha256 = sha
+    generator.actor_context_report_sha256 = ac.text_sha256(report)
+    generator.actor_context_packs = packs
+    return dossier, packs[actor["actor_id"]]
+
 def _explode(*_args, **_kwargs):
     raise AssertionError("canonical v1 crossed a forbidden legacy persona path")
 
@@ -164,9 +189,10 @@ class _AgentGraph:
 
 
 @pytest.mark.parametrize("use_llm", [True, False])
-def test_v1_bypasses_llm_graph_context_and_rule_persona_paths(use_llm):
+def test_v1_bypasses_llm_graph_context_and_rule_persona_paths(use_llm, tmp_path):
     actor = _actor()
     generator = _generator()
+    dossier, pack = _seal(tmp_path, actor, generator)
     generator._build_entity_context = _explode
     generator._generate_profile_with_llm = _explode
     generator._generate_profile_rule_based = _explode
@@ -176,7 +202,8 @@ def test_v1_bypasses_llm_graph_context_and_rule_persona_paths(use_llm):
         user_id=7,
         use_llm=use_llm,
         actor=actor,
-        actors=_dossier(actor),
+        actors=dossier,
+        context_pack=pack,
     )
 
     assert profile.generation_path == "canonical_role"
@@ -196,12 +223,14 @@ def test_v1_exact_platform_fields_are_role_only_and_resist_base_persona_mutation
 ):
     actor = _actor()
     generator = _generator()
+    dossier, pack = _seal(tmp_path, actor, generator)
     profile = generator.generate_profile_from_entity(
         entity=_entity(),
         user_id=0,
         use_llm=False,
         actor=actor,
-        actors=_dossier(actor),
+        actors=dossier,
+        context_pack=pack,
     )
     expected_role = profile.role_prompt
     profile.persona = "UNBOUND POST-GENERATION BASE PERSONA"
@@ -234,13 +263,16 @@ def test_v1_exact_platform_fields_are_role_only_and_resist_base_persona_mutation
     assert role_row["reddit_base_system_message_chars"] == len(system_message)
 
 
-def test_v1_rule_fallback_stub_is_still_exactly_the_canonical_role():
+def test_v1_rule_fallback_stub_is_still_exactly_the_canonical_role(tmp_path):
     actor = _actor()
-    profile = _generator()._error_stub_profile(
+    generator = _generator()
+    dossier, pack = _seal(tmp_path, actor, generator)
+    profile = generator._error_stub_profile(
         entity=_entity(),
         user_id=0,
         actor=actor,
-        actors=_dossier(actor),
+        actors=dossier,
+        context_pack=pack,
     )
 
     assert profile.generation_path == "error_stub"
@@ -256,12 +288,14 @@ def test_v1_reddit_final_effective_system_message_is_exactly_attested(
     monkeypatch.setenv("SIM_WORLD_BRIEF", "true")
     actor = _actor()
     generator = _generator()
+    dossier, pack = _seal(tmp_path, actor, generator)
     profile = generator.generate_profile_from_entity(
         entity=_entity(),
         user_id=0,
         use_llm=False,
         actor=actor,
-        actors=_dossier(actor),
+        actors=dossier,
+        context_pack=pack,
     )
     profile_path = str(tmp_path / "reddit_profiles.json")
     generator.save_profiles([profile], profile_path, platform="reddit")
@@ -339,7 +373,7 @@ def test_v1_direct_legacy_helpers_fail_closed():
     ) is None
 
 
-def test_v1_role_promotes_only_public_hard_relationships_with_epistemics():
+def test_legacy_v2_role_promotes_only_public_hard_relationships_with_epistemics():
     actor = _actor()
     public = {
         "source": actor["name"],
@@ -389,7 +423,7 @@ def test_v1_role_promotes_only_public_hard_relationships_with_epistemics():
         "relationships": [public, private, model_only],
     }
 
-    contract = build_actor_role_contract(
+    contract = _build_legacy_actor_role_contract(
         actor, _dossier(actor), context_pack=context_pack
     )
     relationships = contract["relationships"]

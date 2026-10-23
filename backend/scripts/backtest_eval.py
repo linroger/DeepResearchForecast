@@ -11,6 +11,31 @@ and score the forecasts per ablation arm (design: docs/handoff/backtest/design.m
                     against research_only
     forward-check   validate a 2–12-week forward question file, print its prompts
     forward-score   score the live binaries the resolution monitor has resolved
+    forward-enroll  freeze a two-arm prospective design before forecast deadlines
+    forward-record  bind a published binary or a final failed/abstained/void disposition
+
+Use forward-score --enrollment PATH for the full prospective denominator. Enrollment
+and recording are local-only; neither command starts a pipeline or acquires outcomes.
+All three forward commands accept --ledger-dir for the same publication registry.
+Enrollment and new prediction bindings reject settlements already known anywhere
+in that registry, including terminal market anchors. Late failure accounting remains available.
+The design contains cohort_id, policy_version, two arms (id/method/budget_usd), a
+contrast (kind/baseline/candidate), and questions (question_id/event_family_id,
+statement/resolution_criteria, forecast_due_at/outcome_not_before/resolution_date,
+resolution_source with kind and the exact published anchor). Equal-cost contrasts
+also require cost_tolerance_usd; investigation requires practical_brier_margin.
+Official-data anchors require frequency (D/W/M/Q/A); their sources require
+outcome_vintage (an exact YYYY-MM-DD outcome dataset
+vintage, separate from the forecast anchor's provenance). Publications must carry
+the enrolled resolution_date; market deadlines can also use the registry's date
+extraction. Unsupported or mismatched outcome vintages remain unscored.
+Trial JSON contains question_id, arm, status and all disjoint costs_usd components:
+acquisition/simulation/verification/retries/failures/synthesis (null means unknown).
+Published trials additionally require report_id, forecast_id, evidence_sha256 and
+forecast_request_sha256. Other terminal dispositions require a reason. Publication
+bindings must be recorded before forecast_due_at, and cannot be revised afterward.
+A published trial may later receive one void/disputed disposition through
+forward-record, preserving its costs and original probability with an explicit reason.
 
 Every backtest pipeline cuts its inputs at the question's ``as_of_date`` (search,
 fetch, official data, market prices); the LLM's own training knowledge is not cut,
@@ -533,7 +558,36 @@ def forward_score(ledger_dir: Optional[str] = None, bins: int = ge.DEFAULT_BINS)
             rows.append({"id": f"{record.get('report_id')}:{record.get('forecast_id')}", "probability": probability,
                          "outcome": outcome, "category": kind, "difficulty": None})
     return {"mode": "forward-score", "generated_at": _now(), "ledger_dir": ledger_dir or "(default)",
+            "interpretation": "Legacy resolved-only descriptive scores; no enrollment denominator or probability-lift claim.",
             "skipped_unusable": skipped, "metrics": ge.score_pairs(rows, bins=bins)}
+
+
+def prospective_score(enrollment: str, ledger_dir: Optional[str] = None,
+                      bins: int = ge.DEFAULT_BINS) -> Dict[str, Any]:
+    """Public CLI consumer: join full enrollment, then reuse the existing scorer."""
+    from app.services.backtest import evaluation_report
+    report = evaluation_report(path=enrollment, ledger_dir=ledger_dir)
+    for arm, data in report["arms"].items():
+        resolved = [r for r in report["questions"] if r["arm"] == arm and r["status"] == "resolved"]
+        data["metrics"] = ge.score_pairs(resolved, bins=bins)
+        data["coverage"] = len(resolved) / data["enrolled"]
+    return report
+
+
+def cmd_forward_enroll(args: argparse.Namespace) -> int:
+    from app.services.backtest import enroll_evaluation
+    with open(args.design, encoding="utf-8") as stream:
+        result = enroll_evaluation(json.load(stream), path=args.enrollment, ledger_dir=args.ledger_dir)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_forward_record(args: argparse.Namespace) -> int:
+    from app.services.backtest import record_evaluation_trial
+    with open(args.trial, encoding="utf-8") as stream:
+        result = record_evaluation_trial(json.load(stream), path=args.enrollment, ledger_dir=args.ledger_dir)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 # ============================================================ CLI
@@ -617,7 +671,9 @@ def cmd_forward_check(args: argparse.Namespace) -> int:
 
 
 def cmd_forward_score(args: argparse.Namespace) -> int:
-    report = forward_score(args.ledger_dir, bins=args.bins)
+    enrollment = getattr(args, "enrollment", None)
+    report = (prospective_score(enrollment, args.ledger_dir, bins=args.bins) if enrollment
+              else forward_score(args.ledger_dir, bins=args.bins))
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as stream:
@@ -682,7 +738,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--include-examples", action="store_true", help="also check entries marked example")
     p.set_defaults(func=cmd_forward_check)
 
-    p = sub.add_parser("forward-score", help="score live binaries the resolution monitor resolved")
+    p = sub.add_parser("forward-enroll", help="freeze prospective questions and arms locally; no dispatch")
+    p.add_argument("--design", required=True, help="prospective design JSON; see module docstring for schema")
+    p.add_argument("--enrollment", required=True, help="immutable enrollment/trial JSONL journal")
+    p.add_argument("--ledger-dir", default=None, help="registry checked for already known settlements; default: FORECAST_LEDGER_DIR")
+    p.set_defaults(func=cmd_forward_enroll)
+
+    p = sub.add_parser("forward-record", help="bind one publication or final disposition; no provider calls")
+    p.add_argument("--trial", required=True, help="trial JSON with costs and publication reference or reason")
+    p.add_argument("--enrollment", required=True)
+    p.add_argument("--ledger-dir", default=None, help="existing publication/resolution registry")
+    p.set_defaults(func=cmd_forward_record)
+
+    p = sub.add_parser("forward-score", help="score prospective enrollment, or legacy resolved-only binaries")
+    p.add_argument("--enrollment", default=None, help="retain every enrolled trial, including unresolved and failed")
     p.add_argument("--ledger-dir", default=None, help="default: FORECAST_LEDGER_DIR")
     p.add_argument("--bins", type=int, default=ge.DEFAULT_BINS)
     p.add_argument("-o", "--out", default=None)
@@ -692,7 +761,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ValueError, OSError) as exc:
+        print(f"{args.cmd}: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

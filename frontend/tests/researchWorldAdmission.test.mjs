@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as vue from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import * as i18n from '../src/i18n.js'
 import * as liveProgress from '../src/utils/liveProgress.js'
+import * as simRecord from '../src/utils/simRecord.js'
+import * as world from '../src/utils/worldSimulationView.js'
+import * as feedRounds from '../src/utils/feedRounds.js'
 import { compileSfc } from './sfcHarness.mjs'
+const translationHarness = new URL('./simulationTranslationHarness.mjs', import.meta.url)
+const overlay = existsSync(translationHarness) ? (await import(translationHarness.href)).overlay : {}
 
 // Exercise the real API adapter and SFC setup/template. Only transport, child
 // components, lifecycle scheduling, storage, and polling timers are substituted.
@@ -48,7 +53,7 @@ function findNode(node, predicate) {
   return null
 }
 
-function harness(t, { mount = true, saved = '', lang = 'en' } = {}) {
+function harness(t, { mount = true, saved = '', lang = 'en', simulationComponent = null } = {}) {
   i18n.locale.value = lang
   const storage = new Map(saved ? [['drf_active_pipeline', saved]] : [])
   const restoreStorage = replaceGlobal('localStorage', {
@@ -84,6 +89,7 @@ function harness(t, { mount = true, saved = '', lang = 'en' } = {}) {
     'SimulationView', 'ForecastReport', 'PipelineHistory', 'SettingsMenu', 'ConfirmDialog']) {
     imports[`../components/research/${name}.vue`] = { default: { name, render: () => null } }
   }
+  if (simulationComponent) imports['../components/research/SimulationView.vue'] = { default: simulationComponent }
   imports['../components/GraphPanel.vue'] = { default: { render: () => null } }
   const component = buildView(imports)
   const scope = vue.effectScope()
@@ -360,4 +366,66 @@ test('unmount invalidates an outstanding preflight and late completion cannot re
   assert.equal(h.state.preflightLoading.value, false)
   assert.equal(h.state.preflightChecked.value, false)
   assert.equal(h.state.effectiveSimulationEngine.value, '')
+})
+
+
+test('dashboard forwards Stage 5 status and report record requests to the simulation consumer', async t => {
+  const h = harness(t, { mount: false })
+  h.state.pipelineId.value = 'pipe_record'
+  h.state.status.value = 'running'
+  h.state.simulationId.value = 'sim_record'
+  h.state.stages.value = { run: { status: 'running' } }
+  await h.render()
+  let sim = h.node(node => node.type?.name === 'SimulationView')
+  assert.equal(sim.props['stage-status'], 'running')
+  h.state.stages.value = { run: { status: 'completed' }, report: { status: 'running' } }
+  await h.render()
+  sim = h.node(node => node.type?.name === 'SimulationView')
+  assert.equal(sim.props['stage-status'], 'completed')
+  const report = h.node(node => node.type?.name === 'ForecastReport')
+  const before = sim.props['open-record-request']
+  report.props.onOpenSimulationRecord({ sha256: 'a'.repeat(64), url: '/api/simulation/sim_record/record.md' })
+  await h.render()
+  sim = h.node(node => node.type?.name === 'SimulationView')
+  assert.equal(sim.props['open-record-request'], before + 1)
+  assert.equal(h.state.activeTab.value, 'sim')
+  sim.props.onRecordState({ available: true, status: 200 })
+  assert.match(text(await h.render()), /record ready/)
+})
+
+
+test('the actual world-v1 record is hidden when the dashboard selects another tab', async t => {
+  const rec = JSON.parse(readFileSync(new URL('./fixtures/sim/simulation_record.en.json', import.meta.url), 'utf8'))
+  const RecordView = compileSfc(new URL('../src/components/research/SimulationRecordView.vue', import.meta.url))({
+    vue, '../../i18n': i18n, '../../utils/simRecord': simRecord,
+  })
+  const SimulationView = compileSfc(new URL('../src/components/research/SimulationView.vue', import.meta.url))({
+    vue, '../../i18n': i18n, '../../utils/simRecord': simRecord, '../../utils/worldSimulationView': world,
+    '../../utils/feedRounds': feedRounds,
+    '../../utils/overlayTranslation': overlay,
+    './SimulationRecordView.vue': { default: RecordView },
+    './WorldSimulationView.vue': { default: { render: () => null } },
+    './WorldStatePanel.vue': { default: { render: () => null } },
+    '../../api/simulation': {
+      getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: 'world-v1' } }),
+      fetchRecord: async () => ({ record: rec, status: 200, publicationStatus: 'passed' }),
+    },
+  })
+  const setup = SimulationView.setup
+  SimulationView.setup = async (props, ctx) => {
+    const state = setup(props, ctx)
+    for (let i = 0; i < 4; i++) await settle()
+    return state
+  }
+  const h = harness(t, { mount: false, simulationComponent: SimulationView })
+  h.state.pipelineId.value = 'pipe_record'
+  h.state.simulationId.value = 'sim_record'
+  h.state.stages.value = { run: { status: 'completed' } }
+  h.state.activeTab.value = 'report'
+  const hidden = await h.render()
+  assert.match(hidden, /class="simulation-pane" style="display:none;"/)
+  assert.match(hidden, /class="sim-record"/)
+  h.state.pickTab('sim')
+  const visible = await h.render()
+  assert.doesNotMatch(visible.match(/<div class="simulation-pane"[^>]*>/)[0], /display:none/)
 })

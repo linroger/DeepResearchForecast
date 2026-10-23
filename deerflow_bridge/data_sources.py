@@ -1038,7 +1038,7 @@ def _citation(value: Any) -> str:
     return value if isinstance(value, str) and re.fullmatch(r"S[1-9]\d*", value) else ""
 
 
-def load_datasets(out_dir: str | Path) -> list[dict]:
+def load_datasets(out_dir: str | Path, *, strict: bool = False) -> list[dict]:
     """Read hash-bound local data only. Corrupt rows never become evidence."""
     try:
         root = Path(out_dir)
@@ -1076,9 +1076,13 @@ def load_datasets(out_dir: str | Path) -> list[dict]:
                 seen.add(series.series)
                 result.append({**row, **data})
             except (ValueError, TypeError, KeyError, OSError) as exc:
+                if strict:
+                    raise ValueError("Pinned official dataset payload is invalid") from exc
                 logger.warning("Official data row unavailable: integrity or containment validation failed (%s)", _reason(exc))
         return result
     except (ValueError, TypeError, KeyError, OSError) as exc:
+        if strict:
+            raise ValueError("Pinned official dataset manifest or payload is invalid") from exc
         logger.warning("Official data manifest unavailable: integrity or containment validation failed (%s)", _reason(exc))
         return []
 
@@ -1157,7 +1161,7 @@ def _max_series(value: Any) -> int | None:
 
 
 def load_official_data(handoff_dir: str | Path, *, max_series: int | None = None,
-                       anchored: Iterable[str] = ()) -> dict | None:
+                       anchored: Iterable[str] = (), strict: bool = False) -> dict | None:
     """The bounded official-data carrier for downstream stages.
 
     ``max_series`` defaults to DATA_SOURCES_MAX_SERIES (24). Rows rank anchored series
@@ -1165,9 +1169,9 @@ def load_official_data(handoff_dir: str | Path, *, max_series: int | None = None
     each in manifest order; ids beyond the cap are listed under ``omitted``.
     """
     limit = _max_series(max_series)
+    rows = load_datasets(handoff_dir, strict=strict)
     if limit is None:
         return None
-    rows = load_datasets(handoff_dir)
     if not rows:
         return None
     try:

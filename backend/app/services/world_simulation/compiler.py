@@ -15,7 +15,7 @@ from typing import Any
 
 from .contracts import (
     CAUSAL_ORDER_POLICY, ENGINE, SPEC_SCHEMA, WorldError, canonical_json, clone, decimal, digest,
-    identifier, require, stable_id, validate_spec, visibility,
+    identifier, parse_time, require, stable_id, validate_spec, visibility,
 )
 
 COMPILER_VERSION = "world-compiler/v1"
@@ -166,7 +166,8 @@ def _access(row: dict) -> tuple[bool, bool, bool]:
 
 
 class _Sources:
-    def __init__(self, report: str, generation: str, engine: str, bundle: Any):
+    def __init__(self, report: str, generation: str, engine: str, bundle: Any,
+                 *, preparation_context: dict | None = None):
         require(isinstance(report, str) and bool(report.strip()), "missing_research", "A nonempty research report is required")
         require(len(report.encode("utf-8")) <= MAX_SOURCE_BYTES, "source_too_large", "Research report exceeds compiler bound")
         identifier(generation, "researchGenerationId")
@@ -177,6 +178,16 @@ class _Sources:
         self.bundle = clone(bundle or {"actors": []})
         _source_json(self.bundle)
         self.document = self.bundle["actors"] if isinstance(self.bundle.get("actors"), dict) else self.bundle
+        self.preparation = None
+        self.observations = []
+        if preparation_context is not None:
+            from ..actor_context import canonical_json_sha256
+            from .artifacts import validate_preparation_binding
+            self.preparation = validate_preparation_binding(preparation_context,
+                expected_sources={"report_sha256": _sha(report),
+                                  "actors_sha256": canonical_json_sha256(self.document if bundle is not None else None)},
+                research_generation_id=generation)
+            self.observations = self.preparation["quantitative"]["observations"]
         rows = self.document.get("actors")
         require(isinstance(rows, list) and len(rows) <= 1000 and all(isinstance(r, dict) for r in rows),
                 "invalid_source", "Research actor roster must be a bounded list of objects")
@@ -273,6 +284,85 @@ class _Sources:
                 require(claim["claim"] in report[ref["start"]:ref["end"]],
                         "unresolved_source", "Unsealed claim text is absent from its exact report span")
 
+        if self.preparation is not None:
+            # Extend the existing text-denial guard to the shared projection.
+            # Its modeler partition never grants an actor new knowledge, even
+            # if a proposal copies it into a nominal scenario assumption.
+            qualitative = self.preparation['qualitative']
+            public_text = {_norm(r['claim']) for r in qualitative['public'] if isinstance(r.get('claim'), str)}
+            from ..actor_context import actor_id_for
+            audiences = {aid: {_norm(r['claim']) for r in qualitative['actors'].get(actor_id_for(row), [])
+                               if isinstance(r.get('claim'), str)} for aid, row in self.actors.items()}
+            for row in qualitative['modeler']:
+                if not isinstance(row.get('claim'), str):
+                    continue
+                text = _norm(row['claim'])
+                if text in public_text:
+                    continue
+                owners = [aid for aid, texts in audiences.items() if text in texts]
+                if not owners:
+                    if _specific_denial(text):
+                        self.denied.append(text)
+                    else:
+                        self.denied_exact.add(text)
+                # Store one allowed audience set rather than turning shared
+                # actor knowledge into several mutually denying owner rows.
+                self.restricted_text.append((text, frozenset(owners)))
+
+    def preparation_pin(self) -> dict:
+        require(self.preparation is not None, 'invalid_preparation_context', 'No research preparation supplied')
+        return {'schemaVersion': 'research-preparation/v1', 'contentSha256': self.preparation['content_sha256'],
+                'source': clone(self.preparation['source'])}
+
+    def observation(self, ref: Any) -> dict:
+        require(self.preparation is not None, 'invalid_preparation_context', 'Official references require a verified preparation bundle')
+        require(isinstance(ref, dict) and set(ref) == {'observationId', 'bundleSha256', 'target', 'unit', 'period'}
+                and ref['target'] == 'value' and ref['bundleSha256'] == self.preparation['content_sha256'],
+                'unresolved_official_observation', 'Official metric references need exact bundle, observation, unit and period identities')
+        matches = [row for row in self.observations if row['id'] == ref['observationId'] and row['period'] == ref['period']]
+        require(len(matches) == 1, 'unresolved_official_observation', 'Official observation identity or period does not resolve uniquely')
+        row = matches[0]
+        require(row['source_kind'] == 'official_observation' and row['status'] in {'observed', 'preliminary'}
+                and row['unit'] == ref['unit'],
+                'unsupported_quantity_mapping', 'Only the exact native unit of an admitted official observation may seed a metric')
+        return row
+
+    def actor_preparation(self, actor_id: str) -> str:
+        from ..actor_context import actor_id_for
+        from ..research_preparation import render_preparation_context
+        row = self.actors.get(actor_id)
+        audience = 'actor' if row is not None else 'public'
+        prepared_id = actor_id_for(row) if row is not None else None
+        rendered = render_preparation_context(self.preparation, audience=audience,
+                                               actor_id=prepared_id, max_chars=12000)
+        # The shared renderer emits complete JSON rows. Inspect exactly what
+        # will travel, including typed omission diagnostics; omitted/private
+        # source rows are not an excuse to reject an otherwise safe projection.
+        for line in rendered.splitlines():
+            if line.startswith('{'):
+                try:
+                    value = json.loads(line)
+                except ValueError:
+                    # A multiline question may start a line with a brace;
+                    # it is ordinary header text, not a serialized evidence row.
+                    value = line.strip()
+                self.safe_projection(value, actor_id=actor_id, public=row is None)
+            elif line.strip():
+                self.safe_projection(line.strip(), actor_id=actor_id, public=row is None)
+        return rendered
+
+    def safe_projection(self, value: Any, *, actor_id: str | None = None, public: bool = False) -> None:
+        """Check complete evidence metadata; empty optional fields are valid."""
+        if isinstance(value, str) and value.strip():
+            self.safe(value, actor_id=actor_id, public=public)
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                self.safe_projection(key, actor_id=actor_id, public=public)
+                self.safe_projection(item, actor_id=actor_id, public=public)
+        elif isinstance(value, list):
+            for item in value:
+                self.safe_projection(item, actor_id=actor_id, public=public)
+
     def _validate_legacy(self) -> None:
         """Revalidate available source/claim seals without invoking resealing."""
         from ..actor_context import INTELLIGENCE_DIMENSIONS
@@ -308,7 +398,7 @@ class _Sources:
                 and not any(denied and denied in normalized for denied in self.denied),
                 "forbidden_actor_evidence", "Denied or modeler-only evidence cannot enter actor-visible text")
         if actor_id is not None or public:
-            require(not any((public or owner != actor_id) and restricted
+            require(not any((public or (actor_id not in owner if isinstance(owner, frozenset) else owner != actor_id)) and restricted
                             and (restricted in normalized if _specific_denial(restricted) else restricted == normalized)
                             for restricted, owner in self.restricted_text),
                     "forbidden_actor_evidence", "Private claim text cannot enter another audience through an assumption")
@@ -355,11 +445,14 @@ class _Sources:
               public: bool = False, profile: bool = False) -> dict:
         require(isinstance(value, dict) and set(value) <= {"kind", "refs"}, "missing_provenance", "Explicit bounded basis is required")
         kind, refs = value.get("kind"), value.get("refs")
-        require(kind in {"source_claim", "report_excerpt", "scenario_assumption"}, "missing_provenance", "Initial evidence cannot be a simulation event")
+        require(kind in {"source_claim", "report_excerpt", "scenario_assumption", "official_observation"}, "missing_provenance", "Initial evidence cannot be a simulation event")
         require(isinstance(refs, list) and 1 <= len(refs) <= 100, "missing_provenance", "Evidence references are required")
         resolved = []
         for ref in refs:
-            if kind == "scenario_assumption":
+            if kind == 'official_observation':
+                require(not profile, 'unsupported_quantity_mapping', 'Official quantities cannot establish actor beliefs or identity')
+                self.observation(ref)
+            elif kind == "scenario_assumption":
                 require(isinstance(ref, str) and ref in assumptions, "unresolved_assumption", "Scenario assumption reference does not resolve")
             elif kind == "report_excerpt":
                 require(not profile and actor_id is None and not public, "forbidden_actor_evidence", "Report spans alone do not authorize actor knowledge")
@@ -421,8 +514,37 @@ def _value_leaves(value: Any, path: str = ""):
         yield path, value
 
 
-def _quantities(record: dict, sources: _Sources, *, keys: tuple[str, ...] | None = None) -> None:
+def _quantities(record: dict, sources: _Sources, *, keys: tuple[str, ...] | None = None,
+                official_metric: bool = False, as_of: str | None = None) -> None:
     basis = record["basis"]
+    if basis['kind'] == 'official_observation':
+        require(official_metric and len(basis['refs']) == 1, 'unsupported_quantity_mapping',
+                'Official observations can seed only initial metrics, never accounts, actions, rates or coefficients')
+        row = sources.observation(basis['refs'][0])
+        require(record.get('kind') in {'stock', 'rate', 'quantity'} and record.get('unit') == row['unit']
+                and decimal(record.get('value')) == decimal(str(row['value'])),
+                'unsupported_quantity_mapping', 'Initial metric must equal the official value in its full native units')
+        require(as_of is not None and parse_time(row['period_end']) <= parse_time(as_of)
+                and parse_time(row['as_of']) <= parse_time(as_of)
+                and parse_time(sources.preparation['scope']['as_of']) <= parse_time(as_of),
+                'preparation_period_mismatch', 'Official baseline or research cutoff is later than the simulated initial state')
+        # Native world JSON deliberately forbids floats. Preserve all source
+        # metadata, writing finite source floats as exact decimal text without
+        # rescaling or changing the shared bundle's original hashing recipe.
+        measurement = json.loads(_source_json(row), parse_float=str)
+        # The full baseline (including history) travels in visible state even
+        # when the bounded prompt omitted this series. Check that independent
+        # exposure path against the metric audience before attaching metadata.
+        policy = record['visibility']
+        if policy['kind'] == 'public':
+            sources.safe_projection(measurement, public=True)
+        elif policy['kind'] == 'actors':
+            for aid in policy['actorIds']:
+                sources.safe_projection(measurement, actor_id=aid)
+        record['baseline'] = {'schemaVersion': 'official-metric-baseline/v1',
+                              'preparationSha256': sources.preparation['content_sha256'],
+                              'researchGenerationId': sources.generation, 'observation': measurement}
+        return
     if basis["kind"] == "scenario_assumption":
         return
     target = {k: record[k] for k in keys if k in record} if keys else record
@@ -476,6 +598,8 @@ def _profile(raw: dict, sources: _Sources, assumptions: dict) -> dict:
     aid = identifier(raw.get("actorId"), "actorId")
     name = sources.safe(raw.get("name"), actor_id=aid)
     basis = sources.basis(raw.get("basis"), assumptions)
+    require(basis['kind'] != 'official_observation', 'unsupported_quantity_mapping',
+            'An official metric observation cannot establish actor identity')
     source = sources.actors.get(aid)
     require(sources.actor_names.get(_norm(name), aid) == aid,
             "actor_basis_mismatch", "An admitted actor name cannot be rebound to another identity")
@@ -656,7 +780,8 @@ def _policy_metadata(policy: Any) -> None:
 
 def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str,
                        research_report: str, research_generation_id: str,
-                       research_engine: str, actor_bundle: dict | None = None) -> dict:
+                       research_engine: str, actor_bundle: dict | None = None,
+                       preparation_context: dict | None = None) -> dict:
     """Compile a new world derivative; reject missing evidence before launch.
 
     ``actor_bundle`` is raw actors.json for unsealed v3, or the envelope
@@ -669,7 +794,8 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
                  "periods", "asOf", "horizon", "initialState", "actionCatalog", "scheduledEvents", "flows",
                  "assumptions", "sourceBindings", "seed", "limits", "gaps", "policy"}
     require(set(raw_spec) <= permitted, "invalid_spec", "Modeler proposal contains unsupported fields")
-    sources = _Sources(research_report, research_generation_id, research_engine, actor_bundle)
+    sources = _Sources(research_report, research_generation_id, research_engine, actor_bundle,
+                       preparation_context=preparation_context)
     spec = clone(raw_spec)
     # Compiler-owned semantics for fresh worlds. Saved specs/forks retain their
     # original pin; modeler output cannot choose a different resolution rule.
@@ -694,7 +820,15 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
     require(len(spec["actors"]) == len(raw_spec["actors"]), "invalid_actor", "Actor choices must be objects")
     # Validate the public schema before dereferencing mechanism identities.
     spec["sourceBindings"] = {}
+    if sources.preparation is not None:
+        spec['sourceBindings'] = {'preparationContext': sources.preparation_pin(),
+                                  'researchGenerationId': sources.generation}
+        spec['researchContext'] = {'schemaVersion': 'native-research-context/v1',
+                                  'actors': {a['actorId']: sources.actor_preparation(a['actorId']) for a in spec['actors']}}
     spec = validate_spec(spec)
+    if sources.preparation is not None and sources.preparation['scope'].get('as_of'):
+        require(parse_time(sources.preparation['scope']['as_of']) <= parse_time(spec['asOf']),
+                'preparation_period_mismatch', 'Research preparation cutoff is later than the simulated initial state')
     actor_ids = {a["actorId"] for a in spec["actors"]}
     for assumption in spec["assumptions"]:
         assumption["visibility"] = visibility(assumption.get("visibility", {"kind": "analyst"}), actor_ids)
@@ -709,7 +843,8 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
         for record in records.values():
             require(set(record) <= common | fields[section], "invalid_state", "Unsupported initial state field")
             _visible_basis(record, sources, assumptions, actor_ids)
-            _quantities(record, sources, keys=("balance", "value"))
+            _quantities(record, sources, keys=("balance", "value"),
+                        official_metric=section == 'metrics', as_of=spec['asOf'])
             basis = record["basis"]
             evidence = {_evidence(sources.claims[(r["actorId"], r["claimId"])])
                         for r in basis["refs"]} if basis["kind"] == "source_claim" else {basis["kind"]}
@@ -739,6 +874,9 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
     for row in spec["scheduledEvents"] + spec["flows"]:
         _visible_basis(row, sources, assumptions, actor_ids)
         _quantities(row, sources, keys=("parameters", "ratePerDay"))
+        if any(spec['initialState']['metrics'][row[key]]['basis']['kind'] == 'official_observation'
+               for key in ('rateMetric', 'limitMetric') if key in row and row[key] in spec['initialState']['metrics']):
+            _quantities(row, sources, keys=('rateMetric', 'limitMetric'))
     from .kernel import validate_mechanisms
     try:
         validate_mechanisms(spec)
@@ -780,17 +918,21 @@ def _compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str
         "assumptionsSha256": digest(spec["assumptions"]),
         "mappingVersion": "exact-permitted-claims-or-declared-priors/v1",
     }
+    if sources.preparation is not None:
+        spec['sourceBindings']['preparationContext'] = sources.preparation_pin()
     return validate_spec(spec)
 
 
 def compile_world_spec(raw_spec: Any, *, simulation_id: str, generation_id: str,
                        research_report: str, research_generation_id: str,
-                       research_engine: str, actor_bundle: dict | None = None) -> dict:
+                       research_engine: str, actor_bundle: dict | None = None,
+                       preparation_context: dict | None = None) -> dict:
     """Public preparation boundary; malformed proposals always raise WorldError."""
     try:
         return _compile_world_spec(raw_spec, simulation_id=simulation_id, generation_id=generation_id,
                                    research_report=research_report, research_generation_id=research_generation_id,
-                                   research_engine=research_engine, actor_bundle=actor_bundle)
+                                   research_engine=research_engine, actor_bundle=actor_bundle,
+                                   preparation_context=preparation_context)
     except WorldError:
         raise
     except (TypeError, KeyError, AttributeError, IndexError, RecursionError, OverflowError):
@@ -833,11 +975,13 @@ def _strip_derived_fields(row: dict) -> dict:
 def build_compiler_messages(*, research_report: str, research_generation_id: str,
                             research_engine: str, actor_bundle: dict | None = None,
                             ontology: dict | None = None, simulation_requirement: str = "",
-                            max_actors: int | None = None) -> list[dict]:
+                            max_actors: int | None = None,
+                            preparation_context: dict | None = None) -> list[dict]:
     """Build bounded modeler messages. Caller owns model invocation and budgets."""
     from .contracts import DEFAULT_LIMITS
 
-    sources = _Sources(research_report, research_generation_id, research_engine, actor_bundle)
+    sources = _Sources(research_report, research_generation_id, research_engine, actor_bundle,
+                       preparation_context=preparation_context)
     require(ontology is None or isinstance(ontology, dict), "invalid_source", "Ontology must be an object")
     require(isinstance(simulation_requirement, str) and len(simulation_requirement) <= 16000,
             "invalid_source", "Simulation requirement exceeds compiler bound")
@@ -872,6 +1016,12 @@ def build_compiler_messages(*, research_report: str, research_generation_id: str
                "claims": evidence, "actorCandidatesForModelerOnly": document,
                "limits": {"maxActors": max_actors},
                "ontology": ontology or {}, "requirement": simulation_requirement}
+    if sources.preparation is not None:
+        from ..research_preparation import render_preparation_context
+        payload['preparationContext'] = {'schemaVersion': 'research-preparation/v1',
+            'contentSha256': sources.preparation['content_sha256'],
+            'scope': sources.preparation['scope'],
+            'modelerContext': render_preparation_context(sources.preparation, audience='modeler', max_chars=48000)}
     body = _source_json(payload)
     require(len(body.encode("utf-8")) <= MAX_PROMPT_BYTES, "compiler_context_limit", "Required evidence exceeds modeler context bound; select a smaller scenario explicitly")
     system = f"""You propose a bounded simulation-world-spec/v1 JSON object for world-v1.
@@ -949,5 +1099,18 @@ leave the value unknown. Return gaps [{{code,description}}] only for a requested
 mechanism that cannot be stated even as a declared assumption; any gap stops
 preparation, so never return gaps together with a model you expect to run.
 The result is a conditional model, not a calibrated scientific forecast.
+"""
+    if sources.preparation is not None:
+        system += """
+With the supplied preparationContext, an initial METRIC may instead use basis
+{kind:"official_observation",refs:[{observationId:<exact row id>,bundleSha256:<contentSha256>,
+target:"value",unit:<complete native unit>,period:<exact row period>} ]}. Copy the exact
+row value and full native unit into that metric; use only source_kind official_observation
+rows in observations, with observed or preliminary status. The compiler adds baseline
+metadata. These historical observations do not establish actor budgets, action costs,
+flow rates or causal coefficients. Those still require explicit typed source mappings or
+scenario assumptions, including a flow's rateMetric/limitMetric mapping. Never use guidance,
+projections, targets, diagnostic ranges or modeler-only material as observed state or actor
+knowledge. Do not emit researchContext or baseline fields; the compiler owns projections.
 """
     return [{"role": "system", "content": system}, {"role": "user", "content": body}]

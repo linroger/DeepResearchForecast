@@ -6,7 +6,7 @@ Step2: Zep实体读取与过滤、OASIS模拟准备与运行（全程自动化�
 import os
 import re
 import traceback
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, Response
 
 from . import simulation_bp
 from ..config import Config
@@ -2491,6 +2491,90 @@ def get_simulation_world_state(simulation_id: str):
         return jsonify({"success": True, "data": data})
     except Exception as e:
         logger.error(f"读取世界状态失败: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _record_publication(sim_dir: str):
+    """(published, publication_status) of a simulation's after-action record.
+
+    Served only when ``simulation_record_contract.is_published`` holds (an audit exists,
+    passed, and carries no hard issue); the status names why it is withheld otherwise.
+    """
+    from ..services import simulation_record_contract as _rc
+    record, status = _rc.load_published_record(sim_dir)
+    return record is not None, status
+
+
+def _record_route_preamble(simulation_id: str):
+    """Shared containment for the record routes: ``(sim_dir, record, error_response)``.
+
+    Same posture as the world-state route — realpath containment under
+    OASIS_SIMULATION_DATA_DIR, the record file a regular file only (symlinks refused),
+    the size cap — then the publication gate: 404 while no record exists, 409 while
+    the record is unaudited or failed its gate (ADR 0003: an unaudited or failed record is
+    never served).
+    """
+    from ..services import simulation_record_contract as _rc
+    sim_dir = _contained_sim_dir(simulation_id)
+    if sim_dir is None:
+        return None, None, (jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404)
+    paths = _rc.record_paths(sim_dir)
+    if os.path.islink(paths["json"]) or not os.path.isfile(paths["json"]):
+        return None, None, (jsonify({"success": False, "error": "模拟事后记录尚未生成"}), 404)
+    if os.path.getsize(paths["json"]) > WORLD_STATE_MAX_BYTES:
+        return None, None, (jsonify({"success": False, "error": "模拟事后记录文件超出大小上限"}), 413)
+    record, status = _rc.load_published_record(sim_dir)
+    if record is None:
+        return None, None, (jsonify({
+            "success": False,
+            "error": "模拟事后记录未通过审计门，不予提供（见 simulation_record_audit.json）",
+            "publication_status": status,
+        }), 409)
+    return sim_dir, record, None
+
+
+@simulation_bp.route('/<simulation_id>/record', methods=['GET'])
+def get_simulation_record(simulation_id: str):
+    """SIMULATION AFTER-ACTION RECORD (ADR 0003, design §3.6): the gate-passed
+    ``simulation_record.json`` (schema simulation-record/v1) as JSON.
+
+    404 when no record exists; 409 with ``publication_status`` (``not_audited`` /
+    ``failed`` / ``stale_audit`` when the file no longer matches the audited bytes) when
+    the deterministic gate has not passed it; containment, symlink
+    refusal and size bounds as for ``/world-state``.
+    """
+    try:
+        sim_dir, record, error = _record_route_preamble(simulation_id)
+        if error is not None:
+            return error
+        return jsonify({"success": True, "data": record})
+    except Exception as e:
+        logger.error(f"读取模拟事后记录失败: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@simulation_bp.route('/<simulation_id>/record.md', methods=['GET'])
+def get_simulation_record_markdown(simulation_id: str):
+    """The record's deterministic Markdown rendering as ``text/markdown``.
+
+    Render ``zh`` or ``en`` from the same verified JSON snapshot used by ``/record``.
+    Both stored renderings must still match their audit seals. No translation call
+    or unchecked cache read is made. Same 404 / 409 containment behaviour as ``/record``.
+    """
+    try:
+        sim_dir, record, error = _record_route_preamble(simulation_id)
+        if error is not None:
+            return error
+        want_zh = str(request.args.get("lang", "") or "").strip().lower().startswith("zh")
+        from ..services.simulation_record import render_markdown
+        text = render_markdown(record, "zh" if want_zh else "en")
+        response = Response(text, mimetype="text/markdown; charset=utf-8")
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Disposition"] = (
+            f'inline; filename="simulation_record{".zh" if want_zh else ""}.md"')
+        return response
+    except Exception as e:
+        logger.error(f"读取模拟事后记录渲染失败: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 

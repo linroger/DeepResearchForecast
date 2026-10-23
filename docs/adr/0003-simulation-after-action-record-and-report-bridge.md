@@ -1,6 +1,6 @@
 # ADR 0003 — Simulation After-Action Record and the Forecast-Report Bridge
 
-- **Status:** Proposed (drafted 2026-10-22; awaiting owner acceptance)
+- **Status:** Implemented and verified offline; fresh-provider operational acceptance remains open (owner requested completion on 2026-10-23)
 - **Date:** 2026-10-22
 - **Design and change list:** `docs/handoff/simulation-after-action-record/design.md`
 - **Continuity record:** `docs/handoff/simulation-after-action-record/handoff.md`
@@ -128,6 +128,41 @@ sanctioned place, so it is either hidden or disguised.
   documented and tested; marker and label drift has happened before
   (`【预测结果分布` vs `【推演结果分布`), so one constants module is shared by renderers,
   lint and tests.
+
+## Implementation status (2026-10-23)
+
+Claude's S0–S4 integration was recovered from `579c1acf` and completed on
+`codex/simulation-report-boundary`. The owner explicitly asked to finish the
+attached architecture; version-1 decisions D1–D6 use the recommendations below.
+The previous outline-prompt exception is closed, including direct writer tools
+and the community-tool fallback. The native world engine remains opt-in.
+
+The record now binds canonical JSON, both deterministic Markdown renderings and
+its consumed simulation inputs, including the native world manifest. Every public
+record consumer uses the verified snapshot. Missing/stale records are repaired
+without rerunning a paid simulation or repeating synthesis. A shared terminal
+publisher covers main, reuse, seed and standalone paths; the parallel runner waits
+for post-hoc artifacts before announcing completion.
+
+Legacy fallback records are compiled and audited in memory with synthesis off.
+Rejected projections produce health-only disclosures. Both primary and translated
+bridges must match exact deterministic bytes, including zero-bridge policies and
+malformed-marker negatives. The composed Mandarin translator reviews only prose;
+its source-bound model receipt and the deterministic envelope are checked again
+at publication. Unknown policy never grants a record link.
+
+Verification and exact limits are recorded in
+[completion.md](../handoff/simulation-after-action-record/completion.md) and
+[verification.json](../handoff/simulation-after-action-record/verification.json):
+883 feature-branch backend tests, 321 frontend tests, and 981 backend / 379 frontend
+tests on the composed working tree, with explicit skips/expected failures retained.
+A copied complete nine-period saved run passes the record gate with zero warnings;
+the actual Vue component was exercised in both UI languages and across periods.
+
+The separately defined fresh-provider acceptance runs and optional synthesis
+provider check have not been performed. These are operational evidence limits,
+not permission to give simulated shares probability authority or to overwrite
+existing accepted reports. No prospective calibration claim is made.
 
 ## Alternatives considered
 

@@ -589,7 +589,12 @@ def test_scripted_engine_to_published_report_api_and_export(tmp_path, monkeypatc
         def gateway_factory(args, reporter, bridge, preset):
             return rg.ModelGateway(model, reporter, max_concurrency=1, budget_units=preset.budget_units,
                                    reserve_share=lr.RESERVE_SHARE, sleep=lambda seconds: None)
-        engine = lr._Engine(QUESTION, research, args, {}, log, lambda: None, bridge,
+        metadata = {}
+        def write_metadata():
+            # The CLI supplies this persistence callback in production. The
+            # assessment sidecar must keep its actual producer metadata pin.
+            (research / "meta.json").write_text(json.dumps(metadata, ensure_ascii=False))
+        engine = lr._Engine(QUESTION, research, args, metadata, log, write_metadata, bridge,
                             gateway_factory, tools_factory, env)
         receipt["stage"] = "full production engine"
         assert engine.execute() == 0, (engine.meta, log.lines)

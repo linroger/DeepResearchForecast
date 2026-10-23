@@ -194,6 +194,7 @@ def test_real_prepare_reload_reprepare_and_failure_controls(prepare_env, monkeyp
     dossier = _dossier()
     for actor, marker in zip(dossier["actors"], ("ALPHA_LOCAL_ONLY", "BETA_LOCAL_ONLY")):
         actor["intelligence"]["dimensions"]["current_actions"][0]["claim"] = f"{actor['name']} performs {marker}."
+        actor["intelligence"]["dimensions"]["current_actions"][0]["visibility"] = "actor_known"
     manager, state = _prepare(dossier)
     directory, config = _config(manager, state)
     before = {p.name: p.read_bytes() for p in directory.glob("*.json")}
@@ -211,12 +212,18 @@ def test_real_prepare_reload_reprepare_and_failure_controls(prepare_env, monkeyp
         persona = reddit[profile_index]["persona"]
         assert token in persona
         assert forbidden not in persona
+    # Same-generation preparation remains permitted, but a new research
+    # generation needs a new simulation ID and may not overwrite the old owner.
+    _prepare(dossier, state.simulation_id)
+    owner_before = {p.name: p.read_bytes() for p in directory.glob("*.json") if p.name != "state.json"}
     dossier["forecast_horizon"] = "through 2028"
-    _, updated = _prepare(dossier, state.simulation_id)
+    with pytest.raises(ValueError, match="source generation mismatch"):
+        _prepare(dossier, state.simulation_id)
+    assert owner_before == {p.name: p.read_bytes() for p in directory.glob("*.json") if p.name != "state.json"}
+    _, updated = _prepare(dossier)
     assert updated.actor_context_manifest_sha256 != state.actor_context_manifest_sha256
-    # State objects are cached by the manager, so retain the old config bytes as
-    # the independent before-image rather than relying on mutable alias state.
-    assert (directory / "simulation_config.json").read_bytes() != before["simulation_config.json"]
+    updated_directory, _ = _config(reloaded, updated)
+    assert (updated_directory / "simulation_config.json").read_bytes() != before["simulation_config.json"]
     reloaded.validate_prepared_simulation_config(updated.simulation_id)
 
     def fail_completion(self, saved):
@@ -227,8 +234,8 @@ def test_real_prepare_reload_reprepare_and_failure_controls(prepare_env, monkeyp
     original_save = SimulationManager._save_simulation_state
     monkeypatch.setattr(SimulationManager, "_save_simulation_state", fail_completion)
     with pytest.raises(OSError, match="completion-write fixture"):
-        _prepare(dossier, state.simulation_id)
-    assert reloaded._load_simulation_state(state.simulation_id).status == SimulationStatus.FAILED
+        _prepare(dossier, updated.simulation_id)
+    assert reloaded._load_simulation_state(updated.simulation_id).status == SimulationStatus.FAILED
 
 
 @pytest.mark.parametrize("kind", ["report", "roster", "future_cutoff"])
@@ -321,7 +328,8 @@ def test_graph_priors_reorder_real_cast_without_cross_actor_roles(prepare_env, m
     manager.validate_prepared_simulation_config(state.simulation_id)
 
 
-def test_late_relevant_report_paragraph_reaches_actual_persona(prepare_env, monkeypatch):
+@pytest.mark.parametrize("admitted", [False, True])
+def test_late_relevant_report_paragraph_needs_actor_admission(prepare_env, monkeypatch, admitted):
     dossier = _dossier()
     report = (
         "# Alpha Systems evidence\n\n"
@@ -330,13 +338,16 @@ def test_late_relevant_report_paragraph_reaches_actual_persona(prepare_env, monk
         + "# Beta Union evidence\n\nBeta Union has a separate reporting obligation.\n"
     )
     dossier["actor_intelligence_contract"]["report_sha256"] = hashlib.sha256(report.encode()).hexdigest()
+    if admitted:
+        claim = dossier["actors"][0]["intelligence"]["dimensions"]["knowledge_state"][0]
+        claim.update(claim="Alpha Systems has the LATE_RELEVANT_CONTEXT permit obligation.", visibility="actor_known")
     # Exercise the supported larger role budget so report findings survive the
     # compiler's documented category compaction, instead of testing JSON alone.
     monkeypatch.setenv("SIM_ACTOR_ROLE_PROMPT_MAX_CHARS", "12000")
     manager, state = _prepare(dossier, report=report)
     directory, _ = _config(manager, state)
     profiles = json.loads((directory / "reddit_profiles.json").read_text())
-    assert "LATE_RELEVANT_CONTEXT" in profiles[0]["persona"]
+    assert ("LATE_RELEVANT_CONTEXT" in profiles[0]["persona"]) is admitted
     manifest, packs = validate_actor_context_artifacts(str(directory))
     assert manifest["report_sha256"] == dossier["actor_intelligence_contract"]["report_sha256"]
     alpha = packs["actor_alpha"]

@@ -393,9 +393,11 @@ class Config:
     # $26.28 的内部成本表追加进了 full_report.md（客户交付物）；置 true 恢复旧的「附录进
     # full_report.md」行为（telemetry.md 两种取值下都会写；run 遥测仍落 telemetry.json / state.options）。
     REPORT_TELEMETRY_APPENDIX = os.environ.get('REPORT_TELEMETRY_APPENDIX', 'False').strip().lower() == 'true'
-    # REPORT-3：默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
-    # 钉进每章作可引用的数字底座，提升引用覆盖、减少探索式工具调用。
-    REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'True').strip().lower() == 'true'  # I-3-2 每章注入定量信号包
+    # REPORT-3 曾默认开——把确定性 sim 聚合（top actors/volumes/coalition sizes/P(outcome)/scenario diff）
+    # 钉进每章作可引用的数字底座。ADR 0003 (S3, design §3.4.1)：默认关。模拟产出是 simulated 记录类，
+    # 只经确定性桥接区进入报告；即使打开，_build_signal_pack 在 diagnostic_only / no_update 下也返回
+    # 空串，仅 fixture 专用的 legacy_prompt 策略还会构建信号包。
+    REPORT_SIGNAL_PACK = os.environ.get('REPORT_SIGNAL_PACK', 'False').strip().lower() == 'true'  # I-3-2 每章注入定量信号包（ADR 0003 默认关）
     # RQ-4：默认 False→True。基线-情景对比表是 what-if 报告的核心可引用工件；仅在有 base
     # 模拟 + 命中「对比/反事实」章节时注入，缺基线时自动 no-op（degrade-safe）。
     REPORT_COMPARISON_TABLE = os.environ.get('REPORT_COMPARISON_TABLE', 'True').strip().lower() == 'true'  # I-3-4 基线-情景对比表
@@ -1246,6 +1248,17 @@ class Config:
     # the arbiter temperature of paths 1..K-1 (path 0, the agents' own, stays at 0.3; capped at 1.0).
     SIM_WORLD_PATHS = os.environ.get('SIM_WORLD_PATHS', '1').strip() or '1'
     SIM_WORLD_PATH_TEMPERATURE = os.environ.get('SIM_WORLD_PATH_TEMPERATURE', '0.7').strip() or '0.7'
+    # —— Simulation After-Action Record (ADR 0003; docs/handoff/simulation-after-action-record/design.md §3.1) ——
+    # Stage 5 finalization compiles simulation_record.json / .md / .zh.md from the simulation's own artifacts
+    # (never the dossier, sources, spine or markets) and audits it with the deterministic gate
+    # (simulation_record_audit.json). The record is a 'simulated' record class: never evidence, never a
+    # probability input; an unaudited or failed record is not served. false → no record is written; the RUN
+    # stage and report publication are unaffected either way.
+    SIM_RECORD_ENABLED = os.environ.get('SIM_RECORD_ENABLED', 'true').strip().lower() == 'true'
+    # One bounded LLM call writes the record's overall synthesis from the deterministic skeleton only; on any
+    # provider error or new gate hard issue it is dropped, the skeleton is kept and the reason recorded.
+    # false → deterministic skeleton only, zero LLM calls.
+    SIM_RECORD_SYNTHESIS = os.environ.get('SIM_RECORD_SYNTHESIS', 'true').strip().lower() == 'true'
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
 
     # —— OASIS 并发上限（每轮在飞 LLM 请求数）单一真源（EXECPLAN2 I-8-4）——

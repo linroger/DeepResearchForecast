@@ -1313,6 +1313,8 @@ def validate_direct_child_config_seal(
             raise ForecastTaskError("current forecast task preparation has not completed")
         if KEY not in load_config(config_path):
             raise ForecastTaskError("prepared forecast task cannot downgrade to an unmarked config")
+    from app.services.preparation_adapter import validate_preparation_ready
+    validate_preparation_ready(load_config(config_path), state)
     state_manifest_sha = str(
         state.get("simulation_config_manifest_sha256") or ""
     )
@@ -3799,8 +3801,14 @@ WORLD_ACTIONS_FILE = "world_actions.jsonl"
 
 def _world_model_enabled(config: Dict[str, Any]) -> bool:
     """World mode is presence-keyed on the sealed ``world_model`` block plus the flag."""
-    return (isinstance(config, dict) and isinstance(config.get("world_model"), dict)
-            and _flag_true("SIM_WORLD_MODEL", "true"))
+    if not isinstance(config, dict):
+        return False
+    block = config.get("world_model")
+    pinned = ("research_preparation" in config or isinstance(block, dict)
+              and (block.get("settings") or {}).get("branch_policy") == "adaptive-v1")
+    if pinned and not isinstance(block, dict):
+        raise WorldContextMismatch("pinned grounded runtime requires a world_model")
+    return isinstance(block, dict) and (pinned or _flag_true("SIM_WORLD_MODEL", "true"))
 
 
 def _append_jsonl(path: str, row: Dict[str, Any]) -> None:
@@ -3858,6 +3866,48 @@ class _ReflexiveWorldCoordinator:
         self._language = _sim_output_language(config)
         self._agent_configs = [c for c in (config.get("agent_configs") or []) if isinstance(c, dict)]
         self._power = self._dc._outcome_power_map(self._agent_configs)
+        # Required evidence is validated once, before any best-effort runtime catch.
+        self._preparation = None
+        self._preparation_public = ""
+        self._preparation_actors = {}
+        if "research_preparation" in config:
+            from app.services.research_preparation import load_preparation_context, render_preparation_context
+            marker = config["research_preparation"]
+            if (not isinstance(marker, dict) or marker.get("schema_version") != "research-preparation/v1"
+                    or not isinstance(marker.get("content_sha256"), str) or len(marker["content_sha256"]) != 64
+                    or not isinstance(marker.get("source"), dict) or not marker["source"]):
+                raise WorldContextMismatch("invalid required research preparation marker")
+            try:
+                self._preparation = load_preparation_context(
+                    simulation_dir, expected_sha256=marker["content_sha256"], expected_sources=marker["source"])
+                self._preparation_public = render_preparation_context(self._preparation, audience="public", max_chars=8000)
+                identities = set()
+                for cfg in self._agent_configs:
+                    aid, actor_id = cfg.get("agent_id"), cfg.get("actor_id")
+                    if cfg.get("preparation_audience") == "public":
+                        if type(aid) is not int or actor_id:
+                            raise ValueError("public preparation audience requires an unmapped numeric agent")
+                        self._preparation_actors[aid] = self._preparation_public
+                        continue
+                    if cfg.get("entity_type") == "Audience" and not actor_id:
+                        continue
+                    if type(aid) is not int or not actor_id or actor_id in identities:
+                        raise ValueError("missing or duplicate preparation actor_id mapping")
+                    identities.add(actor_id)
+                    self._preparation_actors[aid] = render_preparation_context(
+                        self._preparation, audience="actor", actor_id=actor_id, max_chars=8000)
+            except Exception as exc:
+                raise WorldContextMismatch(f"required research preparation rejected: {exc}") from exc
+        from app.services.world_paths import resolve_branch_policy
+        try:
+            self._branch_settings = resolve_branch_policy(settings)
+        except ValueError as exc:
+            raise WorldContextMismatch(str(exc)) from exc
+        self._adaptive = self._branch_settings["branch_policy"] == "adaptive-v1"
+        self._branch_used = 0
+        self._branch_inflight = None
+        self._branch_personas = {}
+        self._fatal_error = None
         # scenario-share WorldState: same knobs/semantics as the in-band evolution
         try:
             self._inertia = float(os.environ.get("SIM_DECISION_INERTIA", "0.7") or "0.7")
@@ -3869,6 +3919,12 @@ class _ReflexiveWorldCoordinator:
             self._conv_eps = 0.02
         self._conv_window = max(1, int(self._dc._cfg("SIM_CONVERGENCE_WINDOW", 3) or 3))
         self._entropy_on = _flag_true("WORLDSTATE_ENTROPY_MIX", "true")
+        if self._adaptive:
+            # Fixed versioned defaults keep environment changes from reinterpreting a saved experiment.
+            self._inertia = 0.7
+            self._entropy_on = True
+            self._pressure_weight = float(settings.get("pressure_weight", 0.35))
+            self._arbiter_on = settings.get("arbiter_enabled", True) is not False
         unit = str(self._tc.get("unit") or "").strip() or self._dc._infer_calendar_unit(self._tc.get("round_dates"))
         self._unit = unit
         self._avg_gap = dict(self._dc._UNIT_NOMINAL_DAYS).get(unit or "", 0.0)
@@ -3924,18 +3980,22 @@ class _ReflexiveWorldCoordinator:
                     log_info(f"reflexive world: resumed world_state.json at committed round {self._resumed_round}")
             except WorldContextMismatch:
                 raise
-            except Exception as _load_err:  # noqa: BLE001 — a corrupt state file falls back to the seed
+            except Exception as _load_err:  # noqa: BLE001 — a corrupt legacy state falls back to the seed
+                if self._adaptive:
+                    raise WorldContextMismatch("unreadable adaptive world checkpoint") from _load_err
                 self._world = None
                 log_info(f"reflexive world: could not load world_state.json ({_load_err}); rebuilding from seed")
         if self._world is None:
             self._world = WorldModel.from_seed(self._block, self._agent_configs, scenarios=self._scenarios)
             try:
-                ratio = settings.get("max_change_ratio", float(_cfg_flag("SIM_WORLD_MAX_CHANGE_RATIO", "0.5") or 0.5))
+                ratio = (settings.get("max_change_ratio", 0.5) if self._adaptive else
+                         settings.get("max_change_ratio", float(_cfg_flag("SIM_WORLD_MAX_CHANGE_RATIO", "0.5") or 0.5)))
             except (TypeError, ValueError):
                 ratio = 0.5
             self._world.settings.setdefault("max_change_ratio", ratio)
             self._brief = self._world.render_public_brief(upto_round=0, previous=None)
             self._digest = ""
+        self._brief = self._with_preparation_public(self._brief)
         if self._ws is not None and self._world.scenario_shares:
             try:
                 shares = {str(k): float(v) for k, v in (self._world.scenario_shares or {}).items()
@@ -4020,22 +4080,30 @@ class _ReflexiveWorldCoordinator:
         # EXOGENOUS SHOCKS: SIM_WORLD_SHOCKS=false stops the documented shocks from firing (recorded in the
         # world's settings only when it has shocks, so a world without them serialises as before)
         if getattr(self._world, "shocks", None):
-            self._world.settings["shocks_enabled"] = _flag_true("SIM_WORLD_SHOCKS", "true")
+            self._world.settings["shocks_enabled"] = (settings.get("shocks_enabled", True) if self._adaptive
+                                                       else _flag_true("SIM_WORLD_SHOCKS", "true"))
         # WORLD PATHS (design §2.12): K seeded variants of every round's world update sharing the actors'
         # decisions; path 0 is self._world (the path the agents live in), the siblings live in self._paths
         from app.services.world_paths import DEFAULT_PATH_TEMPERATURE, resolve_path_count, resolve_path_temperature
-        self._k, _paths_note = resolve_path_count(_cfg_flag("SIM_WORLD_PATHS", "1"))
-        if _paths_note:
-            log_info(f"reflexive world: {_paths_note}")
-        self._path_temperature = resolve_path_temperature(
-            _cfg_flag("SIM_WORLD_PATH_TEMPERATURE", str(DEFAULT_PATH_TEMPERATURE)))
+        if self._adaptive:
+            self._k = self._branch_settings["path_count"]
+            self._seed_value = self._branch_settings["path_seed"]
+            self._path_temperature = self._branch_settings["path_temperature"]
+        else:
+            self._k, _paths_note = resolve_path_count(_cfg_flag("SIM_WORLD_PATHS", "1"))
+            if _paths_note:
+                log_info(f"reflexive world: {_paths_note}")
+            self._path_temperature = resolve_path_temperature(
+                _cfg_flag("SIM_WORLD_PATH_TEMPERATURE", str(DEFAULT_PATH_TEMPERATURE)))
         self._paths: List[Dict[str, Any]] = []
         self._paths_restarted_at: Optional[int] = None
         self._path_sem = asyncio.Semaphore(max(1, self._decision_conc - 1))
         if self._k > 1:
             try:
                 self._init_paths()
-            except Exception as _paths_err:  # noqa: BLE001 — path 0 must run even if the siblings cannot
+            except Exception as _paths_err:  # noqa: BLE001 — legacy siblings remain best effort
+                if self._adaptive:
+                    raise WorldContextMismatch(f"adaptive paths cannot be restored: {_paths_err}") from _paths_err
                 self._paths = []
                 log_info(f"reflexive world: world paths unavailable ({_paths_err}); running one path")
 
@@ -4133,7 +4201,12 @@ class _ReflexiveWorldCoordinator:
         except (OSError, ValueError, TypeError) as exc:
             self._log(f"reflexive world: partial restart projection ({type(exc).__name__}); committed shares preserved")
 
-    def _previous_decision_note(self, aid: int) -> str:
+    def _with_preparation_public(self, brief: str) -> str:
+        if self._preparation_public and self._preparation_public not in brief:
+            return brief + "\n\n" + self._preparation_public
+        return brief
+
+    def _previous_decision_note(self, aid: int, *, world=None, rows=None, committed_round=None) -> str:
         """Only this actor's last committed move memory enters its structured call.
 
         The platform publisher already produces this private note for organic
@@ -4141,15 +4214,18 @@ class _ReflexiveWorldCoordinator:
         project the same note without copying it into public world artifacts.
         """
         from app.services.agent_decision import AgentDecision, decision_memory_note
-        row = self._private_decision_rows.get(aid)
-        if not row or row.get("round", 0) > self._max_round:
+        world = self._world if world is None else world
+        rows = self._private_decision_rows if rows is None else rows
+        committed_round = self._max_round if committed_round is None else committed_round
+        row = rows.get(aid)
+        if not row or row.get("round", 0) > committed_round:
             return ""
-        decision = AgentDecision(aid, self._world.actor_name(aid), row.get("option") or {},
+        decision = AgentDecision(aid, world.actor_name(aid), row.get("option") or {},
                                  targets=row.get("targets") or [], magnitude=row.get("magnitude") or 0,
                                  public_statement=row.get("public_statement") or "",
                                  private_rationale=row.get("private_rationale") or "",
                                  commitment=row.get("commitment"), status=row.get("status") or "invalid")
-        note = decision_memory_note(decision, self._world._period_label_for_round(row["round"]))
+        note = decision_memory_note(decision, world._period_label_for_round(row["round"]))
         if len(note) > 1800:
             note = note[:1800] + " [private move memory truncated]"
         return "# YOUR PREVIOUS DECISION (private memory)\n" + note if note else ""
@@ -4187,14 +4263,57 @@ class _ReflexiveWorldCoordinator:
                 + (f"\n[{len(lines) - 12} further public observations omitted]" if len(lines) > 12 else ""))
 
     def _init_paths(self) -> None:
-        """WORLD PATHS: the sibling paths 1..K-1, restored from ``world_paths.json`` when a resume matches
-        its committed round, else copied from path 0 (a resumed run then records the round the siblings
-        restarted from: what they had diverged into before is lost)."""
+        """Restore sibling checkpoints. Only legacy shared paths may rebuild from path 0.
+
+        Adaptive checkpoints bind policy, config, budget, personas and local records;
+        incomplete or inconsistent state cannot silently become a new experiment.
+        """
         from app.services.world_model import WorldModel
         from app.services.world_paths import WORLD_PATHS_FILE, WORLD_PATHS_VERSION
         from app.services.worldstate import WorldState
         restored: Dict[int, Dict[str, Any]] = {}
-        if self._resumed_round > 0:
+        adaptive_file = os.path.join(self._dir, WORLD_PATHS_FILE)
+        if self._adaptive and (self._resumed_round > 0 or os.path.exists(adaptive_file)):
+            with open(adaptive_file, encoding="utf-8") as handle:
+                saved = json.load(handle)
+            from app.services.actor_context import canonical_json_sha256
+            if saved.get("content_sha256") != canonical_json_sha256(
+                    {k: v for k, v in saved.items() if k != "content_sha256"}):
+                raise WorldContextMismatch("adaptive checkpoint content hash mismatch")
+            if (saved.get("schema_version") != WORLD_PATHS_VERSION
+                    or saved.get("config_hash") != self._config_fingerprint
+                    or saved.get("simulation_id") != str(self._config.get("simulation_id") or "")
+                    or saved.get("branch_settings") != self._branch_settings
+                    or saved.get("committed_round") != self._resumed_round
+                    or saved.get("inflight_round") is not None):
+                raise WorldContextMismatch("incomplete or mismatched adaptive checkpoint")
+            used = saved.get("decision_attempts_used")
+            if type(used) is not int or not 0 <= used <= self._branch_settings["branch_decision_budget"]:
+                raise WorldContextMismatch("invalid adaptive decision budget")
+            self._branch_used = used
+            self._branch_personas = {int(k): v for k, v in saved.get("personas", {}).items()}
+            if used and (set(self._branch_personas) != set(self._world.actors)
+                         or any(not isinstance(v, str) or not v for v in self._branch_personas.values())):
+                raise WorldContextMismatch("missing adaptive personas")
+            restored = {row["path"]: row for row in saved.get("paths", [])}
+            if set(restored) != set(range(1, self._k)):
+                raise WorldContextMismatch("missing adaptive sibling")
+            attempts = 0
+            for row in restored.values():
+                records = row.get("records")
+                if not isinstance(records, list) or len(records) > self._branch_settings["branch_max_rounds"]:
+                    raise WorldContextMismatch("invalid adaptive round records")
+                for index, record in enumerate(records, 1):
+                    decisions = record.get("actor_decisions")
+                    if (record.get("round") != index or not isinstance(decisions, list)
+                            or len(decisions) > self._branch_settings["branch_max_actors"]):
+                        raise WorldContextMismatch("invalid adaptive decision records")
+                    attempts += len(decisions)
+                if row.get("completed_round", 0) != len(records):
+                    raise WorldContextMismatch("adaptive completed round differs from records")
+            if attempts != used:
+                raise WorldContextMismatch("adaptive decision budget differs from records")
+        elif self._resumed_round > 0:
             try:
                 with open(os.path.join(self._dir, WORLD_PATHS_FILE), "r", encoding="utf-8") as handle:
                     saved = json.load(handle)
@@ -4211,7 +4330,9 @@ class _ReflexiveWorldCoordinator:
             row = restored.get(i)
             try:
                 world = WorldModel.from_dict(row["world"]) if row else None
-            except Exception:  # noqa: BLE001 — an unreadable sibling restarts from path 0
+            except Exception:  # noqa: BLE001 — an unreadable legacy sibling restarts from path 0
+                if self._adaptive:
+                    raise
                 world, row = None, None
             if world is None:
                 world = WorldModel.from_dict(self._world.to_dict())
@@ -4227,7 +4348,12 @@ class _ReflexiveWorldCoordinator:
                 ws.round_statuses = [str(s) for s in statuses]
                 world.scenario_shares = dict(ws.shares)
             self._paths.append({"path": i, "world": world, "ws": ws,
-                                "arbiter_failed": int((row or {}).get("arbiter_failed_rounds") or 0)})
+                                "arbiter_failed": int((row or {}).get("arbiter_failed_rounds") or 0),
+                                "private_decisions": {int(k): v for k, v in (row or {}).get("private_decisions", {}).items()},
+                                "discourse": str((row or {}).get("discourse") or ""),
+                                "records": list((row or {}).get("records") or []),
+                                "completed_round": int((row or {}).get("completed_round") or 0),
+                                "stop_reason": (row or {}).get("stop_reason"), "decisions": []})
         if self._resumed_round > 0 and len(restored) < self._k - 1:
             self._paths_restarted_at = self._resumed_round
             self._log(f"reflexive world: {self._k - 1 - len(restored)} world path(s) restarted from path 0 "
@@ -4283,6 +4409,45 @@ class _ReflexiveWorldCoordinator:
     def _period_for(self, round_num: int) -> Optional[Dict[str, Any]]:
         return self._period_by_round.get(round_num)
 
+    def _raise_if_failed(self) -> None:
+        if self._fatal_error is not None:
+            raise WorldContextMismatch(self._fatal_error)
+
+    def _fail_adaptive(self, exc: Exception) -> None:
+        if self._adaptive:
+            self._fatal_error = self._fatal_error or f"adaptive runtime failed closed: {exc}"
+            # Release peers to observe the failure, never to start another round.
+            for event in self._events.values():
+                event.set()
+            for future in self._decision_futures.values():
+                if not future.done():
+                    future.set_result({})
+            raise WorldContextMismatch(self._fatal_error) from exc
+
+    async def _wait_for_adaptive_commit(self, round_num: int) -> None:
+        """Do not let either platform checkpoint an uncommitted adaptive round."""
+        if not self._adaptive:
+            return
+        self._raise_if_failed()
+        if not self._is_committed(round_num):
+            await asyncio.wait_for(self._event_for(round_num).wait(), timeout=self._barrier_timeout)
+        self._raise_if_failed()
+        if not self._is_committed(round_num):
+            raise WorldContextMismatch("adaptive round did not commit")
+
+    def freeze_branch_personas(self, lookup) -> None:
+        """Bind the whole static cast during platform setup, before activity sampling."""
+        self._raise_if_failed()
+        if not self._adaptive or self._branch_personas:
+            return
+        personas = {}
+        for aid in sorted(self._world.actors):
+            persona = str(lookup(aid) or "") if lookup else ""
+            if not persona:
+                raise WorldContextMismatch(f"adaptive persona missing for actor {aid}")
+            personas[aid] = persona
+        self._branch_personas = personas
+
     def register_logger(self, platform: str, action_logger: Any) -> None:
         if action_logger is not None:
             self._loggers[str(platform)] = action_logger
@@ -4291,6 +4456,7 @@ class _ReflexiveWorldCoordinator:
     async def begin_round(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
                           action_logger: Any = None) -> Tuple[str, str]:
         """Barrier on round ``round_num-1`` then hand out this round's brief + digest."""
+        self._raise_if_failed()
         self.register_logger(platform, action_logger)
         try:
             if round_num > 0 and not self._is_committed(round_num - 1):
@@ -4312,16 +4478,19 @@ class _ReflexiveWorldCoordinator:
                     self._log(f"reflexive world: barrier timeout before round {round_num + 1}; "
                               f"platform(s) {missing or '?'} marked stalled, committing with available deliveries")
                     await self._try_commit(flush_upto=round_num - 1)
+            self._raise_if_failed()
             if round_num not in self._started_rounds:
                 self._started_rounds.add(round_num)
                 self._world.start_round(round_num + 1, period or self._period_for(round_num))
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: begin_round failed (continuing with last brief): {_e}")
         return self._brief, self._digest
 
     async def decide(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
                      roster_ids: List[int], system_message_lookup, fired_events: List[Dict[str, Any]]) -> Dict[int, Any]:
         """One structured decision per roster actor for this round, shared across platforms."""
+        self._raise_if_failed()
         if self._is_committed(round_num):
             # resume: this round's world update is already on disk (an older checkpoint replays it);
             # actors post organically instead of re-deciding a committed period
@@ -4329,8 +4498,11 @@ class _ReflexiveWorldCoordinator:
         fut = self._decision_futures.get(round_num)
         if fut is not None:
             try:
-                return dict(await asyncio.wait_for(asyncio.shield(fut), timeout=self._barrier_timeout))
+                result = dict(await asyncio.wait_for(asyncio.shield(fut), timeout=self._barrier_timeout))
+                self._raise_if_failed()
+                return result
             except Exception as _e:  # noqa: BLE001
+                self._fail_adaptive(_e)
                 self._log(f"reflexive world: waiting for shared decisions of round {round_num + 1} failed: {_e}")
                 return {}
         loop = asyncio.get_running_loop()
@@ -4340,7 +4512,9 @@ class _ReflexiveWorldCoordinator:
         try:
             result = await self._run_decisions(round_num, period or self._period_for(round_num), roster_ids,
                                                system_message_lookup, fired_events)
+            self._raise_if_failed()
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: decision step failed in round {round_num + 1} (actors hold): {_e}")
             result = {}
         self._world_decisions[round_num] = result
@@ -4349,12 +4523,14 @@ class _ReflexiveWorldCoordinator:
         return dict(result)
 
     async def _run_decisions(self, round_num: int, period: Optional[Dict[str, Any]], roster_ids: List[int],
-                             system_message_lookup, fired_events: List[Dict[str, Any]]) -> Dict[int, Any]:
+                             system_message_lookup, fired_events: List[Dict[str, Any]], *, path=None) -> Dict[int, Any]:
         from app.services.agent_decision import (
             build_decision_prompt, build_option_menu, elicit_decision, hold_decision,
         )
         rnd = round_num + 1
-        world = self._world
+        world = self._world if path is None else path["world"]
+        if path is None:
+            self.freeze_branch_personas(system_message_lookup)
         p = period or {}
         label = str(p.get("label") or f"round {rnd}")
         n_rounds = self._n_rounds or len(self._period_by_round) or rnd
@@ -4379,11 +4555,16 @@ class _ReflexiveWorldCoordinator:
             try:
                 options = build_option_menu(actor, world, rnd)
                 prompt = build_decision_prompt(
-                    actor, world_clock=clock, public_brief=self._brief,
+                    actor, world_clock=clock,
+                    public_brief=(self._brief if path is None else self._with_preparation_public(
+                        world.render_public_brief(upto_round=rnd - 1, previous=None))),
                     private_brief="\n\n".join(filter(None, (
-                        world.render_private_brief(aid, upto_round=rnd - 1), self._previous_decision_note(aid)))),
+                        world.render_private_brief(aid, upto_round=rnd - 1),
+                        self._previous_decision_note(aid) if path is None else self._previous_decision_note(
+                            aid, world=world, rows=path["private_decisions"], committed_round=path["completed_round"]),
+                        self._preparation_actors.get(aid, "")))),
                     options=options, scenarios=self._scenarios, cast_names=cast_names,
-                    language=self._language, recent_discourse=self._recent_discourse)
+                    language=self._language, recent_discourse=(self._recent_discourse if path is None else path["discourse"]))
                 try:
                     system_message = str(system_message_lookup(aid) or "") if system_message_lookup else ""
                 except Exception:  # noqa: BLE001
@@ -4401,13 +4582,14 @@ class _ReflexiveWorldCoordinator:
 
         await asyncio.gather(*(_one(int(aid)) for aid in roster_ids))
         try:
-            for aid in roster_ids:
+            for aid in (roster_ids if path is None else []):
                 d = decisions.get(int(aid))
                 if d is not None:
                     _append_jsonl(os.path.join(self._dir, WORLD_ACTIONS_FILE),
                                   {**d.to_dict(), "period_label": label,
                                    "config_hash": self._config_fingerprint})
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: writing world_actions.jsonl failed: {_e}")
         counts: Dict[str, int] = {}
         for d in decisions.values():
@@ -4419,6 +4601,7 @@ class _ReflexiveWorldCoordinator:
     async def deliver(self, platform: str, round_num: int, period: Optional[Dict[str, Any]],
                       round_actions: List[Dict[str, Any]], fired_events: List[Dict[str, Any]]) -> None:
         """Hand this platform's round to the world; commits once every live platform delivered."""
+        self._raise_if_failed()
         try:
             if self._is_committed(round_num):
                 self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
@@ -4443,11 +4626,14 @@ class _ReflexiveWorldCoordinator:
             buf["platforms"].add(str(platform))
             self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
             await self._try_commit()
+            await self._wait_for_adaptive_commit(round_num)
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: deliver failed in round {round_num + 1} (isolated): {_e}")
 
     async def heartbeat(self, platform: str, round_num: int, fired_events: Optional[List[Dict[str, Any]]] = None) -> None:
         """Dead / failed round on this platform: advance its watermark without actions."""
+        self._raise_if_failed()
         try:
             if self._is_committed(round_num):
                 self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
@@ -4467,10 +4653,13 @@ class _ReflexiveWorldCoordinator:
                 buf["events"].append(ev)
             self._watermark[str(platform)] = max(self._watermark.get(str(platform), -1), round_num)
             await self._try_commit()
+            await self._wait_for_adaptive_commit(round_num)
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: heartbeat failed in round {round_num + 1} (isolated): {_e}")
 
     async def platform_done(self, platform: str) -> None:
+        self._raise_if_failed()
         try:
             self._done.add(str(platform))
             await self._try_commit()
@@ -4478,22 +4667,27 @@ class _ReflexiveWorldCoordinator:
                 await self.finalize()
                 _WORLD_COORDINATORS.pop(os.path.abspath(self._dir), None)
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: platform_done failed (isolated): {_e}")
 
     async def finalize(self) -> None:
         """Flush pending rounds, write the scenario trajectory and the final world state (idempotent)."""
+        self._raise_if_failed()
         if self._finalized:
             return
         try:
             await self._try_commit(flush_all=True)
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: final flush failed (isolated): {_e}")
-        self._finalized = True
+        self._finalized = not self._adaptive
         try:
             self._write_world_state()
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: final world_state.json write failed: {_e}")
         if self._ws is None or self._stepped <= 0:
+            self._finalized = True
             return
         try:
             from app.utils.atomic import write_json_atomic
@@ -4528,11 +4722,16 @@ class _ReflexiveWorldCoordinator:
             self._log(f"reflexive world complete: leader={out.get('leader')} share={out.get('leader_share')} "
                       f"rounds={self._max_round} arbiter_failed={self._world_summary().get('arbiter_failed_rounds')}")
         except Exception as _e:  # noqa: BLE001
+            self._fail_adaptive(_e)
             self._log(f"reflexive world: trajectory write failed (isolated): {_e}")
+
+        self._finalized = True
 
     # ------------------------------------------------------------------ commit
     async def _try_commit(self, flush_upto: Optional[int] = None, flush_all: bool = False) -> None:
+        self._raise_if_failed()
         async with self._lock:
+            self._raise_if_failed()
             while True:
                 r = self._next_commit
                 pending = r in self._pending
@@ -4552,8 +4751,13 @@ class _ReflexiveWorldCoordinator:
                     live = [p for p in self._known_platforms() if p not in self._done and p not in self._stalled]
                     if any(self._watermark.get(p, -1) < r for p in live):
                         break
-                buf = self._pending.pop(r, None) or {"period": None, "actions": [], "events": []}
-                await self._commit_round(r, buf)
+                buf = self._pending.get(r) or {"period": None, "actions": [], "events": []}
+                try:
+                    await self._commit_round(r, buf)
+                except Exception as exc:
+                    self._fail_adaptive(exc)
+                    raise
+                self._pending.pop(r, None)
                 self._next_commit = r + 1
 
     async def _commit_round(self, round_num: int, buf: Dict[str, Any]) -> None:
@@ -4569,13 +4773,15 @@ class _ReflexiveWorldCoordinator:
         decisions = list((self._world_decisions.get(round_num) or {}).values())
         record: Dict[str, Any] = {}
         sibling_records: List[Dict[str, Any]] = [{} for _ in self._paths]
+        if self._adaptive:
+            await self._prepare_branch_decisions(rnd, period, buf.get("events") or [])
         try:
             before = self._world.snapshot()
             rng = random.Random(self._seed_value * 1000003 + rnd)
             primary = asyncio.to_thread(
                 run_world_round, self._world, rnd, period, decisions, buf.get("events") or [],
                 llm=self._llm, rng=rng, scenarios=self._scenarios, arbiter_enabled=self._arbiter_on,
-                language=self._language)
+                language=self._language, **({"preparation_context": self._preparation} if self._preparation else {}))
             if self._paths:
                 # WORLD PATHS: the siblings' updates run alongside path 0's — K arbiter calls at most
                 results = await asyncio.gather(
@@ -4587,7 +4793,7 @@ class _ReflexiveWorldCoordinator:
                 record = results[0]
             else:
                 record = await primary
-            self._brief = self._world.render_public_brief(upto_round=rnd, previous=before)
+            self._brief = self._with_preparation_public(self._world.render_public_brief(upto_round=rnd, previous=before))
             self._digest = str(record.get("digest") or "")
         except Exception as _e:  # noqa: BLE001 — the barrier must still release
             self._log(f"reflexive world: update failed in round {rnd} (state frozen, barrier released): {_e}")
@@ -4597,6 +4803,7 @@ class _ReflexiveWorldCoordinator:
                 pass
             record = {"round": rnd, "arbiter_status": "failed", "error": str(_e)[:200], "digest": self._digest,
                       "decisions": {"total": len(decisions)}, "diff": {}, "headline": f"{label}: update failed"}
+        self._raise_if_failed()
         # scenario-share WorldState (unchanged downstream contract)
         shares_row: Dict[str, Any] = {}
         round_status = ROUND_STATUS_MISSING
@@ -4680,9 +4887,10 @@ class _ReflexiveWorldCoordinator:
             if getattr(decision, "ok", False):
                 self._private_decision_rows[decision.agent_id] = decision.to_dict()
         self._recent_discourse = self._public_discourse(buf.get("actions") or [])
+        prior_max_round = self._max_round
         self._stepped += 1
         self._max_round = max(self._max_round, rnd)
-        self._committed_done.add(round_num)
+        # Artifacts carry the prospective head; public commit status follows durable writes.
         # artifacts
         try:
             history_row = {
@@ -4703,6 +4911,7 @@ class _ReflexiveWorldCoordinator:
                 "arbiter_problems": record.get("arbiter_problems") or [],
                 "arbiter_attempts": record.get("arbiter_attempts") or [],
                 "arbiter": record.get("arbiter") or {},
+                "replay": record.get("replay") or {},
                 "narrative": record.get("narrative") or "",
                 "diff": record.get("diff") or {},
                 "scenario_pressure": record.get("scenario_pressure") or {},
@@ -4715,15 +4924,25 @@ class _ReflexiveWorldCoordinator:
             _append_jsonl(os.path.join(self._dir, WORLD_HISTORY_FILE), history_row)
             self._write_world_state(headline=record.get("headline") or "")
         except Exception as _e:  # noqa: BLE001
+            if self._adaptive:
+                self._max_round = prior_max_round
+                self._stepped -= 1
+                self._fail_adaptive(_e)
             self._log(f"reflexive world: artifact write failed in round {rnd} (isolated): {_e}")
         if self._paths:
             try:
-                self._write_paths()
+                self._write_paths(committed=True)
+                self._branch_inflight = None
                 last = self._trajectory[-1] if self._trajectory else {}
                 dist = (last.get("paths") or {}) if last.get("round") == rnd else {}
                 self._log(f"world paths after {label}: k={self._k}, leaders={dist.get('leaders') or 'n/a'}")
             except Exception as _e:  # noqa: BLE001
+                if self._adaptive:
+                    self._max_round = prior_max_round
+                    self._stepped -= 1
+                    self._fail_adaptive(_e)
                 self._log(f"reflexive world: world_paths.json write failed in round {rnd} (isolated): {_e}")
+        self._committed_done.add(round_num)
         for plat, logger_obj in list(self._loggers.items()):
             try:
                 log_fn = getattr(logger_obj, "log_world_update", None)
@@ -4738,20 +4957,78 @@ class _ReflexiveWorldCoordinator:
         self._log(f"world update committed: {record.get('headline') or label}")
 
     # ------------------------------------------------------------------ world paths
+    async def _prepare_branch_decisions(self, rnd: int, period, events) -> None:
+        """Reserve the entire round before calls; interrupted reservations fail closed on restart."""
+        if self._branch_inflight is not None:
+            raise WorldContextMismatch("adaptive round already reserved; cannot repeat decisions")
+        limit = self._branch_settings["branch_max_actors"]
+        remaining = self._branch_settings["branch_decision_budget"] - self._branch_used
+        rosters = {}
+        for path in self._paths:
+            path["decisions"] = []
+            if path.get("stop_reason"):
+                continue
+            if rnd > self._branch_settings["branch_max_rounds"]:
+                path["stop_reason"] = "max_rounds"
+                continue
+            if remaining <= 0:
+                path["stop_reason"] = "decision_budget_exhausted"
+                continue
+            world = path["world"]
+            if world.round != rnd:
+                world.start_round(rnd, period)
+            # Stable rotating selection over this branch's cast, with its own due
+            # interactions first. Neither path 0's roster nor its decisions enter.
+            eligible = sorted(c["agent_id"] for c in self._agent_configs
+                              if c.get("entity_type") != "Audience" and c.get("agent_id") in world.actors)
+            eligible = list(dict.fromkeys(eligible))
+            offset = ((rnd - 1) * limit) % max(1, len(eligible))
+            ordered = eligible[offset:] + eligible[:offset]
+            owed = {int(i.recipient) for i in world.interactions.values() if i.is_open()}
+            for aid, actor in world.actors.items():
+                if any(str(c.get("source") or "").startswith("agreement:")
+                       and c.get("status") in ("pending", "due") and int(c.get("due_round") or 0) <= rnd
+                       for c in actor.commitments):
+                    owed.add(aid)
+            roster = (sorted(owed.intersection(eligible)) + [a for a in ordered if a not in owed])[:min(limit, remaining)]
+            if not roster:
+                path["stop_reason"] = "no_eligible_actors"
+                continue
+            if any(not self._branch_personas.get(aid) for aid in roster):
+                raise WorldContextMismatch("adaptive decisions require frozen actor personas")
+            rosters[path["path"]] = roster
+            remaining -= len(roster)
+        self._branch_used += sum(len(ids) for ids in rosters.values())
+        self._branch_inflight = {"round": rnd, "rosters": rosters}
+        self._write_paths()  # failure must prevent every reserved call
+        for path in self._paths:
+            roster = rosters.get(path["path"])
+            if roster:
+                decisions = await self._run_decisions(
+                    rnd - 1, period, roster, self._branch_personas.get, events, path=path)
+                path["decisions"] = [decisions[aid] for aid in roster]
+
     async def _sibling_round(self, path: Dict[str, Any], rnd: int, period: Optional[Dict[str, Any]],
                              decisions: List[Any], events: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """WORLD PATHS: one sibling's update for round ``rnd`` — the shared decisions on its own world,
-        its own RNG stream and an arbiter sampled at the bounded sibling temperature.  Never raises: a
-        failure freezes that path for the round, like a failed update of path 0."""
+        """Update a sibling with shared or adaptive-local decisions and its own RNG.
+
+        Bounded adaptive branches stop both decisions and updates at their limit.
+        Ordinary update failures retain the existing typed-failure behavior.
+        """
         from app.services.world_paths import path_rng
         from app.services.world_update import run_world_round
+        if self._adaptive:
+            decisions = path["decisions"]
+            if path.get("stop_reason"):
+                return {"arbiter_status": "skipped", "branch_stopped": path["stop_reason"]}
         try:
             async with self._path_sem:
                 record = await asyncio.to_thread(
                     run_world_round, path["world"], rnd, period, decisions, events, llm=self._llm,
                     rng=path_rng(self._seed_value, path["path"], rnd), scenarios=self._scenarios,
                     arbiter_enabled=self._arbiter_on, language=self._language,
-                    arbiter_temperature=self._path_temperature)
+                    arbiter_temperature=self._path_temperature,
+                    **({"preparation_context": self._preparation} if self._preparation else {}))
         except Exception as _e:  # noqa: BLE001
             self._log(f"reflexive world: path {path['path']} update failed in round {rnd} (that path freezes): {_e}")
             try:
@@ -4759,6 +5036,15 @@ class _ReflexiveWorldCoordinator:
             except Exception:  # noqa: BLE001
                 pass
             record = {"arbiter_status": "failed", "scenario_pressure": {}}
+        if self._adaptive:
+            for decision in decisions:
+                if decision.ok:
+                    path["private_decisions"][decision.agent_id] = decision.to_dict()
+            path["discourse"] = self._public_discourse([
+                {"agent_id": d.agent_id, "action_type": "CREATE_POST", "action_args": {"content": d.public_statement}}
+                for d in decisions if d.ok and d.public_statement])
+            path["completed_round"] = rnd
+        path["records"].append({**record, "round": rnd, "actor_decisions": [d.to_dict() for d in decisions]})
         if record.get("arbiter_status") in ("failed", "invalid"):
             path["arbiter_failed"] = int(path.get("arbiter_failed") or 0) + 1
         return record
@@ -4766,20 +5052,34 @@ class _ReflexiveWorldCoordinator:
     def _step_sibling_shares(self, sibling_records: List[Dict[str, Any]], conv: List[Dict[str, Any]],
                              actor_mass: float, inertia: float, entropy_days: Optional[int],
                              round_status: str) -> Optional[List[Dict[str, float]]]:
-        """WORLD PATHS: step every sibling's scenario shares with the actors' commitments (shared) plus its
-        own world channel (its arbiter's pressure, when applied).  Returns the shares of all K paths, path 0
-        first; None when a sibling fails (logged; path 0 is never affected)."""
-        from app.services.worldstate import pressure_commitments
+        """Step sibling shares with its admitted commitments and world pressure.
+
+        Adaptive paths derive commitments, mass and status solely from local decisions.
+        Legacy shared paths preserve their existing common commitment input.
+        """
+        from app.services.worldstate import pressure_commitments, commitment_mass, commitments_from_decisions
         try:
             shares = [dict(self._ws.shares)]
             for path, prec in zip(self._paths, sibling_records):
                 pws = path.get("ws")
                 if pws is None:
                     continue
-                world_rows = (pressure_commitments(prec.get("scenario_pressure"), dict(pws.shares), actor_mass,
+                if self._adaptive and path.get("stop_reason"):
+                    shares.append(dict(pws.shares))
+                    continue
+                local_conv, local_mass, local_status = conv, actor_mass, round_status
+                if self._adaptive:
+                    local_rows = [d.scenario_commitment(self._power.get(d.agent_id))
+                                  for d in path["decisions"] if d.ok and d.scenario != "abstain"]
+                    local_conv = commitments_from_decisions([r for r in local_rows if r is not None])
+                    local_mass = commitment_mass(local_conv)
+                    local_status = ("committed" if local_conv else "abstained" if any(
+                        d.ok and d.scenario == "abstain" for d in path["decisions"]) else
+                        "silent" if path["decisions"] else "missing")
+                world_rows = (pressure_commitments(prec.get("scenario_pressure"), dict(pws.shares), local_mass,
                                                    weight_ratio=self._pressure_weight)
                               if prec.get("arbiter_status") == "applied" else [])
-                pws.step(conv + world_rows, inertia=inertia, entropy_mix_days=entropy_days, round_status=round_status)
+                pws.step(local_conv + world_rows, inertia=inertia, entropy_mix_days=entropy_days, round_status=local_status)
                 path["world"].scenario_shares = dict(pws.shares)
                 shares.append(dict(pws.shares))
             return shares
@@ -4795,9 +5095,15 @@ class _ReflexiveWorldCoordinator:
                              rounds=self._max_round, per_path_shares=shares, scenarios=self._scenarios,
                              worlds=[self._world] + [p["world"] for p in self._paths],
                              arbiter_failed=[path0_failed] + [int(p.get("arbiter_failed") or 0) for p in self._paths],
-                             restarted_at_round=self._paths_restarted_at)
+                             restarted_at_round=self._paths_restarted_at,
+                             branch_policy=self._branch_settings["branch_policy"],
+                             decision_budget=({"limit": self._branch_settings["branch_decision_budget"],
+                                               "used": self._branch_used, "unit": "structured decision attempts",
+                                               "branches": [{"path": p["path"], "completed_round": p["completed_round"],
+                                                             "stop_reason": p["stop_reason"]} for p in self._paths]}
+                                              if self._adaptive else None))
 
-    def _write_paths(self) -> None:
+    def _write_paths(self, *, committed: bool = False) -> None:
         """WORLD PATHS: the siblings' committed state, for resume and inspection (``world_paths.json``)."""
         from app.services.world_paths import WORLD_PATHS_FILE, WORLD_PATHS_VERSION
         from app.utils.atomic import write_json_atomic
@@ -4809,8 +5115,17 @@ class _ReflexiveWorldCoordinator:
                        "shares": dict(p["ws"].shares) if p.get("ws") is not None else {},
                        "history": list(p["ws"].history) if p.get("ws") is not None else [],
                        "round_statuses": list(p["ws"].round_statuses) if p.get("ws") is not None else [],
-                       "world": p["world"].to_dict()} for p in self._paths],
+                       "world": p["world"].to_dict(), "records": p["records"],
+                       **({"private_decisions": p["private_decisions"], "discourse": p["discourse"],
+                           "completed_round": p["completed_round"],
+                           "stop_reason": p["stop_reason"]} if self._adaptive else {})} for p in self._paths],
         }
+        if self._adaptive:
+            from app.services.actor_context import canonical_json_sha256
+            payload.update(config_hash=self._config_fingerprint, branch_settings=self._branch_settings,
+                           decision_attempts_used=self._branch_used, inflight_round=None if committed else self._branch_inflight,
+                           personas=self._branch_personas)
+            payload["content_sha256"] = canonical_json_sha256(payload)
         if self._paths_restarted_at:
             payload["restarted_at_round"] = self._paths_restarted_at
         write_json_atomic(os.path.join(self._dir, WORLD_PATHS_FILE), payload)
@@ -4912,8 +5227,15 @@ def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected
         coord = _WORLD_COORDINATORS.get(key)
         if coord is not None and coord._config_fingerprint != _config_hash(config):
             raise WorldContextMismatch("active world coordinator belongs to another config")
+        if coord is not None:
+            coord._raise_if_failed()
         if coord is None:
             if not resume:
+                if ((config.get("world_model") or {}).get("settings", {}).get("branch_policy") == "adaptive-v1"
+                        and any(os.path.exists(os.path.join(simulation_dir, name)) for name in (
+                            "world_paths.json", WORLD_STATE_FILE, WORLD_HISTORY_FILE, WORLD_ACTIONS_FILE,
+                            "world_state_trajectory.json", "world_digest.jsonl", "decisions.jsonl"))):
+                    raise WorldContextMismatch("adaptive experiment cannot reset its budget; use a new simulation")
                 # The platform rejected/has no checkpoint. Its freshly reset DB
                 # must not be paired with a completed world from the previous run.
                 for name in (WORLD_STATE_FILE, WORLD_HISTORY_FILE, WORLD_ACTIONS_FILE,
@@ -4954,11 +5276,13 @@ def _offer_counts(world: Any) -> Dict[str, int]:
 async def _finalize_world_coordinator(simulation_dir: str, log_info) -> bool:
     """main() safety net after both platform loops: flush and write artifacts."""
     key = os.path.abspath(simulation_dir)
-    coord = _WORLD_COORDINATORS.pop(key, None)
+    coord = _WORLD_COORDINATORS.get(key)
     if coord is not None:
         try:
             await coord.finalize()
+            _WORLD_COORDINATORS.pop(key, None)
         except Exception as _e:  # noqa: BLE001
+            coord._fail_adaptive(_e)
             log_info(f"reflexive world: finalize failed (isolated): {_e}")
     return bool(_WORLD_TRAJ_WRITTEN.get(key))
 
@@ -4997,7 +5321,10 @@ async def _world_decision_step(coord: _ReflexiveWorldCoordinator, env, db_path: 
             env, db_path, decisions, active_map, round_num, str((period or {}).get("label") or ""),
             agent_names, action_logger, last_rowid, log_info)
         return decisions, last_rowid, posted
+    except WorldContextMismatch:
+        raise
     except Exception as _e:  # noqa: BLE001
+        coord._fail_adaptive(_e)
         log_info(f"reflexive world: decision step failed on {platform} (agents post organically): {_e}")
         return {}, last_rowid, 0
 
@@ -6165,6 +6492,15 @@ async def run_twitter_simulation(
         if _saved_hash and _cur_hash and _saved_hash != _cur_hash:
             log_info("检查点 config_hash 与当前配置不匹配（配置已变更）→ 放弃续跑，从头重跑")
             resume_ckpt = None
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
+                                               resume=resume_ckpt is not None)
+                    if calendar else None)
+    if _world_coord is not None:
+        def _static_persona(aid):
+            agent = result.agent_graph.get_agent(aid)
+            message = getattr(agent, "system_message", None) or getattr(agent, "_system_message", None)
+            return str(getattr(message, "content", "") or "")
+        _world_coord.freeze_branch_personas(_static_persona)
     if os.path.exists(db_path) and resume_ckpt is None:
         os.remove(db_path)
     
@@ -6351,9 +6687,6 @@ async def run_twitter_simulation(
     # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
     # world update and the scenario-share stepping; when it is active the legacy in-band
     # evolution stays off so the WorldState is stepped exactly once per round.
-    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
-                                               resume=resume_ckpt is not None)
-                    if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if (calendar and _world_coord is None) else None)
     _wc_brief = ""
@@ -6764,6 +7097,15 @@ async def run_reddit_simulation(
         if _saved_hash and _cur_hash and _saved_hash != _cur_hash:
             log_info("检查点 config_hash 与当前配置不匹配（配置已变更）→ 放弃续跑，从头重跑")
             resume_ckpt = None
+    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
+                                               resume=resume_ckpt is not None)
+                    if calendar else None)
+    if _world_coord is not None:
+        def _static_persona(aid):
+            agent = result.agent_graph.get_agent(aid)
+            message = getattr(agent, "system_message", None) or getattr(agent, "_system_message", None)
+            return str(getattr(message, "content", "") or "")
+        _world_coord.freeze_branch_personas(_static_persona)
     if os.path.exists(db_path) and resume_ckpt is None:
         os.remove(db_path)
     
@@ -6948,9 +7290,6 @@ async def run_reddit_simulation(
     # REFLEXIVE WORLD (design §2): shared coordinator owns the barrier, the decision step, the
     # world update and the scenario-share stepping; when it is active the legacy in-band
     # evolution stays off so the WorldState is stepped exactly once per round.
-    _world_coord = (_get_world_coordinator(config, simulation_dir, semaphore_platforms, log_info,
-                                               resume=resume_ckpt is not None)
-                    if calendar else None)
     _inband_evo = (_get_inband_evolution(config, simulation_dir, semaphore_platforms, log_info)
                    if (calendar and _world_coord is None) else None)
     _wc_brief = ""
@@ -7226,6 +7565,15 @@ async def run_reddit_simulation(
     return result
 
 
+def _publish_terminal_artifacts_ready(simulation_dir: str) -> None:
+    """Release the parent only after world/post-hoc artifacts have finished writing."""
+    token = os.environ.get("SIM_TERMINAL_ARTIFACTS_TOKEN")
+    if token:
+        from app.utils.atomic import write_json_atomic
+        write_json_atomic(os.path.join(simulation_dir, "simulation_artifacts_ready.json"),
+                          {"schema": "simulation-artifacts-ready/v1", "run_token": token})
+
+
 async def main():
     parser = argparse.ArgumentParser(description='OASIS双平台并行模拟')
     parser.add_argument(
@@ -7397,6 +7745,11 @@ async def main():
                                   semaphore_platforms=2, resume=args.resume),
             return_exceptions=True,
         )
+        # Admission/fatal adaptive failures are shared-run failures, even when
+        # construction rejected the artifacts before registering a coordinator.
+        for result in results:
+            if isinstance(result, WorldContextMismatch):
+                raise result
         twitter_result, reddit_result = results
         if isinstance(twitter_result, BaseException):
             log_manager.error(f"Twitter 平台模拟异常（已隔离，不影响 Reddit）: {twitter_result}")
@@ -7491,6 +7844,8 @@ async def main():
                     f"share={_oc.get('leader_share')} converged_at={_res.get('converged_at')}")
         except Exception as _dc_err:  # noqa: BLE001
             log_manager.error(f"决策通道演化失败（已隔离，不影响模拟结果）: {_dc_err}")
+
+    _publish_terminal_artifacts_ready(simulation_dir)
 
     # 是否进入等待命令模式
     if wait_for_commands:

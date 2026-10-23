@@ -223,14 +223,14 @@ def test_localized_exec_brief_uses_sealed_variant_and_rebuilds_on_variant_update
                  structured_forecast={"required": False, "present": True, "valid": True})
     (folder / "final_audit.json").write_text(json.dumps(audit))
     localized = json.loads(raw)
-    localized["binary_forecasts"][0]["statement"] = "本地化预测甲"
+    localized["binary_forecasts"][0]["statement"] = "本地化预测甲 " + json.loads(raw)["binary_forecasts"][0]["statement"]
     localized["localization"] = {"lang": "zh", "source_forecast_sha256": audit["forecast_sha256"], "complete": True}
     variant = folder / "forecast.zh.json"
     variant.write_text(json.dumps(localized, ensure_ascii=False))
     result = ExecBriefBuilder.build(rid, str(folder), force=True)
     out = Path(result["exec_brief.zh"])
     assert "本地化预测甲" in out.read_text()
-    localized["binary_forecasts"][0]["statement"] = "本地化预测乙"
+    localized["binary_forecasts"][0]["statement"] = "本地化预测乙 " + json.loads(raw)["binary_forecasts"][0]["statement"]
     variant.write_text(json.dumps(localized, ensure_ascii=False))
     import os
     old = out.stat().st_mtime
@@ -519,8 +519,8 @@ def test_primary_brief_rebuilds_after_localization_deletion(tmp_path, monkeypatc
                  structured_forecast={"required": False, "present": True, "valid": True})
     (folder / "final_audit.json").write_text(json.dumps(audit))
     localized = json.loads(raw)
-    marker = "REMOVED_PRIMARY_LOCALIZATION_FIXTURE"
-    localized["binary_forecasts"][0]["statement"] = marker
+    marker = "removed localized wording"
+    localized["binary_forecasts"][0]["statement"] = marker + " " + json.loads(raw)["binary_forecasts"][0]["statement"]
     localized["localization"] = {"lang": "en", "source_forecast_sha256": audit["forecast_sha256"], "complete": True}
     variant = folder / "forecast.en.json"
     variant.write_text(json.dumps(localized))
@@ -576,7 +576,9 @@ def test_baseline_identity_reaches_comparison_and_actual_writer_prompt(make_agen
     outline = ReportOutline(title="Capacity", summary="Outlook", sections=[section])
     if consumer == "outline":
         agent.plan_outline()
-        assert agent.zep_tools.diff_calls == [("sim_baseline_fixture", "sim_fixture")]
+        # The user-selected baseline remains scope metadata. Simulated results
+        # belong only in the deterministic bridge, not in outline planning.
+        assert agent.zep_tools.diff_calls == []
     else:
         getattr(agent, f"_generate_section_{consumer}")(section, outline, [])
     assert "sim_baseline_fixture" in prompt(agent)

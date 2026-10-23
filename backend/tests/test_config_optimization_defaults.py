@@ -40,7 +40,7 @@ EXPECTED = {
     # Report knobs
     "REPORT_SECTION_CONCURRENCY": 6,  # REPORT-1 (3) → PAR-3 (6)
     "REPORT_SECTION_CONTEXT_MODE": "brief",  # REPORT-2
-    "REPORT_SIGNAL_PACK": True,  # REPORT-3
+    "REPORT_SIGNAL_PACK": False,  # REPORT-3 → ADR 0003 (S3): the pack leaves section prompts
     "REPORT_NATIVE_TOOLS": True,  # REPORT-4
     "REPORT_AGENT_TOOL_TURN_MAX_TOKENS": 8192,  # REPORT-9
     # Sim

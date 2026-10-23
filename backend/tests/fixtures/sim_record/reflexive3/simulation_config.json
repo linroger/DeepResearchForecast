@@ -1,0 +1,84 @@
+{
+ "simulation_id": "sim_3ec25e64209e",
+ "output_language": "English",
+ "as_of_date": "2026-10-22",
+ "temporal_config": {
+  "schema_version": 1,
+  "mode": "calendar",
+  "as_of_date": "2026-10-22",
+  "horizon_date": "2026-10-31",
+  "horizon_source": "anchored_period",
+  "horizon_text": "October 2026",
+  "horizon_defaulted": false,
+  "unit": "day",
+  "unit_stride": 1,
+  "n_rounds": 3,
+  "round_dates": [
+   {
+    "round": 0,
+    "period_start": "2026-10-23",
+    "period_end": "2026-10-23",
+    "label": "2026-10-23"
+   },
+   {
+    "round": 1,
+    "period_start": "2026-10-24",
+    "period_end": "2026-10-24",
+    "label": "2026-10-24"
+   },
+   {
+    "round": 2,
+    "period_start": "2026-10-25",
+    "period_end": "2026-10-25",
+    "label": "2026-10-25"
+   },
+   {
+    "round": 3,
+    "period_start": "2026-10-26",
+    "period_end": "2026-10-26",
+    "label": "2026-10-26"
+   }
+  ],
+  "span_days": 9,
+  "target_max_rounds": 36,
+  "round_cap_coarsened": null,
+  "beyond_horizon_events": [
+   {
+    "date": "2026-11-03",
+    "event": "US midterms; NYT reports detailed post-midterm US-Israeli strike plans for a 'short but intensive' operation that Trump has repeatedly cancelled",
+    "staleness_days": -12,
+    "is_stale": false
+   },
+   {
+    "date": "2026-11-10",
+    "event": "Trilateral US-Russia-Ukraine talks proposed to start on or after 10 November 2026; a Trump-Putin-Xi meeting in China was discussed",
+    "staleness_days": -19,
+    "is_stale": false
+   }
+  ],
+  "warnings": []
+ },
+ "world_state_seed": {
+  "scenarios": [
+   "Stalemate with fragile talks",
+   "Ukraine ceasefire, Iran holds",
+   "Dual de-escalation",
+   "Renewed escalation in Ukraine",
+   "Iran war reignition",
+   "Widened regional war"
+  ],
+  "base_rates": {
+   "Stalemate with fragile talks": 0.4,
+   "Ukraine ceasefire, Iran holds": 0.25,
+   "Dual de-escalation": 0.1,
+   "Renewed escalation in Ukraine": 0.12,
+   "Iran war reignition": 0.08,
+   "Widened regional war": 0.05
+  },
+  "uniform_prior": false,
+  "as_of_date": "2026-10-22",
+  "horizon_date": "2026-10-31",
+  "horizon_source": "anchored_period",
+  "horizon_defaulted": false
+ }
+}

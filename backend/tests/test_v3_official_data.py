@@ -351,6 +351,17 @@ def test_full_engine_consumes_data_and_resume_keeps_sealed_artifacts(tmp_path, m
             obj = rg.parse_json_object(reply.content, ("kiqs",))
             obj["kiqs"][0]["data_needs"] = [{"query": "unemployment", "geography": "USA"}]
             return ai(json.dumps(obj))
+        def assessment(self, call):
+            text = call["messages"][1][1]
+            payload = json.JSONDecoder().raw_decode(text[text.index("{"):])[0]
+            official = next(row for row in payload["evidence"] if row.get("support") == "typed_official_observation")
+            assert official["observation"]["series"] == "fred:UNRATE"
+            assert official["observation"]["status"] == "observed" and official["dataset_sha256"]
+            return ai(json.dumps({"scenarios": [
+                {"scenario_id": row["scenario_id"], "weight": weight,
+                 "reason": "The stored unemployment observation revises the initial planning assessment.",
+                 "evidence_ids": [official["evidence_id"]]}
+                for row, weight in zip(payload["initial"]["scenarios"], (40, 30, 30), strict=True)]}))
     charted = []
     def research_charts(out_dir, meta, plog, question=""):
         charted.append(json.loads((out_dir / "quantitative.json").read_text()))
@@ -360,6 +371,12 @@ def test_full_engine_consumes_data_and_resume_keeps_sealed_artifacts(tmp_path, m
     rc, meta, log, model, out = run_engine(tmp_path, bridge, DataWorld(), depth="quick")
     assert rc == 0, log.text()
     assert "Official Data Baseline" in (out / "research_report.md").read_text()
+    assessment_record = json.loads((out / "research_assessment.json").read_text())
+    assert assessment_record["stopping_reason"] == "assessed"
+    assert [row["weight"] for row in assessment_record["final"]["scenarios"]] == [40, 30, 30]
+    actor_handoff = json.loads((out / "actors.json").read_text())
+    assert [row["probability"] for row in actor_handoff["forecast_inputs"]["scenarios"]] == [.4, .3, .3]
+    assert actor_handoff["forecast_inputs"]["assessment"] == assessment_record
     # The research charts render the extracted rows only; the stored series
     # joins quantitative.json afterwards (its official-data chart shows it).
     assert charted and not any(row.get("source_origin") == "official_data" for row in charted[0])
@@ -376,7 +393,7 @@ def test_full_engine_consumes_data_and_resume_keeps_sealed_artifacts(tmp_path, m
     bound = [call["tools"] for call in model.calls if call["tools"] is not None]
     assert bound and all(schema is rg.AGENT_TOOLS_WITH_DATA_SCHEMA for schema in bound)
     frozen = {name: (out / name).read_bytes() for name in
-              ("data/datasets.json", "v3/data/datasets.json", "v3/qa_report.md", "v3/digest.md")}
+              ("data/datasets.json", "v3/data/datasets.json", "v3/qa_report.md", "v3/digest.md", "research_assessment.json")}
     rc, _, log, _, _ = run_engine(tmp_path, bridge, DataWorld(), depth="quick", out_dir=out)
     assert rc == 0, log.text()
     assert source.prewarms == 1 and len(source.calls) == 1
@@ -677,7 +694,11 @@ def test_agent_note_quoting_unsupplied_status_value_is_reported_not_verified(tmp
     outcome = lr.AgentOutcome(notes=notes, fallback=None, steps=1, forced=None, fetched=[weo, unrate], seen=[])
     engine._finish_kiq(engine.kiqs[0], outcome)
     facts = engine.records[engine.kiqs[0].id]["facts"][:3]
-    assert [fact["tag"] for fact in facts] == ["REPORTED", "VERIFIED", "VERIFIED"]
+    assert [fact["tag"] for fact in facts] == ["REPORTED", "REPORTED", "REPORTED"]
+    assert all(fact["claim_support"]["semantic_support"] is False for fact in facts)
+    # The actual stored observations still supply the deterministic typed data
+    # notes; model-authored prose with matching numbers no longer proves support.
+    assert any(fact["tag"] == "VERIFIED" for fact in engine.records[engine.kiqs[0].id]["facts"][3:])
     assert facts[0]["verification"] == "official_status:unknown"
 
 

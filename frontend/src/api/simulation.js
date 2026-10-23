@@ -1,4 +1,5 @@
 import service from './index'
+import { isSimulationRecord } from '../utils/simRecord'
 
 // EXECPLAN2 F-10-12: 创建/准备/启动/采访均为非幂等 POST，绝不自动重试 —— 否则首请求其实
 // 成功、客户端误判超时重试，会造成重复创建/重复启动等副作用。仅 GET/状态轮询可重试。
@@ -171,6 +172,43 @@ export const getFeedRounds = (simulationId, platform = 'reddit', options = {}) =
  */
 export const getWorldState = (simulationId, rows = 24) => {
   return service.get(`/api/simulation/${simulationId}/world-state`, { params: { rows } })
+}
+
+// ADR 0003: the Simulation After-Action Record (schema simulation-record/v1) is served only
+// once its deterministic gate passed.  The route answers 404 while no record exists and
+// 409 {error, publication_status} when the record exists but failed its gate; both are
+// ordinary outcomes for the dashboard (it keeps today's layout), so they resolve to a null
+// record with the status instead of rejecting.  Any other failure is rethrown.
+function recordUnavailable(error) {
+  const status = error && error.response && error.response.status
+  if (status !== 404 && status !== 409) return null
+  const body = error.response && error.response.data
+  const publicationStatus = body && typeof body === 'object' && body.publication_status
+    ? String(body.publication_status)
+    : (status === 404 ? 'absent' : 'failed')
+  return { status, publicationStatus }
+}
+
+/**
+ * GET /api/simulation/<id>/record → { record, status, publicationStatus }.
+ * `record` is the simulation-record/v1 object (whether the route wraps it in the usual
+ * {success, data} envelope or returns it bare); null with status 404/409 when unavailable.
+ */
+export const fetchRecord = async (simulationId, options = {}) => {
+  try {
+    const res = await service.get(`/api/simulation/${encodeURIComponent(simulationId)}/record`, options)
+    const body = res && typeof res === 'object' && res.data && typeof res.data === 'object' && res.data.schema
+      ? res.data
+      : res
+    if (res?.success === false || !isSimulationRecord(body) || body.simulation_id !== simulationId) {
+      throw new Error('Invalid simulation record response')
+    }
+    return { record: body, status: 200, publicationStatus: 'passed' }
+  } catch (error) {
+    const unavailable = recordUnavailable(error)
+    if (!unavailable) throw error
+    return { record: null, ...unavailable }
+  }
 }
 
 export const getSimulationTimeline = (simulationId, startRound = 0, endRound = null) => {

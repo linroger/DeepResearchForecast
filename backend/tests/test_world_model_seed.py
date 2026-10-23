@@ -195,20 +195,19 @@ def test_canonical_dossier_uses_only_validated_pack_rows():
             {"agent_id": 1, "entity_name": "Beta Union", "entity_type": "Actor"}]
     block = wms.build_world_model_seed(dossier, cfgs, actor_context_packs=packs, temporal_timeline=None)
     alpha = block["actors"][0]
-    assert alpha["documented_plans"] == [
-        "Alpha Systems plans a 2027 multi-site Project Aurora expansion.",
-        "Alpha Systems is likely to file a permit response.",
-        "Alpha Systems is executing Project Aurora now.",
-        "Alpha Systems plans a $2 billion Project Aurora investment.",
-    ]
-    assert alpha["red_lines"] == ["Alpha Systems will not accept an unfinanced immediate mandate."]
-    # motivations are analyst inference in the fixture → skipped; values remain
-    assert alpha["goals"] == ["Alpha Systems values operational reliability."]
+    # Unmarked canonical claims remain modeler-only. A validated owner pack is
+    # not permission to publish its private/unclassified evidence into the world.
+    assert alpha["documented_plans"] == []
+    assert alpha["red_lines"] == []
+    assert alpha["goals"] == []
     assert alpha["agency_class"] == "firm"
     # the flat legacy fields of a canonical actor are not read
     dossier2 = _dossier()
     dossier2["actors"][0]["future_plans"] = ["FLAT LEAK"]
-    block2 = wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=packs)
+    with pytest.raises(ValueError, match="binding|fingerprint"):
+        wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=packs)
+    packs2 = {row["actor_id"]: ac.build_actor_context_pack(dossier2, row, REPORT) for row in dossier2["actors"]}
+    block2 = wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=packs2)
     assert "FLAT LEAK" not in json.dumps(block2)
     # without a pack a canonical actor gets no plans at all (never the flat fields)
     block3 = wms.build_world_model_seed(dossier2, cfgs, actor_context_packs=None)
@@ -444,6 +443,126 @@ def test_build_seed_from_v3_dossier_yields_plans_and_red_lines():
     dossier["actors"][0]["red_lines"] = ["EXPLICIT LINE"]
     row = wms.build_world_model_seed(dossier, _v3_cfgs())["actors"][0]
     assert row["documented_plans"] == ["FLAT PLAN"] and row["red_lines"] == ["EXPLICIT LINE"]
+
+
+def test_prepared_unsealed_v3_retains_legacy_qualitative_baseline():
+    from app.services.research_preparation import compile_preparation_context
+    from app.services.agent_decision import build_option_menu
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    # Explicitly unsealed v3: no actor-intelligence producer contract or packs.
+    dossier["quantitative_facts"][0]["value_type"] = "actual"
+    question = "US–China trade?"
+    bundle = compile_preparation_context(question=question, research_report="Unsealed v3 report", actors=dossier)
+    assert bundle["qualitative"]["public"] == []
+    legacy = wms.build_world_model_seed(dossier, cfgs, question=question)
+    prepared = wms.build_world_model_seed(dossier, cfgs, question=question, preparation_context=bundle)
+    for before, after in zip(legacy["actors"], prepared["actors"]):
+        for key in ("documented_plans", "red_lines", "goals", "posture", "incentives", "allies", "rivals"):
+            assert after[key] == before[key], key
+        assert after["qualitative_context"] == {"source": "unsealed_research", "status": "unverified",
+                                                  "evidence_type": "model_assumption"}
+        assert "research_claims" not in after
+    assert prepared["scenarios"] == legacy["scenarios"]
+    assert len(prepared["relationships"]) == len(legacy["relationships"]) == 1
+    assert prepared["relationships"][0]["qualitative_context"] == prepared["qualitative_context"]
+    anchor = bundle["quantitative"]["observations"][0]
+    assert prepared["state_variables"][0]["research_evidence"]["id"] == anchor["id"]
+    assert prepared["state_variables"][0]["value"] == anchor["value"]
+    world = WorldModel.from_seed(prepared, cfgs)
+    assert world.settings["qualitative_context"] == prepared["qualitative_context"]
+    assert world.actors[0].documented_plans == legacy["actors"][0]["documented_plans"]
+    assert any("Conclude a 'bigger deal'" in o["label"] for o in build_option_menu(world.actors[0], world, 1))
+    restored = WorldModel.from_dict(world.to_dict())
+    assert restored.settings["qualitative_context"] == prepared["qualitative_context"]
+    assert any(g["kind"] == "legacy_context_unverified" for g in restored.seed_gaps)
+
+
+@pytest.mark.parametrize("marker", [{"visibility": "private"}, {"actor_knows": False},
+                                  {"qualifiers": {"actor_knows": False}},
+                                  {"qualifiers": {"visibility": "actor_known"}},
+                                  {"evidence_type": "analyst_inference"}])
+def test_prepared_unsealed_context_filters_explicit_private_access(marker):
+    from app.services.research_preparation import compile_preparation_context
+    from copy import deepcopy
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    actor = dossier["actors"][0]
+    actor["future_plans"] = ["Public plan", {"claim": "PRIVATE_PLAN_SENTINEL", **deepcopy(marker)}]
+    actor["goals"] = ["Public goal", {"claim": "PRIVATE_GOAL_SENTINEL", **deepcopy(marker)}]
+    actor["red_lines"] = ["Public red line", {"claim": "PRIVATE_RED_SENTINEL", **deepcopy(marker)}]
+    actor["stance"] = {"claim": "PRIVATE_STANCE_SENTINEL", **deepcopy(marker)}
+    cfgs[0]["stance"] = deepcopy(actor["stance"])
+    cfgs[0]["gains_if"] = {"claim": "PRIVATE_INCENTIVE_SENTINEL", **deepcopy(marker)}
+    dossier["relationships"].append({"source": "Donald Trump", "target": "PIIE", "type": "ALLIES_WITH",
+                                     "basis": "PRIVATE_RELATION_SENTINEL", **deepcopy(marker)})
+    bundle = compile_preparation_context(question="Trade", research_report="Unsealed report", actors=dossier)
+    prepared = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    assert "PRIVATE_" not in json.dumps(prepared)
+    assert prepared["actors"][0]["goals"] == ["Public goal"]
+    assert prepared["actors"][0]["documented_plans"] == ["Public plan"]
+    assert prepared["actors"][0]["red_lines"] == ["Public red line"]
+    assert len(prepared["relationships"]) == 1
+
+
+def test_prepared_unsealed_does_not_promote_cancelled_or_likely_plans():
+    from app.services.research_preparation import compile_preparation_context
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    dossier["actors"][0].update(future_plans=[{"claim": "CANCELLED_PLAN", "status": "cancelled"},
+                                              {"claim": "CONTESTED_PLAN", "qualifiers": {"status": "contested"}}],
+                                likely_actions=["LIKELY_PLAN"], goals=[], memory="", stated_vs_revealed="", stance="")
+    bundle = compile_preparation_context(question="Trade", research_report="Unsealed report", actors=dossier)
+    seed = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    assert seed["actors"][0]["documented_plans"] == []
+
+
+def test_canonical_preparation_unmatched_cast_does_not_use_legacy_config_fields():
+    from app.services.research_preparation import compile_preparation_context
+    from test_actor_context_runtime import _dossier, REPORT
+    dossier = _dossier()
+    bundle = compile_preparation_context(question="Question", research_report=REPORT, actors=dossier)
+    cfgs = [{"agent_id": 0, "entity_name": "Unmatched cast member", "entity_type": "Actor",
+             "stance": "PRIVATE_STANCE_SENTINEL", "gains_if": "PRIVATE_INCENTIVE_SENTINEL"}]
+    seed = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    assert "PRIVATE_" not in json.dumps(seed)
+    assert seed["actors"][0]["research_claims"] == []
+    assert "qualitative_context" not in seed
+
+
+@pytest.mark.parametrize("alias", [False, True])
+def test_prepared_private_legacy_actor_cannot_reenter_via_plain_config_copy(alias):
+    from app.services.research_preparation import compile_preparation_context
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    dossier["actors"][0]["visibility"] = "private"
+    if alias:
+        cfgs[0]["entity_name"] = "President Trump"
+    cfgs[0]["gains_if"] = "PRIVATE_COPIED_INCENTIVE"
+    bundle = compile_preparation_context(question="Trade", research_report="Unsealed report", actors=dossier)
+    seed = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    assert "Seeks a bigger deal" not in json.dumps(seed)
+    assert "PRIVATE_COPIED_INCENTIVE" not in json.dumps(seed)
+    assert seed["actors"][0]["posture"] == "" and seed["actors"][0]["incentives"] == {}
+
+
+def test_prepared_legacy_conditions_survive_actual_plan_and_runtime_roundtrip():
+    from app.services.research_preparation import compile_preparation_context
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    dossier["actors"][0]["future_plans"] = [{"claim": "Build a new factory",
+        "conditions": ["Only after permit approval"], "dependencies": ["Financing must close"]}]
+    bundle = compile_preparation_context(question="Trade", research_report="Unsealed report", actors=dossier)
+    seed = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    plan = seed["actors"][0]["documented_plans"][0]
+    assert "Only after permit approval" in plan and "Financing must close" in plan
+    world = WorldModel.from_seed(seed, cfgs)
+    assert WorldModel.from_dict(world.to_dict()).actors[0].documented_plans[0] == plan
+
+
+@pytest.mark.parametrize("condition", [{"claim": "PRIVATE PERMIT", "visibility": "private"}, "DETAIL " * 50])
+def test_prepared_legacy_inexpressible_condition_omits_entire_action(condition):
+    from app.services.research_preparation import compile_preparation_context
+    dossier, cfgs = _v3_actors(), _v3_cfgs()
+    dossier["actors"][0]["future_plans"] = [{"claim": "Build a new factory", "conditions": [condition]}]
+    bundle = compile_preparation_context(question="Trade", research_report="Unsealed report", actors=dossier)
+    seed = wms.build_world_model_seed(dossier, cfgs, preparation_context=bundle)
+    assert "Build a new factory" not in json.dumps(seed)
 
 
 def test_seed_reports_modelling_gaps_instead_of_inventing():

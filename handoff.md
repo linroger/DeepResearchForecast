@@ -8,6 +8,10 @@
 
 > Simulation/report boundary — ADR 0003: [ADR](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), [S0 design](docs/handoff/simulation-after-action-record/design.md), [topic handoff](docs/handoff/simulation-after-action-record/handoff.md). S0 contains constants, simulated chart titles, brief disclosure, leakage removal, attribution rules, header alignment, default-off sensitivity and what-if labels. Later S1–S4 changes on the separate implementation branch are outside this named-branch merge.
 
+### Research-grounded branch history retained during main merge
+
+> Simulation/report boundary — complete and delivered: [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md). The verified feature is on `codex/simulation-report-boundary`; active source preserves the separate Mandarin work. Fresh-provider calibration/acceptance remains a separate exercise.
+
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.
 
 > Active branch work: [reflexive world simulation handoff](docs/handoff/reflexive-world-simulation/handoff.md). This is the continuity authority for the world simulation implementation. The completed historical analysis below is retained unchanged.

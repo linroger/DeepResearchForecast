@@ -1,6 +1,6 @@
 # Simulation After-Action Record and Forecast-Report Bridge — Design
 
-**Status:** Proposed design, 2026-10-22. Slice S0 (S0.1–S0.8, T3/T7/T9 and the review fixes) is implemented on `claude/sim-provenance-s0`; S1–S4 are in progress. §10 records what S0 actually did where it differs from §3–§6.
+**Status:** Proposed design, 2026-10-22. All slices (S0–S4) are implemented on `claude/sim-provenance-impl` (S0 also on `claude/sim-provenance-s0`); §10 records what each slice actually did where it differs from §3–§6. ADR acceptance still owes the owner's live runs.
 **Decision record:** [ADR 0003](../../adr/0003-simulation-after-action-record-and-report-bridge.md).
 **Continuity:** [handoff.md](handoff.md) in this folder.
 
@@ -371,4 +371,57 @@ Recorded here so §3–§6 can stay the target design. Commits are on `claude/si
 | §6 T3/T7/T9 | As named | T3 `test_report_lint_provenance.py`; T7 `test_report_visualizer_titles.py` + `test_exec_brief_sim_disclosure.py`; T9 `test_sim_provenance_constants.py`; plus `test_outcome_header_alignment.py`, `test_simleak_tier2_guard.py`, `test_simulation_record_contract.py` | — |
 | Final audit | — | `_final_audit_integrity_issues` also treats a non-zero `legacy_sim_labels` count as a hard issue | Belt and braces beside the leakage patterns |
 
+### Deltas — slice S2 as implemented (2026-10-23, branch `worktree-wf_92affb56-682-2`, merged into `claude/sim-provenance-impl`)
+
+| Area | Design said | S2 did | Why |
+|---|---|---|---|
+| §3.6 Dashboard | Record view "above the live World State panel and feed" | A **Record | Live** toggle: the Record view is the default after completion and the live layout is one click away | Stacking a long record above the live feed buried the feed; the toggle keeps both whole |
+| §3.6 Dashboard | — | New `SimulationRecordView.vue` + pure helpers `utils/simRecord.js`; `utils/markdown.js` gains a generic marked-block splitter used for the bridge box | Keeps the view model testable without a DOM |
+| §3.6 Dashboard | Period strip | The first committed period opens by default (an after-action record reads chronologically); WorldStatePanel keeps opening on the latest round | Different reading modes |
+| §3.6 Dashboard | — | Bounded post-completion retry: a 404 on a completed run re-asks for the record at most 4 × 15 s; 409 and transport failures are not retried | Stage 5 writes the record seconds after the runner reports completion |
+| §3.6 Dashboard | `ResearchView.vue` not in S2's file list | 9-line wiring: `@open-simulation-record` → Simulation tab, `@record-state` → "record ready" badge | The parent had no event or route for tab switching |
+| §5 S2.2 | Badge strings | Already delivered by S0 (pinned to `sim_provenance` by T9); S2 made no change | — |
+| §5 S2.4 | `fetchRecord(id)` | `fetchRecord(id)` accepts a bare record or a `{success, data}` envelope and returns `{record, status, publicationStatus}` for 404/409 | S1's route did not exist when S2 was written |
+| §3.6 footnote | "probabilities from research evidence only (policy: …)" | Policy read from the report payload's `forecast_effect`, then `forecast.simulation_bridge.forecast_effect`, then `forecast.forecast_effect`; the S2 review found the fallback asserted `diagnostic_only` when nothing was read — fixed on the integration branch to "policy not recorded for this run" (mirrors `brief_sim_role`) | The footnote must not assert a policy it did not read |
+| Fixtures | — | `frontend/tests/fixtures/sim/*.json` compiled from the live run `sim_3ec25e64209e` through the contract's public-field allowlist, trimmed to three rounds; a synthetic fixture covers K>1 paths, red lines, shocks and a mechanical-only round | Realistic shapes for T12 |
+
+### Deltas — slices S1 and S3 as implemented (2026-10-23, merged into `claude/sim-provenance-impl`)
+
+| Area | Design said | S1/S3 did | Why |
+|---|---|---|---|
+| §3.1 engine adapters | world-v1 "from `world_result.json` via `world_simulation.results`" | Reads the exported `world_result.json` / `world_spec.json` directly under the same containment (regular files, symlinks refused) | The store path reads SQLite through `Path.read_text`, which the T15 open() contract cannot see |
+| §3.1 markdown files | One `.md` in the run's language plus the other language | Always `simulation_record.md` and `simulation_record.zh.md` (contract names); for a Chinese run both are Chinese and `/record.md?lang=en` renders English deterministically from the gate-passed JSON | Fixed file names in the contract; no translation call |
+| §3.1 rotation list | Three record files | Four: json, md, zh.md and the audit | A stale passed audit would otherwise publish a stale record |
+| §3.1 artifact spec | `simulation_record` beside `run_summary` | Appended only on the non-world-v1 spec path; world-v1 registers the artifact pointer and manifest entry directly | world-v1's strict spec set treats every spec as required |
+| §3.2 G2 | Every numeric token traces to a row | Also admits structural integers (round indices, list lengths, status counts) and path statistics recomputed from `world_paths.json`; shares compared to the trajectory within 0.0005 | Those numbers are derived from the artifacts, not authored |
+| §3.2 G3 | Entities ⊆ allowlist, hard | Structured actor fields and `entities_declared` are hard; undeclared capitalised multi-word tokens in authored prose are warnings in this version | As the brief specified |
+| §3.2 G4 | Every paragraph has a resolvable ref | A synthesis paragraph with no claims entry is grounded by the committed periods whose label it names; the health-stub sentence needs none | Lets a deterministic record pass without fabricated refs |
+| §3.2 G9 | Language purity, hard | Hard for compiler/LLM-authored prose; a warning inside a verbatim arbiter narrative | The record cannot change artifact text |
+| §3.6 API | Serve only a gate-passed record | Also 409 `stale_audit` when the file's SHA-256 differs from the audit's | Stricter than `is_published`, never looser |
+| §3.3 renderer | `render_sim_bridge(record, *, chinese, spine, chart_rel_paths, whatif_table_md)` | Two extra keyword-only arguments: `record_sha256` (the "Full record" line) and `policy` (the fixed sentence) | No constants existed for them |
+| §3.3 strings | From `sim_provenance` | Bridge wiring strings (table headers, the fixed "probabilities were not changed" sentence, "record not available") are literals in `report_agent._SIM_BRIDGE_TEXT`; title, banner, markers and chart titles come from `sim_provenance` | `sim_provenance.py` was not S3's file; move them in a follow-up |
+| §3.3 adapter path | Record absent → render from trajectory and world state | Renders final shares, red lines, broken commitments and health, states "After-action record not available for this run", and no decisive-moves table | Decisive-move ranking needs the record's refs |
+| §3.3 charts | "moved here from wherever `_place_visualizations` put them" | `_place_visualizations` skips simulated charts while the bridge is active and `_insert_sim_bridge` strips any already placed | No simulated chart ever lands in an evidence section or the annex |
+| §3.3 translated variant | Rendered in Chinese at the world-appendix site | Inserted iff the primary carries exactly one block, re-rendered in the target language | The translation worker is built without a pinned policy and must not invent one |
+| §3.4 item 7 | Remove `interview_agents` from the default tool list | Removed from `_define_tools` (writer and chat paths); the env-alive probe became dead and was removed; the description constant remains unused | Minimal diff |
+| §3.4 item 4 | Fence mask is the single mechanism | Also protects ordinary code fences in `strip_internal_basis_traces`, `strip_internal_graph_parentheticals` and `check_scenario_probabilities` | Narrower rewrite scope; needed so one mask governs every pass |
+| §3.4 item 1 | No simulation bytes in any prompt | Section, critique, spine, binary and repair prompts are clean and pinned by T1; `plan_outline` still receives `simulation_outcomes` text (and `scenario_diff` + the what-if prompt label with a baseline) under `diagnostic_only` | Known gap, recorded here; the outline prompt produces titles and descriptions, not probabilities or prose |
+| §3.3 robustness | — | `_sim_bridge_active` returns False when the policy cannot be resolved (bare backfill/translation agents) instead of raising out of chart placement or the audit | Found by the integrated full suite |
+| §6 T1 | `forecast.json` identical except the bridge hash | Compared after dropping `simulation_bridge` and `quality.final_audit` (the per-report audit envelope) | The envelope carries the report id and its own bridge record |
+| ADR acceptance | One live default-engine run with exactly one bridge block; one live `no_update` run | Still owed (fixtures only); the record's LLM synthesis path is exercised with a fake client only | Needs the owner's paid run |
+
 Verification at the S0 tip (clean worktree): 7,707 passed, 9 failed, 19 errors, 1,668 skipped; every failure reproduces at the base commit except one Kaleido probe that the standalone-import fix resolved. Adversarial review (3 lenses, 25 confirmed findings, 2 refuted): the blocker and all majors are fixed in the follow-up commits listed in handoff.md.
+
+
+### Completion deltas — Codex continuation (2026-10-23)
+
+The latest implementation and acceptance authority is completion.md plus verification.json. Historical slice tables above explain the initial implementation, not unresolved exceptions.
+
+- All non-legacy writer inputs, including outline sweeps, direct simulation tools and community fallback, are isolated. T1 now feeds nonempty distinct simulation content through the real report workflow and real record compiler/gate.
+- Record publication uses a checked JSON snapshot with canonical JSON, Markdown and source-input seals. Native world export validity is verified before compilation/reuse and its manifest participates in the source seal. State lifecycle timestamps do not invalidate consumed identity fields.
+- Native, OASIS, seed, reuse and standalone terminal paths share record publication. A per-launch artifact barrier prevents completion before post-hoc writes. Missing derivatives never force a paid RUN replay; repairs suppress repeat synthesis, including Markdown-only migrations.
+- The missing-record bridge fallback uses an audited deterministic projection rather than unchecked raw strings. A failed projection is health-only. No_update and unknown provenance cannot expose record links. Malformed markers and changed translated envelopes fail publication.
+- The composed newer Mandarin translation engine keeps its model-review receipts attached to the exact prose-only pair, then checks deterministic reinsertion against full public bytes. Its unrelated implementation remains owned by the existing working changes; scoped compatibility hunks are recorded in translation-compatibility.patch.
+- Dashboard fields follow real producer shapes; late completion, generation switches, stale responses, rejected audits, retry and Record/Live navigation have actual SFC consumer tests. Record narration remains verbatim in version 1; the live-view translation control does not claim to translate the record.
+
+The record gate establishes faithful reporting of the exercise, not historical truth, model realism or calibration. Source delivery and operational acceptance remain distinct in the handoff.

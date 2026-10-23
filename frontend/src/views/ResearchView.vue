@@ -241,8 +241,10 @@
                   </template>
                 </div>
               </div>
-              <SimulationView v-show="activeTab==='sim'" :simulation-id="simulationId" />
-              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" />
+              <div v-show="activeTab==='sim'" class="simulation-pane">
+                <SimulationView :simulation-id="simulationId" :stage-status="stages.run?.status || ''" :open-record-request="openRecordRequest" @record-state="onSimRecordState" />
+              </div>
+              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" @open-simulation-record="openSimulationRecord" />
             </div>
           </div>
         </div>
@@ -433,6 +435,9 @@ const runTiming = ref({ createdAt: '', updatedAt: '', resumedAt: '' })
 // —— 标签 / 图谱 ——
 const activeTab = ref('log')
 const userPickedTab = ref(false)
+// ADR 0003: the Simulation tab badge says "record ready" once SimulationView has a gate-passed record.
+const simRecordReady = ref(false)
+const openRecordRequest = ref(0)
 const graphData = ref(null)
 const graphLoading = ref(false)
 const graphMax = ref(false)
@@ -482,7 +487,7 @@ function pollFingerprint() {
 function stageLabel(name) {
   return {
     research: L('深度研究', 'Research'), ontology: L('本体生成', 'Ontology'), graph: L('知识图谱', 'Graph'),
-    prepare: L('环境搭建', 'Prepare'), run: L('群体模拟', 'Simulate'), report: L('预测报告', 'Forecast')
+    prepare: L('环境搭建', 'Prepare'), run: L('情景模拟', 'Scenario simulation'), report: L('预测报告', 'Forecast')
   }[name] || name
 }
 
@@ -505,13 +510,19 @@ const tabs = computed(() => {
     { key: 'log', label: L('实时日志', 'Live log'), enabled: true },
     { key: 'dossier', label: L('研究档案', 'Dossier'), enabled: !!researchDone, badge: actorCount || '' },
     { key: 'graph', label: L('知识图谱', 'Graph'), enabled: !!graphId.value },
-    { key: 'sim', label: L('群体模拟', 'Simulation'), enabled: !!simulationId.value },
+    { key: 'sim', label: L('情景模拟', 'Scenario simulation'), enabled: !!simulationId.value, badge: simRecordReady.value ? L('记录就绪', 'record ready') : '' },
     { key: 'report', label: L('预测报告', 'Forecast'), enabled: !!reportId.value }
   ]
 })
 
 function toggleLocale() { setLocale(locale.value === 'en' ? 'zh' : 'en') }
 function onProviderChanged() { return checkPreflight() }
+function onSimRecordState(state) { simRecordReady.value = !!(state && state.available) }
+function openSimulationRecord() {
+  if (!simulationId.value) return
+  openRecordRequest.value += 1
+  pickTab('sim')
+}
 
 function pickTab(key) {
   const t = tabs.value.find(x => x.key === key)

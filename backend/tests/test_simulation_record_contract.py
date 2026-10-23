@@ -84,4 +84,4 @@ def test_is_published_requires_a_passed_audit(tmp_path):
     assert rc.is_published(str(sim_dir)) is False
     (sim_dir / rc.RECORD_AUDIT_JSON).write_text(json.dumps(
         {"publication_status": "passed", "hard_issues": []}), encoding="utf-8")
-    assert rc.is_published(str(sim_dir)) is True
+    assert rc.is_published(str(sim_dir)) is False  # a status is not a seal of any record bytes

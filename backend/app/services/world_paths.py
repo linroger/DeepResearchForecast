@@ -16,6 +16,12 @@ decision calls):
 Cost: at most K arbiter calls per round (one per path; none when the arbiter is off) and no extra
 decision calls; K is capped at ``MAX_WORLD_PATHS``.
 
+The explicit ``world_model.settings.branch_policy='adaptive-v1'`` experiment instead
+elicits sibling decisions from their own observations, fixed personas, prior moves
+and public discourse. It requires a pinned attempt budget, actor/round bounds,
+path count and seed. Stopped branches retain their last state. These are diagnostic
+model branches, not calibrated outcome probabilities; default shared-v1 is unchanged.
+
 This module is pure: per-path RNGs, the settings clamps and the aggregation of shares, shocks and
 numeric facts across paths.  The coordinator (``run_parallel_simulation._ReflexiveWorldCoordinator``)
 owns the worlds, the arbiter calls and the artifacts.
@@ -35,6 +41,37 @@ DEFAULT_PATH_TEMPERATURE = 0.7        # paths 1..K-1 unless SIM_WORLD_PATH_TEMPE
 MAX_PATH_TEMPERATURE = 1.0
 MAX_SPREAD_VARIABLES = 12
 _QUANTILES = (("p10", 0.1), ("p50", 0.5), ("p90", 0.9))
+
+
+def resolve_branch_policy(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate the explicit experiment envelope; never consult the environment.
+
+    The budget counts structured decision attempts, including failed calls. Provider
+    retries are not priced here, so this is not a monetary spending guarantee.
+    """
+    policy = settings.get("branch_policy", "shared-v1")
+    if policy == "shared-v1":
+        return {"branch_policy": policy}
+    if policy != "adaptive-v1":
+        raise ValueError("unsupported branch_policy")
+    out = {"branch_policy": policy}
+    for key, low, high in (("path_count", 2, MAX_WORLD_PATHS),
+                           ("branch_decision_budget", 1, 4096),
+                           ("branch_max_actors", 1, 64),
+                           ("branch_max_rounds", 1, 256)):
+        value = settings.get(key)
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f"adaptive-v1 requires {key} integer in [{low}, {high}]")
+        out[key] = value
+    seed = settings.get("path_seed")
+    if type(seed) is not int:
+        raise ValueError("adaptive-v1 requires an integer path_seed")
+    out["path_seed"] = seed
+    temperature = settings.get("path_temperature", DEFAULT_PATH_TEMPERATURE)
+    if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 1:
+        raise ValueError("adaptive-v1 path_temperature must be finite and in [0, 1]")
+    out["path_temperature"] = float(temperature)
+    return out
 
 
 def resolve_path_count(raw: Any) -> Tuple[int, str]:
@@ -162,7 +199,8 @@ def variable_spread(worlds: Sequence[Any], limit: int = MAX_SPREAD_VARIABLES) ->
 
 def paths_summary(*, k: int, temperature: float, arbiter_enabled: bool, rounds: int,
                   per_path_shares: Sequence[Dict[str, Any]], scenarios: Sequence[str], worlds: Sequence[Any],
-                  arbiter_failed: Sequence[int], restarted_at_round: Optional[int] = None) -> Dict[str, Any]:
+                  arbiter_failed: Sequence[int], restarted_at_round: Optional[int] = None,
+                  branch_policy: str = "shared-v1", decision_budget: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """The ``paths`` block of the world summary (``world_state.json`` summary, trajectory
     ``world_model``, run summary)."""
     dist = share_distribution(per_path_shares, scenarios)
@@ -192,4 +230,11 @@ def paths_summary(*, k: int, temperature: float, arbiter_enabled: bool, rounds: 
     }
     if restarted_at_round:
         out["restarted_at_round"] = int(restarted_at_round)
+    out["branch_policy"] = branch_policy
+    if branch_policy == "adaptive-v1":
+        out["basis"] = ("Bounded experimental branches with branch-local actor decisions, observations, "
+                        "private memory and public statements; world rolls and sampled model responses "
+                        "are diagnostic uncertainty, not calibrated event probabilities. Stopped branches "
+                        "retain their last state; inspect per-branch completed rounds and stop reasons.")
+        out["decision_budget"] = dict(decision_budget or {})
     return out

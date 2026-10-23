@@ -860,13 +860,28 @@ def edit_dossier(pipeline_id: str):
 
 
 # T6.3: 各阶段产物深链。artifacts 映射在 pipeline_state.json 里维护（_record_stage_artifacts）：
-# dossier/timeline/sources/ontology/communities/initial_posts/personas/run_summary。
+# dossier/timeline/sources/ontology/communities/initial_posts/personas/run_summary/simulation_record
+# （ADR 0003：模拟事后记录 simulation_record.json，与 run_summary 同在 RUN 阶段登记）。
 @research_bp.route('/<pipeline_id>/artifact/<name>', methods=['GET'])
 def get_artifact(pipeline_id: str, name: str):
     """T6.3: 返回某阶段产物（JSON 解析后内容；csv/未知按纯文本）。"""
     data = PipelineManager.load(pipeline_id)
     if data is None:
         return jsonify({"success": False, "error": "管线不存在"}), 404
+    if name in {"simulation_record", "simulation_record_partial"}:
+        # This derivative has a publication gate, unlike ordinary research JSON.
+        # Resolve it by the pipeline's simulation identity, never by a stored path.
+        from .simulation import _contained_sim_dir
+        from ..services import simulation_record_contract as record_contract
+        sim_dir = _contained_sim_dir(data.get("simulation_id") or "")
+        if sim_dir is None:
+            return jsonify({"success": False, "error": "模拟事后记录尚未生成"}), 404
+        record, status = record_contract.load_published_record(sim_dir)
+        if record is None:
+            missing = not os.path.isfile(record_contract.record_paths(sim_dir)["json"])
+            return jsonify({"success": False, "error": "模拟事后记录尚未通过发布审计",
+                            "publication_status": status}), 404 if missing else 409
+        return jsonify({"success": True, "data": {"name": name, "content": record}})
     artifacts = (data.get("artifacts") or {})
     path = artifacts.get(name)
     # Live scans store provisional assets as <name>_partial; chart URLs stay

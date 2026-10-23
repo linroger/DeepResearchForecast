@@ -1,0 +1,194 @@
+{
+  "schema": "research-grounded-main-merge/v1",
+  "status": "verified_for_main_publication",
+  "feature_head": "53fc9283dd7facfa8b3c9545181f744168b6d4cd",
+  "initial_main": "dac62ef64215c06c8cc51e3825cc51144ee9907f",
+  "upstream_addition": "31a424d0f604267deec2d80856e68ce2e13a00b9",
+  "upstream_delta": "LICENSE only",
+  "backend": {
+    "modules": 89,
+    "passed": 2296,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/backend-union-accepted/completed.json",
+    "junit": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/backend-union-accepted/junit.xml",
+    "receipt_sha256": "679e8e0e597c34ba419abebc828995a9cd44e19f1ba44c21a0b396c6844c7502",
+    "source_count": 572,
+    "source_manifest": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/source-freeze-accepted.json",
+    "source_manifest_sha256": "ee401349e9f7b1c731b5751d2d9f30ad6d21652569146e1ecc86ae8705038151",
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 11,
+      "allowed:child_liveness": 4,
+      "allow:directory_traversal": 16
+    },
+    "children": {
+      "42256": {
+        "exit_code": 0,
+        "receipt": "process-42256.json"
+      },
+      "42313": {
+        "exit_code": 0,
+        "receipt": "process-42313.json"
+      },
+      "42328": {
+        "exit_code": 0,
+        "receipt": "process-42328.json"
+      },
+      "42331": {
+        "exit_code": 0,
+        "receipt": "process-42331.json"
+      },
+      "42465": {
+        "exit_code": 0,
+        "receipt": "process-42465.json"
+      },
+      "44081": {
+        "exit_code": 0,
+        "receipt": "process-44081.json"
+      },
+      "44088": {
+        "exit_code": 0,
+        "receipt": "process-44088.json"
+      },
+      "44156": {
+        "exit_code": 0,
+        "receipt": "process-44156.json"
+      },
+      "44157": {
+        "exit_code": 0,
+        "receipt": "process-44157.json"
+      },
+      "44162": {
+        "exit_code": 0,
+        "receipt": "process-44162.json"
+      },
+      "44174": {
+        "exit_code": 0,
+        "receipt": "process-44174.json"
+      }
+    },
+    "source_drift": []
+  },
+  "frontend": {
+    "passed": 382,
+    "failed": 0,
+    "build_exit": 0,
+    "build_modules": 718,
+    "receipt": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/frontend/receipt.json",
+    "warnings": [
+      "Output directory outside project root is not emptied.",
+      "Some minified chunks exceed 500 kB."
+    ]
+  },
+  "independent_review": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/independent-review.json",
+  "primary_preservation": {
+    "files": 84,
+    "file_drift": [],
+    "index_unchanged": true,
+    "proof": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/research-grounded-main-merge/primary-preservation.json"
+  },
+  "limits": [
+    "offline scripted provider boundaries",
+    "CPython audit hooks, not OS sandbox",
+    "blocked probes recorded as attempts",
+    "no application restart or production source adoption"
+  ],
+  "test_modules": [
+    "backend/tests/test_actor_context_runtime.py",
+    "backend/tests/test_actor_role_prompt.py",
+    "backend/tests/test_agent_decision.py",
+    "backend/tests/test_artifact_translation_model.py",
+    "backend/tests/test_artifact_translation_restart.py",
+    "backend/tests/test_artifact_translation_review_regressions.py",
+    "backend/tests/test_artifact_translation_routes.py",
+    "backend/tests/test_artifact_translation_services.py",
+    "backend/tests/test_artifact_translation_structured_job.py",
+    "backend/tests/test_audit_fixes_ontology.py",
+    "backend/tests/test_audit_fixes_prepare.py",
+    "backend/tests/test_calendar_event_bucketing.py",
+    "backend/tests/test_calendar_round_loop.py",
+    "backend/tests/test_calibration_rigor.py",
+    "backend/tests/test_canonical_world_brief_denials.py",
+    "backend/tests/test_context_audit_prepare.py",
+    "backend/tests/test_context_audit_report.py",
+    "backend/tests/test_context_audit_simulation.py",
+    "backend/tests/test_final_publish_audit.py",
+    "backend/tests/test_forecast_binary_resilience.py",
+    "backend/tests/test_forecast_feedback_sdk.py",
+    "backend/tests/test_forward_evaluation.py",
+    "backend/tests/test_grounded_actor_prompts.py",
+    "backend/tests/test_grounded_mechanics.py",
+    "backend/tests/test_grounded_runtime_paths.py",
+    "backend/tests/test_legacy_public_preparation.py",
+    "backend/tests/test_llm_errors.py",
+    "backend/tests/test_mandarin_numeric_integrity.py",
+    "backend/tests/test_model_translation_core.py",
+    "backend/tests/test_model_translation_workflow.py",
+    "backend/tests/test_news_context_pipeline.py",
+    "backend/tests/test_oasis_v1_provenance.py",
+    "backend/tests/test_oddsense_workflow.py",
+    "backend/tests/test_ontology_actors_optimizations.py",
+    "backend/tests/test_ontology_refinements.py",
+    "backend/tests/test_preparation_contract_promotion.py",
+    "backend/tests/test_preparation_integration.py",
+    "backend/tests/test_preparation_main_merge.py",
+    "backend/tests/test_preparation_report_policy.py",
+    "backend/tests/test_report_api_simulation_record_ref.py",
+    "backend/tests/test_report_bilingual.py",
+    "backend/tests/test_report_bilingual_filter_safe.py",
+    "backend/tests/test_report_forecast_localization.py",
+    "backend/tests/test_report_repair_and_reflection.py",
+    "backend/tests/test_report_translation_provenance_merge.py",
+    "backend/tests/test_research_assessment.py",
+    "backend/tests/test_research_contract_finalization.py",
+    "backend/tests/test_research_dossier_translation.py",
+    "backend/tests/test_research_numeric_support.py",
+    "backend/tests/test_research_partial_context_resume.py",
+    "backend/tests/test_research_preparation.py",
+    "backend/tests/test_root_arbiter_transaction.py",
+    "backend/tests/test_root_forecast_task.py",
+    "backend/tests/test_root_grounding_structure.py",
+    "backend/tests/test_run_arbiter_contract.py",
+    "backend/tests/test_run_forecast_horizon.py",
+    "backend/tests/test_run_orphan_inventory.py",
+    "backend/tests/test_run_translation_structure.py",
+    "backend/tests/test_sessionb_translation_reallm.py",
+    "backend/tests/test_sessionb_translation_structure.py",
+    "backend/tests/test_sim_config_v1_provenance.py",
+    "backend/tests/test_sim_timeline.py",
+    "backend/tests/test_simulation_config_seal.py",
+    "backend/tests/test_simulation_discovery.py",
+    "backend/tests/test_simulation_record_gate.py",
+    "backend/tests/test_simulation_record_integrity.py",
+    "backend/tests/test_temporal_mode_contract.py",
+    "backend/tests/test_translation_dates.py",
+    "backend/tests/test_translation_ladder.py",
+    "backend/tests/test_translation_pairs_admission.py",
+    "backend/tests/test_translation_pairs_integrity.py",
+    "backend/tests/test_translation_quantities.py",
+    "backend/tests/test_translation_robustness.py",
+    "backend/tests/test_utils_dates.py",
+    "backend/tests/test_v3_official_data.py",
+    "backend/tests/test_world_announced_settings.py",
+    "backend/tests/test_world_commitment_fulfilment.py",
+    "backend/tests/test_world_interactions.py",
+    "backend/tests/test_world_lifecycle.py",
+    "backend/tests/test_world_model.py",
+    "backend/tests/test_world_model_downstream.py",
+    "backend/tests/test_world_model_loop.py",
+    "backend/tests/test_world_model_seed.py",
+    "backend/tests/test_world_paths.py",
+    "backend/tests/test_world_preparation_context.py",
+    "backend/tests/test_world_reflexivity.py",
+    "backend/tests/test_world_report_consumers.py",
+    "backend/tests/test_world_track_records.py",
+    "backend/tests/test_world_update.py"
+  ]
+}

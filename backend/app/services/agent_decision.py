@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import json
 import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -34,7 +35,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from ..utils.llm_errors import describe_llm_error
 from .world_model import (ActorState, FULFILLMENT_ACTION_COST, FULFILLMENT_PREFIX,
                           INTERACTION_TERMS_MAX_CHARS, PROPOSAL_OPTION_IDS, WorldModel,
-                          _text, normalize_label)
+                          _text, normalize_label, validate_operative_terms)
 
 logger = logging.getLogger(__name__)
 
@@ -370,6 +371,48 @@ def _plan_kind(text: str) -> Tuple[str, int, int]:
     return "communication", 1, 0
 
 
+def _fair_menu(options: List[Dict[str, Any]], round_num: int, limit: int) -> List[Dict[str, Any]]:
+    """Reserve fulfillment, substantive coverage and complete offer-response groups."""
+    if type(limit) is not int or limit < 1:
+        raise ValueError("max_options must be a positive integer")
+    slots = limit - 1
+    chosen: List[Dict[str, Any]] = []
+    def take(row):
+        if len(chosen) < slots and row not in chosen:
+            chosen.append(row)
+    deliveries = [o for o in options if o["id"].startswith(FULFILLMENT_PREFIX)]
+    substantive = [o for o in options if ":" not in o["id"] and o["kind"] not in ("communication", "wait")]
+    offset = max(0, round_num - 1) % len(substantive) if substantive else 0
+    substantive = substantive[offset:] + substantive[:offset]
+    if deliveries:
+        take(deliveries[0])
+    if substantive:
+        take(substantive[0])
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for opt in options:
+        if "interaction_id" in opt:
+            groups.setdefault(opt["interaction_id"], []).append(opt)
+    offers = list(groups.values())
+    minimum = 1 + bool(deliveries) + bool(substantive) + (max(map(len, offers)) if offers else 0)
+    if limit < minimum:
+        raise ValueError(f"max_options must be at least {minimum} to preserve delivery, action and offer coverage")
+    if offers:
+        offset = max(0, round_num - 1) % len(offers)
+        for group in offers[offset:] + offers[:offset]:
+            if len(group) <= slots - len(chosen):
+                for opt in group:
+                    take(opt)
+                break
+    for opt in deliveries[1:] + substantive[1:] + options:
+        if "interaction_id" not in opt:
+            take(opt)
+    for group in offers:
+        if not any(o in chosen for o in group) and len(group) <= slots - len(chosen):
+            for opt in group:
+                take(opt)
+    return chosen + [HOLD_TEMPLATE.to_option(why="strategic patience is a legitimate choice")]
+
+
 def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
                       *, max_options: int = MAX_OPTIONS) -> List[Dict[str, Any]]:
     """Deterministic, world-grounded option menu for one actor in one round.
@@ -380,13 +423,15 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
     offered again; options above the remaining capacity are dropped (the actor
     may still take cheap moves).
     """
+    strict = world.mechanics_policy("action_policy")
+    operative = world.mechanics_policy("agreement_policy")
     options: List[Dict[str, Any]] = []
     seen: set = set()
     remaining = actor.capacity_remaining
     last_round = max(0, int(round_num) - 1)
 
     def push(opt: Dict[str, Any]) -> None:
-        if opt["id"] in seen or len(options) >= max_options:
+        if opt["id"] in seen or (not strict and len(options) >= max_options):
             return
         seen.add(opt["id"])
         options.append(opt)
@@ -395,19 +440,26 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
     if remaining >= FULFILLMENT_ACTION_COST:
         deliverable = [c for c in actor.commitments
                        if world.delivery_commitment(actor.agent_id, c.get("id"), round_num) is not None]
-        for c in sorted(deliverable, key=lambda item: (int(item["due_round"]), item["id"]))[:3]:
+        for c in sorted(deliverable, key=lambda item: ((not world.commitment_timing(item, round_num)[0],
+                            world.commitment_deadline_label(item), item["id"]) if operative else
+                            (int(item["due_round"]), item["id"])))[:3]:
             push({"id": FULFILLMENT_PREFIX + c["id"],
                   "label": f"Deliver commitment [{c['id']}]: {_text(c.get('description'), 220)}",
                   "kind": "operational", "cost": FULFILLMENT_ACTION_COST, "lag": 0,
                   "reversibility": "reversible", "targets_actor": False,
                   "suggested_targets": world.delivery_targets(actor.agent_id, c), "commitment_id": c["id"],
                   "commitment_target_ids": world.delivery_target_ids(actor.agent_id, c),
+                  **({"operative_terms": c["operative_terms"], "accepted_terms_hash": c["operative_terms_hash"]}
+                     if "operative_terms" in c else {}),
                   "why": "attempt this specific promise's delivery now; only explicit arbiter confirmation fulfils it"})
 
     # 0) OFFERS: answers owed on open offers — the only way an agreement can come about
-    for it in world.open_interactions_for(actor.agent_id)[:3]:
+    open_offers = world.open_interactions_for(actor.agent_id)
+    for it in (open_offers if strict else open_offers[:3]):
+        if operative and world.interaction_expired(it, round_num):
+            continue
         who = world.actor_name(it.proposer)
-        until = world._period_label_for_round(it.expires_round)
+        until = world.interaction_deadline_label(it)
         for verb, label, kind, cost, lag in (
             ("accept", f"Accept {who}'s offer [{it.id}] on exactly these terms: {_text(it.terms, 110)} — binds both sides",
              "coalition", 1, 1),
@@ -415,6 +467,9 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
             ("reject", f"Reject {who}'s offer [{it.id}]", "communication", 1, 0),
             ("defer", f"Defer your answer to {who}'s offer [{it.id}] (open until {until})", "communication", 0, 0),
         ):
+            if operative and verb == "accept" and world.agreement_admission(
+                    world.round, actor.agent_id, f"accept:{it.id}", accepted_terms_hash=it.operative_terms_hash):
+                continue
             if cost <= remaining:
                 why = f"an offer from {who} awaits your answer (lapses after {until})"
                 if verb == "accept":
@@ -423,7 +478,9 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
                             "an accept whose terms differ materially is recorded as a counter-offer, not an agreement")
                 push({"id": f"{verb}:{it.id}", "label": label, "kind": kind, "cost": cost, "lag": lag,
                       "reversibility": "sticky" if verb == "accept" else "reversible", "targets_actor": False,
-                      "suggested_targets": [who], "interaction_id": it.id, "why": why})
+                      "suggested_targets": [who], "interaction_id": it.id, "why": why,
+                      **({"operative_terms": it.operative_terms, "accepted_terms_hash": it.operative_terms_hash}
+                         if operative else {})})
     # 1) responses to what was aimed at this actor last period (offers are answered above)
     aimed = [e for e in world.events_in_round(last_round)
              if actor.name in e.targets and e.kind not in ("offer", "agreement", "breach")
@@ -464,6 +521,8 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
     # 2) documented plans (research-grounded)
     for idx, plan in enumerate(actor.documented_plans[:4]):
         kind, cost, lag = _plan_kind(plan)
+        if strict and cost > remaining:
+            continue
         if cost > remaining:
             cost = min(cost, max(1, remaining)) if remaining else cost
         push({"id": f"plan_{idx + 1}", "label": f"Advance your documented plan: {_text(plan, 120)}",
@@ -477,6 +536,11 @@ def build_option_menu(actor: ActorState, world: WorldModel, round_num: int,
         if tmpl.cost > max(remaining, 0):
             continue
         push(tmpl.to_option())
+    if operative:
+        for opt in options:
+            opt["agreement_policy"] = "operative-deadline-v1"
+    if strict:
+        return _fair_menu(options, int(round_num), max_options)
     if len(options) >= max_options:
         options = options[: max_options - 1]
     options.append(HOLD_TEMPLATE.to_option(why="strategic patience is a legitimate choice"))
@@ -533,6 +597,9 @@ def _render_options(options: List[Dict[str, Any]]) -> str:
             bits.append("targets=" + json.dumps(o.get("commitment_target_ids") or []))
             if o.get("suggested_targets"):
                 bits.append("stored counterparty=" + json.dumps(o["suggested_targets"], ensure_ascii=False))
+        if o.get("operative_terms") is not None:
+            bits.append("operative_terms=" + json.dumps(o["operative_terms"], ensure_ascii=False, sort_keys=True))
+            bits.append("accepted_terms_hash=" + str(o["accepted_terms_hash"]))
         if o.get("why"):
             bits.append(o["why"])
         lines.append("- " + " · ".join(bits))
@@ -560,6 +627,17 @@ def build_decision_prompt(actor: ActorState, *, world_clock: str, public_brief: 
     ]
     if recent_discourse.strip():
         parts.append(recent_discourse.strip())
+    if any(o.get("agreement_policy") == "operative-deadline-v1" for o in options):
+        parts.append(
+            "OPERATIVE AGREEMENTS: an offer or counteroffer must include operative_terms with "
+            'schema_version="operative-terms/v1" and an exact fulfillment_condition. Optional fields: '
+            "offer_expires_on, effective_on, delivery_deadline (ISO YYYY-MM-DD dates or null), and "
+            "duration_days (positive integer, requires effective_on). A duration is NOT a delivery deadline. "
+            "Use only dates and conditions you actually offer, never extract an arbitrary prose date as a deadline. "
+            "No deadline means the obligation stays pending until explicit delivery or withdrawal. "
+            "For accept, copy that menu entry's accepted_terms_hash exactly; leave terms/operative_terms null "
+            "or repeat them exactly. Any change requires counter, with a complete new operative_terms object."
+        )
     parts.append(
         f"# DECIDE YOUR MOVE FOR THIS PERIOD — {actor.name}\n"
         "Act strictly as this real-world actor. Choose the ONE most consequential move you actually "
@@ -638,9 +716,17 @@ class AgentDecision:
                  expected_reactions: Optional[List[Dict[str, str]]] = None,
                  scenario: Optional[str] = None, scenario_confidence: float = 0.0,
                  status: str = "ok", round_num: int = 0, period_end: Optional[str] = None,
-                 raw_option_id: str = "", problems: Optional[List[str]] = None, terms: str = "") -> None:
+                 raw_option_id: str = "", problems: Optional[List[str]] = None, terms: str = "",
+                 operative_terms: Optional[Dict[str, Any]] = None, accepted_terms_hash: Optional[str] = None) -> None:
         self.agent_id = int(agent_id)
-        self.terms = _text(terms, INTERACTION_TERMS_MAX_CHARS)   # OFFERS: exact offer / counter-offer terms
+        self.operative_terms = validate_operative_terms(operative_terms) if operative_terms is not None else None
+        self.accepted_terms_hash = accepted_terms_hash
+        if operative_terms is not None or accepted_terms_hash is not None:
+            if type(terms) is not str or len(terms) > INTERACTION_TERMS_MAX_CHARS:
+                raise ValueError("operative terms must be bounded exact prose")
+            self.terms = terms
+        else:
+            self.terms = _text(terms, INTERACTION_TERMS_MAX_CHARS)
         self.actor_name = actor_name
         self.option = dict(option)
         self.targets = list(targets)
@@ -672,6 +758,8 @@ class AgentDecision:
             "magnitude": round(self.magnitude, 3),
             "public_statement": self.public_statement, "private_rationale": self.private_rationale,
             "terms": self.terms,
+            **({"operative_terms": json.loads(json.dumps(self.operative_terms))} if self.operative_terms is not None else {}),
+            **({"accepted_terms_hash": self.accepted_terms_hash} if self.accepted_terms_hash is not None else {}),
             "commitment": self.commitment, "alliance_moves": list(self.alliance_moves),
             "expected_reactions": list(self.expected_reactions),
             "scenario": self.scenario, "scenario_confidence": round(self.scenario_confidence, 3),
@@ -786,7 +874,15 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
                              problems=[f"public_statement is {text_script(statement)}-script but the run "
                                        f"language is {_text(language, 40)}: \"{_text(statement, 100)}\""])
     rationale = _text(raw.get("private_rationale"), RATIONALE_MAX_CHARS)
-    terms = _text(raw.get("terms"), INTERACTION_TERMS_MAX_CHARS)
+    if world.mechanics_policy("agreement_policy"):
+        supplied_terms = raw.get("terms")
+        if (supplied_terms is not None and (type(supplied_terms) is not str
+                or len(supplied_terms) > INTERACTION_TERMS_MAX_CHARS)):
+            return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end,
+                                 raw_option_id=raw_option, problems=["operative terms must be bounded exact prose"])
+        terms = supplied_terms or ""
+    else:
+        terms = _text(raw.get("terms"), INTERACTION_TERMS_MAX_CHARS)
     commitment = None
     rc = raw.get("commitment")
     if isinstance(rc, dict) and _text(rc.get("description"), 220):
@@ -825,11 +921,31 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
         statement = f"{actor.name}: {option['label']}" + (f" ({', '.join(targets)})" if targets else "")
     if option["id"].startswith(FULFILLMENT_PREFIX):
         commitment, moves, terms = None, [], ""  # Delivery is not a fresh pledge, alliance or offer.
-    return AgentDecision(actor.agent_id, actor.name, option, targets=targets, magnitude=magnitude,
+    operative_terms = None
+    accepted_hash = None
+    if world.mechanics_policy("agreement_policy"):
+        operative_terms = raw.get("operative_terms")
+        accepted_hash = raw.get("accepted_terms_hash")
+        error = world.agreement_admission(round_num, actor.agent_id, option["id"], terms=terms,
+            operative_terms=operative_terms, accepted_terms_hash=accepted_hash)
+        if error:
+            return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end,
+                                 raw_option_id=raw_option, problems=[error])
+        if option["id"] not in PROPOSAL_OPTION_IDS and not option["id"].startswith("counter:"):
+            operative_terms = None
+        if not option["id"].startswith("accept:"):
+            accepted_hash = None
+    result = AgentDecision(actor.agent_id, actor.name, option, targets=targets, magnitude=magnitude,
                          public_statement=statement, private_rationale=rationale, commitment=commitment,
                          alliance_moves=moves, expected_reactions=reactions, scenario=scenario,
                          scenario_confidence=confidence, status="ok", round_num=round_num,
-                         period_end=period_end, raw_option_id=raw_option, terms=terms)
+                         period_end=period_end, raw_option_id=raw_option, terms=terms,
+                         operative_terms=operative_terms, accepted_terms_hash=accepted_hash)
+    admission = world.decision_admission(round_num, result.to_dict())
+    if admission["status"] != "ok":
+        return hold_decision(actor, status="invalid", round_num=round_num, period_end=period_end,
+                             raw_option_id=raw_option, problems=[admission["reason"]])
+    return result
 
 
 def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: ActorState,

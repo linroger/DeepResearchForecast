@@ -149,7 +149,9 @@ function stageMeta(key) {
     case 'ontology': return { label: L('本体生成', 'Ontology generation'), desc: L('从档案抽取实体与关系本体', 'Extract entity and relation ontology from dossier') }
     case 'graph': return { label: L('知识图谱', 'Knowledge graph'), desc: L('构建时序知识图谱', 'Build temporal knowledge graph') }
     case 'prepare': return { label: L('环境搭建 · 人设', 'Environment setup · personas'), desc: L('生成 Agent 人设与模拟环境', 'Generate agent personas and simulation environment') }
-    case 'run': return { label: L('群体模拟 · OASIS', 'Crowd simulation · OASIS'), desc: L('多智能体社交群体推演', 'Multi-agent social crowd simulation') }
+    // ADR 0003: the run stage carries the one reader-facing simulation name
+    // (sim_provenance.SIM_LABEL_* as a title); the sub-label keeps the OASIS engine mention.
+    case 'run': return { label: L('情景模拟', 'Scenario simulation'), desc: L('OASIS 多智能体情景推演；模拟输出，非证据', 'Multi-agent scenario exercise · OASIS; simulated output, not evidence') }
     case 'report': return { label: L('预测报告', 'Forecast report'), desc: L('综合分析，生成预测报告', 'Synthesize analysis, generate forecast report') }
     default: return null
   }

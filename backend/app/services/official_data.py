@@ -35,7 +35,7 @@ _GENERATION_FILES = ("research_report.md", "actors.json", "sources.json", "actor
                      "research_contract_manifest.json", "data/datasets.json")
 # These are produced during research. Graph priors are deliberately excluded:
 # their legitimate producer runs after research capture in the graph stage.
-_OPTIONAL_RESEARCH_FILES = ("quantitative.json", "contested.json", "timeline.json")
+_OPTIONAL_RESEARCH_FILES = ("quantitative.json", "contested.json", "timeline.json", "research_assessment.json")
 _CORE_RESEARCH_FILES = _GENERATION_FILES[:4]
 
 
@@ -345,19 +345,25 @@ def _max_series():
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else 24
 
 
-def load_official_data(handoff_dir, *, max_series=None, anchored=()):
+def load_official_data(handoff_dir, *, max_series=None, anchored=(), strict=False):
     """Bounded carrier; ``max_series`` defaults to Config.DATA_SOURCES_MAX_SERIES."""
     if not handoff_dir:
         return None
     api = data_api()
     if api is None:
+        if strict and os.path.lexists(Path(handoff_dir) / "data/datasets.json"):
+            raise ValueError("Pinned official dataset validator is unavailable")
         return None
     try:
         kwargs = {"max_series": _max_series() if max_series is None else max_series}
         if anchored:
             kwargs["anchored"] = tuple(anchored)
+        if strict:
+            kwargs["strict"] = True
         return api.load_official_data(handoff_dir, **kwargs)
-    except Exception as exc:  # optional, persisted enrichment only
+    except Exception as exc:  # optional enrichment; strict preparation fails closed
+        if strict:
+            raise
         _LOG.warning("Official-data snapshot unavailable (%s)", type(exc).__name__)
         return None
 

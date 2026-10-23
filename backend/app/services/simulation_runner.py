@@ -13,6 +13,8 @@ import threading
 import subprocess
 import signal
 import atexit
+import uuid
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -299,6 +301,7 @@ class SimulationRunner:
     _processes: Dict[str, subprocess.Popen] = {}
     _action_queues: Dict[str, Queue] = {}
     _monitor_threads: Dict[str, threading.Thread] = {}
+    _record_threads: Dict[tuple, threading.Thread] = {}
     _stdout_files: Dict[str, Any] = {}  # 存储 stdout 文件句柄
     _stderr_files: Dict[str, Any] = {}  # 存储 stderr 文件句柄
     
@@ -503,6 +506,7 @@ class SimulationRunner:
         graph_id: Optional[str] = None,  # Zep图谱ID（启用图谱更新时必需）
         sim_seed: Optional[int] = None,  # NEXTSTEPS P0-3: 本次运行的确定性采样种子（仅注入子进程环境，不改全局）
         resume: Optional[bool] = None,  # RUN-7: True=显式续跑；None=由 SIM_RESUME 自动判定；False=强制全新
+        finalize_record: bool = True,
     ) -> SimulationRunState:
         """
         启动模拟
@@ -527,6 +531,8 @@ class SimulationRunner:
                 expected_manifest_sha256=prepared.world_input_manifest_sha256)
             cls._world_simulations.add(simulation_id)
             cls.register_cleanup()
+            if finalize_record:
+                cls._start_world_record_monitor(simulation_id)
             return cls._world_run_state(data)
         if platform not in {"twitter", "reddit", "parallel"}:
             raise ValueError(
@@ -554,6 +560,7 @@ class SimulationRunner:
         from .forecast_task import validate_task_calendar
         with open(config_path, encoding="utf-8") as task_handle:
             task_config = json.load(task_handle)
+        task_state: Dict[str, Any] = {}
         task_state_path = os.path.join(sim_dir, "state.json")
         if os.path.isfile(task_state_path):
             with open(task_state_path, encoding="utf-8") as task_handle:
@@ -564,6 +571,8 @@ class SimulationRunner:
                         or KEY not in task_config):
                     raise ForecastTaskError("current forecast task preparation has not completed")
         validate_task_calendar(task_config)
+        from .preparation_adapter import validate_preparation_ready
+        validate_preparation_ready(task_config, task_state)
         calendar_execution = (isinstance(task_config.get("temporal_config"), dict)
                               and task_config["temporal_config"].get("mode") == "calendar")
 
@@ -925,6 +934,12 @@ class SimulationRunner:
         )
         if max_rounds_ignored:
             state.options["max_rounds_ignored"] = True
+        state.options["record_owner"] = "runner" if finalize_record else "pipeline"
+        if platform == "parallel" or calendar_mode:
+            # Platform completion precedes post-hoc decisions. A per-launch token
+            # prevents an older completion marker (including checkpoint resumes)
+            # from admitting unfinished outputs from this child.
+            state.options["terminal_artifacts_token"] = uuid.uuid4().hex
         
         cls._save_run_state(state)
         
@@ -1012,6 +1027,8 @@ class SimulationRunner:
             env = os.environ.copy()
             env['PYTHONUTF8'] = '1'  # Python 3.7+ 支持，让所有 open() 默认使用 UTF-8
             env['PYTHONIOENCODING'] = 'utf-8'  # 确保 stdout/stderr 使用 UTF-8
+            if state.options.get("terminal_artifacts_token"):
+                env['SIM_TERMINAL_ARTIFACTS_TOKEN'] = state.options["terminal_artifacts_token"]
             # NEXTSTEPS P0-3: 把本次运行的采样种子**仅注入子进程环境**（run_parallel_simulation
             # 优先读 env['SIM_SEED']），不触碰本进程全局 os.environ，避免并发管线相互污染。
             if sim_seed is not None:
@@ -1146,8 +1163,11 @@ class SimulationRunner:
                         reddit_actions_log, reddit_position, state, "reddit"
                     )
                 
+                cls._complete_after_artifact_barrier(state)
                 # 更新状态
                 cls._save_run_state(state)
+                if state.runner_status == RunnerStatus.COMPLETED:
+                    cls._finalize_standalone_artifacts(state)
                 time.sleep(2)
             
             # 进程结束后，最后读取一次日志
@@ -1159,63 +1179,66 @@ class SimulationRunner:
             # 进程结束
             exit_code = process.returncode
             
-            all_platforms_completed = cls._check_all_platforms_completed(state)
-            status_before_exit = state.runner_status
+            all_platforms_completed = (cls._check_all_platforms_completed(state)
+                                       and cls._terminal_artifacts_ready(state))
+            with state._lock:
+                status_before_exit = state.runner_status
 
-            # 结果生命周期与 command-mode 子进程生命周期是两件事：平台写出
-            # simulation_end 后，模拟结果已经权威 COMPLETED；子进程仍可能继续存活供
-            # 报告采访，随后因空闲、显式 stop 或服务器 cleanup 退出。这个资源退出不得
-            # 改写既有终态。STOPPING 则是显式终止意图，观察到进程退出后收敛为 STOPPED。
-            if status_before_exit in {
-                RunnerStatus.COMPLETED,
-                RunnerStatus.FAILED,
-                RunnerStatus.STOPPED,
-            }:
-                logger.info(
-                    "模拟进程退出，保留既有终态: %s, status=%s, exit_code=%s",
-                    simulation_id,
-                    status_before_exit.value,
-                    exit_code,
-                )
-            elif status_before_exit == RunnerStatus.STOPPING:
-                state.runner_status = RunnerStatus.STOPPED
-                if state.completed_at is None:
-                    state.completed_at = datetime.now().isoformat()
-                logger.info(f"模拟按停止请求退出: {simulation_id}")
-            elif exit_code == 0 and all_platforms_completed:
-                state.runner_status = RunnerStatus.COMPLETED
-                state.completed_at = datetime.now().isoformat()
-                logger.info(f"模拟完成: {simulation_id}")
-            else:
-                state.runner_status = RunnerStatus.FAILED
-                state.completed_at = None
-                # 从主日志文件读取错误信息
-                main_log_path = os.path.join(sim_dir, "simulation.log")
-                error_info = cls._read_log_tail(main_log_path, max_bytes=2000)
-                if exit_code == 0:
-                    # RUN-17/LOOP-001: 子进程在真正进入模拟前拒绝启动（磁盘预检、profile/
-                    # config 缺失等）时可能以 0 退出。进程退出码不是完成证据；每个启用平台
-                    # 都必须在 actions.jsonl 写出 simulation_end。此前这里仍标 COMPLETED，
-                    # 使编排器继续烧数小时生成一份基于 0 轮/0 动作的报告。
-                    missing = cls._missing_platform_completions(state)
-                    missing_text = ", ".join(missing) if missing else "unknown"
-                    state.error = (
-                        "进程退出码为 0，但启用平台未产出 simulation_end "
-                        f"({missing_text})；模拟未真正完成"
+                # 结果生命周期与 command-mode 子进程生命周期是两件事：平台写出
+                # simulation_end 后，模拟结果已经权威 COMPLETED；子进程仍可能继续存活供
+                # 报告采访，随后因空闲、显式 stop 或服务器 cleanup 退出。这个资源退出不得
+                # 改写既有终态。STOPPING 则是显式终止意图，观察到进程退出后收敛为 STOPPED。
+                if status_before_exit in {
+                    RunnerStatus.COMPLETED,
+                    RunnerStatus.FAILED,
+                    RunnerStatus.STOPPED,
+                }:
+                    logger.info(
+                        "模拟进程退出，保留既有终态: %s, status=%s, exit_code=%s",
+                        simulation_id,
+                        status_before_exit.value,
+                        exit_code,
                     )
-                    if error_info.strip():
-                        state.error += f"。模拟日志尾部: {error_info.strip()}"
+                elif status_before_exit == RunnerStatus.STOPPING:
+                    state.runner_status = RunnerStatus.STOPPED
+                    if state.completed_at is None:
+                        state.completed_at = datetime.now().isoformat()
+                    logger.info(f"模拟按停止请求退出: {simulation_id}")
+                elif exit_code == 0 and all_platforms_completed:
+                    state.runner_status = RunnerStatus.COMPLETED
+                    state.completed_at = datetime.now().isoformat()
+                    logger.info(f"模拟完成: {simulation_id}")
                 else:
-                    state.error = f"进程退出码: {exit_code}, 错误: {error_info}"
-                logger.error(f"模拟失败: {simulation_id}, error={state.error}")
+                    state.runner_status = RunnerStatus.FAILED
+                    state.completed_at = None
+                    # 从主日志文件读取错误信息
+                    main_log_path = os.path.join(sim_dir, "simulation.log")
+                    error_info = cls._read_log_tail(main_log_path, max_bytes=2000)
+                    if exit_code == 0:
+                        # RUN-17/LOOP-001: 子进程在真正进入模拟前拒绝启动（磁盘预检、profile/
+                        # config 缺失等）时可能以 0 退出。进程退出码不是完成证据；每个启用平台
+                        # 都必须在 actions.jsonl 写出 simulation_end。此前这里仍标 COMPLETED，
+                        # 使编排器继续烧数小时生成一份基于 0 轮/0 动作的报告。
+                        missing = cls._missing_platform_completions(state)
+                        missing_text = ", ".join(missing) if missing else "unknown"
+                        state.error = (
+                            "进程退出码为 0，但启用平台未产出 simulation_end "
+                            f"({missing_text})；模拟未真正完成"
+                        )
+                        if error_info.strip():
+                            state.error += f"。模拟日志尾部: {error_info.strip()}"
+                    else:
+                        state.error = f"进程退出码: {exit_code}, 错误: {error_info}"
+                    logger.error(f"模拟失败: {simulation_id}, error={state.error}")
             
-            state.twitter_running = False
-            state.reddit_running = False
+                state.twitter_running = False
+                state.reddit_running = False
             cls._save_run_state(state)
             # RUN-11: 子进程已整体退出（含崩溃/被杀），IPC 必然不可用——把 env_status.json
             # 落为 stopped，防止 interview 端点对着死进程阻塞整个超时窗。优雅退出时子进程
             # 自己已写 stopped，重复写幂等无害。
             cls._mark_env_stopped(simulation_id)
+            cls._finalize_standalone_artifacts(state)
 
         except Exception as e:
             logger.error(f"监控线程异常: {simulation_id}, error={str(e)}")
@@ -1309,7 +1332,7 @@ class SimulationRunner:
                                         # 这些事件齐全前退出，则由 _monitor_simulation 的 post-exit 分支
                                         # 标 FAILED，即使 exit_code==0（LOOP-001）。
                                         all_completed = cls._check_all_platforms_completed(state)
-                                        if all_completed and state.runner_status in {
+                                        if all_completed and cls._terminal_artifacts_ready(state) and state.runner_status in {
                                             RunnerStatus.STARTING,
                                             RunnerStatus.RUNNING,
                                         }:
@@ -1415,6 +1438,7 @@ class SimulationRunner:
     # 涌现度量存活到新一轮且新一轮在再生它们之前失败，报告阶段会把「上一次运行」的
     # 产物当作本次运行的结果静默消费。
     _STALE_DERIVED_ARTIFACTS = (
+        "simulation_artifacts_ready.json",
         "run_summary.json",
         "world_state_trajectory.json",
         "decisions.jsonl",
@@ -1425,6 +1449,13 @@ class SimulationRunner:
         "world_actions.jsonl",
         "world_digest.jsonl",
         "world_paths.json",              # WORLD PATHS (SIM_WORLD_PATHS > 1): the sibling paths' state
+        # SIMULATION AFTER-ACTION RECORD (ADR 0003): the record, both renderings and its gate audit
+        # are per-run; a stale passed audit would publish a stale record for the new run.
+        "simulation_record.json",
+        "simulation_record.md",
+        "simulation_record.zh.md",
+        "simulation_record_audit.json",
+        "simulation_record_attempt.json",
         "emergent_metrics.json",
         "twitter_emergent_metrics.json",
         "reddit_emergent_metrics.json",
@@ -1811,10 +1842,10 @@ class SimulationRunner:
         
         # RUN-16: 允许停止 STARTING——启动阶段卡死（如 agent 建图挂在 LLM 上）的模拟
         # 此前必须等它自己转为 RUNNING 才能通过 API 停止；终止路径本就能处理短命/缺失进程。
-        if state.runner_status not in [RunnerStatus.RUNNING, RunnerStatus.PAUSED, RunnerStatus.STARTING]:
-            raise ValueError(f"模拟未在运行: {simulation_id}, status={state.runner_status}")
-        
-        state.runner_status = RunnerStatus.STOPPING
+        with state._lock:
+            if state.runner_status not in [RunnerStatus.RUNNING, RunnerStatus.PAUSED, RunnerStatus.STARTING]:
+                raise ValueError(f"模拟未在运行: {simulation_id}, status={state.runner_status}")
+            state.runner_status = RunnerStatus.STOPPING
         cls._save_run_state(state)
 
         # 终止进程 —— STOPPED 必须与「确实终止了进程」绑定（EXECPLAN2 F-6-11）。
@@ -2162,6 +2193,224 @@ class SimulationRunner:
         result = sorted(agent_stats.values(), key=lambda x: x["total_actions"], reverse=True)
 
         return result
+
+    @classmethod
+    def _terminal_artifacts_ready(cls, state: SimulationRunState) -> bool:
+        token = (getattr(state, "options", None) or {}).get("terminal_artifacts_token")
+        if not token:
+            return True  # Historical children and single-platform runners.
+        from .simulation_record_contract import read_regular
+        try:
+            marker = json.loads(read_regular(os.path.join(
+                cls.RUN_STATE_DIR, state.simulation_id, "simulation_artifacts_ready.json")))
+            return (isinstance(marker, dict) and marker.get("schema") == "simulation-artifacts-ready/v1"
+                    and marker.get("run_token") == token)
+        except (OSError, ValueError, TypeError):
+            return False
+
+    @classmethod
+    def _complete_after_artifact_barrier(cls, state: SimulationRunState) -> None:
+        # Marker I/O can overlap a stop/failure. Re-read status only after that
+        # I/O, under the same lock used to publish stop intent.
+        if not cls._terminal_artifacts_ready(state):
+            return
+        with state._lock:
+            if (state.runner_status in {RunnerStatus.STARTING, RunnerStatus.RUNNING}
+                    and cls._check_all_platforms_completed(state)):
+                state.runner_status = RunnerStatus.COMPLETED
+                state.completed_at = datetime.now().isoformat()
+
+    @staticmethod
+    def reconcile_completed_simulation_state(
+        sim_state: Any,
+        run_state: Any = None,
+        run_summary: Any = None,
+    ) -> None:
+        """Copy authoritative terminal RUN fields into the durable simulation state.
+
+        ``SimulationState`` is the API-facing record while ``SimulationRunState``
+        is the runtime authority.  Updating only the former's top-level status
+        produced impossible records (completed with round 0 and both platforms
+        not_started).  This helper makes the terminal projection explicit and
+        testable without coupling it to pipeline I/O.
+        """
+        from .simulation_manager import SimulationStatus
+        sim_state.status = SimulationStatus.COMPLETED
+        round_candidates = [getattr(run_state, "current_round", None)]
+        if isinstance(run_summary, dict):
+            round_candidates.append(run_summary.get("rounds_executed"))
+        parsed_rounds = []
+        for candidate in round_candidates:
+            try:
+                parsed_rounds.append(max(0, int(candidate or 0)))
+            except (TypeError, ValueError):
+                continue
+        sim_state.current_round = max(parsed_rounds, default=0)
+        for platform in ("twitter", "reddit"):
+            enabled_raw = getattr(run_state, f"{platform}_enabled", None)
+            enabled = bool(
+                getattr(sim_state, f"enable_{platform}", False)
+                if enabled_raw is None else enabled_raw
+            )
+            completed_raw = getattr(run_state, f"{platform}_completed", None)
+            if not enabled:
+                platform_status = "disabled"
+            elif completed_raw is not None:
+                platform_status = "completed" if bool(completed_raw) else "incomplete"
+            else:
+                # Aggregate rounds prove that *some* simulation work completed,
+                # not that every enabled lane reached its terminal checkpoint.
+                # Preserve an existing explicit terminal projection when one is
+                # available; otherwise expose the missing evidence honestly.
+                existing = str(
+                    getattr(sim_state, f"{platform}_status", "") or ""
+                ).strip()
+                platform_status = (
+                    existing if existing not in {"", "not_started"} else "unknown"
+                )
+            setattr(sim_state, f"{platform}_status", platform_status)
+        sim_state.error = getattr(run_state, "error", None) or None
+
+    @classmethod
+    def reconcile_completed_record_state(cls, simulation_id: str, *, run_state=None, summary=None) -> None:
+        """Finish the API projection before sealing its bytes, without reuse timestamp churn."""
+        from .simulation_manager import SimulationManager
+        manager = SimulationManager()
+        manager.SIMULATION_DATA_DIR = cls.RUN_STATE_DIR
+        state = manager.get_simulation(simulation_id)
+        if state is None:
+            return
+        before = state.to_dict()
+        cls.reconcile_completed_simulation_state(state, run_state, summary)
+        if state.to_dict() != before:
+            manager._save_simulation_state(state)
+
+    @classmethod
+    def publish_simulation_record(cls, simulation_id: str, *, language=None, engine_hint=None,
+                                  synthesis=None, world_launch_identity=None) -> bool:
+        """One locked derivative publisher for pipeline and standalone terminal paths.
+
+        Valid receipts are immutable. Missing/stale/failed derivatives are repaired
+        from preserved inputs; repair never repeats paid synthesis. The lock spans
+        compilation and verification so concurrent publishers cannot both call a model.
+        """
+        if not bool(getattr(Config, "SIM_RECORD_ENABLED", True)):
+            return False
+        from . import simulation_record_contract as contract
+        from .simulation_record import build_record, write_record
+        from .simulation_record_gate import audit_record
+        from .world_simulation.artifacts import exclusive_file
+        sim_dir = os.path.abspath(os.path.join(cls.RUN_STATE_DIR, simulation_id))
+        if (os.path.basename(sim_dir) != simulation_id or not os.path.isdir(sim_dir)
+                or os.path.realpath(sim_dir) != sim_dir):
+            return False
+        try:
+            with exclusive_file(Path(sim_dir) / ".simulation_record.lock"):
+                if engine_hint == "world-v1" or cls.simulation_engine(simulation_id) == "world-v1":
+                    from .world_simulation.service import WorldSimulationService
+                    if (world_launch_identity is not None
+                            and cls._world_record_launch_identity(simulation_id) != world_launch_identity):
+                        return False  # An obsolete finalizer owns no newer launch's receipt.
+                    try:
+                        WorldSimulationService.require_complete(simulation_id, root=cls.RUN_STATE_DIR)
+                    except Exception:
+                        if (world_launch_identity is not None
+                                and cls._world_record_launch_identity(simulation_id) != world_launch_identity):
+                            return False
+                        # Raw world_result.json can still look complete when its
+                        # native seal/SQLite binding is invalid. Retire only our
+                        # derivative receipt; never repair native world evidence.
+                        audit = contract.load_audit(sim_dir) or {}
+                        audit.update(publication_status="failed", hard_issues=[
+                            "G7: native world completion verification failed"])
+                        contract.atomic_write(contract.record_paths(sim_dir)["audit"],
+                                              contract.record_bytes(audit))
+                        return False
+                published, _ = contract.load_published_record(sim_dir)
+                if published is not None:
+                    return True
+                paths = contract.record_paths(sim_dir)
+                attempt = os.path.join(sim_dir, "simulation_record_attempt.json")
+                repairing = (os.path.lexists(attempt)
+                             or any(os.path.lexists(paths[key]) for key in ("json", "audit", "md", "md_zh")))
+                # Install before any model call: even a crash before write_record
+                # must not spend on the same run's synthesis a second time.
+                contract.atomic_write(attempt, b'{"attempted":true}\n')
+                record = build_record(sim_dir, language=language, engine_hint=engine_hint,
+                                      synthesis=False if repairing else synthesis)
+                write_record(sim_dir, record)
+                audit_record(sim_dir, record)
+                return contract.load_published_record(sim_dir)[0] is not None
+        except Exception as error:  # A derivative cannot fail or restart paid RUN.
+            logger.warning("[%s] simulation record unavailable: %s", simulation_id, error)
+            return False
+
+    @classmethod
+    def _finalize_standalone_artifacts(cls, state: SimulationRunState) -> None:
+        if (state.options.get("record_owner") == "pipeline" and state.runner_status == RunnerStatus.COMPLETED
+                or state.options.get("record_finalization_attempted")
+                or state.runner_status not in {RunnerStatus.COMPLETED, RunnerStatus.FAILED, RunnerStatus.STOPPED}):
+            return
+        state.options["record_finalization_attempted"] = True
+        try:
+            summary = cls.write_run_summary(state.simulation_id)
+            if state.runner_status == RunnerStatus.COMPLETED:
+                cls.reconcile_completed_record_state(state.simulation_id, run_state=state, summary=summary)
+            cls.publish_simulation_record(state.simulation_id,
+                                          synthesis=None if state.runner_status == RunnerStatus.COMPLETED else False)
+        except Exception as error:
+            logger.warning("[%s] terminal record finalization failed: %s", state.simulation_id, error)
+
+    @classmethod
+    def _world_record_launch_identity(cls, simulation_id: str) -> tuple:
+        from .simulation_record_contract import read_regular
+        from .world_simulation.service import WorldSimulationService
+        directory, spec = WorldSimulationService._inputs(simulation_id, root=cls.RUN_STATE_DIR)
+        try:
+            run = json.loads(read_regular(str(directory / "world_run.json")))
+        except FileNotFoundError:
+            run = {}  # Historical completed exports may predate launch projections.
+        if not isinstance(run, dict) or run and (
+                run.get("simulation_id") != simulation_id or run.get("generation_id") != spec["generationId"]):
+            raise ValueError("World record launch identity mismatch")
+        return simulation_id, spec["generationId"], run.get("launch_id")
+
+    @classmethod
+    def _start_world_record_monitor(cls, simulation_id: str) -> None:
+        """Standalone world executions share the publisher after the native export seal."""
+        from .world_simulation.service import WorldSimulationService
+        identity = cls._world_record_launch_identity(simulation_id)
+        initial = WorldSimulationService.status(simulation_id, root=cls.RUN_STATE_DIR)
+        if (initial or {}).get("runner_status") in {"completed", "failed", "stopped"}:
+            cls.publish_simulation_record(simulation_id, engine_hint="world-v1", synthesis=False,
+                                          world_launch_identity=identity)
+            return
+        def finalize():
+            try:
+                while True:
+                    if cls._world_record_launch_identity(simulation_id) != identity:
+                        return
+                    data = WorldSimulationService.status(simulation_id, root=cls.RUN_STATE_DIR)
+                    status = (data or {}).get("runner_status")
+                    if status in {"completed", "failed", "stopped"}:
+                        cls.publish_simulation_record(simulation_id, engine_hint="world-v1",
+                                                      synthesis=False, world_launch_identity=identity)
+                        return
+                    if status not in {"starting", "running", "stopping"}:
+                        return
+                    time.sleep(2)
+            except Exception as error:
+                logger.warning("[%s] world record finalization failed: %s", simulation_id, error)
+            finally:
+                with cls._run_state_lock:
+                    cls._record_threads.pop(identity, None)
+
+        with cls._run_state_lock:
+            if identity in cls._record_threads:
+                return
+            thread = threading.Thread(target=finalize, daemon=True)
+            cls._record_threads[identity] = thread
+            thread.start()
 
     @classmethod
     def write_run_summary(
@@ -2598,15 +2847,16 @@ class SimulationRunner:
                     # 返回前就观察到子进程退出；预先落 STOPPING 可让它收敛到 STOPPED，
                     # 而不是把服务器主动回收误判成意外 FAILED。
                     state = cls.get_run_state(simulation_id)
-                    was_terminal = bool(state and state.runner_status in {
-                        RunnerStatus.COMPLETED,
-                        RunnerStatus.FAILED,
-                        RunnerStatus.STOPPED,
-                    })
-                    if state and not was_terminal:
-                        state.runner_status = RunnerStatus.STOPPING
-                        state.error = "服务器关闭，模拟被终止"
-                        cls._save_run_state(state)
+                    was_terminal = False
+                    if state:
+                        with state._lock:
+                            was_terminal = state.runner_status in {
+                                RunnerStatus.COMPLETED, RunnerStatus.FAILED, RunnerStatus.STOPPED}
+                            if not was_terminal:
+                                state.runner_status = RunnerStatus.STOPPING
+                                state.error = "服务器关闭，模拟被终止"
+                        if not was_terminal:
+                            cls._save_run_state(state)
 
                     try:
                         # 使用跨平台的进程终止方法

@@ -1,0 +1,57 @@
+{
+  "reviewed_at_utc": "2026-10-23T05:58:12.476258+00:00",
+  "commit": "e3b10782d7ace273372dcd7f36ba291c4905d587",
+  "authority": "live working tree with existing unrelated modifications",
+  "coverage": "targeted source reads and producer/consumer checks; not an exhaustive codebase audit",
+  "application_executed": false,
+  "paid_calls": 0,
+  "runtime_changes": false,
+  "code_reference_count": 23,
+  "source_sha256": {
+    "deerflow_bridge/linear_research.py": "8a1951320c0a6bd6ab5022369c7ab2cb367c485139a4fa6594bbd6e75b5c669f",
+    "backend/app/utils/actors.py": "c0af44a4f8af42565505c23e8045ae0f1b167e3a237488560a367c7356ae0aec",
+    "backend/app/services/forecast_extractor.py": "19d7783e5e547e5dacd9db6f6881de0f31702182e7727b8b4f06ad10576d5b3d",
+    "backend/app/services/world_simulation/kernel.py": "df249d4683370b21f826a16e5232442d4a9bcf9f1f99f777a7cab3cfa3b043b6",
+    "backend/app/services/agent_decision.py": "16b59007e90d299c9ecfae76e89e0923853aed54ba54c8c62b9633eac1f54d31",
+    "backend/app/services/world_model.py": "6a3dc34acb8f2ed6e96f32f29ad89784fcd3fdc7a19b12e83bb69949234962ab",
+    "backend/app/services/world_simulation/observations.py": "92b1b9299d786ab640cba968d0e427ffcedfe26fdf632720d774409fbde31ba8",
+    "backend/app/services/world_simulation/contracts.py": "9bc5cf2389af40f8358963a09ae63f850313c4909e19e95a71d643e928ce943d",
+    "backend/app/services/world_update.py": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+    "backend/app/services/world_paths.py": "48503284b21fabadeade4e1949cea7a912039bc7520ff871ad2e5f973db1f42b",
+    "backend/scripts/run_parallel_simulation.py": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94",
+    "backend/app/services/world_simulation/store.py": "84992896b3919ace0ce0729be83b8bc6fdce16ad6cc275a2ea8b3fc140dec01e",
+    "backend/app/services/backtest_mode.py": "0e3fdd6d2252da1d1b8f643c42607f077851b6794dd28ddd59a88a42a8131d7a",
+    "backend/scripts/backtest_eval.py": "ba3ec5adf1fdaaaf1cf703311aa8511547f669147fb4f150592fb04763ffec0e",
+    "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
+    "backend/app/services/forecast_task.py": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31"
+  },
+  "primary_references": [
+    "https://aclanthology.org/2023.emnlp-main.741/",
+    "https://www.jasss.org/23/2/7.html",
+    "https://arxiv.org/abs/2412.05093",
+    "https://proceedings.iclr.cc/paper_files/paper/2025/hash/ea74e45a229dac70b5b63b28d8934db6-Abstract-Conference.html"
+  ],
+  "concurrent_source_changes": [
+    {
+      "file": "backend/app/services/world_update.py",
+      "initial_sha256": "e2c941867abdc4f85fe711f7f76a8ea1d62931c461ee4fb5877a6708c1cb60f0",
+      "rechecked_sha256": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+      "scope": "bounded affected-symbol recheck; not runtime or whole-file acceptance"
+    },
+    {
+      "file": "backend/scripts/run_parallel_simulation.py",
+      "initial_sha256": "e56203edef38b8214d7e6404e96cca90c12c8c3fa2db19291f0e6f535f0c1fce",
+      "rechecked_sha256": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94",
+      "scope": "bounded affected-symbol recheck; not runtime or whole-file acceptance"
+    }
+  ],
+  "independent_review": {
+    "reviewer": "Lagrange",
+    "verdict": "No blocker after two nuance corrections",
+    "corrections": [
+      "Extend existing belief update semantics, not a duplicate update mechanism",
+      "Match exogenous inputs across fixed and adaptive policy arms"
+    ]
+  },
+  "finalized_at_utc": "2026-10-23T06:04:10.495645+00:00"
+}

@@ -265,3 +265,14 @@ a { color: inherit; }
 .feed-kind { font-family: var(--mono); font-size: .64rem; color: #999; }
 .feed-round { margin-left: auto; font-family: var(--mono); font-size: .64rem; color: #aaa; white-space: nowrap; }
 .feed-content { margin: 0; font-size: .84rem; line-height: 1.6; color: #222; word-break: break-word; }
+
+/* Pre-policy demo badge (ADR 0003): reports written before SIMULATION_FORECAST_EFFECT existed */
+.callout.prepolicy {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-left: 4px solid #b45309;
+  background: #fef3c7;
+  color: #3b2303;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}

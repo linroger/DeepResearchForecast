@@ -1,0 +1,504 @@
+{
+ "outcome": {
+  "shares": {
+   "Stalemate with fragile talks": 0.50629,
+   "Ukraine ceasefire, Iran holds": 0.24223,
+   "Dual de-escalation": 0.086012,
+   "Renewed escalation in Ukraine": 0.04123,
+   "Iran war reignition": 0.107058,
+   "Widened regional war": 0.017179
+  },
+  "leader": "Stalemate with fragile talks",
+  "leader_share": 0.5063,
+  "rounds": 3,
+  "ewma_delta": 0.119776,
+  "converged": false,
+  "convergence_state": "active",
+  "converged_at": null,
+  "uniform_prior": false,
+  "round_accounting": {
+   "policy_version": "foglamp-convergence-policy/v1",
+   "counts": {
+    "committed": 3
+   },
+   "rounds_accounted": 3,
+   "valid_transitions": 3,
+   "valid_coverage": 1.0,
+   "failed_rounds": 0,
+   "missing_rounds": 0
+  },
+  "epistemic_status": "elicited_model_projection"
+ },
+ "trajectory": [
+  {
+   "round": 0,
+   "shares": {
+    "Stalemate with fragile talks": 0.4,
+    "Ukraine ceasefire, Iran holds": 0.25,
+    "Dual de-escalation": 0.1,
+    "Renewed escalation in Ukraine": 0.12,
+    "Iran war reignition": 0.08,
+    "Widened regional war": 0.05
+   },
+   "leader": "Stalemate with fragile talks",
+   "leader_share": 0.4,
+   "rounds": 0,
+   "ewma_delta": 1.0,
+   "converged": false,
+   "convergence_state": "active",
+   "converged_at": null,
+   "uniform_prior": false,
+   "round_accounting": {
+    "policy_version": "foglamp-convergence-policy/v1",
+    "counts": {},
+    "rounds_accounted": 0,
+    "valid_transitions": 0,
+    "valid_coverage": 0.0,
+    "failed_rounds": 0,
+    "missing_rounds": 0
+   },
+   "epistemic_status": "elicited_model_projection",
+   "as_of": "2026-10-22"
+  },
+  {
+   "round": 1,
+   "shares": {
+    "Stalemate with fragile talks": 0.383216,
+    "Ukraine ceasefire, Iran holds": 0.263768,
+    "Dual de-escalation": 0.133394,
+    "Renewed escalation in Ukraine": 0.084018,
+    "Iran war reignition": 0.100596,
+    "Widened regional war": 0.035008
+   },
+   "leader": "Stalemate with fragile talks",
+   "leader_share": 0.3832,
+   "rounds": 1,
+   "ewma_delta": 0.567758,
+   "converged": false,
+   "convergence_state": "active",
+   "converged_at": null,
+   "uniform_prior": false,
+   "round_accounting": {
+    "policy_version": "foglamp-convergence-policy/v1",
+    "counts": {
+     "committed": 1
+    },
+    "rounds_accounted": 1,
+    "valid_transitions": 1,
+    "valid_coverage": 1.0,
+    "failed_rounds": 0,
+    "missing_rounds": 0
+   },
+   "epistemic_status": "elicited_model_projection",
+   "round_status": "committed",
+   "as_of": "2026-10-23",
+   "period_start": "2026-10-23",
+   "period_end": "2026-10-23",
+   "label": "2026-10-23"
+  },
+  {
+   "round": 2,
+   "shares": {
+    "Stalemate with fragile talks": 0.436732,
+    "Ukraine ceasefire, Iran holds": 0.24464,
+    "Dual de-escalation": 0.122864,
+    "Renewed escalation in Ukraine": 0.058844,
+    "Iran war reignition": 0.112401,
+    "Widened regional war": 0.024519
+   },
+   "leader": "Stalemate with fragile talks",
+   "leader_share": 0.4367,
+   "rounds": 2,
+   "ewma_delta": 0.3492,
+   "converged": false,
+   "convergence_state": "active",
+   "converged_at": null,
+   "uniform_prior": false,
+   "round_accounting": {
+    "policy_version": "foglamp-convergence-policy/v1",
+    "counts": {
+     "committed": 2
+    },
+    "rounds_accounted": 2,
+    "valid_transitions": 2,
+    "valid_coverage": 1.0,
+    "failed_rounds": 0,
+    "missing_rounds": 0
+   },
+   "epistemic_status": "elicited_model_projection",
+   "round_status": "committed",
+   "as_of": "2026-10-24",
+   "period_start": "2026-10-24",
+   "period_end": "2026-10-24",
+   "label": "2026-10-24"
+  },
+  {
+   "round": 3,
+   "shares": {
+    "Stalemate with fragile talks": 0.50629,
+    "Ukraine ceasefire, Iran holds": 0.24223,
+    "Dual de-escalation": 0.086012,
+    "Renewed escalation in Ukraine": 0.04123,
+    "Iran war reignition": 0.107058,
+    "Widened regional war": 0.017179
+   },
+   "leader": "Stalemate with fragile talks",
+   "leader_share": 0.5063,
+   "rounds": 3,
+   "ewma_delta": 0.244159,
+   "converged": false,
+   "convergence_state": "active",
+   "converged_at": null,
+   "uniform_prior": false,
+   "round_accounting": {
+    "policy_version": "foglamp-convergence-policy/v1",
+    "counts": {
+     "committed": 3
+    },
+    "rounds_accounted": 3,
+    "valid_transitions": 3,
+    "valid_coverage": 1.0,
+    "failed_rounds": 0,
+    "missing_rounds": 0
+   },
+   "epistemic_status": "elicited_model_projection",
+   "round_status": "committed",
+   "as_of": "2026-10-25",
+   "period_start": "2026-10-25",
+   "period_end": "2026-10-25",
+   "label": "2026-10-25"
+  }
+ ],
+ "decisions": [
+  {
+   "agent_id": 1,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.7,
+   "confidence": 0.45,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 5,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.4,
+   "confidence": 0.6,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 2,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.4,
+   "confidence": 0.7,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 4,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.7,
+   "confidence": 0.45,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 0,
+   "scenario": "Dual de-escalation",
+   "magnitude": 0.7,
+   "confidence": 0.45,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 9,
+   "scenario": "Iran war reignition",
+   "magnitude": 0.6,
+   "confidence": 0.45,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 3,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.7,
+   "confidence": 0.55,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 8,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.5,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 7,
+   "scenario": "Dual de-escalation",
+   "magnitude": 0.6,
+   "confidence": 0.35,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 6,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.6,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 11,
+   "scenario": "Iran war reignition",
+   "magnitude": 0.6,
+   "confidence": 0.4,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 17,
+   "scenario": "Dual de-escalation",
+   "magnitude": 0.5,
+   "confidence": 0.4,
+   "round": 1,
+   "period_end": "2026-10-23"
+  },
+  {
+   "agent_id": 0,
+   "scenario": "Iran war reignition",
+   "magnitude": 0.5,
+   "confidence": 0.3,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 5,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.4,
+   "confidence": 0.55,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 1,
+   "scenario": "Dual de-escalation",
+   "magnitude": 0.5,
+   "confidence": 0.35,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 3,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.6,
+   "confidence": 0.55,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 2,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.7,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 6,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.6,
+   "confidence": 0.45,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 4,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.55,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 7,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.55,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 11,
+   "scenario": "Iran war reignition",
+   "magnitude": 0.6,
+   "confidence": 0.45,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 8,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.7,
+   "confidence": 0.55,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 17,
+   "scenario": "Dual de-escalation",
+   "magnitude": 0.4,
+   "confidence": 0.3,
+   "round": 2,
+   "period_end": "2026-10-24"
+  },
+  {
+   "agent_id": 2,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.4,
+   "confidence": 0.6,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 4,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.55,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 0,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.55,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 3,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.6,
+   "confidence": 0.5,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 5,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.5,
+   "confidence": 0.65,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 1,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.7,
+   "confidence": 0.55,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 13,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.4,
+   "confidence": 0.45,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 8,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.6,
+   "confidence": 0.45,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 6,
+   "scenario": "Ukraine ceasefire, Iran holds",
+   "magnitude": 0.6,
+   "confidence": 0.45,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 7,
+   "scenario": "Stalemate with fragile talks",
+   "magnitude": 0.4,
+   "confidence": 0.6,
+   "round": 3,
+   "period_end": "2026-10-25"
+  },
+  {
+   "agent_id": 11,
+   "scenario": "Iran war reignition",
+   "magnitude": 0.6,
+   "confidence": 0.5,
+   "round": 3,
+   "period_end": "2026-10-25"
+  }
+ ],
+ "converged_at": null,
+ "n_rounds": 3,
+ "scenarios": [
+  "Stalemate with fragile talks",
+  "Ukraine ceasefire, Iran holds",
+  "Dual de-escalation",
+  "Renewed escalation in Ukraine",
+  "Iran war reignition",
+  "Widened regional war"
+ ],
+ "schema_version": 3,
+ "mode": "calendar",
+ "world_model": {
+  "schema_version": "world-model-summary/v1",
+  "rounds_committed": 3,
+  "variables": 43,
+  "actors": 18,
+  "relationships": 41,
+  "events": 59,
+  "pending_effects": 0,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "decision_actors_max": 24,
+  "offers": {
+   "opened": 5,
+   "open": 3,
+   "accepted": 0,
+   "rejected": 0,
+   "countered": 2,
+   "lapsed": 0,
+   "breached": 0
+  },
+  "seed_gaps": 10,
+  "behaviour": {
+   "rounds_scored": 0,
+   "moves": 0,
+   "responsive_moves": 0,
+   "responsive_share": null,
+   "offers_answered": 0
+  }
+ },
+ "calendar_unit": "day",
+ "horizon_date": "2026-10-31",
+ "horizon_source": "anchored_period",
+ "horizon_defaulted": false,
+ "round_accounting": {
+  "policy_version": "foglamp-convergence-policy/v1",
+  "counts": {
+   "committed": 3
+  },
+  "rounds_accounted": 3,
+  "valid_transitions": 3,
+  "valid_coverage": 1.0,
+  "failed_rounds": 0,
+  "missing_rounds": 0
+ },
+ "validity": "valid",
+ "forecast_effect": "diagnostic_only"
+}

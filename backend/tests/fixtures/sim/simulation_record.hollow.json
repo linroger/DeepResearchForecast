@@ -1,0 +1,46 @@
+{
+ "schema": "simulation-record/v1",
+ "record_class": "simulated",
+ "epistemic_status": "elicited_model_projection",
+ "simulation_id": "sim_fixture_record_hollow",
+ "pipeline_id": "pipe_fixture_hollow",
+ "config_hash": "1111111111111111",
+ "engine": "oasis-reflexive",
+ "language": "en",
+ "as_of": "2026-10-22",
+ "horizon_date": "2026-10-31",
+ "calendar_unit": "day",
+ "rounds_planned": 9,
+ "rounds_committed": 0,
+ "health": {
+  "simulation_health": "hollow",
+  "validity": "valid",
+  "arbiter_failed_rounds": 0,
+  "seed_gaps": 10,
+  "organic_actions": 0
+ },
+ "banner": "Simulated under declared assumptions. Not observed facts, not a calibrated probability, and not an input to any probability in this report.",
+ "setup": {
+  "cast": [],
+  "variables": [],
+  "scenarios": [],
+  "shocks": [],
+  "seed_gaps": []
+ },
+ "periods": [],
+ "overall": {
+  "final_variables": [],
+  "shares": {"final": {}, "converged_at": null, "paths": {"k": 0, "per_scenario": {}}},
+  "turning_points": [],
+  "track_records": [],
+  "synthesis": {"generator": "deterministic", "text": "", "claims": []}
+ },
+ "limits": {
+  "arbiter_failed_rounds": 0,
+  "seed_gaps": [],
+  "behaviour_note": "textual diagnostic, not a realism verdict"
+ },
+ "entities_declared": [],
+ "generated_at": "2026-10-22T14:30:00Z",
+ "generator_version": "simulation_record/1.0"
+}

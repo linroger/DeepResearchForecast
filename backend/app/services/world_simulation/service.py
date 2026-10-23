@@ -107,7 +107,7 @@ class WorldSimulationService:
     @classmethod
     def prepare_model(cls, simulation_id, *, raw_spec, research_report, research_generation_id,
                       research_engine, actor_bundle=None, root=None, policy_spec=None,
-                      ontology=None, simulation_requirement=''):
+                      ontology=None, simulation_requirement='', preparation_context=None):
         from .compiler import compile_world_spec
         directory = cls.directory(simulation_id, root)
         preparation = None
@@ -116,7 +116,8 @@ class WorldSimulationService:
         def compile_candidate(raw):
             return compile_world_spec(raw, simulation_id=simulation_id, generation_id=generation_id,
                 research_report=research_report, research_generation_id=research_generation_id,
-                research_engine=research_engine, actor_bundle=actor_bundle)
+                research_engine=research_engine, actor_bundle=actor_bundle,
+                preparation_context=preparation_context)
 
         if raw_spec is None:
             from .modeler import generate_candidate
@@ -125,13 +126,13 @@ class WorldSimulationService:
             raw_spec, preparation = generate_candidate(directory, research_report=research_report,
                 research_generation_id=research_generation_id, research_engine=research_engine,
                 actor_bundle=actor_bundle, ontology=ontology, simulation_requirement=simulation_requirement,
-                policy_spec=policy_spec, validate=compile_candidate)
+                policy_spec=policy_spec, validate=compile_candidate, preparation_context=preparation_context)
         spec = compile_candidate(raw_spec)
         # Pin scheduling semantics only for genuinely new preparation, never load/fork.
         spec['interactionQueuePolicy'] = 'presented-v1'
         if preparation is not None:
             spec['sourceBindings']['modelPreparation'] = preparation
-        manifest = seal_inputs(directory, spec)
+        manifest = seal_inputs(directory, spec, preparation_context=preparation_context)
         return {'spec': spec, 'manifest': manifest,
                 'manifest_sha256': file_digest(directory / 'world_input_manifest.json')}
 
@@ -271,14 +272,16 @@ class WorldSimulationService:
 
     @classmethod
     def fork(cls, simulation_id, new_simulation_id, *, root=None, seed=None):
-        _, original = cls._inputs(simulation_id, root)
+        original_directory, original = cls._inputs(simulation_id, root)
+        from .artifacts import load_preparation
+        preparation_context = load_preparation(original_directory, original)
         spec = clone(original)
         spec.update(simulationId=new_simulation_id, generationId='world_' + uuid.uuid4().hex)
         if seed is not None:
             require(type(seed) is int and seed >= 0, 'invalid_seed', 'Seed must be a nonnegative integer')
             spec['seed'] = seed
         directory = cls.directory(new_simulation_id, root)
-        manifest = seal_inputs(directory, spec)
+        manifest = seal_inputs(directory, spec, preparation_context=preparation_context)
         return {'spec': spec, 'manifest': manifest,
                 'manifest_sha256': file_digest(directory / 'world_input_manifest.json')}
 

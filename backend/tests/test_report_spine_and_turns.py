@@ -213,6 +213,8 @@ def test_react_unused_hint_excludes_interview_agents():
         '<tool_call>\n{"name": "insight_forge", "parameters": {"query": "q"}}\n</tool_call>',
         "Final Answer: " + body,
     ])
+    a.tools = {name: {"name": name, "description": "Read research", "parameters": {}}
+               for name in ("insight_forge", "quick_search")}
     _run_react(a)
     # The observation after the first tool call carries the unused-tools hint.
     # LOOP-015: the nudge text changed from "你还没有使用过" to a relevance-gated hint;
@@ -224,6 +226,8 @@ def test_react_unused_hint_excludes_interview_agents():
     assert hint_msgs, "expected an unused-tools nudge to be emitted"
     for msg in hint_msgs:
         assert "interview_agents" not in msg
+        assert "quick_search" in msg
+        assert not any(name in msg for name in ("simulation_outcomes", "coalition_map", "opinion_shift"))
 
 
 # ─────────────────────────── RQ-1: report shape helper ──────────────────────

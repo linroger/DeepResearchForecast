@@ -213,6 +213,34 @@ test('Forecast Report explicitly discloses source fallback and offers one plain 
   assert.equal(h.state.translationError.value, 'scripted failure')
 })
 
+test('localized report dashboard retains simulation provenance, policy disclosure and record navigation', async t => {
+  const h = reportHarness(t)
+  await h.state.load(); await settle(); await h.state.switchLang('zh')
+  h.state.meta.value.forecast_effect = 'diagnostic_only'
+  h.state.meta.value.simulation_record_ref = { sha256: 'c'.repeat(64), url: '/api/simulation/sim_A/record' }
+  h.state.langMdCache.value.zh += '\n\n<!-- sim-bridge:start -->\n## 情景模拟\n模拟路径保持稳定。\n<!-- sim-bridge:end -->'
+  const html = await renderExisting(h.component, h.props, h.state)
+  for (const phrase of ['委员会会在 2027-06-01 前通过提案。', 'CPI 必须严格高于 3%。', '观察事实 [S#]',
+    '在模拟标签页查看记录', '概率仅来自研究证据（策略：diagnostic_only）', '模拟路径保持稳定。']) assert.ok(text(html).includes(phrase), phrase)
+  assert.match(html, /class="sim-bridge" data-record-class="simulated"/)
+  assert.equal(i18n.locale.value, 'en', 'report language remains independent of global locale')
+})
+
+test('no_update policy remains enforced while the localized forecast is unavailable', async t => {
+  const h = reportHarness(t)
+  await h.state.load(); await settle(); await h.state.switchLang('zh')
+  h.state.forecastByLang.value.en.simulation_bridge = { forecast_effect: 'no_update' }
+  h.state.forecastByLang.value.zh = null
+  h.state.meta.value.simulation_record_ref = { sha256: 'c'.repeat(64), url: '/api/simulation/sim_A/record' }
+  h.state.langMdCache.value.zh += '\n\n<!-- sim-bridge:start -->\n## 情景模拟\n模拟路径保持稳定。\n<!-- sim-bridge:end -->'
+  assert.equal(h.state.fc.value, null, 'untranslated dashboard data must not flash into the selected language')
+  assert.equal(h.state.forecastEffect.value, 'no_update')
+  assert.equal(h.state.simulationRecordRef.value, null)
+  assert.doesNotMatch(h.state.displayMd.value, /模拟路径保持稳定/)
+  const html = await renderExisting(h.component, h.props, h.state)
+  assert.doesNotMatch(html, /class="sim-bridge"|class="sim-record-anchor"/)
+})
+
 test('Forecast Report source selection cancels pending Mandarin activation and cross-report responses cannot repopulate old data', async t => {
   const oldMd = deferred()
   const h = reportHarness(t, { getMd: () => oldMd.promise })

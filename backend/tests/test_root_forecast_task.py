@@ -331,9 +331,12 @@ def test_failed_reprepare_cannot_reuse_old_ready_task(prepare_env, monkeypatch):
     manager, state = _prepare(_dossier())
     directory, old = _config(manager, state)
     saved = (directory / "simulation_config.json").read_bytes()
-    # A new request with no endpoint may not revive the previous prepared task.
-    with pytest.raises(ForecastTaskError, match="unresolved"):
+    # Removing this prepared run's research now fails before task-model work,
+    # and still must revoke the previous task's execution authority.
+    before_calls = len(prepare_env)
+    with pytest.raises(ValueError, match="prepared research generation cannot be removed"):
         manager.prepare_simulation(state.simulation_id, "What happens next?", "")
+    assert len(prepare_env) == before_calls
     after = manager.get_simulation(state.simulation_id)
     assert after.status == SimulationStatus.FAILED and after.config_generated is False
     assert (directory / "simulation_config.json").read_bytes() == saved
@@ -357,6 +360,8 @@ def test_single_platform_calendar_uses_the_calendar_engine(platform, sim_env, no
     assert command[1].endswith("run_parallel_simulation.py")
     assert f"--{platform}-only" in command
     assert state.total_rounds == data["temporal_config"]["n_rounds"]
+    assert state.options["terminal_artifacts_token"]
+    assert no_subprocess[0].kwargs["env"]["SIM_TERMINAL_ARTIFACTS_TOKEN"] == state.options["terminal_artifacts_token"]
 
 
 @pytest.mark.parametrize("platform", ["twitter", "reddit"])

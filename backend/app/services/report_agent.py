@@ -32,6 +32,7 @@ from . import backtest_mode as _backtest
 from . import report_filter_safe as _filter_safe
 from . import news_market_context as _news_context
 from . import sim_provenance as _sp
+from . import simulation_record_contract as _src
 from ..utils.logger import get_logger
 # EXECPLAN2 I-5-4: 报告阶段把 LLM 计量上下文设到 (report_id, 'report')，并按章节读取计量快照差值。
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
@@ -226,6 +227,441 @@ def _world_prose(markdown: str, pathway: str) -> str:
     require(markdown.count(block) == 1 and markdown.count("<!-- world-pathway:") == 2,
             "result_binding_mismatch", "Report pathway differs from its frozen world result")
     return markdown.replace(block, "").replace("\n\n\n", "\n\n")
+
+
+# ── ADR 0003 (S3): the fenced scenario-simulation bridge ─────────────────────
+# One deterministic section (design §3.3), rendered from the Simulation After-Action
+# Record — or from a small adapter over the raw world artifacts while no published record
+# exists — and inserted at the same point as the world-v1 pathway appendix.  It is
+# wrapped in sim_provenance.BRIDGE_START / BRIDGE_END, which report_lint._fence_mask
+# treats like a code fence, and the final audit requires exactly one block whose bytes
+# equal render_sim_bridge(...).  No LLM writes a word of it.  Every reader-facing label
+# (title, banner, chart titles, what-if labels) comes from sim_provenance; the strings
+# below are the section's own wiring (list and table headers, the fixed policy sentence).
+_SIM_BRIDGE_BLOCK_RE = re.compile(
+    re.escape(_sp.BRIDGE_START) + r".*?" + re.escape(_sp.BRIDGE_END), re.S)
+_SIM_BRIDGE_MAX_MOVES = 8
+_SIM_BRIDGE_STATEMENT_CHARS = 160
+_SIM_BRIDGE_TEXT: Dict[str, Dict[str, Any]] = {
+    "en": {
+        "kv": ": ", "list_sep": ", ",
+        "engine": "Engine", "horizon": "Horizon", "unit_fmt": " ({unit})", "units": {},
+        "periods": "Periods committed", "periods_fmt": "{committed} of {planned} planned",
+        "health": "Health", "validity_fmt": " (validity: {validity})",
+        "arbiter_failed": "Arbiter-failed rounds", "gaps": "Modelling gaps",
+        "moves_h": "Decisive moves",
+        "moves_cols": ("Period", "Actor", "Move", "Target", "Public statement"),
+        "moves_none": "No decisive moves were recorded.",
+        "redlines_h": "Red lines crossed and commitments broken", "none": "None recorded.",
+        "redline": "{by} crossed {actor}'s red line: {red_line}",
+        "track": "{actor}: commitments kept {kept}, lapsed {lapsed}, broken {broken}",
+        "shares_h": "Simulated shares beside this report's probabilities",
+        "shares_cols": ("Scenario", "Final simulated share", "Report probability"),
+        "shares_none": "No final simulated shares were recorded.",
+        "spread_fmt": "{mean} (p10–p90 {lo}–{hi})",
+        "unchanged": "The probabilities in this report were not changed by the exercise (policy: {policy}).",
+        "chart_link_sep": ": ", "interactive": "interactive version",
+        "record": "Full record: `simulation_record.md` (canonical JSON SHA-256 {sha})",
+        "no_record": "After-action record not available for this run.",
+    },
+    "zh": {
+        "kv": "：", "list_sep": "、",
+        "engine": "引擎", "horizon": "推演期限", "unit_fmt": "（{unit}）",
+        "units": {"day": "日", "week": "周", "month": "月", "quarter": "季", "year": "年", "hour": "小时"},
+        "periods": "已提交时段", "periods_fmt": "{committed} / {planned}（计划）",
+        "health": "健康状态", "validity_fmt": "（有效性：{validity}）",
+        "arbiter_failed": "仲裁失败轮次", "gaps": "建模缺口",
+        "moves_h": "关键行动",
+        "moves_cols": ("时段", "行动者", "行动", "对象", "公开声明"),
+        "moves_none": "未记录关键行动。",
+        "redlines_h": "越过的红线与违背的承诺", "none": "无记录。",
+        "redline": "{by} 越过 {actor} 的红线：{red_line}",
+        "track": "{actor}：承诺履行 {kept}、失效 {lapsed}、违背 {broken}",
+        "shares_h": "模拟份额与本报告概率对照",
+        "shares_cols": ("情景", "最终模拟份额", "本报告概率"),
+        "shares_none": "未记录最终模拟份额。",
+        "spread_fmt": "{mean}（p10–p90 {lo}–{hi}）",
+        "unchanged": "本报告的概率未因该推演而改变（策略：{policy}）。",
+        "chart_link_sep": "：", "interactive": "交互版",
+        "record": "完整记录：`simulation_record.md`（规范 JSON 的 SHA-256 {sha}）",
+        "no_record": "本次运行无事后记录。",
+    },
+}
+
+
+def _sim_bridge_blocks(markdown: str) -> List[str]:
+    """Every marker-delimited bridge block in ``markdown``, in order."""
+    return _SIM_BRIDGE_BLOCK_RE.findall(markdown or "")
+
+
+def _sim_prose(markdown: str) -> str:
+    """Exclude every fenced bridge block from prose audits (twin of ``_world_prose``).
+
+    Count and bytes are audited separately (``ReportAgent._sim_bridge_audit_block``), so a
+    missing or duplicated block becomes a final-audit hard issue instead of raising here.
+    """
+    text = markdown or ""
+    if _sp.BRIDGE_START not in text:
+        return text
+    return re.sub(r"\n{3,}", "\n\n", _SIM_BRIDGE_BLOCK_RE.sub("", text))
+
+
+def _insert_sim_bridge(markdown: str, block: str) -> str:
+    """Insert ``block`` exactly once, before the References appendix (else at the end),
+    after removing any bridge already present — idempotent across re-finalization."""
+    text = _sim_prose(markdown or "")
+    if not block:
+        return text
+    reference = next((h for h in _REFS_HEADINGS if h in text), None)
+    if reference:
+        before, after = text.split(reference, 1)
+        return before.rstrip() + "\n\n" + block + "\n\n" + reference + after
+    return text.rstrip() + "\n\n" + block + "\n"
+
+
+def _bridge_cell(value: Any) -> str:
+    """One Markdown table cell / list item: single line, pipes and angle brackets escaped."""
+    if isinstance(value, (dict, list)):
+        value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return (str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
+            .replace("<", "&lt;").replace(">", "&gt;").strip())
+
+
+def _bridge_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _bridge_count(value: Any) -> Optional[int]:
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return len(value)
+    return _bridge_int(value)
+
+
+def _bridge_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _bridge_pct1(share: float) -> str:
+    return f"{share * 100:.1f}%"
+
+
+def _bridge_pct0(probability: float) -> str:
+    return f"{round(probability * 100)}%"
+
+
+def _bridge_period_label(period: Dict[str, Any]) -> str:
+    for key in ("label", "period_end", "round"):
+        value = period.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _bridge_relative_change(fact: Dict[str, Any]) -> float:
+    """|to − from| / |from| for a numeric fact (|to − from| when from is 0); 0 otherwise."""
+    start, end = _bridge_float(fact.get("from")), _bridge_float(fact.get("to"))
+    if start is None or end is None:
+        return 0.0
+    return abs(end - start) / (abs(start) if start != 0 else 1.0)
+
+
+def _bridge_select_decisive_moves(periods: List[Any]) -> List[Tuple[str, str, str, str, str]]:
+    """The fixed, documented selection rule for the bridge's "Decisive moves" table
+    (design §3.3 item 2; pinned by T8):
+
+    1. moves by the actor who crossed a red line in that period (the first cast name
+       named in the crossing entry), in period order;
+    2. then moves by either party of an offer that was accepted or breached in that period;
+    3. then every other move, ranked by the largest relative change of a variable whose
+       recorded ``cause`` names the actor (|to − from| / |from|; 0 when none);
+    ties by earliest period, then actor name, then recorded order.  At most
+    ``_SIM_BRIDGE_MAX_MOVES`` rows; the public statement is cut at
+    ``_SIM_BRIDGE_STATEMENT_CHARS`` characters.
+    """
+    ranked: List[Tuple[Tuple[int, float, int, str, int], Tuple[str, str, str, str, str]]] = []
+    order = 0
+    for period in periods:
+        if not isinstance(period, dict):
+            continue
+        moves = [m for m in (period.get("moves") or []) if isinstance(m, dict)]
+        if not moves:
+            continue
+        actors = [str(m.get("actor") or "").strip() for m in moves]
+        label = _bridge_period_label(period)
+        round_no = _bridge_int(period.get("round"))
+        round_no = round_no if round_no is not None else 0
+        crossers: set = set()
+        for entry in period.get("red_lines_crossed") or []:
+            if isinstance(entry, dict):
+                if entry.get("by") in actors:
+                    crossers.add(entry["by"])
+                continue
+            text = str(entry)
+            found = [(text.find(a), a) for a in actors if a and a in text]
+            if found:
+                crossers.add(min(found)[1])
+        parties: set = set()
+        for offer in period.get("offers") or []:
+            if isinstance(offer, dict) and str(offer.get("status") or "").lower() in {"accepted", "breached"}:
+                parties.update(str(offer.get(k) or "").strip() for k in ("from", "to"))
+        facts = [f for f in (period.get("facts_changed") or []) if isinstance(f, dict)]
+        for move, actor in zip(moves, actors):
+            if actor in crossers:
+                tier, rel = 0, 0.0
+            elif actor in parties:
+                tier, rel = 1, 0.0
+            else:
+                tier = 2
+                rel = max((_bridge_relative_change(f) for f in facts
+                           if actor and actor in str(f.get("cause") or "")), default=0.0)
+            targets = move.get("targets")
+            if isinstance(targets, (list, tuple)):
+                target = ", ".join(str(t) for t in targets if str(t).strip())
+            else:
+                target = str(targets or "")
+            statement = str(move.get("public_statement") or "").replace("\n", " ").strip()
+            if len(statement) > _SIM_BRIDGE_STATEMENT_CHARS:
+                statement = statement[:_SIM_BRIDGE_STATEMENT_CHARS] + "…"
+            row = (label, actor, str(move.get("option") or "").strip(), target, statement)
+            ranked.append(((tier, -rel, round_no, actor.lower(), order), row))
+            order += 1
+    ranked.sort(key=lambda item: item[0])
+    return [row for _key, row in ranked[:_SIM_BRIDGE_MAX_MOVES]]
+
+
+def _bridge_red_line_items(record: Dict[str, Any], text: Dict[str, Any]) -> List[str]:
+    """Red lines crossed (per period) and commitments broken or lapsed (track records);
+    the artifact adapter contributes ``(period label, entry)`` pairs at the top level."""
+    items: List[str] = []
+    kv = text["kv"]
+
+    def _pair(entry: Any) -> str:
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            label, body = str(entry[0] or "").strip(), str(entry[1] or "").strip()
+            return f"{label}{kv}{body}" if label else body
+        return str(entry or "").strip()
+
+    for period in record.get("periods") or []:
+        if not isinstance(period, dict):
+            continue
+        label = _bridge_period_label(period)
+        for entry in period.get("red_lines_crossed") or []:
+            body = (text["redline"].format(by=entry.get("by") or "—", actor=entry.get("actor") or "—",
+                                           red_line=entry.get("red_line") or "—")
+                    if isinstance(entry, dict) else str(entry or "").strip())
+            if body:
+                items.append(f"{label}{kv}{body}" if label else body)
+    items.extend(x for x in (_pair(e) for e in record.get("red_lines_crossed") or []) if x)
+    overall = record.get("overall") if isinstance(record.get("overall"), dict) else {}
+    for track in overall.get("track_records") or []:
+        if not isinstance(track, dict):
+            continue
+        kept, lapsed, broken = (_bridge_int(track.get(k)) or 0 for k in ("kept", "lapsed", "broken"))
+        if lapsed or broken:
+            items.append(text["track"].format(actor=str(track.get("actor") or "").strip(),
+                                              kept=kept, lapsed=lapsed, broken=broken))
+    items.extend(x for x in (_pair(e) for e in record.get("commitments_broken") or []) if x)
+    seen: set = set()
+    out: List[str] = []
+    for item in items:
+        cell = _bridge_cell(item)
+        if cell and cell not in seen:
+            seen.add(cell)
+            out.append(cell)
+    return out
+
+
+def _bridge_share_rows(record: Dict[str, Any], spine: Optional[Dict[str, Any]],
+                       text: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """Scenario, final simulated share (mean and p10–p90 when K>1), report probability.
+
+    Spine scenarios come first in spine order, matched by exact name (a dash when the
+    exercise has no share for them); simulated scenarios the spine does not name follow,
+    by descending share, with a dash in the probability column — never mapped heuristically.
+    """
+    overall = record.get("overall") if isinstance(record.get("overall"), dict) else {}
+    shares = overall.get("shares") if isinstance(overall.get("shares"), dict) else {}
+    final_raw = shares.get("final") if isinstance(shares.get("final"), dict) else {}
+    final: Dict[str, float] = {}
+    for name, value in final_raw.items():
+        number = _bridge_float(value)
+        if number is not None:
+            final[str(name).strip()] = number
+    paths = shares.get("paths") if isinstance(shares.get("paths"), dict) else {}
+    k = _bridge_int(paths.get("k")) or 1
+    per = paths.get("per_scenario") if isinstance(paths.get("per_scenario"), dict) else {}
+
+    def _share_cell(name: str) -> str:
+        base = final.get(name)
+        if base is None:
+            return "—"
+        stats = per.get(name) if k > 1 else None
+        if isinstance(stats, dict):
+            mean, lo, hi = (_bridge_float(stats.get(key)) for key in ("mean", "p10", "p90"))
+            if mean is not None and lo is not None and hi is not None:
+                return text["spread_fmt"].format(mean=_bridge_pct1(mean), lo=_bridge_pct1(lo),
+                                                 hi=_bridge_pct1(hi))
+        return _bridge_pct1(base)
+
+    rows: List[Tuple[str, str, str]] = []
+    seen: set = set()
+    for scenario in (spine.get("scenarios") or []) if isinstance(spine, dict) else []:
+        if not isinstance(scenario, dict):
+            continue
+        name = str(scenario.get("name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        probability = _bridge_float(scenario.get("probability"))
+        rows.append((name, _share_cell(name), _bridge_pct0(probability) if probability is not None else "—"))
+    for name in sorted(final, key=lambda n: (-final[n], n)):
+        if name not in seen:
+            rows.append((name, _share_cell(name), "—"))
+    return rows
+
+
+def _bridge_chart_block(chart: Any, chinese: bool, text: Dict[str, Any]) -> str:
+    """One simulated chart, in the exact shape ``_render_viz_block`` gives a manifest item
+    (same ``<!-- viz:path -->`` marker, so re-placement stays idempotent)."""
+    if not isinstance(chart, dict):
+        return ""
+    path = str(chart.get("path") or "").strip()
+    image = str(chart.get("image") or "").strip()
+    if not path:
+        return ""
+    try:
+        title = _sp.chart_title(str(chart.get("id") or ""), "zh" if chinese else "en")
+    except KeyError:
+        return ""
+    marker = f"<!-- viz:{path} -->"
+    if image:
+        return f"{marker}\n![{title}]({image})\n\n*{title}*"
+    return f"{marker}\n**{title}**{text['chart_link_sep']}[{text['interactive']}]({path})"
+
+
+def render_sim_bridge(record: Dict[str, Any], *, chinese: bool,
+                      spine: Optional[Dict[str, Any]],
+                      chart_rel_paths: Optional[List[Dict[str, str]]],
+                      whatif_table_md: str,
+                      record_sha256: Optional[str] = None,
+                      policy: str = "diagnostic_only") -> str:
+    """Deterministic, LLM-free rendering of the scenario-simulation bridge (design §3.3).
+
+    ``record`` is the Simulation After-Action Record (``simulation-record/v1``) or the
+    artifact adapter's record-shaped dict (``_record_available: False``); ``spine`` is the
+    report's forecast dict (``scenarios`` with ``name`` / ``probability``); ``chart_rel_paths``
+    lists the simulated charts as ``{id, path, image}``; ``whatif_table_md`` is the rendered
+    baseline-versus-scenario table or ``""``; ``record_sha256`` is the gate's seal (the link
+    line is omitted without it).  Contents, in order: banner and run facts; the decisive-move
+    table; red lines crossed and commitments broken; simulated shares beside the report's
+    probabilities with the fixed sentence that the probabilities were not changed; the
+    simulated charts; the what-if table; the record line.  Shares are called shares, never
+    probabilities.  Byte-stable for equal inputs in both languages, with identical numbers.
+    """
+    if not isinstance(record, dict):
+        return ""
+    text = _SIM_BRIDGE_TEXT["zh" if chinese else "en"]
+    kv = text["kv"]
+    lines: List[str] = ["## " + (_sp.BRIDGE_TITLE_ZH if chinese else _sp.BRIDGE_TITLE_EN), "",
+                        _sp.SIM_BANNER_ZH if chinese else _sp.SIM_BANNER_EN, ""]
+    engine = str(record.get("engine") or "").strip()
+    if engine:
+        lines.append(f"- {text['engine']}{kv}{_bridge_cell(engine)}")
+    as_of = str(record.get("as_of") or "").strip()
+    horizon = str(record.get("horizon_date") or "").strip()
+    if as_of or horizon:
+        span = f"{as_of} → {horizon}" if (as_of and horizon) else (as_of or horizon)
+        unit = str(record.get("calendar_unit") or "").strip()
+        if unit:
+            span += text["unit_fmt"].format(unit=text["units"].get(unit.lower(), unit))
+        lines.append(f"- {text['horizon']}{kv}{_bridge_cell(span)}")
+    committed, planned = _bridge_int(record.get("rounds_committed")), _bridge_int(record.get("rounds_planned"))
+    if committed is not None or planned is not None:
+        lines.append(f"- {text['periods']}{kv}" + text["periods_fmt"].format(
+            committed="—" if committed is None else committed, planned="—" if planned is None else planned))
+    health = record.get("health") if isinstance(record.get("health"), dict) else {}
+    status = str(health.get("simulation_health") or "").strip()
+    validity = str(health.get("validity") or "").strip()
+    if status or validity:
+        line = status or "—"
+        if validity:
+            line += text["validity_fmt"].format(validity=validity)
+        lines.append(f"- {text['health']}{kv}{_bridge_cell(line)}")
+    limits = record.get("limits") if isinstance(record.get("limits"), dict) else {}
+    failed = _bridge_int(health.get("arbiter_failed_rounds"))
+    if failed is None:
+        failed = _bridge_int(limits.get("arbiter_failed_rounds"))
+    if failed is not None:
+        lines.append(f"- {text['arbiter_failed']}{kv}{failed}")
+    setup = record.get("setup") if isinstance(record.get("setup"), dict) else {}
+    gaps = _bridge_count(health.get("seed_gaps"))
+    if gaps is None:
+        gaps = _bridge_count(setup.get("seed_gaps"))
+    if gaps is not None:
+        lines.append(f"- {text['gaps']}{kv}{gaps}")
+
+    # A stopped or invalid exercise is a health record, not a scenario narrative.
+    # This also contains the raw-artifact fallback for runs predating the compiler.
+    if (status in _src.HEALTH_STUB_VALUES or validity not in {"", "valid"}
+            or record.get("health_stub") is True):
+        if record.get("_record_available") is False:
+            lines.extend(["", text["no_record"]])
+        elif record_sha256:
+            lines.extend(["", text["record"].format(sha=str(record_sha256).strip())])
+        return _sp.BRIDGE_START + "\n" + "\n".join(lines).rstrip() + "\n" + _sp.BRIDGE_END
+
+    lines.extend(["", "### " + text["moves_h"], ""])
+    moves = _bridge_select_decisive_moves(list(record.get("periods") or []))
+    if moves:
+        columns = text["moves_cols"]
+        lines.append("| " + " | ".join(columns) + " |")
+        lines.append("|" + "---|" * len(columns))
+        lines.extend("| " + " | ".join(_bridge_cell(cell) for cell in row) + " |" for row in moves)
+    else:
+        lines.append(text["moves_none"])
+
+    lines.extend(["", "### " + text["redlines_h"], ""])
+    items = _bridge_red_line_items(record, text)
+    if items:
+        lines.extend(f"- {item}" for item in items)
+    else:
+        lines.append(text["none"])
+
+    lines.extend(["", "### " + text["shares_h"], ""])
+    rows = _bridge_share_rows(record, spine, text)
+    if rows:
+        columns = text["shares_cols"]
+        lines.append("| " + " | ".join(columns) + " |")
+        lines.append("|" + "---|" * len(columns))
+        lines.extend("| " + " | ".join(_bridge_cell(cell) for cell in row) + " |" for row in rows)
+    else:
+        lines.append(text["shares_none"])
+    lines.extend(["", text["unchanged"].format(policy=str(policy or "diagnostic_only").strip())])
+
+    for chart in chart_rel_paths or []:
+        block = _bridge_chart_block(chart, chinese, text)
+        if block:
+            lines.extend(["", block])
+    if (whatif_table_md or "").strip():
+        lines.extend(["", whatif_table_md.strip()])
+    if record.get("_record_available") is False:
+        lines.extend(["", text["no_record"]])
+    elif record_sha256:
+        lines.extend(["", text["record"].format(sha=str(record_sha256).strip())])
+    return _sp.BRIDGE_START + "\n" + "\n".join(lines).rstrip() + "\n" + _sp.BRIDGE_END
 
 # EXECPLAN2 F-7-1: 并发报告生成时，每份报告的 console_log.txt 此前都挂在进程级共享 logger
 # （'mirofish.report_agent' / 'mirofish.zep_tools'）上，导致两份报告的日志互相串扰，且 handler
@@ -2437,6 +2873,12 @@ class ReportAgent:
         # Returning a fresh copy from the property also prevents caller mutation.
         from .ensemble import freeze_report_policy
         self._report_policy = freeze_report_policy(report_policy)
+        from .forecast_extractor import BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY
+        quality_policy = (report_policy.get("binary_quality_policy", LEGACY_BINARY_QUALITY_POLICY)
+                          if report_policy is not None else LEGACY_BINARY_QUALITY_POLICY)
+        if quality_policy not in (BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY):
+            raise ValueError("Unsupported saved binary quality policy")
+        self._binary_quality_policy = quality_policy
         _context = _news_context._validated_copy(news_market_context)
         self._news_context_sha256 = (_context or {}).get("sha256")
         self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
@@ -2545,15 +2987,10 @@ class ReportAgent:
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools if self._world_binding else (zep_tools or ZepToolsService())
         
-        # 工具定义
+        # 工具定义。ADR 0003 (S3, design §3.4.7)：interview_agents 不在默认引擎的工具集中——
+        # 它的产出是模拟角色的第一人称发言，桥接区外的模拟内容一律被终审删除；此前按 OASIS
+        # 环境是否在线决定保留与否的探活（_interview_env_alive）因此不再在此调用。
         self.tools = self._define_tools()
-        # interview_agents 需要 OASIS 模拟环境在线（IPC）。报告阶段几乎总在模拟结束、环境关闭之后运行，
-        # 此时每次采访都会失败并浪费一轮昂贵的 LLM 工具调用（实测每章被反复 nudge 去采访→失败→回退）。
-        # 在 agent 初始化时探活一次：环境不在线就直接从工具集中移除 interview_agents，模型再也看不到它。
-        # 环境在线（极少数边跑场景）则保留。探活失败一律按「不可用」处理（degrade-safe）。
-        if "interview_agents" in self.tools and not self._interview_env_alive():
-            self.tools.pop("interview_agents", None)
-            logger.info("报告: OASIS 环境未在线，已从工具集移除 interview_agents（避免每章无效采访重试）")
 
         # 日志记录器（在 generate_report 中初始化）
         self.report_logger: Optional[ReportLogger] = None
@@ -2656,6 +3093,17 @@ class ReportAgent:
         return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                    or "diagnostic_only").strip().lower()
 
+    def _simulation_prompt_inputs_allowed(self) -> bool:
+        """Only the explicit legacy ablation may expose simulated writer inputs.
+
+        Missing owner proof cannot grant that capability. Other consumers still
+        enforce their own owner/evidence checks rather than trusting this fallback.
+        """
+        try:
+            return self._simulation_forecast_effect() == "legacy_prompt"
+        except (ValueError, KeyError, TypeError, OSError):
+            return False
+
     def set_backtest_policy(self, option: Optional[Dict[str, Any]]) -> None:
         """Pin the owning pipeline's backtest option (``None`` = live run).
 
@@ -2703,6 +3151,221 @@ class ReportAgent:
         binding = self._verify_world()
         chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
         return render_world_pathway(binding["result"], chinese=chinese) if binding else ""
+
+    # ── ADR 0003 (S3): scenario-simulation bridge wiring ─────────────────────
+    def _sim_bridge_active(self) -> bool:
+        """The bridge is rendered on the default engine under diagnostic_only only: world-v1
+        bindings keep their pathway appendix (design D4); no_update and legacy_prompt get none.
+
+        Degrade-safe: an agent without a resolvable policy (a backfill or translation
+        worker built without its constructor, or a simulation whose sealed state cannot be
+        read) renders no bridge rather than failing chart placement or the audit."""
+        if getattr(self, "_world_binding", None):
+            return False
+        try:
+            return self._simulation_forecast_effect() == "diagnostic_only"
+        except Exception as exc:  # noqa: BLE001 — policy lookup failure must not break the report
+            logger.debug(f"sim bridge inactive: policy unresolved ({exc})")
+            return False
+
+    def _sim_dir(self, report_id: Optional[str] = None) -> str:
+        """``uploads/simulations/<sim_id>`` for this report, "" for a missing or unsafe id.
+
+        An agent reconstructed without its constructor (the backfill and translation
+        workers) has no ``simulation_id``; the report's own meta.json names the run."""
+        sim_id = str(getattr(self, "simulation_id", "") or "").strip()
+        if not sim_id and report_id:
+            try:
+                meta = ReportManager._read_report_meta(report_id) or {}
+            except Exception:  # noqa: BLE001 — an unreadable meta.json means no simulation dir
+                meta = {}
+            sim_id = str(meta.get("simulation_id") or "").strip()
+        if not sim_id or sim_id in (".", "..") or "/" in sim_id or os.sep in sim_id:
+            return ""
+        return os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "", sim_id)
+
+    @staticmethod
+    def _sim_read_json(path: str) -> Optional[Any]:
+        """JSON from a regular file (symlinks refused, as in the record contract) or None."""
+        try:
+            if os.path.islink(path) or not os.path.isfile(path):
+                return None
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (OSError, ValueError, TypeError):
+            return None
+
+    def _sim_record_from_artifacts(self, sim_dir: str) -> Optional[Dict[str, Any]]:
+        """Audit an old run's deterministic projection without publishing or calling a model.
+
+        A missing/stale record never grants a second path around the fidelity
+        gate. Rejected projections disclose health only, with no dynamic text.
+        """
+        if not any(os.path.isfile(os.path.join(sim_dir, name)) for name in (
+                "run_summary.json", "world_state.json", "world_state_trajectory.json", "world_result.json")):
+            return None
+        from .simulation_record import build_record
+        from .simulation_record_gate import audit_record
+        try:
+            record = build_record(sim_dir, language="English", synthesis=False)
+            audit = audit_record(sim_dir, record, write=False)
+        except (OSError, ValueError, TypeError, KeyError):
+            return {"health": {"simulation_health": "unavailable", "validity": "invalid"},
+                    "health_stub": True, "_record_available": False}
+        if audit.get("publication_status") != "passed":
+            # Select only fixed health metadata. No quote, share, event or other
+            # unverified artifact text can enter the lint-exempt bridge.
+            return {"engine": record.get("engine"),
+                    "rounds_committed": record.get("rounds_committed"),
+                    "rounds_planned": record.get("rounds_planned"),
+                    "health": {"simulation_health": "unavailable", "validity": "invalid"},
+                    "health_stub": True, "_record_available": False}
+        record["_record_available"] = False
+        return record
+
+    def _sim_bridge_chart_paths(self, folder: str) -> List[Dict[str, str]]:
+        """The simulated charts of this report's viz manifest as ``{id, path, image}``, in a
+        fixed order (outcome shares, then state variables); [] without a manifest."""
+        payload = self._sim_read_json(os.path.join(folder, "viz_manifest.json"))
+        items = payload.get("items") if isinstance(payload, dict) else payload
+        if not isinstance(items, list):
+            return []
+        rank = {"worldstate_trajectory": 0, "world_variables": 1}
+        charts: List[Dict[str, str]] = []
+        for item in items:
+            if not isinstance(item, dict) or not _sp.is_simulated_chart(item):
+                continue
+            path = str(item.get("path") or "").strip()
+            if not path:
+                continue
+            chart_id = str(item.get("id") or "")
+            if chart_id not in _sp.SIMULATED_CHART_IDS:
+                chart_id = next((c for c in sorted(_sp.SIMULATED_CHART_IDS) if c in path), "")
+                if not chart_id:
+                    continue
+            vtype = str(item.get("type") or "").strip().lower()
+            png_path = str(item.get("png_path") or "").strip()
+            image = ""
+            if vtype in {"png", "svg"}:
+                image = path
+            elif vtype == "html" and png_path and os.path.isfile(os.path.join(folder, png_path)):
+                image = png_path
+            charts.append({"id": chart_id, "path": path, "image": image})
+        charts.sort(key=lambda c: (rank.get(c["id"], 9), c["path"]))
+        return charts
+
+    def _sim_bridge_whatif_table(self, folder: str) -> str:
+        """The baseline-versus-scenario table from this report's ``comparison.json`` (written
+        in the section loop), rendered by ``_render_comparison_table``; "" when absent or off."""
+        if not getattr(Config, "REPORT_COMPARISON_TABLE", False):
+            return ""
+        diff = self._sim_read_json(os.path.join(folder, "comparison.json"))
+        if not isinstance(diff, dict):
+            return ""
+        try:
+            return self._render_comparison_table(diff) or ""
+        except Exception:  # noqa: BLE001 — a malformed artifact drops the table, nothing else
+            return ""
+
+    def _render_sim_bridge_for_report(self, report_id: str, *, chinese: bool) -> str:
+        """``render_sim_bridge`` for this report from on-disk inputs only — the published
+        record (else the artifact adapter), the sealed forecast.json, the viz manifest and
+        comparison.json — so insertion and the final audit compute the same bytes."""
+        sim_dir = self._sim_dir(report_id)
+        if not sim_dir:
+            return ""
+        record: Optional[Dict[str, Any]] = None
+        record_sha: Optional[str] = None
+        record, _status = _src.load_published_record(sim_dir)
+        if record is not None:
+            record_sha = _src.record_sha256(record)
+        if record is None:
+            record = self._sim_record_from_artifacts(sim_dir)
+            if record is None:
+                return ""
+        folder = ReportManager._get_report_folder(report_id)
+        spine = self._sim_read_json(os.path.join(folder, "forecast.json"))
+        if not isinstance(spine, dict):
+            spine = self._forecast_spine if isinstance(getattr(self, "_forecast_spine", None), dict) else None
+        return render_sim_bridge(
+            record, chinese=chinese, spine=spine,
+            chart_rel_paths=self._sim_bridge_chart_paths(folder),
+            whatif_table_md=self._sim_bridge_whatif_table(folder),
+            record_sha256=record_sha, policy=(
+                (spine.get("simulation_bridge") or {}).get("forecast_effect")
+                if isinstance(spine, dict) else None) or self._simulation_forecast_effect(),
+        )
+
+    def _record_sim_bridge_in_forecast(self, report_id: str, block: str) -> None:
+        """forecast.json gains ``simulation_bridge = {sha256, forecast_effect, probabilityEvidence: false}``."""
+        path = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
+        forecast = self._sim_read_json(path)
+        if not isinstance(forecast, dict):
+            return
+        entry = {"sha256": hashlib.sha256(block.encode("utf-8")).hexdigest(),
+                 "forecast_effect": self._simulation_forecast_effect(),
+                 "probabilityEvidence": False}
+        forecast["simulation_bridge"] = entry
+        write_text_atomic(path, json.dumps(forecast, ensure_ascii=False, indent=2))
+        if isinstance(getattr(self, "_forecast_spine", None), dict):
+            self._forecast_spine["simulation_bridge"] = dict(entry)
+
+    def _publish_sim_bridge(self, report_id: str, report: "Report") -> None:
+        """Insert the bridge into the primary report after the publish stabilizer and before
+        the read-only final audit (the world-v1 appendix's slot).  Absent artifacts leave the
+        report untouched; a renderer failure is logged and never fails the stage."""
+        if not self._sim_bridge_active():
+            return
+        try:
+            chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
+            block = self._render_sim_bridge_for_report(report_id, chinese=chinese)
+            if not block:
+                return
+            report.markdown_content = _insert_sim_bridge(report.markdown_content or "", block)
+            write_text_atomic(ReportManager._get_report_markdown_path(report_id), report.markdown_content)
+            self._record_sim_bridge_in_forecast(report_id, block)
+        except Exception as exc:  # noqa: BLE001 — the bridge never fails the report on its own
+            logger.warning(f"情景模拟桥接区插入失败（忽略，报告不含桥接区）: {exc}")
+
+    def _insert_sim_bridge_variant(self, report_id: str, source_md: str, translated_md: str,
+                                   *, chinese: bool) -> str:
+        """The language variant gets the bridge re-rendered in its language iff the primary
+        carries exactly one block (never translated, never inferred from ambient policy)."""
+        if len(_sim_bridge_blocks(source_md)) != 1:
+            return translated_md
+        try:
+            block = self._render_sim_bridge_for_report(report_id, chinese=chinese)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"译文情景模拟桥接区渲染失败（忽略，译文不含桥接区）: {exc}")
+            return translated_md
+        return _insert_sim_bridge(translated_md, block) if block else translated_md
+
+    @staticmethod
+    def _sim_bridge_audit_block(md: str, expected_block: str) -> Dict[str, Any]:
+        """Pure count-and-bytes check: how many bridge blocks ``md`` carries, whether they are
+        exactly the one ``expected_block`` ("" means none is expected)."""
+        blocks = _sim_bridge_blocks(md or "")
+        expected = 1 if expected_block else 0
+        if expected:
+            match = len(blocks) == 1 and blocks[0] == expected_block
+        else:
+            match = not blocks
+        match = (match and (md or "").count(_sp.BRIDGE_START) == expected
+                 and (md or "").count(_sp.BRIDGE_END) == expected)
+        return {"expected_count": expected, "count": len(blocks), "bytes_match": bool(match),
+                "sha256": (hashlib.sha256(expected_block.encode("utf-8")).hexdigest()
+                           if expected_block else None)}
+
+    def _audit_sim_bridge(self, report_id: str, md: str) -> Dict[str, Any]:
+        """Final-audit record for the bridge (design §3.3 "Policy behaviour"): under
+        diagnostic_only exactly one block whose bytes equal the renderer; none otherwise."""
+        expected_block = ""
+        if self._sim_bridge_active():
+            chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
+            expected_block = self._render_sim_bridge_for_report(report_id, chinese=chinese)
+        out = self._sim_bridge_audit_block(md, expected_block)
+        out["policy"] = self._simulation_forecast_effect()
+        return out
 
     def _interview_env_alive(self) -> bool:
         """探活 OASIS 模拟 IPC 环境是否在线（interview_agents 的前置依赖）。
@@ -4168,7 +4831,10 @@ class ReportAgent:
             self._verify_world()
             return ""
         _effect = self._simulation_forecast_effect()
-        if _effect == "no_update":
+        # ADR 0003 (S3, design §3.4.1): under diagnostic_only and no_update the pack is empty
+        # on every engine — the simulation reaches the report only through the fenced bridge
+        # (render_sim_bridge).  Only the fixture-only legacy_prompt policy still builds it.
+        if _effect != "legacy_prompt":
             return ""
         parts: List[str] = []
         # 0) NEXTSTEPS P1-1: 决策通道演化出的「结果世界态」——建模出的 P(outcome)（按情景份额），
@@ -5266,6 +5932,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     data_pack=getattr(self, "_data_pack", "") or None,
                     official_data=getattr(self, "official_data", None),
+                    binary_quality_policy=getattr(self, "_binary_quality_policy", "conviction-quality/v0"),
                     **self._backtest_extraction_kwargs(),
                 )
                 if _bres.get("binary_forecasts"):
@@ -6167,22 +6834,23 @@ class ReportAgent:
         return repaired, diagnostics
 
     def _repair_quote_grounding(self, md: str) -> Tuple[str, int]:
-        """RQ-2 引文接地修复：删除既非模拟/推演标注、又未在研究材料中逐字命中、且不带 [S#] 来源的
-        blockquote 行（S2 判定为嫁接/捏造的引文）。带有效来源记号但无法逐字接地的文本保留为
-        普通转述而不是伪装成直接引语。与 _audit_quote_provenance 同源判定，但按整行操作以便
-        精确删除/去引号。返回 (新 markdown, 删除的引文行数)。
+        """RQ-2 引文接地修复：删除未在研究材料中逐字命中、且不带 [S#] 来源的 blockquote 行
+        （S2 判定为嫁接/捏造的引文）。带有效来源记号但无法逐字接地的文本保留为普通转述而不是
+        伪装成直接引语。按整行操作以便精确删除/去引号。返回 (新 markdown, 删除的引文行数)。
 
-        WAVE9 修复两个系统性缺陷：
-          (a) 推演标签常写在引文**上一行**的归因行里（'情景模拟——「X」：' + 下一行
-              blockquote）——此前只查 '>' 行本身，导致合法标注的引文被误删；
-          (b) 整段 blockquote 被删后，紧邻其上的『X 表示：』归因行会孤悬（上一份报告残留
-              ~12 处空引子）——现同步删除该引子行。"""
+        WAVE9 修复：整段 blockquote 被删后，紧邻其上的『X 表示：』归因行会孤悬（上一份报告残留
+        ~12 处空引子）——同步删除该引子行。
+
+        ADR 0003 (S3, design §3.4)：WAVE9 曾让归因行或引文本身带推演标签（_SIM_QUOTE_LABELS）的
+        引文免删。桥接区外不再豁免——模拟引语只能出现在确定性桥接区里，正文中的一律按未接地引语
+        删除（研究材料逐字命中或带 [S#] 的照旧保留）；桥接区本身按 report_lint._fence_mask 跳过，
+        由渲染器负责。"""
+        from . import report_lint as _rl
         v2 = bool(getattr(Config, "REPORT_QUOTE_AUDIT_V2", True))
         ground_raw = ((self.research_report or "") + "\n"
                       + (getattr(self, "_background_block", "") or "")
                       + "\n" + (getattr(self, "situation_brief", "") or ""))
         ground = self._quote_ground_material() if v2 else ground_raw.lower()
-        sim_labels = self._SIM_QUOTE_LABELS
         _summary_n = self._norm_quote_text(getattr(self, "_outline_summary", "") or "")
         _table_note_n = self._norm_quote_text(self._TABLE_NOTE_TEXT)
 
@@ -6206,9 +6874,6 @@ class ReportAgent:
         def _is_ungrounded(raw_q: str) -> bool:
             if len(raw_q) < 12:
                 return False
-            ql = raw_q.lower()
-            if any(t in ql for t in sim_labels):
-                return False
             if _matches_ground(raw_q):
                 return False
             if self._S_CITATION_RE.search(raw_q):
@@ -6216,6 +6881,7 @@ class ReportAgent:
             return True
 
         lines = md.splitlines()
+        mask = _rl._fence_mask(lines)  # fenced code and the simulation bridge are never repaired
 
         def _preceding_attr_idx(i: int) -> int:
             """引文行 i 上方最近的非空行下标（-1 = 无）。"""
@@ -6224,20 +6890,17 @@ class ReportAgent:
                 j -= 1
             return j
 
-        # 第一遍：决定删除哪些引文行（归因行带推演标签的引文豁免——(a)）。
+        # 第一遍：决定删除哪些引文行。ADR 0003 (S3)：归因行带推演标签不再豁免——桥接区外的
+        # 模拟引语与其它未接地引语同样删除；桥接区本身按遮蔽表跳过。
         delete: set = set()
         dequote: set = set()
         for i, ln in enumerate(lines):
+            if mask[i]:
+                continue
             s = ln.strip()
             if not s.startswith(">"):
                 continue
             raw_q = s[1:].strip()
-            j = _preceding_attr_idx(i)
-            if j >= 0:
-                prev = lines[j].strip()
-                if (prev and not prev.startswith(">") and not prev.startswith("#")
-                        and any(t in prev.lower() for t in sim_labels)):
-                    continue  # 上一行归因已诚实标注为推演 → 引文合法保留
             if self._S_CITATION_RE.search(raw_q) and not _matches_ground(raw_q):
                 dequote.add(i)
                 continue
@@ -9055,13 +9718,45 @@ class ReportAgent:
         from .model_translation import ENGINE, valid_document_receipt, structure_issues
         from .forecast_extractor import _norm_citation_tag, validate_citation_markers
 
+        # Receipts bind only model-reviewed prose. Keep those bytes and receipts
+        # unchanged, then verify the complete delivered document by reassembly.
+        # Stripping the target envelope alone would admit unreviewed whitespace
+        # or prose edits hidden by the envelope helpers' normalization.
+        source_document, variant_document = source_md, variant_md
+        bridge_audit = self._translation_simulation_provenance(
+            report_id, source_md, variant_md, source_lang, target_lang)
+        envelope_ok = all(part["bytes_match"] for part in bridge_audit.values())
+        world = ReportManager.load_world_result(report_id)
+        if world:
+            source_md = _world_prose(
+                source_md, render_world_pathway(world["result"], chinese=source_lang == "zh"))
+        elif "<!-- world-pathway:" in source_md or "<!-- world-pathway:" in variant_md:
+            envelope_ok = False
+        source_md = _sim_prose(source_md)
+        if world or _sim_bridge_blocks(source_document):
+            rows = proof.get("sections") if isinstance(proof, dict) else None
+            if isinstance(rows, list) and all(
+                    isinstance(row, dict) and isinstance(row.get("target"), str) for row in rows):
+                variant_md = "\n\n".join(row["target"] for row in rows).strip() + "\n"
+                if world:
+                    expected = _insert_world_appendix(
+                        variant_md, render_world_pathway(world["result"], chinese=target_lang == "zh"))
+                else:
+                    expected = self._insert_sim_bridge_variant(
+                        report_id, source_document, variant_md, chinese=target_lang == "zh")
+                envelope_ok = envelope_ok and expected == variant_document
+            else:
+                envelope_ok = False
         issues = structure_issues(source_md, variant_md)
+        if not envelope_ok:
+            issues.append("translation simulation bridge or world envelope differs from admitted deterministic provenance")
         reviewed = valid_document_receipt(source_md, variant_md, target_lang, proof)
         if not reviewed:
             issues.append("translation has no complete source-bound semantic review")
-            if isinstance(proof, dict):
+            if isinstance(proof, dict) and isinstance(proof.get("issues"), dict):
                 issues.extend(f"{key}: {', '.join(str(item) for item in details)}"
-                              for key, details in (proof.get("issues") or {}).items())
+                              for key, details in proof["issues"].items()
+                              if isinstance(details, list))
         primary_citations = primary_citations if isinstance(primary_citations, dict) else {}
         rows = primary_citations.get("markers") or []
         by_tag = {_norm_citation_tag(str(row.get("tag"))): row for row in rows
@@ -9087,8 +9782,8 @@ class ReportAgent:
             if any(row.get("url_valid") is not True or not _citation_url_ok(str(row.get("url") or ""))
                    for row in by_tag.values()):
                 issues.append("primary citation map contains invalid source URLs")
-        source_sha = hashlib.sha256(source_md.encode("utf-8")).hexdigest()
-        target_sha = hashlib.sha256(variant_md.encode("utf-8")).hexdigest()
+        source_sha = hashlib.sha256(source_document.encode("utf-8")).hexdigest()
+        target_sha = hashlib.sha256(variant_document.encode("utf-8")).hexdigest()
         citations = {"schema_version": 2, "report_id": report_id, "grammar": "[S<n>]",
             "language": target_lang, "source_language": source_lang,
             "source_artifact": "citations.json", "source_markdown_sha256": source_sha,
@@ -9100,19 +9795,32 @@ class ReportAgent:
             "policy_version": int(getattr(Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3)),
             "report_id": report_id, "language": target_lang, "source_language": source_lang,
             "audited_at": datetime.now(timezone.utc).isoformat(), "read_only": True,
-            "markdown_chars": len(variant_md), "source_markdown_sha256": source_sha,
+            "markdown_chars": len(variant_document), "source_markdown_sha256": source_sha,
             "markdown_sha256": target_sha, "translator_version": ENGINE,
-            "model_translation": proof, "fact_fidelity": {"passed": reviewed,
+            "model_translation": proof, "simulation_bridge": bridge_audit,
+            "fact_fidelity": {"passed": reviewed,
                 "method": "separate model review of source and translation",
                 "limitation": "model review can err; canonical typed facts are copied separately"},
             "section_parity": {"passed": not structure_issues(source_md, variant_md)},
             "citation_parity": {"passed": not any("citation" in issue or "References" in issue for issue in issues)},
             "residual_source_lines": {"count": 0, "method": "semantic language review"},
             "warnings": [], "issues": issues, "hard_passed": not issues}
-        world = ReportManager.load_world_result(report_id)
         if world:
             audit["world_result_ref"] = citations["world_result_ref"] = world["reference"]
         return audit, citations
+
+    def _translation_simulation_provenance(self, report_id, source_md, variant_md, source_lang, target_lang):
+        """Verify the deterministic envelope independently of the prose translator."""
+        source_bridge = ""
+        target_bridge = ""
+        if _sim_bridge_blocks(source_md):
+            try:
+                source_bridge = self._render_sim_bridge_for_report(report_id, chinese=source_lang == "zh")
+                target_bridge = self._render_sim_bridge_for_report(report_id, chinese=target_lang == "zh")
+            except (OSError, ValueError, TypeError, KeyError):
+                pass
+        return {"source": self._sim_bridge_audit_block(source_md, source_bridge),
+                "variant": self._sim_bridge_audit_block(variant_md, target_bridge)}
 
     def _audit_translation_variant(
         self,
@@ -9160,6 +9868,10 @@ class ReportAgent:
                         if world else source_md)
         variant_prose = (_world_prose(variant_md, render_world_pathway(world["result"], chinese=target_lang == "zh"))
                          if world else variant_md)
+        # ADR 0003 (S3): both bridges leave the prose audits; numbers, headings and tables of
+        # the whole documents (bridges included) still have to agree below.
+        source_prose = _sim_prose(source_prose)
+        variant_prose = _sim_prose(variant_prose)
         source_body, source_refs, _source_heading = self._translation_reference_parts(source_prose)
         variant_body, variant_refs, variant_heading = self._translation_reference_parts(variant_prose)
         source_markers = self._translation_marker_multiset(source_prose)
@@ -9214,6 +9926,10 @@ class ReportAgent:
 
         issues: List[str] = []
         warnings: List[str] = []
+        bridge_audit = self._translation_simulation_provenance(
+            report_id, source_md, variant_md, source_lang, target_lang)
+        if not all(part["bytes_match"] for part in bridge_audit.values()):
+            issues.append("translation simulation bridge differs from admitted deterministic provenance")
         if heading_source != heading_variant:
             issues.append("translation heading-level sequence differs from primary")
         if table_source != table_variant:
@@ -9397,6 +10113,7 @@ class ReportAgent:
                 "invalid_urls": invalid_urls,
             },
             "language_lint": lint_audit,
+            "simulation_bridge": bridge_audit,
             "translator_version": self._TRANSLATOR_VERSION,
             "residual_source_lines": {
                 "count": contamination,
@@ -10712,14 +11429,19 @@ class ReportAgent:
         _progress(1, "translation initialized")
 
         from .model_translation import split_document, translate_document
-        chunks = split_document(md)
+        world = ReportManager.load_world_result(report_id)
+        translation_md = (_world_prose(md, render_world_pathway(world["result"], chinese=src_code == "zh"))
+                          if world else md)
+        # ADR 0003 (S3): the bridge is re-rendered in the target language below, never translated.
+        translation_md = _sim_prose(translation_md)
+        chunks = split_document(translation_md)
         if not chunks:
             return
         def model_progress(result):
             _progress(min(89, 5 + int(80 * len(result) / max(1, len(chunks)))),
                       "translating and reviewing complete sections")
         translated_md, model_proof = translate_document(
-            self.llm, md, str(tgt_code), on_progress=model_progress)
+            self.llm, translation_md, str(tgt_code), on_progress=model_progress)
         citation_drift = []
         folder = ReportManager._get_report_folder(report_id)
         out_path = ReportManager._get_report_translation_path(report_id, tgt_code)
@@ -10743,7 +11465,7 @@ class ReportAgent:
         # no-op 守卫：译文为空、或与原文在「空白归一」意义上完全相同（如整篇翻译退化为原文）。
         def _collapse(t: str) -> str:
             return re.sub(r"\s+", " ", t or "").strip()
-        if not translated_md.strip() or _collapse(translated_md) == _collapse(md):
+        if not translated_md.strip() or _collapse(translated_md) == _collapse(translation_md):
             if not keep_existing_on_failure:
                 _remove_stale_variant()
             ReportManager._set_translation_runtime_status(
@@ -10760,6 +11482,13 @@ class ReportAgent:
             )
             logger.info(f"双语报告：译文为空或与原文实质相同，跳过落盘: {report_id}")
             return
+
+        if world:
+            translated_md = _insert_world_appendix(
+                translated_md, render_world_pathway(world["result"], chinese=str(tgt_code) == "zh"))
+        else:
+            translated_md = self._insert_sim_bridge_variant(
+                report_id, md, translated_md, chinese=str(tgt_code) == "zh")
 
         primary_citations: Dict[str, Any] = {}
         try:
@@ -11456,6 +12185,19 @@ class ReportAgent:
             )
         if lint.get("changed"):
             issues.append("最终 Markdown 在发布后仍会被确定性编辑 lint 改写")
+        # ADR 0003 (S3): exactly one bridge whose bytes equal the renderer under
+        # diagnostic_only; none under any other policy or engine.
+        bridge = audit.get("simulation_bridge") or {}
+        if isinstance(bridge, dict) and bridge:
+            expected = int(bridge.get("expected_count", 0) or 0)
+            count = int(bridge.get("count", 0) or 0)
+            if count != expected:
+                issues.append(
+                    f"simulation bridge block count is {count}; policy "
+                    f"{bridge.get('policy')} requires {expected}"
+                )
+            elif bridge.get("bytes_match") is not True:
+                issues.append("simulation bridge bytes differ from the deterministic renderer")
         for issue in (audit.get("citation_artifacts") or {}).get("issues") or []:
             if issue not in issues:
                 issues.append(str(issue))
@@ -11656,6 +12398,10 @@ class ReportAgent:
         # complete published document below.
         world = self._verify_world(report_id)
         audit_md = _world_prose(md, self._world_pathway()) if world else md
+        # ADR 0003 (S3): the bridge is audited by count and bytes (``simulation_bridge``
+        # below) and then excluded from the prose audits exactly as the world-v1 appendix is.
+        sim_bridge_audit = self._audit_sim_bridge(report_id, md)
+        audit_md = _sim_prose(audit_md)
         from .forecast_track_record import audit_and_strip
         track_forecast_path = os.path.join(folder, "forecast.json")
         try:
@@ -11785,6 +12531,7 @@ class ReportAgent:
             "proposition_consistency": proposition_audit,
             "market_anchor_integrity": market_anchor_audit,
             "stat_plausibility": stat_audit,
+            "simulation_bridge": sim_bridge_audit,
             # ``changed`` means a deterministic final lint would still rewrite the
             # published bytes; the candidate rewrite is intentionally discarded.
             "lint": lint_audit,
@@ -12382,6 +13129,13 @@ class ReportAgent:
         """
         from .report_visualizer import CHART_TITLES_ZH
         zh = not str(getattr(self, "output_language", "") or "English").lower().startswith("en")
+        # ADR 0003 (S3, design §3.3 item 5): under diagnostic_only the simulated charts are
+        # rendered inside the fenced bridge only; placing them here as well would put a
+        # simulated chart in an evidence section or the annex.
+        try:
+            simulation_in_body = self._simulation_forecast_effect() == "legacy_prompt"
+        except Exception:
+            simulation_in_body = False
         lines = md.split("\n")
         # 预扫描 "## " 详细章节标题（行号 + 小写标题），供 Mermaid 就地放置的模糊匹配。
         headings: List[Tuple[int, str]] = []
@@ -12402,6 +13156,8 @@ class ReportAgent:
             marker = f"<!-- viz:{path} -->"
             if marker in md:
                 continue  # 幂等：该图已注入
+            if not simulation_in_body and _sp.is_simulated_chart(item):
+                continue  # ADR 0003 (S3): rendered by render_sim_bridge, nowhere else
             vtype = str(item.get("type") or "").strip().lower()
             caption = str(item.get("caption") or "").strip()
             if zh:
@@ -12858,14 +13614,9 @@ class ReportAgent:
                     "limit": "返回结果数量（可选，默认10）"
                 }
             },
-            "interview_agents": {
-                "name": "interview_agents",
-                "description": TOOL_DESC_INTERVIEW_AGENTS,
-                "parameters": {
-                    "interview_topic": "采访主题或需求描述（如：'了解学生对宿舍甲醛事件的看法'）",
-                    "max_agents": "最多采访的Agent数量（可选，默认5，最大6）"
-                }
-            },
+            # ADR 0003 (S3, design §3.4.7): interview_agents is not offered to the writer.  Its
+            # output is simulated first-person speech, which the fenced-bridge rule removes from
+            # the body; _execute_tool still answers a stray call with the unavailable notice.
             # T4.2: 结构化模拟结果工具（量化论断必须有据可查）
             "simulation_outcomes": {
                 "name": "simulation_outcomes",
@@ -12918,6 +13669,11 @@ class ReportAgent:
                     and self._simulation_forecast_effect() == "diagnostic_only"):
                 tools["world_pathway"] = {"name": "world_pathway", "parameters": {},
                     "description": "Read the frozen conditional world pathway, exact dated metrics, events and pending obligations. Simulated; never probability evidence."}
+        if not self._simulation_prompt_inputs_allowed():
+            # Diagnostic output has one deterministic home: the bridge. Hiding
+            # the pack alone is insufficient if the writer can request it again.
+            for name in ("simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"):
+                tools.pop(name, None)
         return tools
 
     def _execute_tool(self, tool_name: str, parameters: Dict[str, Any], report_context: str = "") -> str:
@@ -12940,6 +13696,9 @@ class ReportAgent:
             if tool_name == "world_pathway":
                 return self._world_pathway() if getattr(self, "_world_chat_mode", False) else ""
             return "Unsupported for world-v1; use admitted research evidence or its pinned conditional pathway."
+        if (not self._simulation_prompt_inputs_allowed()
+                and tool_name in {"simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"}):
+            return "Simulation diagnostics are available only in the labelled after-action record and report bridge."
         try:
             if tool_name == "insight_forge":
                 query = parameters.get("query", "")
@@ -13015,7 +13774,8 @@ class ReportAgent:
 
             elif tool_name == "faction_brief":  # EXECPLAN2 I-1-2
                 return self.zep_tools.faction_brief(
-                    self.graph_id, parameters.get("query", ""), self.simulation_id)
+                    self.graph_id, parameters.get("query", ""),
+                    self.simulation_id if self._simulation_prompt_inputs_allowed() else "")
 
             elif tool_name == "opinion_shift":
                 actor_name = parameters.get("actor_name", parameters.get("query", ""))
@@ -13313,7 +14073,8 @@ class ReportAgent:
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
         try:
-            outcomes = "" if world else self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+            outcomes = (self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+                        if not world and self._simulation_prompt_inputs_allowed() else "")
             if outcomes:
                 # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
                 # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
@@ -13329,7 +14090,8 @@ class ReportAgent:
             user_prompt = user_prompt + "\n\n" + "\n\n".join(sweeps)
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
-        if self.base_simulation_id and not world:
+        if (self.base_simulation_id and not world
+                and self._simulation_prompt_inputs_allowed()):
             try:
                 diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff_text:
@@ -13701,7 +14463,7 @@ class ReportAgent:
     ) -> str:
         """RQ-5：对通过基本有效性的章节草稿做一次廉价批判；未通过则至多一次修订。
 
-        评分维度：(1) 骨架情景概率一致性；(2) 硬数字接地（带 [S#] 或与信号包一致）；
+        评分维度：(1) 骨架情景概率一致性；(2) 硬数字接地（带 [S#]）；
         (3) 篇幅下限；(4) 不复述前序章节。批判返回 PASS 或单条修订指令；至多一次修订抽取。
         由 self.MAX_REFLECTION_ROUNDS 上限（<=0 关闭），并受 Config.REPORT_SECTION_REFLECTION
         总开关约束。全部包在 try 里——反思是旁路增强，任何异常/缺依赖都回退原草稿。"""
@@ -13781,7 +14543,8 @@ class ReportAgent:
     ) -> Optional[str]:
         """RQ-5：一次廉价批判调用。返回 None 表示 PASS，否则返回单条修订指令。"""
         spine_txt = self._reflection_spine_probs()
-        signal_txt = (getattr(self, "_signal_pack", "") or "")[:1500]
+        # ADR 0003 (S3, design §3.4.2): the critique sees no simulation bytes — the signal-pack
+        # clause and block are gone; the pack itself is empty outside legacy_prompt.
         # i7 P0 尾巴：市场表此前只注入章节撰写提示、不给质检员——正文引用的真实市场价
         # 因无 [S#] 被规则 2 判为未接地，修订指令随即把真价当 fabrication 改写/删除
         # （Tesla Optimus P=0.125 事故的报告侧机制之一）。质检材料必须与撰写材料同源。
@@ -13792,9 +14555,7 @@ class ReportAgent:
         sys_prompt = (
             "你是一名严格的报告章节质检员。仅依据下方给定材料，判断本章草稿是否同时满足四条标准：\n"
             "1) 概率一致性：正文若提及情景/事件概率，须与【预测骨架概率】一致，不得矛盾；\n"
-            "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【信号包】中的数字"
-            "是内部模拟推演产物（elicited model projection），只有在正文显式标注其模拟来源时"
-            "才可引用，绝不能替代 [S#] 作为现实世界声明的接地；【预测市场表】中的隐含概率/"
+            "2) 硬数字接地：关于现实世界的关键定量声明必须带来源标注 [S#]；【预测市场表】中的隐含概率/"
             "价格是机器抓取的真实市场数据（Polymarket 公开 API），正文引用且与表内数值一致时"
             "视为已接地，不要求 [S#]，绝不能当作捏造数字要求删除或改写；\n"
             f"3) 篇幅下限：正文须有不少于 {floor} 字符的实质内容；\n"
@@ -13804,7 +14565,6 @@ class ReportAgent:
         )
         usr_prompt = (
             f"【预测骨架概率】\n{spine_txt or '（无）'}\n\n"
-            f"【信号包（硬数字）】\n{signal_txt or '（无）'}\n\n"
             f"【预测市场表】\n{market_txt or '（无）'}\n\n"
             f"【前序章节摘要】\n{prior or '（无）'}\n\n"
             f"【本章标题】{section.title}\n\n"
@@ -14311,12 +15071,9 @@ class ReportAgent:
         # FILTER-SAFE：仅因工具调用不足被退回、且通过污染检测的完整 Final Answer。检索补足阶段若被
         # 提供方内容审查拒绝，采纳该草稿而非把章节钉成占位符（见 _accept_draft_under_filter）。
         draft_answer: Optional[str] = None
-        # REPORT-8: interview_agents 仍可用（保留在 self.tools / 提示词中），但不再进入
-        # 「未使用工具」推荐集——采访依赖 OASIS 在线、延迟高且易超时，不应被反复 nudge 去尝试。
-        all_tools = {"insight_forge", "panorama_search", "quick_search",
-                     "simulation_outcomes", "coalition_map", "opinion_shift"}
-        if self.base_simulation_id:
-            all_tools.add("scenario_diff")  # T4.7
+        # REPORT-8 / ADR 0003 (S3)：interview_agents 已不在默认引擎的工具集中（其产出不能进入
+        # 正文），自然也不在「未使用工具」推荐集里。
+        all_tools = set(self.tools)
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
@@ -14451,7 +15208,7 @@ class ReportAgent:
                             )
                     if not _grounded_early:
                         messages.append({"role": "assistant", "content": response})
-                        unused_tools = all_tools - used_tools
+                        unused_tools = sorted(all_tools - used_tools)
                         unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
                         messages.append({
                             "role": "user",
@@ -14555,7 +15312,7 @@ class ReportAgent:
                 self._SECTION_TOOL_CTX.set(self._SECTION_TOOL_CTX.get() + 1)  # LOG-16: 并发章节按上下文归因
 
                 # 构建未使用工具提示
-                unused_tools = all_tools - used_tools
+                unused_tools = sorted(all_tools - used_tools)
                 unused_hint = ""
                 if unused_tools and tool_calls_count < self.MAX_TOOL_CALLS_PER_SECTION:
                     unused_hint = REACT_UNUSED_TOOLS_HINT.format(unused_list="、".join(unused_tools))
@@ -14579,7 +15336,7 @@ class ReportAgent:
 
             if tool_calls_count < min_tool_calls:
                 # 工具调用次数不足，推荐未用过的工具
-                unused_tools = all_tools - used_tools
+                unused_tools = sorted(all_tools - used_tools)
                 unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
 
                 messages.append({
@@ -14998,9 +15755,10 @@ class ReportAgent:
                             pass
                     section_content = SECTION_FAILURE_PLACEHOLDER
 
-                # EXECPLAN2 I-3-4 / ADR 0003: 若为情景对比章节且开关开启，把确定性对比表
-                # 前置到本章正文，使 LLM 围绕模拟份额差值叙述并标注其情景模拟来源
-                # （不复算/不反转方向，不据此给出或调整概率）。
+                # EXECPLAN2 I-3-4 / ADR 0003 (S3, design §3.3 item 6): the deterministic what-if
+                # table is simulated output and no longer enters the comparison section's prose.
+                # comparison.json is still written here (the visualizer and the UI read it);
+                # render_sim_bridge renders the table inside the fenced bridge section.
                 if (
                     self.base_simulation_id
                     and getattr(Config, "REPORT_COMPARISON_TABLE", False)
@@ -15009,20 +15767,16 @@ class ReportAgent:
                 ):
                     try:
                         diff_dict = self._scenario_diff_structured()
-                        if diff_dict:
-                            table_md = self._render_comparison_table(diff_dict)
-                            if table_md:
-                                section_content = table_md + "\n\n" + section_content
-                                # 落盘结构化对比工件，供 UI / diff 工具消费
-                                cpath = os.path.join(
-                                    ReportManager._get_report_folder(report_id), "comparison.json"
-                                )
-                                write_text_atomic(
-                                    cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
-                                )
-                                logger.info(f"已注入结构化对比表并写入 comparison.json: {report_id}")
+                        if diff_dict and self._render_comparison_table(diff_dict):
+                            cpath = os.path.join(
+                                ReportManager._get_report_folder(report_id), "comparison.json"
+                            )
+                            write_text_atomic(
+                                cpath, json.dumps(diff_dict, ensure_ascii=False, indent=2)
+                            )
+                            logger.info(f"已写入 comparison.json（对比表随情景模拟桥接区渲染）: {report_id}")
                     except Exception as _ct_err:  # noqa: BLE001 — 对比表为可选增强，失败不影响主流程
-                        logger.warning(f"注入结构化对比表失败（忽略）: {_ct_err}")
+                        logger.warning(f"写入结构化对比工件失败（忽略）: {_ct_err}")
 
                 section.content = section_content
                 if section_content == SECTION_FAILURE_PLACEHOLDER:
@@ -15225,6 +15979,11 @@ class ReportAgent:
             if self._verify_world(report_id):
                 report.markdown_content = _insert_world_appendix(report.markdown_content, self._world_pathway())
                 write_text_atomic(ReportManager._get_report_markdown_path(report_id), report.markdown_content)
+            else:
+                # ADR 0003 (S3): the default engine gets the fenced scenario-simulation bridge at
+                # the same point — deterministic, excluded from prose lint by the fence mask,
+                # byte-checked by the final audit.  Absent artifacts leave the report untouched.
+                self._publish_sim_bridge(report_id, report)
 
             # LOOP-010: authoritative, read-only audit of the exact publishable
             # Markdown.  Nothing below mutates the main report (bilingual output is
@@ -16413,11 +17172,14 @@ class ReportManager:
                     "language audit source fingerprint does not match primary"
                 )
             if audit.get("translator_version") == ReportAgent._TRANSLATOR_VERSION or "model_translation" in audit:
-                from .model_translation import valid_document_receipt
                 try:
                     with open(cls._get_report_markdown_path(report_id), encoding="utf-8") as source_file:
                         current_source = source_file.read()
-                    if not valid_document_receipt(current_source, markdown, lang, audit.get("model_translation")):
+                    checker = ReportAgent.__new__(ReportAgent)
+                    proof_audit, _ = checker._audit_model_translation_variant(
+                        report_id, current_source, markdown, source_lang, lang,
+                        {}, audit.get("model_translation"), enforce_citations=False)
+                    if not proof_audit["hard_passed"]:
                         result["reasons"].append("language semantic review is missing or differs from current bytes")
                 except (OSError, ValueError, TypeError):
                     result["reasons"].append("language semantic review source unavailable")

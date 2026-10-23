@@ -1,0 +1,101 @@
+{
+ "schema": "simulation-record/v1",
+ "record_class": "simulated",
+ "epistemic_status": "elicited_model_projection",
+ "simulation_id": "sim_fixture_record_paths",
+ "pipeline_id": "pipe_fixture_paths",
+ "config_hash": "2222222222222222",
+ "engine": "oasis-reflexive",
+ "language": "en",
+ "as_of": "2026-11-01",
+ "horizon_date": "2026-11-14",
+ "calendar_unit": "week",
+ "rounds_planned": 2,
+ "rounds_committed": 2,
+ "health": {
+  "simulation_health": "ok",
+  "validity": "valid",
+  "arbiter_failed_rounds": 1,
+  "seed_gaps": ["actor_without_plans: Actor B — no documented plans or red lines"],
+  "organic_actions": 40
+ },
+ "banner": "Simulated under declared assumptions. Not observed facts, not a calibrated probability, and not an input to any probability in this report.",
+ "setup": {
+  "cast": [
+   {"actor": "Actor A", "agency_class": "sovereign_government", "red_lines": ["No tariff above 100%"], "documented_plans": ["Hold the line"], "source_refs": []},
+   {"actor": "Actor B", "agency_class": "sovereign_government", "red_lines": [], "documented_plans": [], "source_refs": []}
+  ],
+  "variables": [{"name": "Tariff rate", "seed_value": 10, "unit": "%", "as_of": "2026-10-31", "provenance": "research"}],
+  "scenarios": ["Truce holds", "Escalation"],
+  "shocks": [{"name": "Port closure", "probability": 0.2, "window": "2026-11"}],
+  "seed_gaps": ["actor_without_plans: Actor B — no documented plans or red lines"]
+ },
+ "periods": [
+  {
+   "round": 1,
+   "label": "2026-W45",
+   "period_start": "2026-11-01",
+   "period_end": "2026-11-07",
+   "arbiter_status": "applied",
+   "arbiter_problems": [],
+   "narrative": "Actor B raised its tariff past the line Actor A had drawn; Actor A answered with a counter-offer.",
+   "moves": [
+    {"actor": "Actor B", "option": "Raise tariff", "targets": ["Actor A"], "magnitude": 0.9, "public_statement": "We will not be dictated to.", "commitment": {"text": "Keep the tariff until talks resume", "due": "2026-W47"}},
+    {"actor": "Actor A", "option": "Counter offer", "targets": ["Actor B"], "magnitude": 0.5, "public_statement": "Our door remains open on conditions."}
+   ],
+   "held_position": ["Actor C"],
+   "facts_changed": [{"variable": "Tariff rate", "from": 10, "to": 145, "unit": "%", "cause": "Actor B's tariff order took effect"}],
+   "events": ["Shipping insurers repriced the route"],
+   "shocks_fired": ["Port closure"],
+   "red_lines_crossed": ["Actor B crossed Actor A's red line: No tariff above 100%"],
+   "offers": [{"from": "Actor A", "to": "Actor B", "kind": "talks", "status": "accepted", "terms": "Talks within two weeks"}],
+   "alliances": ["Actor A and Actor C aligned on the counter-offer"],
+   "behaviour": {"moves": 2, "responsive_moves": 1, "offers_answered": 1},
+   "refs": [{"file": "world_state_history.jsonl", "round": 1, "id": "h1"}]
+  },
+  {
+   "round": 2,
+   "label": "2026-W46",
+   "period_start": "2026-11-08",
+   "period_end": "2026-11-14",
+   "arbiter_status": "failed",
+   "arbiter_problems": ["llm error: BadRequestError"],
+   "narrative": "",
+   "moves": [],
+   "held_position": [],
+   "facts_changed": [],
+   "events": [],
+   "shocks_fired": [],
+   "red_lines_crossed": [],
+   "offers": [],
+   "alliances": [],
+   "behaviour": {"moves": 0, "responsive_moves": 0, "offers_answered": 0},
+   "refs": [{"file": "world_state_history.jsonl", "round": 2, "id": "h2"}]
+  }
+ ],
+ "overall": {
+  "final_variables": [{"name": "Tariff rate", "seed_value": 10, "final_value": 145, "unit": "%"}],
+  "shares": {
+   "final": {"Truce holds": 0.44, "Escalation": 0.56},
+   "converged_at": 2,
+   "paths": {
+    "k": 4,
+    "per_scenario": {
+     "Truce holds": {"mean": 0.42, "sd": 0.05, "p10": 0.36, "p50": 0.43, "p90": 0.49},
+     "Escalation": {"mean": 0.58, "sd": 0.05, "p10": 0.51, "p50": 0.57, "p90": 0.64}
+    }
+   }
+  },
+  "turning_points": [{"round": 1, "why": "red line crossed: No tariff above 100%"}],
+  "track_records": [{"actor": "Actor B", "kept": 0, "lapsed": 1, "broken": 1}, {"actor": "Actor A", "kept": 2, "lapsed": 0, "broken": 0}],
+  "synthesis": {"generator": "llm", "text": "The exercise turned on one crossing in the first week.\n\nThe second week added nothing: the arbiter failed and the round advanced mechanically.", "claims": []}
+ },
+ "limits": {
+  "arbiter_failed_rounds": 1,
+  "seed_gaps": ["actor_without_plans: Actor B — no documented plans or red lines"],
+  "behaviour_note": "textual diagnostic, not a realism verdict"
+ },
+ "entities_declared": ["Actor A", "Actor B", "Actor C", "Tariff rate", "Truce holds", "Escalation"],
+ "generated_at": "2026-11-15T09:00:00Z",
+ "generator_version": "simulation_record/1.0"
+}

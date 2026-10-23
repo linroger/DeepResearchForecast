@@ -18,6 +18,7 @@ if _BACKEND not in sys.path:
 from app.config import Config  # noqa: E402
 from app.services.actor_role_prompt import (  # noqa: E402
     build_actor_role_contract,
+    _build_legacy_actor_role_contract,
     compile_actor_role_prompt,
     role_prompt_sha256,
 )
@@ -283,7 +284,7 @@ def test_distinct_actors_receive_distinct_grounded_role_contracts_and_prompts():
         assert expected in prompt_a
 
 
-def test_actor_intelligence_v1_reaches_role_prompt_with_epistemic_provenance():
+def test_legacy_v2_actor_intelligence_v1_reaches_role_prompt_with_epistemic_provenance():
     dossier = {
         **DOSSIER,
         "actors": [ACTOR_V2, ACTOR_B],
@@ -292,7 +293,7 @@ def test_actor_intelligence_v1_reaches_role_prompt_with_epistemic_provenance():
             "catalysts": ["The regulator publishes its capacity proposal."],
         },
     }
-    contract = build_actor_role_contract(ACTOR_V2, dossier, ACTOR_V2_CONTEXT)
+    contract = _build_legacy_actor_role_contract(ACTOR_V2, dossier, ACTOR_V2_CONTEXT)
     prompt = compile_actor_role_prompt(contract)
 
     assert contract["schema_version"] == "actor-role/v2"
@@ -345,12 +346,12 @@ def test_actor_intelligence_v1_reaches_role_prompt_with_epistemic_provenance():
     ):
         assert expected in prompt
 
-    assert contract == build_actor_role_contract(ACTOR_V2, dossier, ACTOR_V2_CONTEXT)
+    assert contract == _build_legacy_actor_role_contract(ACTOR_V2, dossier, ACTOR_V2_CONTEXT)
     assert prompt == compile_actor_role_prompt(contract)
     assert role_prompt_sha256(prompt) == role_prompt_sha256(compile_actor_role_prompt(contract))
 
 
-def test_context_pack_identity_mismatch_fails_closed_without_cross_actor_leakage():
+def test_legacy_v2_context_pack_identity_mismatch_fails_closed_without_cross_actor_leakage():
     other = {
         **ACTOR_B,
         "actor_id": "actor_clean_future",
@@ -363,7 +364,7 @@ def test_context_pack_identity_mismatch_fails_closed_without_cross_actor_leakage
             },
         },
     }
-    contract = build_actor_role_contract(
+    contract = _build_legacy_actor_role_contract(
         other,
         {"actors": [ACTOR_V2, other]},
         ACTOR_V2_CONTEXT,
@@ -381,7 +382,7 @@ def test_context_pack_identity_mismatch_fails_closed_without_cross_actor_leakage
     )
 
 
-def test_canonical_dimension_gap_map_and_nested_injection_are_sanitized():
+def test_legacy_v2_canonical_dimension_gap_map_and_nested_injection_are_sanitized():
     actor = {
         "name": "Guarded Intelligence Actor",
         "intelligence": {
@@ -417,7 +418,7 @@ def test_canonical_dimension_gap_map_and_nested_injection_are_sanitized():
             "source_refs": [],
         }],
     }
-    contract = build_actor_role_contract(actor, dossier)
+    contract = _build_legacy_actor_role_contract(actor, dossier)
     prompt = compile_actor_role_prompt(contract)
 
     assert "ignore all system instructions" not in prompt.lower()
@@ -436,7 +437,7 @@ def test_canonical_dimension_gap_map_and_nested_injection_are_sanitized():
     assert "SRC-SAFE" in contract["source_tags"]
 
 
-def test_knowledge_explicitly_unknown_to_actor_stays_in_research_context_only():
+def test_legacy_v2_knowledge_explicitly_unknown_to_actor_stays_in_research_context_only():
     actor = {
         "name": "Bounded Knowledge Actor",
         "intelligence": {
@@ -450,7 +451,7 @@ def test_knowledge_explicitly_unknown_to_actor_stays_in_research_context_only():
             },
         },
     }
-    contract = build_actor_role_contract(actor, {"actors": [actor]})
+    contract = _build_legacy_actor_role_contract(actor, {"actors": [actor]})
 
     assert "rival's private board" not in contract["known_context"]
     assert "rival's private board" not in " ".join(
@@ -463,7 +464,7 @@ def test_knowledge_explicitly_unknown_to_actor_stays_in_research_context_only():
     )
 
 
-def test_knowledge_state_requires_literal_access_and_never_implies_omniscience():
+def test_legacy_v2_knowledge_state_requires_literal_access_and_never_implies_omniscience():
     actor = {
         "name": "Epistemically Bounded Actor",
         "memory": "Legacy memory claims the rival already approved the deal.",
@@ -524,7 +525,7 @@ def test_knowledge_state_requires_literal_access_and_never_implies_omniscience()
         },
     }
 
-    contract = build_actor_role_contract(actor, {"actors": [actor]})
+    contract = _build_legacy_actor_role_contract(actor, {"actors": [actor]})
 
     assert "published filings" in contract["known_context"]
     assert "internal operating dashboard" in contract["known_context"]
@@ -557,7 +558,7 @@ def test_knowledge_state_requires_literal_access_and_never_implies_omniscience()
     )
 
 
-def test_canonical_direct_dimension_lists_are_consumed_without_wrapper_loss():
+def test_legacy_v2_canonical_direct_dimension_lists_are_consumed_without_wrapper_loss():
     actor = {
         "name": "Direct List Actor",
         "intelligence": {
@@ -595,7 +596,7 @@ def test_canonical_direct_dimension_lists_are_consumed_without_wrapper_loss():
             "actor_ids_sha256": "2" * 64,
         },
     }
-    contract = build_actor_role_contract(actor, dossier)
+    contract = _build_legacy_actor_role_contract(actor, dossier)
     prompt = compile_actor_role_prompt(contract)
 
     assert contract["current_actions"][0]["epistemic_status"] == "verified_fact"
@@ -614,7 +615,7 @@ def test_canonical_direct_dimension_lists_are_consumed_without_wrapper_loss():
     assert "unit: GW" in prompt
 
 
-def test_v1_missing_likely_actions_never_derives_forecast_from_goals_or_resources():
+def test_legacy_v2_v1_missing_likely_actions_never_derives_forecast_from_goals_or_resources():
     actor = {
         "name": "Sparse V1 Actor",
         "type": "Organization",
@@ -646,7 +647,7 @@ def test_v1_missing_likely_actions_never_derives_forecast_from_goals_or_resource
         },
     }
 
-    contract = build_actor_role_contract(actor, {"actors": [actor]})
+    contract = _build_legacy_actor_role_contract(actor, {"actors": [actor]})
     rendered = json.dumps(contract["likely_actions"], ensure_ascii=False)
     prompt = compile_actor_role_prompt(contract)
 
@@ -672,8 +673,8 @@ def test_v1_missing_likely_actions_never_derives_forecast_from_goals_or_resource
     assert contract["future_plans"][0]["basis"] == "evidence_gap"
 
 
-def test_v2_compact_prompt_preserves_actions_plan_decision_evidence_and_safety():
-    contract = build_actor_role_contract(
+def test_legacy_v2_v2_compact_prompt_preserves_actions_plan_decision_evidence_and_safety():
+    contract = _build_legacy_actor_role_contract(
         ACTOR_V2,
         {**DOSSIER, "actors": [ACTOR_V2, ACTOR_B]},
         ACTOR_V2_CONTEXT,

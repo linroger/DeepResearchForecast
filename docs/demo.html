@@ -36,7 +36,7 @@
     <button data-tab="dossier" data-i18n="tab.dossier" type="button">② Research dossier</button>
     <button data-tab="ontology" data-i18n="tab.ontology" type="button">③ Ontology</button>
     <button data-tab="graph" data-i18n="tab.graph" type="button">④ Knowledge graph</button>
-    <button data-tab="forum" data-i18n="tab.forum" type="button">⑤ Simulated forum</button>
+    <button data-tab="forum" data-i18n="tab.forum" type="button">⑤ Scenario simulation (raw feed)</button>
     <button data-tab="report" class="active" data-i18n="tab.report" type="button">⑥ Forecast report</button>
   </div>
 
@@ -365,11 +365,24 @@
     }
   }
 
+  // Runs created before SIMULATION_FORECAST_EFFECT existed (2026-07-17) let simulation
+  // output into prose and probabilities; badge them so readers do not take them as
+  // examples of the current contract (ADR 0003).
+  var POLICY_EPOCH = '2026-07-17';
+  function prePolicyBadge(meta) {
+    var created = (meta && meta.created_at) ? String(meta.created_at).slice(0, 10) : '';
+    if (!created || created >= POLICY_EPOCH) return '';
+    var div = document.createElement('div');
+    div.className = 'callout prepolicy';
+    div.textContent = drfT('report.prepolicy');
+    return div.outerHTML;
+  }
+
   function renderReport() {
     return fetchJSONOptional('meta.json').then(function (meta) {
       var pick = pickDoc(meta, 'report', 'report.md');
       return fetchText(pick.file).then(function (md) {
-        return docLangBar('report', pick) + mdBody(pick, md);
+        return prePolicyBadge(meta) + docLangBar('report', pick) + mdBody(pick, md);
       });
     });
   }

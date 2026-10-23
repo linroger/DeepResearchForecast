@@ -172,13 +172,48 @@ def templates_by_id(spec: dict) -> dict[str, dict]:
     return {template["templateId"]: template for template in spec["actionCatalog"]}
 
 
-def _basis(record: dict) -> None:
+def _basis(record: dict, *, official_metric: bool = False) -> None:
     basis = record.get("basis")
     require(isinstance(basis, dict) and basis.get("kind") in {
         "source_claim", "report_excerpt", "scenario_assumption", "simulation_event"
-    }, "missing_provenance", "Every modeled value needs an explicit evidence/assumption basis")
+    } | ({"official_observation"} if official_metric else set()),
+        "missing_provenance", "Every modeled value needs an explicit evidence/assumption basis")
     require(isinstance(basis.get("refs"), list) and bool(basis["refs"]),
             "missing_provenance", "A modeled value requires basis references")
+
+
+def validate_preparation_pin(spec: dict) -> None:
+    """Preparation-specific artifacts cannot silently downgrade to legacy."""
+    bindings = spec.get('sourceBindings', {})
+    features = 'researchContext' in spec or any(
+        'baseline' in record or record.get('basis', {}).get('kind') == 'official_observation'
+        for records in spec.get('initialState', {}).values() if isinstance(records, dict)
+        for record in records.values() if isinstance(record, dict))
+    present = 'preparationContext' in bindings
+    require(not features or present, 'invalid_preparation_context',
+            'Native research projections and official baselines require their preparation pin')
+    if not present:
+        return
+    pin = bindings['preparationContext']
+    require(isinstance(pin, dict) and set(pin) == {'schemaVersion', 'contentSha256', 'source'}
+            and pin['schemaVersion'] == 'research-preparation/v1'
+            and isinstance(pin['contentSha256'], str) and bool(re.fullmatch('[0-9a-f]{64}', pin['contentSha256']))
+            and isinstance(pin['source'], dict),
+            'invalid_preparation_context', 'Native preparation needs an exact schema, hash and source pin')
+    source = pin['source']
+    require(all(isinstance(source.get(key), str) and bool(re.fullmatch('[0-9a-f]{64}', source[key]))
+                for key in ('report_sha256', 'actors_sha256', 'source_binding_sha256')),
+            'invalid_preparation_context', 'Native preparation source fingerprints are missing or invalid')
+    require(isinstance(bindings.get('researchGenerationId'), str) and bool(bindings['researchGenerationId'])
+            and isinstance(source.get('source_binding'), dict)
+            and source['source_binding'].get('research_generation_id') == bindings['researchGenerationId'],
+            'preparation_generation_mismatch', 'Native preparation generation is missing or changed')
+    context = spec.get('researchContext')
+    require(isinstance(context, dict) and set(context) == {'schemaVersion', 'actors'}
+            and context['schemaVersion'] == 'native-research-context/v1' and isinstance(context['actors'], dict)
+            and set(context['actors']) == {a['actorId'] for a in spec['actors']}
+            and all(isinstance(text, str) and len(text) <= 12000 for text in context['actors'].values()),
+            'invalid_preparation_context', 'Native actor preparation projections are missing or invalid')
 
 
 def validate_spec(raw: Any) -> dict:
@@ -250,7 +285,7 @@ def validate_spec(raw: Any) -> dict:
             identifier(record_id)
             require(isinstance(record, dict), "invalid_state", "World records must be objects")
             record["visibility"] = visibility(record.get("visibility"), actor_ids)
-            _basis(record)
+            _basis(record, official_metric=section == "metrics")
             if section == "accounts":
                 require(record.get("ownerId") in actor_ids or record.get("ownerId") == "external",
                         "unknown_owner", "Account owner must be admitted")
@@ -260,7 +295,15 @@ def validate_spec(raw: Any) -> dict:
             if section == "metrics":
                 require(record.get("kind") in {"stock", "rate", "quantity", "category", "boolean"},
                         "invalid_metric", "Metric kind required")
-                identifier(record.get("unit"), "unit")
+                if record['basis']['kind'] == 'official_observation':
+                    # Official series retain their complete native units; no
+                    # alias, rescaling or account-unit conversion is inferred.
+                    unit = record.get('unit')
+                    require(isinstance(unit, str) and 0 < len(unit) <= 512
+                            and unit == unit.strip() and all(ord(c) >= 32 for c in unit),
+                            'invalid_quantity', 'Official metrics require explicit native units')
+                else:
+                    identifier(record.get("unit"), "unit")
                 if record["kind"] in {"stock", "rate", "quantity"} and record.get("value") is not None:
                     record["value"] = quantity(record["value"])
                 record.setdefault("valueStatus", "specified" if record.get("value") is not None else "unknown")
@@ -291,6 +334,7 @@ def validate_spec(raw: Any) -> dict:
     require(isinstance(spec["scheduledEvents"], list) and isinstance(spec["flows"], list)
             and isinstance(spec["assumptions"], list) and isinstance(spec["sourceBindings"], dict),
             "invalid_spec", "Malformed schedules/flows/assumptions/source bindings")
+    validate_preparation_pin(spec)
     require(len(canonical_json(spec).encode()) <= 2 * 1024 * 1024, "spec_too_large", "World specification exceeds size limit")
     return spec
 

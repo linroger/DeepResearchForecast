@@ -172,6 +172,19 @@
 
         <p v-if="structuredTranslationNotice" class="translation-feedback structured-translation-note" role="status">{{ structuredTranslationNotice }}</p>
         <div ref="scrollEl" class="report-scroll">
+          <!-- ADR 0003：来源图例——正文里三类记录各有标记；模拟内容只出现在带标记的桥接框内，从不进入概率。 -->
+          <div class="prov-legend" role="note" :aria-label="L('来源图例', 'Provenance legend')">
+            <span class="prov-item prov-observed"><span class="prov-swatch" aria-hidden="true"></span>{{ L('观察事实 [S#]', 'Observed [S#]') }}</span>
+            <span class="prov-item prov-forecast"><span class="prov-swatch" aria-hidden="true"></span>{{ L('预测（作者判断）', 'Forecast (authors’ judgement)') }}</span>
+            <span class="prov-item prov-simulated"><span class="prov-swatch" aria-hidden="true"></span>{{ L('模拟（模型推演，非证据）', 'Simulated (model exercise, not evidence)') }}</span>
+          </div>
+          <!-- ADR 0003：门禁通过的情景模拟记录的锚点卡（报告负载 simulation_record_ref）；缺失则不渲染。 -->
+          <div v-if="simulationRecordRef" class="sim-record-anchor">
+            <span class="diamond">◇</span>
+            <span class="sra-text">{{ simulationRecordLabel }}</span>
+            <code v-if="simulationRecordRef.sha256" class="sra-sha" :title="simulationRecordRef.sha256">SHA-256 {{ simulationRecordSha }}</code>
+            <button class="sra-btn" type="button" @click="openSimulationRecord">{{ L('在模拟标签页查看记录', 'Open the record in the Simulation tab') }} →</button>
+          </div>
           <!-- FORECAST-DASH：结构化预测仪表盘（情景概率卡 + 置信徽章 + 市场分歧瓦片 + 官方指标瓦片）。
                端点 404/409（旧报告 / 未启用结构化预测 / 无官方数据）→ 对应区块隐藏（degrade-safe）。 -->
           <section v-if="showDashboard || officialTiles.length" class="forecast-dash">
@@ -284,7 +297,7 @@
           </section>
           <!-- LOOP-017：一等公民二元预测表（forecast.binary_forecasts，与仪表盘同源同门）。
                行模型在 utils/binaryForecasts.js（纯函数）；无二元预测 → 组件整体不渲染。 -->
-          <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" />
+          <BinaryForecastTable :forecast="fc" :official-series="officialSeries" :lang="officialLang" :forecast-effect="forecastEffect" />
           <SourceContextPanel v-if="displayContext" :context="displayContext" :lang="viewLang" />
           <!-- VIZ-1：图表画廊（确定性生成的 PNG/SVG 图表 + 图注）。无工件时整体不渲染。 -->
           <section v-if="galleryCharts.length" class="chart-gallery">
@@ -348,7 +361,7 @@ import {
   reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast, getReportOfficialData
 } from '../../api/report'
 import BinaryForecastTable from './BinaryForecastTable.vue'
-import { renderMarkdown, extractHeadings } from '../../utils/markdown'
+import { renderMarkdown, extractHeadings, parseMarkedBlock } from '../../utils/markdown'
 import {
   chartAssetKind,
   chartAttribution,
@@ -389,6 +402,19 @@ const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPan
 const props = defineProps({
   reportId: { type: String, default: '' }
 })
+
+// ADR 0003 (S2): the only event — the reader asks for the gate-passed simulation record,
+// which the parent shows on the Simulation tab.
+const emit = defineEmits(['open-simulation-record'])
+
+// ADR 0003: the one fenced simulation bridge the backend renders between
+// sim_provenance.BRIDGE_START / BRIDGE_END is shown as a shaded, labelled box.  The markers
+// are HTML comments the renderer drops, so a report without a bridge renders as before.
+const SIM_BRIDGE_START = '<!-- sim-bridge:start -->'
+const SIM_BRIDGE_END = '<!-- sim-bridge:end -->'
+// A plain-word slot paragraph (no markdown syntax): renderMarkdown emits it as <p>…</p>,
+// which is then replaced by the rendered bridge box.
+const SIM_BRIDGE_SLOT = 'SIMBRIDGESLOT4c9e1b'
 
 const md = ref('')
 const meta = ref({})
@@ -620,7 +646,7 @@ function interactiveHref(rel) {
 const REF_HEADING_RE = /references|sources|bibliography|参考|来源|文献/i
 const citationsMap = computed(() => {
   const map = {}
-  const src = String(currentMd.value || '')
+  const src = String(displayMd.value || '')
   if (!src) return map
   let inRefs = false
   let inFence = false
@@ -652,9 +678,48 @@ const renderOpts = computed(() => ({
   interactiveHref
 }))
 
+function escapeText(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+// A malformed bridge withholds the body: dropping its markers would relabel simulated
+// prose as research. Code examples are not bridge blocks, including unclosed fences.
+const bridgeParse = computed(() => parseMarkedBlock(currentMd.value, SIM_BRIDGE_START, SIM_BRIDGE_END))
+const bridgeSplit = computed(() => bridgeParse.value.status === 'valid' ? bridgeParse.value : null)
+const displayMd = computed(() => {
+  const parsed = bridgeParse.value
+  if (parsed.status === 'invalid') return ''
+  return forecastEffect.value === 'no_update' && parsed.status === 'valid'
+    ? `${parsed.before}\n\n${parsed.after}` : currentMd.value
+})
+
+function renderReportMarkdown(source) {
+  const parsed = parseMarkedBlock(source, SIM_BRIDGE_START, SIM_BRIDGE_END)
+  if (parsed.status === 'invalid') {
+    return '<p class="partial-warning" role="alert">' + escapeText(L(
+      '情景模拟章节标记无效，报告正文暂不显示。',
+      'The simulation section markers are invalid; the report body is withheld.'
+    )) + '</p>'
+  }
+  if (parsed.status !== 'valid') return renderMarkdown(source, renderOpts.value)
+  if (forecastEffect.value === 'no_update') {
+    return renderMarkdown(`${parsed.before}\n\n${parsed.after}`, renderOpts.value)
+  }
+  // Keep References detection in one pass; choose a slot absent from the source so
+  // literal prose cannot steal the bridge's insertion point.
+  let token = SIM_BRIDGE_SLOT
+  while (source.includes(token)) token += 'X'
+  const main = renderMarkdown(`${parsed.before}\n\n${token}\n\n${parsed.after}`, renderOpts.value)
+  const box = '<section class="sim-bridge" data-record-class="simulated">'
+    + '<div class="sim-bridge-eyebrow"><span class="sim-bridge-mark" aria-hidden="true">◇</span>'
+    + escapeText(L('情景模拟 · 模拟记录：非证据，未进入任何概率', 'Scenario simulation · simulated record: not evidence, not an input to any probability'))
+    + '</div><div class="sim-bridge-body">' + renderMarkdown(parsed.inner, renderOpts.value) + '</div></section>'
+  return main.replace(`<p>${token}</p>`, () => box)
+}
+
 const renderedHtml = computed(() => {
   try {
-    return renderMarkdown(currentMd.value || '', renderOpts.value)
+    return renderReportMarkdown(currentMd.value || '')
   } catch (e) {
     return ''
   }
@@ -662,7 +727,7 @@ const renderedHtml = computed(() => {
 
 const headings = computed(() => {
   try {
-    const list = extractHeadings(currentMd.value || '')
+    const list = extractHeadings(displayMd.value || '')
     return Array.isArray(list) ? list : []
   } catch (e) {
     return []
@@ -1124,6 +1189,48 @@ const fc = computed(() => {
   return cache[sourceLang.value || ''] || cache[''] || null
 })
 
+// ---------- ADR 0003：门禁通过的情景模拟记录引用与模拟策略 ----------
+// GET /api/report/<id> MAY carry simulation_record_ref {sha256, url}（仅当记录通过门禁）与
+// forecast_effect；缺失策略如实披露，no_update 不显示报告桥接或记录链接。
+const simulationRecordRef = computed(() => {
+  if (forecastEffect.value === 'no_update' || bridgeParse.value.status === 'invalid') return null
+  const value = meta.value && meta.value.simulation_record_ref
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const sha256 = typeof value.sha256 === 'string' ? value.sha256.trim() : ''
+  const url = typeof value.url === 'string' ? value.url.trim() : ''
+  return /^[a-f0-9]{64}$/i.test(sha256) && /^\/api\/simulation\/[A-Za-z0-9_-]+\/record$/.test(url)
+    ? { sha256, url } : null
+})
+const simulationRecordLabel = computed(() => {
+  if (['diagnostic_only', 'validated_update'].includes(forecastEffect.value)) {
+    return L('情景模拟事后记录已通过门禁（模拟记录：非证据，未进入任何概率）',
+      'Scenario simulation after-action record passed its gate (simulated record: not evidence, not an input to any probability)')
+  }
+  // Passing the record's fidelity gate does not establish probability isolation for
+  // historical or unknown policies.
+  return L('情景模拟事后记录已通过门禁（模拟记录：非证据）',
+    'Scenario simulation after-action record passed its gate (simulated record: not evidence)')
+})
+const simulationRecordSha = computed(() => {
+  const sha = (simulationRecordRef.value && simulationRecordRef.value.sha256) || ''
+  return sha.length > 13 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha
+})
+function openSimulationRecord() {
+  if (simulationRecordRef.value) emit('open-simulation-record', simulationRecordRef.value)
+}
+const forecastEffect = computed(() => {
+  const fromReport = meta.value && meta.value.forecast_effect
+  if (typeof fromReport === 'string' && fromReport.trim()) return fromReport.trim().toLowerCase()
+  // Policy is source metadata: keep it available while translated dashboard fields
+  // are absent, without falling back to source-language dashboard prose.
+  const policyForecast = forecastByLang.value[sourceLang.value || ''] || forecastByLang.value[''] || fc.value
+  const bridge = policyForecast && policyForecast.simulation_bridge
+  const fromBridge = bridge && typeof bridge === 'object' && !Array.isArray(bridge) ? bridge.forecast_effect : ''
+  if (typeof fromBridge === 'string' && fromBridge.trim()) return fromBridge.trim().toLowerCase()
+  const fromForecast = policyForecast && policyForecast.forecast_effect
+  return typeof fromForecast === 'string' ? fromForecast.trim().toLowerCase() : ''
+})
+
 // 0..1 概率 → 百分比字符串（保留 1 位小数，去掉尾零由 Math.round 保证）。
 function pct(v) {
   const n = Number(v)
@@ -1359,7 +1466,7 @@ const writingSectionLabel = computed(() => {
 function renderPartial(mdText) {
   try {
     // 生成期单章通常尚无 References 章节 → 引文自动降级为纯上标（markdown.js 预扫描决定）。
-    return renderMarkdown(mdText || '', renderOpts.value)
+    return renderReportMarkdown(mdText || '')
   } catch (e) {
     return ''
   }
@@ -1421,7 +1528,7 @@ function scrollToHeading(h) {
 }
 
 async function copyMarkdown() {
-  const text = currentMd.value || ''
+  const text = displayMd.value || ''
   if (!text) return
   try {
     if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
@@ -1796,6 +1903,63 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   color: var(--ink);
 }
+
+/* ---------- ADR 0003: provenance legend, record anchor card, shaded simulation bridge ---------- */
+.prov-legend {
+  max-width: 1200px;
+  margin: 0 auto 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.prov-item { display: inline-flex; align-items: center; gap: 6px; }
+.prov-swatch { width: 10px; height: 10px; border: 1px solid var(--border); background: var(--paper); }
+.prov-observed .prov-swatch { border-color: var(--ink); }
+.prov-forecast .prov-swatch { background: var(--ink); border-color: var(--ink); }
+.prov-simulated .prov-swatch { background: #FFF1EA; border-color: var(--orange); }
+.sim-record-anchor {
+  max-width: 1200px;
+  margin: 0 auto 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--orange);
+  background: #FFF1EA;
+  font-size: 12.5px;
+}
+.sra-sha { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sra-btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.sra-btn:hover { opacity: 0.85; }
+.md-body :deep(.sim-bridge) {
+  margin: 1.6em 0;
+  padding: 14px 18px 6px;
+  border: 1px solid var(--orange);
+  border-left-width: 4px;
+  background: #FFF7F2;
+}
+.md-body :deep(.sim-bridge-eyebrow) {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 8px;
+}
+.md-body :deep(.sim-bridge-mark) { margin-right: 6px; }
 
 /* ---------- Markdown typography ---------- */
 .md-body :deep(.md-h),

@@ -18,9 +18,15 @@ DeepAgentForecast is a forecasting engine that runs on your own machine. You typ
 
 The report is only served after it passes a strict citation and consistency audit. One dashboard shows every stage while it runs.
 
+### Research-guided environment setup
+
+During **Environment setup · personas**, the exact admitted research generation is compiled into a sealed `research-preparation/v1` bundle. Observations keep their native units, periods, status, source identity and historical context. Targets, projections, private claims and modeling assumptions retain their distinct roles. Actor personas and decisions receive only their permitted context; the shared environment and consequence arbiter receive public evidence. Native `world-v1` modeling can use the broader modeler view while validating what each actor may observe. Invalid generation bindings or corrupt declared datasets stop preparation before graph or model work.
+
+Fresh default-world models enforce affordable actions and explicit agreement terms; accepted round transitions include provider-free replay records. Adaptive sibling decisions are an **explicit experiment** with saved attempt, actor and round limits. The standard shared path remains the default. New pipeline admissions also pin a source-conditioned post-gather assessment and evidence-based binary quality policy; old saved runs retain their recorded methodology. Simulation records generate a separate bounded queue of hypothetical research questions, never new evidence. Prospective evaluation retains failed and unresolved cases and rejects already-known settlements. See the [contracts and operating guide](docs/handoff/research-grounded-prepare/architecture.md) and [verification status](docs/handoff/research-grounded-prepare/handoff.md). These checks establish implementation behavior; forecast accuracy requires prospective outcomes.
+
 ### Two world engines
 
-**Default engine (`oasis-legacy`) with the reflexive world model.** Every run uses the OASIS social simulation unless it pins another engine. With `SIM_WORLD_MODEL=true` (the default, calendar mode) it keeps an explicit world state per period: each actor makes one structured move from a menu grounded in its role and the current world, an offer binds nobody until the other side accepts it, one world update per round moves facts with recorded causes, and the dashboard's World State panel and per-period feed open any committed period ([Stage 5](#stage-5--simulation), [design](docs/handoff/reflexive-world-state/design.md)). It is live-validated on real runs.
+**Default engine (`oasis-legacy`) with the reflexive world model.** Every run uses the OASIS social simulation unless it pins another engine. With `SIM_WORLD_MODEL=true` (the default, calendar mode) it keeps an explicit world state per period: each actor makes one structured move from a menu grounded in its role and the current world, an offer binds nobody until the other side accepts it, one world update per round moves facts with recorded causes, and the dashboard's World State panel and per-period feed open any committed period ([Stage 5](#stage-5--simulation), [design](docs/handoff/reflexive-world-state/design.md)). Earlier versions were exercised on real runs; the research-preparation update has the offline verification described above.
 
 **Opt-in engine (`world-v1`).** `simulation_engine: "world-v1"` adds a concrete world that evolves after each round: actors propose feasible actions, counterparties independently consent, and declared mechanisms update resources, projects, rules, coalitions and delayed obligations. Actors receive the resulting permitted state and their own action outcomes in the next round. Historical runs and the default engine remain `oasis-legacy` until the separate model-behavior release gate is accepted.
 
@@ -437,7 +443,7 @@ stateDiagram-v2
 | `handoff/prediction_markets.json` · `market_price_history.json` | Stage 1 | Report (market pack, anchoring, price-history charts) |
 | `handoff/ontology.json` | Stage 2 | Graph |
 | Graph `mirofish_<id>` · `handoff/graph_priors.json` | Stage 3 | Prepare (entity matching, principal ordering) · Report (retrieval tools) |
-| `simulations/<sim_id>/…` | Stages 4–5 | Report (diagnostic signal pack, simulation tools, world-state chart) |
+| `simulations/<sim_id>/…` | Stages 4–5 | Stage 5 finalize compiles `simulation_record.json/.md` and its gate audit; Report reads the gate-passed record only to render the fenced "Scenario simulation" bridge section (ADR 0003) |
 
 ### Code map
 
@@ -1033,7 +1039,7 @@ sequenceDiagram
   - Completion requires an end marker on every platform and a valid `run_summary.json`, which holds organic vs. seeded action counts, per-platform health and calendar coverage. A zero exit code alone is not trusted.
   - A checkpoint is written after every round. Resuming a simulation mid-run is opt-in (`SIM_RESUME=true`), and the rebuilt agents do not keep their conversation memory.
   - Afterwards, the child process stays alive for up to 60 idle minutes to answer interview requests over a file-based IPC mailbox.
-- **Effect on the forecast.** By default (`SIMULATION_FORECAST_EFFECT=diagnostic_only`), the simulation feeds the report's analysis as clearly labelled scenario analysis, and **never** feeds its probabilities. A "hollow" simulation, where agents exist but produce no organic activity, marks pipeline health as *degraded*.
+- **Effect on the forecast.** By default (`SIMULATION_FORECAST_EFFECT=diagnostic_only`), simulation output is a `simulated` record class ([ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md)): Stage 5 writes a **Simulation After-Action Record** (`simulation_record.json`, `.md`, `.zh.md`, one section per committed period plus an overall section, gated by a deterministic fidelity audit) that the dashboard shows as the Simulation tab's Record view, and the report receives it only as **one fenced, deterministically rendered section** ("Scenario simulation: what the exercise explored"). No simulation byte enters any section, critique or probability prompt, and the report **never** uses it as evidence or as a probability input. Under `no_update` the record is still written but the report carries no bridge. A "hollow" simulation, where agents exist but produce no organic activity, yields a health stub instead of a narrative and marks pipeline health as *degraded*.
 
 Output, in `backend/uploads/simulations/<sim_id>/`:
 - `state.json`, the cast manifest and the `actor_context/` packs;
@@ -1080,7 +1086,7 @@ flowchart LR
 
 1. **Admission and context.**
    - A preflight ping checks that the LLM answers, and a `report_<12 hex>` ID is created.
-   - It builds a **signal pack**: deterministic aggregates of the simulation, labelled as internal scenario analysis.
+   - It reads the gate-passed **Simulation After-Action Record** (or, when none was published, the trajectory and world-state artifacts directly) only to render the fenced bridge section after the publish stabilizer; no simulation signal pack enters the writing prompts under `diagnostic_only` (`REPORT_SIGNAL_PACK=false` by default).
    - It builds a **market pack**: the research-time Polymarket snapshot, re-quoted live, with price deltas.
 2. **Scenario spine, before any prose.**
    - One LLM draw proposes the scenarios (`REPORT_SPINE_SELFCONSISTENCY_K=1`).
@@ -1246,7 +1252,7 @@ flowchart TB
 | Context | `actor-context/v1` | Keeps public, documented, actor-private, contested, inferred and unknown information apart. Only public, source-bound evidence enters the shared world. |
 | Role | `actor-role/v2` | The single source of each agent's behaviour, compiled without an LLM. |
 | Runtime | `simulation-config-manifest/v1` | Config, profiles, roles, context and cast are sealed by their exact bytes. Both the parent process and the simulation child re-validate them before the first action. Reddit's final system messages are attested. |
-| Report | `diagnostic_only` | Simulation output is cited as labelled scenario analysis. It is never treated as evidence or used as a probability input. |
+| Report | `diagnostic_only` + fenced bridge | Simulation output appears only inside the one fenced "Scenario simulation" section, rendered deterministically from the gated record; outside the fence any simulation vocabulary is a hard lint issue, and it is never treated as evidence or used as a probability input. |
 
 All of these downstream checks are deterministic and add no LLM calls. Older runs without the sealed contract keep a documented legacy path. The full specification is in the [actor-intelligence architecture](docs/architecture/ACTOR_INTELLIGENCE_ARCHITECTURE.md).
 
@@ -1289,7 +1295,7 @@ With `REPORT_PUBLISH_GATE=true` (the default), *epistemic* problems also block p
 
 ### 4. Evidence decides; simulation and markets inform
 
-- **Simulation.** Under the default `SIMULATION_FORECAST_EFFECT=diagnostic_only`, simulation and world-state outputs appear only as labelled analysis. They never reach the scenario spine or the binary probabilities.
+- **Simulation.** Under the default `SIMULATION_FORECAST_EFFECT=diagnostic_only`, simulation and world-state outputs reach the report only through the fenced bridge section rendered from the gated after-action record. They never reach the scenario spine, the binary probabilities, or any writing prompt; a byte-identical prompt test (two runs differing only in simulation artifacts) pins this on the default engine.
 - **Markets.** A Polymarket price is attached to a forecast only when an exact or near resolution-equivalent market exists. Otherwise the forecast is left unanchored, rather than being compared with a market that asks a different question.
 - **Untrusted text.** Web content and research prose are sanitized and wrapped in explicit untrusted-data delimiters before every downstream model call. The test suite checks these boundaries (`backend/tests/test_prompt_injection_boundaries.py`).
 - **Reproducibility.** `run.json` records the git SHA, the DeerFlow ref and the model resolved for each stage. Safety-relevant policies are pinned per run when it is admitted.

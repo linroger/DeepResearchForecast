@@ -19,8 +19,8 @@ holds:
 * ``settings`` — arbiter switch, change-ratio clamp, barrier timeout.
 
 Canonical actor-intelligence/v1 dossiers: plans, red lines and goals come only from
-the validated context pack's producer-admitted claim rows (never from the flat
-compatibility fields); analyst inference is skipped.  Legacy dossiers use their flat
+the shared selector's public-admitted claim rows (never from private owner packs or
+flat compatibility fields); analyst inference and likely/cancelled plans are skipped. Legacy dossiers use their flat
 fields.  Research engine v3 dossiers (``deerflow_bridge/linear_research.py`` ACTOR
 EXTRACTION TASK) carry no plan or red-line keys at all, only ``goals`` /
 ``constraints`` / ``stated_vs_revealed`` / ``memory``; for them the seed derives
@@ -28,12 +28,15 @@ documented plans from the actor's own stated commitments and action-phrased goal
 and red lines from constraints or statements phrased as non-negotiables — never from
 hedged wording, the "revealed" half of ``stated_vs_revealed``, incentives,
 vulnerabilities or worldview (analyst reading, not world fact).  Pure and never
-raises (a failure degrades to a smaller block).
+raises for legacy inputs (a failure degrades to a smaller block). Explicit current
+preparation and canonical pack binding failures raise before compatibility fallback.
 """
 
 from __future__ import annotations
 
 import calendar
+import copy
+import json
 import math
 import re
 from datetime import date
@@ -135,48 +138,41 @@ def _is_canonical(actor: Dict[str, Any]) -> bool:
     return isinstance(intel, dict) and str(intel.get("schema_version") or "") == "actor-intelligence/v1"
 
 
-def _pack_claims(pack: Optional[Dict[str, Any]], dimensions: Sequence[str], limit: int) -> List[str]:
-    """Documented (non-inference) claim texts of the actor's own validated context pack."""
-    if not isinstance(pack, dict):
-        return []
-    intel = pack.get("actor_intelligence")
-    dims = intel.get("dimensions") if isinstance(intel, dict) else None
-    if not isinstance(dims, dict):
-        return []
-    out: List[str] = []
-    for dim in dimensions:
-        rows = dims.get(dim)
-        if not isinstance(rows, list):
-            continue
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            if str(row.get("evidence_type") or "").casefold().replace("-", "_") == "analyst_inference":
-                continue
-            qualifiers = row.get("qualifiers")
-            qualifiers = qualifiers if isinstance(qualifiers, dict) else {}
-            if row.get("actor_knows") is False or qualifiers.get("actor_knows") is False:
-                continue
-            claim = _clean(row.get("claim"), 200)
-            if claim:
-                out.append(claim)
-    return _dedupe(out, limit)
+def _legacy_claim_text(item: Any, max_chars: int) -> str:
+    """Keep the complete conditional legacy claim or omit it before runtime truncation."""
+    if isinstance(item, dict):
+        text = item.get("claim") or item.get("text") or item.get("action") or item.get("description")
+        if not isinstance(text, str):
+            return ""
+        metadata = {k: item[k] for k in ("conditions", "dependencies", "qualifiers", "status", "source_refs", "source") if item.get(k)}
+        if metadata:
+            text += " | " + json.dumps(metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    elif isinstance(item, str):
+        text = item
+    else:
+        return ""
+    return _clean(text, max_chars) if len(text) <= max_chars else ""
 
 
-def _legacy_list(actor: Dict[str, Any], keys: Sequence[str], limit: int) -> List[str]:
+def _legacy_list(actor: Dict[str, Any], keys: Sequence[str], limit: int, *, preserve_metadata: bool = False,
+                 max_chars: int = 200) -> List[str]:
     out: List[str] = []
     for key in keys:
         value = actor.get(key)
         if isinstance(value, str):
             value = [value]
         if isinstance(value, dict):
-            value = list(value.values())
+            value = [value] if preserve_metadata and any(k in value for k in ("claim", "text", "action", "description")) else list(value.values())
         if not isinstance(value, list):
             continue
         for item in value:
-            if isinstance(item, dict):
+            if preserve_metadata:
+                text = _legacy_claim_text(item, max_chars)
+            elif isinstance(item, dict):
                 item = item.get("claim") or item.get("text") or item.get("action") or item.get("description")
-            text = _clean(item, 200)
+                text = _clean(item, max_chars)
+            else:
+                text = _clean(item, max_chars)
             if text:
                 out.append(text)
     intel = actor.get("intelligence")
@@ -185,9 +181,13 @@ def _legacy_list(actor: Dict[str, Any], keys: Sequence[str], limit: int) -> List
             value = intel.get(key)
             if isinstance(value, list):
                 for item in value:
-                    if isinstance(item, dict):
+                    if preserve_metadata:
+                        text = _legacy_claim_text(item, max_chars)
+                    elif isinstance(item, dict):
                         item = item.get("claim") or item.get("text")
-                    text = _clean(item, 200)
+                        text = _clean(item, max_chars)
+                    else:
+                        text = _clean(item, max_chars)
                     if text:
                         out.append(text)
     return _dedupe(out, limit)
@@ -1054,6 +1054,39 @@ def shocks_from_research(actors: Optional[Dict[str, Any]], variables: Sequence[D
     return shocks, gaps
 
 
+_LEGACY_CONTEXT = {"source": "unsealed_research", "status": "unverified", "evidence_type": "model_assumption"}
+
+
+def _legacy_shared_projection(value: Any, cutoff: str) -> Any:
+    """Copy the unsealed compatibility view while honoring explicit access denials.
+
+    Missing visibility is the historical legacy convention, not proof of public
+    sourcing. The caller labels this entire view as unverified model assumptions.
+    Private owner rows stay in their original dossier; they never enter this
+    shared seed. Filter before text flattening can erase their access/status tags.
+    """
+    from .research_preparation import _public, _check_availability, _token
+    if isinstance(value, dict):
+        if not _public(value, legacy=True):
+            return None
+        qualifiers = value.get("qualifiers") if isinstance(value.get("qualifiers"), dict) else {}
+        if any(_token(row.get("status")) in {"cancelled", "canceled", "contested", "retracted", "denied", "superseded"}
+               for row in (value, qualifiers)):
+            return None
+        try:
+            _check_availability(value, cutoff)
+        except (ValueError, TypeError, OverflowError):
+            return None
+        projected = {key: admitted for key, item in value.items()
+                     if (admitted := _legacy_shared_projection(item, cutoff)) is not None}
+        if any(value.get(key) and projected.get(key) != value[key] for key in ("conditions", "dependencies", "qualifiers")):
+            return None  # a hidden condition cannot become an unconditional action
+        return projected
+    if isinstance(value, list):
+        return [projected for item in value if (projected := _legacy_shared_projection(item, cutoff)) is not None]
+    return copy.deepcopy(value)
+
+
 def build_world_model_seed(
     actors: Optional[Dict[str, Any]],
     agent_configs: Sequence[Any],
@@ -1061,6 +1094,7 @@ def build_world_model_seed(
     question: str = "",
     actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
     official_data: Optional[Dict[str, Any]] = None,
+    preparation_context: Optional[Dict[str, Any]] = None,
     temporal_timeline: Any = None,
     audience_entity_type: str = "Audience",
     ontology_classes: Optional[Dict[str, str]] = None,
@@ -1070,11 +1104,33 @@ def build_world_model_seed(
     barrier_timeout_s: float = 1800.0,
     pressure_weight: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """The sealed ``world_model`` block.  Degrades to a smaller block, never raises.
+    """The sealed ``world_model`` block; legacy inputs degrade to a smaller block.
+
+    A supplied research-preparation/v1 context is authoritative and validated
+    before any compatibility fallback. Its public observations alone seed state;
+    full anchors/history live in ``research_evidence`` and public forecasts,
+    targets and estimates remain ``quantitative_guidance``. Invalid preparation
+    raises. No current dossier can silently replace a bound generation.
+
+    Preparation does not manufacture an actor-intelligence seal. Unsealed v3
+    dossiers keep their filtered legacy qualitative baseline, labelled by
+    ``qualitative_context`` (unsealed_research / unverified / model_assumption)
+    on the seed, actors and relationships. They never become research_claims.
 
     ``pressure_weight`` (backtest ablation) pins ``settings.pressure_weight``, the
     world channel's weight the runner reads before SIM_WORLD_PRESSURE_WEIGHT;
     ``None`` leaves the block as before."""
+    from . import actor_context as ac
+    if preparation_context is not None:
+        from .research_preparation import validate_preparation_context
+        expected = {"actors_sha256": ac.canonical_json_sha256(actors)}
+        if question:
+            expected["question_sha256"] = ac.text_sha256(question)
+        if official_data is not None:
+            expected["official_data_sha256"] = ac.canonical_json_sha256(official_data)
+        if actor_context_packs is not None:
+            expected["actor_context_packs_sha256"] = ac.canonical_json_sha256(actor_context_packs)
+        validate_preparation_context(preparation_context, expected_sources=expected)
     block: Dict[str, Any] = {
         "schema_version": WORLD_MODEL_SEED_VERSION,
         "question": _clean(question, 400),
@@ -1094,6 +1150,44 @@ def build_world_model_seed(
     if pressure_weight is not None:
         block["settings"]["pressure_weight"] = max(0.0, float(pressure_weight))
     actors_dict = actors if isinstance(actors, dict) else {}
+    packs = actor_context_packs if isinstance(actor_context_packs, dict) else {}
+    canonical_dossier = bool(ac._actor_intelligence_contract(actors_dict))
+    legacy_prepared = preparation_context is not None and not canonical_dossier
+    public_claims = (preparation_context["qualitative"]["public"] if preparation_context is not None else
+                     ac.select_research_claims(actors_dict, packs, audience="public") if canonical_dossier else [])
+    shared_dossier = actors_dict
+    if legacy_prepared:
+        shared_dossier = _legacy_shared_projection(actors_dict, preparation_context["scope"]["as_of"]) or {}
+        block["qualitative_context"] = dict(_LEGACY_CONTEXT)
+        block["settings"]["qualitative_context"] = dict(_LEGACY_CONTEXT)
+    if preparation_context is not None or canonical_dossier:
+        from .research_preparation import _public, _check_availability
+        # Shared scenario/risk/relationship fields must obey the same admission
+        # boundary as quantities, rather than re-importing private dossier text.
+        public_rows = public_claims
+        shared_dossier = {**shared_dossier, "relationships": (
+            shared_dossier.get("relationships", []) if legacy_prepared else [
+                copy.deepcopy(r) for r in public_rows if r.get("dimension") == "relationships"
+                and ac.is_hard_public_relationship(r)])}
+        raw_fi = shared_dossier.get("forecast_inputs")
+        cutoff = (preparation_context["scope"]["as_of"] if preparation_context is not None
+                  else actors_dict.get("as_of_date") or "")
+
+        def public_input(row, *, legacy=False):
+            if (not isinstance(row, dict) or not _public(row, legacy=legacy)
+                    or not legacy and not (row.get("source_refs") or row.get("source_ref") or row.get("source"))):
+                return False
+            try:
+                _check_availability(row, cutoff)
+            except (ValueError, TypeError, OverflowError):
+                return False
+            return True
+
+        shared_dossier["forecast_inputs"] = {
+            key: [copy.deepcopy(r) for r in values if public_input(r, legacy=legacy_prepared and key in {"scenarios", "indicators"})]
+            for key, values in (raw_fi.items() if isinstance(raw_fi, dict) else []) if isinstance(values, list)}
+        for risk_key in ("risks", "wildcards", "wild_cards", "tail_risks"):
+            shared_dossier[risk_key] = []
     try:
         block["as_of_date"] = _clean(actors_dict.get("as_of_date"), 40) or None
         if temporal_timeline is not None:
@@ -1101,7 +1195,7 @@ def build_world_model_seed(
                                          or (temporal_timeline.get("as_of_date") if isinstance(temporal_timeline, dict) else None), 40) or block["as_of_date"]
             block["horizon_date"] = _clean(getattr(temporal_timeline, "horizon_date", None)
                                            or (temporal_timeline.get("horizon_date") if isinstance(temporal_timeline, dict) else None), 40) or None
-        fi = extract_forecast_inputs(actors_dict)
+        fi = extract_forecast_inputs(shared_dossier)
         block["scenarios"] = _dedupe(
             (str(s.get("name") or s.get("scenario") or "") for s in fi.get("scenarios") or []), 8)
         block["scenario_indicators"] = [
@@ -1112,22 +1206,60 @@ def build_world_model_seed(
         ]
     except Exception:  # noqa: BLE001
         pass
-    try:
-        block["state_variables"] = state_variables_from_research(actors_dict, official_data,
-                                                                 max_variables=max_variables)
-    except Exception:  # noqa: BLE001
-        block["state_variables"] = []
+    if preparation_context is not None:
+        # The research availability instant is not the simulation calendar date.
+        # Preserve the admitted world clock and pin the distinct information cutoff.
+        block["settings"]["research_information_cutoff"] = preparation_context["scope"]["as_of"]
+        digest = preparation_context["content_sha256"]
+        block["preparation_context_sha256"] = digest
+        block["quantitative_guidance"] = copy.deepcopy(preparation_context["quantitative"]["guidance"])
+        block["state_variables"] = [
+            {"id": r["id"], "name": r["metric"], "value": r["value"], "unit": r["unit"],
+             "kind": "numeric", "as_of": r["period_end"],
+             "provenance": "official" if r["source_kind"] == "official_observation" else "research",
+             "rationale": r["source"], "research_evidence": {**copy.deepcopy(r), "bundle_sha256": digest}}
+            for r in preparation_context["quantitative"]["observations"][:max(0, max_variables)]]
+    elif canonical_dossier:
+        # Even compatibility callers cannot turn private canonical flat fields
+        # into shared state. Only selected public facts and supplied official
+        # carriers pass the same deterministic measurement admission.
+        from .research_preparation import _fact, _group, _official_rows, _OBSERVED
+        cutoff = resolution_instant(block["as_of_date"]).isoformat() if block["as_of_date"] else ""
+        public_numbers, ignored_gaps = [], []
+        supplied_series = {r.get("series") for r in (official_data or {}).get("series", []) if isinstance(r, dict)}
+        for claim in public_claims:
+            if (claim.get("dimension") == "quantitative_facts" and claim.get("series") not in supplied_series
+                    and claim.get("source_origin") != "official_data"):
+                try:
+                    public_numbers.append(_fact(claim, cutoff))
+                except (ValueError, TypeError, OverflowError):
+                    continue
+        if official_data:
+            public_numbers.extend(_official_rows(official_data, cutoff, ignored_gaps))
+        block["state_variables"] = [
+            {"id": r["id"], "name": r["metric"], "value": r["value"], "unit": r["unit"],
+             "kind": "numeric", "as_of": r["period_end"], "provenance": "research",
+             "rationale": r["source"], "research_evidence": copy.deepcopy(r)}
+            for r in _group([r for r in public_numbers if r["status"] in _OBSERVED], ignored_gaps)[:max(0, max_variables)]]
+    else:
+        try:
+            block["state_variables"] = state_variables_from_research(actors_dict, official_data,
+                                                                     max_variables=max_variables)
+        except Exception:  # noqa: BLE001
+            block["state_variables"] = []
 
     # actors ------------------------------------------------------------------------------
-    packs = actor_context_packs if isinstance(actor_context_packs, dict) else {}
-    pack_by_name: Dict[str, Dict[str, Any]] = {}
-    for pack in packs.values():
-        if isinstance(pack, dict) and pack.get("actor_name"):
-            pack_by_name[normalize_name(str(pack["actor_name"]))] = pack
     name_to_agent: Dict[str, int] = {}
     rows: List[Dict[str, Any]] = []
     for cfg in agent_configs or []:
         try:
+            if legacy_prepared:
+                raw_cfg = cfg if isinstance(cfg, dict) else vars(cfg)
+                cfg = _legacy_shared_projection(raw_cfg, preparation_context["scope"]["as_of"]) or {
+                    key: _cfg_get(cfg, key) for key in ("agent_id", "entity_name", "entity_type")}
+                original_actor = match_actor(str(raw_cfg.get("entity_name") or ""), actors_dict)
+                if original_actor and _legacy_shared_projection(original_actor, preparation_context["scope"]["as_of"]) is None:
+                    cfg = {key: raw_cfg.get(key) for key in ("agent_id", "entity_name", "entity_type")}
             aid = _cfg_get(cfg, "agent_id")
             if aid is None:
                 continue
@@ -1136,32 +1268,72 @@ def build_world_model_seed(
             if entity_type == audience_entity_type:
                 continue
             name = _clean(_cfg_get(cfg, "entity_name", "") or f"Agent_{aid}", 160)
-            actor = match_actor(name, actors_dict) if actors_dict else None
+            actor_source = shared_dossier if legacy_prepared else actors_dict
+            actor = match_actor(name, actor_source) if actor_source else None
             actor = actor if isinstance(actor, dict) else None
             ontology_class = (ontology_classes or {}).get(entity_type, "") if ontology_classes else ""
             agency = resolve_agency_class(actor, entity_type, ontology_class)
             canonical = bool(actor and _is_canonical(actor))
-            pack = pack_by_name.get(normalize_name(name)) if canonical else None
-            if canonical:
-                plans = _pack_claims(pack, _PLAN_DIMENSIONS, MAX_PLANS)
-                red_lines = _pack_claims(pack, ("red_lines",), MAX_RED_LINES)
-                goals = _pack_claims(pack, ("motivations", "values_worldview"), MAX_GOALS)
+            own_claims = [r for r in public_claims if actor and r.get("actor_id") == ac.actor_id_for(actor)]
+            if canonical or canonical_dossier:
+                def admitted_texts(dimensions, limit, *, plans_only=False):
+                    selected = []
+                    for claim in own_claims:
+                        if claim.get("dimension") not in dimensions:
+                            continue
+                        if str(claim.get("evidence_type") or "").lower() not in {"verified_fact", "actor_stated_claim"}:
+                            continue
+                        qualifiers = claim.get("qualifiers") if isinstance(claim.get("qualifiers"), dict) else {}
+                        statuses = {str(obj.get("status") or "").lower() for obj in (claim, qualifiers)}
+                        if statuses & {"cancelled", "canceled", "contested", "unknown", "superseded", "denied", "retracted"}:
+                            continue
+                        text = str(claim.get("claim") or "")
+                        if plans_only and (claim.get("dimension") == "likely_actions" or _v3_is_hedged(text)
+                                           or re.search(r"\b(cancelled|canceled|contested|retracted)\b", text, re.I)):
+                            continue
+                        # Keep the complete condition attached to the action. A
+                        # plan string must not discard a separately stored trigger.
+                        conditions = {key: claim[key] for key in ("conditions", "dependencies") if claim.get(key)}
+                        if qualifiers:
+                            conditions["qualifiers"] = qualifiers
+                        if conditions:
+                            text += " | " + json.dumps(conditions, ensure_ascii=False, sort_keys=True)
+                        if text:
+                            selected.append(_clean(text, len(text) + 1))
+                    return _dedupe(selected, limit)
+
+                plans = admitted_texts(_PLAN_DIMENSIONS, MAX_PLANS, plans_only=True)
+                red_lines = admitted_texts(("red_lines",), MAX_RED_LINES)
+                goals = admitted_texts(("motivations", "values_worldview", "goals"), MAX_GOALS)
             else:
-                plans = _legacy_list(actor or {}, _LEGACY_PLAN_KEYS, MAX_PLANS)
-                red_lines = _legacy_list(actor or {}, _LEGACY_RED_LINE_KEYS, MAX_RED_LINES)
-                goals = _legacy_list(actor or {}, ("goals", "objectives", "motivations"), MAX_GOALS)
+                plan_keys = tuple(k for k in _LEGACY_PLAN_KEYS if not legacy_prepared or k != "likely_actions")
+                plans = _legacy_list(actor or {}, plan_keys, MAX_PLANS, preserve_metadata=legacy_prepared)
+                red_lines = _legacy_list(actor or {}, _LEGACY_RED_LINE_KEYS, MAX_RED_LINES, preserve_metadata=legacy_prepared,
+                                         max_chars=160 if legacy_prepared else 200)
+                goals = _legacy_list(actor or {}, ("goals", "objectives", "motivations"), MAX_GOALS,
+                                     preserve_metadata=legacy_prepared, max_chars=160 if legacy_prepared else 200)
                 # research engine v3 rows: no plan / red-line keys → derive from the documented wording
+                derived_actor = actor
+                if actor and legacy_prepared:
+                    derived_actor = {**actor, "goals": _legacy_list(actor, ("goals",), 100, preserve_metadata=True),
+                                     "constraints": _legacy_list(actor, ("constraints",), 100, preserve_metadata=True, max_chars=160)}
+                    for key in ("memory", "stated_vs_revealed", "stance"):
+                        if not isinstance(derived_actor.get(key), str):
+                            derived_actor.pop(key, None)
                 if actor and not plans:
-                    plans = derive_v3_plans(actor, MAX_PLANS)
+                    plans = derive_v3_plans(derived_actor, MAX_PLANS)
                 if actor and not red_lines:
-                    red_lines = derive_v3_red_lines(actor, MAX_RED_LINES)
+                    red_lines = derive_v3_red_lines(derived_actor, MAX_RED_LINES)
+                if legacy_prepared:
+                    plans = [text for text in plans if not _v3_is_hedged(text)
+                             and not re.search(r"\b(cancelled|canceled|contested|retracted)\b", text, re.I)]
             aliases = []
             if actor:
                 raw_aliases = actor.get("aliases")
                 if isinstance(raw_aliases, list):
                     aliases = _dedupe((_clean(a, 80) for a in raw_aliases), 6)
             incentives = {}
-            for key in ("gains_if", "loses_if"):
+            for key in (() if canonical or canonical_dossier else ("gains_if", "loses_if")):
                 value = _clean(_cfg_get(cfg, key, ""), 220)
                 if value:
                     incentives[key] = value
@@ -1174,7 +1346,7 @@ def build_world_model_seed(
                 "capacity_per_round": default_capacity(agency),
                 "outcome_power": _declared_outcome_power(actor, cfg if isinstance(cfg, dict) else {
                     "outcome_power": _cfg_get(cfg, "outcome_power")}),
-                "posture": _clean(_cfg_get(cfg, "stance", ""), 60),
+                "posture": "" if canonical or canonical_dossier else _clean(_cfg_get(cfg, "stance", ""), 60),
                 "documented_plans": plans,
                 "red_lines": red_lines,
                 "goals": goals,
@@ -1183,6 +1355,10 @@ def build_world_model_seed(
                 "allies": [],
                 "rivals": [],
             }
+            if canonical or canonical_dossier:
+                row["research_claims"] = copy.deepcopy(own_claims)
+            elif legacy_prepared:
+                row["qualitative_context"] = dict(_LEGACY_CONTEXT)
             rows.append(row)
             name_to_agent[normalize_name(name)] = aid
             for alias in aliases:
@@ -1195,7 +1371,7 @@ def build_world_model_seed(
     rels: List[Dict[str, Any]] = []
     by_id = {r["agent_id"]: r for r in rows}
     try:
-        for rel in extract_relationship_rows(actors_dict):
+        for rel in extract_relationship_rows(shared_dossier):
             s = name_to_agent.get(normalize_name(str(rel.get("source") or "")))
             t = name_to_agent.get(normalize_name(str(rel.get("target") or "")))
             if s is None or t is None or s == t:
@@ -1208,6 +1384,7 @@ def build_world_model_seed(
                 "kind": str(rel.get("type") or "RELATES_TO").upper(),
                 "valence": valence, "polarity": round(polarity, 4),
                 "basis": _clean(rel.get("basis") or rel.get("evidence"), 160),
+                **({"qualitative_context": dict(_LEGACY_CONTEXT)} if legacy_prepared else {}),
             })
             if valence == "allied":
                 by_id[s]["allies"].append(by_id[t]["name"])
@@ -1225,13 +1402,23 @@ def build_world_model_seed(
     shock_gaps: List[Dict[str, str]] = []
     try:
         block["shocks"], shock_gaps = shocks_from_research(
-            actors_dict, block["state_variables"], {normalize_name(r["name"]): r["name"] for r in rows},
+            shared_dossier, block["state_variables"], {normalize_name(r["name"]): r["name"] for r in rows},
             as_of=block["as_of_date"], horizon=block["horizon_date"])
     except Exception:  # noqa: BLE001
         block["shocks"] = []
     # MODELLING GAPS (ported from the world-v1 compiler's stance): what the research could not
     # ground is reported, never invented — the run, the panel and the report show the list
-    block["gaps"] = (shock_gaps + seed_gaps(block))[:MAX_SEED_GAPS]
+    preparation_gaps = []
+    if preparation_context is not None:
+        from .research_preparation import _gap_projection
+        preparation_gaps = [_gap_projection(g, "public") for g in preparation_context["gaps"] if g.get("audience") == "public"]
+        omitted = len(preparation_context["quantitative"]["observations"]) - len(block["state_variables"])
+        if omitted:
+            preparation_gaps.append({"kind": "preparation_variables_omitted", "count": omitted})
+    if legacy_prepared:
+        preparation_gaps.insert(0, {"kind": "legacy_context_unverified", "subject": "qualitative context",
+                                   "note": "Legacy actor and relationship context is unverified modeling assumptions, not canonical sourced evidence."})
+    block["gaps"] = (preparation_gaps + shock_gaps + seed_gaps(block))[:MAX_SEED_GAPS]
     return block
 
 

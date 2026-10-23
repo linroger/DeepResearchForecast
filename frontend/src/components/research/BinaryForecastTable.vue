@@ -113,6 +113,8 @@
           </tr>
         </tbody>
       </table>
+      <!-- ADR 0003：概率只来自研究证据；情景模拟（模拟记录类）从不进入任何概率。策略来自报告负载的 forecast_effect。 -->
+      <p class="bft-foot">{{ probabilityFootnote }}</p>
     </div>
   </section>
 </template>
@@ -126,10 +128,12 @@ import { L as appL } from '../../i18n'
 // 组件只负责双语标签与 tooltip 的拼装。
 // officialSeries：报告官方数据的 series → {label, sourceId, sourceUrl}（数据锚点的读者标签与 [S#]）；
 // lang：官方数据展示语种（大额数值的量级说明，如「≈45万亿美元」）。
+// forecastEffect：报告负载的 forecast_effect（情景模拟对概率的策略；缺省时披露策略未记录）。
 const props = defineProps({
   forecast: { type: Object, default: null },
   officialSeries: { type: Object, default: null },
   lang: { type: String, default: '' },
+  forecastEffect: { type: String, default: '' },
 })
 
 function L(zh, en) { return props.lang === 'zh' ? zh : props.lang === 'en' ? (en ?? zh) : appL(zh, en) }
@@ -139,6 +143,28 @@ const rows = computed(() => binaryForecastRows(props.forecast, {
   lang: props.lang,
 }))
 const hasDataAnchors = computed(() => rows.value.some(row => row.dataAnchor))
+
+// ADR 0003 (design §3.6): the fixed footnote under the table names the policy under which the
+// scenario simulation ran. It mirrors sim_provenance.brief_sim_role: the research-only claim is
+// made only for a policy that was actually read and keeps the simulation out of probabilities;
+// an unread policy is reported as not recorded, never assumed.
+const RESEARCH_ONLY_POLICIES = ['diagnostic_only', 'no_update']
+const probabilityFootnote = computed(() => {
+  const policy = String(props.forecastEffect || '').trim().toLowerCase()
+  if (!policy) return L('本次运行未记录概率策略', 'The forecast policy is not recorded for this run')
+  if (policy === 'validated_update') {
+    // sim_provenance.brief_sim_role collapses this disabled policy to diagnostic_only.
+    return L('概率仅来自研究证据（策略：diagnostic_only；请求：validated_update）',
+      'Probabilities come from research evidence only (policy: diagnostic_only; requested: validated_update)')
+  }
+  if (RESEARCH_ONLY_POLICIES.includes(policy)) {
+    return L(`概率仅来自研究证据（策略：${policy}）`, `Probabilities come from research evidence only (policy: ${policy})`)
+  }
+  if (policy === 'legacy_prompt') {
+    return L('fixture 专用策略 legacy_prompt：模拟信号进入了二元概率抽取', 'Fixture-only policy legacy_prompt: simulation signals entered probability extraction')
+  }
+  return L(`概率策略：${policy}`, `Forecast policy: ${policy}`)
+})
 
 // 命题列：截断展示，原生 title 露出全文（附 anchor-and-adjust 理由，若有）。
 function statementTitle(row) {
@@ -245,6 +271,14 @@ function influenceTitle(row) {
   margin: 0 auto 28px;
   border: 1px solid var(--color-border, #E5E5E5);
   background: var(--color-soft, #FAFAFA);
+}
+
+/* ---------- ADR 0003 footnote: probabilities are research-only ---------- */
+.bft-foot {
+  margin: 8px 18px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs, 11px);
+  color: var(--color-muted, #666);
 }
 
 /* ---------- Collapsible header (monospace ◇ panel-label convention) ---------- */

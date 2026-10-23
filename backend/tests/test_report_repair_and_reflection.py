@@ -462,13 +462,33 @@ def test_repair_quote_grounding_removes_only_ungrounded():
         "# T\n\n"
         "> The GDP grew steadily according to the ministry report.\n\n"   # grounded → kept
         "> Aliens seized the harbor in Tokyo overnight without warning.\n\n"  # ungrounded → removed
-        "> A simulated agent predicted a collapse of the coalition soon.\n"   # sim-labeled → kept
+        "> A simulated agent predicted a collapse of the coalition soon.\n"   # sim-labeled → removed (ADR 0003 S3)
     )
     new_md, removed = a._repair_quote_grounding(md)
-    assert removed == 1
+    # ADR 0003 (S3): a simulation label no longer exempts a quotation outside the fenced
+    # bridge — simulated speech has no place in the body, so it is judged like any other
+    # quote (grounded in the research material or [S#]-cited, else gone).
+    assert removed == 2
     assert "ministry report" in new_md
-    assert "simulated agent" in new_md
+    assert "simulated agent" not in new_md
     assert "Aliens seized the harbor" not in new_md
+
+
+def test_repair_quote_grounding_deletes_sim_labelled_attribution_outside_the_bridge_only():
+    """S3: a blockquote whose attribution line carries a SIM_QUOTE_LABELS token is deleted
+    (with its dangling intro) when it sits outside the markers; inside the fenced bridge the
+    repair never touches a line."""
+    from app.services import sim_provenance as sp
+    a = _repair_agent(research_report="irrelevant grounding corpus")
+    quote = "> \"Tariffs will be answered in kind within the week.\""
+    outside = "情景模拟——「Actor B」：\n\n" + quote + "\n\nProse continues.\n"
+    new_md, removed = a._repair_quote_grounding(outside)
+    assert removed == 1
+    assert "Tariffs will be answered" not in new_md and "情景模拟——" not in new_md
+    assert "Prose continues." in new_md
+    fenced = "Prose.\n\n" + sp.BRIDGE_START + "\n" + "Actor B said:\n\n" + quote + "\n" + sp.BRIDGE_END + "\n"
+    new_md, removed = a._repair_quote_grounding(fenced)
+    assert removed == 0 and new_md == fenced
 
 
 def test_repair_quote_grounding_dequotes_cited_paraphrase():

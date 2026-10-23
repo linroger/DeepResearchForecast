@@ -37,6 +37,11 @@ from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .actor_role_prompt import (
     ROLE_CONTRACT_VERSION,
+    ROLE_ADMISSION_POLICY_VERSION,
+    LEGACY_PUBLIC_PREPARATION_VERSION,
+    LEGACY_PUBLIC_PREPARATION_MAX_CHARS,
+    legacy_public_preparation_block,
+    _preparation_role_context,
     build_actor_role_contract,
     compile_actor_role_prompt,
     resolve_actor_role_prompt_max_chars,
@@ -272,6 +277,9 @@ class OasisAgentProfile:
         return data
 
 
+_DEFAULT_PREPARATION = object()
+
+
 class OasisProfileGenerator:
     """
     OASIS Profile生成器
@@ -350,7 +358,8 @@ class OasisProfileGenerator:
         zep_api_key: Optional[str] = None,
         graph_id: Optional[str] = None,
         provider: Optional[str] = None,
-        persona_language: Optional[str] = None
+        persona_language: Optional[str] = None,
+        preparation_context: Optional[Dict[str, Any]] = None,
     ):
         # PREP-4(2): persona 语言口径。显式传入优先（'en'/'English' → 英文人设）；未传时，
         # 若显式设置了非中文活动画像（SIM_ACTIVITY_PROFILE=us_business/global_market），
@@ -360,6 +369,7 @@ class OasisProfileGenerator:
             if _env_profile in ("us_business", "global_market"):
                 persona_language = "en"
         self.persona_language = persona_language
+        self.preparation_context = preparation_context
 
         self.provider = (provider or Config.LLM_PROVIDER or "claude-cli").lower()
         self.api_key = api_key or Config.LLM_API_KEY
@@ -615,6 +625,8 @@ class OasisProfileGenerator:
         actors: Optional[Dict[str, Any]],
         context_pack: Optional[Dict[str, Any]],
         generation_path: str,
+        preparation_context: Any = _DEFAULT_PREPARATION,
+        actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> OasisAgentProfile:
         """Build an actor-intelligence/v1 profile without legacy behavior.
 
@@ -626,7 +638,20 @@ class OasisProfileGenerator:
         behavioral persona. Only the structural actor name/type and stable
         entity identifier remain outside that contract.
         """
-        role_contract = build_actor_role_contract(actor, actors, context_pack)
+        if preparation_context is _DEFAULT_PREPARATION:
+            preparation_context = getattr(self, "preparation_context", None)
+        if actor_context_packs is None:
+            actor_context_packs = getattr(self, "actor_context_packs", None)
+        bindings = getattr(self, "actor_context_bindings", {}) or {}
+        if actor_context_packs is None and set(bindings) == {actor_id_for(actor)}:
+            # A persisted one-actor selection is an explicit admitted cast,
+            # unlike silently treating one argument as the entire cast.
+            actor_context_packs = {actor_id_for(actor): context_pack}
+        if actor_context_packs is not None and set(actor_context_packs) != set(bindings):
+            raise ValueError("actor role context packs differ from the admitted manifest roster")
+        role_contract = build_actor_role_contract(
+            actor, actors, context_pack,
+            preparation_context=preparation_context, actor_context_packs=actor_context_packs)
         if not isinstance(role_contract, dict) or (
             role_contract.get("schema_version") != ROLE_CONTRACT_VERSION
             or role_contract.get("actor_intelligence_schema_version")
@@ -693,6 +718,8 @@ class OasisProfileGenerator:
         actor: Optional[Dict[str, Any]] = None,
         actors: Optional[Dict[str, Any]] = None,
         context_pack: Optional[Dict[str, Any]] = None,
+        preparation_context: Any = _DEFAULT_PREPARATION,
+        actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> OasisAgentProfile:
         """
         从Zep实体生成OASIS Agent Profile
@@ -726,7 +753,22 @@ class OasisProfileGenerator:
                 actors=actors,
                 context_pack=context_pack,
                 generation_path="canonical_role",
+                preparation_context=preparation_context,
+                actor_context_packs=actor_context_packs,
             )
+
+        if preparation_context is _DEFAULT_PREPARATION:
+            preparation_context = getattr(self, "preparation_context", None)
+        if actor_context_packs is None:
+            actor_context_packs = getattr(self, "actor_context_packs", None)
+        prepared_role = None
+        if isinstance(actor, dict) and preparation_context is not None:
+            # Validate source/actor binding before graph retrieval or a model
+            # request. The public extension does not replace legacy identity.
+            prepared_role = build_actor_role_contract(
+                actor, actors, context_pack, preparation_context,
+                actor_context_packs=actor_context_packs)
+        public_preparation = legacy_public_preparation_block(prepared_role)
 
         # 基础信息
         name = entity.name
@@ -768,6 +810,7 @@ class OasisProfileGenerator:
                 actor=prompt_actor,
                 actors=prompt_actors,
                 context_pack=context_pack,
+                **({"public_preparation": public_preparation} if public_preparation else {}),
             )
             # PREP-8: LLM 3 次尝试全败时 _generate_profile_with_llm 会静默退回规则模板，
             # 此前对任何健康门不可见——这里读出并剥离路径标记，落到 profile 上供聚合统计。
@@ -805,7 +848,7 @@ class OasisProfileGenerator:
         # bounded role prompt *after* LLM generation.  This prevents the LLM from
         # omitting or rewriting the role and guarantees the same evidence-bounded
         # instructions on the LLM, rule, and rule-fallback paths.
-        role_contract = build_actor_role_contract(actor, actors, context_pack)
+        role_contract = prepared_role or build_actor_role_contract(actor, actors, context_pack)
         context_binding = self._bind_actor_context_provenance(
             role_contract, actor, context_pack
         )
@@ -869,6 +912,8 @@ class OasisProfileGenerator:
         actor: Optional[Dict[str, Any]] = None,
         actors: Optional[Dict[str, Any]] = None,
         context_pack: Optional[Dict[str, Any]] = None,
+        preparation_context: Any = _DEFAULT_PREPARATION,
+        actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> OasisAgentProfile:
         """Build a loadable failure stub without dropping a researched actor's role."""
         self._reject_unsupported_actor_intelligence(actor)
@@ -880,9 +925,17 @@ class OasisProfileGenerator:
                 actors=actors,
                 context_pack=context_pack,
                 generation_path="error_stub",
+                preparation_context=preparation_context,
+                actor_context_packs=actor_context_packs,
             )
         entity_type = entity.get_entity_type() or "Entity"
-        role_contract = build_actor_role_contract(actor, actors, context_pack)
+        if preparation_context is _DEFAULT_PREPARATION:
+            preparation_context = getattr(self, "preparation_context", None)
+        if actor_context_packs is None:
+            actor_context_packs = getattr(self, "actor_context_packs", None)
+        role_contract = build_actor_role_contract(actor, actors, context_pack,
+            preparation_context=preparation_context if isinstance(actor, dict) else None,
+            actor_context_packs=actor_context_packs)
         context_binding = self._bind_actor_context_provenance(
             role_contract, actor, context_pack
         )
@@ -1654,6 +1707,7 @@ class OasisProfileGenerator:
         actor: Optional[Dict[str, Any]] = None,
         actors: Optional[Dict[str, Any]] = None,
         context_pack: Optional[Dict[str, Any]] = None,
+        public_preparation: str = "",
     ) -> Dict[str, Any]:
         """
         使用LLM生成非常详细的人设
@@ -1766,6 +1820,13 @@ class OasisProfileGenerator:
         )
         if design_requested:
             prompt += f"\n\n{self._build_persona_design_block()}"
+
+        # Append after every graph-context slice. The exact same bounded block
+        # is retained in the deterministic role even if the model ignores it.
+        if public_preparation:
+            if not isinstance(public_preparation, str) or len(public_preparation) > LEGACY_PUBLIC_PREPARATION_MAX_CHARS:
+                raise ValueError("public preparation exceeds the persona request budget")
+            prompt += "\n\n" + public_preparation
 
         # 尝试多次生成，直到成功或达到最大重试次数
         max_attempts = 3
@@ -2263,6 +2324,7 @@ class OasisProfileGenerator:
         output_platform: str = "reddit",
         actors: Optional[Dict[str, Any]] = None,
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
+        preparation_context: Any = _DEFAULT_PREPARATION,
     ) -> List[OasisAgentProfile]:
         """
         批量从实体生成Agent Profile（支持并行生成）
@@ -2283,6 +2345,9 @@ class OasisProfileGenerator:
         """
         import concurrent.futures
         from threading import Lock
+
+        if preparation_context is _DEFAULT_PREPARATION:
+            preparation_context = getattr(self, "preparation_context", None)
         
         # 设置graph_id用于Zep检索
         if graph_id:
@@ -2372,6 +2437,8 @@ class OasisProfileGenerator:
                     actor=actor,
                     actors=actors,  # 完整研究档案 → 注入社会关系网（T3.1）
                     context_pack=context_pack,
+                    preparation_context=preparation_context,
+                    actor_context_packs=actor_context_packs,
                 )
                 
                 # 实时输出生成的人设到控制台和日志
@@ -2392,6 +2459,8 @@ class OasisProfileGenerator:
                     actor=actor,
                     actors=actors,
                     context_pack=context_pack,
+                    preparation_context=preparation_context,
+                    actor_context_packs=actor_context_packs,
                 )
                 return idx, fallback_profile, str(e)
         
@@ -2452,6 +2521,8 @@ class OasisProfileGenerator:
                         actor=_actor,
                         actors=actors,
                         context_pack=_context_pack,
+                        preparation_context=preparation_context,
+                        actor_context_packs=actor_context_packs,
                     )
                     # 实时写入文件（即使是备用人设）
                     save_profiles_realtime()
@@ -2708,6 +2779,15 @@ class OasisProfileGenerator:
                 "actor_context_manifest_sha256": profile.actor_context_manifest_sha256,
                 "actor_context_report_sha256": profile.actor_context_report_sha256,
             }
+            if profile.role_contract.get("admission_policy_version"):
+                manifest_row["admission_policy_version"] = profile.role_contract["admission_policy_version"]
+                manifest_row["contract_sha256"] = canonical_json_sha256(profile.role_contract)
+            if profile.role_contract.get("preparation_extension_version"):
+                manifest_row["preparation_extension_version"] = profile.role_contract["preparation_extension_version"]
+                manifest_row["contract_sha256"] = canonical_json_sha256(profile.role_contract)
+            preparation = profile.role_contract.get("preparation_context")
+            if isinstance(preparation, dict):
+                manifest_row["preparation_context_sha256"] = preparation["content_sha256"]
             if canonical_role is not None and not is_csv:
                 reddit_system_message = canonical_reddit_system_message(
                     profile.user_name, canonical_role
@@ -2797,6 +2877,7 @@ class OasisProfileGenerator:
         *,
         expected_role_count: Optional[int] = None,
         expected_cast_manifest_sha256: Optional[str] = None,
+        preparation_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Validate the exact profile/role pair immediately before reuse/run."""
         import csv
@@ -2893,6 +2974,25 @@ class OasisProfileGenerator:
                 raise ValueError("actor role contract identity mismatch")
             if contract.get("schema_version") != recorded_role_version:
                 raise ValueError("actor role contract schema differs from its manifest")
+            policy = contract.get("admission_policy_version")
+            extension = contract.get("preparation_extension_version")
+            if extension != role.get("preparation_extension_version"):
+                raise ValueError("actor role preparation extension differs from its manifest")
+            if extension is not None:
+                if extension != LEGACY_PUBLIC_PREPARATION_VERSION or policy is not None:
+                    raise ValueError("actor role preparation extension is unsupported")
+                if role.get("contract_sha256") != canonical_json_sha256(contract):
+                    raise ValueError("actor role contract fingerprint mismatch")
+                legacy_public_preparation_block(contract)
+            if policy != role.get("admission_policy_version"):
+                raise ValueError("actor role admission policy differs from its manifest")
+            if policy is not None:
+                if policy != ROLE_ADMISSION_POLICY_VERSION:
+                    raise ValueError("actor role admission policy is unsupported")
+                if role.get("contract_sha256") != canonical_json_sha256(contract):
+                    raise ValueError("actor role contract fingerprint mismatch")
+                if not manifest.get("actor_context_required"):
+                    raise ValueError("grounded actor role requires context receipts")
             if manifest.get("actor_context_required"):
                 binding = context_bindings.get(actor_id)
                 context_pack = context_packs.get(actor_id)
@@ -2951,6 +3051,27 @@ class OasisProfileGenerator:
                             f"actor role context provenance {key} mismatch for {actor_id}"
                         )
             compiler_max = role.get("compiler_max_chars")
+            preparation = contract.get("preparation_context")
+            preparation_sha = role.get("preparation_context_sha256")
+            if preparation is not None or preparation_sha is not None:
+                if not isinstance(preparation, dict) or preparation.get("content_sha256") != preparation_sha:
+                    raise ValueError("actor role preparation binding mismatch")
+                if (contract.get("provenance") or {}).get("preparation_context_sha256") != preparation_sha:
+                    raise ValueError("actor role preparation provenance mismatch")
+                from .research_preparation import load_preparation_context
+                bundle = preparation_context
+                if bundle is None:
+                    bundle = load_preparation_context(os.path.dirname(profile_path), expected_sha256=preparation_sha)
+                if bundle.get("content_sha256") != preparation_sha:
+                    raise ValueError("actor role preparation fingerprint mismatch")
+                render_options = ({"audience": "public", "max_chars": preparation.get("max_chars")}
+                                  if extension == LEGACY_PUBLIC_PREPARATION_VERSION else {})
+                rendered = _preparation_role_context(bundle, actor_id, expected_sources={
+                    "actors_sha256": (contract.get("provenance") or {}).get("actors_sha256"),
+                    "report_sha256": (contract.get("provenance") or {}).get("report_sha256"),
+                    "actor_context_packs_sha256": canonical_json_sha256(context_packs)}, **render_options)
+                if rendered != preparation:
+                    raise ValueError("actor role preparation rendered context mismatch")
             if type(compiler_max) is not int:
                 raise ValueError("actor role compiler limit is missing")
             if recorded_role_version == "actor-role/v1":

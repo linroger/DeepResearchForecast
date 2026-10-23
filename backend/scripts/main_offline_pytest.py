@@ -187,7 +187,11 @@ class Guard:
         requested = Path(path).absolute()
         resolved = requested.resolve()
         for candidate in (requested, resolved):
-            parts = {part.lower() for part in candidate.parts}
+            # The checkout is an explicit read root, even below ~/.codex or
+            # ~/.claude. This never admits siblings or credentials within it,
+            # and resolved symlink targets are checked independently.
+            checked = candidate.relative_to(REPO) if candidate.is_relative_to(REPO) else candidate
+            parts = {part.lower() for part in checked.parts}
             credential = (any(part == ".env" or (part.startswith(".env.") and part != ".env.example")
                               for part in parts)
                           or bool(parts & {".netrc", ".git-credentials", "credentials", "credentials.json",

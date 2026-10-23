@@ -84,6 +84,7 @@ class _FakeProc:
 
     def __init__(self, cmd, **kwargs):
         self.cmd = cmd
+        self.kwargs = kwargs
         self.pid = os.getpid()
 
     def poll(self):
@@ -177,9 +178,13 @@ def test_hours_config_legacy_formula_regression_pin(sim_env, no_subprocess):
     assert state.total_rounds == 144          # int(72 * 60 / 30)
     assert state.temporal_mode is None
     data = _read_run_state(sim_dir)
-    for key in ("temporal_mode", "calendar_unit", "current_period_end",
-                "horizon_date", "options"):
+    for key in ("temporal_mode", "calendar_unit", "current_period_end", "horizon_date"):
         assert key not in data
+    # Publication ownership and a terminal-attempt token also apply in hours
+    # mode; neither adds a calendar nor changes the historical round formula.
+    assert data["options"]["record_owner"] == "runner"
+    assert data["options"]["terminal_artifacts_token"]
+    assert "max_rounds_ignored" not in data["options"]
 
 
 def test_hours_config_max_rounds_still_truncates(sim_env, no_subprocess):

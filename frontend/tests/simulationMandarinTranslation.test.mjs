@@ -8,6 +8,7 @@ import * as i18n from '../src/i18n.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as worldState from '../src/utils/worldState.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
+import * as simRecord from '../src/utils/simRecord.js'
 import { compileSfc } from './sfcHarness.mjs'
 import { loadOverlay } from './simulationTranslationHarness.mjs'
 
@@ -254,9 +255,10 @@ function mount(t, builder, { api = {}, props = {}, translate, start } = {}) {
   const component = builder({
     vue: { ...vue, onMounted: () => {}, onUnmounted: fn => cleanups.push(fn), useId: () => 'mandarin-simulation-test' },
     '../../i18n': i18n, '../../utils/overlayTranslation': http.module, '../../utils/worldSimulationView': world,
-    '../../utils/worldState': worldState, '../../utils/feedRounds': feedRounds, '../../api/simulation': api,
+    '../../utils/worldState': worldState, '../../utils/feedRounds': feedRounds, '../../utils/simRecord': simRecord, '../../api/simulation': api,
     './WorldStatePanel.vue': { default: { props: ['language'], template: '<aside>{{ language }}</aside>' } },
     './WorldSimulationView.vue': { default: { props: ['language'], template: '<aside>{{ language }}</aside>' } },
+    './SimulationRecordView.vue': { default: { props: ['record'], template: '<section class="record-child">{{ record.simulation_id }}</section>' } },
   })
   const reactiveProps = vue.reactive({ simulationId: 'sim_A', generationId: '', language: '', pollMs: 0, round: undefined, ...props })
   const scope = vue.effectScope()
@@ -279,6 +281,7 @@ function legacyApi() {
     getAgentStats: async () => ({ data: { total_posts: 1234 } }),
     getRunStatus: async () => ({ data: { runner_status: 'completed', current_round: 2, total_rounds: 2 } }),
     getFeedRounds: async () => ({ data: { rounds: [{ round: 2, period_label: '2026-10' }] } }),
+    fetchRecord: async () => ({ record: null, status: 409, publicationStatus: 'failed' }),
   }
 }
 
@@ -296,6 +299,41 @@ test('actual legacy template translates personas, posts, replies, status and all
   h.state.selectedRound.value = 2; await h.state.loadAll(); await settle()
   assert.equal(h.calls.at(-1).options.context.round, 2)
   assert.match(prose(await h.render()), /2026-10/)
+})
+
+test('completed record and live controls coexist without resetting the selected simulation language', async t => {
+  const record = JSON.parse(readFileSync(new URL('./fixtures/sim/simulation_record.en.json', import.meta.url), 'utf8'))
+  const h = mount(t, buildLegacy, { api: { ...legacyApi(), fetchRecord: async () => ({ record, status: 200, publicationStatus: 'passed' }) },
+    translate: source => LEGACY_TEXT[source] || source })
+  await settle()
+  assert.match(await h.render(), /class="record-child"/)
+  h.state.translation.toggle(); await settle()
+  assert.match(prose(await h.render()), /记录 实时视图/)
+  h.state.showRecord.value = false
+  const html = await h.render()
+  assert.doesNotMatch(html, /class="record-child"/)
+  assert.match(prose(html), /关税维持在 12%/)
+  assert.match(html, /<aside[^>]*>zh<\/aside>/)
+  h.state.showRecord.value = true
+  assert.match(await h.render(), /class="record-child"/)
+  assert.equal(h.state.translation.lang.value, 'zh')
+})
+
+test('world record fallback and record-to-live switching both pass the selected language to the world view', async t => {
+  const record = JSON.parse(readFileSync(new URL('./fixtures/sim/simulation_record.en.json', import.meta.url), 'utf8'))
+  let published = false
+  const h = mount(t, buildLegacy, { api: { ...legacyApi(),
+    getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: 'world-v1', world_generation_id: 'gen_A', status: 'completed' } }),
+    fetchRecord: async () => published ? { record, status: 200, publicationStatus: 'passed' } : { record: null, status: 409, publicationStatus: 'failed' },
+  } })
+  await settle()
+  i18n.locale.value = 'zh'; await settle()
+  assert.match(await h.render(), /<aside[^>]*>zh<\/aside>/)
+  published = true
+  await h.state.retryRecord()
+  assert.match(await h.render(), /class="record-child"/)
+  h.state.showRecord.value = false
+  assert.match(await h.render(), /<aside[^>]*>zh<\/aside>/)
 })
 
 function panelPayload() {
