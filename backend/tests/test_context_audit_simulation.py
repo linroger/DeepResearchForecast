@@ -193,6 +193,10 @@ def test_canonical_pack_role_seed_reaches_only_the_correct_actor_prompt(tmp_path
     _patch_world(monkeypatch, str(tmp_path), envs)
     dossier = _dossier()
     alpha = dossier["actors"][0]
+    for actor in dossier["actors"]:
+        # The world seed admits public plans; private-owner role consumption
+        # has separate negative/positive cases in test_grounded_actor_prompts.
+        actor["intelligence"]["dimensions"]["future_plans"][0]["visibility"] = "public"
     denied = copy.deepcopy(alpha["intelligence"]["dimensions"]["future_plans"][0])
     denied["claim"] = "Alpha Systems will implement DENIED_PLAN_SENTINEL."
     denied["qualifiers"]["actor_knows"] = False
@@ -200,7 +204,8 @@ def test_canonical_pack_role_seed_reaches_only_the_correct_actor_prompt(tmp_path
     # A canonical actor's flat legacy field cannot bypass the typed pack.
     alpha["future_plans"] = ["FLAT_LEGACY_SENTINEL"]
     packs = {actor["actor_id"]: build_actor_context_pack(dossier, actor, REPORT) for actor in dossier["actors"]}
-    systems = {i: compile_actor_role_prompt(build_actor_role_contract(actor, dossier, packs[actor["actor_id"]]))
+    systems = {i: compile_actor_role_prompt(build_actor_role_contract(
+        actor, dossier, packs[actor["actor_id"]], actor_context_packs=packs))
                for i, actor in enumerate(dossier["actors"])}
     config = _world_config()
     config["agent_configs"] = [

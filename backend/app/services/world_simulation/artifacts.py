@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from contextlib import contextmanager
 
-from .contracts import ENGINE, canonical_json, digest, require, validate_spec
+from .contracts import ENGINE, WorldError, canonical_json, clone, digest, require, validate_preparation_pin, validate_spec
 from .kernel import validate_mechanisms
 
 
@@ -78,15 +78,62 @@ def input_manifest(spec: dict) -> dict:
             'sourceBindings': spec['sourceBindings']}
 
 
-def seal_inputs(directory: Path, spec: dict) -> dict:
+def validate_preparation_binding(bundle, *, expected_sources=None, research_generation_id=None):
+    """Validate the shared source authority without resealing or alias fallback."""
+    from ..research_preparation import validate_preparation_context
+    try:
+        validate_preparation_context(bundle, expected_sources=expected_sources)
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
+        raise WorldError('invalid_preparation_context', 'Research preparation proof or source binding is invalid') from None
+    if research_generation_id is not None:
+        binding = bundle['source'].get('source_binding')
+        require(isinstance(binding, dict) and binding.get('research_generation_id') == research_generation_id,
+                'preparation_generation_mismatch', 'Research preparation belongs to another input generation')
+    return clone(bundle)
+
+
+def load_preparation(directory: Path, spec: dict):
+    """A present native pin makes both shared preparation artifacts mandatory."""
+    validate_preparation_pin(spec)
+    bindings = spec['sourceBindings']
+    if 'preparationContext' not in bindings:
+        return None
+    pin = bindings['preparationContext']
+    require(isinstance(pin, dict) and set(pin) == {'schemaVersion', 'contentSha256', 'source'}
+            and pin['schemaVersion'] == 'research-preparation/v1',
+            'invalid_preparation_context', 'Invalid native research preparation pin')
+    from ..research_preparation import load_preparation_context
+    try:
+        bundle = load_preparation_context(directory, expected_sha256=pin['contentSha256'],
+                                          expected_sources=pin['source'])
+    except (ValueError, TypeError, KeyError, OSError):
+        raise WorldError('invalid_preparation_context', 'Pinned research preparation is missing or changed') from None
+    return validate_preparation_binding(bundle, research_generation_id=bindings.get('researchGenerationId'))
+
+
+def seal_inputs(directory: Path, spec: dict, *, preparation_context=None) -> dict:
     directory = Path(directory)
     spec = validate_spec(spec)
     validate_mechanisms(spec)
+    pin = spec['sourceBindings'].get('preparationContext')
+    require((pin is not None) == (preparation_context is not None),
+            'invalid_preparation_context', 'Native preparation must carry its exact pinned bundle')
+    if preparation_context is not None:
+        preparation_context = validate_preparation_binding(preparation_context,
+            expected_sources=pin['source'], research_generation_id=spec['sourceBindings']['researchGenerationId'])
+        require(preparation_context['content_sha256'] == pin['contentSha256'],
+                'invalid_preparation_context', 'Native preparation bundle fingerprint differs from its pin')
     path = directory / 'world_spec.json'
     manifest_path = directory / 'world_input_manifest.json'
     with exclusive_file(directory / 'world_prepare.lock'):
         require(not path.exists() and not manifest_path.exists() and not (directory / 'world.sqlite3').exists(),
                 'generation_exists', 'Prepared world generations are immutable; create a new simulation to replace one')
+        if preparation_context is not None:
+            from ..research_preparation import BUNDLE_FILE, MANIFEST_FILE, write_preparation_context
+            if (directory / BUNDLE_FILE).exists() or (directory / MANIFEST_FILE).exists():
+                load_preparation(directory, spec)  # Never replace an existing generation or repair partial proof.
+            else:
+                write_preparation_context(directory, preparation_context)
         atomic_json(path, spec)
         manifest = input_manifest(spec)
         atomic_json(manifest_path, manifest)
@@ -111,4 +158,5 @@ def load_inputs(directory: Path, *, simulation_id: str | None = None,
             and spec['sourceBindings'] == manifest.get('sourceBindings')
             and (simulation_id is None or simulation_id == spec['simulationId']),
             'input_binding_mismatch', 'World inputs do not match their prepared generation')
+    load_preparation(directory, spec)
     return spec, manifest

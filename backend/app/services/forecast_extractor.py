@@ -3296,16 +3296,25 @@ def _admit_data_anchor(row: Dict[str, Any], anchor: Dict[str, Any], official_dat
             f"{row['statement']} {row['resolution_criteria']}").get("sharp"))
 
 
+BINARY_QUALITY_POLICY = "evidence-quality/v1"
+LEGACY_BINARY_QUALITY_POLICY = "conviction-quality/v0"
+
+
 def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
                     themes_expected: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Conviction + objectivity scorecard for a binary set (QUALITY-OPT A3/A4).
+    """Versioned binary quality scorecard; ``passed`` is the publish gate.
 
-    Flags the two failure modes the brief calls out: hedging (everything near 0.5)
-    and vague criteria. ``passed`` is the publish gate.
+    Fresh evidence-quality rows keep distribution shape as diagnostics. Saved
+    unmarked rows retain the legacy conviction/spread policy on recomputation.
     RPT-6: 主题统计改为「配置的期望主题（补零）+ 实际观察到的主题」，不再硬编码三元组。
     """
+    versions = {b.get("quality_policy", LEGACY_BINARY_QUALITY_POLICY) for b in binaries}
+    evidence_policy = versions == {BINARY_QUALITY_POLICY}
+    invalid_policy = bool(versions - {BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY}) or len(versions) > 1
     n = len(binaries)
-    probs = [b["probability"] for b in binaries]
+    raw_probs = [b.get("probability") for b in binaries]
+    valid_probabilities = all(type(p) in (int, float) and math.isfinite(p) and 0 <= p <= 1 for p in raw_probs)
+    probs = [p if type(p) in (int, float) and math.isfinite(p) and 0 <= p <= 1 else 0.5 for p in raw_probs]
     mean = sum(probs) / n if n else 0.0
     std = math.sqrt(sum((p - mean) ** 2 for p in probs) / n) if n else 0.0
     midband = sum(1 for p in probs if 0.40 <= p <= 0.60)
@@ -3337,20 +3346,37 @@ def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
         and conviction >= 3           # at least a few committed calls
         and sharp >= int(0.8 * n)     # mostly objective criteria
     )
+    distribution_diagnostics = []
+    if std < 0.12:
+        distribution_diagnostics.append(f"probability stdev {std:.2f} below descriptive threshold 0.12")
+    if not midband_ok:
+        distribution_diagnostics.append(f"{midband}/{n} probabilities in 0.40-0.60")
+    if conviction < 3:
+        distribution_diagnostics.append("fewer than 3 probabilities at or beyond 0.30/0.70")
+    if evidence_policy:
+        passed = n >= min_count and sharp >= math.ceil(0.8 * n) and valid_probabilities
+    if invalid_policy or not valid_probabilities:
+        passed = False
     issues = []
+    if invalid_policy:
+        issues.append("mixed or unsupported binary quality policy")
+    if not valid_probabilities:
+        issues.append("invalid binary probability")
     if n < min_count:
         issues.append(f"only {n} binaries (< {min_count})")
-    if std < 0.12:
+    if not evidence_policy and std < 0.12:
         issues.append(f"probability spread too low (stdev {std:.2f}) — hedging")
-    if not midband_ok:
+    if not evidence_policy and not midband_ok:
         issues.append(f"{midband}/{n} forecasts in 0.40-0.60 — under-committed")
-    if conviction < 3:
+    if not evidence_policy and conviction < 3:
         issues.append("fewer than 3 high-conviction calls (p>=0.70 or <=0.30)")
-    if sharp < int(0.8 * n):
+    if sharp < (math.ceil(0.8 * n) if evidence_policy else int(0.8 * n)):
         issues.append(f"only {sharp}/{n} have objective metric+number+date criteria")
     if n > 1 and theme_cardinality <= 1:
         issues.append("all forecasts share a single theme — no thematic spread")
     out = {
+        "policy_version": BINARY_QUALITY_POLICY if evidence_policy else LEGACY_BINARY_QUALITY_POLICY,
+        "distribution_diagnostics": distribution_diagnostics,
         "count": n, "prob_stdev": round(std, 3), "midband_share": round(midband_share, 3),
         "conviction_count": conviction, "sharp_criteria_count": sharp, "themes": themes,
         "theme_cardinality": theme_cardinality,
@@ -3362,6 +3388,8 @@ def _binary_quality(binaries: List[Dict[str, Any]], *, min_count: int,
     # caveat but is no yardstick for a divergence flag.
     divergent = []
     for b in binaries:
+        if type(b.get("probability")) not in (int, float) or not math.isfinite(b["probability"]):
+            continue
         anchor = b.get("data_anchor") if isinstance(b.get("data_anchor"), dict) else {}
         base = anchor.get("empirical_base_rate")
         if (isinstance(base, dict) and isinstance(base.get("p"), (int, float))
@@ -4445,7 +4473,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
                              official_data: Optional[Dict[str, Any]] = None,
                              simulation_effect: Optional[str] = None,
                              pinned_questions: Optional[List[Dict[str, Any]]] = None,
-                             report_policy=None) -> Dict[str, Any]:
+                             report_policy=None,
+                             binary_quality_policy: str = BINARY_QUALITY_POLICY) -> Dict[str, Any]:
     """Extract/derive >=min_count INDEPENDENT binary forecasts from the dossier.
 
     Returns ``{"binary_forecasts": [...], "binary_quality": {...}}``. Degrade-safe:
@@ -4477,7 +4506,10 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     _bhr = _coerce_float(_cfg("FORECAST_EXTRACT_HEAD_RATIO", 0.6))
     content = slice_head_tail(content, _bbudget, _bhr if _bhr is not None else 0.6)
     themes = [str(t).strip().lower() for t in (themes or []) if str(t).strip()] or None
-    contrarian = bool(_cfg("FORECAST_BINARY_CONTRARIAN", True))
+    if binary_quality_policy not in (BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY):
+        raise ValueError("unsupported binary quality policy")
+    evidence_quality = binary_quality_policy == BINARY_QUALITY_POLICY
+    contrarian = not evidence_quality and bool(_cfg("FORECAST_BINARY_CONTRARIAN", True))
     # Foglamp WP1 (1D, I-16)：模拟信号只有在 SIMULATION_FORECAST_EFFECT=legacy_prompt
     # （特征化 fixture 专用）时才允许进入二元概率生成；默认 diagnostic_only 下模拟产出
     # 不得移动任何已发布概率（simulation adjustments 是未晋升的预测政策）。
@@ -4524,6 +4556,11 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
             tie_rule=(f"tied to {', '.join(themes)}" if themes else _BINARY_DEFAULT_TIE_RULE),
             horizon_year_hint=_hz_hint, horizon_year_rule=_hz_rule,
         )
+        if evidence_quality:
+            user = user.replace(
+                "express genuine CONVICTION — do not cluster in 0.40-0.60; commit where the evidence warrants.",
+                "reflect the evidence, including justified uncertainty near 0.5. Do not change probabilities "
+                "or event wording to meet a conviction, spread or contrarian quota.")
         if contrarian:
             user += _BINARY_LOW_P_RULE if low_p else _BINARY_CONTRARIAN_RULE
         if sim_sensitive:
@@ -4619,8 +4656,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     if len(binaries) < min_count:
         need = min_count - len(binaries)
         _merge(binaries, _draw(need + 2, [b["statement"] for b in binaries]))
-    # RPT-4：一次有界的低概率重述补足——首轮 stdev<0.12 或全部 >0.5 时，同方向 top-up
-    # 永远无法过 conviction 门，必须显式索取 0.05-0.35 区间的反共识陈述。
+    # Explicit legacy policy only: retain its historical low-probability top-up.
+    # Fresh evidence-quality requests never dispatch a distribution-shaping draw.
     if contrarian and binaries:
         probs = [b["probability"] for b in binaries]
         mean = sum(probs) / len(probs)
@@ -4689,6 +4726,8 @@ def extract_binary_forecasts(report_markdown: str, llm, *, min_count: int = 10,
     if market_aware:
         _allowed_labels.add(_SOURCE_MARKET_LABEL)
     provenance_downgrades = _enforce_source_provenance(binaries, _allowed_labels)
+    for row in binaries:
+        row["quality_policy"] = binary_quality_policy
     out: Dict[str, Any] = {
         "binary_forecasts": binaries,
         "binary_quality": _binary_quality(binaries, min_count=min_count,
@@ -5306,6 +5345,12 @@ def render_binary_forecasts_block(forecast: Optional[Dict[str, Any]],
                  "Probabilities express genuine conviction, not hedging.")
         cols = "| # | Forecast (one sentence) | Prob. | Resolution criteria | Theme |"
         anchor_col = " Market P(yes) (Polymarket) |"
+    if all(isinstance(b, dict) and b.get("quality_policy") == BINARY_QUALITY_POLICY for b in binaries):
+        intro = ("以下为可独立判定的二元（是/否）预测，每条含概率与客观判定标准"
+                 "（指标·阈值·日期·来源）。概率反映证据及其不确定性；接近50%可以是合理判断。" if zh else
+                 "Independent binary (yes/no) forecasts, each with a probability and an objective "
+                 "resolution test (metric · threshold · date · source). Probabilities reflect the "
+                 "evidence and its uncertainty; values near 0.5 can be justified.")
     sep = "|---|---|---|---|---|"
     if has_anchor:
         cols += anchor_col

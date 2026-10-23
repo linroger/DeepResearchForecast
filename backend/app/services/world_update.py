@@ -24,6 +24,8 @@ Once every platform has delivered a round, the coordinator runs ONE world update
 from __future__ import annotations
 
 import logging
+import copy
+import random
 import math
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -107,7 +109,7 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
 def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                          decisions: Iterable[Any], deterministic: Dict[str, Any],
                          scenarios: Sequence[str], *, language: str = "",
-                         max_variables: int = 24) -> str:
+                         max_variables: int = 24, preparation_context=None) -> str:
     """Prompt for the consequence arbiter.  Variable ids are listed so the model
     can reference them exactly; the scenario distribution is NOT included."""
     p = period or {}
@@ -130,6 +132,18 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         "",
         "## World facts (variable_id: value)",
     ]
+    if (world.settings.get("qualitative_context") or {}).get("status") == "unverified":
+        lines.append("Actor goals, plans, relationships and posture from the legacy dossier are "
+                     "unverified modeling assumptions. They are not observed facts or completed actions.")
+    if preparation_context is not None:
+        from .research_preparation import render_preparation_context
+        lines.extend([
+            "## Bound public research guidance",
+            render_preparation_context(preparation_context, audience="public", max_chars=24000),
+            "Keep observed baselines distinct from simulated current values. Historical ranges are "
+            "diagnostic context, not hard bounds or causal coefficients. Plans and targets are not "
+            "completed capacity. Any unsupported numerical effect remains a modeling assumption.",
+        ])
     vars_sorted = sorted(world.variables.values(),
                          key=lambda v: (-(v.history[-1].get("round", 0) if v.history else 0), v.name))
     for v in vars_sorted[:max_variables]:
@@ -560,7 +574,8 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
 
 def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                 decisions: Iterable[Any], deterministic: Dict[str, Any], scenarios: Sequence[str], *,
-                language: str = "", temperature: float = 0.3, max_tokens: int = 2200
+                language: str = "", temperature: float = 0.3, max_tokens: int = 2200,
+                preparation_context=None
                 ) -> Tuple[str, Dict[str, Any], List[str]]:
     """One arbiter call → ``(status, validated_update, problems)``; never raises.
 
@@ -573,7 +588,8 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
     """
     if llm is None:
         return "skipped", {}, ["no llm"]
-    prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language)
+    prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language,
+                                  preparation_context=preparation_context)
     try:
         raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=temperature,
                             max_tokens=max_tokens)
@@ -709,29 +725,40 @@ def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, A
 def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                     decisions: Iterable[Any], fired_events: Iterable[Dict[str, Any]], *, llm: Any, rng: Any,
                     scenarios: Sequence[str] = (), arbiter_enabled: bool = True, language: str = "",
-                    arbiter_temperature: float = 0.3) -> Dict[str, Any]:
+                    arbiter_temperature: float = 0.3, preparation_context=None) -> Dict[str, Any]:
     """Deterministic update → arbiter → commit → digest.  Returns the round record.
 
     ``arbiter_temperature`` stays at the arbiter's default for the path the agents live in; the
     sibling world paths (``world_paths``) sample it higher, bounded."""
+    if preparation_context is not None:
+        from .research_preparation import validate_preparation_context
+        validate_preparation_context(preparation_context)
     rows = _decision_rows(decisions)
+    fired_events = list(fired_events or [])
+    replay_before = copy.deepcopy(world.to_dict())
+    rng_before = rng.getstate() if isinstance(rng, random.Random) else None
     before = world.snapshot()
     deterministic = deterministic_round_update(world, round_num, period, rows, fired_events, rng)
+    deterministic_state = copy.deepcopy(world.to_dict())
     status, update, problems = ("skipped", {}, [])
     arbiter_summary: Dict[str, Any] = {}
     if arbiter_enabled:
         status, update, problems = run_arbiter(llm, world, round_num, period, rows, deterministic, scenarios,
-                                               language=language, temperature=arbiter_temperature)
-        if status in ("applied", "invalid") and update:
+                                               language=language, temperature=arbiter_temperature,
+                                               preparation_context=preparation_context)
+        if status == "applied" and update:
             try:
                 arbiter_summary = world.apply_arbiter_update(round_num, update)
             except Exception as exc:  # noqa: BLE001 — a kernel bug must not break the loop
                 logger.warning("applying arbiter update failed in round %s: %s", round_num, exc)
+                restored = WorldModel.from_dict(deterministic_state)
+                world.__dict__.clear()
+                world.__dict__.update(restored.__dict__)
                 status = "failed"
                 problems.append(f"apply error: {describe_llm_error(exc, max_chars=120)}")
     world.commit_round(round_num)
     diff = world.diff(before)
-    narrative = str(update.get("narrative") or "") if isinstance(update, dict) else ""
+    narrative = str(update.get("narrative") or "") if status == "applied" else ""
     digest = build_round_digest(world, round_num, before, rows, narrative)
     record: Dict[str, Any] = {
         "schema_version": WORLD_UPDATE_VERSION,
@@ -747,12 +774,61 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "arbiter_status": status,
         "arbiter_problems": problems[:12],
         "arbiter": arbiter_summary,
-        "scenario_pressure": dict(update.get("scenario_pressure") or {}) if isinstance(update, dict) else {},
+        "scenario_pressure": dict(update.get("scenario_pressure") or {}) if status == "applied" else {},
         "narrative": narrative,
         "diff": diff,
         "digest": digest,
         "behaviour": behaviour_metrics(world, round_num, rows),
         "snapshot_before": before,
     }
+    from .actor_context import canonical_json_sha256
+    # Persist complete accepted inputs, including the RNG position and settings.
+    # Provider failures and rejected payloads never acquire transition authority.
+    replay = {
+        "schema_version": "world-replay/v1", "round": int(round_num),
+        "period": copy.deepcopy(period), "before": replay_before,
+        "decisions": copy.deepcopy(rows), "fired_events": copy.deepcopy(fired_events),
+        "rng_before": rng_before, "deterministic_state": deterministic_state,
+        "accepted_arbiter_update": copy.deepcopy(update) if status == "applied" else {},
+        "arbiter_status": status, "arbiter_temperature": arbiter_temperature,
+        "preparation_sha256": preparation_context["content_sha256"] if preparation_context else None,
+        "after": copy.deepcopy(world.to_dict()),
+    }
+    replay["content_sha256"] = canonical_json_sha256(replay)
+    record["replay"] = replay
     record["headline"] = world_update_headline(world, round_num, record)
     return record
+
+
+def replay_world_round(replay, *, preparation_context=None):
+    """Reproduce an accepted transition without a provider call; reject drift."""
+    from .actor_context import canonical_json_sha256
+    from .research_preparation import validate_preparation_context
+    if not isinstance(replay, dict) or replay.get("schema_version") != "world-replay/v1":
+        raise ValueError("Invalid world replay schema")
+    if canonical_json_sha256({k: v for k, v in replay.items() if k != "content_sha256"}) != replay.get("content_sha256"):
+        raise ValueError("World replay fingerprint mismatch")
+    if replay.get("preparation_sha256"):
+        validate_preparation_context(preparation_context)
+        if preparation_context["content_sha256"] != replay["preparation_sha256"]:
+            raise ValueError("World replay research generation mismatch")
+    if replay.get("rng_before") is None:
+        raise ValueError("World replay requires a recorded Random state")
+    def tuples(value):
+        return tuple(tuples(x) for x in value) if isinstance(value, (list, tuple)) else value
+    rng = random.Random()
+    rng.setstate(tuples(replay["rng_before"]))
+    world = WorldModel.from_dict(copy.deepcopy(replay["before"]))
+    deterministic_round_update(world, replay["round"], replay["period"],
+                               replay["decisions"], replay["fired_events"], rng)
+    if canonical_json_sha256(world.to_dict()) != canonical_json_sha256(replay["deterministic_state"]):
+        raise ValueError("World replay deterministic transition drifted")
+    update = replay["accepted_arbiter_update"]
+    if update:
+        if replay["arbiter_status"] != "applied":
+            raise ValueError("Rejected update cannot be replayed")
+        world.apply_arbiter_update(replay["round"], update)
+    world.commit_round(replay["round"])
+    if canonical_json_sha256(world.to_dict()) != canonical_json_sha256(replay["after"]):
+        raise ValueError("World replay accepted transition drifted")
+    return world

@@ -16,6 +16,7 @@ import json
 import os
 import re
 import unicodedata
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -1310,8 +1311,15 @@ def build_actor_context_pack(
     report_text: str,
     *,
     max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    allow_missing_sections: bool = False,
 ) -> Dict[str, Any]:
-    """Build one deterministic actor-specific runtime context pack."""
+    """Build one deterministic actor-specific runtime context pack.
+
+    Native consumers may explicitly accept source-bound typed intelligence
+    without a name-matched report section. That selection gap is recorded, never
+    filled with invented prose. OASIS preparation and artifact validation retain
+    their default mandatory report-section coverage.
+    """
     if not isinstance(actors, Mapping):
         raise ValueError("actors dossier must be an object")
     if not isinstance(actor, Mapping):
@@ -1359,10 +1367,16 @@ def build_actor_context_pack(
                 f"actor intelligence coverage is incomplete for {actor_name}: "
                 + ", ".join(dimension_coverage["missing_dimensions"])
             )
-        if not sections:
+        if not sections and not allow_missing_sections:
             raise ValueError(
                 f"research report has no actor-relevant section for {actor_name}"
             )
+        if not sections:
+            omitted_audit["report_section_gap"] = {
+                "policy": "typed-evidence-with-report-gap/v1",
+                "reason": "No actor-relevant prose section was found; only bound typed evidence is available.",
+                "selected_section_count": 0,
+            }
 
     bounded = _bounded_context(
         actor,
@@ -1607,3 +1621,214 @@ def context_binding_by_actor_id(manifest: Mapping[str, Any]) -> Dict[str, Dict[s
         for row in rows
         if isinstance(row, dict) and row.get("actor_id")
     }
+
+
+def _research_claim_keys(row: Mapping[str, Any]) -> set:
+    """Identity aliases use full evidence, before any display truncation."""
+    keys = set()
+    values = [("id", row.get("claim_id"))]
+    if row.get("dimension") == "quantitative_facts":
+        # Equal metric names or equal value strings are not the same dated
+        # measurement. Source aliases may not erase a different period/value.
+        identity = {key: row.get(key) for key in (
+            "entity", "metric", "value", "unit", "period", "period_start", "period_end",
+            "as_of_date", "as_of", "date", "value_type", "status")}
+        values.append(("quantity", json.dumps(identity, ensure_ascii=False, sort_keys=True, allow_nan=False)))
+    else:
+        values.append(("text", row.get("claim")))
+    for kind, value in values:
+        if isinstance(value, str):
+            value = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+            if value:
+                keys.add((kind, value))
+    return keys
+
+
+def _research_denied(row: Mapping[str, Any]) -> bool:
+    qualifiers = row.get("qualifiers")
+    qualifiers = qualifiers if isinstance(qualifiers, Mapping) else {}
+    return row.get("actor_knows") is False or qualifiers.get("actor_knows") is False
+
+
+def _research_row_text(row: Mapping[str, Any], dimension: str) -> str:
+    for key in ("claim", "event", "finding"):
+        if isinstance(row.get(key), str) and row[key].strip():
+            return row[key].strip()
+    if dimension == "quantitative_facts":
+        return " ".join(str(row.get(key, "")) for key in ("metric", "value", "unit")).strip()
+    if dimension == "relationships":
+        return " ".join(str(row.get(key, "")) for key in ("source", "type", "target", "basis")).strip()
+    return ""
+
+
+def select_research_claims(
+    actors: Mapping[str, Any],
+    packs: Mapping[str, Any],
+    *,
+    audience: str,
+    actor_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Pure, source-bound audience projection; never a new evidence authority.
+
+    Return copied claim rows augmented with authoritative ``actor_id``,
+    ``actor_name`` and ``dimension``. In addition to the intelligence dimensions,
+    selected relationships/events/claims/quantitative_facts are admitted only
+    when exactly present in the bound dossier. Report prose, arbitrary pack
+    fields and evidence-gap research metadata are never claims.
+
+    The caller authenticates persisted pack files with their existing manifest.
+    Here the in-memory pack must match the producer roster, intelligence and
+    source fingerprints. Source quote/receipt verification remains owned by the
+    intelligence producer; this projection never substitutes a new receipt.
+
+    A denial in any admitted pack vetoes common knowledge, including identity/
+    full-text aliases. It does not revoke another owner's explicitly private
+    knowledge. Within one owner's rows, denial aliases always win. Unmarked
+    evidence is modeler-only. No inputs are modified.
+    """
+    if audience not in {"public", "actor", "modeler"}:
+        raise ValueError("unknown research audience")
+    if audience == "actor" and not actor_id:
+        raise ValueError("actor research audience requires actor_id")
+    if not isinstance(actors, Mapping) or not isinstance(packs, Mapping):
+        raise ValueError("research selection requires dossier and context packs")
+    if not packs:
+        if audience == "actor":
+            raise ValueError("actor research context pack is missing")
+        return []
+    contract = _actor_intelligence_contract(actors)
+    if not contract or contract.get("schema_version") != ACTOR_INTELLIGENCE_VERSION:
+        raise ValueError("research selection requires a bound actor intelligence contract")
+    roster = {}
+    for actor in actors.get("actors") or []:
+        if not isinstance(actor, Mapping):
+            raise ValueError("research actor roster is invalid")
+        aid = str(actor.get("actor_id") or "")
+        if not aid or aid in roster:
+            raise ValueError("research actor roster identity mismatch")
+        roster[aid] = actor
+    if contract.get("actor_ids_sha256") != canonical_json_sha256({aid: 1 for aid in roster}):
+        raise ValueError("research actor roster fingerprint mismatch")
+    if contract.get("actor_count") != len(roster):
+        raise ValueError("research actor roster count mismatch")
+    if audience == "actor" and actor_id not in packs:
+        raise ValueError("actor research context pack is missing")
+    actors_sha = canonical_json_sha256(actors)
+    selected: List[Dict[str, Any]] = []
+    structured = {
+        "relationships": "relationships", "events": "key_events",
+        "claims": "contested_claims", "quantitative_facts": "quantitative_facts",
+    }
+    for aid, pack in packs.items():
+        actor = roster.get(aid)
+        if not isinstance(pack, Mapping) or not actor:
+            raise ValueError("research context pack actor binding mismatch")
+        if (pack.get("schema_version") != ACTOR_CONTEXT_VERSION
+                or pack.get("actor_id") != aid or pack.get("actor_name") != actor.get("name")):
+            raise ValueError("research context pack identity mismatch")
+        intelligence = actor.get("intelligence")
+        source = pack.get("source")
+        if (not isinstance(intelligence, Mapping)
+                or intelligence.get("schema_version") != ACTOR_INTELLIGENCE_VERSION
+                or not isinstance(source, Mapping)
+                or source.get("actors_sha256") != actors_sha
+                or source.get("actor_intelligence_contract_version") != ACTOR_INTELLIGENCE_VERSION
+                or source.get("actor_intelligence_sha256") != canonical_json_sha256(intelligence)
+                or canonical_json_sha256(pack.get("actor_intelligence")) != canonical_json_sha256(intelligence)):
+            raise ValueError("research context intelligence binding mismatch")
+        for key in ("report_sha256", "dossier_sha256", "sources_sha256", "actor_ids_sha256"):
+            if not _is_sha256(contract.get(key)) or source.get(key) != contract[key]:
+                raise ValueError(f"research context {key} binding mismatch")
+        _validate_intelligence_as_of(actor, actors.get("as_of_date"))
+        dimensions = intelligence.get("dimensions") or {}
+        if not isinstance(dimensions, Mapping):
+            raise ValueError("research intelligence dimensions are invalid")
+        rows = [(dimension, row) for dimension in INTELLIGENCE_DIMENSIONS
+                for row in dimensions.get(dimension, []) if isinstance(row, Mapping)]
+        for dimension, key in structured.items():
+            bound_rows = {canonical_json_sha256(row) for row in actors.get(key, [])
+                          if isinstance(row, Mapping)}
+            for row in pack.get(dimension, []):
+                if not isinstance(row, Mapping) or canonical_json_sha256(row) not in bound_rows:
+                    raise ValueError(f"research context {dimension} dossier binding mismatch")
+                rows.append((dimension, row))
+        for dimension, row in rows:
+            refs = row.get("source_refs")
+            if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or not ref.strip() for ref in refs):
+                continue
+            claim = _research_row_text(row, dimension)
+            if not claim:
+                continue
+            value = deepcopy(dict(row))
+            # Relevance is not ownership. A shared selected row may explicitly
+            # name another private owner; never relabel it as this pack's actor.
+            owners = [row[key] for key in ("actor_id", "owner_actor_id") if key in row and row[key] is not None]
+            if any(not isinstance(owner, str) or owner not in roster for owner in owners):
+                raise ValueError("research claim owner binding mismatch")
+            if len(set(owners)) > 1:
+                raise ValueError("research claim owner fields conflict")
+            explicit_owner = owners[0] if owners else None
+            if dimension in INTELLIGENCE_DIMENSIONS and explicit_owner is not None and explicit_owner != aid:
+                raise ValueError("research claim owner binding mismatch")
+            owner = explicit_owner
+            owner = owner or aid
+            value.update(actor_id=owner, actor_name=roster[owner]["name"], dimension=dimension, claim=claim)
+            if dimension in structured:
+                value["owner_actor_id"] = explicit_owner
+            selected.append(value)
+
+    aliases: Dict[Any, set] = {}
+    denied = set()
+    owner_denied: Dict[str, set] = {}
+    for row in selected:
+        keys = _research_claim_keys(row)
+        for key in keys:
+            aliases.setdefault(key, set()).update(keys)
+        if _research_denied(row):
+            denied.update(keys)
+            owner_denied.setdefault(row["actor_id"], set()).update(keys)
+
+    def close(keys: set) -> set:
+        pending = list(keys)
+        while pending:
+            for alias in aliases.get(pending.pop(), ()):
+                if alias not in keys:
+                    keys.add(alias)
+                    pending.append(alias)
+        return keys
+
+    close(denied)
+    own_denials = close(owner_denied.get(str(actor_id), set()))
+    result = []
+    for row in selected:
+        if audience == "modeler":
+            result.append(row)
+            continue
+        qualifiers = row.get("qualifiers")
+        qualifiers = qualifiers if isinstance(qualifiers, Mapping) else {}
+        evidence = _epistemic_token(row.get("evidence_type") or qualifiers.get("evidence_type") or "unknown")
+        if (evidence == "analyst_inference" or _epistemic_token(qualifiers.get("evidence_type")) == "analyst_inference"
+                or _research_denied(row)):
+            continue
+        visibility = _epistemic_token(row.get("visibility") or qualifiers.get("visibility"))
+        visibility_labels = {_epistemic_token(value) for value in (
+            row.get("visibility"), qualifiers.get("visibility")) if value}
+        if any(_epistemic_token(value) in {"research_only", "analyst_only", "modeler_only", "not_known_to_actor"}
+               for value in (row.get("visibility"), qualifiers.get("visibility"))):
+            continue
+        keys = _research_claim_keys(row)
+        public_visibility = bool(visibility_labels) and visibility_labels.issubset(PUBLIC_RELATIONSHIP_VISIBILITIES)
+        public = public_visibility and not keys.intersection(denied)
+        explicit_owner = (
+            audience == "actor" and row["actor_id"] == actor_id
+            and (row["dimension"] in INTELLIGENCE_DIMENSIONS or row.get("owner_actor_id") == actor_id)
+            and not public_visibility
+            and visibility not in {"research_only", "analyst_only", "not_known_to_actor"}
+            and not keys.intersection(own_denials)
+            and (row.get("actor_knows") is True or qualifiers.get("actor_knows") is True
+                 or bool(visibility_labels.intersection(ACTOR_KNOWN_VISIBILITIES)))
+        )
+        if public or explicit_owner:
+            row["evidence_type"] = evidence
+            result.append(row)
+    return result

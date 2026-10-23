@@ -146,6 +146,7 @@ def ai(text: str = "", tool_calls=None, invalid=None, *, inp: int = 1000, cached
 
 
 TASK_MARKERS = ("SCOPE TASK", "PLANNING TASK", "KIQ INVESTIGATION TASK", "GAP REVIEW TASK",
+                "POST-GATHER ASSESSMENT TASK",
                 "SECTION WRITING TASK", "EXECUTIVE SUMMARY TASK", "CRITIQUE TASK",
                 "ACTOR EXTRACTION TASK", "FACT EXTRACTION TASK", "FORECAST FRAME EXTRACTION TASK",
                 "CACHE WARM-UP")
@@ -212,11 +213,20 @@ class World:
             "EXECUTIVE SUMMARY TASK": self.exec_summary, "CRITIQUE TASK": self.critique,
             "ACTOR EXTRACTION TASK": self.actors, "FACT EXTRACTION TASK": self.facts,
             "FORECAST FRAME EXTRACTION TASK": self.frame,
+            "POST-GATHER ASSESSMENT TASK": self.assessment,
         }[role]
         return handler(call)
 
     def zh(self) -> bool:
         return self.language == "Chinese"
+
+    def assessment(self, call):
+        text = call["messages"][1][1]
+        payload = json.JSONDecoder().raw_decode(text[text.index("{"):])[0]
+        return ai(json.dumps({"scenarios": [
+            {"scenario_id": row["scenario_id"], "weight": row["weight"],
+             "reason": "The admitted observations do not change the planning assessment.", "evidence_ids": []}
+            for row in payload["initial"]["scenarios"]]}))
 
     # ------------------------------------------------------------ planning
     def scope(self, call):
@@ -792,7 +802,11 @@ def test_e2e_happy_path_writes_every_artifact(tmp_path, bridge):
     assert "gather" in disk_meta["usage"]["phases"] and "synthesize" in disk_meta["usage"]["phases"]
     assert isinstance(disk_meta["research_quality"]["score"], float)
     assert set(disk_meta["source_tiers"]) == {"s1_count", "s2_count", "s3_count", "s4_count", "s_unknown"}
-    assert disk_meta["kiqs"]["completed"] == 4 and disk_meta["kiqs"]["verified"] == 4
+    assert disk_meta["kiqs"]["completed"] == 4 and disk_meta["kiqs"]["verified"] == 0
+    # The fetched pages contain these numbers, but the agent's paraphrases do
+    # not carry typed entity/metric/unit/date/modality proof under the new policy.
+    assert quant[0]["claim_support"]["semantic_support"] is False
+    assert fi["assessment"]["stopping_reason"] == "insufficient_evidence"
     assert all(disk_meta["phases"][p]["status"] == "done" for p in lr.PHASES)
     assert disk_meta["report_chars"] == len(report) and disk_meta["sources_count"] == len(sources)
 

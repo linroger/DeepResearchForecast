@@ -69,11 +69,31 @@ def build_observation(spec: dict, snapshot: dict, actor_id: str, round_index: in
     model = {key: clone(actor.get(key, [])) for key in (
         'objectives', 'values', 'incentives', 'constraints', 'beliefs', 'priorityRules')}
     model.update(actorId=actor_id, name=actor['name'])
+    if 'researchContext' in spec:
+        context = spec['researchContext']
+        require(context.get('schemaVersion') == 'native-research-context/v1'
+                and isinstance(context.get('actors', {}).get(actor_id), str),
+                'invalid_preparation_context', 'Actor preparation projection is missing or invalid')
+        model['researchContext'] = context['actors'][actor_id]
     private = clone(snapshot['actorStates'][actor_id])
     world = {}
     for section in ('accounts', 'metrics', 'rules', 'relations', 'commitments'):
         world[section] = {key: clone(record) for key, record in snapshot.get(section, {}).items()
                           if visible_to(record, actor_id)}
+    for record in world['metrics'].values():
+        if 'baseline' in record:
+            # Internal seals bind the complete research generation, including
+            # modeler-only material. Actors see the public measurement identity
+            # rather than a fingerprint of private research they cannot access.
+            record['baseline'].pop('preparationSha256', None)
+            record['baseline'].pop('researchGenerationId', None)
+            for ref in record.get('basis', {}).get('refs', []):
+                if isinstance(ref, dict):
+                    ref.pop('bundleSha256', None)
+            # The kernel can evolve value while retaining its immutable source
+            # measurement. Do not relabel that result as a fresh observation.
+            record['valueSemantics'] = {'kind': 'simulated_state', 'simulatedAt': period['start'],
+                                        'baselineAppliesTo': 'initial_value'}
     own_offers = [clone(item) for item in snapshot.get('interactions', {}).values()
                   if item.get('proposerId') == actor_id and visible_to(item, actor_id)]
     now = parse_time(period['start'])

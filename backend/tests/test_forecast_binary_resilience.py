@@ -18,6 +18,97 @@ from app.services.forecast_extractor import audit_proposition_consistency
 from tests.conftest import FakeLLMClient
 
 
+def test_fresh_binary_extraction_accepts_justified_ambiguity_without_forced_spread(monkeypatch):
+    from app.services import forecast_extractor as fe
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: default)
+    rows = [{"statement": f"Agency measure {i} exceeds 10 GW by 2027-06-30",
+             "probability": 0.5, "resolution_criteria": "Agency measured operational capacity > 10 GW on 2027-06-30",
+             "resolution_source": "Agency annual capacity register", "theme": "capacity"}
+            for i in range(5)]
+    llm = FakeLLMClient(json_responses=[{"binary_forecasts": rows}])
+    result = fe.extract_binary_forecasts("Evidence is balanced and uncertain.", llm, min_count=5)
+    quality = result["binary_quality"]
+    assert quality["passed"] and quality["distribution_diagnostics"]
+    assert quality["policy_version"] == fe.BINARY_QUALITY_POLICY
+    assert len(llm.calls) == 1
+    prompt = llm.calls[0]["messages"][0]["content"]
+    assert "justified uncertainty" in prompt and "CONTRARIAN FRAMING" not in prompt
+    assert "do not cluster" not in prompt
+    # The real report-agent recomputation consumes these persisted rows.
+    assert fe._binary_quality(result["binary_forecasts"], min_count=5)["passed"]
+    bad = [{**row, "criteria_sharp": False} for row in result["binary_forecasts"]]
+    assert not fe._binary_quality(bad, min_count=5)["passed"]
+    old = [{k: v for k, v in row.items() if k != "quality_policy"} for row in result["binary_forecasts"]]
+    assert not fe._binary_quality(old, min_count=5)["passed"]
+
+
+def test_binary_quality_keeps_probability_and_policy_validation():
+    from app.services import forecast_extractor as fe
+    row = {"probability": 0.5, "criteria_sharp": True, "quality_policy": fe.BINARY_QUALITY_POLICY}
+    assert not fe._binary_quality([{**row, "probability": 1.2}], min_count=1)["passed"]
+    assert not fe._binary_quality([row, {**row, "quality_policy": "unknown/v99"}], min_count=1)["passed"]
+
+
+def _balanced_rows(count=5, prefix="Capacity"):
+    return [{"statement": f"{prefix} measure {i} exceeds 10 GW by 2027-06-30",
+             "probability": 0.5, "resolution_criteria": "Agency operational capacity > 10 GW on 2027-06-30",
+             "resolution_source": "Agency register", "theme": "capacity"} for i in range(count)]
+
+
+def _assert_evidence_prompts(calls):
+    assert calls
+    for call in calls:
+        prompt = "\n".join(row["content"] for row in call["messages"])
+        for quota in ("do not cluster", "CONTRARIAN FRAMING", "40-50%", "0.05-0.35 range",
+                      "express genuine CONVICTION", "genuine conviction, not hedging"):
+            assert quota not in prompt
+
+
+def test_actual_topup_and_ensemble_requests_keep_evidence_policy(monkeypatch):
+    from app.services import forecast_extractor as fe
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: "second" if name == "FORECAST_ENSEMBLE_MODELS" else default)
+    primary = FakeLLMClient(json_responses=[{"binary_forecasts": []}, {"binary_forecasts": _balanced_rows()}])
+    secondary = FakeLLMClient(json_responses=[{"binary_forecasts": _balanced_rows()}], provider="second")
+    result = fe.extract_binary_forecasts("Fixed evidence supports a balanced assessment.", primary, min_count=5,
+                                        ensemble_client_factory=lambda *args, **kwargs: secondary)
+    assert len(primary.calls) == 2 and len(secondary.calls) == 1
+    _assert_evidence_prompts(primary.calls + secondary.calls)
+    assert all(row["quality_policy"] == fe.BINARY_QUALITY_POLICY for row in result["binary_forecasts"])
+    text = fe.render_binary_forecasts_block(result)
+    assert "near 0.5 can be justified" in text and "not hedging" not in text
+
+
+def test_actual_chunked_recovery_requests_never_force_spread(monkeypatch):
+    from app.services import forecast_extractor as fe
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: default)
+
+    class FilteredClient(FakeLLMClient):
+        def chat_json(self, messages, **kwargs):
+            self.calls.append({"messages": messages})
+            if len(messages[0]["content"]) > 16000:
+                raise _ContentFilterError(_FILTER_TEXT)
+            return {"binary_forecasts": _balanced_rows(3, prefix=f"Chunk {len(self.calls)}")}
+
+    client = FilteredClient()
+    result = fbr.extract_binary_forecasts_resilient(_report(6, 3500), client, min_count=5, chunk_chars=4500, max_chunks=3)
+    assert result["recovery"]["mode"] == "chunked_after_content_filter"
+    assert result["binary_quality"]["policy_version"] == fe.BINARY_QUALITY_POLICY
+    _assert_evidence_prompts(client.calls)
+
+
+def test_explicit_legacy_requests_retain_old_distribution_policy(monkeypatch):
+    from app.services import forecast_extractor as fe
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: default)
+    client = FakeLLMClient(json_responses=[{"binary_forecasts": _balanced_rows()}, {"binary_forecasts": []}])
+    result = fe.extract_binary_forecasts("Same fixed evidence.", client, min_count=5,
+                                        binary_quality_policy=fe.LEGACY_BINARY_QUALITY_POLICY)
+    assert len(client.calls) == 2
+    assert "CONTRARIAN FRAMING" in client.calls[0]["messages"][0]["content"]
+    assert "0.05-0.35 range" in client.calls[1]["messages"][0]["content"]
+    assert not result["binary_quality"]["passed"]
+    assert "not hedging" in fe.render_binary_forecasts_block(result)
+
+
 class _ContentFilterError(Exception):
     pass
 

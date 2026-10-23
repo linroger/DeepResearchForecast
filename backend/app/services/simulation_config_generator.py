@@ -234,6 +234,8 @@ class AgentActivityConfig:
     # selecting activity, topics, stance and influence.  It remains in the
     # saved config for audit and downstream behavior hooks; audience agents
     # and legacy dossiers leave both fields empty.
+    actor_id: str = ""
+    preparation_audience: str = ""
     actor_context_digest: str = ""
     actor_context_evidence_gap_audit: Dict[str, Any] = field(
         default_factory=dict
@@ -378,6 +380,7 @@ class SimulationParameters:
     # relationships, settings).  None → to_dict() omits the field and the runner keeps the legacy
     # in-band evolution path; hours mode never carries it.
     world_model: Optional[Dict[str, Any]] = None
+    research_preparation: Optional[Dict[str, Any]] = None
 
     # 生成元数据
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -415,6 +418,8 @@ class SimulationParameters:
             data["output_language"] = self.output_language
         if self.world_model:
             data["world_model"] = self.world_model
+        if self.research_preparation is not None:
+            data["research_preparation"] = self.research_preparation
         return data
     
     def to_json(self, indent: int = 2) -> str:
@@ -482,6 +487,7 @@ class SimulationConfigGenerator:
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
         max_rounds: Optional[int] = None,
         research_language: Optional[str] = None,
+        preparation_context: Optional[Dict[str, Any]] = None,
     ) -> SimulationParameters:
         """
         智能生成完整的模拟配置（分步生成）
@@ -512,6 +518,15 @@ class SimulationConfigGenerator:
         Returns:
             SimulationParameters: 完整的模拟参数
         """
+        if preparation_context is not None:
+            from .research_preparation import validate_preparation_context
+            from .actor_context import canonical_json_sha256, text_sha256
+            validate_preparation_context(preparation_context, expected_sources={
+                "actors_sha256": canonical_json_sha256(actors),
+                "report_sha256": text_sha256(document_text),
+                "question_sha256": text_sha256(simulation_requirement)})
+        self._preparation_context_for_generation = preparation_context
+        self._prepared_canonical_context = self._dossier_uses_canonical_intelligence(actors)
         logger.info(f"开始智能生成模拟配置: simulation_id={simulation_id}, 实体数={len(entities)}")
 
         # PREP-4(2): 英文调研 + 未显式设置 SIM_ACTIVITY_PROFILE 环境变量 → 本实例切换
@@ -545,14 +560,24 @@ class SimulationConfigGenerator:
                 progress_callback(step, total_steps, message)
             logger.info(f"[{step}/{total_steps}] {message}")
         
+        public_legacy_actors = actors
+        if preparation_context is not None and not self._dossier_uses_canonical_intelligence(actors):
+            from .world_model_seed import _legacy_shared_projection
+            public_legacy_actors = _legacy_shared_projection(actors, preparation_context["scope"]["as_of"]) or {}
+
         # 1. 构建基础上下文信息（含深度研究档案摘要，如有）
-        context = self._build_context(
-            simulation_requirement=simulation_requirement,
-            document_text=document_text,
-            entities=entities,
-            actors=actors,
-            actor_context_packs=actor_context_packs,
-        )
+        if preparation_context is not None and self._dossier_uses_canonical_intelligence(actors):
+            from .research_preparation import render_preparation_context
+            context = render_preparation_context(preparation_context, audience="public", max_chars=24000)
+        else:
+            context = self._build_context(
+                simulation_requirement=simulation_requirement,
+                document_text=document_text if preparation_context is None else "",
+                entities=entities, actors=public_legacy_actors, actor_context_packs=actor_context_packs)
+            if preparation_context is not None:
+                from .research_preparation import render_preparation_context
+                context = "Legacy research context (unverified synthesis; preserve its uncertainty):\n" + context
+
 
         reasoning_parts = []
         if self._profile_override:
@@ -609,12 +634,12 @@ class SimulationConfigGenerator:
             context,
             simulation_requirement,
             entities,
-            actors=actors,
+            actors=public_legacy_actors,
             actor_context_packs=actor_context_packs,
         )
         event_config = self._parse_event_config(
             event_config_result,
-            actors=actors,
+            actors=public_legacy_actors,
             actor_context_packs=actor_context_packs,
         )
         reasoning_parts.append(f"事件配置: {event_config_result.get('reasoning', '成功')}")
@@ -629,22 +654,32 @@ class SimulationConfigGenerator:
         market_priors = self._load_prediction_markets(simulation_id)
         if market_priors:
             logger.info(f"市场先验: 载入 {len(market_priors)} 个 relevance-gated 市场")
-        world_brief = ""
-        try:
-            from .official_data import load_for_simulation, research_window_for_simulation
-            official_data = load_for_simulation(simulation_id)
-            world_brief = self._build_world_brief(
-                simulation_requirement, actors, event_config.hot_topics,
-                prediction_markets=market_priors,
-                actor_context_packs=actor_context_packs,
-                official_data=official_data,
-                official_window=research_window_for_simulation(simulation_id) if official_data else None,
-            )
-            if world_brief:
-                reasoning_parts.append(f"世界简报: {len(world_brief)} 字")
-        except Exception as e:
-            logger.warning(f"世界简报构建失败（降级省略，不影响模拟）: {e}")
+        if preparation_context is not None:
+            from .research_preparation import render_preparation_context
+            world_brief = render_preparation_context(preparation_context, audience="public", max_chars=16000)
+            if not self._dossier_uses_canonical_intelligence(actors):
+                legacy_brief = self._build_world_brief(
+                    simulation_requirement, public_legacy_actors, event_config.hot_topics,
+                    prediction_markets=market_priors, actor_context_packs=actor_context_packs)
+                world_brief = (world_brief + "\n\nLegacy research context (unverified synthesis):\n" + legacy_brief)
+        else:
             world_brief = ""
+            try:
+                from .official_data import load_for_simulation, research_window_for_simulation
+                official_data = load_for_simulation(simulation_id)
+                world_brief = self._build_world_brief(
+                    simulation_requirement, actors, event_config.hot_topics,
+                    prediction_markets=market_priors,
+                    actor_context_packs=actor_context_packs,
+                    official_data=official_data,
+                    official_window=research_window_for_simulation(simulation_id) if official_data else None,
+                )
+                if world_brief:
+                    reasoning_parts.append(f"世界简报: {len(world_brief)} 字")
+            except Exception as e:
+                logger.warning(f"世界简报构建失败（降级省略，不影响模拟）: {e}")
+                world_brief = ""
+
 
         # ========== 步骤3-N: 分批生成Agent配置 ==========
         # PREP-4(1): 按批记录 LLM 成功/规则回退，让 generation_reasoning 能区分
@@ -699,7 +734,7 @@ class SimulationConfigGenerator:
             audience_configs = self._generate_audience_agent_configs(
                 start_idx=len(all_agent_configs),
                 event_config=event_config,
-                actors=actors,
+                actors=public_legacy_actors,
                 main_agent_configs=all_agent_configs,
                 actor_context_packs=actor_context_packs,
             )
@@ -728,7 +763,7 @@ class SimulationConfigGenerator:
             event_config.initial_follows = self._build_initial_follows(
                 all_agent_configs,
                 entities,
-                actors,
+                public_legacy_actors,
                 actor_context_packs=actor_context_packs,
             )
             reasoning_parts.append(f"初始关注图: {len(event_config.initial_follows)} 条关注边")
@@ -742,7 +777,7 @@ class SimulationConfigGenerator:
         # 运行脚本在对应轮次以 CREATE_POST 触发。无 key_events / 无法解析 → 空，不影响模拟。
         try:
             event_config.scheduled_events = self._build_scheduled_events(
-                actors, time_config, all_agent_configs, max_rounds=max_rounds,
+                public_legacy_actors, time_config, all_agent_configs, max_rounds=max_rounds,
                 timeline=temporal_timeline,
                 actor_context_packs=actor_context_packs,
             )
@@ -780,13 +815,15 @@ class SimulationConfigGenerator:
             try:
                 world_model_block = self._build_world_model_block(
                     simulation_requirement, actors, all_agent_configs, actor_context_packs,
-                    temporal_timeline, simulation_id,
+                    temporal_timeline, simulation_id, preparation_context=preparation_context,
                 )
                 if world_model_block:
                     from .world_model_seed import world_model_seed_summary
                     reasoning_parts.append(world_model_seed_summary(world_model_block))
                     logger.info(world_model_seed_summary(world_model_block))
             except Exception as e:
+                if preparation_context is not None:
+                    raise
                 logger.warning(f"world model seed failed (legacy evolution path keeps running): {e}")
                 world_model_block = None
 
@@ -815,6 +852,8 @@ class SimulationConfigGenerator:
                 echo_chamber_strength=0.6
             )
         
+        from .preparation_adapter import preparation_marker
+
         # 构建最终参数
         params = SimulationParameters(
             simulation_id=simulation_id,
@@ -830,6 +869,7 @@ class SimulationConfigGenerator:
             world_brief=world_brief,
             output_language=getattr(self, "_output_language", "") or "",
             world_model=world_model_block,
+            research_preparation=preparation_marker(preparation_context),
             # TEMPORAL spec §3: beyond_horizon_events/warnings 已在 _build_scheduled_events
             # 中回填到 timeline，此处一次性序列化（None → to_dict 省略字段）。
             temporal_config=(asdict(temporal_timeline) if temporal_timeline is not None else None),
@@ -1063,7 +1103,7 @@ class SimulationConfigGenerator:
         且必须落在 (as_of, as_of+30年] 内，否则丢弃返回 None（继续降级到默认时域）。
         任何调用/解析异常 → None，绝不阻断配置生成。
         """
-        context_truncated = context[:self.TIME_CONFIG_CONTEXT_LENGTH]
+        context_truncated = self._bounded_generation_context(context, self.TIME_CONFIG_CONTEXT_LENGTH)
         prompt = f"""从以下预测问题与背景材料中找出「预测判定日」（问题所问的结果应在哪一天之前见分晓）。
 
 {context_truncated}
@@ -2180,6 +2220,7 @@ class SimulationConfigGenerator:
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]],
         temporal_timeline: Any,
         simulation_id: Optional[str] = None,
+        preparation_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """REFLEXIVE WORLD (design §2.7): the sealed ``world_model`` seed block.
 
@@ -2192,7 +2233,7 @@ class SimulationConfigGenerator:
         official_data = None
         try:
             from .official_data import load_for_simulation
-            official_data = load_for_simulation(simulation_id) if simulation_id else None
+            official_data = load_for_simulation(simulation_id) if simulation_id and preparation_context is None else None
         except Exception:  # noqa: BLE001 — official enrichment is optional
             official_data = None
         block = build_world_model_seed(
@@ -2201,6 +2242,7 @@ class SimulationConfigGenerator:
             question=simulation_requirement,
             actor_context_packs=actor_context_packs,
             official_data=official_data,
+            preparation_context=preparation_context,
             temporal_timeline=temporal_timeline,
             audience_entity_type=self.AUDIENCE_ENTITY_TYPE,
             max_variables=int(getattr(Config, "SIM_WORLD_MAX_VARIABLES", 24) or 24),
@@ -2339,6 +2381,22 @@ class SimulationConfigGenerator:
             return _tb.clamp_chars(budget, floor, ceiling)
         except Exception:  # noqa: BLE001 — 预算化仅为增强，任何失败退回固定 floor
             return floor
+
+    def _bounded_generation_context(self, context: str, max_chars: int) -> str:
+        """Reserve complete prepared rows before legacy consumers apply prefixes."""
+        bundle = getattr(self, "_preparation_context_for_generation", None)
+        if bundle is None:
+            return context[:max_chars]
+        from .research_preparation import render_preparation_context
+        if getattr(self, "_prepared_canonical_context", False):
+            return render_preparation_context(bundle, audience="public", max_chars=max_chars)
+        projection = render_preparation_context(bundle, audience="public", max_chars=max_chars * 3 // 4)
+        remaining = max_chars - len(projection) - 2
+        legacy_lines = []
+        for line in context.splitlines():
+            if sum(len(x) + 1 for x in legacy_lines) + len(line) <= remaining:
+                legacy_lines.append(line)
+        return "\n".join(legacy_lines) + "\n\n" + projection
 
     def _build_context(
         self,
@@ -2576,7 +2634,7 @@ class SimulationConfigGenerator:
     def _generate_time_config(self, context: str, num_entities: int) -> Dict[str, Any]:
         """生成时间配置"""
         # 使用配置的上下文截断长度
-        context_truncated = context[:self.TIME_CONFIG_CONTEXT_LENGTH]
+        context_truncated = self._bounded_generation_context(context, self.TIME_CONFIG_CONTEXT_LENGTH)
 
         # 计算最大允许值（90%的agent数）
         max_agents_allowed = max(1, int(num_entities * 0.9))
@@ -2768,7 +2826,7 @@ class SimulationConfigGenerator:
         )
 
         # 使用配置的上下文截断长度
-        context_truncated = context[:self.EVENT_CONFIG_CONTEXT_LENGTH]
+        context_truncated = self._bounded_generation_context(context, self.EVENT_CONFIG_CONTEXT_LENGTH)
 
         # Canonical v1 accepts only explicitly-public, source-bound rows here;
         # unversioned dossiers retain the historical raw digest.
@@ -3431,6 +3489,8 @@ class SimulationConfigGenerator:
             config = AgentActivityConfig(
                 agent_id=agent_id,
                 entity_uuid=entity.uuid,
+                actor_id=(actor_id_for(matched_actors[agent_id]) if matched_actors.get(agent_id) else ""),
+                preparation_audience=("actor" if matched_actors.get(agent_id) else "public" if not canonical_run else ""),
                 entity_name=(
                     canonical_runtime_names.get(agent_id, f"Unbound Actor {agent_id}")
                     if canonical_v1 else entity.name

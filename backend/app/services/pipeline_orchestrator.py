@@ -804,6 +804,10 @@ def capture_safety_policy_v1(origin: str) -> dict[str, Any]:
         "report_spine_selfconsistency_k": max(
             1, int(getattr(Config, "REPORT_SPINE_SELFCONSISTENCY_K", 1) or 1)),
         "ensemble_extremize_a": float(getattr(Config, "ENSEMBLE_EXTREMIZE_A", 1.0) or 1.0),
+        # This methodology change is pinned only on new admission. Recovering
+        # an old unmarked pipeline must not adopt new probability prompts.
+        "binary_quality_policy": ("conviction-quality/v0" if origin == "resume_reconstructed_safe"
+                                  else "evidence-quality/v1"),
         "simulation_forecast_effect": str(
             getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
             or "diagnostic_only"),
@@ -3296,7 +3300,7 @@ _RESEARCH_CONTRACT_FILES = (
     "timeline.json", "quantitative.json", "contested.json",
     "prediction_markets.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
-    "charts.json", "news_market_context.json",
+    "charts.json", "news_market_context.json", "research_assessment.json",
 )
 
 _RESEARCH_JUDGE_DIMS = (
@@ -3505,12 +3509,16 @@ def _research_data_directory_traversal(path: str, *, create: bool) -> int:
         for part in path.split(os.sep)[1:]:
             if part in ("", "."):
                 continue
-            if create and part != "..":
+            try:
+                child = os.open(part, flags, dir_fd=directory)
+            except FileNotFoundError:
+                if not create or part == "..":
+                    raise
                 try:
                     os.mkdir(part, dir_fd=directory)
                 except FileExistsError:
-                    pass
-            child = os.open(part, flags, dir_fd=directory)
+                    pass  # Another creator won; the no-follow open still validates it.
+                child = os.open(part, flags, dir_fd=directory)
             os.close(directory)
             directory = child
         return directory
@@ -3928,6 +3936,29 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
             errors.append("report_incomplete")
         else:
             errors.extend(_research_judge_contract_errors(root, entries, report))
+        meta = _read_json(os.path.join(root, "meta.json")) or {}
+        assessment_pin = meta.get("research_assessment") if isinstance(meta, dict) else None
+        assessment_file = "research_assessment.json"
+        actor_document = _read_json(os.path.join(root, "actors.json")) or {}
+        forecast_inputs = actor_document.get("forecast_inputs", {}) if isinstance(actor_document, dict) else {}
+        consumed_assessment = forecast_inputs.get("assessment") if isinstance(forecast_inputs, dict) else None
+        if (assessment_pin is not None or consumed_assessment is not None
+                or os.path.lexists(os.path.join(root, assessment_file))):
+            assessment = _read_json(os.path.join(root, assessment_file))
+            if (not isinstance(assessment_pin, dict) or not isinstance(assessment, dict)
+                    or assessment_pin.get("file") != assessment_file
+                    or assessment_pin.get("schema_version") != "post-gather-assessment/v1"
+                    or assessment.get("schema_version") != assessment_pin.get("schema_version")
+                    or assessment_file not in entries
+                    or entries[assessment_file].get("sha256") != assessment_pin.get("file_sha256")):
+                errors.append("research_assessment_missing_or_unbound")
+            else:
+                body = {k: v for k, v in assessment.items() if k != "sha256"}
+                digest = hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+                if (digest != assessment.get("sha256") or digest != assessment_pin.get("sha256")
+                        or consumed_assessment is not None and consumed_assessment != assessment):
+                    errors.append("research_assessment_content_mismatch")
         # Optional contract-owned artifacts absent from the generation manifest
         # would prove that a stale file survived promotion.
         for name in _RESEARCH_CONTRACT_FILES:

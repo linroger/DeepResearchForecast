@@ -124,6 +124,13 @@ def build_simulation_config_seal(
             "sha256": actual,
         }
 
+    from .preparation_adapter import load_config_preparation
+    preparation = load_config_preparation(sim_dir, config)
+    if preparation is not None:
+        bindings["research_preparation"] = {
+            name: _file_sha256(os.path.join(sim_dir, name))
+            for name in ("research_preparation.json", "research_preparation_manifest.json")}
+
     manifest = {
         "schema_version": SIMULATION_CONFIG_MANIFEST_VERSION,
         "simulation_id": str(simulation_id),
@@ -226,6 +233,18 @@ def validate_simulation_config_seal(
             raise ValueError("actor role manifest binding is invalid")
         if _file_sha256(os.path.join(sim_dir, expected_file)) != binding.get("sha256"):
             raise ValueError(f"{platform} actor role manifest fingerprint mismatch")
+    from .preparation_adapter import load_config_preparation
+    preparation = load_config_preparation(sim_dir, config)
+    preparation_binding = bindings.get("research_preparation")
+    if preparation is not None:
+        names = {"research_preparation.json", "research_preparation_manifest.json"}
+        if not isinstance(preparation_binding, dict) or set(preparation_binding) != names:
+            raise ValueError("Research preparation is not sealed into the executable config")
+        for name, expected in preparation_binding.items():
+            if _file_sha256(os.path.join(sim_dir, name)) != expected:
+                raise ValueError("Research preparation seal differs from the executable config")
+    elif preparation_binding is not None:
+        raise ValueError("Research preparation marker is missing from the executable config")
     manifest["manifest_sha256"] = manifest_sha
     return manifest
 
@@ -898,7 +917,7 @@ class SimulationManager:
     def prepare_world_simulation(self, simulation_id: str, *, raw_spec: Optional[dict],
                                  research_report: str, research_generation_id: str,
                                  research_engine: str, actor_bundle=None, policy_spec=None,
-                                 ontology=None, simulation_requirement="") -> SimulationState:
+                                 ontology=None, simulation_requirement="", preparation_context=None) -> SimulationState:
         from .world_simulation.service import WorldSimulationService
         from .world_simulation.contracts import require
         require(raw_spec is not None or policy_spec is not None, "world_model_not_ready",
@@ -908,12 +927,21 @@ class SimulationManager:
             raise ValueError("Simulation does not exist")
         if validate_simulation_engine(state.simulation_engine) != "world-v1":
             raise ValueError("Engine mismatch: world preparation requires world-v1")
+        if preparation_context is None:
+            from .preparation_adapter import prepare_research_context
+            document = (actor_bundle["actors"] if isinstance(actor_bundle, dict)
+                        and isinstance(actor_bundle.get("actors"), dict) else actor_bundle)
+            preparation_context = prepare_research_context(
+                simulation_id, question=simulation_requirement, research_report=research_report,
+                actors=document, research_generation_id=research_generation_id,
+                allow_sparse_actor_sections=True)
         prepared = WorldSimulationService.prepare_model(
             simulation_id, raw_spec=raw_spec, research_report=research_report,
             research_generation_id=research_generation_id,
             research_engine=research_engine, actor_bundle=actor_bundle,
             policy_spec=policy_spec, ontology=ontology,
-            simulation_requirement=simulation_requirement, root=self.SIMULATION_DATA_DIR)
+            simulation_requirement=simulation_requirement, root=self.SIMULATION_DATA_DIR,
+            preparation_context=preparation_context)
         return self._pin_world_preparation(state, prepared)
 
     def _pin_world_preparation(self, state: SimulationState, prepared: dict) -> SimulationState:
@@ -985,6 +1013,10 @@ class SimulationManager:
         
         if validate_simulation_engine(state.simulation_engine) != "oasis-legacy":
             raise ValueError("World preparation requires raw world_spec and source bindings")
+
+        from .preparation_adapter import admit_research_inputs
+        admitted_research = admit_research_inputs(
+            simulation_id, question=simulation_requirement, research_report=document_text, actors=actors)
 
         try:
             state.status = SimulationStatus.PREPARING
@@ -1095,6 +1127,13 @@ class SimulationManager:
                 state.actor_context_report_sha256 = None
                 state.actor_context_actors_sha256 = None
 
+            from .research_preparation import compile_preparation_context, write_preparation_context
+            preparation_context = (compile_preparation_context(
+                **admitted_research, actor_context_packs=actor_context_packs)
+                if admitted_research is not None else None)
+            if preparation_context is not None:
+                write_preparation_context(sim_dir, preparation_context)
+
             state.entities_count = filtered.filtered_count
             state.entity_types = list(filtered.entity_types)
             
@@ -1130,6 +1169,7 @@ class SimulationManager:
                 graph_id=state.graph_id,
                 persona_language=("en" if str(research_language or "").strip().lower().startswith("en") else None),
             )
+            generator.preparation_context = preparation_context
             generator.role_dossier_sha256 = actor_cast_manifest.get("dossier_sha256") or ""
             generator.role_cast_manifest_sha256 = actor_cast_sha
             generator.actor_context_bindings = context_binding_by_actor_id(
@@ -1256,9 +1296,12 @@ class SimulationManager:
                 enable_reddit=state.enable_reddit,
                 actors=actors,  # 深度研究档案（可选）：实证立场/热点/时间线进配置
                 actor_context_packs=actor_context_packs,
+                preparation_context=preparation_context,
                 max_rounds=max_rounds,  # PREP-1: 定时事件按真实执行轮数窗排期
                 research_language=research_language,  # PREP-4: 英文调研→global_market 画像
             )
+            from .preparation_adapter import preparation_marker
+            sim_params.research_preparation = preparation_marker(preparation_context)
             
             if progress_callback:
                 progress_callback(

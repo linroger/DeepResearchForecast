@@ -2873,6 +2873,12 @@ class ReportAgent:
         # Returning a fresh copy from the property also prevents caller mutation.
         from .ensemble import freeze_report_policy
         self._report_policy = freeze_report_policy(report_policy)
+        from .forecast_extractor import BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY
+        quality_policy = (report_policy.get("binary_quality_policy", LEGACY_BINARY_QUALITY_POLICY)
+                          if report_policy is not None else LEGACY_BINARY_QUALITY_POLICY)
+        if quality_policy not in (BINARY_QUALITY_POLICY, LEGACY_BINARY_QUALITY_POLICY):
+            raise ValueError("Unsupported saved binary quality policy")
+        self._binary_quality_policy = quality_policy
         _context = _news_context._validated_copy(news_market_context)
         self._news_context_sha256 = (_context or {}).get("sha256")
         self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
@@ -5878,6 +5884,7 @@ class ReportAgent:
                     horizon_date=_hz_date,
                     data_pack=getattr(self, "_data_pack", "") or None,
                     official_data=getattr(self, "official_data", None),
+                    binary_quality_policy=getattr(self, "_binary_quality_policy", "conviction-quality/v0"),
                     **self._backtest_extraction_kwargs(),
                 )
                 if _bres.get("binary_forecasts"):
