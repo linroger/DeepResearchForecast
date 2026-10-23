@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import logging
-import json
 import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
