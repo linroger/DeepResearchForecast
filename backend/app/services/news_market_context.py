@@ -123,6 +123,12 @@ def _validated_copy(context):
 
 def load_context(handoff_dir) -> dict:
     """Missing snapshot returns {}; malformed/tampered present proof raises."""
+    # Config-derived roots (Config.UPLOAD_FOLDER / PIPELINE_DATA_DIR) carry
+    # unnormalized ".." components; the bridge's fail-closed root guard
+    # rejects them, so resolve to the canonical absolute path — the same
+    # normalization the research launcher pins for the subprocess
+    # (DEERFLOW_RUN_ARTIFACT_DIR).
+    handoff_dir = os.path.realpath(handoff_dir)
     path = Path(handoff_dir) / CONTEXT_FILENAME
     # lexists distinguishes an absent capture from a broken symbolic link.
     if not os.path.lexists(path):
@@ -135,7 +141,9 @@ def load_context(handoff_dir) -> dict:
 
 def merge_contexts(input_dirs, output_dir) -> dict:
     """Delegate deterministic sealed-generation merge to its single owner."""
-    return _validated_copy(_bridge_api().merge_contexts(input_dirs, output_dir))
+    return _validated_copy(_bridge_api().merge_contexts(
+        [os.path.realpath(directory) for directory in input_dirs],
+        os.path.realpath(output_dir)))
 
 
 def render_context(context, lang="en", max_items=12) -> str:
