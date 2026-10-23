@@ -931,7 +931,26 @@ _RC_METRIC_RE = re.compile(
     r"prime minister|mayor\w*|holds? office|commenc\w*|"
     r"chancell\w*|cabinet|coalition|elections?|withdraw\w*|"
     r"roll-?call|two-?thirds|amend\w*|constitution\w*|deficit|"
-    r"bill|minister\w*|seat\w*)\b",
+    r"bill|minister\w*|seat\w*)\b|"
+    # 2026-10-23 (Russia-Ukraine run, pipe_9f5353ac9955/report_c492d6254e36):
+    # conflict/sanctions registers were equally invisible to the matcher —
+    # "ISW control-of-terrain assessments show Russia controlling the entire
+    # territory of Donetsk Oblast", "US executive formally waives or lifts
+    # sanctions on Russian oil per Treasury/OFAC actions", "diesel-deal
+    # sanctions waiver not renewed by 2027-07-01 per OFAC action" all resolve
+    # on named official/observatory markers, yet scored metric=0 (11/15
+    # sharp → publish gate abort at 95%). Every stem below denotes an
+    # observable official marker or named-assessment output, not a vague
+    # escalation register: signed ceasefire/armistice/truce texts and peace
+    # deals, sanctions/waiver/OFAC actions, ISW-style territory-control and
+    # frontline assessments, seizures/captures, mobilization decrees,
+    # prisoner exchanges, NATO accession.
+    r"\b(?:ceasefires?|armistice\w*|truce\w*|"
+    r"peace (?:deal|agreement|talks?|settlement)|"
+    r"sanction\w*|waive\w*|waivers?|ofac|"
+    r"territor\w*|seizures?|captur\w*|mobiliz\w*|demobiliz\w*|"
+    r"frontlines?|prisoners? (?:exchange|swap)|swap\w* of prisoners|"
+    r"nato (?:membership|accession|invitation))\b",
     re.I)
 
 

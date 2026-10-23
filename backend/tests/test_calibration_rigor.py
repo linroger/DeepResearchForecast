@@ -464,3 +464,37 @@ def test_validate_resolution_criteria_continental_parliamentary_markers():
     assert FE.validate_resolution_criteria(
         "The coalition could become unstable at some point"
     )["sharp"] is False
+
+
+def test_conflict_sanctions_criteria_score_sharp():
+    """2026-10-23 Russia-Ukraine run (report_c492d6254e36): ISW territory-control
+    and OFAC sanctions registers scored metric=0 (11/15 sharp -> publish gate
+    abort at 95%). Each stem is a named official/observatory marker, and vague
+    escalation prose must stay unsharp."""
+    FE = pytest.importorskip("app.services.forecast_extractor")
+    assert FE.validate_resolution_criteria(
+        "Resolves YES if ISW control-of-terrain assessments on 2027-12-31 show "
+        "Russia controlling the entire territory of Donetsk Oblast."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Resolves YES if ISW control-of-terrain assessments show net Ukrainian "
+        "territorial control gains over calendar year 2027 (2027-12-31 vs "
+        "2027-01-01)."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Resolves YES if, before 2027-07-01, the US executive formally waives or "
+        "lifts sanctions on Russian oil beyond the diesel-deal waiver, per "
+        "Treasury/OFAC actions."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "Resolves YES if the diesel-deal sanctions waiver is not renewed and not "
+        "broadened by 2027-07-01, per OFAC action or Reuters reporting."
+    )["sharp"] is True
+    assert FE.validate_resolution_criteria(
+        "A ceasefire or armistice text signed by authorized representatives "
+        "enters into force on or before 2027-12-31."
+    )["sharp"] is True
+    # Vague escalation prose still fails (no named marker, no threshold).
+    assert FE.validate_resolution_criteria(
+        "Tensions escalate further in the ongoing conflict during 2027."
+    )["sharp"] is False
