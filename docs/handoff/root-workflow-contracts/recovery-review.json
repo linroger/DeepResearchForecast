@@ -1,0 +1,331 @@
+{
+  "verdict": "ACCEPTED",
+  "ready_for_controlled_runtime_refresh": true,
+  "created_utc": "2026-10-23T06:16:39.810621+00:00",
+  "root": {
+    "tests": 1431,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suite_count": 60,
+    "source_files": 760,
+    "source_drift": [],
+    "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/completed.json",
+    "parent_pid": 21854,
+    "parent_exit_code": 0,
+    "shutdown_complete": true,
+    "children": [
+      {
+        "pid": 21913,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-21913.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22128,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22128.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22172,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22172.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22232,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22232.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22263,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22263.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22463,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22463.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22635,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22635.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22648,
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22648.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-run-root-recovery-final-t846thea/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "script_hashes_match": true
+      }
+    ],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 8,
+      "allowed:child_liveness": 4
+    },
+    "manifest": "/private/tmp/drf-run-root-recovery-final-t846thea/source-hashes.json",
+    "manifest_sha256": "473f62b9d02fa4e71bfb23c82175562146be0341c9ca1811f4f9430ab285f786",
+    "duration_seconds": 113.07
+  },
+  "runtime": {
+    "tests": 1630,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suite_count": 70,
+    "source_files": 771,
+    "source_drift": [],
+    "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/completed.json",
+    "parent_pid": 21828,
+    "parent_exit_code": 0,
+    "shutdown_complete": true,
+    "children": [
+      {
+        "pid": 21917,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-21917.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22137,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22137.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22188,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22188.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22459,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22459.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22460,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22460.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22468,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22468.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22637,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22637.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22763,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22763.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "script_hashes_match": true
+      },
+      {
+        "pid": 22848,
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22848.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "source_drift": [],
+        "script_hashes": {
+          "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/pytest-tmp/test_compiler_imports_nothing_0/record_import_probe.py": "ed09d4d08e253484451bb92da210044b1a6f39420ec267e8b30f3048f0354266"
+        },
+        "script_hashes_match": true
+      }
+    ],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 9,
+      "allowed:child_liveness": 4
+    },
+    "manifest": "/private/tmp/drf-root-recovery-nmycmp_f/final-source-hashes.json",
+    "manifest_sha256": "f02c3645bef89656703d724fe662edb385e1fa0d168c0ecb48ec51260241d576",
+    "duration_seconds": 146.71
+  },
+  "focused": {
+    "tests": 44,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suite_count": 2,
+    "source_files": 760,
+    "source_drift": [],
+    "receipt": "/private/tmp/drf-run-partial-checkpoint-focused-hda69iy8/evidence/completed.json",
+    "parent_pid": 20426,
+    "parent_exit_code": 0,
+    "shutdown_complete": true,
+    "children": [],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1
+    },
+    "manifest": "/private/tmp/drf-run-partial-checkpoint-focused-hda69iy8/source-hashes.json",
+    "manifest_sha256": "473f62b9d02fa4e71bfb23c82175562146be0341c9ca1811f4f9430ab285f786"
+  },
+  "clean_root_source_drift": [],
+  "runtime_plan": [
+    {
+      "path": "backend/app/services/pipeline_orchestrator.py",
+      "candidate_sha256": "6e331f604da3dfe328a7c8c0a6498791a4270d0f0d6b27f25dcd24a79318483c",
+      "candidate_matches": true,
+      "tested_matches": true,
+      "clean_root_matches": true,
+      "live_before_matches": true,
+      "no_text_conflict": true
+    }
+  ],
+  "active_source_files_checked": 182,
+  "active_source_drift": [],
+  "source_review": {
+    "file": "backend/app/services/pipeline_orchestrator.py",
+    "clean_sha256": "39ddb9d93e64fcc76ef4174068d0f8edde96a8bf643b12279b1bd78452436530",
+    "runtime_sha256": "6e331f604da3dfe328a7c8c0a6498791a4270d0f0d6b27f25dcd24a79318483c",
+    "helper_ast_identical": true,
+    "helper_ast_sha256": "952d414352a9a41bec20c7447ec24113d8d39678c30f6c309b567d620a7ff3f6",
+    "helper_span": [
+      4466,
+      4487
+    ],
+    "root_changed_functions": [
+      "PipelineOrchestrator._run",
+      "_validate_news_context_for_research_start"
+    ],
+    "peer_changed_functions": [
+      "PipelineOrchestrator._completed_sim_reusable",
+      "PipelineOrchestrator._publish_run_summary",
+      "PipelineOrchestrator._publish_simulation_record",
+      "PipelineOrchestrator._reconcile_completed_simulation_state",
+      "PipelineOrchestrator._record_stage_artifacts",
+      "PipelineOrchestrator._record_stage_artifacts.add_if",
+      "PipelineOrchestrator._require_run_completion_evidence",
+      "PipelineOrchestrator._run",
+      "PipelineOrchestrator._run_one_seed",
+      "PipelineOrchestrator._run_reuse_ready",
+      "PipelineOrchestrator._run_world_seed",
+      "PipelineOrchestrator._run_world_stages",
+      "PipelineOrchestrator._stage_artifact_specs",
+      "PipelineOrchestrator._validate_reuse",
+      "PipelineOrchestrator._wait_world_simulation"
+    ],
+    "peer_nonidentical_functions": [
+      "PipelineOrchestrator._run"
+    ],
+    "root_functions_lost": [],
+    "peer_functions_lost": [],
+    "test_sha256": "a4747b1e7968b47d272567ac5d16bb61b7f26c9ae0f46a081678d3c803abe618"
+  },
+  "preserved_native_red": {
+    "receipt": "/private/tmp/drf-partial-native-red-53dhptyy/evidence/completed.json",
+    "tests": 5,
+    "failures": 5,
+    "errors": 0,
+    "source_drift": []
+  },
+  "scope": "Read-only exact source/test review and completed parent/child/hash/three-way reconciliation. No new tests, provider calls, saved-run inspection, source edits, service changes or Git operations. Operational idle/cancellation checks remain with the parent."
+}

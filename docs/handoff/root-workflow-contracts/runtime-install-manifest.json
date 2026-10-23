@@ -1,0 +1,90 @@
+[
+  {
+    "path": "backend/app/api/simulation.py",
+    "peer_delta": true,
+    "conflict": false,
+    "before_sha256": "ba294cc83e2bf8e36eb0d6e5876cb4dd7d587ddad97dbdc8d9bfd345956f53fc",
+    "root_sha256": "562812854346025205b7eb9267d525fd87b504e30a29b77f3c78043a64af4988",
+    "candidate_sha256": "ebae4b9f20607a0b3512b3d65890a88d046913e3b892df9d218f1fad1b0a1999"
+  },
+  {
+    "path": "backend/app/services/actor_context.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "2b60773d44ded334f281909a0c98601aec8390f5866670d220a9b364ff540f6f",
+    "root_sha256": "e10280317bcff0aab739dcc75466d61f078aa7b7e03d916b368305e435cf2135",
+    "candidate_sha256": "e10280317bcff0aab739dcc75466d61f078aa7b7e03d916b368305e435cf2135"
+  },
+  {
+    "path": "backend/app/services/report_agent.py",
+    "peer_delta": true,
+    "conflict": false,
+    "before_sha256": "0ee479790c82e579913eeaf5382e410a0fcf1f19771400437e918e3ff55037f9",
+    "root_sha256": "27a4a1ea85638f1d29dd9c3e2832aa5b7250f79d46fa147567d072b6ee878a34",
+    "candidate_sha256": "9d58cdc5eedfe408ab14e20d1b03214c8a6a9fc93d49d2f119e433b0354d2872"
+  },
+  {
+    "path": "backend/app/services/simulation_config_generator.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "32a35fc76eabda8cbc3da2919c7b85d1b36bafba7dfb0bcb4b27e41c4ea3d177",
+    "root_sha256": "c365f039941bec60c327251c3a0362b3a04b10f3a2f65b16bc9d07ab4432faac",
+    "candidate_sha256": "c365f039941bec60c327251c3a0362b3a04b10f3a2f65b16bc9d07ab4432faac"
+  },
+  {
+    "path": "backend/app/services/simulation_manager.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1",
+    "root_sha256": "0d5c67e1083faa2f5d1093b5ee3a43546ffba3c058a7905449acbb8bd6b434f9",
+    "candidate_sha256": "0d5c67e1083faa2f5d1093b5ee3a43546ffba3c058a7905449acbb8bd6b434f9"
+  },
+  {
+    "path": "backend/app/services/simulation_runner.py",
+    "peer_delta": true,
+    "conflict": false,
+    "before_sha256": "55aad7cca419e83a0339435b0e89496d5a04205897416b67a69d909ecf891b87",
+    "root_sha256": "dc509e73f9dd46012c5d7fff82835baecba9de31d2282cd9ea978fc7c8586bb4",
+    "candidate_sha256": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb"
+  },
+  {
+    "path": "backend/app/services/world_update.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "e2c941867abdc4f85fe711f7f76a8ea1d62931c461ee4fb5877a6708c1cb60f0",
+    "root_sha256": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+    "candidate_sha256": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923"
+  },
+  {
+    "path": "backend/scripts/run_parallel_simulation.py",
+    "peer_delta": true,
+    "conflict": false,
+    "before_sha256": "e56203edef38b8214d7e6404e96cca90c12c8c3fa2db19291f0e6f535f0c1fce",
+    "root_sha256": "95342efbb49acd7c75a45509657be93297758777b657cdda55df7f760051d8bc",
+    "candidate_sha256": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94"
+  },
+  {
+    "path": "backend/scripts/run_reddit_simulation.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "841444e7f0c25203bbd1abb70aeca4b9ff43ac635b624d1947d52246f456cdaa",
+    "root_sha256": "8a0da27b0528740550d75e178889ce739ed7ba8f894b28c66983f0e4c2b5744b",
+    "candidate_sha256": "8a0da27b0528740550d75e178889ce739ed7ba8f894b28c66983f0e4c2b5744b"
+  },
+  {
+    "path": "backend/scripts/run_twitter_simulation.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": "25a4007a82052f253513c4869e74aab5409a702ace715df11ed106473968466c",
+    "root_sha256": "7682e85993316a2844ae0bae87cc236b0d39fb5f5a683f22ba89076dcd5e7d19",
+    "candidate_sha256": "7682e85993316a2844ae0bae87cc236b0d39fb5f5a683f22ba89076dcd5e7d19"
+  },
+  {
+    "path": "backend/app/services/forecast_task.py",
+    "peer_delta": false,
+    "conflict": false,
+    "before_sha256": null,
+    "root_sha256": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31",
+    "candidate_sha256": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31"
+  }
+]

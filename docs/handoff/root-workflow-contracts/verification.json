@@ -1,17 +1,17 @@
 {
-  "status": "root source accepted; runtime barrier correction and authorized activation/resume pending",
+  "status": "complete: source delivered, validated runtime activated, TTF and Brent resumed and observed",
   "baseline_commit": "8ba2b6aaaabec16f47e82c388c18e946ad32a49b",
   "backend": {
-    "passed": 1387,
+    "passed": 1431,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "deselected": 0,
-    "suites": 58,
-    "seconds": 97.73,
-    "mirror": "/private/tmp/drf-run-root-joint-final-18h96m0m",
-    "receipt_sha256": "6889852cda78ccc0a37a0d8df3d680fc3b8f07bd89510fd91f2b4a32e24413fe",
-    "junit_sha256": "c00b2a35b39ec73e77ef47d6347a42fbb25de5cc567b8d29b8c8dee7dd007ee5",
+    "suites": 60,
+    "seconds": 113.07,
+    "mirror": "/private/tmp/drf-run-root-recovery-final-t846thea",
+    "receipt_sha256": "5c8d9ab6c59acacb68f4936340a0db5b5b629eb2f0fa4736b88cfa455e879346",
+    "junit_sha256": "a368d1dc6d1cefd362f547a4d52db45cd467211e2f6876f26f211454640a4b70",
     "parent": {
       "status": "completed",
       "exit_code": 0,
@@ -32,122 +32,74 @@
     },
     "children": [
       {
-        "pid": "61645",
-        "sha256": "6a759a6b364cd46c7fa0d25063e5b9e4368725cd77e9088110ff458b00aefdc1",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-21913.json",
+        "sha256": "315156f2c0f2b54fa5701ade71b7fe30ae0de2ed09de89e34e897a3b24117de7",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {
-          "redirect:app.config": 1,
-          "redirect:app.utils.logger": 1,
-          "redirect:app.services.simulation_manager": 1
-        }
+        "source_drift": []
       },
       {
-        "pid": "61777",
-        "sha256": "87932f50ab1876606c8d0d43294c72bf1ca90eef2882bbb4c8d1da2f5ff3a90c",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22128.json",
+        "sha256": "8fd6d9a2c87cb1c56378eacd40586fd8347fe3e8e3b487534298d486dd8ca9dc",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {}
+        "source_drift": []
       },
       {
-        "pid": "62043",
-        "sha256": "71a78b72af015fd3ad4990418d3ed2bd8b4d9c867d05842bde466ddf56f0706b",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22172.json",
+        "sha256": "af249dc080dea5070e098e14e4f1f3a3ebf09ca5a36d7f86ed3eb19e310fd17f",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {
-          "redirect:app.config": 1,
-          "redirect:app.utils.logger": 1,
-          "redirect:app.services.simulation_manager": 1
-        }
+        "source_drift": []
       },
       {
-        "pid": "62255",
-        "sha256": "f803cd483c6df8b8ce428ccefcfba20a8536347ef7818d9f9f7401499bec0365",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22232.json",
+        "sha256": "790fdbe91c999eb1445cfbf0a3b6d8dacfd3c43170742f91585af834c51a3cf5",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {}
+        "source_drift": []
       },
       {
-        "pid": "62256",
-        "sha256": "cc6444af3771d764045ee2487d5792952f3caa18bbae2ed8a3dc031665b1d7ad",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22263.json",
+        "sha256": "c325b8ce351a466e3c02ecc1242f9e0a4f19ee371ca7a4a5eeb0737077b7aedc",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {}
+        "source_drift": []
       },
       {
-        "pid": "62261",
-        "sha256": "8fe5c4e2204395e3a3364c63413bacc900547ad0e7578fb5fabec91661687668",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22463.json",
+        "sha256": "151e72a817593d8865544729695105f35a886e897f8b4859ce3364810f17c16d",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {
-          "redirect:app.config": 1,
-          "redirect:app.utils.logger": 1,
-          "redirect:app.services.simulation_manager": 1
-        }
+        "source_drift": []
       },
       {
-        "pid": "62437",
-        "sha256": "2a1d1bcd0c0f72a5aded8c04dc2affe44b07182dd219374e2199d4951ac4a005",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22635.json",
+        "sha256": "2199ed1e4e6a50b036102896fcc5ffc4804b1a9c9fc2bde5817006db1cf43a09",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {
-          "redirect:app.config": 1,
-          "redirect:app.utils.logger": 1,
-          "redirect:app.services.simulation_manager": 1,
-          "blocked:network:socket.__new__": 1,
-          "blocked:process:subprocess.Popen": 2,
-          "quarantine:oasis_import_cwd": 1,
-          "blocked:external_read": 2
-        }
+        "source_drift": []
       },
       {
-        "pid": "62596",
-        "sha256": "994ad2b142e433da03de514cd52e59b2a0a90ac68a919161816b8add33b593d0",
-        "status": "completed",
+        "receipt": "/private/tmp/drf-run-root-recovery-final-t846thea/evidence/process-22648.json",
+        "sha256": "4b81448abb38711e642ae07be6e9eacf4e4bb5d43914f7ca9b0bd187158a736e",
         "exit_code": 0,
         "shutdown_complete": true,
         "identity_preserved": true,
-        "source_drift": [],
-        "events": {
-          "redirect:app.config": 1,
-          "redirect:app.utils.logger": 1,
-          "redirect:app.services.simulation_manager": 1,
-          "blocked:network:socket.__new__": 1,
-          "blocked:process:subprocess.Popen": 2,
-          "quarantine:oasis_import_cwd": 1,
-          "blocked:external_read": 2
-        }
+        "source_drift": []
       }
     ]
   },
-  "source_count": 759,
+  "source_count": 760,
   "source_manifest": {
-    "backend/app/services/forecast_task.py": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31",
-    "backend/tests/forecast_task_fakes.py": "7066a3194f68a430c31002d112762f0a80b64f4e1e285635fbfec6a7a98c5e30",
-    "backend/tests/test_root_arbiter_transaction.py": "6e8987fb31caa771fdf565840eb6c86420c0d41e41ab770583a7459b68b5b64b",
-    "backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b",
-    "backend/tests/test_root_grounding_structure.py": "6190d97ebb2c9312a9f71143c927707d9e2b4c2d34d5301e20ba82ad9dcc4962",
+    "backend/tests/test_research_partial_context_resume.py": "a4747b1e7968b47d272567ac5d16bb61b7f26c9ae0f46a081678d3c803abe618",
     "backend/app/__init__.py": "6ed3da16027f4e7a328946d2b9738e1389d1e1f46af35f7a4849252b4f86387e",
     "backend/app/api/__init__.py": "ff26909731a3631ebd38ce71554972c1d3ec4cb3b96976229abad7b7d75ee76e",
     "backend/app/api/graph.py": "f91b929c57acff90ffa7b9fbdb59f085048a97f8dfb528a0959b28d3b56e8b5b",
@@ -180,6 +132,7 @@
     "backend/app/services/forecast_extractor.py": "19d7783e5e547e5dacd9db6f6881de0f31702182e7727b8b4f06ad10576d5b3d",
     "backend/app/services/forecast_feedback.py": "5e4f4eb48adff25bbb25bf0c7df661531b8f1584fdabda6da73c0a82bd5a3209",
     "backend/app/services/forecast_ledger.py": "2576a04a669586c7ebe94550d5d5ef1a8754c51bf65b42809e068e7164c0edc5",
+    "backend/app/services/forecast_task.py": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31",
     "backend/app/services/forecast_track_record.py": "6cd977828939223b239cd83ebb72c39f05c6a76714ad9ada3f9be5b73d9610b1",
     "backend/app/services/graph_builder.py": "682401fd23559486b95f368e11383cd5369c76184a2a93680d3407f1fa90f00d",
     "backend/app/services/graph_pruner.py": "b738cf7f16a69addfb46ce4f163228e48a2d036fc225f70e3481827725b5c995",
@@ -197,7 +150,7 @@
     "backend/app/services/oasis_profile_generator.py": "78ede1941fc9ff3ed648e764ac5e6bfc8955469f280d9419d30ecdc364139cfe",
     "backend/app/services/official_data.py": "c5859983f9424660efe7fc8a6a56952736654824b76fc78a02296e7586de4c01",
     "backend/app/services/ontology_generator.py": "bab00e8d4c3e2a271dd4369f27b2c82fc177683f61d2afec697d65c361f90983",
-    "backend/app/services/pipeline_orchestrator.py": "24edb02a246fb6bd48c3e91c3e3493ef637787977e75a47f9178bf6f7747a0d3",
+    "backend/app/services/pipeline_orchestrator.py": "39ddb9d93e64fcc76ef4174068d0f8edde96a8bf643b12279b1bd78452436530",
     "backend/app/services/report_agent.py": "27a4a1ea85638f1d29dd9c3e2832aa5b7250f79d46fa147567d072b6ee878a34",
     "backend/app/services/report_filter_safe.py": "e6822de3f01b90e8a20da93411552fbcb6c978c3a56c6414d37283441a3e0416",
     "backend/app/services/report_lint.py": "3044f2a543815b018c975cc50e877332034884a39a3f6f2c07f5d987d3171b3d",
@@ -300,6 +253,7 @@
     "backend/tests/fixtures/market_endpoint_configuration.py": "ba9a70c9872e518066ac64454ce3d08c9fce248132e74fb918f3582eb32a78c0",
     "backend/tests/fixtures/official_data_mcp.py": "21fafc475c656af79572c7e949253596bd76b30519c868d30bde49ce7a7b1e57",
     "backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa",
+    "backend/tests/forecast_task_fakes.py": "7066a3194f68a430c31002d112762f0a80b64f4e1e285635fbfec6a7a98c5e30",
     "backend/tests/model_translation_fakes.py": "0a7d922199236841af8aaff1acaf017ce5e26d56a7019a5ee7e263bd12fa637b",
     "backend/tests/official_data_replay.py": "1f1ae90105c469ad98250dcb38d0f0065c92e298ef9ab77088c32ad589e688e4",
     "backend/tests/test_actor_cast_discipline.py": "47b7d96aa412c878bbaef514dcbe380394045e2b84633d187e88142cb8583e2c",
@@ -511,6 +465,9 @@
     "backend/tests/test_research_spend_flush.py": "f9e5776fa5daada2179ecb07cfad988ffc4632c71c0a4f3552b78acba81cf935",
     "backend/tests/test_resolution_autorun.py": "ab630b8075cb0c4d40ed3ac7e086d1cb37bbda96d8300902fd23ab848ddbc412",
     "backend/tests/test_resolution_monitor.py": "6924482eacb5b4d099cd69091f84b280fddce09793d4e373fdbfc21ba156a19c",
+    "backend/tests/test_root_arbiter_transaction.py": "6e8987fb31caa771fdf565840eb6c86420c0d41e41ab770583a7459b68b5b64b",
+    "backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b",
+    "backend/tests/test_root_grounding_structure.py": "0f0952dcda85010701933ce0ba37e470fbd00e896226d7a0d80a10777361a592",
     "backend/tests/test_run_arbiter_contract.py": "eb746c3c65acc68181e4f8667a0a309ecabf56bfe5dbcc31c6c025b3a3f47c8b",
     "backend/tests/test_run_forecast_horizon.py": "b84f0d357ef0e1ffd548e04762ec29e175b0352765f9c659b5b3e6f4688a9b95",
     "backend/tests/test_run_orphan_inventory.py": "e1af6d9c08ed8349963e67131a89cec58b3b5df9887639dbf973bdf3f62ff391",
@@ -1632,5 +1589,539 @@
       "receipt": "/private/tmp/drf-run-root-test-format-9ahhk635/evidence/completed.json",
       "production_changed": false
     }
+  },
+  "source_delivery": {
+    "commit": "a5da30ae6b06ff291b9113b71f8e8d80dee7af98",
+    "remote": "legacy",
+    "main_verified": "d12cfe2c1528f3bc90de1c8508cd2b5b13e6ffdc",
+    "method": "non-forced atomic exact-SHA main+branch push",
+    "peer_runtime_code_committed": false,
+    "final_source_commit": "d12cfe2c1528f3bc90de1c8508cd2b5b13e6ffdc"
+  },
+  "runtime": {
+    "verdict": "accepted",
+    "tests": {
+      "tests": 1630,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "suites": 70,
+    "seconds": 146.71,
+    "candidate_hashes": {
+      "backend/app/services/pipeline_orchestrator.py": "6e331f604da3dfe328a7c8c0a6498791a4270d0f0d6b27f25dcd24a79318483c"
+    },
+    "source_files": 771,
+    "source_drift": [],
+    "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/completed.json",
+    "receipt_sha256": "64b562b24e754ed6dd3dfac62708e5a497efadb2216e38f05239a427ac1f715e",
+    "junit_sha256": "1f0c1e09447f39fd239a347585c9452076c84843f214551379ede259e2d8e84d",
+    "children": [
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-21917.json",
+        "sha256": "df5e04957319fe4d001f41c48d0e7d0df261bfdedfe99da958ac23ec81c0d6c5"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22137.json",
+        "sha256": "7114bf47ba02bd1294272964859cf08b440ccb79229b90a43c40bec2347b5cae"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22188.json",
+        "sha256": "61bc5e14fd698cca92e6d07e99ddb80e0431c0ec61702d041d9860bfe8200921"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22459.json",
+        "sha256": "b760200244a2f0ca8970deecb61d5b7e3380426737447ee18eff1ce6c63a74e1"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22460.json",
+        "sha256": "d417d7831e4189e0c4f3480eeff6ce842efcf723b00b01ccdfeea6c524cb305c"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22468.json",
+        "sha256": "22e8656329594aeab21974e51253504872e353b48e74aba9ff933a39815b4b13"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22637.json",
+        "sha256": "d15953509a5de3aa9acd9e506943681f36bfc9a1bbb3a6737a5fc7757f554a18"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22763.json",
+        "sha256": "c87b4fe05b27b1d9694ef802b1b90cfffb30e88dbe14de391934e1d27c534c43"
+      },
+      {
+        "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/final-evidence/process-22848.json",
+        "sha256": "c9306d3bb4583bf806860f0158eceee915facdc0c291d11e966c8d6ef8d3843b"
+      }
+    ],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 9,
+      "allowed:child_liveness": 4
+    },
+    "focused_current_green": "/private/tmp/drf-run-partial-checkpoint-focused-hda69iy8/evidence",
+    "original_five_native_failures": "/private/tmp/drf-partial-native-red-53dhptyy/evidence",
+    "independent_accepted_review": "/private/tmp/drf-partial-final-review-n3lcq9lo/accepted-review.json"
+  },
+  "activation": {
+    "started_at": "2026-10-23T06:18:33.012957+00:00",
+    "old_backend_pid": 7943,
+    "new_backend_pid": 25898,
+    "health": {
+      "service": "MiroFish Backend",
+      "status": "ok"
+    },
+    "cancel_pending_graph_owner_stopped": true,
+    "status": "activated",
+    "candidate_hashes": {
+      "backend/app/services/pipeline_orchestrator.py": "6e331f604da3dfe328a7c8c0a6498791a4270d0f0d6b27f25dcd24a79318483c"
+    },
+    "unrelated_files_preserved": 2779,
+    "index_preserved": true,
+    "historical_artifacts_preserved": 309,
+    "finished_at": "2026-10-23T06:18:34.459191+00:00"
+  },
+  "resume": {
+    "started_at": "2026-10-23T06:19:19.457284+00:00",
+    "historical_read_checks": [
+      {
+        "simulation_id": "sim_a79deb6a2772",
+        "world_state_http_status": 200
+      },
+      {
+        "simulation_id": "sim_e0fd51c9e193",
+        "world_state_http_status": 200
+      }
+    ],
+    "runs": [
+      {
+        "pipeline_id": "pipe_d50311277dff",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "mode": "full",
+          "pipeline_id": "pipe_d50311277dff",
+          "resumed": true,
+          "status": "running",
+          "task_id": "30b194da-2b75-4fdc-b5ae-e6e12d8390e2"
+        },
+        "retained_completed_stages": [],
+        "current_status": "running",
+        "current_stage": "research",
+        "new_task_id": "30b194da-2b75-4fdc-b5ae-e6e12d8390e2",
+        "completed_stages_preserved": true
+      },
+      {
+        "pipeline_id": "pipe_ce23ce895f60",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "mode": "full",
+          "pipeline_id": "pipe_ce23ce895f60",
+          "resumed": true,
+          "status": "running",
+          "task_id": "a30feec6-512a-42cf-9fa7-9da64ca9e389"
+        },
+        "retained_completed_stages": [
+          "research",
+          "ontology"
+        ],
+        "current_status": "running",
+        "current_stage": "graph",
+        "new_task_id": "a30feec6-512a-42cf-9fa7-9da64ca9e389",
+        "completed_stages_preserved": true
+      }
+    ],
+    "finished_at": "2026-10-23T06:19:19.500823+00:00"
+  },
+  "frontend": {
+    "passed": 318,
+    "failed": 0,
+    "build_seconds": 1.63,
+    "tests_log": "/private/tmp/drf-root-runtime-3fusghi3/frontend-tests.log",
+    "build_log": "/private/tmp/drf-root-runtime-3fusghi3/frontend-build.log"
+  },
+  "remaining_live_limit": "Both resumed pipelines are running; TTF passed the former seal error and has a live research subprocess, Brent reused completed research/ontology and is building its graph. Neither has reached PREPARE; no newly generated live simulation calendar or finished report is claimed accepted.",
+  "post_resume_observation": [
+    {
+      "pipeline_id": "pipe_d50311277dff",
+      "status": "running",
+      "current_stage": "research",
+      "research_pid": 28755,
+      "error": null,
+      "simulation_id": null,
+      "progress": 61,
+      "started_at": "2026-10-23T06:19:19.507122+00:00",
+      "stage_message": "web_search EU gas storage end of March 2026 fill level percent AGSI lowest",
+      "research_process_alive": true
+    },
+    {
+      "pipeline_id": "pipe_ce23ce895f60",
+      "status": "running",
+      "current_stage": "graph",
+      "research_pid": null,
+      "error": null,
+      "simulation_id": null,
+      "progress": 5,
+      "started_at": "2026-10-23T06:19:19.850036+00:00",
+      "stage_message": "\u6784\u5efa\u77e5\u8bc6\u56fe\u8c31\u2026"
+    }
+  ],
+  "initial_backend": {
+    "passed": 1387,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "suites": 58,
+    "seconds": 97.73,
+    "mirror": "/private/tmp/drf-run-root-joint-final-18h96m0m",
+    "receipt_sha256": "6889852cda78ccc0a37a0d8df3d680fc3b8f07bd89510fd91f2b4a32e24413fe",
+    "junit_sha256": "c00b2a35b39ec73e77ef47d6347a42fbb25de5cc567b8d29b8c8dee7dd007ee5",
+    "parent": {
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 5,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "allowed:guarded_child": 8,
+        "allowed:child_liveness": 4
+      }
+    },
+    "children": [
+      {
+        "pid": "61645",
+        "sha256": "6a759a6b364cd46c7fa0d25063e5b9e4368725cd77e9088110ff458b00aefdc1",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "61777",
+        "sha256": "87932f50ab1876606c8d0d43294c72bf1ca90eef2882bbb4c8d1da2f5ff3a90c",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      },
+      {
+        "pid": "62043",
+        "sha256": "71a78b72af015fd3ad4990418d3ed2bd8b4d9c867d05842bde466ddf56f0706b",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "62255",
+        "sha256": "f803cd483c6df8b8ce428ccefcfba20a8536347ef7818d9f9f7401499bec0365",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      },
+      {
+        "pid": "62256",
+        "sha256": "cc6444af3771d764045ee2487d5792952f3caa18bbae2ed8a3dc031665b1d7ad",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {}
+      },
+      {
+        "pid": "62261",
+        "sha256": "8fe5c4e2204395e3a3364c63413bacc900547ad0e7578fb5fabec91661687668",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1
+        }
+      },
+      {
+        "pid": "62437",
+        "sha256": "2a1d1bcd0c0f72a5aded8c04dc2affe44b07182dd219374e2199d4951ac4a005",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1,
+          "blocked:network:socket.__new__": 1,
+          "blocked:process:subprocess.Popen": 2,
+          "quarantine:oasis_import_cwd": 1,
+          "blocked:external_read": 2
+        }
+      },
+      {
+        "pid": "62596",
+        "sha256": "994ad2b142e433da03de514cd52e59b2a0a90ac68a919161816b8add33b593d0",
+        "status": "completed",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "events": {
+          "redirect:app.config": 1,
+          "redirect:app.utils.logger": 1,
+          "redirect:app.services.simulation_manager": 1,
+          "blocked:network:socket.__new__": 1,
+          "blocked:process:subprocess.Popen": 2,
+          "quarantine:oasis_import_cwd": 1,
+          "blocked:external_read": 2
+        }
+      }
+    ]
+  },
+  "initial_runtime": {
+    "verdict": "accepted",
+    "tests": {
+      "tests": 1586,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "seconds": 128.5,
+    "suites": 68,
+    "source_files": 770,
+    "source_drift": [],
+    "candidate_hashes": {
+      "backend/app/api/simulation.py": "ebae4b9f20607a0b3512b3d65890a88d046913e3b892df9d218f1fad1b0a1999",
+      "backend/app/services/actor_context.py": "e10280317bcff0aab739dcc75466d61f078aa7b7e03d916b368305e435cf2135",
+      "backend/app/services/report_agent.py": "9d58cdc5eedfe408ab14e20d1b03214c8a6a9fc93d49d2f119e433b0354d2872",
+      "backend/app/services/simulation_config_generator.py": "c365f039941bec60c327251c3a0362b3a04b10f3a2f65b16bc9d07ab4432faac",
+      "backend/app/services/simulation_manager.py": "0d5c67e1083faa2f5d1093b5ee3a43546ffba3c058a7905449acbb8bd6b434f9",
+      "backend/app/services/simulation_runner.py": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb",
+      "backend/app/services/world_update.py": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+      "backend/scripts/run_parallel_simulation.py": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94",
+      "backend/scripts/run_reddit_simulation.py": "8a0da27b0528740550d75e178889ce739ed7ba8f894b28c66983f0e4c2b5744b",
+      "backend/scripts/run_twitter_simulation.py": "7682e85993316a2844ae0bae87cc236b0d39fb5f5a683f22ba89076dcd5e7d19",
+      "backend/app/services/forecast_task.py": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31"
+    },
+    "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/completed.json",
+    "receipt_sha256": "d405543e02a3a2bb58ae5df504893c60abd6895c867d6363c629f57f45fb5288",
+    "junit_sha256": "37af8db28f7a8a56ffbe4d9e2af346edc36e675c8b573d26f7decf75b109097e",
+    "children": [
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-97188.json",
+        "sha256": "c1e670ad89d020a78cc4c2772d808a877e267f5dac9a4ca8fd71fa01f6e40fd0",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-97294.json",
+        "sha256": "9e3da777a04c6551b75e153b8fa2c2357511d829c9bb26126d4a2eb2cec577cb",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98064.json",
+        "sha256": "9ec5c39220c5d58650408f406f647168eafb9d0df27d85e6072561f4536d6a3d",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98275.json",
+        "sha256": "0aa82d1166f9659e17df3488375824861d831aaf9c87fff68cccf20c9af1469f",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98284.json",
+        "sha256": "a36ad1059fa86ebeb45a2dfb24500f93e29986fa6851dc14d515170be1549586",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98446.json",
+        "sha256": "ae66f44a3e16bb675902827bf86246f74e6ffccfa9abdc33ee6afdcb54053e63",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-99490.json",
+        "sha256": "da5e43bb472c9d32ca27416f6c984ca8b5f9f6c681f16c68542d737ed0f8855e",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-99977.json",
+        "sha256": "47241ae16c0f45953f6286c4afc4b0b870bf5795c12da1f2807c483b0b45e19f",
+        "exit_code": 0
+      },
+      {
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-1467.json",
+        "sha256": "eca4266a77e3c6592bd56a6dd523b8daf5e874d30b39f008acd35b8c01f3076d",
+        "exit_code": 0
+      }
+    ],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 9,
+      "allowed:child_liveness": 4
+    },
+    "independent_preservation_review": "/private/tmp/drf-runtime-independent-effkcu9k/runtime-review.json",
+    "barrier_correction_review": {
+      "candidate": "/private/tmp/drf-root-runtime-3fusghi3/candidate/backend/app/services/simulation_runner.py",
+      "repo": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/app/services/simulation_runner.py",
+      "regression": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_runtime_terminal_artifact_engine.py",
+      "old_sha256": "0e39bd1da5cb1aed7da2b9f9c7d8cf20496f521eb7d2a120f63a52b1cab7073d",
+      "new_sha256": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb",
+      "unchanged_three_case_source_sha256": "a97377fe62cccc940ffaf4c5cb2774615d0af5fe53790d2304af042d51cad49c",
+      "original_red_evidence": "/private/tmp/drf-runtime-independent-effkcu9k/gate",
+      "plan_updated": true,
+      "focused_tests": 13,
+      "focused_duration_seconds": 14.0,
+      "focused_receipt": "/private/tmp/drf-runtime-token-fix-bpgexg89/green/completed.json",
+      "source_files_verified": 612,
+      "original_red_preserved": true,
+      "plan_hash_change_only": true,
+      "independent_review": {
+        "reviewer": "Sartre",
+        "agent_id": "01a16750-3aa9-7003-a824-ff96c2f6f6d7",
+        "verdict": "No findings",
+        "method": "Read-only exact-diff, dispatch/barrier/legacy analysis and receipt/hash reconciliation; no independent test rerun or app imports."
+      },
+      "readiness": "READY for parent full runtime gate; not installed and no full runtime acceptance claimed."
+    },
+    "limitation": "Guard is CPython audit, not OS sandbox; offline model fixtures do not prove live forecast quality.",
+    "independent_final_review": "/private/tmp/drf-runtime-final-reconcile-nim1khkz/accepted-review.json"
+  },
+  "initial_activation": {
+    "started_at": "2026-10-23T05:58:49.643496+00:00",
+    "old_backend_pid": 64619,
+    "new_backend_pid": 7943,
+    "health": {
+      "service": "MiroFish Backend",
+      "status": "ok"
+    },
+    "status": "activated",
+    "candidate_hashes": {
+      "backend/app/api/simulation.py": "ebae4b9f20607a0b3512b3d65890a88d046913e3b892df9d218f1fad1b0a1999",
+      "backend/app/services/actor_context.py": "e10280317bcff0aab739dcc75466d61f078aa7b7e03d916b368305e435cf2135",
+      "backend/app/services/report_agent.py": "9d58cdc5eedfe408ab14e20d1b03214c8a6a9fc93d49d2f119e433b0354d2872",
+      "backend/app/services/simulation_config_generator.py": "c365f039941bec60c327251c3a0362b3a04b10f3a2f65b16bc9d07ab4432faac",
+      "backend/app/services/simulation_manager.py": "0d5c67e1083faa2f5d1093b5ee3a43546ffba3c058a7905449acbb8bd6b434f9",
+      "backend/app/services/simulation_runner.py": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb",
+      "backend/app/services/world_update.py": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+      "backend/scripts/run_parallel_simulation.py": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94",
+      "backend/scripts/run_reddit_simulation.py": "8a0da27b0528740550d75e178889ce739ed7ba8f894b28c66983f0e4c2b5744b",
+      "backend/scripts/run_twitter_simulation.py": "7682e85993316a2844ae0bae87cc236b0d39fb5f5a683f22ba89076dcd5e7d19",
+      "backend/app/services/forecast_task.py": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31"
+    },
+    "unrelated_files_preserved": 2768,
+    "index_preserved": true,
+    "historical_artifacts_preserved": 309,
+    "finished_at": "2026-10-23T05:58:51.095401+00:00"
+  },
+  "initial_resume": {
+    "started_at": "2026-10-23T05:59:14.044557+00:00",
+    "historical_read_checks": [
+      {
+        "simulation_id": "sim_a79deb6a2772",
+        "world_state_http_status": 200
+      },
+      {
+        "simulation_id": "sim_e0fd51c9e193",
+        "world_state_http_status": 200
+      }
+    ],
+    "runs": [
+      {
+        "pipeline_id": "pipe_d50311277dff",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "mode": "full",
+          "pipeline_id": "pipe_d50311277dff",
+          "resumed": true,
+          "status": "running",
+          "task_id": "fec87908-6642-4466-8417-b7ce681c88c2"
+        },
+        "retained_completed_stages": [],
+        "current_status": "running",
+        "current_stage": "research",
+        "new_task_id": "fec87908-6642-4466-8417-b7ce681c88c2",
+        "completed_stages_preserved": true
+      },
+      {
+        "pipeline_id": "pipe_ce23ce895f60",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "mode": "full",
+          "pipeline_id": "pipe_ce23ce895f60",
+          "resumed": true,
+          "status": "running",
+          "task_id": "e882a0ab-724a-48c4-9805-f2dc022d3ca0"
+        },
+        "retained_completed_stages": [
+          "research",
+          "ontology"
+        ],
+        "current_status": "running",
+        "current_stage": "graph",
+        "new_task_id": "e882a0ab-724a-48c4-9805-f2dc022d3ca0",
+        "completed_stages_preserved": true
+      }
+    ],
+    "finished_at": "2026-10-23T05:59:14.078943+00:00"
+  },
+  "partial_capture_recovery": {
+    "source_commit": "d12cfe2c1528f3bc90de1c8508cd2b5b13e6ffdc",
+    "retained_red": "/private/tmp/drf-partial-native-red-53dhptyy/evidence",
+    "red_failures": 5,
+    "red_deselected": 11,
+    "focused_green_passed": 44,
+    "focused_green": "/private/tmp/drf-run-partial-checkpoint-focused-hda69iy8/evidence",
+    "actual_native_checkpoint_validation": "/private/tmp/drf-root-runtime-3fusghi3/ttf-partial-validation.json",
+    "independent_accepted_review": "/private/tmp/drf-partial-final-review-n3lcq9lo/accepted-review.json"
+  },
+  "retained_stage_final_proof": {
+    "receipt": "/private/tmp/drf-root-recovery-nmycmp_f/retained-stage-final-after.json",
+    "brent_completed_output_hashes_unchanged": "36/36",
+    "completed_stage_timestamps_preserved": true,
+    "project_id_preserved": "proj_d5459a19304a",
+    "project_input_and_ontology_preserved": true,
+    "TTF_live_research_process": 28755
   }
 }

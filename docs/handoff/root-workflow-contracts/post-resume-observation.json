@@ -1,0 +1,25 @@
+[
+  {
+    "pipeline_id": "pipe_d50311277dff",
+    "status": "running",
+    "current_stage": "research",
+    "research_pid": 28755,
+    "error": null,
+    "simulation_id": null,
+    "progress": 61,
+    "started_at": "2026-10-23T06:19:19.507122+00:00",
+    "stage_message": "web_search EU gas storage end of March 2026 fill level percent AGSI lowest",
+    "research_process_alive": true
+  },
+  {
+    "pipeline_id": "pipe_ce23ce895f60",
+    "status": "running",
+    "current_stage": "graph",
+    "research_pid": null,
+    "error": null,
+    "simulation_id": null,
+    "progress": 5,
+    "started_at": "2026-10-23T06:19:19.850036+00:00",
+    "stage_message": "构建知识图谱…"
+  }
+]

@@ -1,0 +1,487 @@
+{
+  "schema": "final-retained-recovery-observation/v1",
+  "observed_utc": "2026-10-23T06:19:58.216982+00:00",
+  "before_snapshot": "/private/tmp/drf-root-runtime-3fusghi3/retained-stage-before.json",
+  "before_snapshot_sha256": "9c042b0b748494ff5c8c859f69a0b5457d3b35a1d0d4a8ab7765b4eb9c5c9ce0",
+  "resume_receipt": "/private/tmp/drf-root-recovery-nmycmp_f/resumed-runs.json",
+  "resume_receipt_sha256": "e93978492f53c19cac21f00e8f7897f7bea1f126436cd37394ecc06c159aa8e7",
+  "resume_results_safe": {
+    "runs": [
+      {
+        "pipeline_id": "pipe_d50311277dff",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "pipeline_id": "pipe_d50311277dff",
+          "resumed": true,
+          "status": "running",
+          "task_id": "30b194da-2b75-4fdc-b5ae-e6e12d8390e2"
+        },
+        "current_stage": "research"
+      },
+      {
+        "pipeline_id": "pipe_ce23ce895f60",
+        "http_status": 200,
+        "success": true,
+        "response": {
+          "pipeline_id": "pipe_ce23ce895f60",
+          "resumed": true,
+          "status": "running",
+          "task_id": "a30feec6-512a-42cf-9fa7-9da64ca9e389"
+        },
+        "current_stage": "graph"
+      }
+    ]
+  },
+  "pipelines": {
+    "pipe_d50311277dff": {
+      "pipeline_id": "pipe_d50311277dff",
+      "status": "running",
+      "current_stage": "research",
+      "task_id": "30b194da-2b75-4fdc-b5ae-e6e12d8390e2",
+      "resumed_at": "2026-10-23T06:19:19.480743+00:00",
+      "resume_count": 2,
+      "updated_at": "2026-10-23T06:19:56.660302+00:00",
+      "last_progress_at": "2026-10-23T06:19:56.660134+00:00",
+      "research_pid": 28755,
+      "research_pid_alive": true,
+      "stages": {
+        "research": {
+          "status": "running",
+          "progress": 61,
+          "started_at": "2026-10-23T06:19:19.507122+00:00",
+          "finished_at": null
+        },
+        "ontology": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "graph": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "prepare": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "run": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "report": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        }
+      },
+      "state_sha256": "a2950558835a0703371365ca075f4f97cb8724985258cf84e68f5b766b0a8293",
+      "state_error_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "research_progress_file": {
+        "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_d50311277dff/handoff/research_progress.log",
+        "exists": true,
+        "bytes": 47690,
+        "mtime_utc": "2026-10-23T06:19:56.660075+00:00",
+        "sha256": "c1827211e5825ed0f1f92b3bb82fa0c1e0c7776b19c5ec29da77321ff7e5166a"
+      },
+      "past_unsealed_startup_barrier": true
+    },
+    "pipe_ce23ce895f60": {
+      "pipeline_id": "pipe_ce23ce895f60",
+      "status": "running",
+      "current_stage": "graph",
+      "task_id": "a30feec6-512a-42cf-9fa7-9da64ca9e389",
+      "resumed_at": "2026-10-23T06:19:19.496917+00:00",
+      "resume_count": 2,
+      "updated_at": "2026-10-23T06:19:19.850226+00:00",
+      "last_progress_at": "2026-10-23T06:19:19.850048+00:00",
+      "research_pid": null,
+      "research_pid_alive": null,
+      "stages": {
+        "research": {
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:21:12.134665+00:00",
+          "finished_at": "2026-10-23T05:40:42.430532+00:00"
+        },
+        "ontology": {
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:40:42.450170+00:00",
+          "finished_at": "2026-10-23T05:41:26.957642+00:00"
+        },
+        "graph": {
+          "status": "running",
+          "progress": 5,
+          "started_at": "2026-10-23T06:19:19.850036+00:00",
+          "finished_at": null
+        },
+        "prepare": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "run": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "report": {
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        }
+      },
+      "state_sha256": "656acbb3669bc12a3e197e2d06303ded1a9156e88ae04e22459f4f516d9fdd38",
+      "state_error_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "retention": {
+        "completed_stage_timestamps": {
+          "research": {
+            "before": {
+              "status": "completed",
+              "started_at": "2026-10-23T05:21:12.134665+00:00",
+              "finished_at": "2026-10-23T05:40:42.430532+00:00"
+            },
+            "after": {
+              "status": "completed",
+              "started_at": "2026-10-23T05:21:12.134665+00:00",
+              "finished_at": "2026-10-23T05:40:42.430532+00:00"
+            },
+            "preserved": true
+          },
+          "ontology": {
+            "before": {
+              "status": "completed",
+              "started_at": "2026-10-23T05:40:42.450170+00:00",
+              "finished_at": "2026-10-23T05:41:26.957642+00:00"
+            },
+            "after": {
+              "status": "completed",
+              "started_at": "2026-10-23T05:40:42.450170+00:00",
+              "finished_at": "2026-10-23T05:41:26.957642+00:00"
+            },
+            "preserved": true
+          }
+        },
+        "all_completed_stage_timestamps_preserved": true,
+        "completed_outputs": [
+          {
+            "name": "report",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/research_report.md",
+            "sha256": "521ee9d768d2368fc0b3979580932c64f227b4ef68c37009d122214f2f6a7f36",
+            "bytes": 61588,
+            "unchanged": true
+          },
+          {
+            "name": "dossier",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/actors.json",
+            "sha256": "fe962b8fbec23dac4e80c8291756b899eb7baaaa98f491e43f903089a7c5a1e9",
+            "bytes": 107594,
+            "unchanged": true
+          },
+          {
+            "name": "timeline",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/timeline.json",
+            "sha256": "7f67208d5eb1d963ceb0da26fafd1909b32ce576b25a6138d3ede567a4b6a47f",
+            "bytes": 4091,
+            "unchanged": true
+          },
+          {
+            "name": "sources",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/sources.json",
+            "sha256": "97f3ceb3bcd8c0b65197e5c6365d56b84ae09c951b2aad3b30082dc8db38003d",
+            "bytes": 54679,
+            "unchanged": true
+          },
+          {
+            "name": "quantitative",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/quantitative.json",
+            "sha256": "af1b000cd050c320cb35556e975605226f143792d01bc3da38a130385db7d5ff",
+            "bytes": 42845,
+            "unchanged": true
+          },
+          {
+            "name": "contested",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/contested.json",
+            "sha256": "8bff76c82c93d2812b427a16934f83cfc9a7a2f8fa0eb060ef0d9e3e102e9796",
+            "bytes": 6432,
+            "unchanged": true
+          },
+          {
+            "name": "prediction_markets",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/prediction_markets.json",
+            "sha256": "fb44df0d457133ef36e38e806a963472f867b931011d59f16cb2ac75e48a449a",
+            "bytes": 1366,
+            "unchanged": true
+          },
+          {
+            "name": "news_market_context",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/news_market_context.json",
+            "sha256": "aec8bcc8ad53063220a0cb8389693ceeebed44a09ea23e086ee7136f8b792ed2",
+            "bytes": 970,
+            "unchanged": true
+          },
+          {
+            "name": "charts",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts.json",
+            "sha256": "29abf993d642b563b5991761cadcb6f620e618ba04c226daace037589ba27d62",
+            "bytes": 4876,
+            "unchanged": true
+          },
+          {
+            "name": "datasets",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/datasets.json",
+            "sha256": "e1c1ef2ddb2c13b898d74b09d3e60090795b4e30f32844a133a7b68bb22556ca",
+            "bytes": 164604,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dcoilbrenteu_4900e357f44ebd30.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.html",
+            "sha256": "c4ea4a17fa2f9e8b514e60c584f3a9cc576d00c8ea4516868cec6b7dacb277a2",
+            "bytes": 22185,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dcoilbrenteu_4900e357f44ebd30.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.png",
+            "sha256": "27db498d7b9d4f7c1aad35d88ac0500c00f4bbfb90842bfbf35491d97dfd9e20",
+            "bytes": 129987,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dcoilwtico_12574943cd132b99.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.html",
+            "sha256": "4e776c807f2bb5decffdc435b1c95feaaaa2634b78bbad122b1941f9b024d066",
+            "bytes": 17129,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dcoilwtico_12574943cd132b99.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.png",
+            "sha256": "1378b6d25e40524bfe73c2daade00de749f10f54611cc4d118608af554919d85",
+            "bytes": 126696,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dtwexbgs_08f046aea85a90af.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.html",
+            "sha256": "3628f0eb64c0aefe5dc152e710741a7e913ca21a7943a533e2b8964c9eb2eee1",
+            "bytes": 12271,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_dtwexbgs_08f046aea85a90af.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.png",
+            "sha256": "d425e6b28fceb7aa4296cbb59ee7f15bf30218ddceb5062ad4645b27c9513e81",
+            "bytes": 109723,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_tcu_29c10e2acbf23e8e.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.html",
+            "sha256": "134f7ed10e10ee3c10a77709156220325aec1855e8807a643b3bd1361e1f1007",
+            "bytes": 16328,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_fred_tcu_29c10e2acbf23e8e.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.png",
+            "sha256": "1c048481e447c59a8c8930e973f3dbf381caa7120e8d288c30eadbac0e86fc79",
+            "bytes": 94824,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.html",
+            "sha256": "8e9fc6f4bc6489042b763b0bb76500ec0087d07859a2b90414fbd038208873dd",
+            "bytes": 23879,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+            "sha256": "a9f11264cc5653965668895707a6b25933999c30f4fab8e1af0b9bfa91121d3b",
+            "bytes": 118953,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_usgov_eia_crude_production_467933bb50b2205f.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.html",
+            "sha256": "7712e4a4109128acba543f0de3972404dd58fe801212df88cda95950dcf482b2",
+            "bytes": 16339,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_usgov_eia_crude_production_467933bb50b2205f.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.png",
+            "sha256": "c7d9dbb1e868e2f8a65b0e7f742b08da75f78e3345961ab2cda3cda0fc4f414a",
+            "bytes": 100530,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.html",
+            "sha256": "b67c23f782536bb7761daefc21d04913f093800f58e00b1d2cecf7cf45814eeb",
+            "bytes": 12572,
+            "unchanged": true
+          },
+          {
+            "name": "chart_data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.png",
+            "sha256": "4314e2107602023a4c77ae1c9f009e02c9216765fc798d642bbaa38e626cb9a1",
+            "bytes": 111490,
+            "unchanged": true
+          },
+          {
+            "name": "chart_quant_metrics.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.html",
+            "sha256": "f649b8b16a4688a11b93995df72babaae1a7e665289cf402fe9da89eeb302d5f",
+            "bytes": 4830436,
+            "unchanged": true
+          },
+          {
+            "name": "chart_quant_metrics.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.png",
+            "sha256": "672e706586ee56b7f0ddd6becd30b5ba9b78acaeb7f57bada046e5a9eb4ff350",
+            "bytes": 297552,
+            "unchanged": true
+          },
+          {
+            "name": "chart_timeline.html",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.html",
+            "sha256": "d61c3070aa2c270d94695474eec4ea62fea17849ca0d677a9008e1a79e085891",
+            "bytes": 4835129,
+            "unchanged": true
+          },
+          {
+            "name": "chart_timeline.png",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.png",
+            "sha256": "9b84b57cbececdba8693c6a44d706f6c11903902cb3c12d2a4e72ffaafa2a712",
+            "bytes": 372747,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_fred_dcoilbrenteu_4900e357f44ebd30.617d77298008b1b3.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilbrenteu_4900e357f44ebd30.617d77298008b1b3.csv",
+            "sha256": "617d77298008b1b36aea30ae9b781d97b5c812cab1181314a3804cbedce6e912",
+            "bytes": 4350,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.5a4a128edae3bb70.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.5a4a128edae3bb70.csv",
+            "sha256": "5a4a128edae3bb702dbd98fcb8efb032e19527ff78a1f79a7e497e0988035c58",
+            "bytes": 6535,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_usgov_eia_crude_production_467933bb50b2205f.426c097eacdb591b.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/usgov_eia_crude_production_467933bb50b2205f.426c097eacdb591b.csv",
+            "sha256": "426c097eacdb591ba456ffa50c5fd9acabd33ba58f982e816d0109edf1feebfd",
+            "bytes": 2220,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_fred_tcu_29c10e2acbf23e8e.e2018ba095b69fe0.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_tcu_29c10e2acbf23e8e.e2018ba095b69fe0.csv",
+            "sha256": "e2018ba095b69fe080a8e9796b2b74682edf46121a06790d746e89dbee607da6",
+            "bytes": 2259,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_fred_dcoilwtico_12574943cd132b99.c4814400c8f87d96.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilwtico_12574943cd132b99.c4814400c8f87d96.csv",
+            "sha256": "c4814400c8f87d96a31dbfa8175b7a362fb1132b2603c1f69ea5ec34aea9766e",
+            "bytes": 2314,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.7b7272409fb089be.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.7b7272409fb089be.csv",
+            "sha256": "7b7272409fb089beed0eeb7800c2246a15f3d08b06287d9639e15f07982f6616",
+            "bytes": 86,
+            "unchanged": true
+          },
+          {
+            "name": "dataset_fred_dtwexbgs_08f046aea85a90af.9eac6e6284e9ca9d.csv",
+            "stage": "research",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dtwexbgs_08f046aea85a90af.9eac6e6284e9ca9d.csv",
+            "sha256": "9eac6e6284e9ca9d39594570477318443fdaa2131caba93c3a6232018856211d",
+            "bytes": 381,
+            "unchanged": true
+          },
+          {
+            "name": "ontology",
+            "stage": "ontology",
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/ontology.json",
+            "sha256": "8350b456ee9ec7c99fa1bbf9f0a34eb7e436389c3024c2d6aa3918e2f7a8f784",
+            "bytes": 18205,
+            "unchanged": true
+          }
+        ],
+        "completed_output_count": 36,
+        "all_completed_outputs_unchanged": true,
+        "project_id": "proj_d5459a19304a",
+        "project_id_preserved": true,
+        "project_input_projection_unchanged": true,
+        "actual_project_input_files": [
+          {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/projects/proj_d5459a19304a/extracted_text.txt",
+            "sha256": "521ee9d768d2368fc0b3979580932c64f227b4ef68c37009d122214f2f6a7f36",
+            "unchanged": true
+          }
+        ],
+        "project_ontology_equals_handoff": true,
+        "research_reuse_recorded": true,
+        "ontology_reuse_recorded": true
+      }
+    }
+  },
+  "actions": "Read saved records, hash retained files and signal-0 research PID liveness only; no operational change or provider call."
+}

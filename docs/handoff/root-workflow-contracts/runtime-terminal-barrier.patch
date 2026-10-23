@@ -1,0 +1,12 @@
+--- before/backend/app/services/simulation_runner.py
++++ after/backend/app/services/simulation_runner.py
+@@ -932,7 +932,8 @@
+         if max_rounds_ignored:
+             state.options["max_rounds_ignored"] = True
+         state.options["record_owner"] = "runner" if finalize_record else "pipeline"
+-        if platform == "parallel":
++        if platform == "parallel" or calendar_mode:
++            # Single-platform calendars also use the parallel engine's artifact barrier.
+             # Platform completion precedes post-hoc decisions. A per-launch token
+             # prevents an older completion marker (including checkpoint resumes)
+             # from admitting unfinished outputs from this child.

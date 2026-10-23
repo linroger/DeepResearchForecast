@@ -334,6 +334,6 @@
       "Reproduce primary Markdown corruption from valid writer output and repair only parser-confirmed source spans while retaining quantitative/citation/publication gates.",
       "Verify native producer-to-publication/API/export controls, independent regressions, historical preservation, and safe local activation with peer work preserved."
     ],
-    "passes": false
+    "passes": true
   }
 ]

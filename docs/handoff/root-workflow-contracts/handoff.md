@@ -1,8 +1,8 @@
 # Root workflow correction handoff
 
-**Last Updated (UTC):** 2026-10-23T03:45:51.435208+00:00
-**Status:** In Progress
-**Current Focus:** Reproduce the producer defects beneath the prior prompt mitigations.
+**Last Updated (UTC):** 2026-10-23T06:20:53.380647+00:00
+**Status:** Complete
+**Current Focus:** Source and runtime delivery complete; resumed live runs continue from retained stages.
 
 ## Request and scope
 The user says: "fix. the root of the problems, not just the symptoms!" The prior source8ba2b6aa corrected specific horizon parsing and prompt guidance, but left three architectural gaps to investigate: task endpoint authority, best-effort arbiter application labelled applied despite validation problems, and destructive primary-report sentence removal that can produce malformed Markdown.
@@ -78,3 +78,35 @@ The user explicitly approved cancelling the two active pipelines, refreshing the
 Independent root+peer review confirmed preservation of26 root and71 peer function ASTs but reproduced a P1 integration gap: calendar Twitter-only/Reddit-only runs use the shared child engine while terminal-artifact tokens were only issued for parallel platform selection. The original1579 green is retained as insufficient for this new finding. A candidate-only correction and native single-platform barrier controls are underway; root-only1387 source acceptance remains unchanged. Activation is held until this additional boundary is green.
 
 The final staging whitespace check found one extra blank line at EOF in test_root_grounding_structure.py. Removing that blank line left its AST unchanged; fresh affected36/36passed with no drift. No production bytes changed. The exact test-only old/new hashes and receipt are in verification.json; the historical759-file manifest remains the original1387 freeze.
+
+## Source delivery and runtime correction
+
+Root source commit a5da30ae6b06ff291b9113b71f8e8d80dee7af98 was atomically pushed without force to legacy/main and the unique integration branch; both exact remote SHAs were verified. Peer S1–S4 implementation was preserved separately, not committed silently. The candidate-only terminal-barrier correction passes13/13 native controls plus independent no-findings review; replacement68-suite full runtime verification is running before installation.
+
+## 2026-10-23T05:59:56.745087+00:00 — accepted runtime activation and authorized resume
+
+Final68-suite runtime gate passed1586/1586in128.50s with zero failures/errors/skips and no drift. All770code hashes and11candidate files match; parent and9registered children completed0with shutdown/identity preserved. Independent final review ACCEPT reconciles146pre-activation source hashes. Nonzero contained discovery attempts remain explicit:1socket,5Popen,20externalreads; the original audit runner is unchanged and is not an OS sandbox. Fresh frontend318/318andproductionbuild1.63s passed.
+
+The user-authorized activation replaced backend64619with7943, healthOK. All11merged candidate files were installed atomically after cancelling both pipelines.2768unrelated shared files, the entire shared Git index and309saved Gold/War artifacts remain unchanged. Root-only Git source is a5da30ae; local after-action peer work and the2line peer-specific terminal-token correction are preserved separately rather than silently committed to main. Runtime installation manifest and accepted independent review are copied into this topic.
+
+Both ordinary resume POSTs returned200withoutforce: TTF pipe_d50311277dff is runningRESEARCH; Brent pipe_ce23ce895f60 is runningGRAPH with its completedRESEARCH/ONTOLOGY stage records unchanged. The same pipeline IDs and retained artifacts are used. Neither has reachedPREPAREat this snapshot, so the future live typed task/calendars and completed forecasts are not yet claimed verified. Native producer→seal→runtime→report controls and the separate bounded4calllive original-goal probe remain the actual current evidence. No historical Gold/War report or translation was regenerated.
+
+## 2026-10-23T06:02:27.686453+00:00 — actual resume observation supersedes initial POST acceptance
+
+BothPOSTs returned200, but the follow-up durable check found TTF immediatelyFAILEDunsealed_context before new research/model dispatch. _run calls the sealed news consumer before deciding whether research is complete/reusable; this incorrectly rejects a valid unfinished acquisition checkpoint from cancelledRESEARCH. Brent remains runningGRAPHwith completedRESEARCH/ONTOLOGY retained. InitialPOST200 is not end-to-end resume acceptance for TTF.
+
+A bounded follow-up correction is assigned in the clean pipeline orchestrator and a new native regression: strict sealed checks remain for published/reusable evidence; incomplete unsealed capture is left to its normal research producer/resume validation. No capture is deleted, fabricated, sealed by hand or bypassed. New source/runtime acceptance and another safe backend refresh will be required before claiming TTF recovery.
+
+## 2026-10-23T06:20:53.380647+00:00 — final recovery closure and observed delivery
+
+The unchanged new native tests failed5/5valid partial cases on originala5da source (11explicitly deselected for that red-only run), then passed the44-case affected gate with the fix. These exercise real parent_run, real native capture schema/digest/no-follow checks, producer reopen, defaultapp/../path normalization, and sealed/final/tamper/missing negatives. No partial capture is deleted or resealed. Final source gate1431/1431in113.07s across60suites and current760codehashes; final local peer-runtime gate1630/1630in146.71s across70suites and771codehashes. Zero failures/errors/skips/deselections in both full gates. Parent plus8root and9runtime children completed0with preserved identity/shutdown/no drift. Independent final review ACCEPT closes the path-alias finding.
+
+The bounded follow-up is source commit d12cfe2c1528f3bc90de1c8508cd2b5b13e6ffdc, pushed and independentlyverified onlegacy/main after a5da30ae. Peer-only S1–S4 code remains separately preserved in the active shared checkout; its2line terminal-token integration patch and installation manifests are retained here. No peer staged file or unrelatednewskills material was committed or discarded.
+
+Brent's second cancellation remained pending inside a graph-only call. After more than3minutes, the exact verified owning backend7943was stopped; no research or simulation child belonged to that graph stage. Public lifecycle cancellation retired the dead owner after restart. Backend25898is healthy. One verified merged orchestrator file was installed, while2779unrelated shared files, the entire shared index and309historical Gold/War artifacts remained unchanged. First activation preserved2768unrelated files separately; these counts refer to their own bounded inventories.
+
+Both normalresume requests returned200withoutforce. Post-dispatch durable observation proves TTF is now runningRESEARCHpastunsealed_context with live researchPID28755and newwebsearch activity; Brent is runningGRAPHwith completedRESEARCH/ONTOLOGY records retained. The initial failedresume and both cancellation/activation receipts remain documented rather than overwritten. Their futurePREPAREcalendars and fullforecast/report completion have not yet occurred and are not claimed live-verified. The root native horizons, bounded original-prompt live admission and current resumed stages are distinct evidence scopes. No published Gold/War body, audit or translation was regenerated.
+
+Next session: read this handoff and verification.json, inspect the two existing pipeline IDs through the public progress API, then verify the newly produced forecast_task_v1/source quote/review/budget and endpoint when they reachPREPARE. Do not start duplicate pipelines, rewrite historical reports, infer completion fromHTTP200, or rerun unchanged paid work. Existing guarded runner and four exact child admissions remain authoritative for later source changes.
+
+Final independent operational follow-through at06:19:58Z confirms36/36Brent completed output hashes, original research/ontology timestamps, project input text/ontology and projectIDunchanged. Explicit research/ontology reuse messages are recorded. TTFPID28755is alive with fresh saved progress at06:19:56Z, beyond the original startup failure. See retained-stage-final-after.json.

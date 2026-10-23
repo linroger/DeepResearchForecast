@@ -1,0 +1,11 @@
+{
+  "schema": "actual-partial-context-validation/v1",
+  "capture_sha256": "aea3af534ad0b239c0c7fcee2d5d26930883ca71b4e3b15d75d9ac7c0f954de3",
+  "existing_bridge_checkpoint_valid": true,
+  "sealed": false,
+  "query_count": 1,
+  "item_count": 0,
+  "strict_consumer_error": "unsealed_context",
+  "bytes_unchanged": true,
+  "provider_calls": 0
+}

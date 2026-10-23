@@ -1,4 +1,4 @@
-> Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Native1387-case source acceptance is complete; local peer compatibility and activation are recorded there.
+> Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Final1431-case source and1630-case peer-runtime gates passed; the backend is active and both authorized pipelines resumed with retained-stage proof.
 
 > Current run repair: [forecast horizon, arbiter and translation contracts](docs/handoff/run-horizon-arbiter-translation/handoff.md). Work is isolated from the shared application checkout; saved run artifacts remain historical.
 

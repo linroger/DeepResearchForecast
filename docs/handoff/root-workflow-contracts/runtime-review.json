@@ -1,0 +1,309 @@
+{
+  "verdict": "ACCEPTED",
+  "ready_for_local_activation_candidate": true,
+  "created_utc": "2026-10-23T05:58:27.656948+00:00",
+  "scope": "Private runtime activation candidate only. No shared source edits, installation, restart, live-provider execution, saved-data inspection, Git operations or remote-integration claim.",
+  "final_gate": {
+    "tests": 1586,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 128.5,
+    "suite_count": 68,
+    "parent": {
+      "pid": 96293,
+      "status": "completed",
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": []
+    },
+    "children": [
+      {
+        "pid": 97188,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-97188.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 97294,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-97294.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 98064,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98064.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_artifact_translation_restart.py": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 98275,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98275.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 98284,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98284.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/fixtures/orphan_owner.py": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 98446,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-98446.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 99490,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-99490.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 99977,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-99977.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_root_forecast_task.py": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b"
+        },
+        "entry_script_hashes_match_allowlist": true
+      },
+      {
+        "pid": 1467,
+        "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/process-1467.json",
+        "exit_code": 0,
+        "shutdown_complete": true,
+        "identity_preserved": true,
+        "source_drift": [],
+        "entry_script_hashes": {
+          "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/pytest-tmp/test_compiler_imports_nothing_0/record_import_probe.py": "f53988108c2f60d03e1ec43cc7267defc5dcd3f9fc519501a99ea2d1814bbc92"
+        },
+        "entry_script_hashes_match_allowlist": true
+      }
+    ],
+    "allowed_scripts": [
+      {
+        "path": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/fixtures/orphan_owner.py",
+        "sha256": "72845575e4867695ae14247982e34c06e4730020f48b64a20ef8b8ce4761beaa",
+        "current_matches": true
+      },
+      {
+        "path": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_artifact_translation_restart.py",
+        "sha256": "5320a95b415608fa94d4e05c791860450aa334372b740b1003dffa8a89e39b4c",
+        "current_matches": true
+      },
+      {
+        "path": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_forecast_feedback_sdk.py",
+        "sha256": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+        "current_matches": true
+      },
+      {
+        "path": "/private/tmp/drf-root-runtime-3fusghi3/repo/backend/tests/test_root_forecast_task.py",
+        "sha256": "3eadf7c474199d3ba833b43b643317e51c8979afb584b1051efd6b6479eae20b",
+        "current_matches": true
+      },
+      {
+        "path": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/pytest-tmp/test_compiler_imports_nothing_0/record_import_probe.py",
+        "sha256": "f53988108c2f60d03e1ec43cc7267defc5dcd3f9fc519501a99ea2d1814bbc92",
+        "current_matches": true
+      }
+    ],
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 5,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20,
+      "allowed:guarded_child": 9,
+      "allowed:child_liveness": 4
+    },
+    "receipt": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/completed.json",
+    "junit": "/private/tmp/drf-root-runtime-3fusghi3/final-evidence/junit.xml"
+  },
+  "final_source_manifest": {
+    "path": "/private/tmp/drf-root-runtime-3fusghi3/final-source-hashes.json",
+    "sha256": "999579ebdbb61e8df5dd2451bd8756d98505dcd6c99bc4ef37b3cf2f4f7c0b91",
+    "code_file_count": 770,
+    "current_source_drift": []
+  },
+  "candidate_plan": {
+    "path": "/private/tmp/drf-root-runtime-3fusghi3/plan.json",
+    "sha256": "ea9fa1ea0a6101704867fb9294c6dc512d7fae343e8838df3b1789ae6adc2957",
+    "core_file_count": 11,
+    "checks": [
+      {
+        "path": "backend/app/api/simulation.py",
+        "candidate_sha256": "ebae4b9f20607a0b3512b3d65890a88d046913e3b892df9d218f1fad1b0a1999",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/actor_context.py",
+        "candidate_sha256": "e10280317bcff0aab739dcc75466d61f078aa7b7e03d916b368305e435cf2135",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/report_agent.py",
+        "candidate_sha256": "9d58cdc5eedfe408ab14e20d1b03214c8a6a9fc93d49d2f119e433b0354d2872",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/simulation_config_generator.py",
+        "candidate_sha256": "c365f039941bec60c327251c3a0362b3a04b10f3a2f65b16bc9d07ab4432faac",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/simulation_manager.py",
+        "candidate_sha256": "0d5c67e1083faa2f5d1093b5ee3a43546ffba3c058a7905449acbb8bd6b434f9",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/simulation_runner.py",
+        "candidate_sha256": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/world_update.py",
+        "candidate_sha256": "34cba9421472e07aeb1e1942f4aa2fe879e2b885c25bf291eebf46179f59b923",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/scripts/run_parallel_simulation.py",
+        "candidate_sha256": "cc20867366b33d82fb2cfe790b3cec95906b6eed1316dabffefca19807a30a94",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/scripts/run_reddit_simulation.py",
+        "candidate_sha256": "8a0da27b0528740550d75e178889ce739ed7ba8f894b28c66983f0e4c2b5744b",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/scripts/run_twitter_simulation.py",
+        "candidate_sha256": "7682e85993316a2844ae0bae87cc236b0d39fb5f5a683f22ba89076dcd5e7d19",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      },
+      {
+        "path": "backend/app/services/forecast_task.py",
+        "candidate_sha256": "14bd730bfd6e1e2716aa0ad567c2e033314d0ff339503a60efeb0952cc657e31",
+        "candidate_matches_plan": true,
+        "tested_matches_candidate": true,
+        "final_manifest_matches_candidate": true,
+        "root_matches_plan": true,
+        "live_before_matches": true
+      }
+    ]
+  },
+  "active_live_before": {
+    "manifest": "/private/tmp/drf-root-runtime-3fusghi3/peer-production-before.json",
+    "files_checked": 146,
+    "source_drift": []
+  },
+  "test_eof_normalization": {
+    "test": "backend/tests/test_root_grounding_structure.py",
+    "ast_identical": true,
+    "only_trailing_whitespace_change": true,
+    "old_sha256": "6190d97ebb2c9312a9f71143c927707d9e2b4c2d34d5301e20ba82ad9dcc4962",
+    "new_sha256": "0f0952dcda85010701933ce0ba37e470fbd00e896226d7a0d80a10777361a592"
+  },
+  "barrier_fix": {
+    "runner_sha256": "60ae556d2cdf9eb5359292425537bae30676ce7efdf5d8f57f306fd8d3d5fecb",
+    "focused_tests": 13,
+    "focused_receipt": "/private/tmp/drf-runtime-token-fix-bpgexg89/green/completed.json",
+    "independent_review": {
+      "reviewer": "Sartre",
+      "agent_id": "01a16750-3aa9-7003-a824-ff96c2f6f6d7",
+      "verdict": "No findings",
+      "method": "Read-only exact-diff, dispatch/barrier/legacy analysis and receipt/hash reconciliation; no independent test rerun or app imports."
+    },
+    "original_red_preserved": "/private/tmp/drf-runtime-independent-effkcu9k/gate/completed.json"
+  },
+  "parent_retained_data_checks": "Parent-reported retained-stage and original 309 saved-artifact preservation were not re-read by this source/receipt-only review."
+}

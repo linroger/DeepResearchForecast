@@ -1,0 +1,1681 @@
+{
+  "schema": "retained-stage-before/v1",
+  "captured_utc": "2026-10-23T05:56:30.228318+00:00",
+  "active_checkout": "/Users/rogerlin/Downloads/DeepResearchForecast",
+  "read_only_saved_data": true,
+  "application_imports": false,
+  "actions_not_taken": [
+    "source/saved-file edits",
+    "service activation/restart",
+    "resume/run HTTP calls",
+    "provider calls",
+    "Git operations"
+  ],
+  "pipelines": {
+    "pipe_d50311277dff": {
+      "pipeline_id": "pipe_d50311277dff",
+      "status": "cancelled",
+      "current_stage": "research",
+      "schema_version": 2,
+      "mode": "full",
+      "ids_before": {
+        "task_id": "288a5b6c-3fe2-488f-b3ce-5947015de36a",
+        "project_id": null,
+        "graph_id": null,
+        "simulation_id": null,
+        "report_id": null
+      },
+      "pipeline_created_at": "2026-10-23T05:30:18.309559+00:00",
+      "pipeline_updated_at": "2026-10-23T05:44:47.588235+00:00",
+      "state_file_observation_only": {
+        "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_d50311277dff/pipeline_state.json",
+        "bytes": 7180,
+        "sha256": "98cb916cbaedda902c6da7a27ec0abc2c0a98836b5e9ab7320d2a556b1feaaac",
+        "mtime_ns": 1792734287588578763
+      },
+      "stages_before": {
+        "research": {
+          "name": "research",
+          "status": "cancelled",
+          "progress": 61,
+          "started_at": "2026-10-23T05:30:18.324141+00:00",
+          "finished_at": "2026-10-23T05:44:47.585619+00:00"
+        },
+        "ontology": {
+          "name": "ontology",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "graph": {
+          "name": "graph",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "prepare": {
+          "name": "prepare",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "run": {
+          "name": "run",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "report": {
+          "name": "report",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        }
+      },
+      "completed_stages": {},
+      "stage_identity_note": "StageState has no separate stage/task ID; retain stage name, original timing window, owning pipeline/project IDs and payload hashes. The pipeline task_id is expected to change on resume.",
+      "submitted_input_hashes": {
+        "prompt_utf8": {
+          "sha256": "87cc06c174d14f8dc33007d4f77660cc230806204ac22eddf0fc3e6ab8fe73da",
+          "bytes": 913
+        },
+        "mode": "full",
+        "options_projection_keys": [
+          "project_name",
+          "depth",
+          "max_rounds",
+          "research_language",
+          "research_model",
+          "simulation_engine",
+          "world_spec",
+          "world_policy_spec",
+          "simulation_admission_v1",
+          "actor_intelligence_policy_v1",
+          "safety_policy_v1"
+        ],
+        "options_projection": {
+          "sha256": "11d4f5abf25783a8c3549a8af88e2860301fe34dd32a26dbcc48e4878d72ff94",
+          "canonical_bytes": 878
+        },
+        "option_field_hashes": {
+          "project_name": {
+            "sha256": "4906424280570a1e4bd9877d5cee16ca24bca39aa4b679b09cc25deb1fa30c0c",
+            "canonical_bytes": 32
+          },
+          "depth": {
+            "sha256": "cb2842d6687d19c69a6c0d4eb6a0f1af02951cef170de56ab331046ea5baac08",
+            "canonical_bytes": 10
+          },
+          "max_rounds": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "research_language": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "research_model": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "simulation_engine": {
+            "sha256": "e03d1a5058bf24b04bc2a07c4e082971e7fb62a49739f0611312b8ddc63c21c2",
+            "canonical_bytes": 14
+          },
+          "world_spec": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "world_policy_spec": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "simulation_admission_v1": {
+            "sha256": "5ef6cd3cfd4445e2f45ad8de66a652c2c355bd24deadc4e55cf37c583309211b",
+            "canonical_bytes": 72
+          },
+          "actor_intelligence_policy_v1": {
+            "sha256": "205030963da39b92b44fda8021d24954ad42a016f93f26d4157eea521499b4c6",
+            "canonical_bytes": 191
+          },
+          "safety_policy_v1": {
+            "sha256": "e322019d1b06b9ff2470b047c031d30f5bee1ccec6e1b05fef18107c83283d7d",
+            "canonical_bytes": 325
+          }
+        },
+        "prediction_requirement_file": {
+          "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_d50311277dff/handoff/prediction_requirement.txt",
+          "bytes": 914,
+          "sha256": "d64446fa5dd5679cd0c5b11bb6b851b01d5ba990b15adc6085bc12720fe4c216",
+          "mtime_ns": 1792733418611989433
+        },
+        "requirement_file_equals_prompt_utf8": false
+      },
+      "immutable_completed_outputs": [],
+      "reuse_guard_bookkeeping_observation_only": [],
+      "mutable_metadata_observation_only": [],
+      "optional_completed_output_absences": [],
+      "excluded_partial_names": [
+        "news_market_context_partial",
+        "research_budget_partial",
+        "research_progress_partial"
+      ],
+      "excluded_mutable_prefixes": [
+        "handoff/v3/",
+        "handoff/research_budget_epochs/",
+        "handoff/research_progress.log",
+        "handoff/meta.json",
+        "handoff/research_budget.json",
+        "run.json",
+        "run_telemetry.json",
+        "telemetry.json"
+      ],
+      "project_retention": {
+        "project_id": null,
+        "note": "No project existed before cancellation; creating a new project after research completes is expected, not loss of a retained completed stage."
+      },
+      "immutable_completed_outputs_count": 0,
+      "completed_manifest_checks_ok": true,
+      "reuse_boundary": "No completed stage exists. Research checkpoint/partial internals may change during resume and are not immutable-output evidence."
+    },
+    "pipe_ce23ce895f60": {
+      "pipeline_id": "pipe_ce23ce895f60",
+      "status": "cancelled",
+      "current_stage": "graph",
+      "schema_version": 2,
+      "mode": "full",
+      "ids_before": {
+        "task_id": "60adc422-6561-4e3f-a6ba-247871394c92",
+        "project_id": "proj_d5459a19304a",
+        "graph_id": null,
+        "simulation_id": null,
+        "report_id": null
+      },
+      "pipeline_created_at": "2026-10-23T05:21:12.106867+00:00",
+      "pipeline_updated_at": "2026-10-23T05:48:06.970216+00:00",
+      "state_file_observation_only": {
+        "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/pipeline_state.json",
+        "bytes": 18683,
+        "sha256": "fe9138386978cd1288a460ab09e96d193c66423605ce7c9a753f8b2ff325b68a",
+        "mtime_ns": 1792734486970619578
+      },
+      "stages_before": {
+        "research": {
+          "name": "research",
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:21:12.134665+00:00",
+          "finished_at": "2026-10-23T05:40:42.430532+00:00"
+        },
+        "ontology": {
+          "name": "ontology",
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:40:42.450170+00:00",
+          "finished_at": "2026-10-23T05:41:26.957642+00:00"
+        },
+        "graph": {
+          "name": "graph",
+          "status": "cancelled",
+          "progress": 5,
+          "started_at": "2026-10-23T05:41:26.960279+00:00",
+          "finished_at": "2026-10-23T05:48:06.967426+00:00"
+        },
+        "prepare": {
+          "name": "prepare",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "run": {
+          "name": "run",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        },
+        "report": {
+          "name": "report",
+          "status": "pending",
+          "progress": 0,
+          "started_at": null,
+          "finished_at": null
+        }
+      },
+      "completed_stages": {
+        "research": {
+          "name": "research",
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:21:12.134665+00:00",
+          "finished_at": "2026-10-23T05:40:42.430532+00:00"
+        },
+        "ontology": {
+          "name": "ontology",
+          "status": "completed",
+          "progress": 100,
+          "started_at": "2026-10-23T05:40:42.450170+00:00",
+          "finished_at": "2026-10-23T05:41:26.957642+00:00"
+        }
+      },
+      "stage_identity_note": "StageState has no separate stage/task ID; retain stage name, original timing window, owning pipeline/project IDs and payload hashes. The pipeline task_id is expected to change on resume.",
+      "submitted_input_hashes": {
+        "prompt_utf8": {
+          "sha256": "55e36fee9f0f58b5126cede943e9b48f0fc50b92f8aeb073d8f18d9faa35655f",
+          "bytes": 850
+        },
+        "mode": "full",
+        "options_projection_keys": [
+          "project_name",
+          "depth",
+          "max_rounds",
+          "research_language",
+          "research_model",
+          "simulation_engine",
+          "world_spec",
+          "world_policy_spec",
+          "simulation_admission_v1",
+          "actor_intelligence_policy_v1",
+          "safety_policy_v1"
+        ],
+        "options_projection": {
+          "sha256": "0b45ef2fe9408e6b31b1359686d9a7816d3e211ff8e7ffac519e3c982daca001",
+          "canonical_bytes": 878
+        },
+        "option_field_hashes": {
+          "project_name": {
+            "sha256": "d3e0a81b73690e857e817996890b26b14f8e7d865383874dedab5b14513d01c5",
+            "canonical_bytes": 32
+          },
+          "depth": {
+            "sha256": "cb2842d6687d19c69a6c0d4eb6a0f1af02951cef170de56ab331046ea5baac08",
+            "canonical_bytes": 10
+          },
+          "max_rounds": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "research_language": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "research_model": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "simulation_engine": {
+            "sha256": "e03d1a5058bf24b04bc2a07c4e082971e7fb62a49739f0611312b8ddc63c21c2",
+            "canonical_bytes": 14
+          },
+          "world_spec": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "world_policy_spec": {
+            "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "canonical_bytes": 4
+          },
+          "simulation_admission_v1": {
+            "sha256": "5ef6cd3cfd4445e2f45ad8de66a652c2c355bd24deadc4e55cf37c583309211b",
+            "canonical_bytes": 72
+          },
+          "actor_intelligence_policy_v1": {
+            "sha256": "843574d697070d53231bee19b61a2f7152bdf62161d268377b8381f5f9ca4a10",
+            "canonical_bytes": 191
+          },
+          "safety_policy_v1": {
+            "sha256": "c81380abd832c56856ac2de345b49cc93121576ddbaac28b763103e698c20a3c",
+            "canonical_bytes": 325
+          }
+        },
+        "prediction_requirement_file": {
+          "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/prediction_requirement.txt",
+          "bytes": 851,
+          "sha256": "392e35fca058a5386a81d0aeb588c54eb394369886c625c4784b32df8418493e",
+          "mtime_ns": 1792732872832429035
+        },
+        "requirement_file_equals_prompt_utf8": false
+      },
+      "immutable_completed_outputs": [
+        {
+          "name": "report",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.432435+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/research_report.md",
+            "bytes": 61588,
+            "sha256": "521ee9d768d2368fc0b3979580932c64f227b4ef68c37009d122214f2f6a7f36",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/research_report.md",
+            "bytes": 61588,
+            "sha256": "521ee9d768d2368fc0b3979580932c64f227b4ef68c37009d122214f2f6a7f36",
+            "mtime_ns": 1792734042293850518
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dossier",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.432575+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/actors.json",
+            "bytes": 107594,
+            "sha256": "fe962b8fbec23dac4e80c8291756b899eb7baaaa98f491e43f903089a7c5a1e9",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/actors.json",
+            "bytes": 107594,
+            "sha256": "fe962b8fbec23dac4e80c8291756b899eb7baaaa98f491e43f903089a7c5a1e9",
+            "mtime_ns": 1792734009117870716
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "timeline",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.433245+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/timeline.json",
+            "bytes": 4091,
+            "sha256": "7f67208d5eb1d963ceb0da26fafd1909b32ce576b25a6138d3ede567a4b6a47f",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/timeline.json",
+            "bytes": 4091,
+            "sha256": "7f67208d5eb1d963ceb0da26fafd1909b32ce576b25a6138d3ede567a4b6a47f",
+            "mtime_ns": 1792734009118483719
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "sources",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.433373+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/sources.json",
+            "bytes": 54679,
+            "sha256": "97f3ceb3bcd8c0b65197e5c6365d56b84ae09c951b2aad3b30082dc8db38003d",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/sources.json",
+            "bytes": 54679,
+            "sha256": "97f3ceb3bcd8c0b65197e5c6365d56b84ae09c951b2aad3b30082dc8db38003d",
+            "mtime_ns": 1792733893325770120
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "quantitative",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.433678+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/quantitative.json",
+            "bytes": 42845,
+            "sha256": "af1b000cd050c320cb35556e975605226f143792d01bc3da38a130385db7d5ff",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/quantitative.json",
+            "bytes": 42845,
+            "sha256": "af1b000cd050c320cb35556e975605226f143792d01bc3da38a130385db7d5ff",
+            "mtime_ns": 1792734042301588715
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "contested",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434024+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/contested.json",
+            "bytes": 6432,
+            "sha256": "8bff76c82c93d2812b427a16934f83cfc9a7a2f8fa0eb060ef0d9e3e102e9796",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/contested.json",
+            "bytes": 6432,
+            "sha256": "8bff76c82c93d2812b427a16934f83cfc9a7a2f8fa0eb060ef0d9e3e102e9796",
+            "mtime_ns": 1792734009119837307
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "prediction_markets",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434157+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/prediction_markets.json",
+            "bytes": 1366,
+            "sha256": "fb44df0d457133ef36e38e806a963472f867b931011d59f16cb2ac75e48a449a",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/prediction_markets.json",
+            "bytes": 1366,
+            "sha256": "fb44df0d457133ef36e38e806a963472f867b931011d59f16cb2ac75e48a449a",
+            "mtime_ns": 1792734028867735199
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "news_market_context",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434259+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/news_market_context.json",
+            "bytes": 970,
+            "sha256": "aec8bcc8ad53063220a0cb8389693ceeebed44a09ea23e086ee7136f8b792ed2",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/news_market_context.json",
+            "bytes": 970,
+            "sha256": "aec8bcc8ad53063220a0cb8389693ceeebed44a09ea23e086ee7136f8b792ed2",
+            "mtime_ns": 1792733408735606744
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "charts",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434448+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts.json",
+            "bytes": 4876,
+            "sha256": "29abf993d642b563b5991761cadcb6f620e618ba04c226daace037589ba27d62",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts.json",
+            "bytes": 4876,
+            "sha256": "29abf993d642b563b5991761cadcb6f620e618ba04c226daace037589ba27d62",
+            "mtime_ns": 1792734042221876892
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "datasets",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434657+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/datasets.json",
+            "bytes": 164604,
+            "sha256": "e1c1ef2ddb2c13b898d74b09d3e60090795b4e30f32844a133a7b68bb22556ca",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/datasets.json",
+            "bytes": 164604,
+            "sha256": "e1c1ef2ddb2c13b898d74b09d3e60090795b4e30f32844a133a7b68bb22556ca",
+            "mtime_ns": 1792733893144283551
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dcoilbrenteu_4900e357f44ebd30.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.435733+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.html",
+            "bytes": 22185,
+            "sha256": "c4ea4a17fa2f9e8b514e60c584f3a9cc576d00c8ea4516868cec6b7dacb277a2",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.html",
+            "bytes": 22185,
+            "sha256": "c4ea4a17fa2f9e8b514e60c584f3a9cc576d00c8ea4516868cec6b7dacb277a2",
+            "mtime_ns": 1792733892049095530
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dcoilbrenteu_4900e357f44ebd30.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.436248+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.png",
+            "bytes": 129987,
+            "sha256": "27db498d7b9d4f7c1aad35d88ac0500c00f4bbfb90842bfbf35491d97dfd9e20",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilbrenteu_4900e357f44ebd30.png",
+            "bytes": 129987,
+            "sha256": "27db498d7b9d4f7c1aad35d88ac0500c00f4bbfb90842bfbf35491d97dfd9e20",
+            "mtime_ns": 1792733891975599065
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dcoilwtico_12574943cd132b99.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.436347+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.html",
+            "bytes": 17129,
+            "sha256": "4e776c807f2bb5decffdc435b1c95feaaaa2634b78bbad122b1941f9b024d066",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.html",
+            "bytes": 17129,
+            "sha256": "4e776c807f2bb5decffdc435b1c95feaaaa2634b78bbad122b1941f9b024d066",
+            "mtime_ns": 1792733892640780677
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dcoilwtico_12574943cd132b99.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.436820+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.png",
+            "bytes": 126696,
+            "sha256": "1378b6d25e40524bfe73c2daade00de749f10f54611cc4d118608af554919d85",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dcoilwtico_12574943cd132b99.png",
+            "bytes": 126696,
+            "sha256": "1378b6d25e40524bfe73c2daade00de749f10f54611cc4d118608af554919d85",
+            "mtime_ns": 1792733892628366085
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dtwexbgs_08f046aea85a90af.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.436948+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.html",
+            "bytes": 12271,
+            "sha256": "3628f0eb64c0aefe5dc152e710741a7e913ca21a7943a533e2b8964c9eb2eee1",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.html",
+            "bytes": 12271,
+            "sha256": "3628f0eb64c0aefe5dc152e710741a7e913ca21a7943a533e2b8964c9eb2eee1",
+            "mtime_ns": 1792733892975753159
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_dtwexbgs_08f046aea85a90af.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.437404+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.png",
+            "bytes": 109723,
+            "sha256": "d425e6b28fceb7aa4296cbb59ee7f15bf30218ddceb5062ad4645b27c9513e81",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_dtwexbgs_08f046aea85a90af.png",
+            "bytes": 109723,
+            "sha256": "d425e6b28fceb7aa4296cbb59ee7f15bf30218ddceb5062ad4645b27c9513e81",
+            "mtime_ns": 1792733892947746629
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_tcu_29c10e2acbf23e8e.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.437510+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.html",
+            "bytes": 16328,
+            "sha256": "134f7ed10e10ee3c10a77709156220325aec1855e8807a643b3bd1361e1f1007",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.html",
+            "bytes": 16328,
+            "sha256": "134f7ed10e10ee3c10a77709156220325aec1855e8807a643b3bd1361e1f1007",
+            "mtime_ns": 1792733892483965917
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_fred_tcu_29c10e2acbf23e8e.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.437664+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.png",
+            "bytes": 94824,
+            "sha256": "1c048481e447c59a8c8930e973f3dbf381caa7120e8d288c30eadbac0e86fc79",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_fred_tcu_29c10e2acbf23e8e.png",
+            "bytes": 94824,
+            "sha256": "1c048481e447c59a8c8930e973f3dbf381caa7120e8d288c30eadbac0e86fc79",
+            "mtime_ns": 1792733892472856164
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.437954+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.html",
+            "bytes": 23879,
+            "sha256": "8e9fc6f4bc6489042b763b0bb76500ec0087d07859a2b90414fbd038208873dd",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.html",
+            "bytes": 23879,
+            "sha256": "8e9fc6f4bc6489042b763b0bb76500ec0087d07859a2b90414fbd038208873dd",
+            "mtime_ns": 1792733892202358609
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.438438+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+            "bytes": 118953,
+            "sha256": "a9f11264cc5653965668895707a6b25933999c30f4fab8e1af0b9bfa91121d3b",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+            "bytes": 118953,
+            "sha256": "a9f11264cc5653965668895707a6b25933999c30f4fab8e1af0b9bfa91121d3b",
+            "mtime_ns": 1792733892189989393
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_usgov_eia_crude_production_467933bb50b2205f.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.438560+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.html",
+            "bytes": 16339,
+            "sha256": "7712e4a4109128acba543f0de3972404dd58fe801212df88cda95950dcf482b2",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.html",
+            "bytes": 16339,
+            "sha256": "7712e4a4109128acba543f0de3972404dd58fe801212df88cda95950dcf482b2",
+            "mtime_ns": 1792733892344096475
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_usgov_eia_crude_production_467933bb50b2205f.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.438947+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.png",
+            "bytes": 100530,
+            "sha256": "c7d9dbb1e868e2f8a65b0e7f742b08da75f78e3345961ab2cda3cda0fc4f414a",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_usgov_eia_crude_production_467933bb50b2205f.png",
+            "bytes": 100530,
+            "sha256": "c7d9dbb1e868e2f8a65b0e7f742b08da75f78e3345961ab2cda3cda0fc4f414a",
+            "mtime_ns": 1792733892333260723
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.439058+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.html",
+            "bytes": 12572,
+            "sha256": "b67c23f782536bb7761daefc21d04913f093800f58e00b1d2cecf7cf45814eeb",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.html",
+            "bytes": 12572,
+            "sha256": "b67c23f782536bb7761daefc21d04913f093800f58e00b1d2cecf7cf45814eeb",
+            "mtime_ns": 1792733892804402507
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.439476+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.png",
+            "bytes": 111490,
+            "sha256": "4314e2107602023a4c77ae1c9f009e02c9216765fc798d642bbaa38e626cb9a1",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/data_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.png",
+            "bytes": 111490,
+            "sha256": "4314e2107602023a4c77ae1c9f009e02c9216765fc798d642bbaa38e626cb9a1",
+            "mtime_ns": 1792733892789925615
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_quant_metrics.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.442315+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.html",
+            "bytes": 4830436,
+            "sha256": "f649b8b16a4688a11b93995df72babaae1a7e665289cf402fe9da89eeb302d5f",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.html",
+            "bytes": 4830436,
+            "sha256": "f649b8b16a4688a11b93995df72babaae1a7e665289cf402fe9da89eeb302d5f",
+            "mtime_ns": 1792734036531744295
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_quant_metrics.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.442558+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.png",
+            "bytes": 297552,
+            "sha256": "672e706586ee56b7f0ddd6becd30b5ba9b78acaeb7f57bada046e5a9eb4ff350",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/quant_metrics.png",
+            "bytes": 297552,
+            "sha256": "672e706586ee56b7f0ddd6becd30b5ba9b78acaeb7f57bada046e5a9eb4ff350",
+            "mtime_ns": 1792734042220638513
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_timeline.html",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.445524+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.html",
+            "bytes": 4835129,
+            "sha256": "d61c3070aa2c270d94695474eec4ea62fea17849ca0d677a9008e1a79e085891",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.html",
+            "bytes": 4835129,
+            "sha256": "d61c3070aa2c270d94695474eec4ea62fea17849ca0d677a9008e1a79e085891",
+            "mtime_ns": 1792734029386648760
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "chart_timeline.png",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.445821+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.png",
+            "bytes": 372747,
+            "sha256": "9b84b57cbececdba8693c6a44d706f6c11903902cb3c12d2a4e72ffaafa2a712",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/charts/timeline.png",
+            "bytes": 372747,
+            "sha256": "9b84b57cbececdba8693c6a44d706f6c11903902cb3c12d2a4e72ffaafa2a712",
+            "mtime_ns": 1792734036468806332
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_fred_dcoilbrenteu_4900e357f44ebd30.617d77298008b1b3.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.446126+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilbrenteu_4900e357f44ebd30.617d77298008b1b3.csv",
+            "bytes": 4350,
+            "sha256": "617d77298008b1b36aea30ae9b781d97b5c812cab1181314a3804cbedce6e912",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilbrenteu_4900e357f44ebd30.617d77298008b1b3.csv",
+            "bytes": 4350,
+            "sha256": "617d77298008b1b36aea30ae9b781d97b5c812cab1181314a3804cbedce6e912",
+            "mtime_ns": 1792733893119444992
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.5a4a128edae3bb70.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.446462+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.5a4a128edae3bb70.csv",
+            "bytes": 6535,
+            "sha256": "5a4a128edae3bb702dbd98fcb8efb032e19527ff78a1f79a7e497e0988035c58",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.5a4a128edae3bb70.csv",
+            "bytes": 6535,
+            "sha256": "5a4a128edae3bb702dbd98fcb8efb032e19527ff78a1f79a7e497e0988035c58",
+            "mtime_ns": 1792733893124693721
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_usgov_eia_crude_production_467933bb50b2205f.426c097eacdb591b.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.446674+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/usgov_eia_crude_production_467933bb50b2205f.426c097eacdb591b.csv",
+            "bytes": 2220,
+            "sha256": "426c097eacdb591ba456ffa50c5fd9acabd33ba58f982e816d0109edf1feebfd",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/usgov_eia_crude_production_467933bb50b2205f.426c097eacdb591b.csv",
+            "bytes": 2220,
+            "sha256": "426c097eacdb591ba456ffa50c5fd9acabd33ba58f982e816d0109edf1feebfd",
+            "mtime_ns": 1792733893128156694
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_fred_tcu_29c10e2acbf23e8e.e2018ba095b69fe0.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.446881+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_tcu_29c10e2acbf23e8e.e2018ba095b69fe0.csv",
+            "bytes": 2259,
+            "sha256": "e2018ba095b69fe080a8e9796b2b74682edf46121a06790d746e89dbee607da6",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_tcu_29c10e2acbf23e8e.e2018ba095b69fe0.csv",
+            "bytes": 2259,
+            "sha256": "e2018ba095b69fe080a8e9796b2b74682edf46121a06790d746e89dbee607da6",
+            "mtime_ns": 1792733893130837371
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_fred_dcoilwtico_12574943cd132b99.c4814400c8f87d96.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.447271+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilwtico_12574943cd132b99.c4814400c8f87d96.csv",
+            "bytes": 2314,
+            "sha256": "c4814400c8f87d96a31dbfa8175b7a362fb1132b2603c1f69ea5ec34aea9766e",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dcoilwtico_12574943cd132b99.c4814400c8f87d96.csv",
+            "bytes": 2314,
+            "sha256": "c4814400c8f87d96a31dbfa8175b7a362fb1132b2603c1f69ea5ec34aea9766e",
+            "mtime_ns": 1792733893134361677
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.7b7272409fb089be.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.447475+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.7b7272409fb089be.csv",
+            "bytes": 86,
+            "sha256": "7b7272409fb089beed0eeb7800c2246a15f3d08b06287d9639e15f07982f6616",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/wb_wb_gep_nygdpmktpkdz_usa_0444fb64c626b1d7.7b7272409fb089be.csv",
+            "bytes": 86,
+            "sha256": "7b7272409fb089beed0eeb7800c2246a15f3d08b06287d9639e15f07982f6616",
+            "mtime_ns": 1792733893137757816
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "dataset_fred_dtwexbgs_08f046aea85a90af.9eac6e6284e9ca9d.csv",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.447664+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dtwexbgs_08f046aea85a90af.9eac6e6284e9ca9d.csv",
+            "bytes": 381,
+            "sha256": "9eac6e6284e9ca9d39594570477318443fdaa2131caba93c3a6232018856211d",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/data/fred_dtwexbgs_08f046aea85a90af.9eac6e6284e9ca9d.csv",
+            "bytes": 381,
+            "sha256": "9eac6e6284e9ca9d39594570477318443fdaa2131caba93c3a6232018856211d",
+            "mtime_ns": 1792733893139678741
+          },
+          "matches_manifest": true
+        },
+        {
+          "name": "ontology",
+          "stage": "ontology",
+          "manifest_produced_at_before": "2026-10-23T05:41:26.958025+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/ontology.json",
+            "bytes": 18205,
+            "sha256": "8350b456ee9ec7c99fa1bbf9f0a34eb7e436389c3024c2d6aa3918e2f7a8f784",
+            "produced_by_stage": "ontology",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/ontology.json",
+            "bytes": 18205,
+            "sha256": "8350b456ee9ec7c99fa1bbf9f0a34eb7e436389c3024c2d6aa3918e2f7a8f784",
+            "mtime_ns": 1792734086957475282
+          },
+          "matches_manifest": true
+        }
+      ],
+      "reuse_guard_bookkeeping_observation_only": [
+        {
+          "name": "research_budget",
+          "stage": "research",
+          "manifest_produced_at_before": "2026-10-23T05:40:42.434336+00:00",
+          "manifest_identity": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/../uploads/pipelines/pipe_ce23ce895f60/handoff/research_budget.json",
+            "bytes": 3666,
+            "sha256": "c931156c44949627750585490ec40e6a63f641810738a6e669181c761c2cf042",
+            "produced_by_stage": "research",
+            "schema_ok": true
+          },
+          "actual_file": {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/research_budget.json",
+            "bytes": 3666,
+            "sha256": "c931156c44949627750585490ec40e6a63f641810738a6e669181c761c2cf042",
+            "mtime_ns": 1792734013860604391
+          },
+          "matches_manifest": true,
+          "note": "Budget accounting is registered for the reuse guard, but is not immutable completed research content."
+        }
+      ],
+      "mutable_metadata_observation_only": [
+        {
+          "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/meta.json",
+          "bytes": 39070,
+          "sha256": "be4e20d8ec8e36391afe22827c984d2eca567ea51b6fb1a1a3e4ecefb2892e30",
+          "mtime_ns": 1792734042307078613
+        }
+      ],
+      "optional_completed_output_absences": [
+        "actor_dossier.md",
+        "research_contract_manifest.json",
+        "evidence_synthesis_manifest.json"
+      ],
+      "excluded_partial_names": [
+        "research_progress_partial"
+      ],
+      "excluded_mutable_prefixes": [
+        "handoff/v3/",
+        "handoff/research_budget_epochs/",
+        "handoff/research_progress.log",
+        "handoff/meta.json",
+        "handoff/research_budget.json",
+        "run.json",
+        "run_telemetry.json",
+        "telemetry.json"
+      ],
+      "artifact_manifest_observation_only": {
+        "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_ce23ce895f60/handoff/manifest.json",
+        "bytes": 15814,
+        "sha256": "21c8908a1c44d64bcd659530be4e8c4dcb4da29bcd1427fd98645187c043b7b2",
+        "mtime_ns": 1792734086958479495
+      },
+      "artifact_manifest_note": "Completion/reuse bookkeeping may refresh produced_at or add downstream entries. Compare retained entry identity and actual bytes, not the full manifest hash.",
+      "project_retention": {
+        "project_id": "proj_d5459a19304a",
+        "status_before": "ontology_generated",
+        "created_at": "2026-10-23T13:40:42.450869",
+        "updated_at_before": "2026-10-23T13:41:26.956049",
+        "graph_id_before": null,
+        "graph_build_task_id_before": null,
+        "project_json_observation_only": {
+          "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/projects/proj_d5459a19304a/project.json",
+          "bytes": 21748,
+          "sha256": "6439b89a2b03b86ab31a8d00c63d9b58a0eefc57e538f19ac0006d09e71f06ff",
+          "mtime_ns": 1792734086956677820
+        },
+        "immutable_input_projection_keys": [
+          "project_id",
+          "name",
+          "created_at",
+          "files",
+          "total_text_length",
+          "ontology",
+          "analysis_summary",
+          "simulation_requirement",
+          "chunk_size",
+          "chunk_overlap"
+        ],
+        "immutable_input_projection": {
+          "sha256": "46204f916eaaa56ffc351e723f6ccac6f66367f01e0e80ecde9d3ab3307664f5",
+          "canonical_bytes": 15052
+        },
+        "immutable_input_field_hashes": {
+          "project_id": {
+            "sha256": "0432f6bc5def25d1dc3a9700c25ad758fa2f433335af0d20b09348fc29f338a9",
+            "canonical_bytes": 19
+          },
+          "name": {
+            "sha256": "d3e0a81b73690e857e817996890b26b14f8e7d865383874dedab5b14513d01c5",
+            "canonical_bytes": 32
+          },
+          "created_at": {
+            "sha256": "973db1d755d26a321276d8d1e91bd39e8dc655fd822dc801a6aaa12a67b7fac9",
+            "canonical_bytes": 28
+          },
+          "files": {
+            "sha256": "fd5ff8970ce8e70db6977ceccc57ecee7d5c174de4074fd751683c3390c7cd98",
+            "canonical_bytes": 48
+          },
+          "total_text_length": {
+            "sha256": "1d1e734c3c8953d03ab6f86c8e1e6c400c033f97bc77466012f8228d529f5fd2",
+            "canonical_bytes": 5
+          },
+          "ontology": {
+            "sha256": "00ad7c77559a30706d7e2dc01ae53182f47646cdbad8afec842995a6bf2d4435",
+            "canonical_bytes": 12873
+          },
+          "analysis_summary": {
+            "sha256": "8939fb759a1346433e48604df3207f4fffba1b6db8a8dd4b19bff38d07995240",
+            "canonical_bytes": 1034
+          },
+          "simulation_requirement": {
+            "sha256": "2a6d9d0b362207ee75b623c6e243b76ebfacd426103c6abd93ddf76324e88927",
+            "canonical_bytes": 852
+          },
+          "chunk_size": {
+            "sha256": "0604cd3138feed202ef293e062da2f4720f77a05d25ee036a7a01c9cfcdd1f0a",
+            "canonical_bytes": 3
+          },
+          "chunk_overlap": {
+            "sha256": "1a6562590ef19d1045d06c4055742d38288e9e6dcd71ccde5cee80f1d5a774eb",
+            "canonical_bytes": 2
+          }
+        },
+        "expected_mutable_project_fields": [
+          "status",
+          "updated_at",
+          "graph_id",
+          "graph_build_task_id",
+          "error"
+        ],
+        "actual_input_files": [
+          {
+            "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/projects/proj_d5459a19304a/extracted_text.txt",
+            "bytes": 61588,
+            "sha256": "521ee9d768d2368fc0b3979580932c64f227b4ef68c37009d122214f2f6a7f36",
+            "mtime_ns": 1792734042451393156
+          }
+        ],
+        "extracted_text_matches_research_report_bytes": true,
+        "files_metadata_count": 1,
+        "files_metadata_note": "The report file entry has no stored path; the actual native text input is extracted_text.txt. An empty files/ directory is not a missing uploaded report.",
+        "project_ontology_canonical_hash": {
+          "sha256": "00ad7c77559a30706d7e2dc01ae53182f47646cdbad8afec842995a6bf2d4435",
+          "canonical_bytes": 12873
+        },
+        "handoff_ontology_canonical_hash": {
+          "sha256": "00ad7c77559a30706d7e2dc01ae53182f47646cdbad8afec842995a6bf2d4435",
+          "canonical_bytes": 12873
+        },
+        "project_ontology_equals_handoff": true,
+        "requirement_equals_pipeline_prompt": true
+      },
+      "immutable_completed_outputs_count": 36,
+      "completed_manifest_checks_ok": true,
+      "reuse_boundary": "Research and ontology timing windows, registered result bytes, project identity and input projections must be retained after reuse; graph is a new attempt."
+    }
+  },
+  "gold_war_original_manifest_recheck": {
+    "original_manifest": "/private/tmp/drf-run-diagnostics-sil9fphl/saved-input-hashes.json",
+    "original_manifest_sha256": "7849e9ba45e5509d773487941b96ec0429d6e4260a2746d148552e14a9ae6744",
+    "expected_files": 309,
+    "checked_files": 309,
+    "unchanged_files": 309,
+    "missing": [],
+    "mismatched": [],
+    "current_hashes": {
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/pipeline_state.json": "c7c4768c613d9fa38d3375d6cc6f9ad0c758fd5c93167ee8170d36e02030fd3b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/telemetry.json": "535fd993041ce5db3144be6f39fad12d03ee22cf60a57a2eb82219d78d660452",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/run.json": "405b3e4806d0df2138df3bf8b6099cbbfddf90ed4829bba1daaf13ebff2b4616",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/run_telemetry.json": "7fa9a49dae862799857a964d249a7d2564fcb0913c60a68b1a50a187337a07b5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/sources.json": "2387838a21352526c63fa0c9d27197edf5c129d6ec054bb2dd9536178b36121f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/prediction_markets.json": "cd67d3405f3380fafed421e2fbafebdafd6c84b8156bcbc0e7f4b21bb1f9ad69",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/contested.json": "07c43b038eac900c482b440c66c6c3936a72e068b08874dd00da1681180e8375",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/graph_prune.json": "e952b3c96f6c7d651e3989615731b155df253dec4a7c7a9f17ea18012f25af44",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/graph_priors.json": "15697ccbbc58194be52782ffcda50fa21f3decdfdc8b147dade87cc1c67215d2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/entity_merges.json": "a4106228f2b6ea0099d6404d291c03c4022e47fb9131c6b9a2dff680da2aac71",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/research_report.md": "08bd9f6511fdabdd4ac292266100af5f6d11c3a21d8534c0484d22ebc4fc235e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/ontology.json": "aaf49db2326fa8a6da606023f91f7e1d3f59e1e24044fe4906453fe7d45f3a47",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/charts.json": "47119407507a26741ed5f2bf73c4644632e6ff706e443e4a4634339629f69403",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/timeline.json": "a3eadac926b449a54784df73a5995dd528b31c8facbd9a3549e16183e0949577",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/research_budget.json": "a8bbc162ada5f1a5b649676f3bde102f5c55c2f1e066eff64625014779e1d6a6",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/manifest.json": "5d7e6617db9f99c2a8e2afee423c709f0307f69714703dfe8e0af9639625a12b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/actors.json": "d6a66dacc2a74355bfd5e584c1d57bb4fbfb3a67072af8536637de9fe2bb9551",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/news_market_context.json": "b77d9712d61a5439dfeb29a38bd7280887a5b766b4a6cf2cb91fdad4c6f96faa",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/quantitative.json": "4ea585571c906cdc5468b5d74773ff0436dc23e74ecca87ab6f39a015cc52366",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/meta.json": "075561ba6d7fb0ac009727975bbaac60a723f4ff2de13c475a258aea00f03065",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/usage.json": "4c2ab3e9fcf40f634b36049224523f27f9638bd1c3e981f7c98b8cac3fca4d2e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/state.json": "66df61644bd5c17b19718820eb159cb7029432f842f3ec362667d20726e6f1be",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/plan.json": "773e2fa422543c969c1fc1b6a761f91fee79a925ddec97353e0750f315ae4956",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/qa.json": "4c4f58386cda5977397af2d9b9f516a50cb234e14b8480623361e42f6186ed09",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/synth.json": "796c7084c2cce2b42871d5ce63e4d3fe086f9f099b941463a6ed1d748c375504",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sources_ledger.json": "0e36793c76cb9b8b5a28e75e54037cdf4401d8ae09325d7193824ca260dc27b9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/digest.md": "bc37fac617df8b1f124968d6c587a497f2ccfd95b95eb8d9a5fb8ac9166eb3c0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/brief.md": "d42b0cb876e54a3bf20082a23d4ed80598fc02497111bf2d9eafccf300e913ef",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/qa_report.md": "3889c9d13939ab46758bf5c9c3aa5a7e695c3e62807a6014430b2c07cccbfd53",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/synth_report.md": "f75e0fd4f6640c89d3e6c6cd0c959a47b7d7df984325e8e70bb016f75daca9c0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_mich_77dd8d691ebd9aad.9c80d92295245a01.json": "9c80d92295245a0179128eb1a89f14dc872ca1c55e833e83d60584b064169e81",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_pcoppusdm_62370e387e48b4df.8ac868145b5bdfa6.json": "8ac868145b5bdfa6858c6348d9624b27670cc1364880ce60f371adf61ad761d2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/bis_ws_cbpol_m_cn_784e709a84087b06.c56ab787d3433ced.json": "c56ab787d3433ced35fb9fc3d8f0acde21d4b17f17b6ee4a437c4210e531abfa",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/bis_ws_cbpol_m_us_eae44f753af36114.7eb50da424177c35.json": "7eb50da424177c35d7463c725c743986680d5447b895b748e3e877a231c25bce",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_dtwexbgs_08f046aea85a90af.78ecae62f95209af.json": "78ecae62f95209af9172c069aaea15647e6b5c904ac838f13a8991a587a71a60",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_t10yie_047417073b32645e.07db401f4867968f.json": "07db401f4867968f2f10f9af9f9516d76ee8003366a118bef3961b8c77316bd7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/datasets.json": "46e4d1cd73e499909250c6e14c06cbca47b768074e8cfc801a3bafd8c24f7efd",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_cpiaucsl_yoy_186c359f8b54c003.427502a0f5c056e4.json": "427502a0f5c056e489899bd85dbf7270d0b89c9da7d99ab98e570951a49f6997",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/bis_ws_eer_m_r_b_us_3145f7064d082574.edbe37a1e0bc3f3c.json": "edbe37a1e0bc3f3c676221154ea7092a23be9eb4f93c514dec41c39d3b7163b0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/data/fred_dfii10_7a0359873a7b1187.9609ac47c59aea69.json": "9609ac47c59aea6949c90aee4980da991f34d8b57a18fa2cdf0614daeb5bb640",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/08.md": "8550d1653ecd949d74c3fd73c2ff4eb92db654ef263b9a9c805ca3c5d82b5107",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/09.md": "f1fd5672fbe9c20ec2a1159b00865f72a34fa3a4e3f1bab46a278a305c7eba6d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/06.md": "0ea24e002f1d8fd377c357c71f96afb16266463b54bed504612292c7e9893e59",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/12.md": "35005fe8115667a86facad14f7e0f3fea9fdaf9848b51bbe5d906d02eee42ffe",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/02.md": "fa184fbe133a41ea34c82a39e7f3eb6bac96898360ae2dbaafc238ab061440ca",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/03.md": "88cb1f55eff25347795ce869585f71cc08bfcecb72c2aaf651c3bf4fff1a220f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/07.md": "3bff8ca51abba35034d1b358577216ae4831e6f2fc2dab9d7f515e3e6e609708",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/10.md": "e2c537402924d476f74761a28e3d16cd840779c443dcc1fe5a0b19ce2bb2e1ab",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/00.md": "a3a64234c8d3b0d744dd5aaacf42b01eef792dc1b06e58634f80b36935f2e621",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/04.md": "25abdb963660f8536d27aac0d3b0a292302d66d4de0cfd00fbd3927781f358f1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/05.md": "923e0243691e7635e89d95321148185d6be2fdadd3b654b5df6b170116d26902",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/11.md": "ae08b43f854d5f3eb6573c867c92b146c57dc7d22b7d16bab6cf012a59333bce",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/01.md": "3e88b618ba8dd42214de9488f81692020fdafba9958df04d4b705b952a9421a8",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/sections/00.input.json": "3296105e62440f8f68e47d19313bbaede27d47b8852481b9e39f596dd77acff1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/gap/round1.json": "aa9af04fca92b7bde032e5d79ceb5d2c11d46c9c761120617d8676f7ab765405",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/extract/frame.json": "b7c19489f57086a8833ff834d49a385ffdefa38b07ed8f7e146080efecf6f81f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/extract/facts.json": "4449974e713e63f1021fe1e31411f74426d23972edfc08e96d31871df17827f3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/extract/actors.json": "e2358107175dc2ac724b09d831226c67e95f912f2e6d89538076cf3342a9c6c5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_mich_77dd8d691ebd9aad.9c80d92295245a01.json": "9c80d92295245a0179128eb1a89f14dc872ca1c55e833e83d60584b064169e81",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_pcoppusdm_62370e387e48b4df.8ac868145b5bdfa6.json": "8ac868145b5bdfa6858c6348d9624b27670cc1364880ce60f371adf61ad761d2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/bis_ws_cbpol_m_cn_784e709a84087b06.c56ab787d3433ced.json": "c56ab787d3433ced35fb9fc3d8f0acde21d4b17f17b6ee4a437c4210e531abfa",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/bis_ws_cbpol_m_us_eae44f753af36114.7eb50da424177c35.json": "7eb50da424177c35d7463c725c743986680d5447b895b748e3e877a231c25bce",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_dtwexbgs_08f046aea85a90af.78ecae62f95209af.json": "78ecae62f95209af9172c069aaea15647e6b5c904ac838f13a8991a587a71a60",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_t10yie_047417073b32645e.07db401f4867968f.json": "07db401f4867968f2f10f9af9f9516d76ee8003366a118bef3961b8c77316bd7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/datasets.json": "2f5d8ec3c9b0ec75489b714eb01be6faefbaa0c84575ae4d0e9906be5c37df4b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_cpiaucsl_yoy_186c359f8b54c003.427502a0f5c056e4.json": "427502a0f5c056e489899bd85dbf7270d0b89c9da7d99ab98e570951a49f6997",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/bis_ws_eer_m_r_b_us_3145f7064d082574.edbe37a1e0bc3f3c.json": "edbe37a1e0bc3f3c676221154ea7092a23be9eb4f93c514dec41c39d3b7163b0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/fred_dfii10_7a0359873a7b1187.9609ac47c59aea69.json": "9609ac47c59aea6949c90aee4980da991f34d8b57a18fa2cdf0614daeb5bb640",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/data/index.json": "440f8425fa9bca8fb162ae9ad35ab61b4b84309a3f7c1b1298fc5c6cb5528f9a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F1.json": "ef0ce3cadb0bf3d34a169835b82a184faf304af96b95ece97487487d159b1677",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K1.json": "cd2b84cc6a512d4e828776f28446013d63178e31c5e4e7d40b1895adc71562d3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F2.md": "711abc99c608db6d4428e1407020e11683ab8e6a6e23e37f2de0b19ce38390dc",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K1.md": "1498aace7ac2ceeca40719d5977cdfa4ba3ee4eea1e5b21038f740f2de391eb9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K7.json": "ab6c236c08c866981bcbee236ed13a3828a1fea742a13085fac8690098f1f572",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K5.md": "8db6a7d236c684703f8600f21bc17ca4aefec0648fec3b27e93cb4ad33170c06",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K4.md": "84ffb158c26c1a31d6b0c3f81ad313c9cf18f1b316641371d74569c53f9a23cc",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F3.md": "a648a3c80995faa7d325c518df9e3e959dc1598b29929be6d509986f1b9fd600",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K6.json": "ec2b65747eacb94af275be554fa4f2ed88b6dd20af91202e6a32d130541ed4b1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K7.md": "f0816aef34f0c808bfb3a9b3740140eb68921be233a7da8a9edfdc4e5ef2e265",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K5.json": "3143bdf89a7f85b96f5e80df9b69431660c3ae9bd6e1968554321c985ca7a2b1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K3.md": "fa94bfe6ac87a5a555b03ec312107e76e8e1fad8238e2f576efdfc3da7c8a58c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F1.md": "7587f4f9904e8751193f9255cb465e824d7493398bf883af2386d825b8dd15b9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K2.md": "b10cfb45a6c69a2c79719ed3c656b86435cb52ce40273756cb422c711531286b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K6.md": "ba578a3b7e8458d9367c27f1242f0fedee8c093a16e7434f6c7a744e01bf0485",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K4.json": "919ea416cb3a4447186e6a4af95af2279f6183b021e592c555ca960ebf241f6c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K3.json": "6b7537667be493c67f779608f6e8e6b963d7c53eb75331bce881518152681b72",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F3.json": "a950bd4e85ecf03eca0a49db69da1414acd09d420707b033b01e9443c1b1f30a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/G1F2.json": "57c62c99e4154159f982569950141c7056034ff17b7468b72dba39e7be080d87",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/v3/kiq/K2.json": "6e27c2908f0bd5f384c54df1c7c93b8a45e2d12a9f664b337af7080e782c74c2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_78903d599684/handoff/research_budget_epochs/epoch-001-ababf3b4-9e55-48d7-bae8-86c6c7f574d3/final_research_budget.json": "e0775bc46408882f7ce02ebd2e6f0ce7e8c740218d3b44aeab88c41efe887b03",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/pipeline_state.json": "6d3d90a917808983abdeaa38a2dce08cbe24966b1678dea9650373c480be6552",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/telemetry.json": "9f64eb4120986c85fab4b19f71e104bfbb2b319bfd1749e7b7ca62a645b6e5d3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/run.json": "35d4cd3d0b94eac5dfff982ec60d3eba3888b95e2fd2e1d3f5acc78463994c6f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/run_telemetry.json": "58fc469623991a10735d7e40b9d813d9251127d1164ac0c804ec84349baee494",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/sources.json": "f3b2064973c3ea001a7a68419a949d3ade697f340ba936db2cf36032627ac38d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/prediction_markets.json": "90851b3667493f5f1fb9a211d1701e67afa90b8ceee959fd564cb7ff21468cbb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/contested.json": "0dbbc7865cc93af3c45ca27760424d72730294baa5795be3a5a343f4abc75116",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/graph_prune.json": "9a363e8c339e3fc50e30d7a12b3e28308045ec0890f0e55cb83fe62c36abec1f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/graph_priors.json": "ff8039fe54fe9f11150ed29eb81273fb682d9d5c65479a602f4be67903d2e24b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/entity_merges.json": "8c742b774f00e64076e69da52bbe5fb50902d4957924a1c5725db6036de6c556",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/research_report.md": "fbaea92e140dcc465ac6ecb91742a7aba4ff2c2c0f076542cc26510eca7ef14a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/ontology.json": "cf0592ca70b8fb482825abb842a94b0558958676e1738e86f899fac7e38e66e7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/charts.json": "012f1fd91bbae2cac85b696304714a9e0939f2c439c14f7a8acc0898cdf4e238",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/timeline.json": "9e330506867a34a009e4a6abf8e67ff58fba582d2a5e5c426d7d4e5b623a0a23",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/research_budget.json": "ab0e2f6e6e191aa1ff3d1f41a873a5d3bcd7e251a1aee6ed0f3a37e1f6db2987",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/manifest.json": "77b2a4b3715a00373ba4bbc5fe98763b50f6b091f7bfb43624c1712d256dc29d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/actors.json": "0488ccfa1a4deb228ec0c66fb04bfb11366779f4b4d1b5f01c586a28e00530a9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/news_market_context.json": "2f2e192f2c9ab413890d29dafc3f712d23d9845488613d2a394b1d7c5cf0a5b9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/quantitative.json": "e21e1207ee9294a895fdec889d22ed257c2393b46d952b94fde43bd1243d7d21",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/meta.json": "9f618177f1b7f3fbc6f5bc227db8db9d03347912529bca563a5e4ca5f44963e0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/usage.json": "4c2ab3e9fcf40f634b36049224523f27f9638bd1c3e981f7c98b8cac3fca4d2e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/state.json": "2bfd7b6775c831f8591bd39c86ffe0e472cefa511a16b2943da2894c7621061e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/plan.json": "7da3a26502c51a823b76c4ff16ea6be50e98ddfcd6f0b9a2088528edb7901f83",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/qa.json": "37b98f64480e0292d6b7089bb0eabe4ddc8723fe1c6f7faca66247db6fe18ee9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/synth.json": "060506c002949d31ab198800dae3a3f3b8f4fb7f11389ed8cadd75a956d544b0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sources_ledger.json": "ff25119459bb3f02d754adc489008fbc4909d55e976cdadb5073456c0057d1f6",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/digest.md": "1d6292cb332ff396bdc6cb906f86f8eb584f3880f95a2ab1045af9ac5e7d8791",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/brief.md": "08396a24c108a79eb657ea8bf8b5d60c893e055f65c6ae8a5ea779990198cbc3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/qa_report.md": "665a60c7b118fe01ebe9ef0ddfbee7dcd420547652f01e60d96cb04008f347c4",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/synth_report.md": "e4536bdd336f40c0765fc130244a8cd33c7e5ec6b21879d084c56f836cf7a01f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/data/datasets.json": "62af34692cfa4754193d222f6829ce9982e123a193727994494f7440c687b4eb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/data/fred_dtwexbgs_08f046aea85a90af.cc7c6649ff076a07.json": "cc7c6649ff076a07b922968cfd9132726df6cba195ffa13692ac63bcf09ad235",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/data/fred_pngaseuusdm_d0cf124085ed5cfc.95f6a763ad07113d.json": "95f6a763ad07113d607df5c7c42e74da0bbbd3720f4ef6c9ccde191428fa5c3d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/data/imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.1bdcd353780806bf.json": "1bdcd353780806bf9fa961c7c7d25eb5c8459733faa4123cc4b6b027c4ddac86",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/08.md": "40041bba5a816645825cfb0c68fa3bd914a39dca3979e906abd0ac06dc76ce1c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/09.md": "dd93b16eafa67361671ecc79aa0e3e2a4f8d1c650b782c4f59657cf0e1f0c35d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/06.md": "253677d74c52f427fa516a9cd2228aee5f483c42a615140146ff85da4e50c07f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/12.md": "bb49c9eccc08d1411032b1b5eb3e61390f3914620a42ea27d006aac16793d3a5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/02.md": "2abc5712a2f01b8df8d4a81d292084609c42ea84bac6ae077b7311903c717aee",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/03.md": "9fedaeafbbbb6e0efe9cb6d97239f21989cdaaa613460f4885025b87724531e0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/07.md": "84f99a77e8616b3a12823976cd1482a6b5122ee907674ef1121faaf4971bebcb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/10.md": "d0434ed3193c158dd93f0b89e608d6af4500cf30beee81693bd4fe408a501103",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/00.md": "42b730d71c6229e2666a16fcf1eceb193113615a5ab6cd310d12b8dab2650ce4",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/04.md": "1977e1f121f5d65c40f9953f32b9c456caed34b58b8d31667565b13c957a0530",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/05.md": "f39134196168f69d7913e1f473b141604e6eb1694c5125a87bcef38942949a17",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/11.md": "50dbeedbcad265c867d133281e641185651134676ce28370815d62eb1ba5e294",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/01.md": "7a95674442c5a29a63441f87457e270654e25bdb96bc1e685e7323c536b80f15",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/sections/00.input.json": "bd91d615e5a8a4077e1fdf3de2b7c035f871bed93f709efb70ae4fdc398b8311",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/gap/round1.json": "861339fb31c89b7f12bc57ee0c99e59448b0efd560b29213ad395a89c47331fa",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/extract/frame.json": "b63c5298c18bf367bbe142f6adb7180683d3763a8f20550071e1b799835cb5ec",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/extract/facts.json": "29fe0d17fa05f1e8cf192184315865fe369baaa469941c740f09983f0e7ddc0e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/extract/actors.json": "3eb038a08b5da4a0a1fdb0db8baf33f4ad94eaf4b063cdc427139f5922f412d7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/data/datasets.json": "56d1c1ccab4233cc5f12cbf127b5926e3170419c38498c82109017b522ff3717",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/data/fred_pngaseuusdm_d0cf124085ed5cfc.95f6a763ad07113d.json": "95f6a763ad07113d607df5c7c42e74da0bbbd3720f4ef6c9ccde191428fa5c3d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/data/imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.1bdcd353780806bf.json": "1bdcd353780806bf9fa961c7c7d25eb5c8459733faa4123cc4b6b027c4ddac86",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/data/fred_dtwexbgs_08f046aea85a90af.3d968526dbe92e2d.json": "3d968526dbe92e2dfd19c9fc3346c0ebec4d7996708656eb167aa17f3f127593",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/data/index.json": "e681c02250da602fc14faf52468968e0954253afc8a727a8eafefdf9e49089ff",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F1.json": "b58c5c212eb707e1d8bee35c95523d8096d8d822230ebaa20963827eaff3776d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K1.json": "568805d797fea2817def4ad7813169601d53280e1a7bbe0183404a072a722aae",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F2.md": "409a1469ece35b58d7628587408be62e611f4df5a45871079f4d5beb190f8760",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K1.md": "d1feb68db905e79c094b485ebffe640945c5b0aebcc8e1703083f728fc302c8b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K7.json": "ee8bdc25d6028e631fbe7973a8d8834769bb4b83ec5df4bed96f88d0a3512e57",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K5.md": "e970375d804d72162a307d30b5ff412e6efc3d2554c8d32c932c9fe9514b7606",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K4.md": "908e59ea2fe8aba3b7dde4f82fb777e6ca7eafe98433dae538de24f3338bd188",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F3.md": "19fe6ce38426c7be64272347023a361d4cefab76fe4e2b48d581d8ca1ffcfa12",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K6.json": "a0984b04cb8f4b214b18532e75ea1b9d3aad5416e656caad63d24f84cc32e893",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K7.md": "2d8f0cf6bffffe469bc254f7816e592e8e3fde58f2cf97ac0cc2ffefd48677d9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K5.json": "8e7ef3d008c02a9f67ce9d1074cc9694e459732d7bb54198c8eb8f38de89d4c9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K3.md": "df17aea77a839044f2d2187aee566dd428fe0c1f6d53e9ff350af54306a8fdd2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F1.md": "1b85b260006fc180db77ab757a603d98475332272bb6b9f1d1ab6dcd58ad5f80",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K2.md": "f63a873b8bdf24c7d6f80ce6cc6d8ff314d1e96e48df415c650a83604cdde9df",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K6.md": "640143e22afd6705aec70a5af9822c3e48fc57cefc76e8ea8b6a3667ff77be27",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K4.json": "0f9667d3ff12d92a5b3e62324ab55ce5a1d7d6127e277d9f7e193b30bc8e65b2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K3.json": "78a997d36a60e44a4b25629561234e5d6e310a877a4a1a62a1b2c5eb8a2262ac",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F3.json": "8c60379428f28b70cd2d2fb60e6cb0ed26f9193e6924a33e4eea3710ff7dd1c9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/G1F2.json": "07dd1dab7ea4a79fe886ac8b314b78f9426ce6f8bd068bec1c65ff3037e30322",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/v3/kiq/K2.json": "2911eac2f0c7f22dcf69b79891ffaf75f0c772ad6959bc31cdf98a275b8dbd08",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_9f5353ac9955/handoff/research_budget_epochs/epoch-001-93a945fd-b0c6-4e32-bb77-de37d814f42a/final_research_budget.json": "bb298b1199b460850c9be6678629ded4a1f575e4ae5566934791cece35552f84",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context_manifest.json": "6ead4329c51e96012089528852d454c936f7943e1f5fbe29cf4e303e8789787c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/run_state.json": "50c98d6fe7ec6b6983e7afa5a551ed6c742c3d55990bf6ff29d4aca3b9bd3648",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/state.json": "3bdc09ddbec35277aa7e04aa533d7225a499c226765d1e002ff95f98e95e3ebb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/run_summary.json": "bf3a648c2237e37752f11b551f2db0b4cbe4596f9f926a64780326735d53f9d9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/reddit_profiles.json": "601774a166aa9a2c394678d52c204f92e930e517277294c4918727d443612019",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/official_research_binding.json": "7937f012a4935102c5c3e6540996b2ead6f9154c194de53a7f0782eab3107358",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/env_status.json": "bab132145fbf58bbb44dcb10cba3b3c58c85c203941249285735e032c0033d4a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_cast_manifest.json": "2c76a13479ff8e087fb8a29eb1c40569ef87ab735b2d4025c61e38cb6808a855",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/reddit_dynamics_summary.json": "433d13821bdd415cdb85955c881cce9e7ae5fcb334be647c9c26766368dc526e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/decisions.jsonl": "d8dc6a5e6a012efe1531ff15c5fab0f1c249b1fcb8fd9108d9db7264cd7247ff",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/sim_llm_telemetry.json": "42269a261aa1bf23b1c77ff73fc7fa0433f9f2b1bd2212589ba52d7bc6360780",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/world_state_history.jsonl": "bf6df8d2659826fe7f27f64a18d068025be6a44e9dca5204f3f93b11224f308c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/world_digest.jsonl": "0e84675d87e77f674619a7e985b635a231733d3ccb88a353d1d1118dba5b6edb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/reddit_profiles_roles.json": "a1384f144745a8704cd39a698009cacd41203c0609fc1d0e560a3e93033a0a56",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/twitter_profiles_roles.json": "809a73c2c5c2839c147071d5c2ade0dea5d0d2717e15ba47af708090e56bc73b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/world_actions.jsonl": "d2f6aadeee2d95b85a54c6eb3939a048ef4e8a427c8e15ecc1b268127bdd162a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/llm_health.json": "146ca917350d0a5421f48faf0d08dc3252d0ac13786fe1a7e17a50fe2b01ba27",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/world_state_trajectory.json": "2f53a9bf38edc5a5b6b697aaf2b8be83477e9d3b23cdb229fc2333843c8cc8ec",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/twitter_dynamics_summary.json": "433d13821bdd415cdb85955c881cce9e7ae5fcb334be647c9c26766368dc526e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/simulation_config.json": "f828c82cefac09aed10992ffd68b6edc19dd6d3f7183ff1106acc0168b05bac1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/world_state.json": "2b594bab9d3c6f81a182e7e3ffed3f0be5a410ae943f37b881de0fbcbb8e71b4",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/simulation_config_manifest.json": "79fd073046df85e11875b35f96711fe46c4345291043d54afde3c3ff250796d0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/twitter/checkpoint.json": "ec019947ab6e984af91f4ecd49e7dfc5fc7c4b69ac3a1cd6f7c5ef4a1dd72908",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/twitter/actions.jsonl": "9cc91d537923ff7ed72a00b29d2c8b90eed4af0b1ef4372dddb76715a240a813",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_146cafd2b7f2ba44.json": "a166facd9f09c4c232cfa9803c444e0c3cab1fc79633addd8551bdd0418051bd",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_347a34821d86845b.json": "abebd06637bb165fb8db6967e0c05b18bfa443b4bc16c20fcd5ac3f99d25501a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_1c23bae755e72412.json": "ba1fc27cab6b46a9b9263706247eb414803b08ae9b9fa62b5d153d178ff07ec1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_21759a57b315a877.json": "181c5f0fe4bbfec85a3c5a14407a16f6d292308b7322d7387ddc6261771eeeeb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_1fea5d17e1347c65.json": "6eba4c8a5962fee8cf8abd03d08a42be9a21da4a80aac7caea7181fed6f0c7ae",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_bf35b3e3b9bb3050.json": "47903d99627d90ea32e811bef66c471c557fe67fc6bde3395bec6e79673d8a29",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_c043c615804cfda4.json": "476644b72369cdd3945b4712169d479f8a882bd396bbeff78bb5f6df7f93bfe3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_7515631c43b2f646.json": "f2a43aa4631a16d416f230407ad4cb73301bb2af199e8c7891ff8689f0f21da5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_dac8de1dd96b7c17.json": "1b6e288934f7e2a290258835303be0217f57131cca35e9fbae03e6a9322d49ba",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_4a61a56357874a7b.json": "552ecd9b7203356f5559fd8146142e4bfba39655b87065741943f32c9e41871a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_ff0ccbbba23f22c7.json": "35b8a66c200117d46ee073c02f695e24814a6b789e292b35dbf7a799f4cc286d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/actor_context/actor_a38b26f8d2b47a1e.json": "2260399f891dec80a6f61d32af58c279924cfb8d9e08a54ae64fe7de1b19c4b5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/reddit/checkpoint.json": "d4d26258839462b5dede5e3cb4296ae24a6176f2972b7fdf56f4269fcd937b3e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_a79deb6a2772/reddit/actions.jsonl": "0f7c85fa9b12e03174e9e7666fed4fc90da8349595a888f32afdd6f10edf0b1a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context_manifest.json": "503eaaa145478bf3bd06cfa82f6e6ea69bb163cf6bd96fa1b7cba6f66e5f5883",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/run_state.json": "edbc04bb0a57a4ed8adb19c0baafc5cb12c7b658e7581659a1ed8d209b7fd426",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/state.json": "0b6d7ae4358aa9d51b6faade488474070f136d94945427ae23ab0e9331b75138",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/run_summary.json": "e9905a00f8955440e4b79b9ffbeec1f8f9658d89cde8ed89ef47210951502550",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/reddit_profiles.json": "194947697fcf759d24196e8981cd5f341f099459971783aad030afdf7c8ae483",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/official_research_binding.json": "036d864a78e758f8e44ac9fdb7053a3255fe1e2f544571280cce7ec2cb8b18af",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/env_status.json": "88c12f4b3354d0dab78afd48acdd0d0c85e6946554d03a961e58e75146c7aaf8",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_cast_manifest.json": "8446645aace8070ef4ef9138854a9b540613d79e247344d57401bf49525dba6a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/reddit_dynamics_summary.json": "433d13821bdd415cdb85955c881cce9e7ae5fcb334be647c9c26766368dc526e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/decisions.jsonl": "981b2c72b3ee5e4b4dd45faf086fb2b12aa0f3351c0472225b0b9a4b0bc3f819",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/sim_llm_telemetry.json": "06d2eedc210584effdf7cfface029a91ea71134422fe4c8f11a3f7b8f7f7e8f6",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/world_state_history.jsonl": "b72fbb97b1d71ba76d9c8d731f3829db09c5071057741414cb189d3c5a0abf67",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/world_digest.jsonl": "518ae0f436d5467f764fbb6667448dee2475136c50bb19741c4eb20b5075370c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/reddit_profiles_roles.json": "d789cff2aea3c53e42d7ee20ad8b1118ce30b121032e7f2cb6ee8b55ae3a4760",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/twitter_profiles_roles.json": "ad157fc6e6ab2edf7a8311b7dadebbadec4828d255d9852eace48b6c52a9cd9a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/world_actions.jsonl": "2d898ff5b5854f53e6ea73ac86e372f30fff4d174e15eb0fe04b548f38abeab5",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/llm_health.json": "71e92d8f72ab64e6b67dcde27f2ed09e0d67954afccf06d3a4159f2fd19ca550",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/world_state_trajectory.json": "d9e3e82db59efb858afc5e21258a8ed957c25a0d82bb39806f80f5f88d55f0ae",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/twitter_dynamics_summary.json": "433d13821bdd415cdb85955c881cce9e7ae5fcb334be647c9c26766368dc526e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/llm_fallback.jsonl": "dbcd3b1a919c9855de5e7183b3b1e51b564ddb266b68211f92da76533ee8e510",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/simulation_config.json": "55d55a5db0739077b89a1ab174960beb329d6c65eafe3d2b6f83c803ff1353f2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/world_state.json": "3189ae907a8611a1a4299080753977df78c0bb8b12c99f1d41f2f53e2f5d9f9a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/simulation_config_manifest.json": "35692672a151f9a6c1d1f81b891b61a823d4e6d623082a3eb43a643f4ebeb7f9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/twitter/checkpoint.json": "4f15efe104eb90967ab3973865ccb4d8342bf5be4a4852eb19dbf813646d4212",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/twitter/actions.jsonl": "b0d5b00ce3f29bf0a4043373789ee00f36ad40bd4af01c7b0db3590577ab8bdb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_5cae49b1fea5b5b9.json": "d36e209ba591df464c50b522c13f74e43523aba4eae81201c822498951aee80a",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_17504ccfecec3ca7.json": "78b47a03805577a12f06b5901f59bd804c832efa8c0fb26c0a6ce22d7ca4ce32",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_20625ec8099756c2.json": "da74dc0adbe0298b38a014e86c5dbc5dadecf92d3ff911c1c66dc21604779b6b",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_640dff6f99de6aca.json": "57826e9c25db0dfe14348a2b32a9799e4526cd3483360b42cfb3278354100119",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_dc0318997845fad7.json": "88c0a3fce5c58bc8f10fb5138aee9ce8a3f273d36a4695a7269fc23c9f4349b8",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_9219a829ebd613c7.json": "644a0d6ed38086aa23825f584bb1d4ab0c9e0ab2031e29dd91e5a4c5aeaa05b1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_756bdae09fd185ef.json": "1f115978e842aff28fc04dca7e409144451c252e094b34a3f653af8a1eada9c3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_463f6861eb24fb2d.json": "4b6e925a1c3bba9ee24ef00e601db5233446f1f351c6ed4e53947b150f18a12d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_a4d275749a7590d6.json": "bfc543e6b7931bc6a2f82d8e1f697c115aecf7779381a00ae0f7a8bf37a4c1be",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_95162f4ae6702d57.json": "21b4b80e3cf3ba314dead77cb40641b106371254aaba10b39683105292fb1c51",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_3fbd0c27bd4d0663.json": "5b5331b31d8cab609104d49a9e734e15f075ef50c9c6c0b486b99c075f30558e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_8588b8c524e36861.json": "e431cdcfbbd6e78b295a5c08ea0479ed4301c93cfd39e0c0000a9a18447c4735",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/actor_context/actor_9dc9c4ee58f15b3c.json": "7a4d49f03a5cbb6c943fa600181ce2a9828c5eda0a5007c4011b3beaaf80f486",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/reddit/checkpoint.json": "ddcdaa8c405700aa73ef9caf4a0f2b27e0288f106b6a0e18bd6454fe63134cda",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/simulations/sim_e0fd51c9e193/reddit/actions.jsonl": "c41c67e01f7adacf2d9f37da506771811d06720d5b741d2ff6df1b589bc6a70e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_05.md": "3f6d0eb443a6c7ee6a1ed7cd2fab3a96d6a6ab4d879d3693bd2f252258c1b121",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_01.md": "58ada05c759853ee9b2ee2c8b30a74888960b782fa268fcd964f18b668955a9e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_11.md": "899d005c2b70bc4f85c38a2be2fdbeb07b1f4842a4e2a988cb29f9a7f81bb8bc",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_10.md": "fb56784ba04c1111660b43f46bc922a788f01b23c6a62bc884b603915df04323",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_04.md": "453c9c4c85f0b1280b68245cc0a9fd46a09bcba23e8a8995dc1ef9345ef778a2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/translation_status.zh.json": "fee54a0ef1609e284da54843147d8b551c74fcfc579c6b7546b56b0e2f43646f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/official_data.json": "bf31d76e320910353bc979e117f3d488aa8cbfc9b4101b6fb3569d4e87426964",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/full_report.md": "9998e9814ae69fe765955c56aa18e4b409acd8723a6f2b6f472488f20df3aa29",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/final_audit.zh.json": "c9254308cf0bfafc5af8673011253c68859fc2394231e1d995ae37a4b4ed4101",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/citations.json": "f859abeaa66eecde4cae2ac3d83e507c48e8e6181da9d9e25b0788d32119a1e7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/agent_log.jsonl": "e47a33693255ae41c1d990e6922f7914505ca5d66da42ed088e744170e03424c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/viz_manifest.json": "fe0f7c020f934103f9992c516ecbbe1e3c48e1b6e406aa615ef0b95648581cd1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_09.md": "f435d94c81c79f02571c7b46ae3c7b3f987d9c469336064433b66031861c5e13",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/outline.json": "507534d3e8cd2b8aaeb4290a68221bfa348324d4f0df1d22600b656de9758cdb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/telemetry.json": "7882ec4733e397422ef5ffbcc3619878acac26649c80e2805c189cd6497e8d2d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_08.md": "a267dbf99946472b97cae2f73997190aa22ed1451479bc9e14ba4e2f29c87403",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/progress.json": "f5e99486a4e868a725a69da19edf880802c046fbe3ac76e7cf2ed32f5614bd74",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_03.md": "92a86f915787dbb92ebb67105463e401d7a37e1c746acd701a5ef395ff1d90fb",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/telemetry.md": "57d12f6b2cdabad054854e7ae2ca46bfbeac8d420594cf84e46d19e87d132fc9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/forecast_track_record.json": "c843b377a46973e460740e57a33f8a2c9aaea548cebed44f41b355dc359b23b7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/forecast.zh.json": "4099bc600a579ed6e1f1d43073633568069377f40d2f197b3ff1e5e72d6181a2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/forecast.json": "d393f1ead6f814d47b98f52b07c3e471d8c5e622d4eec7620c1e931e09475b94",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_13.md": "a6d3daacff6c6e08e22297eb9fde5fd0b0e49db5494ef6ab7c82745cb538c4c7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/prediction_markets_recovered.json": "964ffc783c858b1aab40a1fd83514208ce2d706fae07957987b6a809cbe2e8e1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_07.md": "4e2b07804b3f802885fc08412d5d40b83fa3d2dfc353cca34afa77e2ba118667",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/full_report.zh.rejected.md": "d2209851e206e5f096a6330a69bea0d3dcf9c381996e8b9070809d978b02e1ca",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/news_market_context.json": "b77d9712d61a5439dfeb29a38bd7280887a5b766b4a6cf2cb91fdad4c6f96faa",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/final_audit.json": "ef959c0a18c366daf1c5149db30580c057a7a9725c034f4d503b718fa873d2f7",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_06.md": "7b3de55d3be81bea061f06cdd1fb4c799d526f95a931b41600d3ff5bd03420b1",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_02.md": "5c7079efaece38ed732b67e8f454afa04ad93fedf7e40f0acbfc38b8b23fa03d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/section_12.md": "4fbda307c5731adc19c6692df7a8565031d3b89689648f5c7ed6ac087097f5a9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_0055b92550a6/meta.json": "df5e113c72bb52f8854f01ad0aa1e808194c586f10c6453b1d7afcd62502f552",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_05.md": "24c90f18f1c4d8662a1ba092c54aea028eecabe7a9488724940d41d785198eaf",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_01.md": "465cf66e43be04cde4fc0c5d7c8db8f1979fdae35dc882844177f3728d271507",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_11.md": "08880cc4e0e12caf61876c9ecf6b3003a501ed873449f80562dcfdda10c4cdd4",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_10.md": "47b3e43fbb99be118200bc814f2e90b580d52bac67915788cfe41aa34f0e3513",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_04.md": "b3b24b1737063568dd409824d1c512e4f007cc57a26d42b9fd3826059d5bd4c0",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/translation_status.zh.json": "977fd7d3408fcd0b831fa0f451f3406de1dc1cf41e1cef5ae235490064309c60",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/official_data.json": "3d8ed05f83293c53384f3a5ce1dc5c01c3c9d7f925e2322c7f5b6a78a0d298e4",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/full_report.md": "06bc6f24ed0676b26a5f667b23c912782fb2bb04cd6dcbbdbca0e03bf7fa5b50",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/final_audit.zh.json": "54816cb81f363c78eb6e38febc58597c55bd60c8ddecf4afbba43de205d1f79d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/citations.json": "1277a2fe945917150ca3bdb26ef8f3dd87b8f931463e5c435512aac90d3c5c1c",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/agent_log.jsonl": "ea58625ffbb35bb86ec35ce74da3dbf7325987892c88642d77f789f2d97e814e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/viz_manifest.json": "80b6695fa6a4f3cfbad9df76a4269fb11093a9fac98457446dbb8fdb566a5b17",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_09.md": "3393e42fc07ca6314d68707fe4e5216a78243f2274974367e5bf1642ba6a74bc",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/outline.json": "251be9e825280f845fa00b3df883b06ccd1ed2c35bb79d7faefeac35626aa052",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/telemetry.json": "503537a83151189cf384048df5fbc16620cd7459ed9f0fc12e4e1ffe8d0badc8",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_08.md": "6a76c1d8518a1466424c40f1d487cc26d0391b667a1fa13e84f34f22d53e1c40",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/progress.json": "cdde77d5aaa235e440de4138db77d971aa17267475ebe2d7da084b6f20c24582",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_03.md": "b45b6fe74896b92483337fa48f78849ec5ede7118367782aaeb298cc8c9338bf",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/telemetry.md": "e27f0c3eb74ea22f754296199260b2f332ad7319108bc5e990ae1a6ca2d5c280",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/forecast_track_record.json": "d1c74a633f6b3a2ea55ad7615ab342485fbdf17ab5c09d0326a2b105f49771d3",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/forecast.zh.json": "329e0cf87758f27299c8bb769e855bea135b7e4c45c763f081e881ebc4bec785",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/forecast.json": "96f40551d99a75658161746d131be0d1bf1ccea263ecf6c6f71e4560a875e0b2",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_13.md": "9ec832f432c6b913d278602a8f0c02c0044e9ba671dd486088d1c1f5bcc97a0d",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_07.md": "c1640d922f3c4722ad14306b6b5fcadcb786bfb30e6b3e299d5eb528717e60fd",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/full_report.zh.rejected.md": "99f618160e078dba318fa35d2ea3437e5ffbe22bde935c5f58cf72e3aab06d9e",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/news_market_context.json": "2f2e192f2c9ab413890d29dafc3f712d23d9845488613d2a394b1d7c5cf0a5b9",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/final_audit.json": "bf623839e284935b015b16a8b7f4f003628ef650e9cd1defda698165d1317360",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_06.md": "f6efb88efaecb6970fd2f68d1ed626198f995057709b4affcd63c837686f4ace",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_02.md": "4aecbfb27262a48902ebb4c86a3ea908b2a699d09a7523d2590c739ffb2449d6",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/section_12.md": "826ea7cfdfc6b29f324d38541fa9749cdbf2c79baeb319b9129ef6493e28b56f",
+      "/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/reports/report_553a2cc08357/meta.json": "96769675490d9f9d2517148422e0af546b2c0917d3d2560735eebdeed6ba1ea7"
+    }
+  },
+  "source_evidence": [
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/services/pipeline_orchestrator.py",
+      "sha256": "c8f2f87c5f85480f8c455a3079a4a5c50d21b04f3dcd1b412809679ae085f76a",
+      "methods": [
+        {
+          "name": "_validated_research_checkpoint_lineage",
+          "line": 3089,
+          "end_line": 3154,
+          "sha256": "56f8bed0e6c89c4bccfc82cc92642f587f539ddcf6e41f9c90fc30c7771316e5"
+        },
+        {
+          "name": "_finalize_research_contract",
+          "line": 4178,
+          "end_line": 4299,
+          "sha256": "364a79958e52ccb720d0ea6ca6e361da8a2f49452ff642c3b1b52d6b5a6f3d98"
+        },
+        {
+          "name": "_reset_stage_attempt",
+          "line": 4412,
+          "end_line": 4427,
+          "sha256": "405ca990b8505fd3d454eb11390a79cbc3fd00f27cb0026ab272d8a8529b36a9"
+        },
+        {
+          "name": "_load_research_handoff",
+          "line": 4466,
+          "end_line": 4497,
+          "sha256": "4699807af7d42b910e0efd18b6635e66c9ad010d9662d8e49a77406fe8f84f4f"
+        },
+        {
+          "name": "resume",
+          "line": 9081,
+          "end_line": 9198,
+          "sha256": "ca82ee43932cf1466edabe861bad436f79db914844cc47827df95940e4bc30b6"
+        },
+        {
+          "name": "_complete_stage",
+          "line": 10344,
+          "end_line": 10391,
+          "sha256": "11e01f6abe8f96d6f9d9384f8a6ab8f2f99fa822a9c97de3a54253b40dcad1ad"
+        },
+        {
+          "name": "_validate_reuse",
+          "line": 11180,
+          "end_line": 11288,
+          "sha256": "5d7df9df0c5a3ea36fa8323e88b2a1d4546b02285f071a9fd732519da1fb1a09"
+        }
+      ]
+    },
+    {
+      "path": "/Users/rogerlin/Downloads/DeepResearchForecast/backend/app/api/research.py",
+      "sha256": "4029e93bb8b5428d48cec27b54a6c34b70238521112c213bd7b358bd60b92d24",
+      "methods": [
+        {
+          "name": "resume_pipeline",
+          "line": 164,
+          "end_line": 197,
+          "sha256": "04d5e29e3e0a2919429107f3199de6450a2dfee4abfda742bbbb0bf015385c8c"
+        }
+      ]
+    },
+    {
+      "path": "/Users/rogerlin/.codex/worktrees/forecast-feedback/DeepResearchForecast/backend/app/services/pipeline_orchestrator.py",
+      "sha256": "24edb02a246fb6bd48c3e91c3e3493ef637787977e75a47f9178bf6f7747a0d3",
+      "methods": [
+        {
+          "name": "_validated_research_checkpoint_lineage",
+          "line": 3089,
+          "end_line": 3154,
+          "sha256": "56f8bed0e6c89c4bccfc82cc92642f587f539ddcf6e41f9c90fc30c7771316e5"
+        },
+        {
+          "name": "_finalize_research_contract",
+          "line": 4178,
+          "end_line": 4299,
+          "sha256": "364a79958e52ccb720d0ea6ca6e361da8a2f49452ff642c3b1b52d6b5a6f3d98"
+        },
+        {
+          "name": "_reset_stage_attempt",
+          "line": 4412,
+          "end_line": 4427,
+          "sha256": "405ca990b8505fd3d454eb11390a79cbc3fd00f27cb0026ab272d8a8529b36a9"
+        },
+        {
+          "name": "_load_research_handoff",
+          "line": 4466,
+          "end_line": 4497,
+          "sha256": "4699807af7d42b910e0efd18b6635e66c9ad010d9662d8e49a77406fe8f84f4f"
+        },
+        {
+          "name": "resume",
+          "line": 9080,
+          "end_line": 9197,
+          "sha256": "ca82ee43932cf1466edabe861bad436f79db914844cc47827df95940e4bc30b6"
+        },
+        {
+          "name": "_complete_stage",
+          "line": 10338,
+          "end_line": 10385,
+          "sha256": "11e01f6abe8f96d6f9d9384f8a6ab8f2f99fa822a9c97de3a54253b40dcad1ad"
+        },
+        {
+          "name": "_validate_reuse",
+          "line": 11210,
+          "end_line": 11315,
+          "sha256": "425624be0dd9a4ec7462d4f6a75b172a05f3265a83d8686d3ff4f49bca9bfb3b"
+        }
+      ]
+    },
+    {
+      "path": "/Users/rogerlin/.codex/worktrees/forecast-feedback/DeepResearchForecast/backend/app/api/research.py",
+      "sha256": "58b65a7a6f64f47bbe1a1732620a83e3d364e97900c0312ae2409723745d57a3",
+      "methods": [
+        {
+          "name": "resume_pipeline",
+          "line": 164,
+          "end_line": 197,
+          "sha256": "04d5e29e3e0a2919429107f3199de6450a2dfee4abfda742bbbb0bf015385c8c"
+        }
+      ]
+    }
+  ],
+  "snapshot_consistency": {
+    "saved_files_read": 354,
+    "all_rehashed_unchanged_before_publish": true,
+    "unstable_files": []
+  },
+  "post_resume_checks": [
+    {
+      "id": "identity",
+      "check": "Same pipeline IDs; Brent project_id remains proj_d5459a19304a. A new pipeline task_id/resumed_at/resume_count and new graph task/ID are expected."
+    },
+    {
+      "id": "completed-stage-timing",
+      "check": "After Brent passes reuse bookkeeping, research/ontology remain completed with exactly the original started_at/finished_at values in completed_stages. Do not compare current_stage/global_progress or require whole pipeline_state.json bytes to stay fixed."
+    },
+    {
+      "id": "completed-results",
+      "check": "Rehash all immutable_completed_outputs using actual_file SHA256/size; retain the logical artifact key/path and completed owner stage. Do not require manifest produced_at or the whole manifest file to stay byte-identical."
+    },
+    {
+      "id": "project-inputs",
+      "check": "Rehash project extracted_text.txt and actual input files; compare the canonical project input projection and per-field hashes. Reconfirm project.ontology canonical equality with handoff/ontology.json and unchanged report/extracted-text relation."
+    },
+    {
+      "id": "no-replay",
+      "check": "Confirm research/ontology reuse paths in stage/task observations and no newly executed research acquisition or ontology LLM attempt for Brent. Preserved bytes alone do not prove zero provider calls."
+    },
+    {
+      "id": "ttf-boundary",
+      "check": "TTF had no completed stage. Preserve submitted input hashes, but allow v3/checkpoint/progress/budget/metadata internals to change; new completed research/project outputs are expected."
+    },
+    {
+      "id": "legacy-reuse-semantics",
+      "check": "Current source checks Brent research report presence/length and artifact manifest when no research_contract_manifest exists. Current ontology reuse branch uses existing nonempty project.ontology; the external canonical/file hash checks provide explicit retention evidence."
+    },
+    {
+      "id": "new-attempt",
+      "check": "Only the cancelled current stage is reset at resume; graph for Brent and research for TTF receive a new timing window. Resume starts the canonical pipeline runner from its research reuse checks rather than jumping directly to graph."
+    },
+    {
+      "id": "mutable-bookkeeping",
+      "check": "Do not treat research_progress.log, handoff/v3/, research_budget*, meta.json, telemetry, new manifests/produced_at, state heartbeat/status or project graph/status fields as immutable completed payloads."
+    },
+    {
+      "id": "gold-war",
+      "check": "Rehash the same original309-path manifest after activation/resume; require all309 old Gold/War hashes to remain unchanged."
+    }
+  ],
+  "resume_authority_note": "This is pre-resume preservation evidence and source interpretation only. Runtime P1 barrier readiness and backend activation/resume decisions remain with the parent coordinator."
+}
