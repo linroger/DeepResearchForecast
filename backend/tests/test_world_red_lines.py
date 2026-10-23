@@ -103,6 +103,7 @@ def test_red_line_matching_is_about_the_actors_own_text():
 
 def test_trends_are_marked_after_two_periods_the_same_way():
     world = _world()
+    world.settings.update(max_change_ratio=None, reversion_kappa=None, max_drift_ratio=None)
     var = world.variables["tanker_insurance_premium"]
     for rnd, value in ((1, 0.3), (2, 0.45), (3, 0.6)):
         world.start_round(rnd, {"label": f"P{rnd}"})

@@ -490,6 +490,9 @@ def runtime_config(monkeypatch):
     """Load actual pure vendored schema modules, avoiding config dotenv startup."""
     from types import SimpleNamespace
     directory = ROOT / "deer-flow/backend/packages/harness/deerflow/config"
+    if not all((directory / (name + ".py")).is_file()
+               for name in ("tool_config", "subagents_config", "guardrails_config")):
+        pytest.skip("requires the optional deer-flow checkout")
     loaded = {}
     for name in ("tool_config", "subagents_config", "guardrails_config"):
         fullname = "deerflow.config." + name

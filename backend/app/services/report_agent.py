@@ -7619,7 +7619,7 @@ class ReportAgent:
                     continue   # 悬空/不可解析记号归悬空修复管，此处不动
                 occurrences.append((line_index, match.span(), tag, numeric_line))
         counts: Dict[str, int] = {}
-        for _li, _sp, tag, _num in occurrences:
+        for _li, _span, tag, _num in occurrences:
             counts[tag] = counts.get(tag, 0) + 1
         over_tags = {tag for tag, count in counts.items() if count > cap}
         if not over_tags:
