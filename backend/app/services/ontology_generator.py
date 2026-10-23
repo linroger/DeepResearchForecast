@@ -8,6 +8,7 @@ import unicodedata
 from collections import Counter
 from typing import Dict, Any, List, Optional
 from ..utils.llm_client import LLMClient
+from ..utils.llm_errors import is_content_filter_error
 from ..utils.logger import get_logger
 from .actor_role_prompt import (
     delimit_untrusted_research_text,
@@ -581,29 +582,19 @@ class OntologyGenerator:
         template_name = self._resolve_template(effective_template)
         system_prompt = self._effective_system_prompt(template_name)
 
-        # 构建用户消息
-        user_message = self._build_user_message(
-            document_texts,
-            simulation_requirement,
-            additional_context,
-            template=template_name,            # EXECPLAN2 I-1-3
-            central_question=central_question,  # EXECPLAN2 I-1-3
-            actors=actors,                      # EXECPLAN2 I-1-3
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
-
         # 调用LLM
         # ONTO-5: max_tokens 4096→8192。富本体 schema 要求每个 entity/edge 额外标注
         # archetype/simulation_tier/family/valence 等元数据，10 类实体 + 10 类边的 JSON 体积
         # 已逼近 4096 token 上限，截断会产出非法 JSON 触发空本体回退。提到 8192 给足裕量。
-        result = self.llm_client.chat_json(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=8192
+        # FS-1: 经 _chat_json_filter_safe 走内容审查安全梯子（首跑逐字节等于直调 chat_json）。
+        result = self._chat_json_filter_safe(
+            system_prompt=system_prompt,
+            document_texts=document_texts,
+            simulation_requirement=simulation_requirement,
+            additional_context=additional_context,
+            template_name=template_name,
+            central_question=central_question,
+            actors=actors,
         )
 
         # 验证和后处理
@@ -619,27 +610,104 @@ class OntologyGenerator:
                 "falling back to %r template.",
                 template_name, DEFAULT_ONTOLOGY_TEMPLATE,
             )
-            fallback_message = self._build_user_message(
-                document_texts,
-                simulation_requirement,
-                additional_context,
-                template=DEFAULT_ONTOLOGY_TEMPLATE,
+            fallback_result = self._chat_json_filter_safe(
+                system_prompt=self._effective_system_prompt(DEFAULT_ONTOLOGY_TEMPLATE),
+                document_texts=document_texts,
+                simulation_requirement=simulation_requirement,
+                additional_context=additional_context,
+                template_name=DEFAULT_ONTOLOGY_TEMPLATE,
                 central_question=central_question,
                 actors=actors,
-            )
-            fallback_result = self.llm_client.chat_json(
-                messages=[
-                    {"role": "system", "content": self._effective_system_prompt(DEFAULT_ONTOLOGY_TEMPLATE)},
-                    {"role": "user", "content": fallback_message},
-                ],
-                temperature=0.3,
-                max_tokens=8192,  # ONTO-5: 与主调用一致，避免回退路径再次因截断产出空本体
             )
             result = self._validate_and_process(
                 fallback_result, template=DEFAULT_ONTOLOGY_TEMPLATE, actors=actors
             )
 
         return result
+
+    # FS-1: 内容审查安全梯子（GLM 400/1301 等 content_filter 拒绝专用）。
+    # 首次尝试与直调 chat_json 逐字节一致；仅当且仅当提供方内容审查拒绝时升级：
+    # L1 = 中性机构称谓指令 + 压缩文档采样（32k 字）；L2 = 仅结构化提示
+    # （需求 + 核心问题 + 角色统计，不含研究文档原文）。
+    # 线上案例：pipe_9f5353ac9955（俄乌战争，2026-10-22）本体调用连续两次被 1301 拒绝。
+    FILTER_SAFE_REGISTER_DIRECTIVE = (
+        "\n\n【中性机构称谓模式（上一次尝试被提供方内容审查拒绝后启用）/ "
+        "Institutional-register mode (enabled after the provider's content filter rejected the previous attempt)】\n"
+        "- 以中性、分析性的机构术语描述武装冲突、伤亡与敏感政治内容；在任国家元首与政府首脑以职务或机构指称；"
+        "不得逐字引用煽动性、暴力或血腥表述，改写为中性的事实陈述。\n"
+        "- Use neutral, analytical institutional terminology for armed conflict, casualties and sensitive "
+        "political content; refer to serving heads of state and government by office or institution; "
+        "paraphrase inflammatory, violent or graphic passages into neutral factual statements instead of "
+        "quoting them verbatim.\n"
+        "- 输出仍仅为本体 JSON 结构，不复现任何敏感原文。/ The output remains the ontology JSON "
+        "structure only; do not reproduce sensitive verbatim source text."
+    )
+    FILTER_SAFE_TEXT_CAP = 32_000
+
+    def _chat_json_filter_safe(
+        self,
+        *,
+        system_prompt: str,
+        document_texts: List[str],
+        simulation_requirement: str,
+        additional_context: Optional[str],
+        template_name: str,
+        central_question: Optional[str],
+        actors: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """chat_json + 内容审查安全梯子；非审查路径与直调逐字节一致。
+
+        仅 is_content_filter_error 命中时升级（梯级见类常量）；其余异常原样上抛，
+        保留既有失败语义。
+        """
+
+        def _messages(*, register: bool = False, text_cap: Optional[int] = None,
+                      docs: Optional[List[str]] = None, extra_ctx: Optional[str] = None):
+            system = system_prompt + (self.FILTER_SAFE_REGISTER_DIRECTIVE if register else "")
+            user = self._build_user_message(
+                document_texts if docs is None else docs,
+                simulation_requirement,
+                additional_context if extra_ctx is None else extra_ctx,
+                template=template_name,
+                central_question=central_question,
+                actors=actors,
+                text_cap=text_cap,
+            )
+            return [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+
+        try:
+            return self.llm_client.chat_json(
+                messages=_messages(), temperature=0.3, max_tokens=8192
+            )
+        except Exception as exc:  # noqa: BLE001 — 仅内容审查类才升级，其余原样上抛
+            if not is_content_filter_error(exc):
+                raise
+        logger.warning(
+            "Ontology: provider content filter rejected the request; "
+            "retrying (L1) in neutral institutional register with %s-char sampling.",
+            self.FILTER_SAFE_TEXT_CAP,
+        )
+        try:
+            return self.llm_client.chat_json(
+                messages=_messages(register=True, text_cap=self.FILTER_SAFE_TEXT_CAP),
+                temperature=0.3,
+                max_tokens=8192,
+            )
+        except Exception as exc:  # noqa: BLE001
+            if not is_content_filter_error(exc):
+                raise
+        logger.warning(
+            "Ontology: content filter rejected the L1 retry; falling back to "
+            "(L2) structural-only prompt without research document text."
+        )
+        return self.llm_client.chat_json(
+            messages=_messages(register=True, docs=[], extra_ctx=""),
+            temperature=0.3,
+            max_tokens=8192,
+        )
     
     # ONTO-3: 传给 LLM 的文本最大长度 5万→12万字。本体分析需要"看全角色阵容"——50000 字常把
     # 后半部分出现的关键 actor/关系整段截掉，导致类型覆盖不全。12万字配合下方 head+middle+tail
@@ -700,7 +768,8 @@ class OntologyGenerator:
         additional_context: Optional[str],
         template: str = DEFAULT_ONTOLOGY_TEMPLATE,  # EXECPLAN2 I-1-3
         central_question: Optional[str] = None,     # EXECPLAN2 I-1-3
-        actors: Optional[Dict[str, Any]] = None     # EXECPLAN2 I-1-3
+        actors: Optional[Dict[str, Any]] = None,    # EXECPLAN2 I-1-3
+        text_cap: Optional[int] = None              # FS-1: 内容审查 L1 重试的压缩采样上限
     ) -> str:
         """构建用户消息"""
 
@@ -721,12 +790,15 @@ class OntologyGenerator:
         combined_text = "\n\n---\n\n".join(safe_documents)
         original_length = len(combined_text)
 
+        # FS-1: text_cap 缺省时与既有 MAX_TEXT_LENGTH_FOR_LLM 行为逐字节一致。
+        effective_cap = self.MAX_TEXT_LENGTH_FOR_LLM if text_cap is None else max(1, int(text_cap))
+
         # ONTO-3: 文本超长时按 head+middle+tail 采样（仅影响传给LLM的内容，不影响图谱构建）
-        if len(combined_text) > self.MAX_TEXT_LENGTH_FOR_LLM:
-            combined_text = self._sample_head_middle_tail(combined_text, self.MAX_TEXT_LENGTH_FOR_LLM)
+        if len(combined_text) > effective_cap:
+            combined_text = self._sample_head_middle_tail(combined_text, effective_cap)
             combined_text += (
                 f"\n\n...(原文共{original_length}字，已采样首/中/尾约"
-                f"{self.MAX_TEXT_LENGTH_FOR_LLM}字用于本体分析)..."
+                f"{effective_cap}字用于本体分析)..."
             )
 
         requirement_block = delimit_untrusted_research_text(
@@ -737,7 +809,7 @@ class OntologyGenerator:
         documents_block = delimit_untrusted_research_text(
             "research documents",
             combined_text,
-            max_chars=self.MAX_TEXT_LENGTH_FOR_LLM + 400,
+            max_chars=effective_cap + 400,
         )
         message = f"""## 模拟需求
 
